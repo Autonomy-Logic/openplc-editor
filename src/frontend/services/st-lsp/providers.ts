@@ -337,16 +337,23 @@ export function registerStLspSemanticTokens({
       return legend
     },
     async provideDocumentSemanticTokens(model): Promise<monaco.languages.SemanticTokens | null> {
-      const uri = model.uri.toString()
-      const offset = getBodyLineOffset(uri)
+      const { lspUri, lineOffset } = effectiveLspContext(model.uri.toString())
       const result: SemanticTokens | null = await connection.sendRequest(
         SemanticTokensRequest.type,
-        { textDocument: { uri } },
+        { textDocument: { uri: lspUri } },
       )
       if (!result) return null
+      // For body editors: keep tokens at LSP line >= lineOffset (skip
+      // the synthesized declaration + VAR preamble) and shift down.
+      // For the variables-text view: ALSO drop tokens beyond the VAR
+      // blocks (i.e. tokens in the body) — the editor only renders
+      // the variable section.  The end-line cutoff is the underlying
+      // synthesized doc's bodyLineOffset.
+      const isVarsView = parsePouVarsUri(model.uri.toString()) !== null
+      const endLineExclusive = isVarsView ? getBodyLineOffset(lspUri) : Number.POSITIVE_INFINITY
       return {
         ...(result.resultId ? { resultId: result.resultId } : {}),
-        data: shiftSemanticTokensToBody(result.data, offset),
+        data: shiftSemanticTokensToBody(result.data, lineOffset, endLineExclusive),
       }
     },
     releaseDocumentSemanticTokens() {
@@ -361,22 +368,32 @@ export function registerStLspSemanticTokens({
 
 /**
  * Translate the worker's delta-encoded semantic tokens (in
- * full-document coordinates) into Monaco's body-only frame.
+ * full-document coordinates) into Monaco's view-frame.
  *
  *   1. Decode deltas to absolute (line, col) positions.
- *   2. Drop tokens that fall inside the preamble (`line < offset`) —
- *      those describe the synthesized declaration and VAR blocks
- *      Monaco never displays.
- *   3. Subtract `offset` from each surviving token's line.
+ *   2. Keep tokens whose line is in `[offset, endLineExclusive)`.
+ *      Both ends are LSP coordinates.
+ *   3. Subtract `offset` from each surviving token's line so the
+ *      output is Monaco-relative.
  *   4. Re-encode as a delta stream Monaco can consume directly.
  *
- * When `offset === 0` (non-ST doc, or registry not populated yet),
- * step 2 is a no-op and step 3 leaves lines unchanged — the function
- * still does decode/re-encode, but the output is bitwise-equivalent
- * to a `new Uint32Array(data)` copy.  Cheap enough that special-
- * casing it isn't worth the branch.
+ * Used in two modes:
+ *   - **Body view**: `offset = bodyLineOffset` (preamble line count),
+ *     `endLineExclusive = ∞` — drop the preamble, keep everything
+ *     from the body onwards.
+ *   - **Variables-text view**: `offset = 1` (declaration line count),
+ *     `endLineExclusive = bodyLineOffset` of the underlying synthesized
+ *     doc — keep only the VAR block region.
+ *
+ * When `offset === 0` and `endLineExclusive === ∞` (e.g. early boot
+ * before the registry is populated) the function is a copy; cheap
+ * enough that the dead branch isn't worth special-casing.
  */
-function shiftSemanticTokensToBody(data: number[], offset: number): Uint32Array {
+function shiftSemanticTokensToBody(
+  data: number[],
+  offset: number,
+  endLineExclusive: number = Number.POSITIVE_INFINITY,
+): Uint32Array {
   // Decode to absolute positions.
   const abs: Array<{ line: number; col: number; len: number; type: number; mods: number }> = []
   let absLine = 0
@@ -391,12 +408,13 @@ function shiftSemanticTokensToBody(data: number[], offset: number): Uint32Array 
     }
     abs.push({ line: absLine, col: absCol, len: data[i + 2], type: data[i + 3], mods: data[i + 4] })
   }
-  // Re-encode body-only tokens with shifted line numbers.
+  // Re-encode in-range tokens with shifted line numbers.
   const out: number[] = []
   let prevLine = 0
   let prevCol = 0
   for (const t of abs) {
     if (t.line < offset) continue
+    if (t.line >= endLineExclusive) continue
     const shiftedLine = t.line - offset
     const dLine = shiftedLine - prevLine
     const dStart = dLine === 0 ? t.col - prevCol : t.col
