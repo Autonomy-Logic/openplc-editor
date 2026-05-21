@@ -3,6 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
 import { MINIMUM_ELEMENT_HEIGHT, MINIMUM_ELEMENT_WIDTH } from './utils/constants'
@@ -10,8 +11,8 @@ import { CommentNode, CommentProps } from './utils/types'
 
 const CommentElement = (block: CommentProps) => {
   const { id, selected, data, width, height } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     editorActions: { updateModelFBD },
     fbdFlows,
     fbdFlowActions: { updateNode },
@@ -47,14 +48,14 @@ const CommentElement = (block: CommentProps) => {
       return
     }
 
-    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!commentaryBlock) return
 
     if (commentFocused) {
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: id,
         node: {
           ...commentaryBlock,
@@ -74,7 +75,7 @@ const CommentElement = (block: CommentProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodeId: id,
       node: {
         ...commentaryBlock,
@@ -97,7 +98,7 @@ const CommentElement = (block: CommentProps) => {
   }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
-    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!commentaryBlock) return
@@ -112,7 +113,7 @@ const CommentElement = (block: CommentProps) => {
 
     setCommentValue(parsedCommentValue)
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodeId: id,
       node: {
         ...commentaryBlock,

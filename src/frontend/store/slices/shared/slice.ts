@@ -438,6 +438,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     forceCloseFile: (name) => {
       getState().tabsActions.removeTab(name)
+      // Drop the editor model from `state.editors[]` so the workspace's
+      // multi-mount loop doesn't keep rendering a hidden editor for a
+      // closed tab.  `tabs[]` is the open-tabs list; `editors[]` is
+      // expected to mirror it.  `removeModel` is idempotent for names
+      // that aren't registered.
+      getState().editorActions.removeModel(name)
 
       const filteredTabs = getState().tabs
       const nextTab = filteredTabs[filteredTabs.length - 1]

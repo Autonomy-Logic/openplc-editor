@@ -3,6 +3,8 @@ import { createStore } from 'zustand/vanilla'
 import type { BoardInfo, PLCPou, PLCRemoteDevice, PLCVariable } from '../../../middleware/shared/ports/types'
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
+import { createEditorSlice } from '../slices/editor'
+import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot } from '../slices/project/types'
 
@@ -20,6 +22,8 @@ function makeStore() {
     ...createProjectSlice(...args),
     ...createDeviceSlice(...args),
     ...createConsoleSlice(...args),
+    ...createEditorSlice(...args),
+    ...createLibrarySlice(...args),
   }))
 }
 

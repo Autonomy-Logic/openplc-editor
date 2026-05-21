@@ -18,6 +18,7 @@ import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/u
 import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {
@@ -70,11 +71,12 @@ type RungBodyProps = {
 const EDGE_COLOR_TRUE = '#00FF00'
 
 export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
     ladderFlowActions,
     ladderFlows,
     libraries,
-    editor,
     editorActions: { updateModelVariables },
     project,
     projectActions: { deleteVariable },
@@ -87,7 +89,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const { captureAndPush } = usePouSnapshot()
   const { pous } = project.data
-  const pouRef = pous.find((pou) => pou.name === editor.meta.name)
+  const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -132,7 +134,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       [bounds.width, bounds.height + 20],
     ])
     ladderFlowActions.updateReactFlowViewport({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rungLocal.id,
       reactFlowViewport: [bounds.width, bounds.height + 20],
     })
@@ -187,7 +189,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       if (pouRef?.pouType !== 'function-block') {
         const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst) => inst.program === editor.meta.name)
+        const programInstance = instances.find((inst) => inst.program === pouName)
         if (!programInstance) return undefined
       }
 
@@ -277,7 +279,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     rungLocal.nodes,
     isDebuggerVisible,
     debugVariableValues,
-    editor.meta.name,
+    pouName,
     project,
     getCompositeKey,
   ])
@@ -357,7 +359,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     isDebuggerVisible,
     isDebuggerActive,
     debugVariableValues,
-    editor.meta.name,
+    pouName,
     project,
     getCompositeKey,
   ])
@@ -390,7 +392,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
     // Update the selected nodes in the rung state
     ladderFlowActions.setSelectedNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: rungLocal.selectedNodes,
     })
@@ -515,17 +517,17 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       blockVariant: pouLibrary,
     })
 
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
+    ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes })
+    ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges })
     if (handleBranches) {
-      ladderFlowActions.setHandleBranches({ editorName: editor.meta.name, rungId: rungLocal.id, handleBranches })
+      ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
     }
 
     if (newNode)
       ladderFlowActions.setSelectedNodes({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rungLocal.id,
         nodes: [newNode],
       })
@@ -535,7 +537,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         pouRef.interface?.variables ?? [],
         ladderFlows,
         ladderFlowActions.updateNode,
-        editor.meta.name,
+        pouName,
       )
     }
   }
@@ -546,15 +548,15 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements({ ...rungLocal }, nodes)
 
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+    ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes: newNodes })
+    ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges: newEdges })
     if (handleBranches) {
-      ladderFlowActions.setHandleBranches({ editorName: editor.meta.name, rungId: rungLocal.id, handleBranches })
+      ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
     }
     ladderFlowActions.setSelectedNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rungLocal.id,
       nodes: [],
     })
@@ -576,7 +578,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       let variables: PLCVariable[] = []
       if (pouRef) variables = [...(pouRef.interface?.variables ?? [])] as PLCVariable[]
 
-      const currentFlow = ladderFlows.find((f) => f.name === editor.meta.name)
+      const currentFlow = ladderFlows.find((f) => f.name === pouName)
       const allRungs = currentFlow?.rungs ?? []
       const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, allRungs, variables)
 
@@ -584,7 +586,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         deleteVariable({
           variableName,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
       })
 
@@ -596,7 +598,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
           deleteVariable({
             variableId: (blockNode.data as BasicNodeData).variable.id,
             scope: 'local',
-            associatedPou: editor.meta.name,
+            associatedPou: pouName,
           })
           variables.splice(variableIndex, 1)
         }
@@ -615,7 +617,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         pouRef.interface?.variables ?? [],
         ladderFlows,
         ladderFlowActions.updateNode,
-        editor.meta.name,
+        pouName,
       )
     }
   }
@@ -660,14 +662,14 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
 
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     setDragging(false)
-    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
-    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
+    ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes: result.nodes })
+    ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges: result.edges })
     if (result.handleBranches) {
       ladderFlowActions.setHandleBranches({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rungLocal.id,
         handleBranches: result.handleBranches,
       })
@@ -678,7 +680,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         pouRef.interface?.variables ?? [],
         ladderFlows,
         ladderFlowActions.updateNode,
-        editor.meta.name,
+        pouName,
       )
     }
   }

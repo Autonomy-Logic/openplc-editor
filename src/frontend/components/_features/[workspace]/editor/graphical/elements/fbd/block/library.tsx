@@ -6,6 +6,7 @@ import { useState } from 'react'
 
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../../../../../../_molecules/library-tree'
+import { useBoundPou } from '../../../active-context'
 
 export const ModalBlockLibrary = ({
   selectedFileKey,
@@ -14,8 +15,8 @@ export const ModalBlockLibrary = ({
   selectedFileKey: string | null
   setSelectedFileKey: (string: string) => void
 }) => {
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
@@ -34,12 +35,12 @@ export const ModalBlockLibrary = ({
     (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
   )
   const systemLibraries = visiblePool.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+    pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
   const userLibraries = user.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+    pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.type === 'function' && library.name.toLowerCase().includes(filterText)
       : library.name.toLowerCase().includes(filterText),
   )
@@ -71,7 +72,7 @@ export const ModalBlockLibrary = ({
           <LibraryRoot>
             {systemLibraries.map((library) => {
               const isFunctionEditor =
-                pous.find((p) => p.name === editor.meta.name)?.pouType === 'function'
+                pous.find((p) => p.name === pouName)?.pouType === 'function'
               const tree = buildLibraryTree(library, (pou) => {
                 if (!pou.name.toLowerCase().includes(filterText)) return false
                 if (isFunctionEditor && pou.type !== 'function') return false

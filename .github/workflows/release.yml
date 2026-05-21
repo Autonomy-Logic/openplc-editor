@@ -144,6 +144,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download binaries for x64
+        run: npx ts-node scripts/download-binaries.ts --arch x64
+
       - name: Get version and build date
         id: version
         shell: bash

@@ -5,22 +5,29 @@ import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../..
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
-import type { DeviceSliceRoot } from '../slices/device/types'
 import * as pinsValidation from '../slices/device/validation/pins'
+import { createEditorSlice } from '../slices/editor'
+import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
+import type { ProjectSliceRoot } from '../slices/project/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeStore() {
-  // The device slice now reads from project + console slices for the
-  // alias-sync trigger inside setAvailableOptions. Compose all three
-  // so the cross-slice types resolve correctly.
-  return createStore<DeviceSliceRoot>()((...args) => ({
+  // The device slice reads from project + console (alias-sync trigger
+  // inside setAvailableOptions); the project slice in turn now needs
+  // editor + library state for its variables-text reconcile helpers.
+  // Use ProjectSliceRoot (the most expansive of the cross-slice
+  // unions) as the store type so every composed slice creator's
+  // `getState()` resolves.
+  return createStore<ProjectSliceRoot>()((...args) => ({
     ...createDeviceSlice(...args),
     ...createProjectSlice(...args),
     ...createConsoleSlice(...args),
+    ...createEditorSlice(...args),
+    ...createLibrarySlice(...args),
   }))
 }
 

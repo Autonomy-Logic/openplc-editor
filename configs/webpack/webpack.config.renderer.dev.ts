@@ -111,6 +111,12 @@ const configuration: webpack.Configuration = {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         type: 'asset/resource',
       },
+      // Static JS assets — used by the STruC++ LSP worker.  See
+      // webpack.config.renderer.prod.ts for the same rule + rationale.
+      {
+        resourceQuery: /^\?url$/,
+        type: 'asset/resource',
+      },
       // Images
       {
         test: /\.(png|jpg|jpeg|gif)$/i,

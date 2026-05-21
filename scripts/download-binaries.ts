@@ -31,10 +31,6 @@ interface CacheMetadata {
   arch: string
 }
 
-interface StrucppCacheMetadata {
-  strucpp: string
-}
-
 type Platform = 'darwin' | 'linux' | 'win32'
 type Arch = 'x64' | 'arm64'
 
@@ -45,8 +41,6 @@ type Arch = 'x64' | 'arm64'
 const ROOT_DIR = path.resolve(__dirname, '..')
 const VERSIONS_FILE = path.join(ROOT_DIR, 'binary-versions.json')
 const RESOURCES_DIR = path.join(ROOT_DIR, 'resources')
-const STRUCPP_DIR = path.join(RESOURCES_DIR, 'strucpp')
-const STRUCPP_CACHE_FILE = path.join(STRUCPP_DIR, '.strucpp-metadata.json')
 
 function binDir(platform: Platform, arch: Arch): string {
   return path.join(RESOURCES_DIR, 'bin', platform, arch)
@@ -103,16 +97,6 @@ function getCachedMetadata(platform: Platform, arch: Arch): CacheMetadata | null
   }
 }
 
-function getStrucppCachedMetadata(): StrucppCacheMetadata | null {
-  if (!fs.existsSync(STRUCPP_CACHE_FILE)) return null
-
-  try {
-    return JSON.parse(fs.readFileSync(STRUCPP_CACHE_FILE, 'utf-8')) as StrucppCacheMetadata
-  } catch {
-    return null
-  }
-}
-
 function needsXml2st(versions: BinaryVersions, cached: CacheMetadata | null, platform: Platform, arch: Arch): boolean {
   const dir = binDir(platform, arch)
   const isWindows = platform === 'win32'
@@ -128,24 +112,20 @@ function needsXml2st(versions: BinaryVersions, cached: CacheMetadata | null, pla
   return false
 }
 
-function needsStrucpp(versions: BinaryVersions, strucppCached: StrucppCacheMetadata | null): boolean {
-  // Check if runtime headers exist
-  if (!fs.existsSync(path.join(STRUCPP_DIR, 'runtime', 'include', 'iec_types.hpp'))) return true
-
-  // Check if node_modules/strucpp exists with the correct version
+function needsStrucpp(versions: BinaryVersions): boolean {
+  // strucpp is `npm install`-ed into `node_modules/`, so npm's own
+  // `package.json` is the canonical source of truth for what's
+  // installed.  Re-fetch only when the package isn't installed or
+  // its version doesn't match the pin — no parallel metadata cache.
+  const expected = versions.strucpp.version.replace(/^v/, '')
   const pkgJsonPath = path.join(ROOT_DIR, 'node_modules', 'strucpp', 'package.json')
   if (!fs.existsSync(pkgJsonPath)) return true
-
   try {
     const installed = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
-    const expected = versions.strucpp.version.replace(/^v/, '')
     if (installed.version !== expected) return true
   } catch {
     return true
   }
-
-  // Check cached version
-  if (!strucppCached || strucppCached.strucpp !== versions.strucpp.version) return true
 
   return false
 }
@@ -158,14 +138,6 @@ function writeCache(versions: BinaryVersions, platform: Platform, arch: Arch): v
   }
   fs.mkdirSync(path.dirname(cacheFile(platform, arch)), { recursive: true })
   fs.writeFileSync(cacheFile(platform, arch), JSON.stringify(data, null, 2) + '\n')
-}
-
-function writeStrucppCache(versions: BinaryVersions): void {
-  const data: StrucppCacheMetadata = {
-    strucpp: versions.strucpp.version,
-  }
-  fs.mkdirSync(STRUCPP_DIR, { recursive: true })
-  fs.writeFileSync(STRUCPP_CACHE_FILE, JSON.stringify(data, null, 2) + '\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -288,37 +260,24 @@ async function downloadStrucpp(tool: ToolEntry): Promise<void> {
     const tgzPath = path.join(tmpDir, 'strucpp.tgz')
     await downloadToFile(url, tgzPath)
 
-    // Install into node_modules via npm so `import { compile } from 'strucpp'` works
+    // Install into node_modules via npm.  In dev (`npm run dev`),
+    // the compiler reads runtime headers from `node_modules/strucpp/
+    // src/runtime/include/` and bundled `.stlib` archives from
+    // `node_modules/strucpp/libs/` directly.  In packaged builds,
+    // electron-builder's `extraResources` config copies those two
+    // directories into `Resources/strucpp/` of the final app — see
+    // `electron-builder.json` and the dev/packaged path branching
+    // in `backend/editor/compiler/compiler-module.ts` and
+    // `backend/editor/library-manager/library-manager-module.ts`.
+    // We don't mirror the install into `release/app/node_modules`
+    // because electron-builder walks `release/app/package.json`'s
+    // dependency tree and prunes anything not listed there from the
+    // asar, regardless of whether the files exist on disk.
     console.log(`  Installing strucpp ${tool.version} into node_modules...`)
     execSync(`npm install "${tgzPath}" --no-save`, {
       cwd: ROOT_DIR,
       stdio: 'pipe',
     })
-
-    // Extract runtime headers and libs to resources/strucpp/ for the compiler module.
-    // The npm tarball extracts to a package/ directory.
-    const extractDir = path.join(tmpDir, 'extracted')
-    extractTarGz(tgzPath, extractDir)
-    const packageDir = path.join(extractDir, 'package')
-
-    // Clear previous version
-    const runtimeDest = path.join(STRUCPP_DIR, 'runtime', 'include')
-    const libsDest = path.join(STRUCPP_DIR, 'libs')
-    rmrf(runtimeDest)
-    rmrf(libsDest)
-
-    // Copy runtime headers
-    const runtimeSrc = path.join(packageDir, 'src', 'runtime', 'include')
-    if (fs.existsSync(runtimeSrc)) {
-      copyRecursive(runtimeSrc, runtimeDest)
-    }
-
-    // Copy .stlib libraries
-    const libsSrc = path.join(packageDir, 'libs')
-    if (fs.existsSync(libsSrc)) {
-      copyRecursive(libsSrc, libsDest)
-    }
-
     console.log(`  strucpp ${tool.version} installed.`)
   } finally {
     rmrf(tmpDir)
@@ -345,9 +304,8 @@ async function main(): Promise<void> {
   fs.mkdirSync(targetBinDir, { recursive: true })
 
   const cached = force ? null : getCachedMetadata(platform, arch)
-  const strucppCached = force ? null : getStrucppCachedMetadata()
   const downloadXml2stNeeded = force || needsXml2st(versions, cached, platform, arch)
-  const downloadStrucppNeeded = force || needsStrucpp(versions, strucppCached)
+  const downloadStrucppNeeded = force || needsStrucpp(versions)
 
   if (!downloadXml2stNeeded && !downloadStrucppNeeded) {
     console.log(`[download-binaries] All tools up to date, skipping.`)
@@ -363,7 +321,6 @@ async function main(): Promise<void> {
   // strucpp is platform-independent — only download once regardless of platform/arch
   if (downloadStrucppNeeded) {
     await downloadStrucpp(versions.strucpp)
-    writeStrucppCache(versions)
   } else {
     console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
   }

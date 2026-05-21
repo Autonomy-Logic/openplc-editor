@@ -1,5 +1,5 @@
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
@@ -9,6 +9,7 @@ import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
+import { selectEditorForPou } from '../../../store/slices/editor/utils'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
@@ -34,10 +35,38 @@ import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesTable } from '../../_molecules/variables-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
-const VariablesEditor = () => {
+interface VariablesEditorProps {
+  /**
+   * POU name this VariablesEditor instance is bound to.  When omitted
+   * (legacy callers) the editor falls back to whichever POU is
+   * currently active in the store.  With multi-mount, every open POU
+   * has its own VariablesEditor instance with `name` set explicitly,
+   * so each operates on its own model regardless of which tab is
+   * visible.
+   */
+  name?: string
+  /**
+   * Whether this instance corresponds to the currently active tab.
+   * Currently unused — every effect in this component is naturally
+   * scoped to its own POU via `propName`, so hidden instances don't
+   * react to other POUs' state changes.  Kept on the prop contract
+   * so callers in workspace-screen.tsx pass it consistently with
+   * the other multi-mounted editors and so future gating (e.g. of
+   * expensive memos) has a hook to attach to without an API break.
+   */
+  isActive?: boolean
+}
+
+const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
   const ROWS_NOT_SELECTED = -1
+  // Multi-mount support: every open POU's VariablesEditor reads ITS
+  // OWN model via the shared `selectEditorForPou` helper.  This is
+  // the same selector the graphical editors use through
+  // `useBoundEditorModel()` — kept centralised so the active-editor
+  // preference + hidden-snapshot fallback can't drift between the
+  // textual and graphical multi-mount paths.
+  const editor = useOpenPLCStore((s) => selectEditorForPou(s, propName))
   const {
-    editor,
     ladderFlows,
     ladderFlowActions: { updateNode },
     fbdFlows,
@@ -178,14 +207,13 @@ const VariablesEditor = () => {
     }
   }, [tableData, editorVariables.display])
 
-  // Re-derive the local view state from the active editor whenever its
-  // identity changes (tab switch, programmatic navigation from a
-  // compile-error click, etc.).  Both `editorVariables` and
-  // `editorCode` are useState initialisers that run only on mount, so
-  // without this sync the panel keeps showing the previous POU's
-  // display mode and code after `setEditor(...)` swaps the model
-  // beneath us.  Driven off `editor.meta.name` so we don't re-fire on
-  // unrelated `editor` mutations (cursorPosition, etc.).
+  // Sync local view state from this instance's own model when the
+  // POU is renamed or its display mode toggles (table ↔ code).  Each
+  // VariablesEditor is bound to a specific POU via `propName`, so this
+  // effect only re-derives for changes to THIS POU's model, not
+  // whichever happens to be active.  Driven off `editor.meta.name` so
+  // unrelated mutations (cursorPosition, variable list edits) don't
+  // re-fire it.
   const editorVariableState =
     editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable : null
   const editorVariableDisplay = editorVariableState?.display
@@ -945,6 +973,35 @@ const VariablesEditor = () => {
     commitCodeRef.current = commitCode
   }, [commitCode])
 
+  // Memoise so the `<VariablesCodeEditor cursorPosition>` prop holds a
+  // stable reference when the underlying values don't change.  Without
+  // this, the child's cursor-jump effect — keyed on `cursorPosition`
+  // identity — re-fires on every parent render (one per keystroke,
+  // because `setEditorCode` triggers it), re-selects the navigation
+  // line, and the next character typed replaces that selection.
+  const codeEditorCursorPosition = useMemo(
+    () =>
+      editor.cursorPosition
+        ? {
+            lineNumber: editor.cursorPosition.lineNumber,
+            column: editor.cursorPosition.column,
+            target: editor.cursorPosition.target,
+          }
+        : undefined,
+    [editor.cursorPosition?.lineNumber, editor.cursorPosition?.column, editor.cursorPosition?.target],
+  )
+
+  // Go to Definition on a variable lands here with `target='variables'`
+  // even when the panel is currently in table mode — force the switch
+  // so the user actually sees the highlight.  Idempotent when already
+  // in code mode.
+  useEffect(() => {
+    if (editor.cursorPosition?.target !== 'variables') return
+    if (editorVariables.display === 'code') return
+    updateModelVariables({ display: 'code', code: editorCode })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor.cursorPosition?.target, editor.cursorPosition?.lineNumber, editor.cursorPosition?.column])
+
   return (
     <>
       {confirmRenameBlocksOpen && renameImpactData && (
@@ -1273,11 +1330,8 @@ const VariablesEditor = () => {
               code={editorCode}
               onCodeChange={setEditorCode}
               shouldUseDarkMode={shouldUseDarkMode}
-              cursorPosition={
-                editor.cursorPosition
-                  ? { lineNumber: editor.cursorPosition.lineNumber, column: editor.cursorPosition.column }
-                  : undefined
-              }
+              cursorPosition={codeEditorCursorPosition}
+              pouName={editor.meta.name}
             />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}

@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { useProject } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveFile, reloadFileFromDisk } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
@@ -23,12 +23,13 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   } = useOpenPLCStore()
 
   const projectPort = useProject()
+  const capabilities = useCapabilities()
   const { fileName } = data
 
   const handleSave = async () => {
     closeModal()
 
-    const result = await executeSaveFile(fileName, projectPort)
+    const result = await executeSaveFile(fileName, projectPort, capabilities)
     if (!result.success) return
 
     forceCloseFile(fileName)

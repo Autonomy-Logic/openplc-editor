@@ -1330,6 +1330,30 @@ describe('createSharedSlice', () => {
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().editor.type).toBe('available')
       })
+
+      it('does not resurrect the closed model in editors[]', () => {
+        // Multi-mount keeps every open POU's editor model in `editors[]`.
+        // `forceCloseFile` removes the active model from `editors[]`
+        // BEFORE handing off to `setEditor` for the next tab.  If
+        // `setEditor` ever started snapshotting the *outgoing* editor
+        // back into `editors[]` unconditionally, the freshly-closed
+        // model would reappear and the user would see a "closed" tab
+        // pop back on the next focus switch.  Lock the invariant here.
+        store.getState().pouActions.create({ type: 'program', name: 'A', language: 'st' })
+        store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
+        // A becomes active (creation flips active to the new one), then
+        // we explicitly switch to A for the regression scenario.
+        store.getState().editorActions.setEditor(
+          store.getState().editorActions.getEditorFromEditors('A')!,
+        )
+        expect(store.getState().editor.meta.name).toBe('A')
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('A')
+
+        expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
+        // And the next tab took over cleanly.
+        expect(store.getState().editor.meta.name).toBe('B')
+      })
     })
 
     // -----------------------------------------------------------------------

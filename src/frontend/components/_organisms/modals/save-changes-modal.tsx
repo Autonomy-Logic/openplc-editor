@@ -57,7 +57,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
     closeModal()
 
     if (operation === 'save') {
-      const result = await executeSaveProject(projectPort)
+      const result = await executeSaveProject(projectPort, capabilities)
       if (!result.success) return
     }
 

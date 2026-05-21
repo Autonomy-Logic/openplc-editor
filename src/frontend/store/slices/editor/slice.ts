@@ -251,12 +251,31 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       setState(
         produce((state: EditorState) => {
           const oldEditor = state.editor
-          if (oldEditor.meta.name === newEditor.meta.name) return
 
+          // Snapshot the old active editor's latest in-memory state
+          // back into `editors[]` — but only when it's still there.
+          // `forceCloseFile` removes the active editor's model from
+          // `editors[]` BEFORE calling setEditor with the next tab;
+          // re-adding it on the `else` branch would resurrect a
+          // freshly-closed tab.  This way, the snapshot is a no-op
+          // for tabs that have just been removed.
           if (oldEditor.type !== 'available') {
-            state.editors = state.editors.map((model) => (model.meta.name === oldEditor.meta.name ? oldEditor : model))
+            const oldIdx = state.editors.findIndex((m) => m.meta.name === oldEditor.meta.name)
+            if (oldIdx !== -1) {
+              state.editors[oldIdx] = oldEditor
+            }
           }
 
+          // Idempotently ensure the new editor is registered in
+          // `editors[]`.  Multi-mount consumers iterate `editors[]`
+          // and assume every open tab has a corresponding entry —
+          // missing it would mean the new tab's editor never renders.
+          const newIdx = state.editors.findIndex((m) => m.meta.name === newEditor.meta.name)
+          if (newIdx === -1) {
+            state.editors.push(newEditor)
+          }
+
+          if (oldEditor.meta.name === newEditor.meta.name) return
           state.editor = newEditor
         }),
       ),
@@ -287,21 +306,6 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           if (state.editor.meta.name === name && state.editor.type !== 'available') {
             state.editor.cursorPosition = cursorPosition
           }
-        }),
-      ),
-
-    saveEditorViewState: ({ prevEditorName, cursorPosition, scrollPosition, fbdPosition }) =>
-      setState(
-        produce((state: EditorState) => {
-          const currentEditor = state.editor
-          if (currentEditor.type === 'available') return
-
-          const index = state.editors.findIndex((e) => e.meta.name === prevEditorName)
-          if (index === -1) return
-
-          state.editors[index].cursorPosition = cursorPosition
-          state.editors[index].scrollPosition = scrollPosition
-          state.editors[index].fbdPosition = fbdPosition
         }),
       ),
 

@@ -5,6 +5,7 @@ import { CoilNode } from '../../../../../../../_atoms/graphical-editor/ladder/co
 import { DEFAULT_COIL_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
+import { useBoundPou } from '../../../active-context'
 
 type CoilElementProps = {
   isOpen: boolean
@@ -13,8 +14,8 @@ type CoilElementProps = {
 }
 
 const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
+  const pouName = useBoundPou()
   const {
-    editor,
     ladderFlows,
     project: {
       data: { pous },
@@ -41,13 +42,13 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: node.id,
       node: {

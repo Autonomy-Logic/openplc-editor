@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
-import { assertPathContained } from '../../shared/utils/path-safety'
+import { assertPathContained } from '../utils/path-containment'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'

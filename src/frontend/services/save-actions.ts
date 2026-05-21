@@ -11,6 +11,7 @@
  * save can never disagree about what a given file should look like on disk.
  */
 
+import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
 import type { PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
@@ -300,8 +301,18 @@ export function buildAllProjectFileContents(): Record<string, string> {
  * All serialization happens here on the frontend using the same functions
  * as the single-file save (serializePouToText, sanitizePou, etc.).
  * The backend receives only pre-serialized strings via WriteProjectFiles.
+ *
+ * `capabilities` gates the success toast: on the native desktop build
+ * saves go through the local filesystem and effectively never fail, so
+ * surfacing "Saved!" after every save is just noise.  On the web build
+ * the save round-trips through HTTP — broken token, dropped network,
+ * server error are all routine — so the success toast is load-bearing
+ * confirmation the user needs.  Failure toasts fire on both builds.
  */
-export async function executeSaveProject(projectPort: ProjectPort): Promise<{ success: boolean }> {
+export async function executeSaveProject(
+  projectPort: ProjectPort,
+  capabilities: PlatformCapabilities,
+): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
@@ -311,11 +322,19 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
   const deletionsBeforeSave = [...pendingDeletions]
 
   setEditingState('save-request')
-  toast({
-    title: 'Save changes',
-    description: 'Trying to save the changes in the project file.',
-    variant: 'warn',
-  })
+  // Same capability-gate as the success toast below: on desktop the
+  // save is effectively instantaneous and "Trying to save…" would
+  // outlive the actual save round-trip, leaving the user staring at
+  // a message that looks like failure when really the save already
+  // succeeded.  Web shows it because the HTTP round-trip is slow
+  // enough that the user wants confirmation something's happening.
+  if (!capabilities.isNativeApplication) {
+    toast({
+      title: 'Save changes',
+      description: 'Trying to save the changes in the project file.',
+      variant: 'warn',
+    })
+  }
 
   try {
     // Group every spec by category so we can build the platform's
@@ -411,6 +430,13 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
         state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
 
+      if (!capabilities.isNativeApplication) {
+        toast({
+          title: 'Changes saved!',
+          description: 'The project was saved successfully!',
+          variant: 'default',
+        })
+      }
     } else {
       setEditingState('unsaved')
       toast({
@@ -442,7 +468,11 @@ export async function executeSaveProject(projectPort: ProjectPort): Promise<{ su
  * For device/data-type/resource/server/remote-device: writes appropriate JSON files.
  * Also updates project.json when debug variables may have changed.
  */
-export async function executeSaveFile(fileName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
+export async function executeSaveFile(
+  fileName: string,
+  projectPort: ProjectPort,
+  capabilities: PlatformCapabilities,
+): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const { project, files } = state
   const { setEditingState } = state.workspaceActions
@@ -607,6 +637,10 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
       setEditingState('unsaved')
     }
 
+    // See `executeSaveProject` for the capability-gated toast rationale.
+    if (!capabilities.isNativeApplication) {
+      toast({ title: 'File saved', description: `"${fileName}" saved successfully.`, variant: 'default' })
+    }
     return { success: true }
   } catch {
     return fail('An unexpected error occurred.')
@@ -619,13 +653,16 @@ export async function executeSaveFile(fileName: string, projectPort: ProjectPort
  *
  * Thin wrapper around executeSaveFile that resolves the active editor name.
  */
-export async function executeSaveActiveFile(projectPort: ProjectPort): Promise<{ success: boolean }> {
+export async function executeSaveActiveFile(
+  projectPort: ProjectPort,
+  capabilities: PlatformCapabilities,
+): Promise<{ success: boolean }> {
   const name = openPLCStoreBase.getState().editor.meta.name
   if (!name) {
     toast({ title: 'No file open', description: 'There is no file to save.', variant: 'fail' })
     return { success: false }
   }
-  return executeSaveFile(name, projectPort)
+  return executeSaveFile(name, projectPort, capabilities)
 }
 
 /**

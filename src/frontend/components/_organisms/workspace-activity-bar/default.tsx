@@ -3,7 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
-import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
+import {
+  useCapabilities,
+  useCompiler,
+  useDebugger,
+  useProject,
+  useRuntime,
+  useSimulator,
+} from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
@@ -67,6 +74,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const simulator = useSimulator()
   const debuggerPort = useDebugger()
   const projectPort = useProject()
+  const capabilities = useCapabilities()
   const debugSession = useDebugSession()
   useDebugPolling({ debugTreesRef: debugSession.debugTreesRef })
 
@@ -118,7 +126,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
 
   const executeSave = useCallback(async (): Promise<boolean> => {
-    const result = await executeSaveProject(projectPort)
+    const result = await executeSaveProject(projectPort, capabilities)
     return result.success
   }, [projectPort])
 

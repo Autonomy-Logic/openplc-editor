@@ -121,3 +121,7 @@ export function useEsi() {
 export function useLibrary() {
   return usePlatform().library
 }
+
+export function useStlibSource() {
+  return usePlatform().stlibSource
+}

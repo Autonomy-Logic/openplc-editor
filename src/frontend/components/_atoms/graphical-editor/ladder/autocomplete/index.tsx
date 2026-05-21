@@ -9,6 +9,7 @@ import { cn } from '../../../../../utils/cn'
 import { getLiteralType } from '../../../../../utils/keywords'
 import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
@@ -59,8 +60,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
+    const pouName = useBoundPou()
     const {
-      editor,
       project: {
         data: { pous },
       },
@@ -69,7 +70,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       ladderFlowActions: { updateNode },
     } = useOpenPLCStore()
 
-    const pou = pous.find((pou) => pou.name === editor.meta.name)
+    const pou = pous.find((pou) => pou.name === pouName)
     const variables = pou?.interface?.variables ?? []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
@@ -103,13 +104,13 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         : []
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !variableNode) return
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: variableNode.id,
         node: {
@@ -148,7 +149,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
       // Update the block to include the variable
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: relatedBlock.id,
         node: {
@@ -166,12 +167,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         // For variable nodes on block handles, clearing the name resets the variable
         // so that a branch (contacts/coils) can be placed on the handle instead.
         if (blockType === 'variable') {
-          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
             nodeId: (block as Node<BasicNodeData>).id,
           })
           if (rung && variableNode) {
             updateNode({
-              editorName: editor.meta.name,
+              editorName: pouName,
               rungId: rung.id,
               nodeId: variableNode.id,
               node: {
@@ -194,7 +195,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return
@@ -223,7 +224,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           debug: false,
         },
         scope: 'local',
-        associatedPou: editor.meta.name,
+        associatedPou: pouName,
       })
       if (!res.ok) {
         toast({
@@ -237,7 +238,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       const variable = res.data as PLCVariable | undefined
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: node.id,
         node: {

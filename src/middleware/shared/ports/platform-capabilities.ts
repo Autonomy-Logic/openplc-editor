@@ -59,6 +59,16 @@ export interface PlatformCapabilities {
   /** True if the app has a Python LSP (language server protocol) for code completion. */
   hasPythonLSP: boolean
 
+  /**
+   * True if the app hosts the STruC++ language server for Structured
+   * Text (`.st`) editors.  Both the Electron and web builds will
+   * eventually flip this on as their host-side wiring lands; while
+   * the flag is false, ST Monaco editors fall back to plain text
+   * (no autocomplete, no diagnostics) — there is no hand-written
+   * legacy provider any more.
+   */
+  hasStLSP: boolean
+
   /** True if the app supports undo/redo history tracking. */
   hasUndoRedoHistory: boolean
 
@@ -114,6 +124,10 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasVersionControl: false,
   hasAboutDialog: true,
   hasPythonLSP: true,
+  // Worker wired via src/frontend/services/st-lsp/boot.ts, started
+  // from App.tsx at module load.  Web build keeps this off until
+  // their HTTP-backed stlibSource adapter ships.
+  hasStLSP: true,
   hasUndoRedoHistory: true,
   hasFileWatcher: true,
   hasAIAssistant: false,
@@ -137,6 +151,7 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasVersionControl: true,
   hasAboutDialog: false,
   hasPythonLSP: false,
+  hasStLSP: false,
   hasUndoRedoHistory: false,
   hasFileWatcher: false,
   hasAIAssistant: true,

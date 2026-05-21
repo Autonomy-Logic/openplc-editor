@@ -32,6 +32,7 @@ import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
 import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
@@ -45,9 +46,13 @@ interface FBDProps {
 const EDGE_COLOR_TRUE = '#00FF00'
 
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
+  // Bound POU + editor model — every multi-mounted FBDBody reads
+  // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
+  // tab store mutations don't fire effects against the wrong flow.
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
-    editorActions: { updateModelVariables, saveEditorViewState },
+    editorActions: { updateModelVariables },
     fbdFlowActions,
     libraries,
     project,
@@ -61,7 +66,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const { captureAndPush } = usePouSnapshot()
 
   const { pous } = project.data
-  const pouRef = pous.find((pou) => pou.name === editor.meta.name)
+  const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
@@ -76,6 +81,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     insideViewport,
     reactFlowInstance,
     rung,
+    viewportRef: reactFlowViewportRef,
     handleDeleteNodes: (nodes, edges) => {
       handleOnDelete(nodes, edges)
     },
@@ -136,7 +142,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       if (pouRef?.pouType !== 'function-block') {
         const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
+        const programInstance = instances.find((inst: { program: string }) => inst.program === pouName)
         if (!programInstance) return undefined
       }
 
@@ -243,7 +249,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     isDebuggerVisible,
     debugVariableValues,
     debugForcedVariables,
-    editor.meta.name,
+    pouName,
     pouRef?.interface?.variables,
     project.data.configurations.resource.instances,
   ])
@@ -315,7 +321,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     const selectedNodes = updatedNodes.filter((node) => node.selected)
 
     fbdFlowActions.setRung({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rung: {
         ...rungLocalCopy,
         nodes: updatedNodes,
@@ -356,33 +362,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   }, [rungLocal])
 
   /**
-   * Handle screen position changes
-   */
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !reactFlowInstance) return
-        const { x, y, zoom } = reactFlowInstance.getViewport()
-        saveEditorViewState({
-          prevEditorName,
-          fbdPosition: { x, y, zoom },
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [reactFlowInstance])
-
-  useEffect(() => {
-    const viewport = editor.fbdPosition
-    if (!reactFlowInstance || !viewport) return
-    setTimeout(() => {
-      reactFlowInstance.setViewport(viewport, { duration: 0 })
-    }, 0)
-  }, [reactFlowInstance, editor.meta.name])
-
-  /**
    * Handle the addition of a new element by dropping it in the viewport
    */
   const handleAddElementByDropping = (
@@ -390,7 +369,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     newNodeType: CustomFbdNodeTypes,
     library: string | undefined,
   ) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     let pouLibrary = undefined
     if (library) {
@@ -462,7 +441,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
     fbdFlowActions.addNode({
       node: newNode,
-      editorName: editor.meta.name,
+      editorName: pouName,
     })
   }
 
@@ -472,12 +451,12 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * It is used to remove the selected nodes and edges from the flow
    */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
         nodes: nodes,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
 
       if (pouRef && nodes.length > 0) {
@@ -493,7 +472,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
             deleteVariable({
               variableName,
               scope: 'local',
-              associatedPou: editor.meta.name,
+              associatedPou: pouName,
             })
 
             if (
@@ -511,7 +490,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     if (edges.length > 0) {
       fbdFlowActions.removeEdges({
         edges: edges,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
     }
   }
@@ -522,7 +501,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     setRungLocal((rung) => ({
       ...rung,
@@ -531,7 +510,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
     fbdFlowActions.onConnect({
       changes: connection,
-      editorName: editor.meta.name,
+      editorName: pouName,
     })
   }
 
@@ -600,9 +579,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   )
 
   const onNodeDragStart = useCallback(() => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
     setDragging(true)
-  }, [rungLocal, dragging, captureAndPush, editor.meta.name])
+  }, [rungLocal, dragging, captureAndPush, pouName])
 
   /**
    * When the node drag stops, update the fbd rung state
@@ -611,7 +590,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     (_e, _node, nodes) => {
       setDragging(false)
       fbdFlowActions.setRung({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rung: {
           ...rungLocal,
           nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
@@ -737,6 +716,13 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}
+        // Per-POU pattern id.  Without this, every <Background> SVG
+        // <pattern> shares the library default id="pattern"; SVG ids
+        // are document-scoped, so opening a second FBD POU makes its
+        // <rect fill="url(#pattern)"> resolve against the first
+        // instance's pattern and the grid disappears on the second
+        // editor.  Scoping by POU name keeps each grid independent.
+        backgroundConfig={{ id: `fbd-bg-${pouName}` }}
         controls={true}
         controlsConfig={{
           showInteractive: false,

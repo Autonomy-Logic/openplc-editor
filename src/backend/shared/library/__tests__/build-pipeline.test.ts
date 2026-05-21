@@ -40,8 +40,8 @@ function makeStrucppStub(
     formatDiagnostic: jest.fn(),
     buildSourceMap: jest.fn(),
     getVersion: jest.fn(),
-    importCodesysLibrary: jest.fn(),
-    loadStlibFromFile: jest.fn(),
+    importCodesysLibraryFromBytes: jest.fn(),
+    loadStlibFromString: jest.fn(),
     compileStlib: jest.fn().mockReturnValue({ success: true, archive: { kind: 'fake-archive' } }),
     ...overrides,
   } as unknown as StrucppRuntime

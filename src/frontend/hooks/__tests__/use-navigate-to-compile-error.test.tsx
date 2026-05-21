@@ -87,6 +87,7 @@ describe('useNavigateToCompileError', () => {
       lineNumber: 7,
       column: 5,
       offset: 0,
+      target: 'body',
     })
     expect(updateModelVariablesForName).not.toHaveBeenCalled()
   })
@@ -99,6 +100,7 @@ describe('useNavigateToCompileError', () => {
       lineNumber: 12,
       column: 1,
       offset: 0,
+      target: 'body',
     })
   })
 
@@ -111,6 +113,7 @@ describe('useNavigateToCompileError', () => {
       lineNumber: 4,
       column: 3,
       offset: 0,
+      target: 'variables',
     })
   })
 

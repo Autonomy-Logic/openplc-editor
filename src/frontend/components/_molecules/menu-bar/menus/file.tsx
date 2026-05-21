@@ -29,13 +29,13 @@ export const FileMenu = () => {
 
   const handleSave = () => {
     if (activeEditor.meta.name && !isSaving) {
-      void executeSaveActiveFile(projectPort)
+      void executeSaveActiveFile(projectPort, capabilities)
     }
   }
 
   const handleSaveProject = () => {
     if (!isSaving) {
-      void executeSaveProject(projectPort)
+      void executeSaveProject(projectPort, capabilities)
     }
   }
 

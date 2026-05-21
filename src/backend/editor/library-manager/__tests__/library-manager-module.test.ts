@@ -22,16 +22,16 @@ jest.mock('electron', () => ({
   app: { getPath: () => '/tmp/never-used' },
 }))
 
-// Mock strucpp at the require boundary — the module is only imported
-// lazily inside install paths, so this only needs to exist for the
-// codesys-import test.  Returns deterministic archives with a known
-// shape so the test can pin downstream behaviour.
+// Mock strucpp at the require boundary — the shared shims `require`
+// the pure `strucpp` entry, so that's the module-id we target.
+// Returns deterministic archives with a known shape so the test can
+// pin downstream behaviour without pulling in the real (ESM) package.
 jest.mock(
   'strucpp',
   () => ({
-    importCodesysLibrary: jest.fn((path: string) => ({
+    importCodesysLibraryFromBytes: jest.fn(async (bytes: Uint8Array) => ({
       success: true,
-      sources: [{ fileName: 'mock.st', source: `(* imported from ${path} *)` }],
+      sources: [{ fileName: 'mock.st', source: `(* imported from ${bytes.byteLength}-byte buffer *)` }],
       globalConstants: { STRING_LENGTH: 254 },
     })),
     compileStlib: jest.fn(
@@ -54,7 +54,7 @@ jest.mock(
         },
       }),
     ),
-    loadStlibFromFile: jest.fn(),
+    loadStlibFromString: jest.fn(),
   }),
   { virtual: true },
 )
@@ -296,30 +296,31 @@ describe('LibraryManagerModule', () => {
     })
   })
 
-  describe('resolveEnabledLibraryDirs', () => {
-    it('always returns the bundled directory when it exists', () => {
+  describe('loadEnabledArchives', () => {
+    it('always returns bundled archives when the bundled dir exists', () => {
       writeBundled(makeArchive('iec-standard-fb'))
       const mod = makeModule()
-      const result = mod.resolveEnabledLibraryDirs([])
-      expect(result.dirs).toEqual([bundledDir])
+      const result = mod.loadEnabledArchives([])
+      expect(result.archives.map((a) => a.manifest.name)).toEqual(['iec-standard-fb'])
       expect(result.missing).toEqual([])
     })
 
-    it('omits the bundled directory when the strucpp libs dir is absent', () => {
+    it('returns no archives when the bundled dir is absent and nothing is enabled', () => {
       const mod = makeModule()
-      const result = mod.resolveEnabledLibraryDirs([])
-      expect(result.dirs).toEqual([])
+      const result = mod.loadEnabledArchives([])
+      expect(result.archives).toEqual([])
+      expect(result.missing).toEqual([])
     })
 
-    it('appends per-library directories for installed user libs', async () => {
+    it('appends parsed archives for installed user libs that are enabled', async () => {
       writeBundled(makeArchive('iec-standard-fb'))
       const mod = makeModule()
       const tmp = join(testRoot, 'oscat.stlib')
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
       await mod.installFromFile(tmp)
 
-      const result = mod.resolveEnabledLibraryDirs(['oscat-basic'])
-      expect(result.dirs).toEqual([bundledDir, join(librariesDir, 'oscat-basic')])
+      const result = mod.loadEnabledArchives(['oscat-basic'])
+      expect(result.archives.map((a) => a.manifest.name)).toEqual(['iec-standard-fb', 'oscat-basic'])
       expect(result.missing).toEqual([])
     })
 
@@ -329,9 +330,9 @@ describe('LibraryManagerModule', () => {
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
       await mod.installFromFile(tmp)
 
-      const result = mod.resolveEnabledLibraryDirs([])
+      const result = mod.loadEnabledArchives([])
       // Bundled dir doesn't exist in this test harness.
-      expect(result.dirs).toEqual([])
+      expect(result.archives).toEqual([])
     })
 
     it('reports enabled libraries that have no archive on disk', async () => {
@@ -343,8 +344,8 @@ describe('LibraryManagerModule', () => {
       // gate should detect this as missing.
       rmSync(join(librariesDir, 'foo', 'foo.stlib'))
 
-      const result = mod.resolveEnabledLibraryDirs(['foo', 'phantom'])
-      expect(result.dirs).toEqual([])
+      const result = mod.loadEnabledArchives(['foo', 'phantom'])
+      expect(result.archives).toEqual([])
       expect(result.missing).toEqual(['foo', 'phantom'])
     })
   })

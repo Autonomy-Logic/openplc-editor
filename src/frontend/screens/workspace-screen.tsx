@@ -65,6 +65,12 @@ const WorkspaceScreen = () => {
   // RARE: UI state (changes on user interaction, not during debug polling)
   const tabs = useOpenPLCStore(useCallback((s) => s.tabs, []))
   const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
+  // Every open editor model (POU + data type + singletons).  POU
+  // editors (textual / graphical) and data-type editors are
+  // multi-mounted: one React subtree per entry, visibility toggled
+  // by CSS.  This keeps Monaco / ReactFlow instances alive across
+  // tab switches — no dispose churn, no view-state loss.
+  const editors = useOpenPLCStore(useCallback((s) => s.editors, []))
   const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
   const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
@@ -502,6 +508,11 @@ const WorkspaceScreen = () => {
 
                     {tabs.length > 0 ? (
                       <>
+                        {/* Singleton editor types — at most one tab per project,
+                            so single-mount on the active editor is fine.  Each
+                            remounts on tab switch, which is harmless because
+                            they don't carry per-instance Monaco / ReactFlow
+                            state that would be lost. */}
                         {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                         {editor['type'] === 'plc-device' && <DeviceEditor />}
                         {editor['type'] === 'plc-remote-device' && editor.meta.protocol === 'ethercat' && (
@@ -509,9 +520,6 @@ const WorkspaceScreen = () => {
                         )}
                         {editor['type'] === 'plc-remote-device' && editor.meta.protocol !== 'ethercat' && (
                           <RemoteDeviceEditor />
-                        )}
-                        {editor['type'] === 'plc-ethercat-device' && (
-                          <EtherCATDeviceEditor key={editor.meta.deviceId} />
                         )}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'modbus-tcp' && (
                           <ModbusServerEditor />
@@ -522,60 +530,147 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
-                        {editor['type'] === 'plc-datatype' && (
-                          <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
-                            <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
+
+                        {/* EtherCAT device editors — multi-instance (one tab
+                            per `deviceId`).  Kept mounted across tab switches
+                            so the device's view state (active tab pane,
+                            scroll position, etc.) survives.  `busName` and
+                            `deviceId` are passed as props so each instance
+                            reads its own device regardless of which tab is
+                            active. */}
+                        {editors
+                          .filter((m) => m.type === 'plc-ethercat-device')
+                          .map((model) => {
+                            const isActive =
+                              editor.type === 'plc-ethercat-device' && editor.meta.deviceId === model.meta.deviceId
+                            return (
+                              <div
+                                key={model.meta.deviceId}
+                                className={cn('h-full w-full', !isActive && 'hidden')}
+                              >
+                                <EtherCATDeviceEditor busName={model.meta.busName} deviceId={model.meta.deviceId} />
+                              </div>
+                            )
+                          })}
+
+                        {/* Data type editors — multi-instance (one tab per
+                            data type).  Kept mounted across tab switches.
+                            DataTypeEditor reads its own data type by name
+                            from the project slice, so multi-mount is safe. */}
+                        {editors.some((m) => m.type === 'plc-datatype') && (
+                          <div
+                            aria-label='Datatypes editor container'
+                            className={cn(
+                              'flex h-full w-full flex-1 gap-2',
+                              editor.type !== 'plc-datatype' && 'hidden',
+                            )}
+                          >
+                            {editors
+                              .filter((m) => m.type === 'plc-datatype')
+                              .map((model) => {
+                                const isActive =
+                                  editor.type === 'plc-datatype' && editor.meta.name === model.meta.name
+                                return (
+                                  <div
+                                    key={model.meta.name}
+                                    className={cn('h-full w-full', !isActive && 'hidden')}
+                                  >
+                                    <DataTypeEditor dataTypeName={model.meta.name} />
+                                  </div>
+                                )
+                              })}
                           </div>
                         )}
-                        {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
-                          <ResizablePanelGroup
-                            id='editorContentPanelGroup'
-                            direction='vertical'
-                            className='flex flex-1 flex-col gap-1'
+
+                        {/* POU editors (textual + graphical) — multi-instance.
+                            One ResizablePanelGroup shared by every POU so the
+                            variables-panel splitter position is consistent;
+                            inside, every POU's `VariablesEditor` and body
+                            editor stay mounted, with CSS toggling visibility.
+                            Eliminates the dispose-during-tab-switch error chain
+                            (WordHighlighter, InstantiationService, etc.) and
+                            preserves Monaco cursor / ReactFlow viewport for free. */}
+                        {editors.some((m) => m.type === 'plc-textual' || m.type === 'plc-graphical') && (
+                          <div
+                            className={cn(
+                              'flex h-full w-full flex-1',
+                              editor.type !== 'plc-textual' && editor.type !== 'plc-graphical' && 'hidden',
+                            )}
                           >
-                            <ResizablePanel
-                              ref={panelRef}
-                              id='variableTablePanel'
-                              order={1}
-                              collapsible
-                              onCollapse={() => {
-                                setIsVariablesPanelCollapsed(true)
-                              }}
-                              onExpand={() => setIsVariablesPanelCollapsed(false)}
-                              collapsedSize={0}
-                              defaultSize={25}
-                              minSize={20}
-                              className={`relative flex h-full w-full flex-1 flex-col gap-4 overflow-auto`}
+                            <ResizablePanelGroup
+                              id='editorContentPanelGroup'
+                              direction='vertical'
+                              className='flex flex-1 flex-col gap-1'
                             >
-                              <VariablesEditor />
-                            </ResizablePanel>
+                              <ResizablePanel
+                                ref={panelRef}
+                                id='variableTablePanel'
+                                order={1}
+                                collapsible
+                                onCollapse={() => {
+                                  setIsVariablesPanelCollapsed(true)
+                                }}
+                                onExpand={() => setIsVariablesPanelCollapsed(false)}
+                                collapsedSize={0}
+                                defaultSize={25}
+                                minSize={20}
+                                className={`relative flex h-full w-full flex-1 flex-col gap-4 overflow-auto`}
+                              >
+                                {editors
+                                  .filter((m) => m.type === 'plc-textual' || m.type === 'plc-graphical')
+                                  .map((model) => {
+                                    const isActive = editor.meta.name === model.meta.name
+                                    return (
+                                      <div
+                                        key={model.meta.name}
+                                        className={cn('h-full w-full', !isActive && 'hidden')}
+                                      >
+                                        <VariablesEditor name={model.meta.name} isActive={isActive} />
+                                      </div>
+                                    )
+                                  })}
+                              </ResizablePanel>
 
-                            <ResizableHandle
-                              style={{ height: '1px' }}
-                              className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
-                            />
+                              <ResizableHandle
+                                style={{ height: '1px' }}
+                                className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
+                              />
 
-                            <ResizablePanel
-                              defaultSize={75}
-                              id='textualEditorPanel'
-                              order={2}
-                              className='mt-4 flex-1 flex-grow rounded-md'
-                            >
-                              {editor['type'] === 'plc-textual' ? (
-                                <MonacoEditor
-                                  name={editor.meta.name}
-                                  language={editor.meta.language}
-                                  path={editor.meta.path}
-                                />
-                              ) : (
-                                <GraphicalEditor
-                                  name={editor.meta.name}
-                                  language={editor.meta.language}
-                                  path={editor.meta.path}
-                                />
-                              )}
-                            </ResizablePanel>
-                          </ResizablePanelGroup>
+                              <ResizablePanel
+                                defaultSize={75}
+                                id='textualEditorPanel'
+                                order={2}
+                                className='mt-4 flex-1 flex-grow rounded-md'
+                              >
+                                {editors
+                                  .filter((m) => m.type === 'plc-textual' || m.type === 'plc-graphical')
+                                  .map((model) => {
+                                    const isActive = editor.meta.name === model.meta.name
+                                    return (
+                                      <div
+                                        key={model.meta.name}
+                                        className={cn('h-full w-full', !isActive && 'hidden')}
+                                      >
+                                        {model.type === 'plc-textual' ? (
+                                          <MonacoEditor
+                                            name={model.meta.name}
+                                            language={model.meta.language}
+                                            path={model.meta.path}
+                                            isActive={isActive}
+                                          />
+                                        ) : (
+                                          <GraphicalEditor
+                                            name={model.meta.name}
+                                            language={model.meta.language}
+                                            isActive={isActive}
+                                          />
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                              </ResizablePanel>
+                            </ResizablePanelGroup>
+                          </div>
                         )}
                       </>
                     ) : (
