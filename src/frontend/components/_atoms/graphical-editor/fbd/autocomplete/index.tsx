@@ -206,7 +206,10 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({ title: res.title, description: res.message, variant: 'fail' })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 

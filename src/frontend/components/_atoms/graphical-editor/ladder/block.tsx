@@ -206,11 +206,15 @@ export const BlockNodeElement = <T extends object>({
       })
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
-        deleteVariable({
+        const deletionResult = deleteVariable({
           rowId: variableIndex,
           scope: 'local',
           associatedPou: editor.meta.name,
         })
+        if (!deletionResult.ok) {
+          toast({ title: deletionResult.title, description: deletionResult.message, variant: 'fail' })
+          return
+        }
         if (
           editor.type === 'plc-graphical' &&
           editor.variable.display === 'table' &&

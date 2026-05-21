@@ -1,4 +1,5 @@
 import { produce } from 'immer'
+import type { StoreApi } from 'zustand'
 import { StateCreator } from 'zustand'
 
 import type {
@@ -17,6 +18,8 @@ import {
   syncVariableAliases as syncVariablesPure,
 } from '../../../../middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
@@ -164,6 +167,98 @@ function generateIOPoints(
   }
 
   return points
+}
+
+// ---------------------------------------------------------------------------
+// Variables-text ⇄ variables-table reconcile helpers
+// ---------------------------------------------------------------------------
+
+// `createVariable`, `updateVariable`, and `deleteVariable` below are
+// reachable from outside the variables-editor itself — block drops,
+// autocomplete "Add variable", block deletion, node type changes, etc.
+// When that POU's variables editor is in text mode, the in-memory
+// `pou.interface.variables` array and the `editor.variable.code`
+// buffer are two views of the same data.  Mutating the array
+// directly would diverge them: switching back to table mode would
+// reparse the (stale) text and clobber the just-added variable.
+//
+// Each external mutation runs three steps to keep them in lockstep:
+//
+//   1. **Reconcile** (`reconcileVariablesText`) — if the editor is in
+//      code mode, parse the text and replace the variables array with
+//      the parsed result.  Mirrors what the explicit text→table mode
+//      switch does, minus the rename/type-change dialogs (those are
+//      polish for an explicit user mode switch, not an implicit
+//      reconcile triggered by an unrelated diagram action).  If the
+//      text doesn't parse, refuse the mutation — the call site
+//      surfaces the failure via toast through the standard
+//      `{ok: false, title, message}` return shape.
+//   2. **Mutate** — apply the requested change to the variables array.
+//   3. **Regenerate** (`regenerateVariablesText`) — if the editor is
+//      in code mode, regenerate `editor.variable.code` from the new
+//      variables so Monaco shows the new state immediately.
+//
+// Project save / load paths intentionally do NOT call these — the
+// serializer roundtrip preserves invalid text verbatim (see
+// `parse-project-files`), and we only need to reconcile when an
+// external mutation is requested.
+
+type ProjectSetState = StoreApi<ProjectSliceRoot>['setState']
+type ProjectGetState = () => ProjectSliceRoot
+
+const reconcileVariablesText = (
+  pouName: string | undefined,
+  getState: ProjectGetState,
+  setState: ProjectSetState,
+): ProjectResponse => {
+  if (!pouName) return ok()
+  const state = getState()
+  const editorModel =
+    state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
+  // Only the editors that expose a per-POU variables panel
+  // participate.  Other editor types (datatype, device, server, etc.)
+  // never own a variables-text view.
+  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return ok()
+  if (editorModel.variable.display !== 'code') return ok()
+  const code = editorModel.variable.code
+  if (typeof code !== 'string') return ok()
+
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  const currentVariables = pou?.interface?.variables ?? []
+  // Buffer is a verbatim serialisation of the current variables —
+  // user hasn't typed since the last sync, nothing to reconcile.
+  if (code === generateIecVariablesToString(currentVariables)) return ok()
+
+  try {
+    const parsed = parseIecStringToVariables(
+      code,
+      state.project.data.pous,
+      state.project.data.dataTypes,
+      state.libraries,
+    )
+    setState(
+      produce((slice: ProjectSlice) => {
+        const target = slice.project.data.pous.find((p) => p.name === pouName)
+        if (target?.interface) target.interface.variables = parsed
+      }),
+    )
+    return ok()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown parse error.'
+    return fail(message, 'Variables table is invalid')
+  }
+}
+
+const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
+  if (!pouName) return
+  const state = getState()
+  const editorModel =
+    state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
+  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return
+  if (editorModel.variable.display !== 'code') return
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  const newText = generateIecVariablesToString(pou?.interface?.variables ?? [])
+  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
 }
 
 const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
@@ -358,6 +453,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         return fail(`'${data.name}' ${reason}`, 'Illegal Variable Name')
       }
 
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
@@ -391,6 +491,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           response.data = data
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     setPouVariables: ({ pouName, variables }) => {
@@ -411,6 +512,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return ok()
     },
     updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       let response: ProjectResponse = { ok: true }
 
       // Auto-adopt path: whenever the location changes, look up the
@@ -479,6 +585,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           response.data = variables[found.index]
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     getVariable: ({ scope, associatedPou, rowId, variableId }) => {
@@ -492,6 +599,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return found?.variable
     },
     deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName }) => {
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       if (scope === 'global') {
         const state = getState()
         const globalVars = state.project.data.configurations.resource.globalVariables
@@ -549,6 +661,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           variables.splice(found.index, 1)
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {

@@ -294,5 +294,7 @@ export type ProjectSlice = {
  */
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
+import type { EditorSlice } from '../editor/types'
+import type { LibrarySlice } from '../library/types'
 
-export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice
+export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice & EditorSlice & LibrarySlice
