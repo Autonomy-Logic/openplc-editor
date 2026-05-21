@@ -14,12 +14,10 @@
   "extraResources": [
     "./assets/**",
     {
-      "comment": "STruC++ runtime headers — the compiler module copies these into every project's build directory so arduino-cli's compiler sees them.  Lives in extraResources rather than the asar because electron-builder walks the asar via release/app/package.json's dependency tree, and strucpp isn't listed there (the version is pinned in binary-versions.json instead).  At runtime the path is process.resourcesPath/strucpp/runtime/include — see backend/editor/compiler/compiler-module.ts.",
       "from": "./node_modules/strucpp/src/runtime/include",
       "to": "./strucpp/runtime/include"
     },
     {
-      "comment": "STruC++ bundled .stlib archives — loaded by the library manager and pushed to the LSP worker on boot.  See backend/editor/library-manager/library-manager-module.ts for the runtime path resolution.",
       "from": "./node_modules/strucpp/libs",
       "to": "./strucpp/libs"
     }
