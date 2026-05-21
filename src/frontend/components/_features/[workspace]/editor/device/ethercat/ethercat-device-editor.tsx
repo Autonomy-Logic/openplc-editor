@@ -268,6 +268,9 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
       {/* Header */}
       <div className='mb-4 shrink-0'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>{device.name}</h2>
+        {esiDevice?.name && esiDevice.name !== device.name && (
+          <p className='mt-0.5 text-xs text-neutral-500 dark:text-neutral-400'>{esiDevice.name}</p>
+        )}
       </div>
 
       {/* Tabs */}

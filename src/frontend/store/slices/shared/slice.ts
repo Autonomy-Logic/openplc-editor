@@ -6,6 +6,7 @@ import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { toast } from '../../../utils/toast'
+import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
@@ -380,6 +381,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!device) return { ok: false, message: 'EtherCAT device not found' }
 
       const oldName = device.name
+      // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
+      // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
+      // silently on duplicates, so new write paths must replicate one strategy.
+      // Same-name rename is allowed (the action stays idempotent).
+      if (newName !== oldName && collectAllSlaveNames(state.project.data.remoteDevices).has(newName)) {
+        return { ok: false, message: `An EtherCAT slave named "${newName}" already exists in this project` }
+      }
       const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
       state.projectActions.updateEthercatConfig(busName, {
         masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {

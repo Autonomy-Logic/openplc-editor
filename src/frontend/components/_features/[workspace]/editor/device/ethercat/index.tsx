@@ -8,6 +8,8 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
@@ -414,6 +416,9 @@ const EtherCATEditor = () => {
     const unmatched: ScannedDeviceMatch['device'][] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
     const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
+    // Names already taken across every master — extended as we add each
+    // device so the batch can't collide with itself either.
+    const takenNames = collectAllSlaveNames(project.data.remoteDevices)
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -441,10 +446,14 @@ const EtherCATEditor = () => {
         for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
+      const baseName = getShortDeviceName(bestMatch.esiDevice)
+      const uniqueName = generateUniqueSlaveName(baseName, takenNames)
+      takenNames.add(uniqueName)
+
       newDevices.push({
         id: uuidv4(),
         position: match.device.position,
-        name: bestMatch.esiDevice.name || match.device.name,
+        name: uniqueName,
         esiDeviceRef: {
           repositoryItemId: bestMatch.repositoryItemId,
           deviceIndex: bestMatch.deviceIndex,
@@ -510,10 +519,13 @@ const EtherCATEditor = () => {
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
 
+      const baseName = getShortDeviceName(device)
+      const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
+
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
         position: nextPosition,
-        name: device.name,
+        name: uniqueName,
         esiDeviceRef: ref,
         vendorId: repoItem.vendor.id,
         productCode: device.type.productCode,
