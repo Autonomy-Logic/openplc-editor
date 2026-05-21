@@ -2,8 +2,9 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
+import type { SystemLibrary } from '../../../store/slices/library/types'
 import { openPLCStoreBase } from '../../../store'
-import { attachProjectSync } from '../project-sync'
+import { attachEnabledLibrariesSync, attachProjectSync } from '../project-sync'
 import type { StLspService } from '../types'
 
 function makeStPou(name: string, body: string = 'x := 1;'): PLCPou {
@@ -201,5 +202,138 @@ describe('attachProjectSync', () => {
     expect(service.openDocument).not.toHaveBeenCalled()
     expect(service.changeDocument).not.toHaveBeenCalled()
     handle.dispose()
+  })
+
+  it('forceResync() re-publishes every tracked document with bumped versions', () => {
+    setProjectPous([makeStPou('A'), makeStPou('B')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.openDocument.mockClear()
+    service.changeDocument.mockClear()
+
+    handle.forceResync()
+
+    expect(service.changeDocument).toHaveBeenCalledTimes(2)
+    const uris = service.changeDocument.mock.calls.map((c) => c[0]).sort()
+    expect(uris).toEqual(['inmemory://pou/A.st', 'inmemory://pou/B.st'])
+    const versions = service.changeDocument.mock.calls.map((c) => c[2])
+    expect(new Set(versions).size).toBe(versions.length)
+    handle.dispose()
+  })
+})
+
+function makeSystemLibrary(name: string, version: string = '1.0.0'): SystemLibrary {
+  return {
+    name,
+    author: 'test',
+    version,
+    stPath: `/libs/${name}.st`,
+    cPath: `/libs/${name}.c`,
+    pous: [],
+  } as SystemLibrary
+}
+
+describe('attachEnabledLibrariesSync', () => {
+  beforeEach(() => {
+    // Reset the library slice to a known state between tests.  The
+    // store is shared across the file, so left-over enabled libraries
+    // would otherwise leak from earlier tests.
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setProjectLibraries([])
+    a.setSystemLibraries([])
+  })
+
+  it('fires refreshStlibs when a library is enabled for the project', () => {
+    const service = makeStubService()
+    const unsubscribe = attachEnabledLibrariesSync(service)
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+
+    a.enableLibrary('Semaphore_Package')
+
+    expect(service.refreshStlibs).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('fires refreshStlibs when a library is disabled for the project', () => {
+    const service = makeStubService()
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
+    a.enableLibrary('Semaphore_Package')
+
+    const unsubscribe = attachEnabledLibrariesSync(service)
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+
+    a.disableLibrary('Semaphore_Package')
+
+    expect(service.refreshStlibs).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('does not fire when only libraries.user changes (handled by attachLibrarySync)', () => {
+    const service = makeStubService()
+    const unsubscribe = attachEnabledLibrariesSync(service)
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+
+    openPLCStoreBase.getState().libraryActions.addLibrary('UserFB', 'function-block')
+
+    expect(service.refreshStlibs).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('is order-independent — a reorder of the same set does not refresh', () => {
+    const service = makeStubService()
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setSystemLibraries([makeSystemLibrary('A'), makeSystemLibrary('B')])
+
+    const unsubscribe = attachEnabledLibrariesSync(service)
+    a.setProjectLibraries([
+      { name: 'A', version: '1.0.0' },
+      { name: 'B', version: '1.0.0' },
+    ])
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+
+    a.setProjectLibraries([
+      { name: 'B', version: '1.0.0' },
+      { name: 'A', version: '1.0.0' },
+    ])
+
+    expect(service.refreshStlibs).not.toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('unsubscribe stops the subscription firing', () => {
+    const service = makeStubService()
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
+
+    const unsubscribe = attachEnabledLibrariesSync(service)
+    unsubscribe()
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+
+    a.enableLibrary('Semaphore_Package')
+
+    expect(service.refreshStlibs).not.toHaveBeenCalled()
+  })
+
+  it('calls onAfterRefresh once refreshStlibs resolves (forces document re-analyze)', async () => {
+    const service = makeStubService()
+    const onAfterRefresh = jest.fn()
+    const unsubscribe = attachEnabledLibrariesSync(service, onAfterRefresh)
+    const a = openPLCStoreBase.getState().libraryActions
+    a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
+    ;(service.refreshStlibs as jest.Mock).mockClear()
+    onAfterRefresh.mockClear()
+
+    a.enableLibrary('Semaphore_Package')
+    // Drain the `.then(...)` continuation that runs after the
+    // refreshStlibs() promise resolves.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(service.refreshStlibs).toHaveBeenCalledTimes(1)
+    expect(onAfterRefresh).toHaveBeenCalledTimes(1)
+    unsubscribe()
   })
 })

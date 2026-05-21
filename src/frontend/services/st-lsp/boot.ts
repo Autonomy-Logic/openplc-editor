@@ -19,7 +19,7 @@
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import { startStLsp } from './index'
 import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
-import { attachLibrarySync, attachProjectSync } from './project-sync'
+import { attachEnabledLibrariesSync, attachLibrarySync, attachProjectSync } from './project-sync'
 import type { StLspService } from './types'
 
 export interface StLspBootHandle {
@@ -51,7 +51,15 @@ export function bootStLsp(
   // opens a project, the subscribe fires and the worker sees a
   // didOpen wave for every POU.
   const projectSync = attachProjectSync(service)
-  const unsubscribeLibrarySync = attachLibrarySync(service)
+  // Both library-sync layers force a document re-publish after the
+  // stlib cache settles.  The worker doesn't re-run analysis on
+  // cache mutations, so without this nudge documents keep their
+  // previously-cached `analysisResult` and Monaco shows stale
+  // diagnostics — most visibly: symbols from a just-disabled
+  // library still resolve.
+  const forceResync = () => projectSync.forceResync()
+  const unsubscribeLibrarySync = attachLibrarySync(service, forceResync)
+  const unsubscribeEnabledLibrariesSync = attachEnabledLibrariesSync(service, forceResync)
 
   // Pre-register Monaco models for every POU so cross-POU
   // references / peek-definition / go-to-references resolve through
@@ -70,6 +78,7 @@ export function bootStLsp(
   return {
     service,
     dispose() {
+      unsubscribeEnabledLibrariesSync()
       unsubscribeLibrarySync()
       projectSync.dispose()
       modelSync?.dispose()
