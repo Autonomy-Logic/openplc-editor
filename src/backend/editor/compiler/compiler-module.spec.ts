@@ -3,9 +3,12 @@ import { CompilerModule } from './compiler-module'
 jest.mock('electron', () => ({
   app: {
     getPath: jest.fn().mockReturnValue('/tmp/mock-user-data'),
-    // strucppRuntimeDir resolves under `<app-root>/node_modules/strucpp/...`;
-    // any non-empty string works for the type-asserting tests.
+    // In dev (the branch tests exercise — `isPackaged` is undefined/falsy
+    // through this mock), strucppRuntimeDir resolves under
+    // `<app-root>/node_modules/strucpp/src/runtime/include`; any
+    // non-empty string works for the type-asserting tests.
     getAppPath: jest.fn().mockReturnValue('/tmp/mock-app-root'),
+    isPackaged: false,
     getVersion: jest.fn().mockReturnValue('0.0.0-test'),
   },
   dialog: {

@@ -115,34 +115,16 @@ function needsXml2st(versions: BinaryVersions, cached: CacheMetadata | null, pla
 function needsStrucpp(versions: BinaryVersions): boolean {
   // strucpp is `npm install`-ed into `node_modules/`, so npm's own
   // `package.json` is the canonical source of truth for what's
-  // installed.  Re-fetch only when the package isn't installed or its
-  // version doesn't match the pin — no parallel metadata cache.
-  //
-  // We check BOTH the root and `release/app/node_modules` copies:
-  // the root copy serves `npm run dev`, the release/app copy is what
-  // electron-builder packs into the asar for packaged builds.  If
-  // either is missing or stale, redownload (the install step
-  // mirrors into both).
+  // installed.  Re-fetch only when the package isn't installed or
+  // its version doesn't match the pin — no parallel metadata cache.
   const expected = versions.strucpp.version.replace(/^v/, '')
-  const candidatePaths = [
-    path.join(ROOT_DIR, 'node_modules', 'strucpp', 'package.json'),
-    path.join(ROOT_DIR, 'release', 'app', 'node_modules', 'strucpp', 'package.json'),
-  ]
-  for (const pkgJsonPath of candidatePaths) {
-    // Skip the release/app path entirely when that directory doesn't
-    // exist yet (fresh checkout pre-`npm ci`); the release/app
-    // postinstall + electron-builder install-app-deps create the
-    // structure later.
-    if (pkgJsonPath.includes('release') && !fs.existsSync(path.dirname(path.dirname(path.dirname(pkgJsonPath))))) {
-      continue
-    }
-    if (!fs.existsSync(pkgJsonPath)) return true
-    try {
-      const installed = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
-      if (installed.version !== expected) return true
-    } catch {
-      return true
-    }
+  const pkgJsonPath = path.join(ROOT_DIR, 'node_modules', 'strucpp', 'package.json')
+  if (!fs.existsSync(pkgJsonPath)) return true
+  try {
+    const installed = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
+    if (installed.version !== expected) return true
+  } catch {
+    return true
   }
 
   return false
@@ -278,40 +260,25 @@ async function downloadStrucpp(tool: ToolEntry): Promise<void> {
     const tgzPath = path.join(tmpDir, 'strucpp.tgz')
     await downloadToFile(url, tgzPath)
 
-    // Install into node_modules via npm.  The compiler reads runtime
-    // headers from `node_modules/strucpp/src/runtime/include/` and
-    // bundled `.stlib` archives from `node_modules/strucpp/libs/` at
-    // runtime — Electron's fs APIs handle the asar lookup in
-    // packaged builds — so no parallel copy to `resources/strucpp/`
-    // is needed.  npm's own `node_modules/strucpp/package.json`
-    // tracks the installed version; we don't maintain a separate
-    // metadata file alongside.
+    // Install into node_modules via npm.  In dev (`npm run dev`),
+    // the compiler reads runtime headers from `node_modules/strucpp/
+    // src/runtime/include/` and bundled `.stlib` archives from
+    // `node_modules/strucpp/libs/` directly.  In packaged builds,
+    // electron-builder's `extraResources` config copies those two
+    // directories into `Resources/strucpp/` of the final app — see
+    // `electron-builder.json` and the dev/packaged path branching
+    // in `backend/editor/compiler/compiler-module.ts` and
+    // `backend/editor/library-manager/library-manager-module.ts`.
+    // We don't mirror the install into `release/app/node_modules`
+    // because electron-builder walks `release/app/package.json`'s
+    // dependency tree and prunes anything not listed there from the
+    // asar, regardless of whether the files exist on disk.
     console.log(`  Installing strucpp ${tool.version} into node_modules...`)
     execSync(`npm install "${tgzPath}" --no-save`, {
       cwd: ROOT_DIR,
       stdio: 'pipe',
     })
     console.log(`  strucpp ${tool.version} installed.`)
-
-    // ALSO install into release/app/node_modules.  electron-builder
-    // packages from `release/app/`, so its asar only includes that
-    // directory's `node_modules` — the root install above is enough
-    // for `npm run dev`, but a packaged build would ship without
-    // strucpp's runtime/include and libs (`compiler-module`'s
-    // `fs.access` then throws "STruC++ runtime headers not found
-    // at …app.asar\node_modules\strucpp\src\runtime\include").
-    // `release/app/package.json` deliberately keeps strucpp out of
-    // its `dependencies` to avoid pinning a hardcoded version
-    // alongside `binary-versions.json`; we mirror the install here.
-    const releaseAppDir = path.join(ROOT_DIR, 'release', 'app')
-    if (fs.existsSync(releaseAppDir)) {
-      console.log(`  Installing strucpp ${tool.version} into release/app/node_modules...`)
-      execSync(`npm install "${tgzPath}" --no-save`, {
-        cwd: releaseAppDir,
-        stdio: 'pipe',
-      })
-      console.log(`  strucpp ${tool.version} mirrored into release/app/node_modules.`)
-    }
   } finally {
     rmrf(tmpDir)
   }

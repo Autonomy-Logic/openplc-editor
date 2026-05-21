@@ -44,13 +44,23 @@ export class LibraryManagerModule {
   }
 
   /**
-   * Resolve the strucpp-shipped bundled-libs directory.  Reads
-   * directly from the strucpp package — dev mode resolves to
-   * `<repo>/node_modules/strucpp/libs/`, packaged builds to the
-   * same path inside asar.  Electron's `readdirSync` / `readFileSync`
-   * handle asar paths transparently, so no `asarUnpack` is needed.
+   * Resolve the strucpp-shipped bundled-libs directory.  Reads from
+   * two different locations depending on dev vs packaged:
+   *
+   *   - **Dev**: `<repo>/node_modules/strucpp/libs/` — populated by
+   *     `scripts/download-binaries.ts` on `npm install`.
+   *
+   *   - **Packaged**: `process.resourcesPath/strucpp/libs/` —
+   *     populated by electron-builder's `extraResources` config.  We
+   *     can't read from `app.getAppPath()/node_modules/strucpp` in
+   *     packaged builds because strucpp isn't declared in
+   *     `release/app/package.json`'s `dependencies`, so
+   *     electron-builder prunes it out of the asar.
    */
   private resolveDefaultBundledDir(): string {
+    if (app.isPackaged) {
+      return join(process.resourcesPath, 'strucpp', 'libs')
+    }
     return join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
   }
 

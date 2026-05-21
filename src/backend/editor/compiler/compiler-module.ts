@@ -285,13 +285,28 @@ class CompilerModule {
   }
 
   #constructStrucppRuntimeDir(): string {
-    // strucpp's npm tarball ships `src/runtime/include/` (see strucpp's
-    // package.json `files`); `electronApp.getAppPath()` resolves to the
-    // repo root in dev and to the asar archive root in a packaged app.
-    // Electron's `fs.cp` / `fs.readFile` read transparently from inside
-    // asar, so the runtime-header copy step (`copyStrucppRuntimeHeaders`)
-    // works without any `asarUnpack` configuration — arduino-cli still
-    // only ever sees the destination copy under `build/[target]/`.
+    // strucpp's runtime headers (`src/runtime/include/`) live in two
+    // places depending on whether we're running dev or a packaged app:
+    //
+    //   - **Dev** (`npm run dev`): read from the root install at
+    //     `node_modules/strucpp/src/runtime/include` — that's what
+    //     `scripts/download-binaries.ts` populates via `npm install
+    //     <tarball> --no-save`.
+    //
+    //   - **Packaged**: read from `process.resourcesPath/strucpp/
+    //     runtime/include` — copied there by electron-builder's
+    //     `extraResources` config.  We *cannot* read from the asar's
+    //     own node_modules because electron-builder packs the asar
+    //     based on `release/app/package.json`'s dependency tree and
+    //     strucpp isn't a declared dep (the version is pinned in
+    //     `binary-versions.json` instead), so the package gets pruned
+    //     out of the asar entirely.
+    //
+    // arduino-cli still only ever sees the destination copy under
+    // `build/[target]/` after `copyStrucppRuntimeHeaders` runs.
+    if (electronApp.isPackaged) {
+      return join(process.resourcesPath, 'strucpp', 'runtime', 'include')
+    }
     return join(electronApp.getAppPath(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
   }
 
