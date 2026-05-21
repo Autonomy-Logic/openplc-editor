@@ -219,12 +219,22 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
     const result = calculateDynamicHandleOffsets({ ...rung, nodes }, blockNode)
 
     if (!result) {
-      // No expansion needed — reset handle relPosition/style to defaults and clear
-      // stale height overrides so blocks shrink back after branch removal.
+      // No expansion needed — reset handle relPosition/style to defaults and
+      // restore the natural per-variant block height so that:
+      //   - blocks shrink back to their default size after a branch removal,
+      //   - blocks with many handles (FBs like OSCAT SEQUENCE_4 with 15 inputs)
+      //     still occupy the full vertical span their connectors require.
+      //
+      // Using blockStyle.height (the 3-handle DEFAULT_BLOCK_HEIGHT constant)
+      // here used to clip large blocks: connectors were rendered past the
+      // bounding box because the box was forced to 128px.
       const defaultCumulativeY: number[] = [FIRST_HANDLE_Y]
       for (let i = 1; i < maxHandles; i++) {
         defaultCumulativeY[i] = FIRST_HANDLE_Y + i * DEFAULT_OFFSET
       }
+      // Match getBlockSize: top padding for the first handle + 24px below the
+      // last handle for the block frame's bottom edge.
+      const naturalHeight = defaultCumulativeY[maxHandles - 1] + 24
 
       const newInputHandles = blockData.inputHandles.map((h, i) => ({
         ...h,
@@ -242,8 +252,8 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
 
       nodes[blockIdx] = {
         ...blockNode,
-        height: blockStyle.height,
-        measured: { width: blockNode.measured?.width ?? blockNode.width ?? 0, height: blockStyle.height },
+        height: naturalHeight,
+        measured: { width: blockNode.measured?.width ?? blockNode.width ?? 0, height: naturalHeight },
         data: {
           ...blockData,
           handles: newHandles,
