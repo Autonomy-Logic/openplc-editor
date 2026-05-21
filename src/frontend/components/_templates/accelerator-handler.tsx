@@ -57,7 +57,7 @@ const AcceleratorHandler = () => {
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
   const pendingRecentProjectRef = useRef<unknown>(null)
 
-  const executeSave = useCallback(() => executeSaveProject(projectPort), [projectPort])
+  const executeSave = useCallback(() => executeSaveProject(projectPort, capabilities), [projectPort, capabilities])
 
   /**
    * Export project accelerator
@@ -247,10 +247,10 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSaveFile(() => {
-      void executeSaveActiveFile(projectPort)
+      void executeSaveActiveFile(projectPort, capabilities)
     })
     return unsub
-  }, [accelerator, projectPort])
+  }, [accelerator, projectPort, capabilities])
 
   /**
    * Find in project (Cmd+Shift+F)

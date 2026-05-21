@@ -923,7 +923,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // Keyboard shortcuts: Ctrl+S (save active file), Ctrl+Shift+S (save entire project)
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
-        void executeSaveActiveFile(projectPort)
+        void executeSaveActiveFile(projectPort, capabilities)
       }
     })
 
@@ -931,7 +931,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyS,
       () => {
         if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
-          void executeSaveProject(projectPort)
+          void executeSaveProject(projectPort, capabilities)
         }
       },
     )
