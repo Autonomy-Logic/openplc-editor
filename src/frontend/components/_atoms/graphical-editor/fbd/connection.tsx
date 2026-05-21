@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
@@ -17,8 +18,8 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const ConnectionElement = (block: ConnectionProps) => {
   const { id, data, selected, type } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     editorActions: { updateModelFBD },
     fbdFlows,
     fbdFlowActions: { updateNode },
@@ -65,7 +66,7 @@ const ConnectionElement = (block: ConnectionProps) => {
    * Update inputError state when the variable is updated
    */
   useEffect(() => {
-    const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!rung || !connectionNode) return
@@ -98,13 +99,13 @@ const ConnectionElement = (block: ConnectionProps) => {
       pou,
       rung,
       node: connectionNode,
-    } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !connectionNode) return
 
     const connectionBlock = fbdFlows
-      .find((flow) => flow.name === editor.meta.name)
+      .find((flow) => flow.name === pouName)
       ?.rung?.nodes.find(
         (node) =>
           (type === 'connector' ? node.type === 'continuation' : node.type === 'connector') &&
@@ -118,7 +119,7 @@ const ConnectionElement = (block: ConnectionProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodeId: id,
       node: {
         ...connectionNode,

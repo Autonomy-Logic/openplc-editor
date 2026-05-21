@@ -9,6 +9,7 @@ import { cn } from '../../../../../utils/cn'
 import { getLiteralType } from '../../../../../utils/keywords'
 import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { BlockVariant } from '../../types/block'
@@ -27,8 +28,8 @@ type FBDBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 
 const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProps>(
   ({ block: unknownBlock, isOpen, setIsOpen, keyPressed, valueToSearch }: FBDBlockAutoCompleteProps, ref) => {
+    const pouName = useBoundPou()
     const {
-      editor,
       project: {
         data: { pous },
       },
@@ -39,10 +40,10 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
     const block = unknownBlock as Node<BasicNodeData> & { positionAbsoluteX?: number; positionAbsoluteY?: number }
     const { edges, pou, variables, rung } = useMemo(() => {
-      return getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      return getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
-    }, [pous, fbdFlows, editor, block.id])
+    }, [pous, fbdFlows, pouName, block.id])
 
     const variableRestrictions = useMemo(() => {
       switch (block.type as keyof typeof customNodeTypes) {
@@ -124,13 +125,13 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         : ([] as PLCVariable[])
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
       if (!rung || !variableNode) return
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: variableNode.id,
         node: {
           ...variableNode,
@@ -152,7 +153,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
 
-      const { rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      const { rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
       if (!rung || !node) return
@@ -204,7 +205,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           debug: false,
         },
         scope: 'local',
-        associatedPou: editor.meta.name,
+        associatedPou: pouName,
       })
       if (!res.ok) {
         toast({ title: res.title, description: res.message, variant: 'fail' })
@@ -214,7 +215,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       const variable = res.data as PLCVariable | undefined
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: node.id,
         node: {
           ...node,
@@ -239,7 +240,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       if (!newBlock) return
 
       addNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         node: newBlock,
       })
     }

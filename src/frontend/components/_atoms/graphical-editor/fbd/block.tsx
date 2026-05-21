@@ -7,6 +7,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -46,8 +47,9 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable?: boolean
   scale?: number
 }) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
     editorActions: { updateModelVariables, updateModelFBD },
     libraries,
     fbdFlows,
@@ -80,7 +82,7 @@ export const BlockNodeElement = <T extends object>({
   const inputNameRef = useRef<HTMLInputElement>(null)
   const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
 
-  const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+  const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
     nodeId: nodeId ?? '',
   })
   /**
@@ -148,8 +150,8 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
-      const pouData = project.data.pous.find((p) => p.name === editor.meta.name)
-      pushToHistory(editor.meta.name, {
+      const pouData = project.data.pous.find((p) => p.name === pouName)
+      pushToHistory(pouName, {
         variables: pouData?.interface?.variables ?? [],
         body: pouData?.body.value,
       })
@@ -158,7 +160,7 @@ export const BlockNodeElement = <T extends object>({
         const deletionResult = deleteVariable({
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (!deletionResult.ok) {
           toast({ title: deletionResult.title, description: deletionResult.message, variant: 'fail' })
@@ -182,7 +184,7 @@ export const BlockNodeElement = <T extends object>({
           },
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (!res.ok) {
           toast({
@@ -238,18 +240,18 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const pouData2 = project.data.pous.find((p) => p.name === editor.meta.name)
-    pushToHistory(editor.meta.name, {
+    const pouData2 = project.data.pous.find((p) => p.name === pouName)
+    pushToHistory(pouName, {
       variables: pouData2?.interface?.variables ?? [],
       body: pouData2?.body.value,
     })
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodes: newNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       edges: newEdges,
     })
 
@@ -328,8 +330,8 @@ export const BlockNodeElement = <T extends object>({
 
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     project,
     project: {
       data: { pous },
@@ -347,7 +349,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
     nodeId: id ?? '',
   })
 
@@ -425,7 +427,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     if ((node.data as BasicNodeData).variable.id === variable.id) {
       if ((node.data as BasicNodeData).variable.name !== variable.name) {
         updateNode({
-          editorName: editor.meta.name,
+          editorName: pouName,
           nodeId: node.id,
           node: {
             ...node,
@@ -454,7 +456,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
 
@@ -479,7 +481,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) => {
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: node.id,
         node: {
           ...node,
@@ -506,8 +508,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
-        const pouData = project.data.pous.find((p) => p.name === editor.meta.name)
-        pushToHistory(editor.meta.name, {
+        const pouData = project.data.pous.find((p) => p.name === pouName)
+        pushToHistory(pouName, {
           variables: pouData?.interface?.variables ?? [],
           body: pouData?.body.value,
         })
@@ -523,7 +525,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             debug: false,
           },
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
 
         if (!creationResult.ok) {
@@ -548,7 +550,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
-    const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
@@ -723,11 +725,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       .filter((edge) => edge !== null)
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodes: newNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       edges: newEdges,
     })
   }

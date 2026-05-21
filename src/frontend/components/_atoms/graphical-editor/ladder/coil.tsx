@@ -7,6 +7,7 @@ import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
@@ -18,9 +19,8 @@ export type { CoilNode } from './utils/types'
 
 export const Coil = (block: CoilProps) => {
   const { selected, data, id } = block
-
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
@@ -90,7 +90,7 @@ export const Coil = (block: CoilProps) => {
       node: coilNode,
       rung,
       variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
 
@@ -115,7 +115,7 @@ export const Coil = (block: CoilProps) => {
     if ((coilNode.data as BasicNodeData).variable.name.toLowerCase() !== variable.name.toLowerCase()) {
       setCoilVariableValue(variable.name)
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: coilNode.id,
         node: {
@@ -181,7 +181,7 @@ export const Coil = (block: CoilProps) => {
    */
   const handleSubmitCoilVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || coilVariableValue
-    const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -195,7 +195,7 @@ export const Coil = (block: CoilProps) => {
       variable.type.value.toUpperCase() !== 'BOOL'
     ) {
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: node.id,
         node: {
@@ -211,7 +211,7 @@ export const Coil = (block: CoilProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: node.id,
       node: {
@@ -265,12 +265,12 @@ export const Coil = (block: CoilProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {
@@ -281,12 +281,12 @@ export const Coil = (block: CoilProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {

@@ -7,6 +7,7 @@ import type { FBDRungState } from '../../../../../store/slices/fbd'
 import { pasteNodesAtFBD } from '../../../../../store/slices/fbd/utils'
 import { EdgeType, NodeType } from '../../../../../store/slices/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 
 export const useFBDClipboard = ({
   mousePosition,
@@ -21,7 +22,8 @@ export const useFBDClipboard = ({
   rung: FBDRungState
   handleDeleteNodes: (nodes: Node[], edges: Edge[]) => void
 }) => {
-  const { editor, fbdFlowActions } = useOpenPLCStore()
+  const pouName = useBoundPou()
+  const { fbdFlowActions } = useOpenPLCStore()
 
   /**
    * Set data to clipboard when copying the viewport
@@ -150,19 +152,19 @@ export const useFBDClipboard = ({
       newNodes.push(...data.nodes)
       fbdFlowActions.setNodes({
         nodes: newNodes,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
 
       data.edges.forEach((edge) => {
         fbdFlowActions.addEdge({
           edge: edge,
-          editorName: editor.meta.name,
+          editorName: pouName,
         })
       })
 
       fbdFlowActions.setSelectedNodes({
         nodes: data.nodes,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
 
       toast({

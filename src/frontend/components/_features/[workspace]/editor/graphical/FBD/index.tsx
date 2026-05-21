@@ -5,24 +5,15 @@ import { zodFBDFlowSchema } from '../../../../../../store/slices/fbd'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
+import { useBoundPou } from '../active-context'
 
-interface FbdEditorProps {
-  /**
-   * POU name this FbdEditor instance is bound to.  With multi-mount,
-   * every open FBD POU has its own FbdEditor that must look up its
-   * OWN flow — not whichever POU happens to be active in the store.
-   * Without this prop the ReactFlow inside would render the active
-   * POU's nodes inside every hidden FbdEditor too, and the viewport
-   * the user set while a POU was visible would get clobbered on
-   * subsequent tab switches.  Defaults to the active editor's name
-   * for legacy callers.
-   */
-  name?: string
-}
-
-export default function FbdEditor({ name: propName }: FbdEditorProps = {}) {
-  const activeEditorName = useOpenPLCStore((state) => state.editor.meta.name)
-  const pouName = propName ?? activeEditorName
+export default function FbdEditor() {
+  // Bound POU comes from the `GraphicalEditorActiveProvider` set up
+  // in the wrapper one level up.  With multi-mount, every open FBD
+  // POU has its own FbdEditor instance — the context is what tells
+  // each instance which POU's flow to operate on, instead of all of
+  // them collapsing to the globally-active editor.
+  const pouName = useBoundPou()
   const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
@@ -117,12 +108,7 @@ export default function FbdEditor({ name: propName }: FbdEditorProps = {}) {
   return (
     <div className='h-full w-full'>
       {flow?.rung ? (
-        <FBDBody
-          pouName={pouName}
-          rung={flow?.rung}
-          nodeDivergences={nodeDivergences}
-          isDebuggerActive={isDebuggerVisible}
-        />
+        <FBDBody rung={flow?.rung} nodeDivergences={nodeDivergences} isDebuggerActive={isDebuggerVisible} />
       ) : (
         <span>No rung found for editor</span>
       )}

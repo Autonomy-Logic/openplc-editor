@@ -9,6 +9,7 @@ import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
+import { selectEditorForPou } from '../../../store/slices/editor/utils'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
@@ -59,21 +60,12 @@ interface VariablesEditorProps {
 const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
   const ROWS_NOT_SELECTED = -1
   // Multi-mount support: every open POU's VariablesEditor reads ITS
-  // OWN model.  When this instance's POU matches the currently-active
-  // editor we read `state.editor` directly — that's the *fresh* copy
-  // most action callsites (`updateModelVariables`, etc.) mutate.
-  // Falling back to `state.editors[]` for non-matching tabs is fine
-  // because hidden VariablesEditors aren't interactive; reading the
-  // last-saved snapshot is correct.  Without this preference the
-  // hidden-snapshot lookup would shadow updates to the active editor
-  // and the UI would never re-render after `updateModelVariables`.
-  // Alias `editor` to this instance's model so the rest of the
-  // component reads from the right POU without a sweeping rename.
-  const editor = useOpenPLCStore((s) => {
-    if (!propName) return s.editor
-    if (s.editor.meta.name === propName) return s.editor
-    return s.editors.find((e) => e.meta.name === propName) ?? s.editor
-  })
+  // OWN model via the shared `selectEditorForPou` helper.  This is
+  // the same selector the graphical editors use through
+  // `useBoundEditorModel()` — kept centralised so the active-editor
+  // preference + hidden-snapshot fallback can't drift between the
+  // textual and graphical multi-mount paths.
+  const editor = useOpenPLCStore((s) => selectEditorForPou(s, propName))
   const {
     ladderFlows,
     ladderFlowActions: { updateNode },

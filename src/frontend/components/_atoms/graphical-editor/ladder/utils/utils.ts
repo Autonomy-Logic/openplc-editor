@@ -2,7 +2,6 @@ import { Position } from '@xyflow/react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
-import type { EditorModel } from '../../../../../store/slices/editor'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import {
@@ -13,8 +12,13 @@ import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
 
+// `pouName` is the bound POU for the caller's editor instance — see
+// the FBD helper next door for the full rationale.  In short: the
+// editor used to be passed in so we could read `editor.meta.name`,
+// but that always resolves to the globally-active editor and breaks
+// multi-mounted instances.
 export const getLadderPouVariablesRungNodeAndEdges = (
-  editor: EditorModel,
+  pouName: string,
   pous: PLCPou[],
   ladderFlows: LadderFlowType[],
   data: { nodeId: string; variableName?: string },
@@ -28,10 +32,10 @@ export const getLadderPouVariablesRungNodeAndEdges = (
   }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
-  const pou = pous.find((pou) => pou.name === editor.meta.name)
+  const pou = pous.find((pou) => pou.name === pouName)
 
   const rung = ladderFlows
-    .find((flow) => flow.name === editor.meta.name)
+    .find((flow) => flow.name === pouName)
     ?.rungs.find((rung) => rung.nodes.some((node) => node.id === data.nodeId))
 
   const node = rung?.nodes.find((node) => node.id === data.nodeId)

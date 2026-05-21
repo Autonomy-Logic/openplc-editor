@@ -8,7 +8,6 @@ import SfcEditor from './SFC'
 type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   name: string
   language: 'ld' | 'sfc' | 'fbd'
-  path: string
   readOnly?: boolean
   /**
    * Whether this editor is the active (visible) tab.  Multi-mount
@@ -31,13 +30,13 @@ const GraphicalEditor = ({ name, language, readOnly, isActive = true }: Graphica
   const EditorComponent = editorComponents[language]
 
   return (
-    <GraphicalEditorActiveProvider isActive={isActive}>
+    <GraphicalEditorActiveProvider pouName={name} isActive={isActive}>
       <div className='relative h-full w-full overflow-y-auto'>
         {readOnly && (
           <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only: viewing historical commit' />
         )}
         <div className={`h-full w-full${readOnly ? ' pointer-events-none' : ''}`}>
-          <EditorComponent name={name} />
+          <EditorComponent />
         </div>
       </div>
     </GraphicalEditorActiveProvider>

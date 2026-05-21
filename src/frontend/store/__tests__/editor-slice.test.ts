@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla'
 
 import { createEditorSlice } from '../slices/editor/slice'
 import type { EditorModel, EditorSlice } from '../slices/editor/types'
+import { selectEditorForPou } from '../slices/editor/utils'
 
 type TextualEditor = Extract<EditorModel, { type: 'plc-textual' }>
 type GraphicalEditor = Extract<EditorModel, { type: 'plc-graphical' }>
@@ -571,5 +572,45 @@ describe('editor slice', () => {
     expect(store.getState().isMonacoFocused).toBe(true)
     a.setMonacoFocused(false)
     expect(store.getState().isMonacoFocused).toBe(false)
+  })
+
+  describe('selectEditorForPou', () => {
+    // Cross-mount selector shared by `useBoundEditorModel()` (graphical
+    // editors) and `<VariablesEditor>`.  Three branches: matches
+    // active editor → return it, found in editors[] → return snapshot,
+    // not found / missing name → fall back to active editor.
+    it('returns the active editor when its name matches', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), 'Main')
+      expect(result).toBe(store.getState().editor)
+    })
+
+    it('returns the snapshot from editors[] for a hidden POU', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('A'))
+      a.addModel(makeTextual('B'))
+      a.setEditor(makeTextual('A'))
+      const result = selectEditorForPou(store.getState(), 'B')
+      expect(result.meta.name).toBe('B')
+      expect(result).not.toBe(store.getState().editor)
+    })
+
+    it('falls back to the active editor when pouName is not found', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), 'DoesNotExist')
+      expect(result).toBe(store.getState().editor)
+    })
+
+    it('falls back to the active editor when pouName is undefined', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), undefined)
+      expect(result).toBe(store.getState().editor)
+    })
   })
 })

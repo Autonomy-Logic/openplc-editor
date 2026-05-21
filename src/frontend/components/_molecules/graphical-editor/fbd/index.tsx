@@ -32,19 +32,12 @@ import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
 import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
 interface FBDProps {
-  /**
-   * POU this FBD body is bound to.  Passed in by `FbdEditor` so the
-   * body operates on its OWN POU's state — variable lookups, snapshot
-   * captures, flow mutations — regardless of which tab the user has
-   * active.  Without it every multi-mounted FBDBody would read the
-   * active editor's name and the same flow would render N times.
-   */
-  pouName: string
   rung: FBDRungState
   nodeDivergences?: string[]
   isDebuggerActive?: boolean
@@ -52,7 +45,12 @@ interface FBDProps {
 
 const EDGE_COLOR_TRUE = '#00FF00'
 
-export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
+export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
+  // Bound POU + editor model — every multi-mounted FBDBody reads
+  // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
+  // tab store mutations don't fire effects against the wrong flow.
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
     editorActions: { updateModelVariables },
     fbdFlowActions,
@@ -62,17 +60,6 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     modals,
     modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
-  // Use this POU's own model for variable display / graphical
-  // configuration reads.  When the FBDBody's `pouName` matches the
-  // currently-active editor we prefer `state.editor` (the fresh copy
-  // that action callsites mutate); for hidden POUs we read the
-  // last-saved snapshot from `state.editors[]`.  Same pattern as
-  // `<VariablesEditor>` — without it, updates that target the active
-  // editor would be invisible here.
-  const editor = useOpenPLCStore((s) => {
-    if (s.editor.meta.name === pouName) return s.editor
-    return s.editors.find((e) => e.meta.name === pouName) ?? s.editor
-  })
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
@@ -154,7 +141,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
 
       if (pouRef?.pouType !== 'function-block') {
         const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst: { program: string }) => inst.program === editor.meta.name)
+        const programInstance = instances.find((inst: { program: string }) => inst.program === pouName)
         if (!programInstance) return undefined
       }
 
@@ -261,7 +248,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     isDebuggerVisible,
     debugVariableValues,
     debugForcedVariables,
-    editor.meta.name,
+    pouName,
     pouRef?.interface?.variables,
     project.data.configurations.resource.instances,
   ])
@@ -333,7 +320,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     const selectedNodes = updatedNodes.filter((node) => node.selected)
 
     fbdFlowActions.setRung({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rung: {
         ...rungLocalCopy,
         nodes: updatedNodes,
@@ -381,7 +368,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     newNodeType: CustomFbdNodeTypes,
     library: string | undefined,
   ) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     let pouLibrary = undefined
     if (library) {
@@ -453,7 +440,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
 
     fbdFlowActions.addNode({
       node: newNode,
-      editorName: editor.meta.name,
+      editorName: pouName,
     })
   }
 
@@ -463,12 +450,12 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
    * It is used to remove the selected nodes and edges from the flow
    */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
         nodes: nodes,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
 
       if (pouRef && nodes.length > 0) {
@@ -484,7 +471,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
             deleteVariable({
               variableName,
               scope: 'local',
-              associatedPou: editor.meta.name,
+              associatedPou: pouName,
             })
 
             if (
@@ -502,7 +489,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     if (edges.length > 0) {
       fbdFlowActions.removeEdges({
         edges: edges,
-        editorName: editor.meta.name,
+        editorName: pouName,
       })
     }
   }
@@ -513,7 +500,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
 
     setRungLocal((rung) => ({
       ...rung,
@@ -522,7 +509,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
 
     fbdFlowActions.onConnect({
       changes: connection,
-      editorName: editor.meta.name,
+      editorName: pouName,
     })
   }
 
@@ -591,9 +578,9 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
   )
 
   const onNodeDragStart = useCallback(() => {
-    captureAndPush(editor.meta.name)
+    captureAndPush(pouName)
     setDragging(true)
-  }, [rungLocal, dragging, captureAndPush, editor.meta.name])
+  }, [rungLocal, dragging, captureAndPush, pouName])
 
   /**
    * When the node drag stops, update the fbd rung state
@@ -602,7 +589,7 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
     (_e, _node, nodes) => {
       setDragging(false)
       fbdFlowActions.setRung({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rung: {
           ...rungLocal,
           nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),

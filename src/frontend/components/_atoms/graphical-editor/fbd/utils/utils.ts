@@ -2,7 +2,6 @@ import { Position } from '@xyflow/react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
-import type { EditorModel } from '../../../../../store/slices/editor'
 import type { FBDFlowType } from '../../../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
@@ -12,8 +11,14 @@ import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData } from './types'
 
+// `pouName` is the bound POU for the caller's editor instance (from
+// `useBoundPou()` under multi-mount, or the active editor's name for
+// legacy single-mount call sites).  Taking it as a string instead of
+// the full `EditorModel` avoids leaking the *global* `state.editor`
+// into hidden multi-mounted nodes — that was the root cause of the
+// "Node or rung not found for ID:" spam we used to see.
 export const getFBDPouVariablesRungNodeAndEdges = (
-  editor: EditorModel,
+  pouName: string,
   pous: PLCPou[],
   fbdFlows: FBDFlowType[],
   data: { nodeId: string; variableName?: string },
@@ -27,8 +32,8 @@ export const getFBDPouVariablesRungNodeAndEdges = (
   }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
-  const pou = pous.find((pou) => pou.name === editor.meta.name)
-  const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung
+  const pou = pous.find((pou) => pou.name === pouName)
+  const rung = fbdFlows.find((flow) => flow.name === pouName)?.rung
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
 
   const variables: PLCVariable[] = pou?.interface?.variables ?? []

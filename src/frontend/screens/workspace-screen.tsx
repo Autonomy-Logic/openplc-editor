@@ -662,7 +662,6 @@ const WorkspaceScreen = () => {
                                           <GraphicalEditor
                                             name={model.meta.name}
                                             language={model.meta.language}
-                                            path={model.meta.path}
                                             isActive={isActive}
                                           />
                                         )}

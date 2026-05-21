@@ -9,6 +9,7 @@ import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { reconcileBranchesIfNeeded } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -56,8 +57,9 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable?: boolean
   scale?: number
 }) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
     editorActions: { updateModelVariables },
     libraries,
     ladderFlows,
@@ -172,7 +174,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: nodeId ?? '',
     })
     if (!pou || !rung || !node) return
@@ -199,8 +201,8 @@ export const BlockNodeElement = <T extends object>({
       }
 
       const project = useOpenPLCStore.getState().project
-      const currentPou = project.data.pous.find((p) => p.name === editor.meta.name)
-      pushToHistory(editor.meta.name, {
+      const currentPou = project.data.pous.find((p) => p.name === pouName)
+      pushToHistory(pouName, {
         variables: currentPou?.interface?.variables ?? [],
         body: currentPou?.body.value,
       })
@@ -209,7 +211,7 @@ export const BlockNodeElement = <T extends object>({
         const deletionResult = deleteVariable({
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (!deletionResult.ok) {
           toast({ title: deletionResult.title, description: deletionResult.message, variant: 'fail' })
@@ -233,7 +235,7 @@ export const BlockNodeElement = <T extends object>({
           },
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (!res.ok) {
           toast({
@@ -313,25 +315,25 @@ export const BlockNodeElement = <T extends object>({
     )
 
     const project2 = useOpenPLCStore.getState().project
-    const currentPou2 = project2.data.pous.find((p) => p.name === editor.meta.name)
-    pushToHistory(editor.meta.name, {
+    const currentPou2 = project2.data.pous.find((p) => p.name === pouName)
+    pushToHistory(pouName, {
       variables: currentPou2?.interface?.variables ?? [],
       body: currentPou2?.body.value,
     })
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: variableNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       edges: variableEdges,
     })
     if (reconciledHandleBranches) {
       setHandleBranches({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         handleBranches: reconciledHandleBranches,
       })
@@ -402,8 +404,8 @@ export const BlockNodeElement = <T extends object>({
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
 
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
@@ -420,7 +422,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
     nodeId: id,
   })
 
@@ -487,7 +489,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       variables: freshVariables,
       rung: freshRung,
       node: freshNode,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable.name,
     })
@@ -518,7 +520,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
       if (nodeVariable.name !== variable.name) {
         updateNode({
-          editorName: editor.meta.name,
+          editorName: pouName,
           rungId: freshRung.id,
           nodeId: freshNode.id,
           node: {
@@ -566,7 +568,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: node.id,
         node: {
@@ -594,8 +596,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
         const project = useOpenPLCStore.getState().project
-        const currentPou = project.data.pous.find((p) => p.name === editor.meta.name)
-        pushToHistory(editor.meta.name, {
+        const currentPou = project.data.pous.find((p) => p.name === pouName)
+        pushToHistory(pouName, {
           variables: currentPou?.interface?.variables ?? [],
           body: currentPou?.body.value,
         })
@@ -611,7 +613,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             debug: false,
           },
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
 
         if (!creationResult.ok) {
@@ -632,7 +634,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
-    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
 
@@ -793,18 +795,18 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     )
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: variableNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       edges: variableEdges,
     })
     if (reconciledHandleBranches) {
       setHandleBranchesBlock({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         handleBranches: reconciledHandleBranches,
       })
@@ -872,7 +874,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               e.target.select()
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {
@@ -885,7 +887,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             onBlur={() => {
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {
