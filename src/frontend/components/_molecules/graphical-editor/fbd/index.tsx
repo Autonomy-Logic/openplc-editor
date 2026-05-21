@@ -81,6 +81,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     insideViewport,
     reactFlowInstance,
     rung,
+    viewportRef: reactFlowViewportRef,
     handleDeleteNodes: (nodes, edges) => {
       handleOnDelete(nodes, edges)
     },

@@ -1,5 +1,5 @@
 import { Edge, Node, ReactFlowInstance, XYPosition } from '@xyflow/react'
-import { useCallback, useEffect } from 'react'
+import { RefObject, useCallback, useEffect } from 'react'
 
 import { useOpenPLCStore } from '../../../../../store'
 import { ClipboardType } from '../../../../../store/slices/clipboard/types'
@@ -14,16 +14,39 @@ export const useFBDClipboard = ({
   insideViewport,
   reactFlowInstance,
   rung,
+  viewportRef,
   handleDeleteNodes,
 }: {
   mousePosition: { x: number; y: number }
   insideViewport: boolean
   reactFlowInstance: ReactFlowInstance | null
   rung: FBDRungState
+  /**
+   * Scoping ref for the FBD viewport.  Copy / cut / paste listeners
+   * are registered on the window (Radix and Monaco compete for the
+   * same events, so a viewport-local listener won't see all
+   * dispatches), so each handler bails out early when the event
+   * target isn't inside this FBD instance's React Flow tree.
+   * Without this gate, a multi-mounted FBDBody would intercept
+   * every Cmd+C anywhere in the app — Monaco copies, console
+   * copies, you name it — and spam "Nothing to copy" toasts.
+   */
+  viewportRef: RefObject<HTMLDivElement>
   handleDeleteNodes: (nodes: Node[], edges: Edge[]) => void
 }) => {
   const pouName = useBoundPou()
   const { fbdFlowActions } = useOpenPLCStore()
+
+  // True when the clipboard event originated from a DOM node inside
+  // this FBD instance's viewport.  Cmd+C in Monaco / console / any
+  // other input falls outside the viewport and we let the browser
+  // handle the copy normally — no FBD toast, no preventDefault.
+  // The `as globalThis.Node` cast is needed because xyflow's `Node`
+  // type shadows the DOM `Node` in this module.
+  const isInsideThisFbd = (event: ClipboardEvent): boolean => {
+    const target = event.target as globalThis.Node | null
+    return Boolean(viewportRef.current && target && viewportRef.current.contains(target))
+  }
 
   /**
    * Set data to clipboard when copying the viewport
@@ -47,6 +70,7 @@ export const useFBDClipboard = ({
    */
   const handleCopyEvent = useCallback(
     (event: ClipboardEvent) => {
+      if (!isInsideThisFbd(event)) return
       if (!rung.selectedNodes.length) {
         toast({
           title: 'Nothing to copy',
@@ -72,6 +96,7 @@ export const useFBDClipboard = ({
    */
   const handleCutEvent = useCallback(
     (event: ClipboardEvent) => {
+      if (!isInsideThisFbd(event)) return
       if (!rung.selectedNodes.length) {
         toast({
           title: 'Nothing to cut',
@@ -101,6 +126,7 @@ export const useFBDClipboard = ({
    */
   const handlePasteEvent = useCallback(
     (event: ClipboardEvent) => {
+      if (!isInsideThisFbd(event)) return
       const clipboardData = event.clipboardData?.getData('fbd:nodes')
       if (!clipboardData) {
         toast({
