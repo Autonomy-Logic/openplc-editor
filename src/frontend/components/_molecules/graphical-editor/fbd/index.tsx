@@ -728,6 +728,13 @@ export const FBDBody = ({ pouName, rung, nodeDivergences = [], isDebuggerActive 
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}
+        // Per-POU pattern id.  Without this, every <Background> SVG
+        // <pattern> shares the library default id="pattern"; SVG ids
+        // are document-scoped, so opening a second FBD POU makes its
+        // <rect fill="url(#pattern)"> resolve against the first
+        // instance's pattern and the grid disappears on the second
+        // editor.  Scoping by POU name keeps each grid independent.
+        backgroundConfig={{ id: `fbd-bg-${pouName}` }}
         controls={true}
         controlsConfig={{
           showInteractive: false,
