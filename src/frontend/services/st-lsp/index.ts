@@ -105,7 +105,6 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   // inside the ready promise) so the request handler is in place
   // even for refreshes the server sends mid-handshake.
   connection.onRequest(SemanticTokensRefreshRequest.type, () => {
-    console.log('[lsp:tokens-refresh-from-server]', Date.now())
     semanticTokensRegistration?.refresh()
     return null
   })
@@ -114,7 +113,6 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   // LSP handshake — initialize, initialized, push stlibs
   // ---------------------------------------------------------------------------
   const ready = (async () => {
-    console.log('[lsp-boot:1-listen]', Date.now())
     connection.listen()
 
     const initParams: InitializeParams = {
@@ -150,12 +148,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       },
       workspaceFolders: null,
     }
-    console.log('[lsp-boot:2-init-send]', Date.now())
     const initResult = (await connection.sendRequest(
       InitializeRequest.type,
       initParams,
     )) as InitializeResult
-    console.log('[lsp-boot:3-init-result]', Date.now(), initResult.capabilities.semanticTokensProvider)
     await connection.sendNotification(InitializedNotification.type, {})
 
     // Wire semantic tokens once we know the worker's legend.  The
@@ -165,7 +161,6 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // unaffected.
     const legend = initResult.capabilities.semanticTokensProvider
     if (monaco && legend && 'legend' in legend && legend.legend) {
-      console.log('[lsp-boot:4-register-tokens]', Date.now())
       semanticTokensRegistration = registerStLspSemanticTokens({
         connection,
         monacoApi: monaco,
@@ -177,7 +172,6 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     }
 
     await pushAllStlibs()
-    console.log('[lsp-boot:5-stlibs-pushed]', Date.now())
   })().catch((err) => {
     console.error('[strucpp-lsp] initialize failed:', err)
     throw err

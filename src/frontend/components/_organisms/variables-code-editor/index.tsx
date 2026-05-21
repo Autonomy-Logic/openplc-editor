@@ -127,6 +127,16 @@ const VariablesCodeEditor = ({
           // by the editor's own bounding box at the top.  Same
           // motivation as the body editor's identical setting.
           fixedOverflowWidgets: true,
+          // Monaco's standalone themes default `semanticHighlighting`
+          // to `false`; without this, the editor receives tokens from
+          // the LSP semantic-tokens provider but silently drops them
+          // before rendering — the user sees Monarch colours only.
+          // The body editor sets the same flag in monaco/index.tsx.
+          // Whichever 'st' editor mounts first with this flag enables
+          // semantic-token processing globally for the language,
+          // which is why opening an ST POU body would light up an
+          // already-mounted variables-text editor by side effect.
+          'semanticHighlighting.enabled': true,
           // Match the body editor's default (Monaco's default is 4 too).
           // Inconsistent values would split-personality the indentation
           // of LSP-inserted snippets (`\t` substitutes per this option).

@@ -353,25 +353,10 @@ export function registerStLspSemanticTokens({
     onDidChange: changeEmitter.event,
     async provideDocumentSemanticTokens(model): Promise<monaco.languages.SemanticTokens | null> {
       const { lspUri, lineOffset } = effectiveLspContext(model.uri.toString())
-      // TEMP DIAGNOSTIC — investigation of "vars-text on graphical
-      // POUs stays uncoloured until an ST POU is opened".  Logs the
-      // model URI, the routed LSP URI, the line offset, and what
-      // strucpp returned so we can see whether the chain breaks at
-      // the LSP-response stage or at Monaco's caching.
-      console.log('[tokens:1-query]', Date.now(), {
-        modelUri: model.uri.toString(),
-        lspUri,
-        lineOffset,
-      })
       const result: SemanticTokens | null = await connection.sendRequest(
         SemanticTokensRequest.type,
         { textDocument: { uri: lspUri } },
       )
-      console.log('[tokens:2-response]', Date.now(), {
-        modelUri: model.uri.toString(),
-        hasResult: result !== null,
-        rawTokenTriples: result ? Math.floor(result.data.length / 5) : 0,
-      })
       if (!result) return null
       // For body editors: keep tokens at LSP line >= lineOffset (skip
       // the synthesized declaration + VAR preamble) and shift down.
@@ -381,16 +366,9 @@ export function registerStLspSemanticTokens({
       // synthesized doc's bodyLineOffset.
       const isVarsView = parsePouVarsUri(model.uri.toString()) !== null
       const endLineExclusive = isVarsView ? getBodyLineOffset(lspUri) : Number.POSITIVE_INFINITY
-      const shifted = shiftSemanticTokensToBody(result.data, lineOffset, endLineExclusive)
-      console.log('[tokens:3-shifted]', Date.now(), {
-        modelUri: model.uri.toString(),
-        isVarsView,
-        endLineExclusive,
-        tripleCount: Math.floor(shifted.length / 5),
-      })
       return {
         ...(result.resultId ? { resultId: result.resultId } : {}),
-        data: shifted,
+        data: shiftSemanticTokensToBody(result.data, lineOffset, endLineExclusive),
       }
     },
     releaseDocumentSemanticTokens() {
@@ -400,13 +378,9 @@ export function registerStLspSemanticTokens({
   // Microtask defer so the registration has fully propagated into
   // Monaco's internal language-features registry before we tell it
   // to refresh.
-  queueMicrotask(() => {
-    console.log('[tokens:0-initial-refresh-fire]', Date.now())
-    changeEmitter.fire()
-  })
+  queueMicrotask(() => changeEmitter.fire())
   return {
     refresh() {
-      console.log('[tokens:0-refresh-fire]', Date.now())
       changeEmitter.fire()
     },
     dispose() {
