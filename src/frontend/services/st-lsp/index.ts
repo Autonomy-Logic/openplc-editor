@@ -51,9 +51,10 @@ interface DocumentState {
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
-  const { stlibSource, monaco, workerUrlOverride } = opts
+  const { stlibSource, monaco, workerUrlOverride, onCrash } = opts
 
   let disposed = false
+  let initialised = false
   let workerUrl = workerUrlOverride
   if (!workerUrl) {
     // Webpack rewrites this `?url` import to the emitted asset URL.
@@ -67,9 +68,25 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
+  // Forward worker crashes to the renderer's callback ONLY after
+  // `initialize` has resolved.  Pre-init crashes reject `ready`
+  // through the natural in-flight-request rejection that
+  // `connection.dispose()` triggers, so calling `onCrash` then would
+  // surface a redundant toast on top of the already-rejected promise
+  // that the boot path already surfaces.
+  const handleWorkerCrash = (err: Error) => {
+    if (!initialised) return
+    if (disposed) return
+    try {
+      onCrash?.(err)
+    } catch (callbackErr) {
+      console.error('[strucpp-lsp] onCrash callback threw:', callbackErr)
+    }
+  }
+
   let transport: LspTransport
   try {
-    transport = createLspTransport(workerUrl)
+    transport = createLspTransport(workerUrl, { onError: handleWorkerCrash })
   } catch (err) {
     // No worker support (jsdom, missing URL, etc.) — return a
     // service that never resolves `ready` so callers gate on it.
@@ -173,6 +190,12 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     }
 
     await pushAllStlibs()
+    // Mark the service initialised AFTER stlib push — any failure
+    // up to this point counts as crash-during-init and goes through
+    // the rejected `ready` promise, not the post-init crash
+    // callback.  This is the exact boundary where the rest of the
+    // app starts trusting the service is alive.
+    initialised = true
   })().catch((err) => {
     console.error('[strucpp-lsp] initialize failed:', err)
     throw err

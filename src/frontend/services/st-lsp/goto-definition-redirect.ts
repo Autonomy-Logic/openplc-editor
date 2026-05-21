@@ -29,6 +29,7 @@
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType } from '../../../middleware/shared/ports/types'
+import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { getBodyLineOffset } from './body-offsets'
@@ -117,36 +118,29 @@ function openPouEditor(name: string): boolean {
  * store.  Returns true iff navigation was performed (in which case
  * Monaco should NOT navigate to the location).
  */
-/**
- * Number of lines a single data type takes inside the serialized
- * `TYPE…END_TYPE` document.  Mirrors `serializeDataTypesToST` —
- * enumerated and array each render as one indented line, structures
- * span the declaration line + one per field + an `END_STRUCT;` line.
- * The map is used to locate which data type an LSP line falls into
- * when we route a datatypes-URI Definition target through the store.
- */
-function dataTypeLineCount(dt: PLCDataType): number {
-  if (dt.derivation === 'enumerated') return 1
-  if (dt.derivation === 'array') return 1
-  if (dt.derivation === 'structure') return 2 + (dt.variable?.length ?? 0)
-  return 0
-}
 
 /**
  * Map an LSP line in the synthesized datatypes document to the
  * `PLCDataType` whose entry occupies that line.  Returns null when
  * the line falls on the `TYPE` / `END_TYPE` framing lines or beyond
  * the last entry — caller treats that as "not navigable".
+ *
+ * The line spans are sourced directly from
+ * `serializeDataTypesToLines` so this stays in lockstep with the
+ * serializer's actual layout — no more hand-maintained per-shape
+ * line counts that drift the moment a new field separator or
+ * derivation lands on disk.
  */
 function findDataTypeAtLine(lspLine: number, dataTypes: PLCDataType[]): PLCDataType | null {
   // Synthesized doc: line 0 is `TYPE`, entries start at line 1.
   if (lspLine < 1) return null
+  const entries = serializeDataTypesToLines(dataTypes)
+  const byName = new Map(dataTypes.map((dt) => [dt.name, dt]))
   let cursor = 1
-  for (const dt of dataTypes) {
-    const span = dataTypeLineCount(dt)
-    if (span === 0) continue
+  for (const entry of entries) {
+    const span = entry.lines.length
     if (lspLine >= cursor && lspLine < cursor + span) {
-      return dt
+      return byName.get(entry.name) ?? null
     }
     cursor += span
   }

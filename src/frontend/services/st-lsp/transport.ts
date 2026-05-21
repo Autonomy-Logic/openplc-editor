@@ -40,11 +40,23 @@ export interface LspTransport {
  * (`new URL` would re-bundle the IIFE, which we don't want); tests
  * inject a Blob URL or an `about:blank`-style stub.
  *
- * Worker error events are forwarded to the connection's `onError`
- * handler so a single crash path covers both transport and runtime
- * failures.
+ * Worker error events dispose the connection and surface to the
+ * optional `onError` callback.  The connection's pending requests
+ * reject as part of the dispose, which is how a crash *before*
+ * `initialize` resolves rejects `ready` cleanly without extra
+ * plumbing — `vscode-jsonrpc` already rejects every in-flight
+ * request when `connection.dispose()` runs.
+ *
+ * `onError` exists for the *after*-init case: by the time the
+ * worker crashes mid-session the `ready` promise has already
+ * resolved, so callers gated on `ready` would otherwise sit waiting
+ * on requests that never resolve.  The orchestrator forwards the
+ * error to whoever owns the user-facing UI.
  */
-export function createLspTransport(workerUrl: string): LspTransport {
+export function createLspTransport(
+  workerUrl: string,
+  options: { onError?: (err: Error) => void } = {},
+): LspTransport {
   const worker = new Worker(workerUrl, { name: 'strucpp-lsp' })
 
   // Surface worker-level errors as connection errors.  The browser
@@ -55,17 +67,25 @@ export function createLspTransport(workerUrl: string): LspTransport {
   const writer = new BrowserMessageWriter(worker)
   const connection = createMessageConnection(reader, writer)
 
+  let crashed = false
   const handleError = (ev: Event | ErrorEvent) => {
+    if (crashed) return
+    crashed = true
     const message =
       ev instanceof ErrorEvent
         ? ev.message
         : '[strucpp LSP worker] worker reported a non-Error event'
-    // The connection.onError handler users register expects this
-    // tuple shape.  Use Number.MAX_SAFE_INTEGER as a synthetic
-    // request id so the renderer-side handler can spot worker
-    // errors vs. per-request failures.
+    const error = ev instanceof ErrorEvent && ev.error instanceof Error ? ev.error : new Error(message)
     connection.dispose()
     console.error(message, ev)
+    try {
+      options.onError?.(error)
+    } catch (callbackErr) {
+      // Don't let a user-supplied callback throwing during crash
+      // recovery swallow the original failure — log it but keep
+      // going so the transport itself ends up in a consistent state.
+      console.error('[strucpp LSP worker] onError callback threw:', callbackErr)
+    }
   }
   worker.addEventListener('error', handleError)
   worker.addEventListener('messageerror', handleError)

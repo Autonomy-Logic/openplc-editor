@@ -17,6 +17,7 @@
  */
 
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
+import { toast } from '../../utils/toast'
 import { startStLsp } from './index'
 import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
 import { attachEnabledLibrariesSync, attachLibrarySync, attachProjectSync } from './project-sync'
@@ -41,9 +42,28 @@ export function bootStLsp(
     return null
   }
 
+  // Post-initialize worker crashes leave any in-flight request
+  // hanging forever — the user types into Monaco, completions never
+  // arrive, diagnostics stop updating, and there's no signal that
+  // anything broke.  Surface it as a one-shot toast so the user
+  // knows to restart instead of fighting an apparently-frozen
+  // editor.  Pre-init crashes go through the rejected `ready`
+  // promise; this callback fires only for crash-after-ready.
+  let crashToastShown = false
   const service = startStLsp({
     stlibSource: ports.stlibSource,
     monaco,
+    onCrash: (err) => {
+      if (crashToastShown) return
+      crashToastShown = true
+      toast({
+        title: 'STruC++ service crashed',
+        description:
+          err.message ||
+          'The Structured Text language server stopped responding. Reload the editor to restore autocomplete and diagnostics.',
+        variant: 'fail',
+      })
+    },
   })
 
   // Project sync starts immediately — diff layer copes with an

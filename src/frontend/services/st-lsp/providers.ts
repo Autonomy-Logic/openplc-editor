@@ -254,7 +254,7 @@ export function registerStLspProviders({
           )
         }
         return (result as SymbolInformation[]).map((s) =>
-          symbolInformationToDocumentSymbol(s, monacoApi, offset),
+          symbolInformationToDocumentSymbol(s, offset),
         )
       },
     }),
@@ -523,7 +523,6 @@ function lspDocumentSymbolToMonaco(
 
 function symbolInformationToDocumentSymbol(
   sym: SymbolInformation,
-  monacoApi: typeof monaco,
   lineOffset = 0,
 ): monaco.languages.DocumentSymbol {
   return {
@@ -534,6 +533,5 @@ function symbolInformationToDocumentSymbol(
     selectionRange: lspRangeToMonaco(sym.location.range, lineOffset),
     tags: [],
     children: [],
-    ...(monacoApi ? {} : {}),
   }
 }

@@ -88,6 +88,15 @@ export interface StLspStartOptions {
    * webpack's `?url` resource query.  Tests can pass a Blob URL.
    */
   workerUrlOverride?: string
+  /**
+   * Called when the worker emits an `error` or `messageerror` event
+   * after initialize has resolved.  The transport disposes the
+   * connection on its own — this callback exists so the renderer can
+   * react (toast, sentry, etc.) instead of silently hanging on
+   * subsequent requests.  Crashes during init reject `ready` and
+   * don't reach this callback.
+   */
+  onCrash?: (err: Error) => void
 }
 
 /** Make a synthetic in-memory URI for a POU source. */
