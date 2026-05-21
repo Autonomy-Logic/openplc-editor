@@ -7,7 +7,7 @@ import type { FBDRungState } from '../../../../../store/slices/fbd'
 import { pasteNodesAtFBD } from '../../../../../store/slices/fbd/utils'
 import { EdgeType, NodeType } from '../../../../../store/slices/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
-import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
+import { useBoundPou, useIsGraphicalEditorActive } from '../../../../_features/[workspace]/editor/graphical/active-context'
 
 export const useFBDClipboard = ({
   mousePosition,
@@ -35,14 +35,15 @@ export const useFBDClipboard = ({
   handleDeleteNodes: (nodes: Node[], edges: Edge[]) => void
 }) => {
   const pouName = useBoundPou()
+  const isActive = useIsGraphicalEditorActive()
   const { fbdFlowActions } = useOpenPLCStore()
 
   // True when the clipboard event originated from a DOM node inside
-  // this FBD instance's viewport.  Cmd+C in Monaco / console / any
-  // other input falls outside the viewport and we let the browser
-  // handle the copy normally — no FBD toast, no preventDefault.
-  // The `as globalThis.Node` cast is needed because xyflow's `Node`
-  // type shadows the DOM `Node` in this module.
+  // this FBD instance's viewport.  Used to scope **copy** and **cut**
+  // — the operation only makes sense when the user is actually
+  // focused inside the FBD tree.  Paste uses a different rule (see
+  // below).  The `as globalThis.Node` cast is needed because
+  // xyflow's `Node` type shadows the DOM `Node` in this module.
   const isInsideThisFbd = (event: ClipboardEvent): boolean => {
     const target = event.target as globalThis.Node | null
     return Boolean(viewportRef.current && target && viewportRef.current.contains(target))
@@ -122,20 +123,30 @@ export const useFBDClipboard = ({
   )
 
   /**
-   * Handle paste event in the viewport
+   * Handle paste event in the viewport.
+   *
+   * Paste can't use the same viewport-target gate as copy/cut: the
+   * "Copied to clipboard" toast that fires after Cmd+C can pull
+   * focus into Radix's toast portal, so by the time the user
+   * presses Cmd+V the event target is outside the React Flow tree
+   * even though the user clearly meant to paste into THIS FBD.
+   * Two looser checks instead:
+   *
+   *   - `isActive` — only the currently-visible FBD editor claims
+   *     the paste, so multi-mount doesn't fire N pastes when the
+   *     user copies from one tab and pastes in another.
+   *   - `getData('fbd:nodes')` — if the clipboard doesn't carry
+   *     our custom MIME, the recent copy wasn't FBD nodes (Monaco
+   *     text, console output, etc.) and we silently let the
+   *     browser handle the paste.  Previously we surfaced an
+   *     "Invalid clipboard data" toast here, which was noise on
+   *     every non-FBD paste anywhere in the app.
    */
   const handlePasteEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!isInsideThisFbd(event)) return
+      if (!isActive) return
       const clipboardData = event.clipboardData?.getData('fbd:nodes')
-      if (!clipboardData) {
-        toast({
-          title: 'Invalid clipboard data',
-          description: 'The clipboard data is not valid.',
-          variant: 'fail',
-        })
-        return
-      }
+      if (!clipboardData) return
 
       let parsedData: ClipboardType | null = null
       try {
@@ -200,7 +211,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rung],
+    [isActive, insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rung],
   )
 
   useEffect(() => {
