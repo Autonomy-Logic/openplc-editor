@@ -26,6 +26,7 @@ import {
   SemanticTokensRefreshRequest,
 } from 'vscode-languageserver-protocol'
 
+import { openPLCStoreBase } from '../../store'
 import { attachDiagnosticsBridge } from './diagnostics'
 import { registerStLspProviders, registerStLspSemanticTokens, type SemanticTokensRegistration } from './providers'
 import { createLspTransport, type LspTransport } from './transport'
@@ -179,7 +180,15 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
   async function pushAllStlibs(): Promise<void> {
     const sources = await stlibSource.listStlibs()
+    // Honor the project's enabled-library set.  The adapter returns
+    // every system-installed archive; the project policy lives in the
+    // store, so the service applies it here.  An archive that isn't
+    // enabled for the current project must not contribute symbols to
+    // the LSP — otherwise the user can reference types from libraries
+    // they never opted in to.
+    const enabled = new Set(openPLCStoreBase.getState().enabledLibraries)
     for (const source of sources) {
+      if (!enabled.has(source.name)) continue
       try {
         const payload = await stlibSource.readStlib(source.sourceLabel)
         await connection.sendRequest(LOAD_STLIB_BUFFER, {

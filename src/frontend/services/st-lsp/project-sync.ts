@@ -62,6 +62,15 @@ export interface ProjectSyncHandle {
    * mutation has occurred.
    */
   resync(): void
+  /**
+   * Re-publish every open document with a bumped version, forcing
+   * the worker to re-run analysis even when the document text hasn't
+   * changed.  Required after a stlib-cache mutation (enable/disable
+   * a project library): the worker updates its library cache in
+   * place but only re-analyses on `didChange`, so previously-cached
+   * `analysisResult`s would otherwise stay stale.
+   */
+  forceResync(): void
   dispose(): void
 }
 
@@ -179,6 +188,17 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
       reconcile(openPLCStoreBase.getState().project.data.pous)
     },
+    forceResync() {
+      if (disposed) return
+      // Re-publish every tracked document with a bumped version.  The
+      // worker debounces analysis per-URI, so back-to-back calls for
+      // the same URI coalesce; that's fine — we just need one
+      // analysis pass after the stlib cache settled.
+      for (const [uri, text] of snapshot.contentByUri) {
+        snapshot.version += 1
+        service.changeDocument(uri, text, snapshot.version)
+      }
+    },
     dispose() {
       if (disposed) return
       disposed = true
@@ -201,12 +221,51 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
  * service's `refreshStlibs()`.  Subscribes to a stable selector so
  * the callback fires only when the user-library list actually
  * mutates, not on unrelated state changes.
+ *
+ * `onAfterRefresh` (when supplied) is invoked once `refreshStlibs()`
+ * resolves.  Callers wire this to `ProjectSyncHandle.forceResync` so
+ * the worker re-runs analysis against the new stlib cache; without
+ * it, open documents would keep stale `analysisResult`s.
  */
-export function attachLibrarySync(service: StLspService): () => void {
+export function attachLibrarySync(
+  service: StLspService,
+  onAfterRefresh?: () => void,
+): () => void {
   return openPLCStoreBase.subscribe(
     (state) => state.libraries.user.map((l) => l.name).join('|'),
     () => {
-      void service.refreshStlibs()
+      void service.refreshStlibs().then(() => {
+        onAfterRefresh?.()
+      })
+    },
+  )
+}
+
+/**
+ * Wires project-level library enablement to the service's
+ * `refreshStlibs()`.  The Library Manager's enable/disable actions
+ * mutate `project.data.libraries` (and the derived `enabledLibraries`
+ * view); user-defined POUs do not.  Watching the derived view keeps
+ * this independent of `attachLibrarySync` and ensures the LSP worker
+ * re-loads its stlib cache the moment the user toggles a `.stlib`
+ * library on or off for the current project.
+ *
+ * The selector is sorted so a reorder doesn't fire a spurious refresh.
+ *
+ * `onAfterRefresh` is invoked once `refreshStlibs()` resolves; wire
+ * it to `forceResync` so open documents are re-analysed against the
+ * new library cache.
+ */
+export function attachEnabledLibrariesSync(
+  service: StLspService,
+  onAfterRefresh?: () => void,
+): () => void {
+  return openPLCStoreBase.subscribe(
+    (state) => state.enabledLibraries.slice().sort().join('|'),
+    () => {
+      void service.refreshStlibs().then(() => {
+        onAfterRefresh?.()
+      })
     },
   )
 }
