@@ -98,6 +98,32 @@ describe('AcuExhaustionModal', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
+  it('fires onUpgradeClick before dismissing so the consumer can emit telemetry', () => {
+    const onDismiss = vi.fn()
+    const onUpgradeClick = vi.fn()
+    render(
+      <AcuExhaustionModal
+        billingError={insufficientAcu}
+        onDismiss={onDismiss}
+        upgradeUrl={TEST_UPGRADE_URL}
+        onUpgradeClick={onUpgradeClick}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('acu-exhaustion-cta'))
+    expect(onUpgradeClick).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    // onUpgradeClick must fire before onDismiss so the consumer's telemetry
+    // helper can read fresh state before the slice clears.
+    expect(onUpgradeClick.mock.invocationCallOrder[0]).toBeLessThan(onDismiss.mock.invocationCallOrder[0])
+  })
+
+  it('skips onUpgradeClick when the prop is not provided (back-compat for legacy callers)', () => {
+    const onDismiss = vi.fn()
+    render(<AcuExhaustionModal billingError={insufficientAcu} onDismiss={onDismiss} upgradeUrl={TEST_UPGRADE_URL} />)
+    expect(() => fireEvent.click(screen.getByTestId('acu-exhaustion-cta'))).not.toThrow()
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
   it('uses dialog ARIA semantics (Radix Dialog)', () => {
     render(<AcuExhaustionModal billingError={insufficientAcu} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
     const dialog = screen.getByRole('dialog')

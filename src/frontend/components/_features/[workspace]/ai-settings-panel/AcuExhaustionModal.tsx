@@ -18,6 +18,12 @@ export type AcuExhaustionModalProps = {
    * from the 402 payload when present and falls back to this prop.
    */
   upgradeUrl: string
+  /**
+   * Optional callback fired right before the upgrade CTA navigates. Used
+   * by the consumer to fire the `upgrade_cta_clicked` telemetry event;
+   * left undefined in contexts (tests, future surfaces) that don't need it.
+   */
+  onUpgradeClick?: () => void
 }
 
 /**
@@ -27,7 +33,12 @@ export type AcuExhaustionModalProps = {
  * this component stays platform-agnostic and trivially testable in both
  * Vitest and Jest.
  */
-export const AcuExhaustionModal = ({ billingError, onDismiss, upgradeUrl }: AcuExhaustionModalProps) => {
+export const AcuExhaustionModal = ({
+  billingError,
+  onDismiss,
+  upgradeUrl,
+  onUpgradeClick,
+}: AcuExhaustionModalProps) => {
   if (!billingError) return null
 
   const isInactive = billingError.code === 'subscription_inactive'
@@ -76,7 +87,10 @@ export const AcuExhaustionModal = ({ billingError, onDismiss, upgradeUrl }: AcuE
             href={ctaUrl}
             target='_blank'
             rel='noreferrer'
-            onClick={onDismiss}
+            onClick={() => {
+              onUpgradeClick?.()
+              onDismiss()
+            }}
             data-testid='acu-exhaustion-cta'
             className='cursor-pointer rounded bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-blue-600'
           >
