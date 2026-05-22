@@ -8,7 +8,7 @@ import { cn } from '../../../utils/cn'
 type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
   textAreaValue: string
   setTextAreaValue: (value: string) => void
-  handleSubmit?: () => void
+  handleSubmit?: (currentValue?: string) => void
   submitWith?: {
     enter: boolean
   }
@@ -147,7 +147,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
               highlightDivRef.current.scrollTop = 0
             }
             props.onBlur?.(e)
-            if (canSubmit && handleSubmit) handleSubmit()
+            if (canSubmit && handleSubmit) handleSubmit(e.target.value)
             setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}

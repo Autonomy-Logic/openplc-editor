@@ -873,6 +873,28 @@ export type FBDRungState = {
 }
 
 /**
+ * Represents a branch of elements connected to a specific block handle.
+ * Input branches connect from the left rail to a block input handle.
+ * Output branches connect from a block output handle to the right rail.
+ *
+ * Defined here (ports layer) rather than in the components layer so the
+ * `RungLadderState.handleBranches` field below can reference it without
+ * violating the layer rule that forbids ports from depending on components.
+ * The components/_atoms ladder types module re-exports this name so
+ * component code can keep importing it from a single nearby location.
+ */
+export type HandleBranch = {
+  /** The block node ID this branch connects to */
+  blockId: string
+  /** The handle ID on the block (e.g., "R", "PV", "CV") */
+  handleId: string
+  /** Direction: 'input' means elements feed INTO the block, 'output' means elements come OUT */
+  direction: 'input' | 'output'
+  /** Ordered list of node IDs in this branch (left-to-right for input, block-to-right for output) */
+  nodeIds: string[]
+}
+
+/**
  * Ladder rung data — nodes + edges + layout for one Ladder rung.
  * Used by both the store slice and the compiler adapter.
  */
@@ -884,6 +906,8 @@ export type RungLadderState = {
   selectedNodes: import('@xyflow/react').Node[]
   nodes: import('@xyflow/react').Node[]
   edges: import('@xyflow/react').Edge[]
+  /** Index of active handle branches in this rung (undefined for backward compatibility) */
+  handleBranches?: HandleBranch[]
 }
 
 // ---------------------------------------------------------------------------

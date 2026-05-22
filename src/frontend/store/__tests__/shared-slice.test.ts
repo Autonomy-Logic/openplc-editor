@@ -774,6 +774,132 @@ describe('createSharedSlice', () => {
   })
 
   // =========================================================================
+  // ethercatDeviceActions
+  // =========================================================================
+  describe('ethercatDeviceActions', () => {
+    function addEthercatBus(name: string, slaves: Array<{ id: string; name: string }>) {
+      store.getState().projectActions.createRemoteDevice({
+        data: { name, protocol: 'ethercat' },
+      })
+      store.getState().projectActions.updateEthercatConfig(name, {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
+        devices: slaves as never,
+      })
+      for (const slave of slaves) {
+        store
+          .getState()
+          .editorActions.addModel({ type: 'plc-remote-device', meta: { name: slave.name, protocol: 'ethercat' } })
+        store.getState().fileActions.addFile({ name: slave.name, type: 'ethercat-device', filePath: name })
+        store.getState().tabsActions.updateTabs({
+          name: slave.name,
+          elementType: { type: 'ethercat-device', busName: name, deviceId: slave.id },
+        })
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // delete
+    // -----------------------------------------------------------------------
+    describe('delete', () => {
+      beforeEach(() => {
+        addEthercatBus('bus1', [{ id: 'slave-1', name: 'EK1100' }])
+      })
+
+      it('removes the slave from project, files, tabs and editor', () => {
+        store.getState().editorActions.setEditor({
+          type: 'plc-remote-device',
+          meta: { name: 'EK1100', protocol: 'ethercat' },
+        })
+
+        const result = store.getState().ethercatDeviceActions.delete('bus1', 'slave-1')
+        expect(result).toEqual({ ok: true })
+
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        expect(bus?.ethercatConfig?.devices).toHaveLength(0)
+        expect(state.files['EK1100']).toBeUndefined()
+        expect(state.tabs.some((t) => t.name === 'EK1100')).toBe(false)
+        expect(state.editor.type).toBe('available')
+      })
+
+      it('returns error when the bus does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.delete('missing-bus', 'slave-1')
+        expect(result).toEqual({ ok: false, message: 'Bus not found' })
+      })
+
+      it('returns error when the slave id does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.delete('bus1', 'missing-slave')
+        expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
+      })
+
+      it('does not clear the editor when a different slave is active', () => {
+        store.getState().editorActions.setEditor({
+          type: 'plc-remote-device',
+          meta: { name: 'other-device', protocol: 'ethercat' },
+        })
+        store.getState().ethercatDeviceActions.delete('bus1', 'slave-1')
+        expect(store.getState().editor.meta.name).toBe('other-device')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // rename
+    // -----------------------------------------------------------------------
+    describe('rename', () => {
+      beforeEach(() => {
+        addEthercatBus('bus1', [
+          { id: 'slave-1', name: 'EK1100' },
+          { id: 'slave-2', name: 'EL1809' },
+        ])
+        addEthercatBus('bus2', [{ id: 'slave-3', name: 'EL1809_01' }])
+      })
+
+      it('renames the slave across project, files and tabs', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100-renamed')
+        expect(result).toEqual({ ok: true })
+
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        const slave = bus?.ethercatConfig?.devices?.find((d) => d.id === 'slave-1')
+        expect(slave?.name).toBe('EK1100-renamed')
+        expect(state.files['EK1100-renamed']).toBeDefined()
+        expect(state.files['EK1100']).toBeUndefined()
+        expect(state.tabs.some((t) => t.name === 'EK1100-renamed')).toBe(true)
+      })
+
+      it('rejects renaming to a name already used by another slave in the same bus', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EL1809')
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain('EL1809')
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        expect(bus?.ethercatConfig?.devices?.find((d) => d.id === 'slave-1')?.name).toBe('EK1100')
+      })
+
+      it('rejects renaming to a name already used by a slave on a different bus', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-2', 'EL1809_01')
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain('EL1809_01')
+      })
+
+      it('allows renaming to the same name (no-op)', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
+        expect(result).toEqual({ ok: true })
+      })
+
+      it('returns error when the bus does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.rename('missing-bus', 'slave-1', 'X')
+        expect(result).toEqual({ ok: false, message: 'Bus not found' })
+      })
+
+      it('returns error when the slave id does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'missing-slave', 'X')
+        expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
+      })
+    })
+  })
+
+  // =========================================================================
   // snapshotActions
   // =========================================================================
   describe('snapshotActions', () => {
