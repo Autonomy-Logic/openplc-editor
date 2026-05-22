@@ -434,9 +434,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })
-        return
+        return { pendingConfirmation: true }
       }
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      return { pendingConfirmation: false }
     },
 
     clearStatesOnCloseProject: () => {

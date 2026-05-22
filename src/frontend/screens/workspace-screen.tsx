@@ -384,7 +384,7 @@ const WorkspaceScreen = () => {
           <ResizablePanelGroup
             id='mainContentPanelGroup'
             direction='horizontal'
-            className='relative flex h-full w-full gap-2'
+            className='relative flex h-full w-full'
           >
             {hasVersionControl && activePanel === 'source-control' ? (
               <SourceControlPanel

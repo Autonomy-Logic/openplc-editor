@@ -1,6 +1,7 @@
 import { Files, GitBranch } from 'lucide-react'
 import { useCallback } from 'react'
 
+import { useNavigation } from '../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
@@ -30,12 +31,18 @@ type ActivityBarProps = {
 export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceControl }: ActivityBarProps) => {
   const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
   const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
+  const navigation = useNavigation()
 
   const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
 
   const handleExitApplication = () => {
-    closeProject()
+    const { pendingConfirmation } = closeProject()
+    // When the modal opens, defer exiting to the modal's save/discard
+    // path so the user's choice is respected.
+    if (!pendingConfirmation) {
+      navigation.exitToHost()
+    }
   }
   return (
     <>
