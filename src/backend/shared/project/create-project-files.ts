@@ -17,11 +17,10 @@
  * — shared returns content strings, editor reads/writes around it.
  */
 
-import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service'
-
 import type { DeviceConfiguration, DevicePin } from '../types/PLC/devices'
 import type { PLCPou, PLCProject } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from '../utils/default-zod-schema-values'
+import { projectDefaultFilesMapSchema } from './project-files-schema'
 
 /** Input shape — same as the IPC contract carries today. */
 export interface CreateProjectFileInput {

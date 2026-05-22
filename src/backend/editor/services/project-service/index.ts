@@ -5,7 +5,7 @@ import {
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
-import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
+import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'

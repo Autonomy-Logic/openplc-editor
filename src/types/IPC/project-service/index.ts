@@ -2,7 +2,12 @@ import { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/d
 import { PLCPou, PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 
 export * from './create-project'
-export * from './project-files-schema'
+// project-files-schema moved to backend/shared/project so it can be
+// safely imported from cross-platform shared code without dragging
+// the Electron IPC types namespace along with it.  Re-export here
+// for back-compat with Electron-only callers that still resolve the
+// schema through this IPC index.
+export * from '@root/backend/shared/project/project-files-schema'
 export * from './project-recent-history'
 
 export type IProjectServiceResponse = {
