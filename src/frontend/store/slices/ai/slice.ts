@@ -12,6 +12,10 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   preferences: {
     inlineCompletionsEnabled: true,
   },
+  acuUsed: 0,
+  acuTotal: 0,
+  subscriptionStatus: null,
+  planSlug: null,
   creditsUsed: 0,
   creditsTotal: 500,
   tier: 'free',
@@ -67,11 +71,37 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
+      setUsage: (used, total) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.acuUsed = used
+            ai.acuTotal = total
+            // Keep deprecated mirror fields in lockstep so unmigrated consumers
+            // (DOPE-287 / DOPE-288 still on `creditsUsed`/`creditsTotal`) read
+            // the same values. Removed once the rename is fully propagated.
+            ai.creditsUsed = used
+            ai.creditsTotal = total
+          }),
+        )
+      },
+      setSubscription: (status, currentPeriodEnd, planSlug) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.subscriptionStatus = status
+            ai.currentPeriodEnd = currentPeriodEnd
+            ai.planSlug = planSlug
+          }),
+        )
+      },
       setCredits: (used, total) => {
         setState(
           produce(({ ai }: AISlice) => {
             ai.creditsUsed = used
             ai.creditsTotal = total
+            // Mirror to the new ACU fields so consumers migrated ahead of their
+            // call-site refactor see the right numbers via either name.
+            ai.acuUsed = used
+            ai.acuTotal = total
           }),
         )
       },

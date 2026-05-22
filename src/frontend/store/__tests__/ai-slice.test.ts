@@ -39,6 +39,10 @@ describe('createAISlice', () => {
       expect(ai.isEnabled).toBe(false)
       expect(ai.isLoading).toBe(false)
       expect(ai.hasConsented).toBe(false)
+      expect(ai.acuUsed).toBe(0)
+      expect(ai.acuTotal).toBe(0)
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.planSlug).toBeNull()
       expect(ai.creditsUsed).toBe(0)
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
@@ -112,11 +116,50 @@ describe('createAISlice', () => {
     })
   })
 
-  describe('setCredits', () => {
+  describe('setUsage', () => {
+    it('writes the new ACU fields', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
+    })
+
+    it('mirrors to deprecated creditsUsed/creditsTotal so unmigrated consumers stay in sync', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.creditsUsed).toBe(42)
+      expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+  })
+
+  describe('setSubscription', () => {
+    it('sets subscriptionStatus, currentPeriodEnd, and planSlug together', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBe('active')
+      expect(ai.currentPeriodEnd).toBe('2026-06-01')
+      expect(ai.planSlug).toBe('community')
+    })
+
+    it('accepts null for all three fields (e.g. on logout)', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      store.getState().aiActions.setSubscription(null, null, null)
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.planSlug).toBeNull()
+    })
+  })
+
+  describe('setCredits (deprecated)', () => {
     it('sets both used and total credits', () => {
       store.getState().aiActions.setCredits(42, 1000)
       expect(store.getState().ai.creditsUsed).toBe(42)
       expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+
+    it('mirrors to new acuUsed/acuTotal so consumers migrated ahead of their call sites stay correct', () => {
+      store.getState().aiActions.setCredits(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
     })
   })
 
@@ -614,6 +657,10 @@ describe('createAISliceFactory', () => {
       createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false, inlineCompletionsEnabled: true }),
     )
     const { ai } = store.getState()
+    expect(ai.acuUsed).toBe(0)
+    expect(ai.acuTotal).toBe(0)
+    expect(ai.subscriptionStatus).toBeNull()
+    expect(ai.planSlug).toBeNull()
     expect(ai.creditsUsed).toBe(0)
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
