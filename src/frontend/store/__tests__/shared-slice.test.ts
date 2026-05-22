@@ -1429,10 +1429,12 @@ describe('createSharedSlice', () => {
       it('opens save-changes modal when there are unsaved changes', () => {
         store.getState().workspaceActions.setEditingState('unsaved')
 
-        store.getState().sharedWorkspaceActions.closeProject()
+        const result = store.getState().sharedWorkspaceActions.closeProject()
 
         const modalState = store.getState().modalActions.getModalState('save-changes-project')
         expect(modalState.open).toBe(true)
+        // Caller should defer host navigation until the modal resolves.
+        expect(result).toEqual({ pendingConfirmation: true })
       })
 
       it('clears state when everything is saved', () => {
@@ -1440,11 +1442,13 @@ describe('createSharedSlice', () => {
         store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
         store.getState().workspaceActions.setEditingState('saved')
 
-        store.getState().sharedWorkspaceActions.closeProject()
+        const result = store.getState().sharedWorkspaceActions.closeProject()
 
         // State should be cleared
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().project.data.pous).toHaveLength(0)
+        // Caller should navigate to the host immediately.
+        expect(result).toEqual({ pendingConfirmation: false })
       })
     })
 
