@@ -104,7 +104,13 @@ export function useDebugSession(): UseDebugSessionReturn {
         let treeMap = new Map<string, DebugTreeNode>()
         const pouTrees: Record<string, DebugTreeNode[]> = {}
         try {
-          const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, entriesForTree, project.data)
+          const treeResult = buildDebugVariableTreeMap(
+            project.data.pous,
+            instances,
+            entriesForTree,
+            project.data,
+            useOpenPLCStore.getState().libraries.system,
+          )
           treeMap = treeResult.treeMap
 
           // Group trees by POU name for polling hook

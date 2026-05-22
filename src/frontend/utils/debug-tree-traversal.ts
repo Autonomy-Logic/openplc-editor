@@ -6,8 +6,8 @@
  * can use these utilities to traverse variable hierarchies consistently.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
 import type { DebugVariableEntry } from './debug-parser'
 import {
   buildDebugPath,
@@ -60,6 +60,10 @@ export interface TraversalContext {
   projectPous: PLCPou[]
   /** Project data types for struct lookup */
   dataTypes: PLCDataType[]
+  /** Loaded system libraries (bundled + user-installed) — passed in
+   *  by the caller so this utility module doesn't import the store
+   *  directly (arch validator forbids utils → store). */
+  systemLibraries: SystemLibrary[]
   /** Instance name from Resources configuration */
   instanceName: string
   /** POU name for composite key generation */
@@ -116,14 +120,17 @@ interface ArrayTypeData {
 /**
  * Check if a type is a function block (standard library or custom).
  */
-function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
+function isFunctionBlock(typeName: string, projectPous: PLCPou[], systemLibraries: SystemLibrary[]): boolean {
   const typeNameUpper = typeName.toUpperCase()
 
   // Check every system library loaded from bundled .stlib archives
   // (standard FBs, additional FBs, OSCAT, std-functions, plus any
-  // future user-installed library). FB names are globally unique
-  // across IEC libraries by convention, so first match wins.
-  for (const lib of openPLCStoreBase.getState().libraries.system) {
+  // future user-installed library).  Libraries are passed in via
+  // TraversalContext rather than read from the store so this utility
+  // module stays store-free (arch validator forbids utils → store).
+  // FB names are globally unique across IEC libraries by convention,
+  // so first match wins.
+  for (const lib of systemLibraries) {
     const matched = lib.pous.some(
       (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
     )
@@ -159,11 +166,11 @@ function traverseNestedNode<T>(
   visitor: DebugNodeVisitor<T>,
   arrayData?: ArrayTypeData,
 ): T {
-  const { debugVariables, projectPous, dataTypes } = context
+  const { debugVariables, projectPous, dataTypes, systemLibraries } = context
 
   if (typeDefinition === 'derived') {
     // Function block type
-    const fbVariables = findFunctionBlockVariables(typeName, projectPous)
+    const fbVariables = findFunctionBlockVariables(typeName, projectPous, systemLibraries)
 
     if (!fbVariables) {
       // FB definition not found - treat as leaf
@@ -214,7 +221,7 @@ function traverseNestedNode<T>(
           )
         } else if (fbVar.type.definition === 'user-data-type') {
           // Could be FB or struct - check
-          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous) ? 'derived' : 'user-data-type'
+          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
           children.push(
             traverseNestedNode(
               fbVar.name,
@@ -279,7 +286,7 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (field.type.definition === 'user-data-type') {
-        const childTypeDef = isFunctionBlock(field.type.value, projectPous) ? 'derived' : 'user-data-type'
+        const childTypeDef = isFunctionBlock(field.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
         children.push(
           traverseNestedNode(
             field.name,
@@ -350,7 +357,7 @@ function traverseNestedNode<T>(
         // 'base-type' | 'user-data-type' (see middleware/.../types.ts),
         // so 'user-data-type' is the single entry point for both shapes;
         // disambiguate by name lookup against the project's POUs.
-        const childTypeDef = isFunctionBlock(baseType.value, projectPous) ? 'derived' : 'user-data-type'
+        const childTypeDef = isFunctionBlock(baseType.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
         children.push(
           traverseNestedNode(
             `[${elementIndex}]`,
@@ -389,7 +396,7 @@ function traverseNestedNode<T>(
  * @returns The result produced by the visitor
  */
 export function traverseVariable<T>(variable: PLCVariable, context: TraversalContext, visitor: DebugNodeVisitor<T>): T {
-  const { debugVariables, projectPous, pouName, instanceName } = context
+  const { debugVariables, projectPous, pouName, instanceName, systemLibraries } = context
   const compositeKey = `${pouName}:${variable.name}`
 
   // Build the base path
@@ -415,7 +422,7 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
     )
   } else if (variable.type.definition === 'user-data-type') {
     // Could be FB or struct
-    const typeDef = isFunctionBlock(variable.type.value, projectPous) ? 'derived' : 'user-data-type'
+    const typeDef = isFunctionBlock(variable.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
     return traverseNestedNode(variable.name, fullPath, compositeKey, variable.type.value, typeDef, context, visitor)
   }
 

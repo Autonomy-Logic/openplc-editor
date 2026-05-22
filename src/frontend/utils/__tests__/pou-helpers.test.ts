@@ -1,4 +1,5 @@
 import type { PLCDataType, PLCPou } from '../../../middleware/shared/ports/types'
+import { openPLCStoreBase } from '../../store'
 import {
   findFunctionBlockVariables,
   findLeafVariables,
@@ -10,6 +11,13 @@ import {
   isStructureType,
   normalizeTypeString,
 } from '../pou-helpers'
+
+/** Bundled system libraries — pre-populated by `jest-vi-shim.ts`
+ *  reading the same `node_modules/strucpp/libs/*.stlib` archives the
+ *  runtime loads.  Helpers used to read this directly from the store;
+ *  the refactor passes it through as an explicit param so utils don't
+ *  cross the store boundary (arch validator forbids utils → store). */
+const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // normalizeTypeString
@@ -78,13 +86,13 @@ describe('isBaseType', () => {
 describe('findFunctionBlockVariables', () => {
   it('finds a standard library function block by name (case-insensitive)', () => {
     // SR is a standard FB
-    const vars = findFunctionBlockVariables('sr', [])
+    const vars = findFunctionBlockVariables('sr', [], SYSTEM_LIBS)
     expect(vars).not.toBeNull()
     expect(Array.isArray(vars)).toBe(true)
   })
 
   it('returns null for unknown function block names', () => {
-    expect(findFunctionBlockVariables('NonExistentFB', [])).toBeNull()
+    expect(findFunctionBlockVariables('NonExistentFB', [], SYSTEM_LIBS)).toBeNull()
   })
 
   it('finds a project-defined function-block POU', () => {
@@ -96,7 +104,7 @@ describe('findFunctionBlockVariables', () => {
       },
       body: { language: 'st', value: '' },
     }
-    const vars = findFunctionBlockVariables('MYCUSTOMFB', [customFB])
+    const vars = findFunctionBlockVariables('MYCUSTOMFB', [customFB], SYSTEM_LIBS)
     expect(vars).not.toBeNull()
     expect(vars!.length).toBe(1)
   })
@@ -107,7 +115,7 @@ describe('findFunctionBlockVariables', () => {
       pouType: 'function-block',
       body: { language: 'st', value: '' },
     }
-    const vars = findFunctionBlockVariables('EmptyFB', [customFB])
+    const vars = findFunctionBlockVariables('EmptyFB', [customFB], SYSTEM_LIBS)
     expect(vars).not.toBeNull()
     expect(vars).toEqual([])
   })
@@ -119,7 +127,7 @@ describe('findFunctionBlockVariables', () => {
       interface: { variables: [] },
       body: { language: 'st', value: '' },
     }
-    expect(findFunctionBlockVariables('MyProg', [prog])).toBeNull()
+    expect(findFunctionBlockVariables('MyProg', [prog], SYSTEM_LIBS)).toBeNull()
   })
 
   // STruC++ debug-table-gen treats library FBs as black boxes — only
@@ -129,7 +137,7 @@ describe('findFunctionBlockVariables', () => {
   it('returns ONLY interface vars for a library FB (no locals)', () => {
     // TON has class:'local' members STATE, PREV_IN, CURRENT_TIME,
     // START_TIME — those must not appear.
-    const ton = findFunctionBlockVariables('TON', [])
+    const ton = findFunctionBlockVariables('TON', [], SYSTEM_LIBS)
     expect(ton).not.toBeNull()
     const names = ton!.map((v) => v.name.toUpperCase())
     expect(names).toEqual(expect.arrayContaining(['IN', 'PT', 'Q', 'ET']))
@@ -158,7 +166,7 @@ describe('findFunctionBlockVariables', () => {
       },
       body: { language: 'st', value: '' },
     }
-    const vars = findFunctionBlockVariables('MyFB', [customFB])
+    const vars = findFunctionBlockVariables('MyFB', [customFB], SYSTEM_LIBS)
     expect(vars).not.toBeNull()
     const names = vars!.map((v) => v.name)
     expect(names).toEqual(['IN', 'OUT', 'STATE'])
@@ -173,11 +181,11 @@ describe('findFunctionBlockVariables', () => {
 
 describe('isFunctionBlockType', () => {
   it('returns true for known FB types', () => {
-    expect(isFunctionBlockType('SR', [])).toBe(true)
+    expect(isFunctionBlockType('SR', [], SYSTEM_LIBS)).toBe(true)
   })
 
   it('returns false for non-FB types', () => {
-    expect(isFunctionBlockType('INT', [])).toBe(false)
+    expect(isFunctionBlockType('INT', [], SYSTEM_LIBS)).toBe(false)
   })
 })
 
@@ -273,18 +281,18 @@ describe('findLeafVariables', () => {
   const emptyDataTypes: PLCDataType[] = []
 
   it('returns a single leaf for a base type', () => {
-    const leaves = findLeafVariables('BOOL', emptyPous, emptyDataTypes, 'myVar')
+    const leaves = findLeafVariables('BOOL', emptyPous, emptyDataTypes, SYSTEM_LIBS, 'myVar')
     expect(leaves).toEqual([{ relativePath: 'myVar', typeName: 'BOOL' }])
   })
 
   it('returns empty array for unknown non-base type', () => {
-    const leaves = findLeafVariables('UnknownType', emptyPous, emptyDataTypes)
+    const leaves = findLeafVariables('UnknownType', emptyPous, emptyDataTypes, SYSTEM_LIBS)
     expect(leaves).toEqual([])
   })
 
   it('expands a standard library FB into leaf variables', () => {
     // SR has base-type variables (S1, R, Q1 are BOOL)
-    const leaves = findLeafVariables('SR', emptyPous, emptyDataTypes, 'mySR')
+    const leaves = findLeafVariables('SR', emptyPous, emptyDataTypes, SYSTEM_LIBS, 'mySR')
     expect(leaves.length).toBeGreaterThan(0)
     leaves.forEach((leaf) => {
       expect(leaf.relativePath).toMatch(/^mySR\./)
@@ -303,7 +311,7 @@ describe('findLeafVariables', () => {
         ],
       },
     ]
-    const leaves = findLeafVariables('Point', emptyPous, dataTypes, 'p')
+    const leaves = findLeafVariables('Point', emptyPous, dataTypes, SYSTEM_LIBS, 'p')
     expect(leaves).toEqual([
       { relativePath: 'p.x', typeName: 'INT' },
       { relativePath: 'p.y', typeName: 'INT' },
@@ -323,7 +331,7 @@ describe('findLeafVariables', () => {
         variable: [{ name: 'inner', type: { definition: 'user-data-type', value: 'Inner' } }],
       },
     ]
-    const leaves = findLeafVariables('Outer', emptyPous, dataTypes, 'o')
+    const leaves = findLeafVariables('Outer', emptyPous, dataTypes, SYSTEM_LIBS, 'o')
     expect(leaves).toEqual([{ relativePath: 'o.inner.val', typeName: 'REAL' }])
   })
 
@@ -340,7 +348,7 @@ describe('findLeafVariables', () => {
       },
     ]
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const leaves = findLeafVariables('Circular', emptyPous, dataTypes)
+    const leaves = findLeafVariables('Circular', emptyPous, dataTypes, SYSTEM_LIBS)
     expect(leaves).toEqual([{ relativePath: 'val', typeName: 'INT' }])
     consoleSpy.mockRestore()
   })
@@ -378,7 +386,7 @@ describe('findLeafVariables', () => {
         body: { language: 'st', value: '' },
       },
     ]
-    const leaves = findLeafVariables('CustomFB', pous, dataTypes, 'fb')
+    const leaves = findLeafVariables('CustomFB', pous, dataTypes, SYSTEM_LIBS, 'fb')
     expect(leaves).toEqual([{ relativePath: 'fb.out', typeName: 'BOOL' }])
   })
 
@@ -398,7 +406,7 @@ describe('findLeafVariables', () => {
         ],
       },
     ]
-    const leaves = findLeafVariables('WithEnum', emptyPous, dataTypes, 's')
+    const leaves = findLeafVariables('WithEnum', emptyPous, dataTypes, SYSTEM_LIBS, 's')
     expect(leaves).toEqual([{ relativePath: 's.v', typeName: 'INT' }])
   })
 
@@ -435,7 +443,7 @@ describe('findLeafVariables', () => {
         body: { language: 'st', value: '' },
       },
     ]
-    const leaves = findLeafVariables('NestedFB', pous, dataTypes, 'fb')
+    const leaves = findLeafVariables('NestedFB', pous, dataTypes, SYSTEM_LIBS, 'fb')
     expect(leaves).toEqual([
       { relativePath: 'fb.inner.val', typeName: 'REAL' },
       { relativePath: 'fb.out', typeName: 'BOOL' },
@@ -475,13 +483,13 @@ describe('findLeafVariables', () => {
         body: { language: 'st', value: '' },
       },
     ]
-    const leaves = findLeafVariables('ArrayFB', pous, emptyDataTypes, 'fb')
+    const leaves = findLeafVariables('ArrayFB', pous, emptyDataTypes, SYSTEM_LIBS, 'fb')
     expect(leaves).toEqual([{ relativePath: 'fb.flag', typeName: 'BOOL' }])
   })
 
   it('expands a standard library FB with empty pathPrefix (line 168 falsy arm)', () => {
     // SR is a standard FB. Calling without pathPrefix exercises the fbVar.name branch.
-    const leaves = findLeafVariables('SR', emptyPous, emptyDataTypes)
+    const leaves = findLeafVariables('SR', emptyPous, emptyDataTypes, SYSTEM_LIBS)
     expect(leaves.length).toBeGreaterThan(0)
     // Without pathPrefix, paths should NOT have a leading dot
     leaves.forEach((leaf) => {
@@ -497,7 +505,7 @@ describe('findLeafVariables', () => {
         variable: [{ name: 'a', type: { definition: 'base-type', value: 'BOOL' } }],
       },
     ]
-    const leaves = findLeafVariables('Simple', emptyPous, dataTypes)
+    const leaves = findLeafVariables('Simple', emptyPous, dataTypes, SYSTEM_LIBS)
     expect(leaves).toEqual([{ relativePath: 'a', typeName: 'BOOL' }])
   })
 })

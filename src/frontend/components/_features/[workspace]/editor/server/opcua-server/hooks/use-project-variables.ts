@@ -7,6 +7,7 @@ import {
   isFunctionBlockType,
   type PouVariable,
 } from '@root/frontend/utils/pou-helpers'
+import type { SystemLibrary } from '@root/middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
 import { useMemo } from 'react'
 
@@ -79,6 +80,7 @@ const buildVariableNode = (
   parentPath: string,
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
   variableClass?: string,
   arrayData?: ArrayData,
 ): VariableTreeNode | null => {
@@ -91,7 +93,7 @@ const buildVariableNode = (
 
   // Handle arrays
   if (typeDefinition === 'array' && arrayData) {
-    return buildArrayNode(name, pouName, parentPath, dataTypes, pous, variableClass, arrayData)
+    return buildArrayNode(name, pouName, parentPath, dataTypes, pous, systemLibraries, variableClass, arrayData)
   }
 
   // Base type - this is a selectable leaf
@@ -119,14 +121,25 @@ const buildVariableNode = (
       structVariables,
       dataTypes,
       pous,
+      systemLibraries,
       variableClass,
     )
   }
 
   // Check if it's a function block (standard OR custom - universal lookup)
-  const fbVariables = findFunctionBlockVariables(typeName, pous)
+  const fbVariables = findFunctionBlockVariables(typeName, pous, systemLibraries)
   if (fbVariables) {
-    return buildFunctionBlockNode(name, typeName, pouName, parentPath, fbVariables, dataTypes, pous, variableClass)
+    return buildFunctionBlockNode(
+      name,
+      typeName,
+      pouName,
+      parentPath,
+      fbVariables,
+      dataTypes,
+      pous,
+      systemLibraries,
+      variableClass,
+    )
   }
 
   // Unknown type - not selectable
@@ -144,6 +157,7 @@ const buildStructureNode = (
   structVariables: PouVariable[],
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
   variableClass?: string,
 ): VariableTreeNode => {
   const variablePath = parentPath ? `${parentPath}.${name}` : name
@@ -162,6 +176,7 @@ const buildStructureNode = (
         variablePath,
         dataTypes,
         pous,
+        systemLibraries,
         undefined,
         arrayData,
       )
@@ -197,6 +212,7 @@ const buildFunctionBlockNode = (
   fbVariables: PouVariable[],
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
   variableClass?: string,
 ): VariableTreeNode => {
   const variablePath = parentPath ? `${parentPath}.${name}` : name
@@ -212,7 +228,7 @@ const buildFunctionBlockNode = (
 
       // For 'user-data-type', check if it's actually an FB
       if (effectiveDefinition === 'user-data-type') {
-        if (isFunctionBlockType(varTypeName, pous)) {
+        if (isFunctionBlockType(varTypeName, pous, systemLibraries)) {
           effectiveDefinition = 'derived'
         }
       }
@@ -228,6 +244,7 @@ const buildFunctionBlockNode = (
         variablePath,
         dataTypes,
         pous,
+        systemLibraries,
         fbVar.class,
         arrayData,
       )
@@ -256,6 +273,7 @@ const buildArrayNode = (
   parentPath: string,
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
   variableClass?: string,
   arrayData?: ArrayData,
 ): VariableTreeNode => {
@@ -321,6 +339,7 @@ const buildArrayNode = (
         variablePath,
         dataTypes,
         pous,
+        systemLibraries,
       )
       if (elementNode) {
         children.push(elementNode)
@@ -350,6 +369,7 @@ const buildVariableNodeFromPLC = (
   pouName: string,
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
   parentPath: string = '',
 ): VariableTreeNode | null => {
   const typeName = getTypeName(variable)
@@ -361,6 +381,7 @@ const buildVariableNodeFromPLC = (
     parentPath,
     dataTypes,
     pous,
+    systemLibraries,
     variable.class,
     variable.type.definition === 'array' ? variable.type.data : undefined,
   )
@@ -369,13 +390,18 @@ const buildVariableNodeFromPLC = (
 /**
  * Build a tree node for a program POU.
  */
-const buildProgramNode = (pou: PLCPou, dataTypes: PLCDataType[], pous: PLCPou[]): VariableTreeNode => {
+const buildProgramNode = (
+  pou: PLCPou,
+  dataTypes: PLCDataType[],
+  pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
+): VariableTreeNode => {
   if (pou.pouType !== 'program') {
     throw new Error('Expected program POU')
   }
 
   const children = (pou.interface?.variables ?? [])
-    .map((v) => buildVariableNodeFromPLC(v, pou.name, dataTypes, pous))
+    .map((v) => buildVariableNodeFromPLC(v, pou.name, dataTypes, pous, systemLibraries))
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {
@@ -396,9 +422,10 @@ const buildGlobalVariablesNode = (
   globalVariables: PLCVariable[],
   dataTypes: PLCDataType[],
   pous: PLCPou[],
+  systemLibraries: SystemLibrary[],
 ): VariableTreeNode => {
   const children = globalVariables
-    .map((v) => buildVariableNodeFromPLC({ ...v, class: 'global' }, 'GVL', dataTypes, pous))
+    .map((v) => buildVariableNodeFromPLC({ ...v, class: 'global' }, 'GVL', dataTypes, pous, systemLibraries))
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {
@@ -421,14 +448,16 @@ const buildGlobalVariablesNode = (
 export const useProjectVariables = (): VariableTreeNode[] => {
   const {
     project: { data: projectData },
+    libraries,
   } = useOpenPLCStore()
 
   return useMemo(() => {
+    const systemLibraries = libraries.system
     const nodes: VariableTreeNode[] = []
 
     for (const pou of projectData.pous) {
       if (pou.pouType === 'program') {
-        nodes.push(buildProgramNode(pou, projectData.dataTypes, projectData.pous))
+        nodes.push(buildProgramNode(pou, projectData.dataTypes, projectData.pous, systemLibraries))
       }
     }
 
@@ -439,12 +468,13 @@ export const useProjectVariables = (): VariableTreeNode[] => {
           globalVars.map((v) => ({ ...v, class: 'global' })) as PLCVariable[],
           projectData.dataTypes,
           projectData.pous,
+          systemLibraries,
         ),
       )
     }
 
     return nodes
-  }, [projectData.pous, projectData.dataTypes, projectData.configurations.resource.globalVariables])
+  }, [projectData.pous, projectData.dataTypes, projectData.configurations.resource.globalVariables, libraries.system])
 }
 
 // Helper exports for tree manipulation

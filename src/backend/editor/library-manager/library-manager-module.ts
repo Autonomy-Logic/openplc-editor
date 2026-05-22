@@ -6,6 +6,10 @@ import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-p
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
 import { importCodesysLibrary as sharedImportCodesys } from '../../shared/library/codesys-import'
 import { compileStlib as sharedCompileStlib } from '../../shared/library/compile-stlib'
+import {
+  bundledArchiveToInstalledRow,
+  userArchiveToInstalledRow,
+} from '../../shared/library/installed-library-rows'
 import { assertPathContained } from '../utils/path-containment'
 import { validatePathId } from '../../shared/utils/path-safety'
 import type { LibraryRegistry } from './types'
@@ -107,15 +111,7 @@ export class LibraryManagerModule {
     const out: InstalledLibrary[] = []
 
     for (const archive of this.readBundledArchives()) {
-      out.push({
-        name: archive.manifest.name,
-        version: archive.manifest.version,
-        bundled: true,
-        installedAt: '',
-        origin: 'bundled',
-        ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
-        ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
-      })
+      out.push(bundledArchiveToInstalledRow(archive))
     }
 
     const registry = this.readRegistry()
@@ -123,15 +119,14 @@ export class LibraryManagerModule {
     for (const [name, info] of userEntries) {
       const archive = this.readUserArchive(name, info.stlibPath)
       if (!archive) continue
-      out.push({
-        name,
-        version: info.version,
-        bundled: false,
-        installedAt: info.installedAt,
-        origin: info.origin,
-        ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
-        ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
-      })
+      out.push(
+        userArchiveToInstalledRow(archive, {
+          name,
+          version: info.version,
+          installedAt: info.installedAt,
+          origin: info.origin,
+        }),
+      )
     }
     return out
   }

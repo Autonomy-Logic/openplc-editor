@@ -5,6 +5,7 @@
  * to build DebugTreeNode structures for displaying variables in the debugger.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { DebugTreeNode, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import type { DebugVariableEntry } from './debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from './debug-tree-traversal'
@@ -132,6 +133,7 @@ export function buildDebugTree(
   instanceName: string,
   debugVariables: DebugVariableEntry[],
   projectData: DebugProjectData,
+  systemLibraries: SystemLibrary[],
 ): DebugTreeNode {
   // Handle external variables specially - they use global path
   // For external variables, we need to adjust the traversal
@@ -172,6 +174,7 @@ export function buildDebugTree(
     debugVariables,
     projectPous: projectData.pous,
     dataTypes: projectData.dataTypes,
+    systemLibraries,
     instanceName,
     pouName,
   }

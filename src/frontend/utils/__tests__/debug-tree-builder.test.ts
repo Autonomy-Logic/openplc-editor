@@ -2,6 +2,11 @@ import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/share
 import type { DebugVariableEntry } from '../debug-parser'
 import { buildDebugTree, buildVariableBasePath } from '../debug-tree-builder'
 
+import { openPLCStoreBase } from '../../store'
+
+/** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
+const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -95,7 +100,7 @@ describe('buildDebugTree', () => {
       const debugVars = [makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 0)]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.name).toBe('SPEED')
       expect(node.fullPath).toBe('INSTANCE0.SPEED')
@@ -109,7 +114,7 @@ describe('buildDebugTree', () => {
       const variable = makeBaseVariable('MISSING', 'BOOL')
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, [], projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, [], projectData, SYSTEM_LIBS)
 
       expect(node.debugIndex).toBeUndefined()
     })
@@ -121,7 +126,7 @@ describe('buildDebugTree', () => {
       const debugVars = [makeDebugVar('GLOBAL_FLAG', 'BOOL_ENUM', 5)]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.fullPath).toBe('GLOBAL_FLAG')
       expect(node.compositeKey).toBe('Main:GLOBAL_FLAG')
@@ -133,7 +138,7 @@ describe('buildDebugTree', () => {
       const variable = makeBaseVariable('MISSING_GLOBAL', 'INT', 'external')
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, [], projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, [], projectData, SYSTEM_LIBS)
 
       expect(node.fullPath).toBe('MISSING_GLOBAL')
       expect(node.debugIndex).toBeUndefined()
@@ -148,7 +153,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       // SR is a standard library FB, so it should be expanded
       expect(node.isComplex).toBe(true)
@@ -167,7 +172,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.name).toBe('MySR')
       expect(node.isComplex).toBe(true)
@@ -189,7 +194,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [], pous: [customFbPou] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(true)
       expect(node.children).toHaveLength(2)
@@ -202,7 +207,7 @@ describe('buildDebugTree', () => {
       const debugVars = [makeDebugVar('INSTANCE0.UNKNOWN_FB', 'INT_ENUM', 99)]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       // FB not found -> fallback to leaf
       expect(node.isComplex).toBe(false)
@@ -223,7 +228,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [structType], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(true)
       expect(node.type).toBe('MyStruct')
@@ -238,7 +243,7 @@ describe('buildDebugTree', () => {
       const debugVars = [makeDebugVar('INSTANCE0.MYVAR', 'INT_ENUM', 50)]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(false)
       expect(node.debugIndex).toBe(50)
@@ -250,7 +255,7 @@ describe('buildDebugTree', () => {
       const debugVars = [makeDebugVar('INSTANCE0.MYINST.Q', 'BOOL_ENUM', 60)]
       const projectData = { dataTypes: [], pous: [customFb] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(true)
       expect(node.children).toHaveLength(1)
@@ -268,7 +273,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(true)
       expect(node.type).toBe('ARRAY')
@@ -288,7 +293,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.arrayIndices).toEqual([-1, 1])
       expect(node.children).toHaveLength(3)
@@ -320,7 +325,7 @@ describe('buildDebugTree', () => {
       ]
       const projectData = { dataTypes: [structType], pous: [] }
 
-      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData)
+      const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
       expect(node.isComplex).toBe(true)
       expect(node.children).toHaveLength(2)

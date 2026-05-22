@@ -3,8 +3,8 @@
  * Used by both the debugger and OPC-UA config generator.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
 
 /**
  * Variable definition from a POU or library FB.
@@ -94,16 +94,22 @@ const USER_FB_PERSISTENT_CLASSES: ReadonlySet<string> = new Set(['input', 'outpu
  * match the debugger's variable-enumeration contract (see comment on
  * LIBRARY_FB_INTERFACE_CLASSES). Returns null if not found.
  */
-export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou[]): PouVariable[] | null => {
+export const findFunctionBlockVariables = (
+  typeName: string,
+  projectPous: PLCPou[],
+  systemLibraries: SystemLibrary[],
+): PouVariable[] | null => {
   const typeNameUpper = typeName.toUpperCase()
 
   // Check system library FBs across every loaded .stlib bundle —
-  // interface only. Loaded libraries live in the Zustand store,
-  // populated at app boot from bundled .stlib archives. We search every
-  // library because a typeName may belong to standard, additional,
-  // OSCAT, or a future user-installed lib; first match wins, and FB
-  // names are unique across IEC libraries by convention.
-  for (const lib of openPLCStoreBase.getState().libraries.system) {
+  // interface only.  Callers thread the loaded library set down from
+  // the store (or from a TraversalContext that already carries it) —
+  // utils don't import the store directly so the architecture
+  // validator stays clean.  We search every library because a
+  // typeName may belong to standard, additional, OSCAT, or a future
+  // user-installed lib; first match wins, and FB names are unique
+  // across IEC libraries by convention.
+  for (const lib of systemLibraries) {
     const systemFB = lib.pous.find(
       (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
     )
@@ -131,8 +137,12 @@ export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou
 /**
  * Check if a type name is a function block (library or project).
  */
-export const isFunctionBlockType = (typeName: string, projectPous: PLCPou[]): boolean => {
-  return findFunctionBlockVariables(typeName, projectPous) !== null
+export const isFunctionBlockType = (
+  typeName: string,
+  projectPous: PLCPou[],
+  systemLibraries: SystemLibrary[],
+): boolean => {
+  return findFunctionBlockVariables(typeName, projectPous, systemLibraries) !== null
 }
 
 /**
@@ -187,6 +197,7 @@ export const findLeafVariables = (
   typeName: string,
   projectPous: PLCPou[],
   dataTypes: PLCDataType[],
+  systemLibraries: SystemLibrary[],
   pathPrefix: string = '',
   visited: Set<string> = new Set(),
 ): LeafVariable[] => {
@@ -201,7 +212,7 @@ export const findLeafVariables = (
   visited.add(typeNameNormalized)
 
   // Try to find as FB first
-  const fbVariables = findFunctionBlockVariables(typeName, projectPous)
+  const fbVariables = findFunctionBlockVariables(typeName, projectPous, systemLibraries)
   if (fbVariables) {
     for (const fbVar of fbVariables) {
       const varPath = pathPrefix ? `${pathPrefix}.${fbVar.name}` : fbVar.name
@@ -214,7 +225,14 @@ export const findLeafVariables = (
         // Skip for now as arrays need special handling
       } else if (!isEnumerationType(varTypeName, dataTypes)) {
         // Recurse into nested FBs or structures
-        const nestedLeaves = findLeafVariables(varTypeName, projectPous, dataTypes, varPath, new Set(visited))
+        const nestedLeaves = findLeafVariables(
+          varTypeName,
+          projectPous,
+          dataTypes,
+          systemLibraries,
+          varPath,
+          new Set(visited),
+        )
         leaves.push(...nestedLeaves)
       }
     }
@@ -232,7 +250,14 @@ export const findLeafVariables = (
         leaves.push({ relativePath: fieldPath, typeName: fieldTypeName.toUpperCase() })
       } else if (!isEnumerationType(fieldTypeName, dataTypes)) {
         // Recurse into nested types
-        const nestedLeaves = findLeafVariables(fieldTypeName, projectPous, dataTypes, fieldPath, new Set(visited))
+        const nestedLeaves = findLeafVariables(
+          fieldTypeName,
+          projectPous,
+          dataTypes,
+          systemLibraries,
+          fieldPath,
+          new Set(visited),
+        )
         leaves.push(...nestedLeaves)
       }
     }

@@ -6,6 +6,7 @@
  * are stored in the workspace Zustand store for the debugger UI.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type {
   DebugTreeNode,
   FbInstanceInfo,
@@ -198,6 +199,7 @@ export function buildDebugVariableTreeMap(
   instances: PLCInstance[],
   debugVariables: DebugVariableEntry[],
   projectData: { dataTypes: PLCDataType[]; pous: PLCPou[] },
+  systemLibraries: SystemLibrary[],
 ): DebugVariableTreeMapResult {
   const trees: DebugTreeNode[] = []
   const treeMap = new Map<string, DebugTreeNode>()
@@ -226,7 +228,7 @@ export function buildDebugVariableTreeMap(
     const variables = pou.interface?.variables ?? []
     variables.forEach((v: PLCVariable) => {
       try {
-        const node = buildDebugTree(v, pou.name, instanceName, debugVariables, projectData)
+        const node = buildDebugTree(v, pou.name, instanceName, debugVariables, projectData, systemLibraries)
         trees.push(node)
         addNodeAndChildrenToMap(node)
         if (node.isComplex) {

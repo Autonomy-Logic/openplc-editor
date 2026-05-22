@@ -1,4 +1,5 @@
 import type { PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import { openPLCStoreBase } from '../../store'
 import type { DebugMap, DebugVariableEntry } from '../debug-parser'
 import { packDebugAddr } from '../debug-parser'
 import {
@@ -7,6 +8,9 @@ import {
   buildVariableIndexMap,
   logCompilerEvent,
 } from '../debugger-session'
+
+/** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
+const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -327,7 +331,7 @@ describe('buildDebugVariableTreeMap', () => {
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { treeMap, trees, complexCount } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { treeMap, trees, complexCount } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     expect(trees).toHaveLength(2)
     expect(treeMap.has('Main:X')).toBe(true)
@@ -345,7 +349,7 @@ describe('buildDebugVariableTreeMap', () => {
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { complexCount } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { complexCount } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     expect(complexCount).toBe(1)
   })
@@ -360,7 +364,7 @@ describe('buildDebugVariableTreeMap', () => {
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     expect(treeMap.has('Main:mySR')).toBe(true)
     expect(treeMap.has('Main:mySR.S1')).toBe(true)
@@ -373,7 +377,7 @@ describe('buildDebugVariableTreeMap', () => {
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [fb] }
 
-    const { trees } = buildDebugVariableTreeMap([fb], instances, [], projectData)
+    const { trees } = buildDebugVariableTreeMap([fb], instances, [], projectData, SYSTEM_LIBS)
 
     expect(trees).toHaveLength(0)
   })
@@ -383,7 +387,7 @@ describe('buildDebugVariableTreeMap', () => {
     const instances: PLCInstance[] = []
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { trees } = buildDebugVariableTreeMap([pou], instances, [], projectData)
+    const { trees } = buildDebugVariableTreeMap([pou], instances, [], projectData, SYSTEM_LIBS)
 
     expect(trees).toHaveLength(0)
   })
@@ -404,7 +408,7 @@ describe('buildDebugVariableTreeMap', () => {
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
     // Should not throw, should still include the good variable
-    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     // At minimum the good variable should be present
     const goodTree = trees.find((t) => t.name === 'good')
@@ -422,7 +426,7 @@ describe('buildDebugVariableTreeMap', () => {
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { trees, treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { trees, treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     expect(trees).toHaveLength(4)
     expect(treeMap.get('Main:_TMP_ADD3_OUT')?.type).toBe('INT')
@@ -440,7 +444,7 @@ describe('buildDebugVariableTreeMap', () => {
     ]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     expect(trees).toHaveLength(0)
   })
@@ -451,7 +455,7 @@ describe('buildDebugVariableTreeMap', () => {
     const debugVars = [makeDebugVar('INSTANCE0.REGULAR_VAR', 'INT_ENUM', 300)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     // REGULAR_VAR is not _TMP_ so it won't be added as a TMP tree node
     expect(trees).toHaveLength(0)
@@ -463,7 +467,7 @@ describe('buildDebugVariableTreeMap', () => {
     const debugVars = [makeDebugVar('INSTANCE0._TMP_FUNC1_OUT', 'CUSTOM_TYPE', 500)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData)
+    const { treeMap } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
 
     // Type name should be kept as-is since it doesn't end in _ENUM
     expect(treeMap.get('Main:_TMP_FUNC1_OUT')?.type).toBe('CUSTOM_TYPE')
@@ -478,7 +482,7 @@ describe('buildDebugVariableTreeMap', () => {
     const instances = [makeInstance('INSTANCE0', 'Empty')]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { trees } = buildDebugVariableTreeMap([pou], instances, [], projectData)
+    const { trees } = buildDebugVariableTreeMap([pou], instances, [], projectData, SYSTEM_LIBS)
     expect(trees).toHaveLength(0)
   })
 })
