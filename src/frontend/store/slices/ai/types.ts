@@ -1,12 +1,13 @@
 import type {
   AIChatContentBlock,
+  BillingErrorPayload,
   ChatMessage,
   ChatMessageRole,
   SubscriptionStatus,
 } from '../../../../middleware/shared/ports/types'
 import type { DiffHunk } from '../../../utils/ai-diff-review'
 
-export type { AIChatContentBlock, ChatMessage, ChatMessageRole, SubscriptionStatus }
+export type { AIChatContentBlock, BillingErrorPayload, ChatMessage, ChatMessageRole, SubscriptionStatus }
 
 // ---------------------------------------------------------------------------
 // Conversation summary (returned by GET /ai/conversations)
@@ -92,6 +93,13 @@ export type AIState = {
      */
     tier: 'free' | 'pro'
     currentPeriodEnd: string | null
+    /**
+     * Structured billing error from the most recent 402 (insufficient ACU or
+     * inactive subscription). Read by the exhaustion-modal consumer
+     * (DOPE-285). `null` while no billing block is active — cleared on the
+     * next successful AI request.
+     */
+    billingError: BillingErrorPayload | null
     messages: ChatMessage[]
     activeEditorPou: string | null
     isAgenticLoopRunning: boolean
@@ -147,6 +155,12 @@ export type AIActions = {
    */
   setTier: (tier: 'free' | 'pro') => void
   setCurrentPeriodEnd: (date: string | null) => void
+  /**
+   * Set or clear the structured 402 payload. Called by the chat panel /
+   * inline completion provider when an AIRequestError(402) surfaces, and
+   * cleared (passed `null`) on the next successful request.
+   */
+  setBillingError: (error: BillingErrorPayload | null) => void
   setAIError: (error: string | null) => void
   setActiveEditorPou: (pouName: string | null) => void
   setAgenticLoopRunning: (running: boolean) => void

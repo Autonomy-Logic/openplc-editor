@@ -20,6 +20,7 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   creditsTotal: 500,
   tier: 'free',
   currentPeriodEnd: null,
+  billingError: null,
   messages: [],
   activeEditorPou: null,
   isAgenticLoopRunning: false,
@@ -116,6 +117,13 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.currentPeriodEnd = date
+          }),
+        )
+      },
+      setBillingError: (error) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.billingError = error
           }),
         )
       },
