@@ -22,6 +22,7 @@ import {
   prepareXmlForLibraryBuild,
 } from '@root/backend/shared/library/build-pipeline'
 import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
+import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
@@ -1160,97 +1161,35 @@ class CompilerModule {
   }: CompileArduinoProgramArgs) {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
-    // -j 0 — saturate every CPU core. arduino-cli's default is
-    // sequential compilation; with the codegen split (one TU per POU
-    // plus configuration.cpp + generated_debug.cpp) there are now
-    // many independent .cpp files in the library folder, so
-    // parallel compilation cuts wall-clock build time roughly
-    // proportional to core count. Per-file build caching is enabled
-    // by default — arduino-cli keys its cache on (sketch path,
-    // flags, board) under ~/<user-cache>/arduino/sketches/<hash>/
-    // and reuses .o files when their content hash matches. Together
-    // with the build-folder wipe at createBasicDirectories(), this
-    // gives the same edit-one-POU-rebuild-fast behaviour that the
-    // v4 runtime gets via ccache + make -j.
-    //
-    // --clean — invalidate arduino-cli's per-file cache for the
-    // selected sketch, forcing every TU to be recompiled from
-    // scratch. Wired to the "Clean build and upload" UI option.
-    let buildProjectFlags = ['compile', '-v', '-j', '0']
     if (cleanBuild) {
-      buildProjectFlags.push('--clean')
       handleOutputData('Clean build requested — arduino-cli cache will be invalidated.', 'info')
     }
 
-    if (boardHalsContent['c_flags']) {
-      buildProjectFlags = [
-        ...buildProjectFlags,
-        '--build-property',
-        `compiler.c.extra_flags=${boardHalsContent['c_flags'].map((f) => f).join(' ')}`,
-      ]
-    }
+    // The AVR toolchain doesn't ship a C++ stdlib; we bundle a
+    // freestanding port at resources/sources/avr-libstdcpp/include
+    // and pass it via -I.  Electron's user-data dir on macOS is
+    // `~/Library/Application Support/<App>/`, and arduino-cli's
+    // recipe substitution gets confused by quoted paths with embedded
+    // spaces — so mirror the headers into a no-space cache directory
+    // on first compile.  Versioned cache key self-invalidates on
+    // editor upgrades that ship new headers.
+    const avrLibStdCppInclude = boardHalsContent['core']?.startsWith('arduino:avr')
+      ? await this.ensureAvrLibStdCppCache()
+      : undefined
 
-    if (boardHalsContent['cxx_flags']) {
-      const cxxFlags = [...boardHalsContent['cxx_flags']]
-      // AVR toolchains don't ship the C++ standard library (no
-      // <type_traits>, <algorithm>, etc.). We bundle a freestanding-
-      // libstdc++ port at resources/sources/avr-libstdcpp/include and
-      // pass it via -I.
-      //
-      // The original path can sit anywhere — Electron's user-data dir
-      // on macOS is `~/Library/Application Support/<App>/` and many
-      // users have spaces in their home path. arduino-cli builds the
-      // compile invocation by token-substituting compiler.cpp.extra_flags
-      // into a recipe and processing the result; quoted paths with
-      // embedded spaces have been known to confuse the substitution and
-      // break AVR builds. Mirror the headers into a known no-space
-      // cache path on first compile to sidestep that whole class of
-      // breakage. Versioned cache key so the editor self-invalidates
-      // on upgrades that ship new headers.
-      if (boardHalsContent['core']?.startsWith('arduino:avr')) {
-        const avrLibStdCppPath = await this.ensureAvrLibStdCppCache()
-        cxxFlags.push(`-I${avrLibStdCppPath}`)
-      }
-      buildProjectFlags = [
-        ...buildProjectFlags,
-        '--build-property',
-        `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`,
-      ]
-    }
-
-    if (boardHalsContent['ld_flags']) {
-      buildProjectFlags = [
-        ...buildProjectFlags,
-        '--build-property',
-        `compiler.c.elf.extra_flags=${boardHalsContent['ld_flags'].map((f: string) => f).join(' ')}`,
-      ]
-    }
-
-    // `upload.maximum_data_size` controls arduino-cli's post-link
-    // size check, not the linker memory map (that's `ld_flags`).
-    // For boards like the simulator that target a stock Arduino
-    // platform but emulate more RAM than the canonical SoC, we
-    // need to override both — otherwise the link succeeds but
-    // arduino-cli rejects the binary with "data section exceeds
-    // available space in board" because boards.txt still reports
-    // 8192 bytes for atmega2560.
-    if (typeof boardHalsContent['max_data_size'] === 'number') {
-      buildProjectFlags = [
-        ...buildProjectFlags,
-        '--build-property',
-        `upload.maximum_data_size=${boardHalsContent['max_data_size']}`,
-      ]
-    }
-
-    buildProjectFlags = [
-      ...buildProjectFlags,
-      '--library',
-      `${join(compilationPath, 'src')}`, // STruC++ generated code + runtime headers
-      '--export-binaries', // Export binaries
-      '-b',
-      boardHalsContent['platform'], // Board target
-      join(baremetalPath, 'Baremetal.ino'), // Arduino .ino file
-      ...this.arduinoCliBaseParameters, // Base parameters
+    // Shared with openplc-web's compiler-adapter — single source of
+    // truth for arduino-cli compile argv composition.  Editor passes
+    // `-j 0` (parallel: default true) to saturate cores on developer
+    // machines; web passes parallel: false because compiler-service
+    // multiplexes many clients in nsjail sandboxes.
+    const buildProjectFlags = [
+      ...buildArduinoCliCompileArgs(boardHalsContent, {
+        sketchPath: join(baremetalPath, 'Baremetal.ino'),
+        libraryPath: join(compilationPath, 'src'),
+        avrLibStdCppInclude,
+        cleanBuild,
+      }),
+      ...this.arduinoCliBaseParameters,
     ]
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
