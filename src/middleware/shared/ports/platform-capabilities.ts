@@ -151,7 +151,14 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasVersionControl: true,
   hasAboutDialog: false,
   hasPythonLSP: false,
-  hasStLSP: false,
+  // The STruC++ worker bundle runs in any modern browser; web's
+  // stlib-source adapter (HTTP-backed, mirror of editor's IPC-backed
+  // one) lands alongside the library port and lets `bootStLsp`
+  // populate the worker with the user's enabled archives.  Web only
+  // compiles to Runtime v4 targets — the matiec / iec2c flow is
+  // Electron-only — so there's no scenario where the LSP isn't the
+  // right tool for ST tooling on web.
+  hasStLSP: true,
   hasUndoRedoHistory: false,
   hasFileWatcher: false,
   hasAIAssistant: true,
