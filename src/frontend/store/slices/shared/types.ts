@@ -140,9 +140,11 @@ export type SharedWorkspaceActions = {
   forceCloseFile: (name: string) => { success: boolean }
   /**
    * Close project: checks save state, shows save-changes modal if unsaved,
-   * or clears all state if saved.
+   * or clears all state if saved. Returns `{ pendingConfirmation: true }`
+   * when the modal was opened so the caller can defer post-close work
+   * (e.g. host navigation) until the modal resolves.
    */
-  closeProject: () => void
+  closeProject: () => { pendingConfirmation: boolean }
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
   /**

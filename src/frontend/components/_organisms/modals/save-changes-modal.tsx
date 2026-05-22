@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { useCapabilities, useProject, useWindow } from '../../../../middleware/shared/providers'
+import { useCapabilities, useNavigation, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
@@ -39,6 +39,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
 
   const projectPort = useProject()
   const windowPort = useWindow()
+  const navigation = useNavigation()
   const capabilities = useCapabilities()
 
   const {
@@ -48,9 +49,6 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
   const clearAndClose = () => {
     clearStatesOnCloseProject()
     setEditingState('initial-state')
-    if (!capabilities.hasLocalFilesystem) {
-      window.history.back()
-    }
   }
 
   const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
@@ -76,6 +74,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
         return
       case 'close-project':
         clearAndClose()
+        navigation.exitToHost()
         return
       case 'close-app':
         if (capabilities.isNativeApplication) {

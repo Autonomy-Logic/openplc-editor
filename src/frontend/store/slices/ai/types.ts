@@ -1,7 +1,13 @@
-import type { AIChatContentBlock, ChatMessage, ChatMessageRole } from '../../../../middleware/shared/ports/types'
+import type {
+  AIChatContentBlock,
+  BillingErrorPayload,
+  ChatMessage,
+  ChatMessageRole,
+  SubscriptionStatus,
+} from '../../../../middleware/shared/ports/types'
 import type { DiffHunk } from '../../../utils/ai-diff-review'
 
-export type { AIChatContentBlock, ChatMessage, ChatMessageRole }
+export type { AIChatContentBlock, BillingErrorPayload, ChatMessage, ChatMessageRole, SubscriptionStatus }
 
 // ---------------------------------------------------------------------------
 // Conversation summary (returned by GET /ai/conversations)
@@ -60,10 +66,40 @@ export type AIState = {
     isLoading: boolean
     hasConsented: boolean
     preferences: AIPreferences
+    /** ACU consumed in the current billing period. Replaces `creditsUsed`. */
+    acuUsed: number
+    /** ACU monthly cap for the active plan. Replaces `creditsTotal`. */
+    acuTotal: number
+    /**
+     * Paddle subscription status from `/me/entitlements`. `null` before the
+     * first fetch completes.
+     */
+    subscriptionStatus: SubscriptionStatus | null
+    /** Plan slug from `/me/entitlements` (e.g. `'community'`, `'standard'`). `null` before first fetch. */
+    planSlug: string | null
+    /**
+     * @deprecated Use `acuUsed`. Kept in sync by `setUsage` and the legacy
+     * `setCredits` setter for one release.
+     */
     creditsUsed: number
+    /**
+     * @deprecated Use `acuTotal`. Kept in sync by `setUsage` and the legacy
+     * `setCredits` setter for one release.
+     */
     creditsTotal: number
+    /**
+     * @deprecated Pre-Paddle tier flag. Use `subscriptionStatus` + `planSlug`.
+     * Retained for one release while UI surfaces migrate.
+     */
     tier: 'free' | 'pro'
     currentPeriodEnd: string | null
+    /**
+     * Structured billing error from the most recent 402 (insufficient ACU or
+     * inactive subscription). Read by the exhaustion-modal consumer
+     * (DOPE-285). `null` while no billing block is active — cleared on the
+     * next successful AI request.
+     */
+    billingError: BillingErrorPayload | null
     messages: ChatMessage[]
     activeEditorPou: string | null
     isAgenticLoopRunning: boolean
@@ -94,9 +130,33 @@ export type AIActions = {
   setAILoading: (loading: boolean) => void
   setAIConsented: (consented: boolean) => void
   setPreference: <K extends keyof AIPreferences>(key: K, value: AIPreferences[K]) => void
+  /**
+   * Set the ACU usage counters from `/me/usage`. Also writes the deprecated
+   * `creditsUsed` / `creditsTotal` fields to keep unmigrated consumers in sync.
+   */
+  setUsage: (used: number, total: number) => void
+  /**
+   * Set the subscription source fields from `/me/entitlements`. `null` clears
+   * them (e.g. on logout or before the first fetch resolves).
+   */
+  setSubscription: (status: SubscriptionStatus | null, currentPeriodEnd: string | null, planSlug: string | null) => void
+  /**
+   * @deprecated Use `setUsage`. Writes to both legacy (`creditsUsed`/`creditsTotal`)
+   * and new (`acuUsed`/`acuTotal`) fields during the deprecation window.
+   */
   setCredits: (used: number, total: number) => void
+  /**
+   * @deprecated Use `setSubscription`. `tier` is the pre-Paddle 'free'|'pro'
+   * flag; the new Paddle world uses `subscriptionStatus` + `planSlug`.
+   */
   setTier: (tier: 'free' | 'pro') => void
   setCurrentPeriodEnd: (date: string | null) => void
+  /**
+   * Set or clear the structured 402 payload. Called by the chat panel /
+   * inline completion provider when an AIRequestError(402) surfaces, and
+   * cleared (passed `null`) on the next successful request.
+   */
+  setBillingError: (error: BillingErrorPayload | null) => void
   setAIError: (error: string | null) => void
   setActiveEditorPou: (pouName: string | null) => void
   setAgenticLoopRunning: (running: boolean) => void
