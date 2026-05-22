@@ -33,10 +33,21 @@ export interface StLspBootHandle {
  * `null` when `capabilities.hasStLSP` is false OR when the
  * required `stlibSource` port is missing — both signal "ST tooling
  * intentionally absent on this build", not a misconfiguration.
+ *
+ * `workerUrl` is the resolved asset URL for strucpp's browser-server
+ * worker bundle.  Each platform's `App.tsx` resolves it through its
+ * own bundler (webpack `?url` rewriter on the Electron editor, Vite
+ * `?url` query import on the web build) and passes it in — keeping
+ * the bundler-specific syntax out of this shared module.  When
+ * omitted, `startStLsp` falls back to its in-line `require()`
+ * resolution, which works under webpack but not Vite.  Tests pass
+ * `workerUrl: 'about:blank'` (or any string) to bypass the fallback
+ * entirely.
  */
 export function bootStLsp(
   ports: PlatformPorts,
   monaco: typeof import('monaco-editor'),
+  workerUrl?: string,
 ): StLspBootHandle | null {
   if (!ports.capabilities.hasStLSP || !ports.stlibSource) {
     return null
@@ -53,6 +64,7 @@ export function bootStLsp(
   const service = startStLsp({
     stlibSource: ports.stlibSource,
     monaco,
+    ...(workerUrl ? { workerUrlOverride: workerUrl } : {}),
     onCrash: (err) => {
       if (crashToastShown) return
       crashToastShown = true
