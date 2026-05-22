@@ -26,10 +26,12 @@ describe('AcuExhaustionModal', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders the "Out of ACU" variant with the upgrade CTA and ACU figures', () => {
+  it('renders the "Out of ACU" variant with frontend copy + ACU figures', () => {
     render(<AcuExhaustionModal billingError={insufficientAcu} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
     expect(screen.getByText("You're out of ACU")).toBeTruthy()
-    expect(screen.getByText('Out of ACU — upgrade to keep chatting')).toBeTruthy()
+    // Frontend copy — ignores the backend message which still mentions the
+    // descoped Haiku quick-switch.
+    expect(screen.getByText(/used all 613 ACU.*Buy more ACU or upgrade your plan/)).toBeTruthy()
     expect(screen.getByText(/This request needed 12 ACU; only 0 remaining/)).toBeTruthy()
     const cta = screen.getByTestId('acu-exhaustion-cta') as HTMLAnchorElement
     expect(cta.textContent).toBe('Upgrade plan')
@@ -39,7 +41,8 @@ describe('AcuExhaustionModal', () => {
   it('renders the "Subscription required" variant with reactivate CTA pointing at reactivateUrl', () => {
     render(<AcuExhaustionModal billingError={subscriptionInactive} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
     expect(screen.getByText('Subscription required')).toBeTruthy()
-    expect(screen.getByText('Your subscription was canceled. Reactivate to continue.')).toBeTruthy()
+    // Frontend copy — uses subscriptionStatus, ignores the backend message.
+    expect(screen.getByText(/Your subscription is canceled.*Reactivate it to keep using AI features/)).toBeTruthy()
     const cta = screen.getByTestId('acu-exhaustion-cta') as HTMLAnchorElement
     expect(cta.textContent).toBe('Reactivate subscription')
     expect(cta.href).toBe('https://billing.example/reactivate')
@@ -62,15 +65,27 @@ describe('AcuExhaustionModal', () => {
     expect(cta.href).toBe('https://override.example/billing')
   })
 
-  it('falls back to a default description when billing.message is empty', () => {
+  it('ignores the backend `message` field — frontend composes its own copy', () => {
+    // Backend's `CreditGuard` still emits "Switch to Haiku..." text from the
+    // descoped DOPE-288 era. The modal must not surface that to the user.
+    const stalePayload: BillingErrorPayload = {
+      ...insufficientAcu,
+      message: 'Switch to Haiku to use fewer credits, or upgrade your plan.',
+    }
+    render(<AcuExhaustionModal billingError={stalePayload} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
+    expect(screen.queryByText(/Switch to Haiku/)).toBeNull()
+    expect(screen.getByText(/Buy more ACU or upgrade your plan/)).toBeTruthy()
+  })
+
+  it('falls back to a generic out-of-ACU description when monthlyLimit is missing', () => {
     render(
       <AcuExhaustionModal
-        billingError={{ ...insufficientAcu, message: '' }}
+        billingError={{ code: 'insufficient_acu', message: '' }}
         onDismiss={vi.fn()}
         upgradeUrl={TEST_UPGRADE_URL}
       />,
     )
-    expect(screen.getByText(/used all 613 ACU/)).toBeTruthy()
+    expect(screen.getByText(/out of ACU for this billing period/)).toBeTruthy()
   })
 
   it('omits the "needed N / M remaining" line when remaining/required are missing', () => {
