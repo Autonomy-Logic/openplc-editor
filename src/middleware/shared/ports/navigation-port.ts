@@ -42,6 +42,20 @@ export interface NavigationPort {
    * Editor: `window.open(url, '_blank')` (new BrowserWindow).
    */
   openInNewWindow(path: string, search?: NavigationSearch): void
+
+  /**
+   * Exit the editor surface back to the host that embedded it.
+   * Web: hard-redirects to the autonomy-edge project list
+   *      (`${VITE_EDGE_FRONTEND_URL}/projects`).
+   * Editor: no-op — the start screen reappears automatically once
+   *         the project state has been cleared by the caller.
+   *
+   * Callers are expected to clear project state first (via the shared
+   * `clearStatesOnCloseProject` action) so the editor view is in a
+   * coherent "no project loaded" state before the platform decides
+   * whether to stay (editor) or navigate away (web).
+   */
+  exitToHost(): void
 }
 
 /**
