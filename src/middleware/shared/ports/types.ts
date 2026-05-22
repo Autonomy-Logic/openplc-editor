@@ -762,6 +762,120 @@ export type ChatMessage = {
 }
 
 // ---------------------------------------------------------------------------
+// AI Billing — Entitlements + Usage (Phase 5)
+// ---------------------------------------------------------------------------
+//
+// Mirrors the backend `ResolvedEntitlements` / `ResolvedUsage` shapes from
+// autonomy-edge `infrastructure/services/billing/entitlements.service.ts`.
+// Surfaced via `GET /me/entitlements` and `GET /me/usage` (Gustavo's chassis,
+// populated by `EntitlementsService` + `AcuLedgerService`).
+
+/** Subscription status as reported by the backend (Paddle-backed). */
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'paused' | 'canceled' | 'expired'
+
+/** Plan level slug (standard < plus < premium). */
+export type PlanLevelSlug = 'standard' | 'plus' | 'premium'
+
+/**
+ * Feature flags resolved from the active plan level. Open-ended map; only
+ * declared keys are typed statically — backend may emit additional booleans
+ * as new plan-gated features land.
+ */
+export type PlanFeatures = {
+  hasAiEngineer?: boolean
+  hasAiChat?: boolean
+  hasPrivateProjects?: boolean
+  hasOrganizations?: boolean
+  hasCodesysImporter?: boolean
+  hasOnPrem?: boolean
+  hasSla?: boolean
+  hasSoc2Badge?: boolean
+  hasVersionControl?: boolean
+  [key: string]: boolean | undefined
+}
+
+/** Shared header on both `/me/entitlements` and `/me/usage`. */
+export interface EntitlementSource {
+  subscriptionId: string
+  subscriptionStatus: SubscriptionStatus
+  planSlug: string
+  planDisplayName: string
+  planLevelSlug: PlanLevelSlug
+  tier: number
+}
+
+/** Numeric counter with a nullable cap (null = unlimited). */
+export interface UsageCounter {
+  used: number
+  limit: number | null
+  remaining: number | null
+}
+
+/** Response shape of `GET /me/entitlements`. */
+export interface AIEntitlements {
+  source: EntitlementSource
+  limits: {
+    maxOrchestrators: number | null
+    maxDevices: number | null
+    maxPrivateProjects: number | null
+    maxPublicProjects: number | null
+    maxOrgMembers: number | null
+    maxTeamWorkspaces: number | null
+  }
+  acu: {
+    monthlyAcu: number
+    rateLimitWindowHours: number
+    rateLimitWindowPercent: number
+    marginPercent: number | null
+  }
+  features: PlanFeatures
+}
+
+/** Response shape of `GET /me/usage`. */
+export interface AIUsage {
+  source: EntitlementSource
+  orchestrators: UsageCounter
+  devices: UsageCounter
+  privateProjects: UsageCounter
+  publicProjects: UsageCounter
+  organizations: {
+    used: number
+    allowed: boolean
+  }
+  acu: {
+    used: number
+    monthlyLimit: number
+    remaining: number
+    rateLimitWindowHours: number
+    rateLimitWindowPercent: number
+  }
+}
+
+/**
+ * Structured 402 payload from `/ai/chat` and `/ai/complete`. The backend
+ * `CreditGuard` (autonomy-edge `presentation/guards/credit.guard.ts`) throws
+ * one of two variants depending on whether the user is out of ACU
+ * (`insufficient_acu`) or has a non-active Paddle subscription
+ * (`subscription_inactive`). Surfaced via `AIRequestError.billing` in the
+ * web adapter and stored on `AISlice` as `billingError` for the exhaustion-
+ * modal consumer (DOPE-285).
+ */
+export type BillingErrorPayload = {
+  code: 'insufficient_acu' | 'subscription_inactive'
+  message: string
+  /** Set when `code === 'insufficient_acu'`. ACU remaining in the period. */
+  remaining?: number
+  /** Set when `code === 'insufficient_acu'`. ACU the request would have used. */
+  required?: number
+  /** Set when `code === 'insufficient_acu'`. Plan's monthly ACU cap. */
+  monthlyLimit?: number
+  /** Set when `code === 'subscription_inactive'`. Reason the subscription is blocking. */
+  subscriptionStatus?: SubscriptionStatus
+  /** Optional deep-link to the autonomy-edge billing portal. */
+  reactivateUrl?: string
+}
+
+// ---------------------------------------------------------------------------
 // Graphical Editor Flow Data Shapes
 // ---------------------------------------------------------------------------
 
