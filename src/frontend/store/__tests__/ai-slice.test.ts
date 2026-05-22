@@ -47,6 +47,7 @@ describe('createAISlice', () => {
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
       expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.billingError).toBeNull()
       expect(ai.messages).toEqual([])
       expect(ai.activeEditorPou).toBeNull()
       expect(ai.isAgenticLoopRunning).toBe(false)
@@ -186,6 +187,32 @@ describe('createAISlice', () => {
       store.getState().aiActions.setCurrentPeriodEnd('2026-04-01')
       store.getState().aiActions.setCurrentPeriodEnd(null)
       expect(store.getState().ai.currentPeriodEnd).toBeNull()
+    })
+  })
+
+  describe('setBillingError', () => {
+    it('sets the structured 402 payload', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'insufficient_acu',
+        message: 'Out of ACU',
+        remaining: 0,
+        required: 12,
+        monthlyLimit: 613,
+      })
+      const { billingError } = store.getState().ai
+      expect(billingError?.code).toBe('insufficient_acu')
+      expect(billingError?.required).toBe(12)
+      expect(billingError?.monthlyLimit).toBe(613)
+    })
+
+    it('clears the billing error when passed null', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'subscription_inactive',
+        message: 'Payment failed',
+        subscriptionStatus: 'past_due',
+      })
+      store.getState().aiActions.setBillingError(null)
+      expect(store.getState().ai.billingError).toBeNull()
     })
   })
 
@@ -665,6 +692,7 @@ describe('createAISliceFactory', () => {
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
     expect(ai.currentPeriodEnd).toBeNull()
+    expect(ai.billingError).toBeNull()
     expect(ai.messages).toEqual([])
     expect(ai.activeEditorPou).toBeNull()
     expect(ai.isAgenticLoopRunning).toBe(false)

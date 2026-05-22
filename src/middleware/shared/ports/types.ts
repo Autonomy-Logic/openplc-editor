@@ -857,6 +857,30 @@ export interface AIUsage {
   }
 }
 
+/**
+ * Structured 402 payload from `/ai/chat` and `/ai/complete`. The backend
+ * `CreditGuard` (autonomy-edge `presentation/guards/credit.guard.ts`) throws
+ * one of two variants depending on whether the user is out of ACU
+ * (`insufficient_acu`) or has a non-active Paddle subscription
+ * (`subscription_inactive`). Surfaced via `AIRequestError.billing` in the
+ * web adapter and stored on `AISlice` as `billingError` for the exhaustion-
+ * modal consumer (DOPE-285).
+ */
+export type BillingErrorPayload = {
+  code: 'insufficient_acu' | 'subscription_inactive'
+  message: string
+  /** Set when `code === 'insufficient_acu'`. ACU remaining in the period. */
+  remaining?: number
+  /** Set when `code === 'insufficient_acu'`. ACU the request would have used. */
+  required?: number
+  /** Set when `code === 'insufficient_acu'`. Plan's monthly ACU cap. */
+  monthlyLimit?: number
+  /** Set when `code === 'subscription_inactive'`. Reason the subscription is blocking. */
+  subscriptionStatus?: SubscriptionStatus
+  /** Optional deep-link to the autonomy-edge billing portal. */
+  reactivateUrl?: string
+}
+
 // ---------------------------------------------------------------------------
 // Graphical Editor Flow Data Shapes
 // ---------------------------------------------------------------------------
