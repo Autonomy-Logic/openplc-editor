@@ -18,7 +18,7 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53",
     "extra_libraries": [],
     "platform": "arduino:avr:mega",
-    "source": "mega_due.cpp",
+    "source": "simulator.cpp",
     "preview": "simulator.png",
     "specs": {
       "CPU": "Emulated ATmega2560 at 16MHz",
