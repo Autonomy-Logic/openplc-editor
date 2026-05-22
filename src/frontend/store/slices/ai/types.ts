@@ -139,11 +139,7 @@ export type AIActions = {
    * Set the subscription source fields from `/me/entitlements`. `null` clears
    * them (e.g. on logout or before the first fetch resolves).
    */
-  setSubscription: (
-    status: SubscriptionStatus | null,
-    currentPeriodEnd: string | null,
-    planSlug: string | null,
-  ) => void
+  setSubscription: (status: SubscriptionStatus | null, currentPeriodEnd: string | null, planSlug: string | null) => void
   /**
    * @deprecated Use `setUsage`. Writes to both legacy (`creditsUsed`/`creditsTotal`)
    * and new (`acuUsed`/`acuTotal`) fields during the deprecation window.

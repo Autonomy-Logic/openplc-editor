@@ -22,7 +22,9 @@ const subscriptionInactive: BillingErrorPayload = {
 
 describe('AcuExhaustionModal', () => {
   it('renders nothing when billingError is null', () => {
-    const { container } = render(<AcuExhaustionModal billingError={null} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
+    const { container } = render(
+      <AcuExhaustionModal billingError={null} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />,
+    )
     expect(container.firstChild).toBeNull()
   })
 

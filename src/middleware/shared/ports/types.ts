@@ -771,13 +771,7 @@ export type ChatMessage = {
 // populated by `EntitlementsService` + `AcuLedgerService`).
 
 /** Subscription status as reported by the backend (Paddle-backed). */
-export type SubscriptionStatus =
-  | 'trialing'
-  | 'active'
-  | 'past_due'
-  | 'paused'
-  | 'canceled'
-  | 'expired'
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'paused' | 'canceled' | 'expired'
 
 /** Plan level slug (standard < plus < premium). */
 export type PlanLevelSlug = 'standard' | 'plus' | 'premium'
