@@ -23,6 +23,10 @@ import {
 } from '@root/backend/shared/library/build-pipeline'
 import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
+import {
+  describeIncompatibleRuntime,
+  isStrucppCompatibleRuntime,
+} from '@root/backend/shared/firmware/runtime-version-gate'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
@@ -1153,6 +1157,56 @@ class CompilerModule {
     }
   }
 
+  /**
+   * Probes the runtime at `<ip>:8443/api/version` (unauthenticated)
+   * to discover what version it speaks.  Used by the upload path to
+   * gate strucpp builds against older MatIEC runtimes.
+   *
+   * Returns `{ version: null }` on any failure (404, network error,
+   * timeout, malformed body) — the caller treats that as
+   * "incompatible" so an unreachable / pre-version-endpoint runtime
+   * gets the same friendly upgrade message as an explicitly old one.
+   */
+  private async fetchRuntimeVersion(runtimeIpAddress: string): Promise<{ version: string | null }> {
+    return new Promise((resolve) => {
+      const req = https.request(
+        {
+          hostname: runtimeIpAddress,
+          port: 8443,
+          path: '/api/version',
+          method: 'GET',
+          timeout: 5000,
+          ...getRuntimeHttpsOptions(),
+        } as https.RequestOptions,
+        (res: IncomingMessage) => {
+          if (res.statusCode !== 200) {
+            resolve({ version: null })
+            res.resume()
+            return
+          }
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data) as { version?: unknown }
+              resolve({ version: typeof parsed.version === 'string' ? parsed.version : null })
+            } catch {
+              resolve({ version: null })
+            }
+          })
+        },
+      )
+      req.on('error', () => resolve({ version: null }))
+      req.on('timeout', () => {
+        req.destroy()
+        resolve({ version: null })
+      })
+      req.end()
+    })
+  }
+
   async handleCompileArduinoProgram({
     boardHalsContent,
     compilationPath,
@@ -2181,6 +2235,31 @@ class CompilerModule {
         })
         _mainProcessPort.close()
         return
+      }
+
+      // Runtime v4 ships the STruC++ pipeline starting at v4.1.0;
+      // 4.0.x runtimes still speak the MatIEC wire format and can't
+      // load the strucpp artefacts we'd upload here.  Probe
+      // /api/version (unauthenticated) before sending the zip so the
+      // user gets a clear "upgrade your runtime" message instead of
+      // a cryptic 500 on the device side.
+      //
+      // Runtime v3 is on a separate upload path (raw program.st), so
+      // the gate is v4-only.
+      if (!isRuntimeV3) {
+        const versionResult = await this.fetchRuntimeVersion(runtimeIpAddress)
+        if (!isStrucppCompatibleRuntime(versionResult.version)) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: describeIncompatibleRuntime(versionResult.version),
+          })
+          _mainProcessPort.postMessage({
+            message:
+              '-------------------------------------------------------------------------------------------------------------\n',
+          })
+          _mainProcessPort.close()
+          return
+        }
       }
 
       try {
