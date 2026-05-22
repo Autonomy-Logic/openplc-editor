@@ -18,6 +18,12 @@ export type AcuExhaustionModalProps = {
    * from the 402 payload when present and falls back to this prop.
    */
   upgradeUrl: string
+  /**
+   * Optional callback fired right before the upgrade CTA navigates. Used
+   * by the consumer to fire the `upgrade_cta_clicked` telemetry event;
+   * left undefined in contexts (tests, future surfaces) that don't need it.
+   */
+  onUpgradeClick?: () => void
 }
 
 /**
@@ -27,17 +33,26 @@ export type AcuExhaustionModalProps = {
  * this component stays platform-agnostic and trivially testable in both
  * Vitest and Jest.
  */
-export const AcuExhaustionModal = ({ billingError, onDismiss, upgradeUrl }: AcuExhaustionModalProps) => {
+export const AcuExhaustionModal = ({
+  billingError,
+  onDismiss,
+  upgradeUrl,
+  onUpgradeClick,
+}: AcuExhaustionModalProps) => {
   if (!billingError) return null
 
   const isInactive = billingError.code === 'subscription_inactive'
 
   const title = isInactive ? 'Subscription required' : "You're out of ACU"
+  // Frontend-controlled copy: the backend `CreditGuard` message is geared
+  // toward operators/logs and still references the (now-descoped) Haiku
+  // model quick-switch from DOPE-288. We pull only the structured fields
+  // (subscriptionStatus, monthlyLimit) and compose user-facing text here.
   const description = isInactive
-    ? billingError.message ||
-      `Your subscription is ${billingError.subscriptionStatus ?? 'inactive'}. Reactivate to keep using AI features.`
-    : billingError.message ||
-      `You've used all ${billingError.monthlyLimit ?? 0} ACU for this billing period. Upgrade your plan for more, or wait for the next reset.`
+    ? `Your subscription is ${billingError.subscriptionStatus ?? 'inactive'}. Reactivate it to keep using AI features.`
+    : billingError.monthlyLimit != null
+      ? `You've used all ${billingError.monthlyLimit} ACU for this billing period. Buy more ACU or upgrade your plan to keep going.`
+      : "You're out of ACU for this billing period. Buy more ACU or upgrade your plan to keep going."
   const ctaLabel = isInactive ? 'Reactivate subscription' : 'Upgrade plan'
   // subscription_inactive carries its own reactivation URL; insufficient_acu doesn't.
   const ctaUrl = isInactive && billingError.reactivateUrl ? billingError.reactivateUrl : upgradeUrl
@@ -76,7 +91,10 @@ export const AcuExhaustionModal = ({ billingError, onDismiss, upgradeUrl }: AcuE
             href={ctaUrl}
             target='_blank'
             rel='noreferrer'
-            onClick={onDismiss}
+            onClick={() => {
+              onUpgradeClick?.()
+              onDismiss()
+            }}
             data-testid='acu-exhaustion-cta'
             className='cursor-pointer rounded bg-brand px-3 py-1.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-blue-600'
           >

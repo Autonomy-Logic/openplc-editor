@@ -63,6 +63,16 @@ export type AITelemetryEventName =
   | 'conversation_loaded'
   | 'conversation_renamed'
   | 'conversation_deleted'
+  /**
+   * Fired when `AcuExhaustionModal` opens (transition from `null` to a
+   * billing block on the slice). Data: `{ source: 'usage_limit'|'subscription', planSlug, remaining }`.
+   */
+  | 'acu_exhausted'
+  /**
+   * Fired when the user clicks the upgrade / reactivate CTA in the
+   * exhaustion modal. Data: `{ source: 'modal' }`.
+   */
+  | 'upgrade_cta_clicked'
 
 // ---------------------------------------------------------------------------
 // Port interface
