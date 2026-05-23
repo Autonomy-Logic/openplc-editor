@@ -26,10 +26,9 @@ import {
   libraryBuildFromTranspiledSt,
   prepareXmlForLibraryBuild,
 } from '@root/backend/shared/library/build-pipeline'
-import { pollRuntimeCompilation } from '@root/backend/shared/library/poll-runtime-compilation'
+import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
-import { startPlcAfterBuild } from '@root/backend/shared/library/start-plc-after-build'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
@@ -1377,6 +1376,74 @@ class CompilerModule {
     })
   }
 
+  /**
+   * Send a compiled program file to the runtime's `/api/upload-file`
+   * over HTTPS via a multipart/form-data POST.  Pure transport — no
+   * polling, no PLC start, no UI logging.  Used as the `uploadProgram`
+   * callback fed to the shared `deployRuntimeProgram` orchestrator.
+   *
+   * v3 callers pass `program.st` + `text/plain`; v4 callers pass the
+   * compiled zip + `application/zip`.  `cleanBuild` toggles the
+   * `?clean=1` flag the runtime honours by wiping `build/` and ccache
+   * before compiling.
+   */
+  private async sendRuntimeUpload(opts: {
+    hostname: string
+    jwtToken: string
+    filename: string
+    contentType: string
+    fileBuffer: Buffer
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }): Promise<{ success: boolean; error?: string }> {
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
+    const header = Buffer.from(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
+        `Content-Type: ${opts.contentType}\r\n\r\n`,
+    )
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
+    const body = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      const req = https.request(
+        {
+          hostname: opts.hostname,
+          port: 8443,
+          path: opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file',
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': body.length,
+            Authorization: `Bearer ${opts.jwtToken}`,
+          },
+          ...getRuntimeHttpsOptions(),
+        } as https.RequestOptions,
+        (res: IncomingMessage) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => {
+            data += chunk.toString()
+          })
+          res.on('end', () => {
+            if (res.statusCode === 200) {
+              opts.onUploadAccepted?.(data)
+              resolve({ success: true })
+            } else {
+              resolve({ success: false, error: data || `HTTP ${res.statusCode}` })
+            }
+          })
+        },
+      )
+      req.setTimeout(300_000, () => {
+        req.destroy()
+        resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
+      })
+      req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
+      req.write(body)
+      req.end()
+    })
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -2462,203 +2529,114 @@ class CompilerModule {
           message: `Uploading program to runtime at ${runtimeIpAddress}...`,
         })
 
-        const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
-
-        const header = Buffer.from(
-          `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
-            `Content-Type: ${contentType}\r\n\r\n`,
-        )
-        const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-        const body = Buffer.concat([header, fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
-
-        await new Promise<void>((resolve, reject) => {
-          const req = https.request(
-            {
+        // The full deploy sequence (upload → poll runtime build →
+        // start PLC with BUSY retry) lives in the shared
+        // `deployRuntimeProgram` so openplc-web's `compileProgram`
+        // can drive the exact same flow.  Only the three
+        // round-trips are platform-specific — the orchestration,
+        // log fan-out, deadlines, and retry policy are not.
+        const deployOutcome = await deployRuntimeProgram({
+          uploadProgram: () =>
+            this.sendRuntimeUpload({
               hostname: runtimeIpAddress,
-              port: 8443,
-              // ?clean=1 tells the runtime to wipe build/ and ccache
-              // before compiling — wired to the "Clean build and
-              // upload" UI option. Older runtimes that don't know
-              // about the flag simply ignore it.
-              path: cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file',
-              method: 'POST',
-              headers: {
-                'Content-Type': `multipart/form-data; boundary=${boundary}`,
-                'Content-Length': body.length,
-                Authorization: `Bearer ${runtimeJwtToken}`,
-              },
-              ...getRuntimeHttpsOptions(),
-            } as https.RequestOptions,
-            (res: IncomingMessage) => {
-              let data = ''
-              res.on('data', (chunk: Buffer) => {
-                data += chunk.toString()
-              })
-              res.on('end', () => {
-                if (res.statusCode === 200) {
+              jwtToken: runtimeJwtToken,
+              filename,
+              contentType,
+              fileBuffer,
+              cleanBuild: cleanBuild ?? false,
+              onUploadAccepted: (responseBody) => {
+                // Runtime returns the initial `CompilationStatus`
+                // field in the upload response (typically
+                // "COMPILING").  Surface it so the user sees the
+                // build kick off before the poller's first tick.
+                try {
+                  const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   _mainProcessPort.postMessage({
                     logLevel: 'info',
-                    message: 'Program uploaded successfully to runtime.',
+                    message: `Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`,
                   })
-                  try {
-                    const response = JSON.parse(data) as { CompilationStatus?: string }
-                    _mainProcessPort.postMessage({
-                      logLevel: 'info',
-                      message: `Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`,
-                    })
-                  } catch (_parseError) {
-                    _mainProcessPort.postMessage({
-                      logLevel: 'warning',
-                      message: 'Could not parse runtime response',
-                    })
-                  }
-
-                  // Shared poller — same logic runs on openplc-web.
-                  // Editor injects the IPC-bridged HTTPS call as the
-                  // `fetchStatus` callback; the poll loop, log
-                  // dedup, level parsing, deadlines, and
-                  // consecutive-error guard live in the shared
-                  // module.  See
-                  // `backend/shared/library/poll-runtime-compilation.ts`.
-                  const pollCompilationStatus = () =>
-                    pollRuntimeCompilation({
-                      fetchStatus: async () => {
-                        try {
-                          const result = await mainProcessBridge.makeRuntimeApiRequest<{
-                            status: string
-                            logs: string[]
-                            exit_code: number | null
-                          }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
-                            return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
-                          })
-                          if (!result.success) return { success: false, error: result.error }
-                          return { success: true, data: result.data! }
-                        } catch (pollError) {
-                          return {
-                            success: false,
-                            error: pollError instanceof Error ? pollError.message : String(pollError),
-                          }
-                        }
-                      },
-                      onLog: (level, message) => {
-                        _mainProcessPort.postMessage({ logLevel: level, message })
-                      },
-                      timeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
-                      pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
-                    })
-
-                  // Auto-start the PLC after the runtime build settles.
-                  // Routed through the shared helper so web's
-                  // `compileProgram` runs the same retry-on-BUSY loop
-                  // — single source of truth for the post-upload start
-                  // behaviour.  fetchStart wraps the IPC call to
-                  // `/api/start-plc` and parses the body's `status`
-                  // field; the helper handles deadlines / BUSY retry
-                  // / log emission.
-                  const startPlcAfterBuildWithRetry = () =>
-                    startPlcAfterBuild({
-                      fetchStart: async () => {
-                        const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
-                          runtimeIpAddress,
-                          runtimeJwtToken,
-                          '/api/start-plc',
-                          (data: string) => {
-                            const parsed = JSON.parse(data) as { status?: string }
-                            return (parsed.status ?? '').trim()
-                          },
-                        )
-                        if (!result.success) return { success: false, error: result.error }
-                        return { success: true, status: result.data ?? '' }
-                      },
-                      onLog: (level, message) => {
-                        _mainProcessPort.postMessage({ logLevel: level, message })
-                      },
-                      timeoutMs: POST_BUILD_START_TIMEOUT_MS,
-                      pollIntervalMs: POST_BUILD_START_POLL_INTERVAL_MS,
-                    })
-
-                  pollCompilationStatus()
-                    .then(async (compileStatus) => {
-                      // Auto-start the PLC on successful build. The runtime no longer
-                      // restarts on its own after an upload, so the editor owns the
-                      // retry-on-BUSY policy and the error reporting.
-                      if (compileStatus === 'SUCCESS' && !compileOnly) {
-                        await startPlcAfterBuildWithRetry()
-                      }
-
-                      if (runtimeIpAddress && runtimeJwtToken) {
-                        try {
-                          const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
-                            runtimeIpAddress,
-                            runtimeJwtToken,
-                            '/api/status',
-                            (data: string) => {
-                              const response = JSON.parse(data) as { status: string }
-                              return response.status
-                            },
-                          )
-
-                          if (statusResult.success && statusResult.data) {
-                            const status = parsePlcStatus(statusResult.data)
-                            if (status) {
-                              _mainProcessPort.postMessage({
-                                plcStatus: status,
-                              })
-                            }
-                          }
-                        } catch (_statusError) {
-                          // Silently ignore status check errors - this is a best-effort update
-                        }
-                      }
-
-                      _mainProcessPort.postMessage({
-                        message:
-                          '-------------------------------------------------------------------------------------------------------------\n',
-                      })
-                      _mainProcessPort.close()
-                    })
-                    .catch((error) => {
-                      _mainProcessPort.postMessage({
-                        logLevel: 'error',
-                        message: `Unexpected error in compilation polling: ${getErrorMessage(error)}`,
-                      })
-                      _mainProcessPort.postMessage({
-                        message:
-                          '-------------------------------------------------------------------------------------------------------------\n',
-                      })
-                      _mainProcessPort.close()
-                    })
-
-                  resolve()
-                } else {
+                } catch {
                   _mainProcessPort.postMessage({
-                    logLevel: 'error',
-                    message: `Upload failed: ${data || 'HTTP ' + res.statusCode}`,
+                    logLevel: 'warning',
+                    message: 'Could not parse runtime response',
                   })
-                  reject(new Error(`Upload failed with status ${res.statusCode}`))
                 }
+              },
+            }),
+          fetchCompilationStatus: async () => {
+            try {
+              const result = await mainProcessBridge.makeRuntimeApiRequest<{
+                status: string
+                logs: string[]
+                exit_code: number | null
+              }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
+                return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
               })
-            },
-          )
-          req.setTimeout(300000, () => {
-            req.destroy()
-            _mainProcessPort.postMessage({
-              logLevel: 'error',
-              message: 'Upload request timed out after 5 minutes.',
-            })
-            reject(new Error('Upload timeout'))
-          })
-          req.on('error', (error: Error) => {
-            _mainProcessPort.postMessage({
-              logLevel: 'error',
-              message: `Upload error: ${error.message}`,
-            })
-            reject(error)
-          })
-          req.write(body)
-          req.end()
+              if (!result.success) return { success: false, error: result.error }
+              return { success: true, data: result.data! }
+            } catch (pollError) {
+              return {
+                success: false,
+                error: pollError instanceof Error ? pollError.message : String(pollError),
+              }
+            }
+          },
+          fetchStartResponse: async () => {
+            const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
+              runtimeIpAddress,
+              runtimeJwtToken,
+              '/api/start-plc',
+              (data: string) => {
+                const parsed = JSON.parse(data) as { status?: string }
+                return (parsed.status ?? '').trim()
+              },
+            )
+            if (!result.success) return { success: false, error: result.error }
+            return { success: true, status: result.data ?? '' }
+          },
+          onLog: (level, message) => {
+            _mainProcessPort.postMessage({ logLevel: level, message })
+          },
+          pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
+          pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
+          startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
+          startIntervalMs: POST_BUILD_START_POLL_INTERVAL_MS,
         })
+
+        // Editor-only follow-up: fetch the current PLC status and
+        // forward it through the IPC channel so the UI can update
+        // its run/stop indicator.  Best-effort — silently skipped
+        // when the deploy succeeded but the device drops the
+        // status request, or when the deploy itself fell short of
+        // STARTED.
+        if (deployOutcome === 'STARTED' && runtimeIpAddress && runtimeJwtToken) {
+          try {
+            const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
+              runtimeIpAddress,
+              runtimeJwtToken,
+              '/api/status',
+              (data: string) => {
+                const response = JSON.parse(data) as { status: string }
+                return response.status
+              },
+            )
+            if (statusResult.success && statusResult.data) {
+              const status = parsePlcStatus(statusResult.data)
+              if (status) {
+                _mainProcessPort.postMessage({ plcStatus: status })
+              }
+            }
+          } catch (_statusError) {
+            // Best-effort — silently ignore.
+          }
+        }
+
+        _mainProcessPort.postMessage({
+          message:
+            '-------------------------------------------------------------------------------------------------------------\n',
+        })
+        _mainProcessPort.close()
+        return
       } catch (error) {
         _mainProcessPort.postMessage({
           logLevel: 'error',
