@@ -154,6 +154,21 @@ describe('onStopped', () => {
     expect(window.bridge.onSimulatorStopped).toHaveBeenCalled()
   })
 
+  it('does not throw when simulator stopped event bridge is unavailable', () => {
+    window.bridge = {
+      ...window.bridge,
+      onSimulatorStopped: undefined,
+    } as unknown as typeof window.bridge
+
+    expect(() => createEditorSimulatorAdapter()).not.toThrow()
+  })
+
+  it('does not throw when the bridge is unavailable during adapter creation', () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+
+    expect(() => createEditorSimulatorAdapter()).not.toThrow()
+  })
+
   it('fires callback when main process signals stopped', async () => {
     const cb = jest.fn()
     adapter.onStopped(cb)

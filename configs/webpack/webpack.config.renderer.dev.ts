@@ -148,6 +148,8 @@ const configuration: webpack.Configuration = {
     extensions: ['.ts', '.js'],
     alias: {
       '@src': srcPath,
+      react: resolve(webpackPaths.rootPath, 'node_modules/react'),
+      'react-dom': resolve(webpackPaths.rootPath, 'node_modules/react-dom'),
     },
   },
 

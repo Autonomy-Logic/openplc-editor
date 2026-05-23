@@ -43,6 +43,11 @@ export function createEditorStlibSourceAdapter(): StlibSourcePort {
 
   async function ensureCache(): Promise<Map<string, CachedArchive>> {
     if (archives) return archives
+    if (typeof window.bridge?.loadAllLibraries !== 'function') {
+      archives = new Map<string, CachedArchive>()
+      return archives
+    }
+
     // Returns StlibArchiveDTO[] — the structural shape matches
     // strucpp's `StlibArchive` (just a JSON object).  Each entry
     // carries a full `manifest` block and the chunks/dependencies.

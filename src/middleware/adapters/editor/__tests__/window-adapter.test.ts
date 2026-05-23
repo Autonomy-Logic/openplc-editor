@@ -160,3 +160,23 @@ describe('onMaximizedChanged', () => {
     unsub()
   })
 })
+
+describe('missing preload bridge', () => {
+  it('turns window operations and listeners into no-ops', () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+    adapter = createEditorWindowAdapter()
+
+    expect(() => adapter.minimize()).not.toThrow()
+    expect(() => adapter.maximize()).not.toThrow()
+    expect(() => adapter.close()).not.toThrow()
+    expect(() => adapter.hide()).not.toThrow()
+    expect(() => adapter.reload()).not.toThrow()
+    expect(() => adapter.quit()).not.toThrow()
+    expect(() => adapter.rebuildMenu()).not.toThrow()
+
+    expect(adapter.onCloseRequested(jest.fn())).not.toThrow()
+    expect(adapter.onDarwinAppQuitting!(jest.fn())).not.toThrow()
+    expect(adapter.enableAutoCloseHandshake!()).not.toThrow()
+    expect(adapter.onMaximizedChanged!(jest.fn())).not.toThrow()
+  })
+})

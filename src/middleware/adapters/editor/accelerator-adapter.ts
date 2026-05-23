@@ -29,156 +29,87 @@
 import type { AcceleratorPort } from '../../shared/ports/accelerator-port'
 import type { Unsubscribe } from '../../shared/ports/types'
 
+type BridgeListener = (callback: (...args: unknown[]) => void) => void
+
+const subscribeBridgeEvent = (
+  listener: BridgeListener | undefined,
+  callback: (...args: unknown[]) => void,
+  mapArgs: (...args: unknown[]) => unknown[] = () => [],
+): Unsubscribe => {
+  if (typeof listener !== 'function') {
+    return () => {}
+  }
+
+  let active = true
+  listener((...args: unknown[]) => {
+    if (active) callback(...mapArgs(...args))
+  })
+
+  return () => {
+    active = false
+  }
+}
+
 export function createEditorAcceleratorAdapter(): AcceleratorPort {
   return {
     onCreateProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.createProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.createProjectAccelerator, callback)
     },
 
     onOpenProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleOpenProjectRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.handleOpenProjectRequest, callback)
     },
 
     onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe {
-      let active = true
-      window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => {
-        if (active) callback(response)
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.openRecentAccelerator, callback, (_event, response) => [response])
     },
 
     onSaveProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.saveProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.saveProjectAccelerator, callback)
     },
 
     onSaveFile(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.saveFileAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.saveFileAccelerator, callback)
     },
 
     onCloseProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.closeProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.closeProjectAccelerator, callback)
     },
 
     onExportProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.exportProjectRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.exportProjectRequest, callback)
     },
 
     onCloseTab(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.closeTabAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.closeTabAccelerator, callback)
     },
 
     onDeleteFile(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.deleteFileAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.deleteFileAccelerator, callback)
     },
 
     onFindInProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.findInProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.findInProjectAccelerator, callback)
     },
 
     onUndo(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleUndoRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.handleUndoRequest, callback)
     },
 
     onRedo(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleRedoRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.handleRedoRequest, callback)
     },
 
     onSwitchPerspective(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.switchPerspective(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.switchPerspective, callback)
     },
 
     onAbout(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.aboutModalAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.aboutModalAccelerator, callback)
     },
 
     onQuitApp(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.quitAppRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return subscribeBridgeEvent(window.bridge?.quitAppRequest, callback)
     },
   }
 }

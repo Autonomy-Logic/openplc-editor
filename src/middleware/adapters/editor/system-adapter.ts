@@ -19,23 +19,35 @@ import type { SystemInfo } from '../../shared/ports/types'
 export function createEditorSystemAdapter(): SystemPort {
   return {
     getSystemInfo(): Promise<SystemInfo> {
-      return window.bridge.getSystemInfo()
+      return (
+        window.bridge?.getSystemInfo?.() ??
+        Promise.resolve({
+          OS: '',
+          architecture: '',
+          prefersDarkMode: window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false,
+          isWindowMaximized: false,
+        })
+      )
     },
 
     getStoreValue(key: string): Promise<unknown> {
-      return window.bridge.getStoreValue(key)
+      return window.bridge?.getStoreValue?.(key) ?? Promise.resolve(localStorage.getItem(key))
     },
 
     setStoreValue(key: string, value: string): void {
-      window.bridge.setStoreValue(key, value)
+      if (typeof window.bridge?.setStoreValue === 'function') {
+        window.bridge.setStoreValue(key, value)
+        return
+      }
+      localStorage.setItem(key, value)
     },
 
     openExternalLink(url: string): Promise<{ success: boolean }> {
-      return window.bridge.openExternalLinkAccelerator(url)
+      return window.bridge?.openExternalLinkAccelerator?.(url) ?? Promise.resolve({ success: false })
     },
 
     log(level: 'info' | 'error', message: string): void {
-      window.bridge.log(level, message)
+      window.bridge?.log?.(level, message)
     },
   }
 }

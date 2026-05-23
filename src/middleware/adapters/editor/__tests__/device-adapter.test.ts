@@ -73,4 +73,12 @@ describe('createEditorDeviceAdapter', () => {
     await adapter.getPreviewImage('motor-shield.png', '/path/to/pkg')
     expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('motor-shield.png', '/path/to/pkg')
   })
+
+  it('returns empty communication ports when the preload bridge is unavailable', async () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+    adapter = createEditorDeviceAdapter()
+
+    await expect(adapter.getCommunicationPorts()).resolves.toEqual([])
+    await expect(adapter.refreshCommunicationPorts()).resolves.toEqual([])
+  })
 })

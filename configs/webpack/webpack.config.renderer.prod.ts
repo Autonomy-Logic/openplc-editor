@@ -7,7 +7,7 @@ import CssMinimizerPlugin from 'css-minimizer-webpack-plugin'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import tailwindcss from 'tailwindcss'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
@@ -115,6 +115,13 @@ const configuration: webpack.Configuration = {
         ],
       },
     ],
+  },
+
+  resolve: {
+    alias: {
+      react: resolve(webpackPaths.rootPath, 'node_modules/react'),
+      'react-dom': resolve(webpackPaths.rootPath, 'node_modules/react-dom'),
+    },
   },
 
   optimization: {

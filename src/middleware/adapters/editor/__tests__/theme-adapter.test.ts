@@ -100,3 +100,19 @@ describe('onThemeChanged', () => {
     expect(cb).not.toHaveBeenCalled()
   })
 })
+
+describe('missing preload bridge', () => {
+  it('keeps local theme state and returns a no-op unsubscribe', () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+    adapter = createEditorThemeAdapter()
+
+    expect(() => adapter.setTheme('light')).not.toThrow()
+    expect(adapter.getCurrentTheme()).toBe('light')
+    expect(() => adapter.toggleTheme()).not.toThrow()
+    expect(adapter.getCurrentTheme()).toBe('dark')
+
+    const unsub = adapter.onThemeChanged(jest.fn())
+    expect(typeof unsub).toBe('function')
+    expect(unsub).not.toThrow()
+  })
+})

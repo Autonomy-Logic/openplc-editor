@@ -24,7 +24,7 @@ export function createEditorDeviceAdapter(): DevicePort {
     },
 
     getCommunicationPorts(): Promise<CommunicationPort[]> {
-      return window.bridge.getAvailableCommunicationPorts()
+      return window.bridge?.getAvailableCommunicationPorts?.() ?? Promise.resolve([])
     },
 
     refreshBoards(): Promise<Array<{ board: string; version: string }>> {
@@ -32,7 +32,7 @@ export function createEditorDeviceAdapter(): DevicePort {
     },
 
     refreshCommunicationPorts(): Promise<CommunicationPort[]> {
-      return window.bridge.refreshCommunicationPorts()
+      return window.bridge?.refreshCommunicationPorts?.() ?? Promise.resolve([])
     },
 
     getPreviewImage(imageName: string, packagePath?: string): Promise<string> {

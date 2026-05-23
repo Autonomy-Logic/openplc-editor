@@ -69,3 +69,21 @@ describe('log', () => {
     expect(window.bridge.log).toHaveBeenCalledWith('error', 'error message')
   })
 })
+
+describe('missing preload bridge', () => {
+  it('uses browser-safe fallbacks', async () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+    ;(window.matchMedia as jest.Mock | undefined) = jest.fn().mockReturnValue({ matches: false })
+    adapter = createEditorSystemAdapter()
+
+    await expect(adapter.getSystemInfo()).resolves.toEqual({
+      OS: '',
+      architecture: '',
+      prefersDarkMode: false,
+      isWindowMaximized: false,
+    })
+    await expect(adapter.openExternalLink('https://example.com')).resolves.toEqual({ success: false })
+
+    expect(() => adapter.log('info', 'ignored')).not.toThrow()
+  })
+})

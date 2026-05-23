@@ -22,6 +22,12 @@ describe('loadAll', () => {
     expect(window.bridge.loadAllLibraries).toHaveBeenCalledTimes(1)
     expect(result).toEqual([{ manifest: { name: 'IEC' } }])
   })
+
+  it('returns an empty list when bridge is unavailable', async () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+
+    await expect(createEditorLibraryAdapter().loadAll()).resolves.toEqual([])
+  })
 })
 
 describe('listInstalled', () => {
@@ -30,6 +36,12 @@ describe('listInstalled', () => {
 
     expect(window.bridge.listInstalledLibraries).toHaveBeenCalledTimes(1)
     expect(result).toEqual([{ name: 'IEC', bundled: true }])
+  })
+
+  it('returns an empty list when bridge is unavailable', async () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+
+    await expect(createEditorLibraryAdapter().listInstalled()).resolves.toEqual([])
   })
 })
 
@@ -80,5 +92,13 @@ describe('onLibrariesChanged', () => {
 
     expect(window.bridge.onLibrariesChanged).toHaveBeenCalledWith(callback)
     expect(returned).toBe(unsub)
+  })
+
+  it('returns a no-op unsubscribe when bridge is unavailable', () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+
+    const returned = createEditorLibraryAdapter().onLibrariesChanged(jest.fn())
+
+    expect(() => returned()).not.toThrow()
   })
 })

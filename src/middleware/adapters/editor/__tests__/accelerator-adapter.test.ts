@@ -128,3 +128,34 @@ describe('onOpenRecent', () => {
     expect(cb).not.toHaveBeenCalled()
   })
 })
+
+describe('missing bridge listeners', () => {
+  it('returns no-op unsubscribers when the preload bridge is unavailable', () => {
+    window.bridge = undefined as unknown as typeof window.bridge
+    adapter = createEditorAcceleratorAdapter()
+
+    const methods: Array<keyof AcceleratorPort> = [
+      'onCreateProject',
+      'onOpenProject',
+      'onOpenRecent',
+      'onSaveProject',
+      'onSaveFile',
+      'onCloseProject',
+      'onExportProject',
+      'onCloseTab',
+      'onDeleteFile',
+      'onFindInProject',
+      'onUndo',
+      'onRedo',
+      'onSwitchPerspective',
+      'onAbout',
+      'onQuitApp',
+    ]
+
+    for (const method of methods) {
+      const unsub = (adapter[method] as (cb: () => void) => () => void)(jest.fn())
+      expect(typeof unsub).toBe('function')
+      expect(unsub).not.toThrow()
+    }
+  })
+})

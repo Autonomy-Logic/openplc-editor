@@ -28,25 +28,45 @@ export function createEditorLibraryAdapter(): LibraryPort {
       // boundary — the structural shape lines up by construction
       // (the main process JSON.parses .stlib files we ship and
       // .stlib files compileStlib produces, both share the contract).
+      if (typeof window.bridge?.loadAllLibraries !== 'function') {
+        return []
+      }
+
       const archives = await window.bridge.loadAllLibraries()
       return archives as StlibArchiveDTO[]
     },
 
     listInstalled(): Promise<InstalledLibrary[]> {
+      if (typeof window.bridge?.listInstalledLibraries !== 'function') {
+        return Promise.resolve([])
+      }
+
       return window.bridge.listInstalledLibraries()
     },
 
     installFromFile(): Promise<LibraryInstallResult> {
+      if (typeof window.bridge?.installLibraryFromFile !== 'function') {
+        return Promise.resolve({ success: false, error: 'Library installation is not available in this context' })
+      }
+
       return window.bridge.installLibraryFromFile()
     },
 
     async uninstall(name: string): Promise<Result> {
+      if (typeof window.bridge?.uninstallLibrary !== 'function') {
+        return { success: false, error: 'Library uninstall is not available in this context' }
+      }
+
       const result = await window.bridge.uninstallLibrary(name)
       if (result.success) return { success: true } as Result
       return { success: false, error: result.error ?? 'Uninstall failed' }
     },
 
     onLibrariesChanged(callback: () => void): Unsubscribe {
+      if (typeof window.bridge?.onLibrariesChanged !== 'function') {
+        return () => undefined
+      }
+
       return window.bridge.onLibrariesChanged(callback)
     },
   }

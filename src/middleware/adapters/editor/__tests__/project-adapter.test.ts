@@ -470,6 +470,14 @@ describe('createEditorProjectAdapter', () => {
       expect(window.bridge.retrieveRecent).toHaveBeenCalledTimes(1)
       expect(result).toEqual(mockRecentProjects)
     })
+
+    it('returns an empty list when the preload bridge is unavailable', async () => {
+      window.bridge = undefined as unknown as typeof window.bridge
+
+      const result = await adapter.getRecentProjects()
+
+      expect(result).toEqual([])
+    })
   })
 
   describe('readFileContent', () => {

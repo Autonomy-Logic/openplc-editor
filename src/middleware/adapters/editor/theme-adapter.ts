@@ -25,12 +25,12 @@ export function createEditorThemeAdapter(): ThemePort {
 
     setTheme(theme: ThemeVariant): void {
       currentTheme = theme
-      window.bridge.winHandleUpdateTheme()
+      window.bridge?.winHandleUpdateTheme?.()
     },
 
     toggleTheme(): void {
       currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
-      window.bridge.winHandleUpdateTheme()
+      window.bridge?.winHandleUpdateTheme?.()
     },
 
     onThemeChanged(callback: (theme: ThemeVariant) => void): Unsubscribe {
@@ -40,6 +40,12 @@ export function createEditorThemeAdapter(): ThemePort {
         if (!active) return
         currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
         callback(currentTheme)
+      }
+
+      if (typeof window.bridge?.handleUpdateTheme !== 'function') {
+        return () => {
+          active = false
+        }
       }
 
       window.bridge.handleUpdateTheme(handler)

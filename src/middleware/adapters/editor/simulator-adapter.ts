@@ -23,10 +23,13 @@ export function createEditorSimulatorAdapter(
   const stopCallbacks: Array<() => void> = []
 
   // Subscribe to main process simulator stop events once on creation
-  const unsubscribeFromMain = window.bridge.onSimulatorStopped(() => {
-    running = false
-    for (const cb of stopCallbacks) cb()
-  })
+  const unsubscribeFromMain =
+    typeof window.bridge?.onSimulatorStopped === 'function'
+      ? window.bridge.onSimulatorStopped(() => {
+          running = false
+          for (const cb of stopCallbacks) cb()
+        })
+      : undefined
 
   // Keep the unsubscribe reference to allow cleanup if needed
   void unsubscribeFromMain

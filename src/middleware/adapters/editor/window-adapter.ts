@@ -25,34 +25,38 @@ import type { WindowPort } from '../../shared/ports/window-port'
 export function createEditorWindowAdapter(): WindowPort {
   return {
     minimize(): void {
-      window.bridge.minimizeWindow()
+      window.bridge?.minimizeWindow?.()
     },
 
     maximize(): void {
-      window.bridge.maximizeWindow()
+      window.bridge?.maximizeWindow?.()
     },
 
     close(): void {
-      window.bridge.handleCloseOrHideWindow()
+      window.bridge?.handleCloseOrHideWindow?.()
     },
 
     hide(): void {
-      window.bridge.hideWindow()
+      window.bridge?.hideWindow?.()
     },
 
     reload(): void {
-      window.bridge.reloadWindow()
+      window.bridge?.reloadWindow?.()
     },
 
     quit(): void {
-      window.bridge.handleQuitApp()
+      window.bridge?.handleQuitApp?.()
     },
 
     rebuildMenu(): void {
-      window.bridge.rebuildMenu()
+      window.bridge?.rebuildMenu?.()
     },
 
     onCloseRequested(callback: () => void): Unsubscribe {
+      if (typeof window.bridge?.windowIsClosing !== 'function') {
+        return () => {}
+      }
+
       let active = true
       window.bridge.windowIsClosing(() => {
         if (active) callback()
@@ -63,6 +67,10 @@ export function createEditorWindowAdapter(): WindowPort {
     },
 
     onDarwinAppQuitting(callback: () => void): Unsubscribe {
+      if (typeof window.bridge?.darwinAppIsClosing !== 'function') {
+        return () => {}
+      }
+
       let active = true
       window.bridge.darwinAppIsClosing(() => {
         if (active) callback()
@@ -73,13 +81,17 @@ export function createEditorWindowAdapter(): WindowPort {
     },
 
     enableAutoCloseHandshake(): Unsubscribe {
-      window.bridge.handleCloseOrHideWindowAccelerator()
+      window.bridge?.handleCloseOrHideWindowAccelerator?.()
       return () => {
-        window.bridge.removeHandleCloseOrHideWindowAccelerator()
+        window.bridge?.removeHandleCloseOrHideWindowAccelerator?.()
       }
     },
 
     onMaximizedChanged(callback: (isMaximized: boolean) => void): Unsubscribe {
+      if (typeof window.bridge?.isMaximizedWindow !== 'function') {
+        return () => {}
+      }
+
       let maximized = false
 
       const handler = () => {

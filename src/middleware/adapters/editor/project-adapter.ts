@@ -288,7 +288,7 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async getRecentProjects(): Promise<RecentProject[]> {
-      return window.bridge.retrieveRecent()
+      return window.bridge?.retrieveRecent?.() ?? []
     },
 
     async readFileContent(filePath: string): Promise<{ success: boolean; content?: string; error?: string }> {
