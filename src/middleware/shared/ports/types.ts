@@ -570,6 +570,29 @@ import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capa
 
 export type { DebuggerTransport, TargetCapabilities }
 
+/**
+ * VPP-declared FQBN sub-option (e.g. Nano `cpu=atmega328old`). Shared
+ * shape between the manifest wire type, the resolved BoardBuildInfo, the
+ * boards Map exposed to the renderer, and the BoardInfo IPC payload —
+ * keeping it as a single exported interface so adding a field (say,
+ * `condition` for conditional visibility) doesn't drift across the four
+ * sites that reference it. See CompilerModule.applyPlatformOptions for
+ * how the editor turns a value pick into an FQBN segment.
+ */
+export interface PlatformOptionValue {
+  id: string
+  label: string
+  help?: string
+}
+
+export interface PlatformOption {
+  key: string
+  label: string
+  default: string
+  help?: string
+  values: PlatformOptionValue[]
+}
+
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
@@ -587,6 +610,14 @@ export interface BoardInfo {
    *  field (back-compat for pre-migration data). */
   capabilities?: Partial<TargetCapabilities>
   vpp?: VppMetadata
+  /**
+   * Mirrors the VPP manifest's `target.platformOptions`. Surfaced on the
+   * flat BoardInfo (rather than only inside `vpp`) so the device-screen UI
+   * can decide whether to render the variant dropdown without reaching
+   * into VPP-specific metadata. Builtins (Simulator / Runtime v3/v4) never
+   * declare it.
+   */
+  platformOptions?: PlatformOption[]
 }
 
 // ---------------------------------------------------------------------------
@@ -670,6 +701,15 @@ export interface PackageManifest {
       type: string
       platform?: string
       core?: string
+      boardManagerUrl?: string
+      /**
+       * User-selectable FQBN sub-options for arduino-cli targets. The editor
+       * renders a dropdown per entry (next to the board picker) and appends
+       * `:<key>=<chosen_id>` to `platform` at compile and upload time —
+       * mirroring arduino-cli's boards.txt menu mechanism. See
+       * manifest.schema.json for the canonical field documentation.
+       */
+      platformOptions?: PlatformOption[]
     }
     specs?: Record<string, string>
     hal: {
@@ -679,6 +719,14 @@ export interface PackageManifest {
       configTemplate?: string
       requirements?: string
       source?: string
+      compilerFlags?: {
+        c_flags?: string[]
+        cxx_flags?: string[]
+        ld_flags?: string[]
+      }
+      define?: string | string[]
+      extraArduinoLibraries?: string[]
+      libraries?: string
     }
     defaults?: {
       runtimeIpAddress?: string
@@ -762,6 +810,17 @@ export interface DeviceConfiguration {
   runtimeIpAddress?: string
   compileOnly: boolean
   vendorScreenData?: Record<string, unknown>
+  /**
+   * User's choices for the board's `target.platformOptions` (VPP-declared
+   * FQBN sub-options like processor variant, USB type, clock speed).
+   * Keyed by option `key`, value is the chosen `values[].id`. Missing keys
+   * fall back to the manifest's `default` at compile/upload time. Cleared
+   * automatically when the selected board changes — platformOptions are
+   * board-specific and a `cpu=atmega328old` choice on Nano makes no sense
+   * for Mega. Optional for back-compat with project configs saved before
+   * this field existed.
+   */
+  selectedPlatformOptions?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------

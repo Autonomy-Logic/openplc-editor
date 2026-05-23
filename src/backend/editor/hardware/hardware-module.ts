@@ -10,6 +10,7 @@ import { produce } from 'immer'
 import { assertPathContained } from '../utils/path-containment'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
+import { type BoardBuildInfo, BoardInfoResolver } from './board-info-resolver'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
@@ -134,6 +135,20 @@ class HardwareModule {
       logger.error(`Failed to execute xml2st: ${String(execError)}`)
       return []
     }
+  }
+
+  /**
+   * Resolve compile/upload info for `boardName` from either hals.json or
+   * an installed VPP package. Compiler module should call this instead
+   * of reading hals.json directly.
+   */
+  async getBoardBuildInfo(boardName: string): Promise<BoardBuildInfo> {
+    const resolver = new BoardInfoResolver(
+      join(this.sourcesDirectoryPath, 'boards', 'hals.json'),
+      this.sourcesDirectoryPath,
+      new PackageManagerModule(),
+    )
+    return resolver.resolve(boardName)
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {
@@ -265,6 +280,14 @@ class HardwareModule {
               defaultAin: device.defaults?.pins?.defaultAin,
               defaultAout: device.defaults?.pins?.defaultAout,
             },
+            // Forward platformOptions only when the manifest actually declares
+            // some; the UI keys off `platformOptions?.length` to decide whether
+            // to render the variant dropdown, so leaving it undefined for
+            // boards that don't expose variants keeps the JSX gate tight.
+            platformOptions:
+              device.target.platformOptions && device.target.platformOptions.length > 0
+                ? device.target.platformOptions
+                : undefined,
             vpp: {
               packageId: manifest.package.id,
               deviceId: device.id,

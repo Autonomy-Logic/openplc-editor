@@ -1,5 +1,7 @@
 import { z } from 'zod/v4'
 
+import type { PlatformOption } from '../../../middleware/shared/ports/types'
+
 const SerialPortSchema = z.object({
   name: z.string(),
   address: z.string(),
@@ -115,6 +117,9 @@ type AvailableBoards = Map<
       defaultDout?: string[]
     }
     vpp?: VppMetadata
+    /** VPP-declared FQBN sub-options (e.g. Nano cpu=atmega328old). Absent
+     *  when the manifest doesn't expose variants — see ports/types.ts. */
+    platformOptions?: PlatformOption[]
   }
 >
 

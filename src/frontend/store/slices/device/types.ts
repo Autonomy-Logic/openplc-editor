@@ -110,6 +110,12 @@ export type DeviceActions = {
   removePin: () => void
   updatePin: (updatedData: Partial<DevicePin>) => PinUpdateResponse
   setDeviceBoard: (board: string) => void
+  /** Set a single platformOption key/value pair (e.g. cpu→atmega328old).
+   *  Marks the device as updated to trigger config persistence. */
+  setSelectedPlatformOption: (key: string, value: string) => void
+  /** Wipe all platformOption selections. Called automatically on board
+   *  change, can also be invoked by UI to reset to manifest defaults. */
+  clearSelectedPlatformOptions: () => void
   setCommunicationPort: (port: string) => void
   setCompileOnly: (compileOnly: boolean) => void
   setRuntimeIpAddress: (ipAddress: string) => void

@@ -332,7 +332,34 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
+          // Wipe platformOption selections when the board changes — they're
+          // declared per-board in the VPP manifest, so a `cpu=atmega328old`
+          // choice from a previous Nano session shouldn't bleed into a fresh
+          // Mega/Opta/etc. setup. Compile-time code falls back to each
+          // manifest's `default` when the record is empty.
+          if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+          }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
+        }),
+      )
+    },
+    setSelectedPlatformOption: (key, value): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          if (!deviceDefinitions.configuration.selectedPlatformOptions) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+          }
+          deviceDefinitions.configuration.selectedPlatformOptions[key] = value
+        }),
+      )
+    },
+    clearSelectedPlatformOptions: (): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          deviceDefinitions.configuration.selectedPlatformOptions = {}
         }),
       )
     },
@@ -497,6 +524,11 @@ function mergeDeviceConfigWithDefaults(
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     compileOnly: provided.compileOnly ?? defaults.compileOnly,
     vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
+    // Must merge — otherwise loading a project whose configuration.json
+    // predates platformOptions leaves the field undefined in the store, and
+    // every selector falling back to `?? {}` returns a fresh literal that
+    // triggers an infinite Zustand re-render loop (blank device screen).
+    selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
   }
 }
 

@@ -14,14 +14,28 @@ type RemoteDeviceIOPoint = {
 }
 
 // ===================== Device screen selectors. =====================
+// Stable reference for the empty-platform-options fallback. Returning a
+// fresh `{}` from the selector on every call would defeat Zustand's
+// reference-equality check and trigger an infinite re-render loop in any
+// component subscribed to it (manifests as a blank device-configuration
+// screen). The slice's merge function is the primary defence (it always
+// populates the field on load), but this fallback covers async edge cases
+// where the field could transiently be undefined.
+const EMPTY_SELECTED_PLATFORM_OPTIONS: Record<string, string> = Object.freeze({}) as Record<string, string>
+
 const boardSelectors = {
   useAvailableBoards: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableBoards),
   useAvailableCommunicationPorts: () =>
     useOpenPLCStore((state) => state.deviceAvailableOptions.availableCommunicationPorts),
   useDeviceBoard: () => useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard),
   useCommunicationPort: () => useOpenPLCStore((state) => state.deviceDefinitions.configuration.communicationPort),
+  useSelectedPlatformOptions: () =>
+    useOpenPLCStore(
+      (state) => state.deviceDefinitions.configuration.selectedPlatformOptions ?? EMPTY_SELECTED_PLATFORM_OPTIONS,
+    ),
   useSetDeviceBoard: () => useOpenPLCStore((state) => state.deviceActions.setDeviceBoard),
   useSetCommunicationPort: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPort),
+  useSetSelectedPlatformOption: () => useOpenPLCStore((state) => state.deviceActions.setSelectedPlatformOption),
   useSetAvailableOptions: () => useOpenPLCStore((state) => state.deviceActions.setAvailableOptions),
 }
 
