@@ -42,6 +42,25 @@ void runtime_discover_tasks();
 // Per-cycle helpers (call once per scan cycle from scheduler()/loop()).
 void runtime_plc_cycle();
 
+// ---------------------------------------------------------------------------
+// Debug dispatch shims — extern "C" wrappers around strucpp::debug::handle_*.
+//
+// ModbusSlave.cpp used to include `debug_dispatch.hpp` directly to reach
+// these calls, but that pulled the strucpp template-heavy headers into the
+// sketch's TU (compiled by arduino-cli with the core's default C++ standard
+// — typically gnu++14 on mbed). The strucpp runtime needs C++17, so the
+// direct include broke every non-AVR build. Wrapping the surface here lets
+// ModbusSlave.cpp speak plain C against a stable ABI while the actual
+// strucpp invocations stay in arduino_runtime_glue.cpp, which is compiled
+// into the precompiled OpenPLCUserLib archive with -std=gnu++17.
+// ---------------------------------------------------------------------------
+
+uint8_t  openplc_debug_array_count(void);
+uint16_t openplc_debug_elem_count(uint8_t arr);
+uint16_t openplc_debug_size(uint8_t arr, uint16_t elem);
+uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t* dest);
+uint8_t  openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing, const uint8_t* bytes, uint16_t len);
+
 #ifdef __cplusplus
 }
 #endif

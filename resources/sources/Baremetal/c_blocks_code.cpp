@@ -11,19 +11,14 @@
 #undef max
 #endif
 
-// STruC++ runtime types — IEC_BOOL/IEC_INT/.../IEC_REAL all live under
-// `namespace strucpp` as IECVar<T> wrappers. The auto-generated POU
-// struct (emitted just below this preamble at compile time) refers to
-// them as `strucpp::IEC_*` so the user's `*name = 5` write routes
-// through `IECVar::operator=` and respects forcing on the IEC side.
-//
-// The user's setup() / loop() bodies meanwhile keep the historical
-// raw-type aliases at file scope for any user-local variables
-// (e.g. `IEC_INT my_temp = 0;` stays a plain int16_t). The struct
-// field's `strucpp::IEC_INT*` resolves separately and never collides
-// with these typedefs.
-#include "iec_var.hpp"
-#include "iec_string.hpp"
+// Static baseline — compiled by arduino-cli in the core's native C++
+// standard (gnu++11 on AVR, gnu++14 on mbed/Renesas, etc.), so it MUST
+// stay free of strucpp template-heavy headers. The typedefs below are
+// plain C — no namespace, no templates — and parse in every supported
+// standard. When the user's project declares C/C++ blocks, the editor
+// instead emits the dynamic version under <build>/<board>/src/, where
+// the pre-compile pipeline picks it up with -std=gnu++17 and links it
+// into the precompiled OpenPLCUserLib archive.
 
 /*********************/
 /*  IEC Types defs   */

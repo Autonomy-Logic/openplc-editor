@@ -4,7 +4,13 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"
-#include "debug_dispatch.hpp"  // Phase 4 debugger — strucpp::debug::handle_*
+// Debug surface comes via the extern "C" shims in arduino_runtime_glue.h
+// (openplc_debug_*) so this TU stays free of strucpp template-heavy headers
+// and compiles cleanly in arduino-cli's path with the core's default C++
+// standard (gnu++14 on mbed and others). The shims forward to
+// strucpp::debug::handle_* inside arduino_runtime_glue.cpp, which is part
+// of the precompiled OpenPLCUserLib archive built with -std=gnu++17.
+#include "arduino_runtime_glue.h"
 
 //Global Modbus vars
 struct MBinfo modbus;
@@ -1073,7 +1079,7 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
 // Response: [FC, arrCount, STATUS_OK, (count×arrCount as u16 BE)]
 void debugInfo()
 {
-    uint8_t arrCount = strucpp::debug::handle_array_count();
+    uint8_t arrCount = openplc_debug_array_count();
 
     // Cap at what the Modbus frame can hold: 3 header bytes + 2 bytes/array.
     // Realistic projects have <=10 arrays, so this is never a real limit.
@@ -1086,7 +1092,7 @@ void debugInfo()
     uint16_t pos = 4;
     for (uint8_t i = 0; i < arrCount; i++)
     {
-        uint16_t c = strucpp::debug::handle_elem_count(i);
+        uint16_t c = openplc_debug_elem_count(i);
         mb_frame[pos++] = (uint8_t)(c >> 8);
         mb_frame[pos++] = (uint8_t)(c & 0xFF);
     }
@@ -1128,8 +1134,8 @@ void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
         return;
     }
 
-    uint8_t status = strucpp::debug::handle_set(
-        arr, elem, (bool)flag, (const uint8_t *)value, len);
+    uint8_t status = openplc_debug_set(
+        arr, elem, (uint8_t)flag, (const uint8_t *)value, len);
 
     mb_frame_len = 3;
     mb_frame[1] = MB_FC_DEBUG_SET;
@@ -1162,7 +1168,7 @@ void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
 //            size_hi, size_lo, data...]
 void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
 {
-    uint16_t arrCount = strucpp::debug::handle_elem_count(arr);
+    uint16_t arrCount = openplc_debug_elem_count(arr);
     if (arrCount == 0 || startidx >= arrCount ||
         endidx >= arrCount || startidx > endidx)
     {
@@ -1178,7 +1184,7 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
 
     for (uint16_t elem = startidx; elem <= endidx; elem++)
     {
-        uint16_t varSize = strucpp::debug::handle_size(arr, elem);
+        uint16_t varSize = openplc_debug_size(arr, elem);
         // Bounds check — stop packing if this one won't fit.
         if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
         if (varSize == 0) {
@@ -1187,7 +1193,7 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
             lastElemIdx = elem;
             continue;
         }
-        uint16_t n = strucpp::debug::handle_read(arr, elem, responsePtr);
+        uint16_t n = openplc_debug_read(arr, elem, responsePtr);
         if (n == 0) {
             lastElemIdx = elem;
             continue;
@@ -1272,7 +1278,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         uint16_t elem = (uint16_t)localIndex[i * 3 + 1] << 8 |
                          (uint16_t)localIndex[i * 3 + 2];
 
-        uint16_t varSize = strucpp::debug::handle_size(arr, elem);
+        uint16_t varSize = openplc_debug_size(arr, elem);
         if (varSize == 0)
         {
             // Out-of-bounds or string stub — skip gracefully.
@@ -1281,7 +1287,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         }
         if ((response_idx + varSize) > MAX_MB_FRAME) break;
 
-        uint16_t n = strucpp::debug::handle_read(arr, elem, &mb_frame[response_idx]);
+        uint16_t n = openplc_debug_read(arr, elem, &mb_frame[response_idx]);
         if (n == 0)
         {
             lastReqIdx = i;

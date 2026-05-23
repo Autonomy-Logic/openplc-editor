@@ -104,16 +104,17 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
-import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
+import type { CompileLibraryResult, PlatformOption } from '@root/middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '@root/middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PackageManifest } from '../package-manager'
+import { BoardInfoResolver } from '../hardware'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
-import type { ArduinoCoreControl, HalsFile } from './types'
+import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -169,6 +170,11 @@ class CompilerModule {
   xml2stBinaryPath: string
 
   strucppRuntimeDir: string
+
+  // Memoised arduino-cli `--show-properties=expanded` output keyed by FQBN.
+  // Resetting requires a fresh CompilerModule instance — adequate for the
+  // MVP where the editor recreates the module per compile session.
+  #toolchainPropsCache: Map<string, ToolchainProperties> = new Map()
 
   // ############################################################################
   // =========================== Static properties ==============================
@@ -229,6 +235,45 @@ class CompilerModule {
   static async readJSONFile<T>(filePath: string): Promise<T> {
     const data = await readFile(filePath, 'utf-8')
     return JSON.parse(data) as T
+  }
+
+  /**
+   * Append user-selected (or default) FQBN sub-options to the base platform
+   * string. Used by handleCompileArduinoProgram and the orchestrator's
+   * upload step to apply the VPP-declared `target.platformOptions` choices
+   * the user made on the device screen (e.g. Nano `cpu=atmega328old`).
+   *
+   * Pure / deterministic: every key in `platformOptions` becomes a segment
+   * `:<key>=<id>` appended in declaration order. Missing entries in
+   * `selected` fall back to each option's `default`. Returns the input
+   * `platform` verbatim when the manifest declares no platformOptions.
+   */
+  static applyPlatformOptions(
+    platform: string,
+    platformOptions: PlatformOption[] | undefined,
+    selected: Record<string, string> | undefined,
+  ): string {
+    if (!platformOptions || platformOptions.length === 0) return platform
+    const segments: string[] = []
+    for (const opt of platformOptions) {
+      const chosen = selected?.[opt.key] ?? opt.default
+      segments.push(`${opt.key}=${chosen}`)
+    }
+    return `${platform}:${segments.join(':')}`
+  }
+
+  // Pure parser for `arduino-cli compile --show-properties=expanded` stdout.
+  // Values can contain '=' (e.g. -DARDUINO=10607) so we split on the FIRST '='
+  // only. Empty lines and lines without '=' are silently skipped.
+  static parseShowPropertiesOutput(stdout: string): Record<string, string> {
+    const properties: Record<string, string> = {}
+    for (const line of stdout.split('\n')) {
+      if (!line) continue
+      const eqIdx = line.indexOf('=')
+      if (eqIdx < 0) continue
+      properties[line.slice(0, eqIdx)] = line.slice(eqIdx + 1)
+    }
+    return properties
   }
 
   // ############################################################################
@@ -317,6 +362,14 @@ class CompilerModule {
     return join(electronApp.getAppPath(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
   }
 
+  // Path to the empty sketch arduino-cli compiles against when extracting
+  // toolchain properties via `--show-properties=expanded`. The sketch itself
+  // is never linked — its only role is to give arduino-cli a valid sketch
+  // structure so the recipe templates resolve.
+  #constructShowPropertiesDummyPath(): string {
+    return join(this.sourceDirectoryPath, 'show_properties_dummy')
+  }
+
   /**
    * Resolve a board target to the arduino-cli core ID
    * (`arduino-cli core install` target — e.g. `arduino:avr`).
@@ -332,6 +385,24 @@ class CompilerModule {
   async #getBoardCore(board: string): Promise<string | null> {
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     return halsFileContent[board]?.['core'] ?? null
+  }
+
+  /**
+   * Pull the user's platformOption selections out of a project's
+   * devices/configuration.json. Returns `{}` on any read/parse error —
+   * a missing file or stale config without the field means the user
+   * never touched the dropdown, so the compile path should fall back to
+   * each manifest option's `default`.
+   */
+  async #readSelectedPlatformOptions(projectPath: string): Promise<Record<string, string>> {
+    const configPath = join(projectPath, 'devices', 'configuration.json')
+    try {
+      const raw = await readFile(configPath, 'utf-8')
+      const parsed = JSON.parse(raw) as { selectedPlatformOptions?: Record<string, string> }
+      return parsed.selectedPlatformOptions ?? {}
+    } catch {
+      return {}
+    }
   }
 
   async #getBoardRuntime(board: string) {
@@ -456,6 +527,55 @@ class CompilerModule {
     const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
 
     return installedLibraries
+  }
+
+  /**
+   * Ask arduino-cli to resolve every recipe property for a given FQBN and
+   * return it as a typed struct. Backbone of the pre-compile pipeline:
+   * because `recipe.cpp.o.pattern` / `recipe.c.o.pattern` / `recipe.ar.pattern`
+   * arrive fully expanded (every {build.*} / {compiler.*} / {runtime.*}
+   * already substituted), the editor can drive the toolchain directly with
+   * only the per-TU placeholders (`{source_file}`, `{object_file}`,
+   * `{includes}`, `{archive_file_path}`) left to fill in.
+   *
+   * Results are memoised in-process per FQBN — show-properties takes ~300 ms
+   * on a warm arduino-cli and the same FQBN is queried multiple times within
+   * a single compile session.
+   */
+  async extractToolchainProperties(fqbn: string): Promise<ToolchainProperties> {
+    const cached = this.#toolchainPropsCache.get(fqbn)
+    if (cached) return cached
+
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+    const dummySketchPath = this.#constructShowPropertiesDummyPath()
+    const baseArgs = this.arduinoCliBaseParameters.map((p) => `"${p}"`).join(' ')
+    const execAsync = promisify(exec)
+
+    // `--show-properties=expanded` tells arduino-cli to evaluate every
+    // `{var}` interpolation in `platform.txt` / `boards.txt` before printing
+    // — without `=expanded`, recipes come back with raw `{compiler.path}`
+    // placeholders that would be useless for direct toolchain invocation.
+    const cmd = `"${binaryPath}" compile --fqbn "${fqbn}" --show-properties=expanded "${dummySketchPath}" ${baseArgs}`
+
+    const { stdout } = await execAsync(cmd, { maxBuffer: 8 * 1024 * 1024 })
+
+    const properties = CompilerModule.parseShowPropertiesOutput(stdout)
+    const recipeCpp = properties['recipe.cpp.o.pattern']
+    const recipeC = properties['recipe.c.o.pattern']
+    const recipeAr = properties['recipe.ar.pattern']
+    if (!recipeCpp || !recipeC || !recipeAr) {
+      throw new Error(
+        `arduino-cli --show-properties for "${fqbn}" returned an incomplete recipe set ` +
+          `(cpp=${Boolean(recipeCpp)}, c=${Boolean(recipeC)}, ar=${Boolean(recipeAr)}). ` +
+          `This usually means the core for this board is not installed.`,
+      )
+    }
+
+    const props: ToolchainProperties = { fqbn, properties, recipeCpp, recipeC, recipeAr }
+    this.#toolchainPropsCache.set(fqbn, props)
+    return props
   }
 
   // ++ =========================== Defines.h methods ==========================++
@@ -1184,7 +1304,11 @@ class CompilerModule {
   async handleGenerateCBlocksCode(
     projectData: ProjectDataWithCppPous,
     compilationPath: string,
-    boardRuntime: string,
+    // Reserved on the signature so caller orchestrators (Arduino vs Runtime
+    // v4) keep a stable API surface; both runtimes share <build>/src/ today
+    // because both need gnu++17 for the strucpp IECVar<T> wrappers, but a
+    // future runtime might branch off this discriminator again.
+    _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
     const originalCppPous = projectData.originalCppPous || []
@@ -1195,17 +1319,12 @@ class CompilerModule {
     }
 
     const cppPous = originalCppPous
-    // generateCBlocksCode now emits the full file (baseline + per-POU
-    // wrappers + user code), so we overwrite rather than append. The
-    // static Baremetal/c_blocks_code.cpp baseline is now redundant for
-    // projects with C++ POUs but stays as a benign empty unit for
-    // Arduino projects without any.
+    // Written into <build>/src/ so the pre-compile loop picks it up with
+    // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
+    // strucpp-free and is compiled by arduino-cli in the core's native
+    // standard.
     const codeContent = generateCBlocksCode(cppPous)
-
-    const codeFilePath =
-      boardRuntime === 'openplc-compiler'
-        ? join(compilationPath, 'src', 'c_blocks_code.cpp')
-        : join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
+    const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
       await writeFile(codeFilePath, codeContent, { encoding: 'utf8' })
@@ -1265,7 +1384,237 @@ class CompilerModule {
     })
   }
 
+  // Stub empty files for `@response_file` paths a recipe references but
+  // that arduino-cli would only generate during a real compile (ESP32 +
+  // STM32duino). GCC treats missing `@file` as a literal positional
+  // argument → "cannot specify '-o' with '-c' ... with multiple files".
+  // Empty is the canonical default arduino-cli itself writes when no
+  // per-project build_opt customization exists.
+  private static async ensureResponseFileStubs(
+    cmd: string,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    // Match `@<absolute-path>` (POSIX `/...` or Windows `C:\...` / `C:/...`),
+    // with optional surrounding quote from the recipe substitution.
+    const responseFileRe = /["']?@([A-Za-z]:[\\/][^"'\s]+|\/[^"'\s]+)/g
+    const paths = new Set<string>()
+    let match: RegExpExecArray | null
+    while ((match = responseFileRe.exec(cmd)) !== null) {
+      paths.add(match[1])
+    }
+    for (const responsePath of paths) {
+      if (existsSync(responsePath)) continue
+      await mkdir(path.dirname(responsePath), { recursive: true })
+      try {
+        await writeFile(responsePath, '', { flag: 'wx' })
+        handleOutputData(`[precompile] Stubbed empty response file: ${responsePath}`, 'info')
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      }
+    }
+  }
+
+  // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
+  // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
+  // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
+  // surface contained — arduino-cli compiles the core and sketch in
+  // whatever standard the core ships with.
+  async handlePrecompileUserLib({
+    compilationPath,
+    fqbn,
+    extraCxxFlags = [],
+    handleOutputData,
+  }: {
+    compilationPath: string
+    fqbn: string
+    extraCxxFlags?: string[]
+    handleOutputData: HandleOutputDataCallback
+  }): Promise<{ archivePath: string; toolchainArch: string; objectFiles: string[] }> {
+    const tcProps = await this.extractToolchainProperties(fqbn)
+
+    const srcDir = join(compilationPath, 'src')
+    const baremetalDir = join(compilationPath, 'examples', 'Baremetal')
+
+    // arduino.cpp is the board HAL; arduino-cli must compile it so it sees
+    // the core's external libraries (Ethernet, SPI, ...) it discovers via
+    // sketch-tree includes.
+    const allEntries = await readdir(srcDir)
+    const sources = allEntries
+      .filter((name) => name.endsWith('.cpp') && name !== 'arduino.cpp')
+      .map((name) => join(srcDir, name))
+
+    if (sources.length === 0) {
+      throw new Error(`handlePrecompileUserLib: no .cpp sources found under ${srcDir}`)
+    }
+
+    const objDir = join(compilationPath, 'precompile', 'obj')
+    await mkdir(objDir, { recursive: true })
+
+    const includes = [`"-I${srcDir}"`, `"-I${baremetalDir}"`].join(' ')
+
+    // Appended after the recipe so the last `-std=` wins over the core's
+    // implicit gnu++14. extraCxxFlags carries VPP per-board cxx_flags.
+    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraCxxFlags].join(' ')
+
+    const execAsync = promisify(exec)
+    const execMaxBuffer = 16 * 1024 * 1024
+
+    handleOutputData(
+      `[precompile] Compiling ${sources.length} TU(s) with toolchain for ${fqbn}...`,
+      'info',
+    )
+
+    // Build the .o path list synchronously up-front so the archive members
+    // land in source-file order regardless of the concurrent compile result.
+    const objectFiles = sources.map((sourcePath) =>
+      join(objDir, path.basename(sourcePath).replace(/\.cpp$/, '.o')),
+    )
+
+    const compilePromises = sources.map(async (sourcePath, idx) => {
+      const objectPath = objectFiles[idx]
+
+      const cmd =
+        tcProps.recipeCpp
+          .replaceAll('{source_file}', sourcePath)
+          .replaceAll('{object_file}', objectPath)
+          .replaceAll('{includes}', includes) +
+        ' ' +
+        trailingFlags
+
+      await CompilerModule.ensureResponseFileStubs(cmd, handleOutputData)
+
+      try {
+        const { stdout, stderr } = await execAsync(cmd, { maxBuffer: execMaxBuffer })
+        // gcc emits warnings on stderr even on success — both streams logged as info.
+        if (stdout) handleOutputData(stdout, 'info')
+        if (stderr) handleOutputData(stderr, 'info')
+        handleOutputData(`[precompile]   ✓ ${path.basename(sourcePath)}`, 'info')
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        handleOutputData(`[precompile]   ✗ ${path.basename(sourcePath)}: ${reason}`, 'error')
+        throw new Error(`Pre-compile failed for ${path.basename(sourcePath)}: ${reason}`)
+      }
+    })
+
+    await Promise.all(compilePromises)
+
+    // Build the ar command manually instead of using recipe.ar.pattern —
+    // cores disagree on placeholder semantics: mbed uses `{archive_file_path}`
+    // (full path, usable) while AVR uses `{archive_file}` (bare filename with
+    // build cache dir baked into the recipe, which would write to the wrong place).
+    const archivePath = join(compilationPath, 'precompile', 'libOpenPLCUserLib.a')
+    const quotedObjects = objectFiles.map((p) => `"${p}"`).join(' ')
+    const compilerPath = tcProps.properties['compiler.path']
+    const arName = tcProps.properties['compiler.ar.cmd']
+    if (!compilerPath || !arName) {
+      throw new Error(
+        `Toolchain archive invocation requires compiler.path + compiler.ar.cmd ` +
+          `from arduino-cli --show-properties for "${fqbn}" ` +
+          `(got compiler.path="${compilerPath ?? ''}", compiler.ar.cmd="${arName ?? ''}"). ` +
+          `The board's core is likely not installed.`,
+      )
+    }
+    const arFlags = tcProps.properties['compiler.ar.flags'] ?? 'rcs'
+    const arExtraFlags = tcProps.properties['compiler.ar.extra_flags'] ?? ''
+    const archiverBin = `"${compilerPath}${arName}"`
+    const archiveCmd = `${archiverBin} ${arFlags} ${arExtraFlags} "${archivePath}" ${quotedObjects}`
+
+    handleOutputData(
+      `[precompile] Archiving ${objectFiles.length} object(s) into libOpenPLCUserLib.a...`,
+      'info',
+    )
+    await execAsync(archiveCmd, { maxBuffer: execMaxBuffer })
+
+    // Move pre-compiled sources out of src/ so arduino-cli library discovery
+    // doesn't recompile them; preserved under precompile/sources/ for debug.
+    const sourcesStash = join(compilationPath, 'precompile', 'sources')
+    await mkdir(sourcesStash, { recursive: true })
+    for (const sourcePath of sources) {
+      const stashedPath = join(sourcesStash, path.basename(sourcePath))
+      await fs.rename(sourcePath, stashedPath)
+    }
+    handleOutputData(
+      `[precompile] Moved ${sources.length} compiled source(s) to precompile/sources/ (won't be recompiled by arduino-cli)`,
+      'info',
+    )
+
+    // build.architecture (mbed: cortex-m7, lowercase) preferred over build.arch
+    // (AVR/SAMD: uppercased). Lowercase is the Arduino precompiled-lib convention.
+    const toolchainArch = (
+      tcProps.properties['build.architecture'] ??
+      tcProps.properties['build.arch'] ??
+      'unknown'
+    ).toLowerCase()
+
+    handleOutputData(
+      `[precompile] Pre-compile complete (${objectFiles.length} TUs → libOpenPLCUserLib.a, arch=${toolchainArch})`,
+      'info',
+    )
+
+    return { archivePath, toolchainArch, objectFiles }
+  }
+
+  // Wrap the precompiled archive as an Arduino library so arduino-cli's
+  // library discovery picks it up via `#include <OpenPLCUserLib.h>` and
+  // links the archive without recompiling anything inside. Staged under
+  // os.tmpdir() because arduino-cli's --build-property tokenises on
+  // whitespace and ignores quotes, so a build path with spaces (e.g.
+  // "Arduino Mega") would break the -L flag and link input list.
+  async installAsArduinoLibrary({
+    compilationPath,
+    archivePath,
+    toolchainArch,
+  }: {
+    compilationPath: string
+    archivePath: string
+    toolchainArch: string
+  }): Promise<{ libraryDir: string; archDir: string }> {
+    // Hash isolates concurrent compiles of different boards; pid suffix
+    // isolates concurrent compiles of the SAME board across processes so
+    // the rm-then-mkdir reset below never deletes another process's stage.
+    const buildHash = createHash('md5').update(compilationPath).digest('hex').slice(0, 12)
+    const stagingRoot = join(os.tmpdir(), `openplc-precompile-${buildHash}-${process.pid}`)
+    const libraryDir = join(stagingRoot, 'OpenPLCUserLib')
+    const srcDir = join(libraryDir, 'src')
+    const archDir = join(srcDir, toolchainArch)
+
+    // Wipe leftover from a previous compile so a stale .a doesn't shadow a
+    // fresh one (e.g. when the board switches between toolchains).
+    await fs.rm(stagingRoot, { recursive: true, force: true })
+    await mkdir(archDir, { recursive: true })
+
+    const targetArchive = join(archDir, 'libOpenPLCUserLib.a')
+    await cp(archivePath, targetArchive)
+
+    const propsContent = [
+      'name=OpenPLCUserLib',
+      'version=1.0.0',
+      'author=OpenPLC Editor',
+      'maintainer=OpenPLC Editor <noreply@autonomylogic.com>',
+      'sentence=Pre-compiled OpenPLC user code archive',
+      'paragraph=Pre-compiled gnu++17 archive of generated PLC code, isolated from arduino-cli core compilation.',
+      'category=Other',
+      'architectures=*',
+      'precompiled=full',
+      '',
+    ].join('\n')
+    await writeFile(join(libraryDir, 'library.properties'), propsContent, 'utf-8')
+
+    const headerContent = [
+      '// Auto-generated stub for OpenPLCUserLib.',
+      '// Real declarations come via arduino_runtime_glue.h in <sketch>/src/.',
+      '// This file exists solely to trigger arduino-cli library discovery for the',
+      '// precompiled archive in this directory.',
+      '#pragma once',
+      '',
+    ].join('\n')
+    await writeFile(join(srcDir, 'OpenPLCUserLib.h'), headerContent, 'utf-8')
+
+    return { libraryDir, archDir }
+  }
+
   async handleCompileArduinoProgram({
+    boardTarget,
     boardHalsContent,
     compilationPath,
     handleOutputData,
@@ -1277,23 +1626,60 @@ class CompilerModule {
       handleOutputData('Clean build requested — arduino-cli cache will be invalidated.', 'info')
     }
 
-    // The AVR toolchain doesn't ship a C++ stdlib; we bundle a
-    // freestanding port at resources/sources/avr-libstdcpp/include
-    // and pass it via -I.  Electron's user-data dir on macOS is
-    // `~/Library/Application Support/<App>/`, and arduino-cli's
-    // recipe substitution gets confused by quoted paths with embedded
-    // spaces — so mirror the headers into a no-space cache directory
-    // on first compile.  Versioned cache key self-invalidates on
-    // editor upgrades that ship new headers.
-    const avrLibStdCppInclude = boardHalsContent['core']?.startsWith('arduino:avr')
-      ? await this.ensureAvrLibStdCppCache()
-      : undefined
+    // Resolve unified board info (VPP-aware, falls back to hals.json) so the
+    // pre-compile + arduino-cli paths see the same compilerFlags/platformOptions.
+    const resolver = new BoardInfoResolver(this.halsFilePath, this.sourceDirectoryPath, new PackageManagerModule())
+    const info = await resolver.resolve(boardTarget)
+    if (!info.platform) {
+      throw new Error(`Board "${boardTarget}" does not declare a platform (FQBN)`)
+    }
 
-    // Shared with openplc-web's compiler-adapter — single source of
-    // truth for arduino-cli compile argv composition.  Editor passes
-    // `-j 0` (parallel: default true) to saturate cores on developer
-    // machines; web passes parallel: false because compiler-service
-    // multiplexes many clients in nsjail sandboxes.
+    // Compose effective FQBN by appending platformOptions selected by the user
+    // (or each option's manifest default). projectPath is derived from
+    // compilationPath (always `<projectPath>/build/<boardTarget>`).
+    const projectPath = path.dirname(path.dirname(compilationPath))
+    const selectedPlatformOptions = await this.#readSelectedPlatformOptions(projectPath)
+    const effectiveFqbn = CompilerModule.applyPlatformOptions(
+      info.platform,
+      info.platformOptions,
+      selectedPlatformOptions,
+    )
+
+    // The AVR/megaavr toolchain ships <stdint.h> but no C++ wrappers; we
+    // bundle a freestanding port at resources/sources/avr-libstdcpp/.
+    // Electron's user-data dir on macOS has spaces, which break arduino-cli's
+    // compiler.cpp.extra_flags substitution — mirror to a no-space cache.
+    const avrLibStdCppInclude =
+      info.core?.startsWith('arduino:avr') || info.core?.startsWith('arduino:megaavr')
+        ? await this.ensureAvrLibStdCppCache()
+        : undefined
+
+    // Pre-compile strucpp-touching TUs at -std=gnu++17 into libOpenPLCUserLib.a.
+    // Flag policy: VPP cxx_flags + AVR libstdcpp -I flow into BOTH the pre-compile
+    // and the arduino-cli pass (ModbusSlave still rides arduino-cli); internal
+    // -std=gnu++17/-fno-rtti stays pre-compile-only.
+    const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
+    if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
+
+    const { archivePath, toolchainArch } = await this.handlePrecompileUserLib({
+      compilationPath,
+      fqbn: effectiveFqbn,
+      extraCxxFlags: cxxFlags,
+      handleOutputData,
+    })
+    const { archDir: precompiledArchDir } = await this.installAsArduinoLibrary({
+      compilationPath,
+      archivePath,
+      toolchainArch,
+    })
+
+    // Shared with openplc-web's compiler-adapter — single source of truth for
+    // arduino-cli compile argv composition. We append our overrides after:
+    // --fqbn (effective with platformOptions), VPP-resolved cxx_flags into
+    // compiler.cpp.extra_flags, and compiler.libraries.ldflags injecting
+    // -L<archDir> -lOpenPLCUserLib (arduino-cli doesn't auto-emit -L/-l for
+    // libraries marked precompiled=full).
+    const cxxFlagsArg = cxxFlags.length > 0 ? ['--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`] : []
     const buildProjectFlags = [
       ...buildArduinoCliCompileArgs(boardHalsContent, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
@@ -1301,6 +1687,11 @@ class CompilerModule {
         avrLibStdCppInclude,
         cleanBuild,
       }),
+      '--fqbn',
+      effectiveFqbn,
+      ...cxxFlagsArg,
+      '--build-property',
+      `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
     ]
 
