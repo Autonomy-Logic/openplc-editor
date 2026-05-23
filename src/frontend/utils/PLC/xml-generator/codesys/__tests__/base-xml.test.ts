@@ -4,6 +4,7 @@ describe('getBaseCodeSysXmlStructure', () => {
   it('returns a BaseXml with the codesys namespace', () => {
     const xml = getBaseCodeSysXmlStructure()
     expect(xml.project['@xmlns']).toBe('http://www.plcopen.org/xml/tc6_0200')
+    expect(xml.project['@xmlns:xhtml']).toBe('http://www.w3.org/1999/xhtml')
   })
 
   it('has default fileHeader fields', () => {
