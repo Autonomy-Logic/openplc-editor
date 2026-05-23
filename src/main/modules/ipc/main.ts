@@ -32,7 +32,7 @@ import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-clien
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
-import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
+import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
@@ -47,7 +47,7 @@ class MainProcessBridge implements MainIpcModule {
   hardwareModule
   private registeredHandleChannels: string[] = []
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
-  private debuggerWebSocketClient: WebSocketDebugClient | null = null
+  private debuggerWebSocketClient: WebSocketDebugTransport | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
@@ -1162,7 +1162,7 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
   }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
-    let wsClient: WebSocketDebugClient | null = null
+    let wsClient: WebSocketDebugTransport | null = null
     try {
       if (connectionType === 'simulator') {
         const virtualPort = new VirtualSerialPort(this.simulatorModule)
@@ -1187,7 +1187,7 @@ class MainProcessBridge implements MainIpcModule {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
         if (!this.debuggerWebSocketClient) {
-          wsClient = new WebSocketDebugClient({
+          wsClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
             token: connectionParams.jwtToken,
@@ -1330,7 +1330,7 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerReconnecting = false
             return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
           }
-          this.debuggerWebSocketClient = new WebSocketDebugClient({
+          this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: this.debuggerTargetIp,
             port: 8443,
             token: this.debuggerJwtToken,
@@ -1490,7 +1490,7 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerWebSocketClient = null
           }
 
-          this.debuggerWebSocketClient = new WebSocketDebugClient({
+          this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
             token: connectionParams.jwtToken,
@@ -1601,7 +1601,11 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       try {
-        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, buffer)
+        // Shared transport takes Uint8Array; convert from the IPC's
+        // Buffer payload (Buffer is a Uint8Array subclass so the cast
+        // is a no-op at runtime, but TS wants the explicit step).
+        const valueBytes = buffer ? new Uint8Array(buffer) : undefined
+        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, valueBytes)
         logger.info('[IPC Handler] WebSocket setVariable result: ' + JSON.stringify(result))
         return result
       } catch (error) {
