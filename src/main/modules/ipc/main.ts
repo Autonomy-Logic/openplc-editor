@@ -492,7 +492,19 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+      // Parse the body so the renderer can drive a retry-on-BUSY
+      // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
+      // while it's still unloading the previous program after an
+      // upload).  See `backend/shared/library/start-plc-after-build.ts`.
+      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
+        ipAddress,
+        jwtToken,
+        '/api/start-plc',
+        (data: string) => JSON.parse(data) as { status?: string },
+      )
+      if (!result.success) return { success: false, error: result.error }
+      const status = (result.data?.status ?? '').trim()
+      return { success: true, status }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

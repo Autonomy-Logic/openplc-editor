@@ -435,7 +435,10 @@ const rendererProcessBridge = {
     }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
-  runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+  runtimeStartPlc: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; error?: string; status?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
   runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress, jwtToken),

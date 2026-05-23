@@ -29,6 +29,7 @@ import {
 import { pollRuntimeCompilation } from '@root/backend/shared/library/poll-runtime-compilation'
 import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
+import { startPlcAfterBuild } from '@root/backend/shared/library/start-plc-after-build'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
@@ -2547,63 +2548,35 @@ class CompilerModule {
                       pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
                     })
 
-                  /**
-                   * Send START to the runtime after a successful build, retrying on
-                   * COMMAND:BUSY (the runtime returns BUSY while its STOP transition
-                   * thread is still finishing the unload — plugin cleanup, pthread_join,
-                   * etc.). Any non-BUSY error response (invalid program, compilation
-                   * error, etc.) stops the retry immediately.
-                   */
-                  const startPlcAfterBuildWithRetry = async (): Promise<void> => {
-                    const maxWaitMs = POST_BUILD_START_TIMEOUT_MS
-                    const pollIntervalMs = POST_BUILD_START_POLL_INTERVAL_MS
-                    const deadline = Date.now() + maxWaitMs
-
-                    while (Date.now() < deadline) {
-                      const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
-                        runtimeIpAddress,
-                        runtimeJwtToken,
-                        '/api/start-plc',
-                        (data: string) => {
-                          const parsed = JSON.parse(data) as { status?: string }
-                          return (parsed.status ?? '').trim()
-                        },
-                      )
-
-                      if (!result.success) {
-                        _mainProcessPort.postMessage({
-                          logLevel: 'error',
-                          message: `Failed to start PLC: ${result.error}`,
-                        })
-                        return
-                      }
-
-                      const rawStatus = result.data ?? ''
-                      if (rawStatus.includes('START:OK') || rawStatus.includes('ALREADY_RUNNING')) {
-                        _mainProcessPort.postMessage({
-                          logLevel: 'info',
-                          message: 'PLC started.',
-                        })
-                        return
-                      }
-
-                      // Only BUSY is retryable — everything else is a real error from the runtime.
-                      if (!rawStatus.includes('BUSY')) {
-                        _mainProcessPort.postMessage({
-                          logLevel: 'error',
-                          message: `Failed to start PLC: ${rawStatus || 'unknown response'}`,
-                        })
-                        return
-                      }
-
-                      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
-                    }
-
-                    _mainProcessPort.postMessage({
-                      logLevel: 'warning',
-                      message: `PLC did not start within ${maxWaitMs}ms — runtime remained busy. Press Play to retry.`,
+                  // Auto-start the PLC after the runtime build settles.
+                  // Routed through the shared helper so web's
+                  // `compileProgram` runs the same retry-on-BUSY loop
+                  // — single source of truth for the post-upload start
+                  // behaviour.  fetchStart wraps the IPC call to
+                  // `/api/start-plc` and parses the body's `status`
+                  // field; the helper handles deadlines / BUSY retry
+                  // / log emission.
+                  const startPlcAfterBuildWithRetry = () =>
+                    startPlcAfterBuild({
+                      fetchStart: async () => {
+                        const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
+                          runtimeIpAddress,
+                          runtimeJwtToken,
+                          '/api/start-plc',
+                          (data: string) => {
+                            const parsed = JSON.parse(data) as { status?: string }
+                            return (parsed.status ?? '').trim()
+                          },
+                        )
+                        if (!result.success) return { success: false, error: result.error }
+                        return { success: true, status: result.data ?? '' }
+                      },
+                      onLog: (level, message) => {
+                        _mainProcessPort.postMessage({ logLevel: level, message })
+                      },
+                      timeoutMs: POST_BUILD_START_TIMEOUT_MS,
+                      pollIntervalMs: POST_BUILD_START_POLL_INTERVAL_MS,
                     })
-                  }
 
                   pollCompilationStatus()
                     .then(async (compileStatus) => {
