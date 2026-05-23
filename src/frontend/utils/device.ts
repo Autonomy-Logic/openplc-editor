@@ -86,6 +86,27 @@ export type RuntimeVersionValidationResult = {
 }
 
 /**
+ * Pull the major version number out of a runtime version string.
+ *
+ * Handles two shapes the runtime has returned over time:
+ *   - Legacy short form: `"v4"`, `"v3"` (what `getExpectedRuntimeVersion`
+ *     extracts from a board target name).
+ *   - Full SemVer-ish: `"4.1.0-RC3"`, `"4.2.0-rc1"`, `"3.0.0"` (what
+ *     `/api/version` actually emits on the wire today).
+ *
+ * In both cases the *major* digit is what matters for compatibility —
+ * a "v4 runtime" is any 4.x.y release.  Returns the leading digit(s)
+ * with no `v` prefix; falls back to the raw input when the string
+ * starts with neither a `v` nor a digit (so unexpected formats stay
+ * loud rather than silently passing).
+ */
+function extractRuntimeMajor(version: string): string {
+  const stripped = version.replace(/^v/i, '')
+  const match = stripped.match(/^\d+/)
+  return match ? match[0] : version
+}
+
+/**
  * Validates that the detected runtime version matches the expected version.
  */
 export function validateRuntimeVersion(
@@ -106,12 +127,18 @@ export function validateRuntimeVersion(
     }
   }
 
-  const normalizedDetected = detectedVersion.toLowerCase()
+  // Compare on the major version number only — `expectedVersion` is
+  // `"v4"`/`"v3"` (from the board target), `detectedVersion` is now
+  // a full SemVer-ish string like `"4.1.0-RC3"` on current runtimes
+  // (older builds answered with the short `"v4"` form).  Both
+  // collapse to `"4"`/`"3"` for the actual compatibility check.
+  const expectedMajor = extractRuntimeMajor(expectedVersion)
+  const detectedMajor = extractRuntimeMajor(detectedVersion)
 
-  if (normalizedDetected !== expectedVersion) {
+  if (expectedMajor !== detectedMajor) {
     return {
       status: 'mismatch',
-      message: `Runtime version mismatch: Selected "${boardTarget}" but connected to a ${normalizedDetected.toUpperCase()} runtime. Please update your device configuration to match the connected runtime.`,
+      message: `Runtime version mismatch: Selected "${boardTarget}" but connected to a ${detectedVersion} runtime. Please update your device configuration to match the connected runtime.`,
     }
   }
 

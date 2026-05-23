@@ -120,7 +120,7 @@ describe('validateRuntimeVersion', () => {
     expect(result.status).toBe('mismatch')
     expect(result.message).toContain('Runtime version mismatch')
     expect(result.message).toContain('OpenPLC Runtime v4')
-    expect(result.message).toContain('V3')
+    expect(result.message).toContain('v3')
   })
 
   it('returns ok when detected version matches expected', () => {
@@ -131,5 +131,18 @@ describe('validateRuntimeVersion', () => {
   it('normalizes detected version to lowercase for comparison', () => {
     const result = validateRuntimeVersion('OpenPLC Runtime v4', 'V4')
     expect(result).toEqual({ status: 'ok' })
+  })
+
+  it('accepts full SemVer detected versions matching the expected major', () => {
+    // What `/api/version` actually returns on shipping runtimes.
+    expect(validateRuntimeVersion('OpenPLC Runtime v4', '4.1.0-RC3')).toEqual({ status: 'ok' })
+    expect(validateRuntimeVersion('OpenPLC Runtime v4', '4.2.0-rc1')).toEqual({ status: 'ok' })
+    expect(validateRuntimeVersion('OpenPLC Runtime v4', '4.0.5')).toEqual({ status: 'ok' })
+  })
+
+  it('still flags SemVer detected versions whose major differs', () => {
+    const result = validateRuntimeVersion('OpenPLC Runtime v4', '3.5.2')
+    expect(result.status).toBe('mismatch')
+    expect(result.message).toContain('3.5.2')
   })
 })
