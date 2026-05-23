@@ -99,15 +99,23 @@ describe('parseGetMd5Response', () => {
 })
 
 describe('buildGetListRequest', () => {
-  it('packs indexes big-endian after the FC + count header', () => {
-    const buf = buildGetListRequest([0x0102, 0x0304])
+  it('packs each address as arr:U8 + elem:U16BE (3 bytes) after FC + count', () => {
+    // Two packed DebugAddrs:
+    //   (arr=0x05, elem=0x0102) → packed = (0x05 << 16) | 0x0102 = 0x050102
+    //   (arr=0x07, elem=0x0304) → packed = (0x07 << 16) | 0x0304 = 0x070304
+    const buf = buildGetListRequest([0x050102, 0x070304])
+    expect(buf).toHaveLength(3 + 3 * 2)
     expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_LIST)
     expect(buf[1]).toBe(0x00)
-    expect(buf[2]).toBe(0x02)
-    expect(buf[3]).toBe(0x01)
-    expect(buf[4]).toBe(0x02)
-    expect(buf[5]).toBe(0x03)
-    expect(buf[6]).toBe(0x04)
+    expect(buf[2]).toBe(0x02) // count = 2 (U16BE)
+    // First address: arr=0x05, elem=0x0102
+    expect(buf[3]).toBe(0x05)
+    expect(buf[4]).toBe(0x01)
+    expect(buf[5]).toBe(0x02)
+    // Second address: arr=0x07, elem=0x0304
+    expect(buf[6]).toBe(0x07)
+    expect(buf[7]).toBe(0x03)
+    expect(buf[8]).toBe(0x04)
   })
 })
 
@@ -143,23 +151,31 @@ describe('parseGetListResponse', () => {
 })
 
 describe('buildSetVariableRequest / parseSetVariableResponse', () => {
-  it('builds force-write with the supplied value buffer', () => {
-    const buf = buildSetVariableRequest(0x0102, true, new Uint8Array([0xff, 0xfe]))
+  it('builds force-write as [FC, arr:U8, elem:U16BE, force:U8, len:U16BE, value...]', () => {
+    // packed = (arr=0x03 << 16) | elem=0x0102 = 0x030102
+    const buf = buildSetVariableRequest(0x030102, true, new Uint8Array([0xff, 0xfe]))
+    expect(buf).toHaveLength(7 + 2)
     expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_SET)
-    expect(buf[1]).toBe(0x01)
-    expect(buf[2]).toBe(0x02)
-    expect(buf[3]).toBe(1) // force flag
-    expect(buf[4]).toBe(0x00)
-    expect(buf[5]).toBe(0x02) // length
-    expect(buf[6]).toBe(0xff)
-    expect(buf[7]).toBe(0xfe)
+    expect(buf[1]).toBe(0x03) // arr
+    expect(buf[2]).toBe(0x01) // elem high
+    expect(buf[3]).toBe(0x02) // elem low
+    expect(buf[4]).toBe(1) // force flag
+    expect(buf[5]).toBe(0x00) // dataLen high
+    expect(buf[6]).toBe(0x02) // dataLen low
+    expect(buf[7]).toBe(0xff)
+    expect(buf[8]).toBe(0xfe)
   })
 
   it('builds release-force (force=false) with single zero-byte payload', () => {
-    const buf = buildSetVariableRequest(0x10, false)
-    expect(buf[3]).toBe(0) // force flag off
-    expect(buf[5]).toBe(1) // length = 1
-    expect(buf[6]).toBe(0) // payload byte
+    // packed = (arr=0x00 << 16) | elem=0x0010 = 0x0010
+    const buf = buildSetVariableRequest(0x0010, false)
+    expect(buf[1]).toBe(0x00) // arr
+    expect(buf[2]).toBe(0x00) // elem high
+    expect(buf[3]).toBe(0x10) // elem low
+    expect(buf[4]).toBe(0) // force flag off
+    expect(buf[5]).toBe(0x00)
+    expect(buf[6]).toBe(0x01) // dataLen = 1
+    expect(buf[7]).toBe(0x00) // payload byte
   })
 
   it('parses success', () => {

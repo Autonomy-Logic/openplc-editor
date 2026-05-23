@@ -10,15 +10,20 @@
  * `WebSocketDebugClient` and web's `ModbusDataChannelTransport` both
  * route through these functions.
  *
- * PDU layouts:
+ * PDU layouts (Phase 4 / strucpp wire — every address is `arr:u8 +
+ * elem:u16 BE`, three bytes total.  The runtime uses the same packing
+ * editor's `WebSocketDebugClient` has emitted since the strucpp
+ * migration; web's older two-byte packing was MatIEC residue and is
+ * gone here.  Callers pass `packed = (arr << 16) | elem` and the
+ * builders split the bytes themselves):
  *
  *   getMd5 request:   [FC=0x45] [0xDE 0xAD] [0x00 0x00]
  *   getMd5 response:  [FC=0x45] [status] [MD5 UTF-8 chars...] [endian-sentinel: U16 native]
  *
- *   getList request:   [FC=0x44] [numIndexes: U16BE] [idx0: U16BE] [idx1: U16BE] ...
+ *   getList request:   [FC=0x44] [numIndexes: U16BE] [arr0:U8 elem0:U16BE] [arr1:U8 elem1:U16BE] ...
  *   getList response:  [FC=0x44] [status] [lastIndex: U16BE] [tick: U32BE] [size: U16BE] [data...]
  *
- *   set request:   [FC=0x42] [index: U16BE] [force: U8] [dataLen: U16BE] [value...]
+ *   set request:   [FC=0x42] [arr: U8] [elem: U16BE] [force: U8] [dataLen: U16BE] [value...]
  *   set response:  [FC=0x42] [status]
  *
  * The MD5 response's trailing 2 bytes are an endianness sentinel —
@@ -90,27 +95,42 @@ export function buildGetMd5Request(): Uint8Array {
   return buf
 }
 
+/**
+ * `indexes` carry packed DebugAddr (`(arr << 16) | elem`) — what
+ * `frontend/utils/debug-parser.ts:packDebugAddr` produces from the
+ * strucpp debug-map.  Wire layout is 3 bytes per address.
+ */
 export function buildGetListRequest(indexes: number[]): Uint8Array {
-  const buf = alloc(3 + 2 * indexes.length)
+  const buf = alloc(3 + 3 * indexes.length)
   writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_LIST)
   writeU16BE(buf, 1, indexes.length)
   for (let i = 0; i < indexes.length; i++) {
-    writeU16BE(buf, 3 + i * 2, indexes[i])
+    const arr = (indexes[i] >>> 16) & 0xff
+    const elem = indexes[i] & 0xffff
+    writeU8(buf, 3 + i * 3, arr)
+    writeU16BE(buf, 3 + i * 3 + 1, elem)
   }
   return buf
 }
 
+/**
+ * `index` is packed DebugAddr (`(arr << 16) | elem`).  Wire layout:
+ * [FC=0x42, arr:U8, elem:U16BE, force:U8, len:U16BE, value...].
+ */
 export function buildSetVariableRequest(index: number, force: boolean, valueBuffer?: Uint8Array): Uint8Array {
   const dataLength = force && valueBuffer ? valueBuffer.length : 1
-  const buf = alloc(6 + dataLength)
+  const buf = alloc(7 + dataLength)
+  const arr = (index >>> 16) & 0xff
+  const elem = index & 0xffff
   writeU8(buf, 0, ModbusFunctionCode.DEBUG_SET)
-  writeU16BE(buf, 1, index)
-  writeU8(buf, 3, force ? 1 : 0)
-  writeU16BE(buf, 4, dataLength)
+  writeU8(buf, 1, arr)
+  writeU16BE(buf, 2, elem)
+  writeU8(buf, 4, force ? 1 : 0)
+  writeU16BE(buf, 5, dataLength)
   if (force && valueBuffer) {
-    buf.set(valueBuffer, 6)
+    buf.set(valueBuffer, 7)
   } else {
-    writeU8(buf, 6, 0)
+    writeU8(buf, 7, 0)
   }
   return buf
 }
