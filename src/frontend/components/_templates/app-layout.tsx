@@ -44,14 +44,23 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   // System initialization
   useEffect(() => {
     const initSystem = async () => {
-      const sysInfo = await system.getSystemInfo()
-      setSystemConfigs({
-        OS: sysInfo.OS,
-        arch: sysInfo.architecture,
-        isWindowMaximized: sysInfo.isWindowMaximized,
-      })
-      const recent = await projectPort.getRecentProjects()
-      setRecent(recent)
+      try {
+        const sysInfo = await system.getSystemInfo()
+        setSystemConfigs({
+          OS: sysInfo.OS,
+          arch: sysInfo.architecture,
+          isWindowMaximized: sysInfo.isWindowMaximized,
+        })
+      } catch (error) {
+        console.error('Failed to read system info during app layout initialization:', error)
+      }
+
+      try {
+        const recent = await projectPort.getRecentProjects()
+        setRecent(recent)
+      } catch (error) {
+        console.error('Failed to read recent projects during app layout initialization:', error)
+      }
     }
     void initSystem()
   }, [system, projectPort, setSystemConfigs, setRecent])
