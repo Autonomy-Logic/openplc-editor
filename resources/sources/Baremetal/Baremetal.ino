@@ -293,14 +293,9 @@ void modbusTask()
     // Read changes from clients
     mbtask();
 
-    // Write changes back to OpenPLC Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
-    {
-        if (bool_output[i/8][i%8] != NULL)
-        {
-            *bool_output[i/8][i%8] = get_discrete(i, COILS);
-        }
-    }
+    // Do not mirror coil values back into mapped digital outputs.
+    // For located outputs (e.g. %QX0.0), debugger forcing updates the PLC variable
+    // directly. Copying COILS back here overwrites that value on every cycle.
     for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
     {
         if (int_output[i] != NULL)
