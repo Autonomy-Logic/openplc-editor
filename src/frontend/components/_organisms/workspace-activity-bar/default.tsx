@@ -455,15 +455,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // Disconnect before re-upload; the recursive call will reconnect
         await debuggerPort.disconnect()
 
+        const mismatchMessage = verifyResult.targetMd5Unavailable
+          ? (verifyResult.error ?? 'Target did not provide a program MD5.')
+          : `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`
+
         consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'warning',
-          message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
+          message: mismatchMessage,
         })
         const response = await showDebuggerMessage(
           'warning',
           'Program Mismatch',
-          'The program on the target does not match. Upload the current project?',
+          verifyResult.targetMd5Unavailable
+            ? 'The target does not have a verifiable OpenPLC program yet. Upload the current project?'
+            : 'The program on the target does not match. Upload the current project?',
           ['Yes', 'No'],
         )
         if (response === 0) {

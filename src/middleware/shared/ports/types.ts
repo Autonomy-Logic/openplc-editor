@@ -868,6 +868,7 @@ export interface Md5VerifyResult {
    *  trailer.  Renderer-side debug components feed this into the
    *  swap layer at read / write boundaries.  Omitted on failure. */
   targetEndian?: 'le' | 'be'
+  targetMd5Unavailable?: boolean
   error?: string
 }
 
