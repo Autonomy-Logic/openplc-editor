@@ -105,6 +105,7 @@ import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-
 import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
 import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
 import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
+import { composeRuntimeV4Bundle } from '@root/middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -492,7 +493,18 @@ class CompilerModule {
   }
 
   // INFO: This method is a placeholder for copying static files.
-  async copyStaticFiles(compilationPath: string, boardTarget: string): Promise<MethodsResult<string>> {
+  // `boardRuntime` is the runtime identifier from hals.json
+  // (`arduino-cli` or `openplc-compiler`).  `isRuntimeV4` further
+  // distinguishes v4 from v3 within the openplc-compiler family —
+  // v4's c_blocks.h + strucpp_runtime headers come from
+  // `composeRuntimeV4Bundle` in the v4 block, so the static pre-write
+  // here would be a redundant scatter producer and is skipped.  v3
+  // still needs the static c_blocks.h template + strucpp_runtime copy.
+  async copyStaticFiles(
+    compilationPath: string,
+    boardRuntime: string,
+    isRuntimeV4 = false,
+  ): Promise<MethodsResult<string>> {
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
@@ -500,7 +512,7 @@ class CompilerModule {
 
     const filesToCopy: Promise<void>[] = []
 
-    if (boardTarget !== 'openplc-compiler') {
+    if (boardRuntime !== 'openplc-compiler') {
       // Arduino targets: headers go flat next to the sketch (Baremetal.ino
       // includes "iec_var.hpp" etc. directly).
       //
@@ -517,16 +529,21 @@ class CompilerModule {
         this.copyStrucppRuntimeHeaders(sourceTargetFolderPath),
         cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
       )
-    } else {
-      // OpenPLC Runtime v4 target: headers go under strucpp_runtime/include/
-      // — that's where the runtime's scripts/compile.sh expects them after
-      // extracting the upload zip into core/generated/.
+    } else if (!isRuntimeV4) {
+      // OpenPLC Runtime v3: legacy boardTarget that still consumes
+      // c_blocks.h via `embedCBlocksInProgramSt`.  Keep the template
+      // copy + strucpp_runtime headers under the same layout v4 had
+      // historically — v3 doesn't go through the composer.
       const cBlocksHeaderPath = join(this.sourceDirectoryPath, 'arduino', 'c_blocks.h')
       filesToCopy.push(
         this.copyStrucppRuntimeHeaders(join(sourceTargetFolderPath, 'strucpp_runtime', 'include')),
         cp(cBlocksHeaderPath, join(sourceTargetFolderPath, 'c_blocks.h')),
       )
     }
+    // Runtime v4 (openplc-compiler + !v3): no static copy here.  The
+    // v4 block in `compileProgram` runs `composeRuntimeV4Bundle`
+    // which produces c_blocks.h + strucpp_runtime/include/* as part
+    // of the canonical upload-bundle file map.
 
     try {
       await Promise.all(filesToCopy)
@@ -555,6 +572,38 @@ class CompilerModule {
     // (strucpp_runtime/include) that may not exist yet.
     await fs.mkdir(targetDir, { recursive: true })
     await cp(runtimeDir, targetDir, { recursive: true })
+  }
+
+  /**
+   * Read STruC++ runtime headers off disk into the in-memory file map
+   * `composeRuntimeV4Bundle` expects (keys `strucpp_runtime/include/<filename>`,
+   * values = file content).  Mirror of openplc-web's `getStrucppRuntimeIncludeFiles()`
+   * — the composer is platform-agnostic and takes the headers as a Record
+   * so both repos can call it the same way.
+   *
+   * Flat directory (no subfolders) per the strucpp release layout —
+   * `readdir(runtimeDir)` is enough; no recursive walk.
+   */
+  private async loadStrucppRuntimeHeaders(): Promise<Record<string, string>> {
+    const runtimeDir = this.strucppRuntimeDir
+    try {
+      await fs.access(runtimeDir)
+    } catch {
+      throw new Error(
+        `STruC++ runtime headers not found at ${runtimeDir}. Run "npm run setup:binaries" to download them.`,
+      )
+    }
+    const entries = await readdir(runtimeDir, { withFileTypes: true })
+    const files: Record<string, string> = {}
+    await Promise.all(
+      entries
+        .filter((e) => e.isFile())
+        .map(async (e) => {
+          const content = await readFile(join(runtimeDir, e.name), 'utf-8')
+          files[`strucpp_runtime/include/${e.name}`] = content
+        }),
+    )
+    return files
   }
 
 
@@ -668,7 +717,7 @@ class CompilerModule {
        */
       missingLibraries?: string[]
     },
-  ): Promise<{ md5Hash: string }> {
+  ): Promise<{ md5Hash: string; strucppFiles: Record<string, string> }> {
     const stFilePath = join(sourceTargetFolderPath, 'program.st')
     const stSource = await readFile(stFilePath, { encoding: 'utf8' })
 
@@ -731,7 +780,15 @@ class CompilerModule {
     handleOutputData(`C++ files generated at: ${sourceTargetFolderPath}`, 'info')
     handleOutputData(`Program MD5: ${result.md5Hash}`, 'info')
 
-    return { md5Hash: result.md5Hash }
+    // Strucpp pipeline output also returned as an in-memory file map
+    // so callers building the runtime v4 upload bundle can feed
+    // `composeRuntimeV4Bundle` without re-reading every artefact off
+    // disk.  Disk writes stay for the Arduino path that consumes them
+    // through arduino-cli.
+    const strucppFiles: Record<string, string> = {}
+    for (const f of result.files) strucppFiles[f.name] = f.content
+
+    return { md5Hash: result.md5Hash, strucppFiles }
   }
 
   // Debug file generation and glue variable generation are no longer needed.
@@ -1921,6 +1978,11 @@ class CompilerModule {
     const sourceTargetFolderPath = join(compilationPath, 'src') // Assuming the source folder is named 'src'
 
     let buildMD5Hash: string | null = null
+    // Strucpp emit's in-memory file map.  Populated by `handleCompileSTtoCpp`
+    // and threaded into the runtime v4 block so we can compose the upload
+    // bundle without re-reading every artefact off disk.  Stays empty for
+    // any compile path that doesn't reach the strucpp step.
+    let strucppEmittedFiles: Record<string, string> = {}
 
     // --- Print basic information ---
     _mainProcessPort.postMessage({
@@ -2030,7 +2092,7 @@ class CompilerModule {
     // -- Copy static files --
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
     try {
-      await this.copyStaticFiles(compilationPath, boardRuntime)
+      await this.copyStaticFiles(compilationPath, boardRuntime, isRuntimeV4)
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -2055,7 +2117,7 @@ class CompilerModule {
       const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
       const { archives: libraries, missing: missingLibraries } =
         mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
-      const { md5Hash } = await this.handleCompileSTtoCpp(
+      const { md5Hash, strucppFiles } = await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel, compileError) => {
           _mainProcessPort.postMessage({
@@ -2067,6 +2129,7 @@ class CompilerModule {
         { hasCBlocks, pous: knownPous, libraries, missingLibraries },
       )
       buildMD5Hash = md5Hash
+      strucppEmittedFiles = strucppFiles
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -2080,40 +2143,46 @@ class CompilerModule {
       return
     }
 
-    // Step 7: Generate C/C++ blocks header file
-    try {
-      await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
+    // Step 7 / 8: Generate C/C++ blocks header + code.  Skipped for
+    // runtime v4 — the runtime v4 block below routes c_blocks.h /
+    // c_blocks_code.cpp through `composeRuntimeV4Bundle` so the upload
+    // bundle has a single canonical producer.  Arduino and v3 still
+    // need the disk writes here (Arduino: arduino-cli consumes them;
+    // v3: `embedCBlocksInProgramSt` reads c_blocks.h off disk).
+    if (!isRuntimeV4) {
+      try {
+        await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
 
-    // Step 8: Generate C/C++ blocks code file
-    try {
-      await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
+      try {
+        await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+        })
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     // Step 9: Embed C/C++ blocks in program.st for Runtime v3
@@ -2149,43 +2218,133 @@ class CompilerModule {
         message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
       })
 
-      // Generate Runtime v4 conf/* files for BOTH compile-only and upload flows.
-      // Without this, compile-only never produces ethercat.json (and other configs),
-      // so users who only want the generated sources miss runtime configuration.
+      // Build the runtime v4 upload bundle through the shared composer
+      // (`composeRuntimeV4Bundle`).  Web routes through the same code
+      // path — single source of truth for the upload zip contract.  All
+      // pre-v4 scatter writes (c_blocks.h, c_blocks_code.cpp,
+      // strucpp_runtime/include/*, defines.h, conf/*) are skipped for v4
+      // boards above and emitted here in one go so the file list is
+      // structurally identical to web's.
+      //
+      // Idempotent for compile-only: the composer's output is written
+      // to disk under `sourceTargetFolderPath`, exactly where the
+      // pre-refactor scatter writes used to land — diffing build/<target>/src
+      // pre- vs post-refactor should produce no changes for any test
+      // project.
       if (isRuntimeV4) {
         try {
-          // defines.h next to generated.cpp — picked up by the v4 runtime
-          // shim (core/strucpp_runtime/runtime_v4_entry.cpp) via
-          // __has_include so strucpp_program_md5 reflects the program
-          // currently loaded. FC 0x45 (DEBUG_GET_MD5) returns this so the
-          // editor can verify it's debugging the matching source. Macro
-          // name matches the Arduino sketch's PROGRAM_MD5 convention.
-          if (buildMD5Hash) {
-            await writeFile(
-              join(sourceTargetFolderPath, 'defines.h'),
-              `#pragma once\n// Program MD5\n#define PROGRAM_MD5 "${buildMD5Hash}"\n`,
-              { encoding: 'utf8' },
-            )
-          }
           await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
           })
-          await this.handleGenerateModbusSlaveConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
+
+          // Two POU shapes: the header generator wants
+          // `{ name, variables }`, the code generator needs the full
+          // `{ name, code, variables }`.  Build both views once so
+          // the composer inputs read cleanly.
+          const originalCppPous = (projectData as ProjectDataWithCppPous).originalCppPous ?? []
+          const hasCppCode = originalCppPous.length > 0
+          const cppPousHeader = originalCppPous.map((pou) => ({
+            name: pou.name,
+            variables: pou.variables,
+          })) as CppPouDataHeader[]
+
+          // Modbus slave / master / S7Comm: pure helpers, no I/O —
+          // call them directly here and hand the strings to the
+          // composer.  `null` from any of them means the project has
+          // no config of that type, which the composer skips.
+          const modbusSlaveJson = generateModbusSlaveConfig(
+            projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
+          )
+          const modbusMasterJson = generateModbusMasterConfig(
+            projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
+          )
+          const s7CommJson = generateS7CommConfig(projectData.servers)
+
+          // OPC-UA needs strucpp's `generated_debug.cpp` to resolve
+          // `%I/%Q/%M` addresses — pull it from the in-memory
+          // strucpp file map (kept around from the strucpp emit step
+          // above so the composer doesn't have to re-read every
+          // artefact off disk).  Mirrors web's flow.
+          const debugMapContent = strucppEmittedFiles['generated_debug.cpp'] ?? ''
+          const instances = projectData.configuration.resource.instances.map((inst) => ({
+            name: inst.name,
+            task: inst.task,
+            program: inst.program,
+          }))
+          let opcUaJson: string | null = null
+          try {
+            opcUaJson = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
+              _mainProcessPort.postMessage({ logLevel: 'info', message: msg }),
+            )
+          } catch (error) {
+            if (error instanceof OpcUaConfigError) {
+              _mainProcessPort.postMessage({
+                logLevel: 'error',
+                message: `OPC-UA Configuration Error:\n${error.message}`,
+              })
+            } else {
+              _mainProcessPort.postMessage({
+                logLevel: 'error',
+                message: `Failed to generate OPC-UA config: ${getErrorMessage(error)}`,
+              })
+            }
+            throw error
+          }
+
+          // EtherCAT: validate up-front so a bad config aborts the
+          // compile before the composer runs — same gate web has.
+          const ethercatJson = generateEthercatConfig(projectData.remoteDevices)
+          const ethercatErrors = validateEthercatConfig(ethercatJson)
+          if (ethercatErrors.length > 0) {
+            throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
+          }
+
+          // ST source — read from disk since handleGenerateXMLfromJSON
+          // + xml2st wrote it earlier in the pipeline.
+          const programStContent = await readFile(join(sourceTargetFolderPath, 'program.st'), 'utf-8')
+
+          const bundleFiles = composeRuntimeV4Bundle({
+            programSt: programStContent,
+            md5: buildMD5Hash ?? '',
+            strucppFiles: strucppEmittedFiles,
+            cBlocks: {
+              header: hasCppCode ? generateCBlocksHeader(cppPousHeader) : '// Empty file\n',
+              code: hasCppCode ? generateCBlocksCode(originalCppPous) : null,
+            },
+            strucppRuntimeHeaders: await this.loadStrucppRuntimeHeaders(),
+            confs: {
+              modbusSlave: modbusSlaveJson,
+              modbusMaster: modbusMasterJson,
+              s7Comm: s7CommJson,
+              opcUa: opcUaJson,
+              // `validateEthercatConfig` above guarantees a non-null
+              // payload by here; coerce for the composer's required
+              // `string` shape.
+              ethercat: ethercatJson ?? '',
+            },
           })
-          await this.handleGenerateModbusMasterConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
+
+          // Write each composer-emitted file to disk under
+          // `sourceTargetFolderPath`.  Nested paths (e.g.
+          // `strucpp_runtime/include/iec_std_lib.hpp`,
+          // `conf/modbus_slave.json`) need their parent directories
+          // created first — mkdir recursive is idempotent.
+          await Promise.all(
+            Object.entries(bundleFiles).map(async ([relativePath, content]) => {
+              const absolutePath = join(sourceTargetFolderPath, relativePath)
+              await mkdir(path.dirname(absolutePath), { recursive: true })
+              await writeFile(absolutePath, content, { encoding: 'utf8' })
+            }),
+          )
+          _mainProcessPort.postMessage({
+            logLevel: 'info',
+            message: `Runtime v4 bundle composed: ${Object.keys(bundleFiles).length} files written under ${sourceTargetFolderPath}`,
           })
-          await this.handleGenerateS7CommConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-          await this.handleGenerateOpcUaConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-          await this.handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-          // VPP plugin config + source copy for boards whose target is runtime-v4
+
+          // VPP plugin config + source copy for boards whose target is runtime-v4.
+          // Runs after the composer so VPP-provided files land on top of
+          // the composer's writes (today no overlap; if VPP ever ships a
+          // file the composer also emits, ordering preserves VPP).
           await this.handleVendorPluginPackaging(
             boardTarget,
             normalizedProjectPath,
