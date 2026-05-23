@@ -16,17 +16,18 @@ import { promisify } from 'node:util'
 // the shared `runProgramBuildPipeline`.
 type StrucppCompileError = import('strucpp').CompileError
 
-import {
-  composeVerificationProject,
-  libraryBuildFromTranspiledSt,
-  prepareXmlForLibraryBuild,
-} from '@root/backend/shared/library/build-pipeline'
-import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import {
   describeIncompatibleRuntime,
   isStrucppCompatibleRuntime,
 } from '@root/backend/shared/firmware/runtime-version-gate'
+import {
+  composeVerificationProject,
+  libraryBuildFromTranspiledSt,
+  prepareXmlForLibraryBuild,
+} from '@root/backend/shared/library/build-pipeline'
+import { pollRuntimeCompilation } from '@root/backend/shared/library/poll-runtime-compilation'
+import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
@@ -2352,80 +2353,39 @@ class CompilerModule {
                     })
                   }
 
-                  const pollCompilationStatus = async (): Promise<'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR'> => {
-                    let lastLogCount = 0
-                    let finalResult: 'SUCCESS' | 'FAILED' | 'TIMEOUT' | 'ERROR' | null = null
-                    const startTime = Date.now()
-                    const timeout = CompilerModule.COMPILATION_STATUS_TIMEOUT_MS
-                    const pollInterval = CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS
-
-                    while (finalResult === null) {
-                      if (Date.now() - startTime > timeout) {
-                        _mainProcessPort.postMessage({
-                          logLevel: 'error',
-                          message: 'Compilation status polling timed out after 20 minutes.',
-                        })
-                        finalResult = 'TIMEOUT'
-                        continue
-                      }
-
-                      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-
-                      try {
-                        const result = await mainProcessBridge.makeRuntimeApiRequest<{
-                          status: string
-                          logs: string[]
-                          exit_code: number | null
-                        }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
-                          return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
-                        })
-
-                        if (!result.success) {
-                          _mainProcessPort.postMessage({
-                            logLevel: 'error',
-                            message: `Error polling compilation status: ${result.error}`,
+                  // Shared poller — same logic runs on openplc-web.
+                  // Editor injects the IPC-bridged HTTPS call as the
+                  // `fetchStatus` callback; the poll loop, log
+                  // dedup, level parsing, deadlines, and
+                  // consecutive-error guard live in the shared
+                  // module.  See
+                  // `backend/shared/library/poll-runtime-compilation.ts`.
+                  const pollCompilationStatus = () =>
+                    pollRuntimeCompilation({
+                      fetchStatus: async () => {
+                        try {
+                          const result = await mainProcessBridge.makeRuntimeApiRequest<{
+                            status: string
+                            logs: string[]
+                            exit_code: number | null
+                          }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
+                            return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
                           })
-                          finalResult = 'ERROR'
-                          continue
+                          if (!result.success) return { success: false, error: result.error }
+                          return { success: true, data: result.data! }
+                        } catch (pollError) {
+                          return {
+                            success: false,
+                            error: pollError instanceof Error ? pollError.message : String(pollError),
+                          }
                         }
-
-                        const { status, logs, exit_code } = result.data!
-
-                        if (logs.length > lastLogCount) {
-                          const newLogs = logs.slice(lastLogCount)
-                          newLogs.forEach((log) => {
-                            const { level, cleanedMessage } = this.parseLogLevel(log)
-                            _mainProcessPort.postMessage({
-                              logLevel: level,
-                              message: cleanedMessage,
-                            })
-                          })
-                          lastLogCount = logs.length
-                        }
-
-                        if (status === 'SUCCESS') {
-                          _mainProcessPort.postMessage({
-                            logLevel: 'info',
-                            message: `Compilation completed successfully (exit code: ${exit_code ?? 0}).`,
-                          })
-                          finalResult = 'SUCCESS'
-                        } else if (status === 'FAILED') {
-                          _mainProcessPort.postMessage({
-                            logLevel: 'error',
-                            message: `Compilation failed (exit code: ${exit_code ?? 1}).`,
-                          })
-                          finalResult = 'FAILED'
-                        }
-                      } catch (pollError) {
-                        _mainProcessPort.postMessage({
-                          logLevel: 'error',
-                          message: `Error polling compilation status: ${pollError instanceof Error ? pollError.message : String(pollError)}`,
-                        })
-                        finalResult = 'ERROR'
-                      }
-                    }
-                    return finalResult
-                  }
+                      },
+                      onLog: (level, message) => {
+                        _mainProcessPort.postMessage({ logLevel: level, message })
+                      },
+                      timeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
+                      pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
+                    })
 
                   /**
                    * Send START to the runtime after a successful build, retrying on
