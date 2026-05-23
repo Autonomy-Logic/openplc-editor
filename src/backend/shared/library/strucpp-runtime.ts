@@ -20,6 +20,16 @@
  *   load tree clean for tests; the real consumer paths pay the
  *   require cost once on first call.  Webpack handles the same
  *   `require('strucpp')` as a static dependency at bundle time.
+ *
+ *   Vite caveat: `require()` in source isn't covered by Vite's
+ *   commonjs interop in the browser bundle and silently returns
+ *   `undefined`, so web's compile path can't go through this
+ *   loader for the bundled-archive parse step.  Web's
+ *   `middleware/adapters/web/services/bundled-stlibs.ts` imports
+ *   `loadStlibFromString` from `strucpp` directly via static ESM —
+ *   that file is web-platform-only so editor's Jest never resolves
+ *   it.  The shared `parseStlibArchive` helper here remains for the
+ *   editor's main-process callers (which Webpack handles).
  */
 
 /**
