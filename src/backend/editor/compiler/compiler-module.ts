@@ -1667,7 +1667,7 @@ class CompilerModule {
       extraCxxFlags: cxxFlags,
       handleOutputData,
     })
-    const { archDir: precompiledArchDir } = await this.installAsArduinoLibrary({
+    const { libraryDir: precompiledLibDir, archDir: precompiledArchDir } = await this.installAsArduinoLibrary({
       compilationPath,
       archivePath,
       toolchainArch,
@@ -1676,9 +1676,11 @@ class CompilerModule {
     // Shared with openplc-web's compiler-adapter — single source of truth for
     // arduino-cli compile argv composition. We append our overrides after:
     // --fqbn (effective with platformOptions), VPP-resolved cxx_flags into
-    // compiler.cpp.extra_flags, and compiler.libraries.ldflags injecting
-    // -L<archDir> -lOpenPLCUserLib (arduino-cli doesn't auto-emit -L/-l for
-    // libraries marked precompiled=full).
+    // compiler.cpp.extra_flags, --library pointing at the staged precompiled
+    // OpenPLCUserLib (so arduino-cli's discovery finds the header via
+    // Baremetal.ino's #include <OpenPLCUserLib.h>), and compiler.libraries.
+    // ldflags injecting -L<archDir> -lOpenPLCUserLib (arduino-cli doesn't
+    // auto-emit -L/-l for libraries marked precompiled=full).
     const cxxFlagsArg = cxxFlags.length > 0 ? ['--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`] : []
     const buildProjectFlags = [
       ...buildArduinoCliCompileArgs(boardHalsContent, {
@@ -1690,6 +1692,8 @@ class CompilerModule {
       '--fqbn',
       effectiveFqbn,
       ...cxxFlagsArg,
+      '--library',
+      precompiledLibDir,
       '--build-property',
       `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
