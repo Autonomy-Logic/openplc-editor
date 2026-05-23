@@ -2260,12 +2260,13 @@ class CompilerModule {
           )
           const s7CommJson = generateS7CommConfig(projectData.servers)
 
-          // OPC-UA needs strucpp's `generated_debug.cpp` to resolve
-          // `%I/%Q/%M` addresses — pull it from the in-memory
-          // strucpp file map (kept around from the strucpp emit step
-          // above so the composer doesn't have to re-read every
-          // artefact off disk).  Mirrors web's flow.
-          const debugMapContent = strucppEmittedFiles['generated_debug.cpp'] ?? ''
+          // OPC-UA needs strucpp's `debug-map.json` (NOT
+          // `generated_debug.cpp`) to resolve `%I/%Q/%M` addresses —
+          // `parseDebugMap` in `frontend/utils/opcua/` expects the
+          // JSON shape strucpp emits at that filename.  Pull it from
+          // the in-memory strucpp file map so the composer doesn't
+          // have to re-read every artefact off disk.
+          const debugMapContent = strucppEmittedFiles['debug-map.json'] ?? ''
           const instances = projectData.configuration.resource.instances.map((inst) => ({
             name: inst.name,
             task: inst.task,
