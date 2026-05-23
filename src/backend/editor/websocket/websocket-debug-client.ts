@@ -1,5 +1,5 @@
+import { buildGetMd5Request, parseGetMd5Response } from '@root/backend/shared/debug/modbus-pdu'
 import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
-import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { io, Socket } from 'socket.io-client'
 
@@ -89,16 +89,14 @@ export class WebSocketDebugClient {
       throw new Error('Not connected to target')
     }
 
-    const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
-    const endiannessCheck = 0xdead
-
-    const request = Buffer.alloc(5)
-    request.writeUInt8(functionCode, 0)
-    request.writeUInt16BE(endiannessCheck, 1)
-    request.writeUInt8(0, 3)
-    request.writeUInt8(0, 4)
-
-    const commandHex = this.bufferToHexString(request)
+    // Shared builders + parser — same code openplc-web routes
+    // through.  The 2-byte 0xDEAD endianness sentinel the runtime
+    // appends after the MD5 chars is stripped here AND classifies
+    // target endian; without that, TextDecoder spilled two U+FFFD
+    // replacement chars into the cached MD5 string and verification
+    // always failed.  See `backend/shared/debug/modbus-pdu.ts`.
+    const pdu = buildGetMd5Request()
+    const commandHex = this.bufferToHexString(Buffer.from(pdu))
 
     return new Promise((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
@@ -121,35 +119,11 @@ export class WebSocketDebugClient {
 
         try {
           const responseBuffer = this.hexStringToBuffer(response.data)
-
-          if (responseBuffer.length < 2) {
-            reject(new Error('Invalid response: too short'))
-            return
-          }
-
-          const responseFunctionCode = responseBuffer.readUInt8(0)
-          const statusCode = responseBuffer.readUInt8(1)
-
-          if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_GET_MD5 as number)) {
-            reject(new Error('Function code mismatch'))
-            return
-          }
-
-          if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-            reject(new Error(`Target returned error code: 0x${statusCode.toString(16)}`))
-            return
-          }
-
-          // Response trailer is a 2-byte runtime-driven sentinel: the
-          // runtime stores the literal 0xDEAD through a native
-          // uint16_t, so the bytes reflect target byte order.
-          const trailerHi = responseBuffer.readUInt8(responseBuffer.length - 2)
-          const trailerLo = responseBuffer.readUInt8(responseBuffer.length - 1)
-          const targetEndian = detectTargetEndian(trailerHi, trailerLo)
-
-          const md5Region = responseBuffer.slice(2, responseBuffer.length - 2)
-          const md5 = md5Region.toString('utf-8').replace(/\0+$/, '').trim()
-          resolve({ md5, targetEndian })
+          // Buffer is a Uint8Array subclass — pass-through into the
+          // shared parser.  Errors (function-code mismatch, status,
+          // length) surface as exceptions that the catch below turns
+          // into a reject.
+          resolve(parseGetMd5Response(new Uint8Array(responseBuffer)))
         } catch (error) {
           reject(error instanceof Error ? error : new Error(getErrorMessage(error)))
         }
