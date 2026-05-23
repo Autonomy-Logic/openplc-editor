@@ -202,6 +202,49 @@ describe('CompilerModule', () => {
     })
   })
 
+  describe('synthesizeSimulatorPinMapping (Simulator pin layout from hals.json)', () => {
+    it('parses the comma-separated default_* strings into typed DevicePin entries', () => {
+      const pins = CompilerModule.synthesizeSimulatorPinMapping({
+        default_din: '62, 63, 64, 65',
+        default_dout: '14, 15, 16',
+        default_ain: 'A0, A1',
+        default_aout: '2, 3',
+      })
+      // Order: digitalInput, analogInput, digitalOutput, analogOutput
+      expect(pins.map((p) => p.pin)).toEqual(['62', '63', '64', '65', 'A0', 'A1', '14', '15', '16', '2', '3'])
+      expect(pins.map((p) => p.pinType)).toEqual([
+        'digitalInput',
+        'digitalInput',
+        'digitalInput',
+        'digitalInput',
+        'analogInput',
+        'analogInput',
+        'digitalOutput',
+        'digitalOutput',
+        'digitalOutput',
+        'analogOutput',
+        'analogOutput',
+      ])
+    })
+
+    it('skips empty/whitespace entries so a trailing comma does not produce a blank pin', () => {
+      const pins = CompilerModule.synthesizeSimulatorPinMapping({
+        default_din: '62,  ,63,',
+        default_dout: '',
+        default_ain: '',
+        default_aout: '',
+      })
+      expect(pins).toEqual([
+        { pin: '62', pinType: 'digitalInput', address: '', alias: '' },
+        { pin: '63', pinType: 'digitalInput', address: '', alias: '' },
+      ])
+    })
+
+    it('returns an empty list when the board declares no pin defaults', () => {
+      expect(CompilerModule.synthesizeSimulatorPinMapping({})).toEqual([])
+    })
+  })
+
   describe('installAsArduinoLibrary (precompiled library layout)', () => {
     const fs = jest.requireActual('node:fs') as typeof import('node:fs')
     const fsPromises = jest.requireActual('node:fs/promises') as typeof import('node:fs/promises')
@@ -226,7 +269,7 @@ describe('CompilerModule', () => {
       const { libraryDir, archDir } = await compilerModule.installAsArduinoLibrary({
         compilationPath: tempCompilationPath,
         archivePath: dummyArchivePath,
-        toolchainArch: 'cortex-m7',
+        archCandidates: ['cortex-m7'],
       })
       expect(libraryDir.startsWith(jest.requireActual('node:os').tmpdir())).toBe(true)
       expect(libraryDir).not.toMatch(/\s/)
@@ -236,11 +279,25 @@ describe('CompilerModule', () => {
       expect(fs.existsSync(join(archDir, 'libOpenPLCUserLib.a'))).toBe(true)
     })
 
+    it('lays the archive under every candidate subdir so arduino-cli finds it regardless of per-core convention', async () => {
+      const { libraryDir } = await compilerModule.installAsArduinoLibrary({
+        compilationPath: tempCompilationPath,
+        archivePath: dummyArchivePath,
+        // AVR Mega exposes build.mcu=atmega2560 + build.arch=AVR; arduino-cli
+        // picks atmega2560 for the precompiled-lib subdir on this core, while
+        // mbed cores pick build.architecture (e.g. cortex-m7). Writing to both
+        // dirs sidesteps the per-core mapping.
+        archCandidates: ['atmega2560', 'avr'],
+      })
+      expect(fs.existsSync(join(libraryDir, 'src', 'atmega2560', 'libOpenPLCUserLib.a'))).toBe(true)
+      expect(fs.existsSync(join(libraryDir, 'src', 'avr', 'libOpenPLCUserLib.a'))).toBe(true)
+    })
+
     it('marks the library as precompiled=full so arduino-cli skips source compilation', async () => {
       const { libraryDir } = await compilerModule.installAsArduinoLibrary({
         compilationPath: tempCompilationPath,
         archivePath: dummyArchivePath,
-        toolchainArch: 'avr',
+        archCandidates: ['avr'],
       })
       const props = fs.readFileSync(join(libraryDir, 'library.properties'), 'utf-8')
       expect(props).toMatch(/^precompiled=full$/m)
@@ -252,7 +309,7 @@ describe('CompilerModule', () => {
       const { libraryDir } = await compilerModule.installAsArduinoLibrary({
         compilationPath: tempCompilationPath,
         archivePath: dummyArchivePath,
-        toolchainArch: 'cortex-m7',
+        archCandidates: ['cortex-m7'],
       })
       const header = fs.readFileSync(join(libraryDir, 'src', 'OpenPLCUserLib.h'), 'utf-8')
       expect(header).toContain('#pragma once')
@@ -264,7 +321,7 @@ describe('CompilerModule', () => {
       const { libraryDir } = await compilerModule.installAsArduinoLibrary({
         compilationPath: tempCompilationPath,
         archivePath: dummyArchivePath,
-        toolchainArch: 'cortex-m4',
+        archCandidates: ['cortex-m4'],
       })
       // Reset-on-stage-collision is documented in the method; the pid suffix
       // is what prevents a concurrent process from deleting our staging dir

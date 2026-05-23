@@ -111,7 +111,7 @@ import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PackageManifest } from '../package-manager'
-import { BoardInfoResolver } from '../hardware'
+import { type BoardBuildInfo, BoardInfoResolver } from '../hardware'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
@@ -274,6 +274,33 @@ class CompilerModule {
       properties[line.slice(0, eqIdx)] = line.slice(eqIdx + 1)
     }
     return properties
+  }
+
+  // Synthesise the simulator's pin mapping from its hals.json default_*
+  // strings. The simulator HAL (simulator.cpp) expects PINMASK_DIN/DOUT/AIN/AOUT
+  // populated, but those values are a property of the virtual device — not
+  // of the user's project. The UI already hides the pin table when Simulator
+  // is selected; this override makes the compile path follow the same rule
+  // so a stale pin saved from a previous board doesn't poison the build.
+  static synthesizeSimulatorPinMapping(boardEntry: {
+    default_din?: string
+    default_dout?: string
+    default_ain?: string
+    default_aout?: string
+  }): DevicePin[] {
+    const parse = (s: string | undefined): string[] =>
+      s
+        ? s
+            .split(',')
+            .map((p) => p.trim())
+            .filter(Boolean)
+        : []
+    const pins: DevicePin[] = []
+    for (const pin of parse(boardEntry.default_din)) pins.push({ pin, pinType: 'digitalInput', address: '', alias: '' })
+    for (const pin of parse(boardEntry.default_ain)) pins.push({ pin, pinType: 'analogInput', address: '', alias: '' })
+    for (const pin of parse(boardEntry.default_dout)) pins.push({ pin, pinType: 'digitalOutput', address: '', alias: '' })
+    for (const pin of parse(boardEntry.default_aout)) pins.push({ pin, pinType: 'analogOutput', address: '', alias: '' })
+    return pins
   }
 
   // ############################################################################
@@ -1173,11 +1200,20 @@ class CompilerModule {
     // INFO: If null, only the define value
     // 3.3. IO Config defines
     DEFINES_CONTENT += '//IO Config\n'
+    // Simulator overrides the project's pin-mapping with the board's canonical
+    // hals.json default_* layout. The pin-mapping table is hidden in the UI for
+    // this target, but the file persists so switching back to a real board
+    // preserves the user's wiring. Sourcing from hals.json here keeps the
+    // compile aligned with what the UI advertises.
+    const effectivePinMapping =
+      boardRuntime === 'simulator' && boardEntry
+        ? CompilerModule.synthesizeSimulatorPinMapping(boardEntry)
+        : devicePinMapping
     // INFO: This approach assumes that the pins are sorted.
-    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
-    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
-    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
-    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
+    const digitalInputPins = effectivePinMapping.filter((pin) => pin.pinType === 'digitalInput')
+    const analogInputPins = effectivePinMapping.filter((pin) => pin.pinType === 'analogInput')
+    const digitalOutputPins = effectivePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
+    const analogOutputPins = effectivePinMapping.filter((pin) => pin.pinType === 'analogOutput')
 
     DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
     DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`
@@ -1257,15 +1293,20 @@ class CompilerModule {
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
 
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    // Source the HAL .cpp from BoardInfoResolver so the same code path works
+    // for legacy hals.json entries and installed VPP packages (where only
+    // Simulator / Runtime v3 / Runtime v4 remain in hals.json; every Arduino
+    // board lives in a VPP).
+    const resolver = new BoardInfoResolver(this.halsFilePath, this.sourceDirectoryPath, new PackageManagerModule())
+    const info = await resolver.resolve(boardTarget)
+    if (!info.halSourceFile) {
+      throw new Error(`Board "${boardTarget}" does not declare a HAL source file`)
+    }
 
-    const boardSourceFile = halsFileContent[boardTarget]['source']
-
-    const boardSourceFilePath = join(this.sourceDirectoryPath, 'hal', boardSourceFile)
     const arduinoCppFilePath = join(projectPath, 'build', boardTarget, 'src', 'arduino.cpp')
 
     try {
-      await cp(boardSourceFilePath, arduinoCppFilePath, { recursive: true })
+      await cp(info.halSourceFile, arduinoCppFilePath, { recursive: true })
       result = { success: true, data: arduinoCppFilePath }
     } catch (error) {
       throw new Error(`Error copying Arduino source file: ${(error as Error).message}`)
@@ -1429,7 +1470,7 @@ class CompilerModule {
     fqbn: string
     extraCxxFlags?: string[]
     handleOutputData: HandleOutputDataCallback
-  }): Promise<{ archivePath: string; toolchainArch: string; objectFiles: string[] }> {
+  }): Promise<{ archivePath: string; archCandidates: string[]; objectFiles: string[] }> {
     const tcProps = await this.extractToolchainProperties(fqbn)
 
     const srcDir = join(compilationPath, 'src')
@@ -1538,20 +1579,32 @@ class CompilerModule {
       'info',
     )
 
-    // build.architecture (mbed: cortex-m7, lowercase) preferred over build.arch
-    // (AVR/SAMD: uppercased). Lowercase is the Arduino precompiled-lib convention.
-    const toolchainArch = (
-      tcProps.properties['build.architecture'] ??
-      tcProps.properties['build.arch'] ??
-      'unknown'
-    ).toLowerCase()
+    // arduino-cli's precompiled-lib resolution picks ONE subdir per core,
+    // and the convention varies: AVR uses build.mcu ("atmega2560"), mbed
+    // uses build.architecture ("cortex-m7"), others fall back to build.arch.
+    // We collect every candidate so installAsArduinoLibrary can lay the
+    // archive under all of them — duplicating a few-hundred-KB file in the
+    // /tmp staging is cheaper than maintaining a per-core mapping. The
+    // first entry doubles as the canonical `archDir` used for -L injection.
+    const archCandidates = Array.from(
+      new Set(
+        [
+          tcProps.properties['build.mcu'],
+          tcProps.properties['build.architecture'],
+          tcProps.properties['build.arch'],
+        ]
+          .filter((s): s is string => Boolean(s))
+          .map((s) => s.toLowerCase()),
+      ),
+    )
+    if (archCandidates.length === 0) archCandidates.push('unknown')
 
     handleOutputData(
-      `[precompile] Pre-compile complete (${objectFiles.length} TUs → libOpenPLCUserLib.a, arch=${toolchainArch})`,
+      `[precompile] Pre-compile complete (${objectFiles.length} TUs → libOpenPLCUserLib.a, archs=${archCandidates.join(',')})`,
       'info',
     )
 
-    return { archivePath, toolchainArch, objectFiles }
+    return { archivePath, archCandidates, objectFiles }
   }
 
   // Wrap the precompiled archive as an Arduino library so arduino-cli's
@@ -1563,12 +1616,16 @@ class CompilerModule {
   async installAsArduinoLibrary({
     compilationPath,
     archivePath,
-    toolchainArch,
+    archCandidates,
   }: {
     compilationPath: string
     archivePath: string
-    toolchainArch: string
+    archCandidates: string[]
   }): Promise<{ libraryDir: string; archDir: string }> {
+    if (archCandidates.length === 0) {
+      throw new Error('installAsArduinoLibrary: archCandidates must contain at least one entry')
+    }
+
     // Hash isolates concurrent compiles of different boards; pid suffix
     // isolates concurrent compiles of the SAME board across processes so
     // the rm-then-mkdir reset below never deletes another process's stage.
@@ -1576,15 +1633,22 @@ class CompilerModule {
     const stagingRoot = join(os.tmpdir(), `openplc-precompile-${buildHash}-${process.pid}`)
     const libraryDir = join(stagingRoot, 'OpenPLCUserLib')
     const srcDir = join(libraryDir, 'src')
-    const archDir = join(srcDir, toolchainArch)
 
     // Wipe leftover from a previous compile so a stale .a doesn't shadow a
     // fresh one (e.g. when the board switches between toolchains).
     await fs.rm(stagingRoot, { recursive: true, force: true })
-    await mkdir(archDir, { recursive: true })
 
-    const targetArchive = join(archDir, 'libOpenPLCUserLib.a')
-    await cp(archivePath, targetArchive)
+    // Lay the archive under every candidate subdir — arduino-cli's
+    // precompiled-lib resolver picks ONE based on a per-core convention
+    // (build.mcu for AVR, build.architecture for mbed, etc.). The first
+    // candidate is treated as canonical for the returned archDir, which is
+    // what -L points to via compiler.libraries.ldflags.
+    const archDir = join(srcDir, archCandidates[0])
+    for (const arch of archCandidates) {
+      const candidateDir = join(srcDir, arch)
+      await mkdir(candidateDir, { recursive: true })
+      await cp(archivePath, join(candidateDir, 'libOpenPLCUserLib.a'))
+    }
 
     const propsContent = [
       'name=OpenPLCUserLib',
@@ -1661,7 +1725,7 @@ class CompilerModule {
     const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
     if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
 
-    const { archivePath, toolchainArch } = await this.handlePrecompileUserLib({
+    const { archivePath, archCandidates } = await this.handlePrecompileUserLib({
       compilationPath,
       fqbn: effectiveFqbn,
       extraCxxFlags: cxxFlags,
@@ -1670,20 +1734,35 @@ class CompilerModule {
     const { libraryDir: precompiledLibDir, archDir: precompiledArchDir } = await this.installAsArduinoLibrary({
       compilationPath,
       archivePath,
-      toolchainArch,
+      archCandidates,
     })
 
     // Shared with openplc-web's compiler-adapter — single source of truth for
-    // arduino-cli compile argv composition. We append our overrides after:
-    // --fqbn (effective with platformOptions), VPP-resolved cxx_flags into
-    // compiler.cpp.extra_flags, --library pointing at the staged precompiled
-    // OpenPLCUserLib (so arduino-cli's discovery finds the header via
-    // Baremetal.ino's #include <OpenPLCUserLib.h>), and compiler.libraries.
-    // ldflags injecting -L<archDir> -lOpenPLCUserLib (arduino-cli doesn't
-    // auto-emit -L/-l for libraries marked precompiled=full).
+    // arduino-cli compile argv composition. The compile entry is synthesised
+    // from BoardInfoResolver's BoardBuildInfo (covers legacy hals.json AND
+    // VPP boards uniformly); the boardHalsContent argument stays on the
+    // signature for backward compat but is no longer the data source — for
+    // VPP-installed boards it would be undefined.
+    //
+    // After the shared helper composes its baseline args we append:
+    //   --fqbn (effective with platformOptions applied),
+    //   compiler.cpp.extra_flags (VPP cxx_flags),
+    //   --library <precompiledLibDir> (so arduino-cli's discovery finds the
+    //     header via Baremetal.ino's #include <OpenPLCUserLib.h>),
+    //   compiler.libraries.ldflags=-L<archDir> -lOpenPLCUserLib (arduino-cli
+    //     doesn't auto-emit -L/-l for libraries marked precompiled=full).
+    const compileEntry = {
+      platform: info.platform,
+      core: info.core,
+      c_flags: info.compilerFlags?.c_flags,
+      cxx_flags: info.compilerFlags?.cxx_flags,
+      ld_flags: info.compilerFlags?.ld_flags,
+      max_data_size: info.maxDataSize,
+    }
+    void boardHalsContent // accepted for signature compat; data comes from `info`
     const cxxFlagsArg = cxxFlags.length > 0 ? ['--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`] : []
     const buildProjectFlags = [
-      ...buildArduinoCliCompileArgs(boardHalsContent, {
+      ...buildArduinoCliCompileArgs(compileEntry, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
         libraryPath: join(compilationPath, 'src'),
         avrLibStdCppInclude,
@@ -2433,6 +2512,18 @@ class CompilerModule {
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
 
     const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    // Resolve unified board info upfront so upload-step lookups work for VPP
+    // boards too (hals.json only contains Simulator / Runtime v3 / Runtime v4
+    // after the VPP migration; every Arduino board lives in a VPP manifest).
+    // Done lazily — only computed when boardTarget is known to be an
+    // arduino-cli target downstream; runtime-v4 / simulator paths don't need it.
+    let resolvedBoardInfo: BoardBuildInfo | null = null
+    const getResolvedBoardInfo = async (): Promise<BoardBuildInfo> => {
+      if (resolvedBoardInfo) return resolvedBoardInfo
+      const resolver = new BoardInfoResolver(this.halsFilePath, this.sourceDirectoryPath, new PackageManagerModule())
+      resolvedBoardInfo = await resolver.resolve(boardTarget)
+      return resolvedBoardInfo
+    }
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
@@ -3161,9 +3252,14 @@ class CompilerModule {
         return
       }
       // For simulator targets, send the HEX firmware path back to the renderer.
-      // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
-      // so it stays in sync with the hals.json entry.
-      const fqbnSubDir = halsContent[boardTarget]['platform'].replaceAll(':', '.')
+      // Derive the build sub-directory from the resolved platform FQBN (e.g.
+      // "arduino:avr:mega" → "arduino.avr.mega"). The resolver covers both
+      // legacy hals.json entries and VPP boards.
+      const simulatorInfo = await getResolvedBoardInfo()
+      if (!simulatorInfo.platform) {
+        throw new Error(`Board "${boardTarget}" does not declare a platform (FQBN)`)
+      }
+      const fqbnSubDir = simulatorInfo.platform.replaceAll(':', '.')
       const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
       _mainProcessPort.postMessage({
         logLevel: 'info',
@@ -3180,9 +3276,13 @@ class CompilerModule {
     if (!compileOnly) {
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
       try {
+        const uploadInfo = await getResolvedBoardInfo()
+        if (!uploadInfo.platform) {
+          throw new Error(`Board "${boardTarget}" does not declare a platform (FQBN)`)
+        }
         await this.handleUploadProgram({
           projectPath: normalizedProjectPath,
-          arduinoPlatform: halsContent[boardTarget]['platform'],
+          arduinoPlatform: uploadInfo.platform,
           compilationPath,
           handleOutputData: (data, logLevel) => {
             _mainProcessPort.postMessage({ logLevel, message: data })
