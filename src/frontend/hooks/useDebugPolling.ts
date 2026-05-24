@@ -253,15 +253,48 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // variable IDs trip `index >= lastIndex` on the first entry and
       // collapse the throughput to one variable per poll, which makes
       // related variables visibly desync as the round-robin sweeps.
+      //
+      // `loopReachedEnd` records whether the loop walked the full batch
+      // before exiting.  The early-exit paths below (bounds check, lastIndex
+      // cap) leave `pos` pointing at the FIRST unprocessed slot, so we
+      // capture that to advance the round-robin offset by exactly the
+      // positions the editor actually consumed.  See the offset-advancement
+      // block below this loop for why naive use of `lastIndex+1` strands
+      // the tail of the active set.
+      let positionsConsumed = 0
+      let loopReachedEnd = true
       for (let pos = 0; pos < batch.length; pos++) {
-        if (result.lastIndex !== undefined && pos > result.lastIndex) break
+        if (result.lastIndex !== undefined && pos > result.lastIndex) {
+          // Runtime processed fewer positions than the request; subsequent
+          // slots are valid but unread by the runtime, so they are also
+          // unread by us.  `positionsConsumed = pos` reflects exactly how
+          // far the runtime got.
+          loopReachedEnd = false
+          break
+        }
 
         const index = batch[pos]
         const meta = allLeaves.get(index)
-        if (!meta) continue
+        if (!meta) {
+          // No leaf metadata — the runtime still consumed the position
+          // (it doesn't know our index→type map).  Count it consumed and
+          // press on; the value bytes for this slot are forfeit.
+          positionsConsumed = pos + 1
+          continue
+        }
 
         const typeSize = getTypeSizeByName(meta.type)
-        if (bufferOffset + typeSize > responseBuffer.length) break
+        if (bufferOffset + typeSize > responseBuffer.length) {
+          // Response buffer ran out before we reached every position the
+          // runtime claims to have processed.  Stop here; do NOT advance
+          // past `pos`.  The next poll cycle retries from this same slot
+          // (round-robin offset += positionsConsumed below) so variables
+          // sitting at the tail of the active set still get their reads
+          // — which is the entire reason this is structured around
+          // `positionsConsumed` rather than `lastIndex+1`.
+          loopReachedEnd = false
+          break
+        }
 
         const isBool = meta.type === 'BOOL'
 
@@ -287,14 +320,34 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
           ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, 'ERR')
           bufferOffset += typeSize
         }
+        positionsConsumed = pos + 1
       }
 
-      // Advance the round-robin offset by positions the runtime touched
-      // (lastIndex + 1) rather than by entries we successfully parsed.
-      // Otherwise positions the runtime skipped (var_size == 0) would
-      // never advance the offset and we'd stick on them forever.
-      itemsProcessed =
-        result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
+      // Advance round-robin offset by what we actually consumed.
+      //
+      // Why not `lastIndex + 1`: the runtime reports how many positions
+      // IT touched, but if the response buffer truncated before we read
+      // them all (or if we broke out for any other reason) the editor's
+      // consumption is smaller.  Using `lastIndex+1` then strands every
+      // position past the truncation point — the offset wraps past the
+      // tail of `activeIndexes` and the next poll restarts at 0, never
+      // covering the dropped positions.  This was the root cause of
+      // "forced REAL at the tail of the active set reads as `-`": batch
+      // size 60 against an active set of 20 sent every poll as one shot,
+      // the response truncated short of position 19 (pid_tr), the offset
+      // advanced past 19 anyway, and pid_tr was unreachable for the life
+      // of the session.
+      //
+      // When the loop walked the full batch with no break, fall through
+      // to runtime's lastIndex+1 so positions the runtime skipped
+      // (var_size == 0, e.g. STRING stubs) still advance us.  Otherwise
+      // honor positionsConsumed so unread positions get retried.
+      if (loopReachedEnd) {
+        itemsProcessed =
+          result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
+      } else {
+        itemsProcessed = positionsConsumed
+      }
 
       // Only write to store when values actually changed
       if (changedBool.size > 0) workspaceActions.setDebugBoolValues(changedBool)
