@@ -4,7 +4,7 @@
     "repository": "Autonomy-Logic/xml2st"
   },
   "strucpp": {
-    "version": "v0.4.13",
+    "version": "v0.4.15",
     "repository": "Autonomy-Logic/STruCpp"
   }
 }
