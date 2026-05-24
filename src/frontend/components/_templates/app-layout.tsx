@@ -8,6 +8,7 @@ import { ResolutionWarning } from '../_atoms/resolution-warning-message'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
+import AboutModal from '../_organisms/about-modal'
 import { RuntimeCreateUserModal, RuntimeLoginModal } from '../_organisms/modals'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
@@ -121,6 +122,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
+          <AboutModal />
           <AcceleratorHandler />
         </main>
       </div>

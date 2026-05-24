@@ -75,6 +75,7 @@
     "label": "Help",
     "submenu": {
       "communitySupport": "Community support",
+      "documentation": "Documentation",
       "about": "About"
     }
   },

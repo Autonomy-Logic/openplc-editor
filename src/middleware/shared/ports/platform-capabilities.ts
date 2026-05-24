@@ -149,7 +149,7 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasLocalFilesystem: false,
   hasProjectExport: false,
   hasVersionControl: true,
-  hasAboutDialog: false,
+  hasAboutDialog: true,
   hasPythonLSP: false,
   // The STruC++ worker bundle runs in any modern browser; web's
   // stlib-source adapter (HTTP-backed, mirror of editor's IPC-backed
