@@ -3,6 +3,13 @@ import { CompilerModule } from './compiler-module'
 jest.mock('electron', () => ({
   app: {
     getPath: jest.fn().mockReturnValue('/tmp/mock-user-data'),
+    // In dev (the branch tests exercise — `isPackaged` is undefined/falsy
+    // through this mock), strucppRuntimeDir resolves under
+    // `<app-root>/node_modules/strucpp/src/runtime/include`; any
+    // non-empty string works for the type-asserting tests.
+    getAppPath: jest.fn().mockReturnValue('/tmp/mock-app-root'),
+    isPackaged: false,
+    getVersion: jest.fn().mockReturnValue('0.0.0-test'),
   },
   dialog: {
     showSaveDialog: jest.fn().mockResolvedValue({ filePath: '/tmp/mock-save-path' }),
@@ -42,7 +49,7 @@ describe('CompilerModule', () => {
     expect(typeof compilerModule.arduinoCliConfigurationFilePath).toBe('string')
     expect(Array.isArray(compilerModule.arduinoCliBaseParameters)).toBe(true)
     expect(typeof compilerModule.xml2stBinaryPath).toBe('string')
-    expect(typeof compilerModule.iec2cBinaryPath).toBe('string')
+    expect(typeof compilerModule.strucppRuntimeDir).toBe('string')
   })
 
   it('getHostHardwareInfo should return a string containing hardware info', () => {

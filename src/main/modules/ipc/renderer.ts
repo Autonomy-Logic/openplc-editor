@@ -18,13 +18,24 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-/** Data posted through the MessagePort by the compiler module. */
+/** Data posted through the MessagePort by the compiler module.
+ *  `compileError` carries strucpp's structured `CompileError` (pouName,
+ *  section, bodyLine, …) when the message is one of the per-error log
+ *  entries emitted by the strucpp compile failure path — the renderer
+ *  uses it to attach a click-to-open handler to the rendered line.
+ *  Absent for plain progress messages. */
 type CompilerPortMessage = {
   message?: string
   logLevel?: string
+  compileError?: import('strucpp').CompileError
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** Final structured outcome of a library build.  Set only on the
+   *  close-port message emitted by `compileLibrary`; absent from
+   *  intermediate log entries and from program-build / debug-build
+   *  callbacks. */
+  libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
 }
 
 /**
@@ -100,6 +111,38 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
+  /**
+   * Load all bundled .stlib archives. Returns parsed `StlibArchive`
+   * objects in alphabetical-filename order. Typed as `unknown[]` here
+   * so the IPC layer stays free of strucpp type imports — the
+   * LibraryPort consumer narrows to `StlibArchiveDTO[]`.
+   */
+  // ===================== LIBRARY MANAGER METHODS =====================
+  loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
+  listInstalledLibraries: (): Promise<
+    Array<{
+      name: string
+      version: string
+      bundled: boolean
+      installedAt: string
+      origin: 'stlib' | 'codesys' | 'bundled'
+      displayName?: string
+      description?: string
+      author?: string
+    }>
+  > => ipcRenderer.invoke('libraries:list-installed'),
+  installLibraryFromFile: (): Promise<
+    | { success: true; canceled?: false; name: string; version: string; origin: 'stlib' | 'codesys' }
+    | { success: true; canceled: true }
+    | { success: false; error: string }
+  > => ipcRenderer.invoke('libraries:install-from-file'),
+  uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('libraries:uninstall', name),
+  onLibrariesChanged: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('libraries:changed', listener)
+    return () => ipcRenderer.removeListener('libraries:changed', listener)
+  },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
@@ -169,6 +212,28 @@ const rendererProcessBridge = {
         closePort: true,
       }),
     )
+  },
+
+  /** Build the open Library Project into a `.stlib` archive.  Same
+   *  MessageChannel pattern as `runCompileProgram`.  Args:
+   *    [0] projectPath
+   *    [1] projectData preprocessed with `isSimulator: false` (full
+   *        Python-as-ST), used for the library build proper.
+   *    [2] projectData preprocessed with `isSimulator: true` (Python
+   *        as no-op stubs), used as input to the simulator-target
+   *        verification compile so it doesn't try to link Python
+   *        loader externs the AVR simulator runtime doesn't ship.
+   *    [3] cleanBuild flag (skips the verification cache).
+   *  Callback receives a stream of log messages and a final
+   *  `libraryBuildResult`. */
+  runCompileLibrary: (
+    compileArgs: Array<string | PLCProjectData | boolean>,
+    callback: (args: CompilerPortMessage) => void,
+  ) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
+    rendererProcessPort.addEventListener('close', () => callback({ closePort: true }))
   },
 
   // !! Deprecated: These methods are an outdated implementation and should be removed.
@@ -243,8 +308,35 @@ const rendererProcessBridge = {
   refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
+  // ===================== PACKAGE MANAGER METHODS =====================
+  importPackageFromFile: (): Promise<{
+    success: boolean
+    canceled?: boolean
+    packageId?: string
+    packageName?: string
+    devices?: string[]
+    error?: string
+  }> => ipcRenderer.invoke('packages:import-from-file'),
+  listInstalledPackages: (): Promise<
+    Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
+  > => ipcRenderer.invoke('packages:list-installed'),
+  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('packages:uninstall', packageId),
+  getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
+  onOpenPackageManager: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:open-manager', listener)
+    return () => ipcRenderer.removeListener('packages:open-manager', listener)
+  },
+  onBoardsUpdated: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:boards-updated', listener)
+    return () => ipcRenderer.removeListener('packages:boards-updated', listener)
+  },
+
   // ===================== UTILITY METHODS =====================
-  getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
+  getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
+    ipcRenderer.invoke('util:get-preview-image', image, packagePath),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
   readDebugFile: (
     projectPath: string,
@@ -326,21 +418,27 @@ const rendererProcessBridge = {
     success: boolean
     status?: string
     timingStats?: {
-      scan_count: number
-      scan_time_min: number | null
-      scan_time_max: number | null
-      scan_time_avg: number | null
-      cycle_time_min: number | null
-      cycle_time_max: number | null
-      cycle_time_avg: number | null
-      cycle_latency_min: number | null
-      cycle_latency_max: number | null
-      cycle_latency_avg: number | null
-      overruns: number
+      tasks: Array<{
+        name: string
+        scan_count: number
+        scan_time_min: number | null
+        scan_time_max: number | null
+        scan_time_avg: number | null
+        cycle_time_min: number | null
+        cycle_time_max: number | null
+        cycle_time_avg: number | null
+        cycle_latency_min: number | null
+        cycle_latency_max: number | null
+        cycle_latency_avg: number | null
+        overruns: number
+      }>
     }
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
-  runtimeStartPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
+  runtimeStartPlc: (
+    ipAddress: string,
+    jwtToken: string,
+  ): Promise<{ success: boolean; error?: string; status?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
   runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress, jwtToken),

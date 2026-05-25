@@ -1,10 +1,10 @@
 {
   "xml2st": {
-    "version": "v4.0.3",
+    "version": "v4.0.5",
     "repository": "Autonomy-Logic/xml2st"
   },
-  "matiec": {
-    "version": "v4.0.11",
-    "repository": "Autonomy-Logic/matiec"
+  "strucpp": {
+    "version": "v0.4.16",
+    "repository": "Autonomy-Logic/STruCpp"
   }
 }

@@ -19,6 +19,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
@@ -31,8 +32,8 @@ import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNod
 
 const VariableElement = (block: VariableProps) => {
   const { id, data } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous, dataTypes },
     },
@@ -96,7 +97,7 @@ const VariableElement = (block: VariableProps) => {
     ]
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: relatedBlock.id,
       node: {
@@ -128,7 +129,7 @@ const VariableElement = (block: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const { node: variableNode, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { node: variableNode, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable?.name,
     })
@@ -147,7 +148,7 @@ const VariableElement = (block: VariableProps) => {
     }
 
     // Find the POU variable that matches the node's current variable name
-    const pouVariables = pous.find((p) => p.name === editor.meta.name)?.interface?.variables ?? []
+    const pouVariables = pous.find((p) => p.name === pouName)?.interface?.variables ?? []
     const variable = pouVariables.find((v) => v.name.toLowerCase() === nodeVariableName.toLowerCase())
 
     if (!variable || !inputVariableRef) {
@@ -159,7 +160,7 @@ const VariableElement = (block: VariableProps) => {
 
       if (!namesMatchCI || caseDiffers || refStale) {
         updateNode({
-          editorName: editor.meta.name,
+          editorName: pouName,
           rungId: rung.id,
           nodeId: variableNode.id,
           node: {
@@ -200,7 +201,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
     const variableNameToSubmit = currentValue ?? variableValue
 
-    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
@@ -214,7 +215,7 @@ const VariableElement = (block: VariableProps) => {
       setIsAVariable(false)
       setInputError(false)
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: variableNode.id,
         node: {
@@ -250,7 +251,7 @@ const VariableElement = (block: VariableProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: variableNode.id,
       node: {
@@ -273,7 +274,7 @@ const VariableElement = (block: VariableProps) => {
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
+    const { pou } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, { nodeId: id })
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -372,7 +373,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, variableType)
 
     setForceValueModalOpen(false)
     setForceValue('')

@@ -6,8 +6,8 @@
  * can use these utilities to traverse variable hierarchies consistently.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 import type { DebugVariableEntry } from './debug-parser'
 import {
   buildDebugPath,
@@ -16,6 +16,39 @@ import {
   findDebugVariableForField,
 } from './debug-variable-finder'
 import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
+
+/**
+ * Pick the right type name for a leaf. The debug-map records the IEC base
+ * type that STruC++ actually emits to C++ (INT for an enum, etc.), which is
+ * what the wire-format parser needs. The project's type may be a user-data
+ * type name like "Irrigation_State" that the parser can't decode, so prefer
+ * the debug-map type whenever a match exists.
+ *
+ * Exported for testing; callers in other modules should go through the
+ * visitor APIs defined below.
+ */
+export function resolveLeafType(projectType: string, debugVar: DebugVariableEntry | null): string {
+  if (!debugVar?.type) return projectType
+  // DebugVariableEntry.type is suffixed with `_ENUM` (legacy MatIEC encoding).
+  return debugVar.type.replace(/_(O|P)_ENUM$/, '').replace(/_ENUM$/, '')
+}
+
+/**
+ * If `projectType` names an enumerated data type, return its member names
+ * indexed by the underlying integer value. Returns undefined for any other
+ * type so callers can attach the result unconditionally.
+ *
+ * Exported for testing.
+ */
+export function lookupEnumValues(projectType: string, dataTypes: PLCDataType[]): string[] | undefined {
+  const target = projectType.toUpperCase()
+  for (const dt of dataTypes) {
+    if (dt.name.toUpperCase() !== target) continue
+    if (dt.derivation !== 'enumerated') return undefined
+    return dt.values.map((v) => v.description)
+  }
+  return undefined
+}
 
 /**
  * Context for tree traversal containing all necessary lookup data.
@@ -27,6 +60,10 @@ export interface TraversalContext {
   projectPous: PLCPou[]
   /** Project data types for struct lookup */
   dataTypes: PLCDataType[]
+  /** Loaded system libraries (bundled + user-installed) — passed in
+   *  by the caller so this utility module doesn't import the store
+   *  directly (arch validator forbids utils → store). */
+  systemLibraries: SystemLibrary[]
   /** Instance name from Resources configuration */
   instanceName: string
   /** POU name for composite key generation */
@@ -40,8 +77,19 @@ export interface TraversalContext {
 export interface DebugNodeVisitor<T> {
   /**
    * Called for leaf nodes (base types that have a debug index).
+   *
+   * `enumValues` is set when the variable's project type is an enumerated
+   * data type. The wire still carries the underlying INT — consumers map
+   * the integer to `enumValues[i]` for display and reverse-map for force.
    */
-  visitLeaf(name: string, fullPath: string, compositeKey: string, typeName: string, debugIndex: number | undefined): T
+  visitLeaf(
+    name: string,
+    fullPath: string,
+    compositeKey: string,
+    typeName: string,
+    debugIndex: number | undefined,
+    enumValues?: string[],
+  ): T
 
   /**
    * Called for complex nodes (FBs, structs) with children.
@@ -72,14 +120,22 @@ interface ArrayTypeData {
 /**
  * Check if a type is a function block (standard library or custom).
  */
-function isFunctionBlock(typeName: string, projectPous: PLCPou[]): boolean {
+function isFunctionBlock(typeName: string, projectPous: PLCPou[], systemLibraries: SystemLibrary[]): boolean {
   const typeNameUpper = typeName.toUpperCase()
 
-  // Check standard library
-  const isStandard = StandardFunctionBlocks.pous.some(
-    (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
-  )
-  if (isStandard) return true
+  // Check every system library loaded from bundled .stlib archives
+  // (standard FBs, additional FBs, OSCAT, std-functions, plus any
+  // future user-installed library).  Libraries are passed in via
+  // TraversalContext rather than read from the store so this utility
+  // module stays store-free (arch validator forbids utils → store).
+  // FB names are globally unique across IEC libraries by convention,
+  // so first match wins.
+  for (const lib of systemLibraries) {
+    const matched = lib.pous.some(
+      (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
+    )
+    if (matched) return true
+  }
 
   // Check custom FBs
   return projectPous.some(
@@ -110,16 +166,23 @@ function traverseNestedNode<T>(
   visitor: DebugNodeVisitor<T>,
   arrayData?: ArrayTypeData,
 ): T {
-  const { debugVariables, projectPous, dataTypes } = context
+  const { debugVariables, projectPous, dataTypes, systemLibraries } = context
 
   if (typeDefinition === 'derived') {
     // Function block type
-    const fbVariables = findFunctionBlockVariables(typeName, projectPous)
+    const fbVariables = findFunctionBlockVariables(typeName, projectPous, systemLibraries)
 
     if (!fbVariables) {
       // FB definition not found - treat as leaf
       const debugVar = findDebugVariable(debugVariables, fullPath)
-      return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+      return visitor.visitLeaf(
+        name,
+        fullPath,
+        compositeKey,
+        resolveLeafType(typeName, debugVar),
+        debugVar?.index,
+        lookupEnumValues(typeName, dataTypes),
+      )
     }
 
     const children: T[] = []
@@ -158,7 +221,9 @@ function traverseNestedNode<T>(
           )
         } else if (fbVar.type.definition === 'user-data-type') {
           // Could be FB or struct - check
-          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous) ? 'derived' : 'user-data-type'
+          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous, systemLibraries)
+            ? 'derived'
+            : 'user-data-type'
           children.push(
             traverseNestedNode(
               fbVar.name,
@@ -189,19 +254,26 @@ function traverseNestedNode<T>(
 
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'user-data-type') {
-    // Structure type - fields use .value. prefix in debug path
+    // Structure type — STruC++ emits struct fields as `PARENT.FIELD`
+    // (same convention as FB fields), no `.value.` shim.
     const structVariables = findStructureVariables(typeName, dataTypes)
 
     if (!structVariables) {
       const debugVar = findDebugVariable(debugVariables, fullPath)
-      return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+      return visitor.visitLeaf(
+        name,
+        fullPath,
+        compositeKey,
+        resolveLeafType(typeName, debugVar),
+        debugVar?.index,
+        lookupEnumValues(typeName, dataTypes),
+      )
     }
 
     const children: T[] = []
 
     for (const field of structVariables) {
-      // Structure fields use .value. prefix
-      const fieldFullPath = `${fullPath}.value.${field.name.toUpperCase()}`
+      const fieldFullPath = `${fullPath}.${field.name.toUpperCase()}`
       const fieldCompositeKey = `${compositeKey}.${field.name}`
 
       if (field.type.definition === 'base-type') {
@@ -216,7 +288,9 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (field.type.definition === 'user-data-type') {
-        const childTypeDef = isFunctionBlock(field.type.value, projectPous) ? 'derived' : 'user-data-type'
+        const childTypeDef = isFunctionBlock(field.type.value, projectPous, systemLibraries)
+          ? 'derived'
+          : 'user-data-type'
         children.push(
           traverseNestedNode(
             field.name,
@@ -246,7 +320,8 @@ function traverseNestedNode<T>(
 
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'array' && arrayData) {
-    // Array type - elements use .value.table[i] pattern
+    // Array type — STruC++ emits array elements as `PARENT[iec_idx]` using
+    // IEC-based indexing (the start of the declared range, not 0).
     const dimensions = arrayData.dimensions
     if (dimensions.length === 0) {
       return visitor.visitLeaf(name, fullPath, compositeKey, 'ARRAY', undefined)
@@ -266,7 +341,7 @@ function traverseNestedNode<T>(
 
     for (let i = 0; i < arraySize; i++) {
       const elementIndex = startIndex + i
-      const elementFullPath = `${fullPath}.value.table[${i}]`
+      const elementFullPath = `${fullPath}[${elementIndex}]`
       const elementCompositeKey = `${compositeKey}[${elementIndex}]`
 
       if (baseType.definition === 'base-type') {
@@ -281,7 +356,14 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (baseType.definition === 'user-data-type') {
-        const childTypeDef = isFunctionBlock(baseType.value, projectPous) ? 'derived' : 'user-data-type'
+        // Array of complex elements — could be FB instances or structs.
+        // The PLCVariableType.data.baseType union only allows
+        // 'base-type' | 'user-data-type' (see middleware/.../types.ts),
+        // so 'user-data-type' is the single entry point for both shapes;
+        // disambiguate by name lookup against the project's POUs.
+        const childTypeDef = isFunctionBlock(baseType.value, projectPous, systemLibraries)
+          ? 'derived'
+          : 'user-data-type'
         children.push(
           traverseNestedNode(
             `[${elementIndex}]`,
@@ -301,7 +383,14 @@ function traverseNestedNode<T>(
 
   // Unknown type - treat as leaf
   const debugVar = findDebugVariable(debugVariables, fullPath)
-  return visitor.visitLeaf(name, fullPath, compositeKey, typeName, debugVar?.index)
+  return visitor.visitLeaf(
+    name,
+    fullPath,
+    compositeKey,
+    resolveLeafType(typeName, debugVar),
+    debugVar?.index,
+    lookupEnumValues(typeName, dataTypes),
+  )
 }
 
 /**
@@ -313,7 +402,7 @@ function traverseNestedNode<T>(
  * @returns The result produced by the visitor
  */
 export function traverseVariable<T>(variable: PLCVariable, context: TraversalContext, visitor: DebugNodeVisitor<T>): T {
-  const { debugVariables, projectPous, pouName, instanceName } = context
+  const { debugVariables, projectPous, pouName, instanceName, systemLibraries } = context
   const compositeKey = `${pouName}:${variable.name}`
 
   // Build the base path
@@ -323,7 +412,13 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
     const debugVar = findDebugVariable(debugVariables, fullPath)
-    return visitor.visitLeaf(variable.name, fullPath, compositeKey, baseType, debugVar?.index)
+    return visitor.visitLeaf(
+      variable.name,
+      fullPath,
+      compositeKey,
+      resolveLeafType(baseType, debugVar),
+      debugVar?.index,
+    )
   } else if (variable.type.definition === 'derived') {
     return traverseNestedNode(variable.name, fullPath, compositeKey, variable.type.value, 'derived', context, visitor)
   } else if (variable.type.definition === 'array') {
@@ -339,7 +434,7 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
     )
   } else if (variable.type.definition === 'user-data-type') {
     // Could be FB or struct
-    const typeDef = isFunctionBlock(variable.type.value, projectPous) ? 'derived' : 'user-data-type'
+    const typeDef = isFunctionBlock(variable.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
     return traverseNestedNode(variable.name, fullPath, compositeKey, variable.type.value, typeDef, context, visitor)
   }
 

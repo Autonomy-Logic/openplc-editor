@@ -27,6 +27,24 @@ function makeDerivedVariable(name: string, typeName: string, debug = false): PLC
   }
 }
 
+function makeArrayVariable(name: string, baseType: string, range: string, debug = false): PLCVariable {
+  return {
+    name,
+    class: 'local',
+    type: {
+      definition: 'array',
+      value: '',
+      data: {
+        baseType: { definition: 'base-type', value: baseType },
+        dimensions: [{ dimension: range }],
+      },
+    },
+    location: '',
+    documentation: '',
+    debug,
+  }
+}
+
 function makePou(name: string, pouType: PLCPou['pouType'], vars: PLCVariable[] = [], language = 'st'): PLCPou {
   return {
     name,
@@ -257,6 +275,148 @@ describe('buildActiveIndexSet', () => {
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
+    })
+
+    // Regression: array elements use `[N]` notation, not `.N`. Step 4
+    // used to filter them out before resolving expansion, so a watched +
+    // expanded array was silently empty.
+    it('includes array elements when array root is watched and expanded', () => {
+      const pou = makePou('Main', 'program', [makeArrayVariable('MY_ARRAY', 'DINT', '1..3', true)])
+      const indexMap = new Map([
+        ['Main:MY_ARRAY', 100],
+        ['Main:MY_ARRAY[1]', 101],
+        ['Main:MY_ARRAY[2]', 102],
+        ['Main:MY_ARRAY[3]', 103],
+      ])
+      const expandedNodes = new Map([['Main:MY_ARRAY', true]])
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        debugExpandedNodes: expandedNodes,
+      })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
+        [101, { compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }],
+        [102, { compositeKey: 'Main:MY_ARRAY[2]', type: 'DINT' }],
+        [103, { compositeKey: 'Main:MY_ARRAY[3]', type: 'DINT' }],
+      ])
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual(expect.arrayContaining([101, 102, 103]))
+    })
+
+    it('excludes array elements when array root is watched but NOT expanded', () => {
+      const pou = makePou('Main', 'program', [makeArrayVariable('MY_ARRAY', 'DINT', '1..3', true)])
+      const indexMap = new Map([
+        ['Main:MY_ARRAY', 100],
+        ['Main:MY_ARRAY[1]', 101],
+      ])
+      // No expanded nodes
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+      })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
+        [101, { compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }],
+      ])
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).not.toContain(101)
+    })
+
+    // Arrays inside FBs / structs need both the FB and the array root
+    // expanded for elements to be polled.
+    it('includes array elements nested under a watched FB only when chain is fully expanded', () => {
+      const pou = makePou('Main', 'program', [makeDerivedVariable('FB', 'MY_FB', true)])
+      const indexMap = new Map([
+        ['Main:FB', 10],
+        ['Main:FB.ARR[1]', 21],
+        ['Main:FB.ARR[2]', 22],
+      ])
+      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
+        [21, { compositeKey: 'Main:FB.ARR[1]', type: 'INT' }],
+        [22, { compositeKey: 'Main:FB.ARR[2]', type: 'INT' }],
+      ])
+
+      // Only FB expanded — array root is collapsed → elements stay hidden
+      let state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        debugExpandedNodes: new Map([['Main:FB', true]]),
+      })
+      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).not.toContain(21)
+
+      // Both FB and array root expanded → elements polled
+      state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        debugExpandedNodes: new Map([
+          ['Main:FB', true],
+          ['Main:FB.ARR', true],
+        ]),
+      })
+      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([21, 22]))
+    })
+
+    // Array of complex elements (FBs / structs). Expanding the array
+    // surfaces the elements as nodes, but their inner fields stay hidden
+    // until the user expands the specific element they want to inspect.
+    // Polling must reflect this: only the expanded element's leaves run.
+    it('only polls the expanded element of an array-of-FBs', () => {
+      const pou = makePou('Main', 'program', [makeArrayVariable('FB_ARR', 'MY_FB', '1..3', true)])
+      const indexMap = new Map([
+        ['Main:FB_ARR', 50],
+        ['Main:FB_ARR[1].Q', 61],
+        ['Main:FB_ARR[1].ET', 62],
+        ['Main:FB_ARR[2].Q', 71],
+        ['Main:FB_ARR[2].ET', 72],
+        ['Main:FB_ARR[3].Q', 81],
+        ['Main:FB_ARR[3].ET', 82],
+      ])
+      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
+        [61, { compositeKey: 'Main:FB_ARR[1].Q', type: 'BOOL' }],
+        [62, { compositeKey: 'Main:FB_ARR[1].ET', type: 'TIME' }],
+        [71, { compositeKey: 'Main:FB_ARR[2].Q', type: 'BOOL' }],
+        [72, { compositeKey: 'Main:FB_ARR[2].ET', type: 'TIME' }],
+        [81, { compositeKey: 'Main:FB_ARR[3].Q', type: 'BOOL' }],
+        [82, { compositeKey: 'Main:FB_ARR[3].ET', type: 'TIME' }],
+      ])
+
+      // Array expanded, only element [2] expanded → only [2]'s leaves poll
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        debugExpandedNodes: new Map([
+          ['Main:FB_ARR', true],
+          ['Main:FB_ARR[2]', true],
+        ]),
+      })
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual(expect.arrayContaining([71, 72]))
+      expect(activeIndexes).not.toContain(61)
+      expect(activeIndexes).not.toContain(62)
+      expect(activeIndexes).not.toContain(81)
+      expect(activeIndexes).not.toContain(82)
+    })
+
+    it('polls all elements of a base-type array when root is expanded', () => {
+      const pou = makePou('Main', 'program', [makeArrayVariable('BOOLS', 'BOOL', '0..2', true)])
+      const indexMap = new Map([
+        ['Main:BOOLS', 90],
+        ['Main:BOOLS[0]', 91],
+        ['Main:BOOLS[1]', 92],
+        ['Main:BOOLS[2]', 93],
+      ])
+      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
+        [91, { compositeKey: 'Main:BOOLS[0]', type: 'BOOL' }],
+        [92, { compositeKey: 'Main:BOOLS[1]', type: 'BOOL' }],
+        [93, { compositeKey: 'Main:BOOLS[2]', type: 'BOOL' }],
+      ])
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        debugExpandedNodes: new Map([['Main:BOOLS', true]]),
+      })
+      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([91, 92, 93]))
     })
 
     it('skips leaf without dot in variable part (not nested)', () => {

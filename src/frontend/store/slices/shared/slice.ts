@@ -5,14 +5,18 @@ import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
-import { toast } from '../../../utils/toast'
 import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { HistorySnapshot } from '../history'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
-import { CreateEditorObjectFromTab, CreateRemoteDeviceEditor, CreateServerEditor } from '../tabs/utils'
+import {
+  CreateEditorObjectFromTab,
+  CreateRemoteDeviceEditor,
+  CreateServerEditor,
+  LIBRARY_MANIFEST_TAB_NAME,
+} from '../tabs/utils'
 import type { SharedRootState, SharedSlice } from './types'
 import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
 
@@ -68,6 +72,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const result = state.projectActions.createPou(pouDto)
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
+
+      // Seed the graphical-flow slice for new LD/FBD POUs. The project
+      // slice owns the persisted body (rungs/nodes/edges); the per-
+      // language flow slice is what the editor reads to render. Without
+      // this, the FBD editor falls through to "No rung found for editor"
+      // and ladder shows a bare canvas. handleOpenProjectResponse does
+      // the same on project load — this matches it for create.
+      if (language === 'ld') {
+        state.ladderFlowActions.addLadderFlow(pouDto.data.body.value as LadderFlowType)
+      } else if (language === 'fbd') {
+        state.fbdFlowActions.addFBDFlow(pouDto.data.body.value as FBDFlowType)
+      }
 
       const editorModel = createEditorObjectForPou(name, type, language)
       state.editorActions.addModel(editorModel)
@@ -140,6 +156,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const result = state.projectActions.createPou(pouDto)
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
+
+      // Seed the graphical-flow slice for the duplicated POU. Mirrors
+      // the create-path so a duplicated LD/FBD POU's editor finds its
+      // rungs/nodes immediately instead of rendering empty.  The body
+      // value was shallow-copied from the source, so its `name` field
+      // still refers to `sourceName` — override it so the flow lands
+      // under the new POU's name (the editor's lookup key).
+      if (language === 'ld') {
+        state.ladderFlowActions.addLadderFlow({
+          ...(pouDto.data.body.value as LadderFlowType),
+          name: newName,
+        })
+      } else if (language === 'fbd') {
+        state.fbdFlowActions.addFBDFlow({
+          ...(pouDto.data.body.value as FBDFlowType),
+          name: newName,
+        })
+      }
 
       const editorModel = createEditorObjectForPou(newName, sourcePou.pouType, language)
       state.editorActions.addModel(editorModel)
@@ -390,21 +424,33 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     closeFile: (name) => {
-      // Check if file has unsaved changes
-      const isSaved = getState().fileActions.getSavedState({ name })
-
-      if (!isSaved) {
-        // File has unsaved changes - show save prompt modal
-        getState().modalActions.openModal('save-changes-file', { fileName: name })
-        return { success: false }
+      // Tabs that don't persist any project data (Package Manager,
+      // Library Manager browsing view, ...) never register a file
+      // entry. Treat their absence from the file slice as "nothing
+      // to save" — otherwise getSavedState's `?? false` default
+      // would route them through the save-changes modal, and the
+      // subsequent "Save" path would fail with "File not found"
+      // because executeSaveFile has nothing to write.
+      const fileExists = getState().files[name] !== undefined
+      if (fileExists) {
+        const isSaved = getState().fileActions.getSavedState({ name })
+        if (!isSaved) {
+          getState().modalActions.openModal('save-changes-file', { fileName: name })
+          return { success: false }
+        }
       }
 
-      // File is saved, proceed with close
       return getState().sharedWorkspaceActions.forceCloseFile(name)
     },
 
     forceCloseFile: (name) => {
       getState().tabsActions.removeTab(name)
+      // Drop the editor model from `state.editors[]` so the workspace's
+      // multi-mount loop doesn't keep rendering a hidden editor for a
+      // closed tab.  `tabs[]` is the open-tabs list; `editors[]` is
+      // expected to mirror it.  `removeModel` is idempotent for names
+      // that aren't registered.
+      getState().editorActions.removeModel(name)
 
       const filteredTabs = getState().tabs
       const nextTab = filteredTabs[filteredTabs.length - 1]
@@ -496,6 +542,26 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           getState().libraryActions.addLibrary(pou.name, pou.pouType)
         }
       })
+
+      // Hydrate the library slice's project view from the durable
+      // `project.libraries` field (if any).  Bundled / canonical
+      // libs are always-on regardless and don't appear here; only
+      // opt-in libraries flow through this path.  Drives the
+      // missing-libraries modal post-open.
+      const projectLibraryRefs = (data.projectData.libraries ?? []).map((ref) => ({
+        name: ref.name,
+        version: ref.version,
+      }))
+      getState().libraryActions.setProjectLibraries(projectLibraryRefs)
+
+      // If the project references libraries the system pool can't
+      // currently resolve, surface the missing-libraries modal so
+      // the user can route through the Library Manager.  Project
+      // load itself is non-blocking — compile will fail later with
+      // a clear error if they don't install the missing pieces.
+      if (getState().missingLibraries.length > 0) {
+        getState().modalActions.openModal('missing-libraries')
+      }
 
       // Reclassify ALL POUs' variables with full context.
       // The text parser can't determine type definitions accurately since it doesn't have
@@ -655,21 +721,43 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
 
-      // Open the main POU tab (if present)
-      const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
-      if (mainPou) {
-        const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+      // Open the default tab for the project type:
+      //   - Library projects: the manifest (`library.json`) — it's
+      //     mandatory for the build and there's no main POU to fall
+      //     back to.
+      //   - PLC projects: the `main` program if present (existing
+      //     behaviour).
+      if (data.meta.type === 'plc-library') {
         const tabToBeCreated: TabsProps = {
-          name: mainPou.name,
-          path: `/data/pous/program/${mainPou.name}`,
-          elementType: { type: 'program', language },
+          name: LIBRARY_MANIFEST_TAB_NAME,
+          path: '/library.json',
+          elementType: { type: 'library-manifest' },
         }
         const model = CreateEditorObjectFromTab(tabToBeCreated)
         getState().editorActions.addModel(model)
         getState().editorActions.setEditor(model)
         getState().tabsActions.updateTabs(tabToBeCreated)
-        getState().tabsActions.setSelectedTab(mainPou.name)
-        getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+        getState().tabsActions.setSelectedTab(LIBRARY_MANIFEST_TAB_NAME)
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: LIBRARY_MANIFEST_TAB_NAME,
+          type: 'library-manifest',
+        })
+      } else {
+        const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
+        if (mainPou) {
+          const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+          const tabToBeCreated: TabsProps = {
+            name: mainPou.name,
+            path: `/data/pous/program/${mainPou.name}`,
+            elementType: { type: 'program', language },
+          }
+          const model = CreateEditorObjectFromTab(tabToBeCreated)
+          getState().editorActions.addModel(model)
+          getState().editorActions.setEditor(model)
+          getState().tabsActions.updateTabs(tabToBeCreated)
+          getState().tabsActions.setSelectedTab(mainPou.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+        }
       }
 
       // For POUs with unparseable variables (variablesText present, variables empty),
@@ -704,11 +792,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
 
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
-        variant: 'default',
-      })
+      // Alias self-upgrade pass runs in `deviceActions.setAvailableOptions`
+      // once the workspace screen finishes board discovery — capabilities
+      // depend on the active board info, which isn't loaded here yet.
     },
   },
 

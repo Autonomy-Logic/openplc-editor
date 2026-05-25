@@ -18,6 +18,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
@@ -38,8 +39,8 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     editorActions: { updateModelFBD },
     fbdFlows,
     fbdFlowActions: { updateNode },
@@ -85,7 +86,7 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Get the connection type
    */
-  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === editor.meta.name), [fbdFlows, editor])
+  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === pouName), [fbdFlows, pouName])
 
   const connections = useMemo(() => {
     const rung = flow?.rung
@@ -213,7 +214,7 @@ const VariableElement = (block: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
       variableName: variableValue,
     })
@@ -225,7 +226,7 @@ const VariableElement = (block: VariableProps) => {
     } else {
       if (variable.name.toLowerCase() !== (variableNode as VariableNode).data.variable.name.toLowerCase()) {
         updateNode({
-          editorName: editor.meta.name,
+          editorName: pouName,
           nodeId: variableNode.id,
           node: {
             ...variableNode,
@@ -283,7 +284,7 @@ const VariableElement = (block: VariableProps) => {
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, { nodeId: id })
+    const { pou } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, { nodeId: id })
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v: PLCVariable) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -392,7 +393,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, varType)
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -427,7 +428,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
@@ -446,7 +447,7 @@ const VariableElement = (block: VariableProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodeId: variableNode.id,
       node: {
         ...variableNode,

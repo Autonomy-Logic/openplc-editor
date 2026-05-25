@@ -20,6 +20,14 @@ export const HelpMenu = () => {
     }
   }
 
+  const handleOpenDocumentation = () => {
+    try {
+      window.open('https://edge.autonomylogic.com/docs', '_blank')
+    } catch (error) {
+      console.error('Error opening link:', error)
+    }
+  }
+
   const handleOpenAboutModal = () => {
     setModalOpen('aboutOpenPlc', true)
   }
@@ -32,6 +40,9 @@ export const HelpMenu = () => {
           <MenuPrimitive.Item className={ITEM} onClick={handleOpenCommunitySupport}>
             <span>{i18n.t('menu:help.submenu.communitySupport')}</span>
             <span className={ACCELERATOR}>{'F1'}</span>
+          </MenuPrimitive.Item>
+          <MenuPrimitive.Item className={ITEM} onClick={handleOpenDocumentation}>
+            <span>{i18n.t('menu:help.submenu.documentation')}</span>
           </MenuPrimitive.Item>
           {capabilities.hasAboutDialog && (
             <MenuPrimitive.Item className={ITEM} onClick={handleOpenAboutModal}>

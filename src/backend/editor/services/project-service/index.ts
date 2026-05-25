@@ -1,3 +1,4 @@
+import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import {
@@ -5,7 +6,6 @@ import {
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
-import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
@@ -131,6 +131,7 @@ class ProjectService {
       projectJson: string
       deviceConfig: string
       pinMapping: string
+      libraryManifest: string
       pouFiles: Array<{ relativePath: string; content: string }>
       serverFiles: Array<{ relativePath: string; content: string }>
       remoteDeviceFiles: Array<{ relativePath: string; content: string }>
@@ -227,6 +228,20 @@ class ProjectService {
       const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
       const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
 
+      // Library projects own a `library.json` at the project root.
+      // Read it as a plain string (parsing happens upstream in the
+      // build pipeline + manifest editor — same convention POUs use:
+      // raw bytes here, structure upstream).  Empty string for PLC
+      // projects and for libraries whose disk shape is missing the
+      // file; the manifest editor seeds a template on first save.
+      let libraryManifest = ''
+      try {
+        libraryManifest = await promises.readFile(join(projectPath, 'library.json'), 'utf-8')
+      } catch {
+        // No library.json on disk — not a library, or a library
+        // whose manifest was never persisted.  Leave empty.
+      }
+
       return {
         success: true,
         data: {
@@ -234,6 +249,7 @@ class ProjectService {
           projectJson,
           deviceConfig,
           pinMapping,
+          libraryManifest,
           pouFiles,
           serverFiles,
           remoteDeviceFiles,
@@ -365,15 +381,35 @@ class ProjectService {
   async writeProjectFiles(files: {
     projectPath: string
     projectJson: string
-    deviceConfig: string
-    pinMapping: string
+    /** Library projects don't own `devices/configuration.json`; the
+     *  renderer sends `undefined` for those, and we skip the write
+     *  here instead of truncating the on-disk copy to an empty
+     *  string. */
+    deviceConfig?: string
+    /** Same optional-on-libraries semantics as `deviceConfig`. */
+    pinMapping?: string
+    /** Library projects' manifest (`library.json`).  PLC projects
+     *  send `undefined`; libraries whose manifest tab hasn't been
+     *  mounted this session also send `undefined` (no pending edits
+     *  to flush).  Skipped on the write side when undefined so the
+     *  on-disk copy stays intact. */
+    libraryManifest?: string
     pouFiles: Array<{ relativePath: string; content: string }>
     serverFiles: Array<{ relativePath: string; content: string }>
     remoteDeviceFiles: Array<{ relativePath: string; content: string }>
     deletions: string[]
   }): Promise<IProjectServiceResponse> {
-    const { projectPath, projectJson, deviceConfig, pinMapping, pouFiles, serverFiles, remoteDeviceFiles, deletions } =
-      files
+    const {
+      projectPath,
+      projectJson,
+      deviceConfig,
+      pinMapping,
+      libraryManifest,
+      pouFiles,
+      serverFiles,
+      remoteDeviceFiles,
+      deletions,
+    } = files
 
     if (!projectPath) {
       return {
@@ -393,12 +429,22 @@ class ProjectService {
         ),
       )
 
-      // Write config files
-      await Promise.all([
-        promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'),
-      ])
+      // Write config files.  `deviceConfig` / `pinMapping` /
+      // `libraryManifest` are optional — each is skipped by project
+      // types that don't own it, so the renderer sends `undefined`
+      // and we leave the on-disk copies untouched rather than
+      // overwriting them with an empty string.
+      const writes: Promise<void>[] = [promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8')]
+      if (deviceConfig !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'))
+      }
+      if (pinMapping !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'))
+      }
+      if (libraryManifest !== undefined) {
+        writes.push(promises.writeFile(join(dir, 'library.json'), libraryManifest, 'utf-8'))
+      }
+      await Promise.all(writes)
 
       // Write POU files
       for (const file of pouFiles) {

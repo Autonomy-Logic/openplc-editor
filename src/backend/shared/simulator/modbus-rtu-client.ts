@@ -1,3 +1,6 @@
+import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { detectTargetEndian } from '@root/frontend/utils/endian'
+
 import { ModbusDebugResponse, ModbusFunctionCode } from './types'
 
 export interface SerialPortLike {
@@ -262,7 +265,7 @@ export class ModbusRtuClient {
     })
   }
 
-  async getMd5Hash(): Promise<string> {
+  async getMd5Hash(): Promise<Md5ProbeResult> {
     const functionCode = ModbusFunctionCode.DEBUG_GET_MD5
     const endiannessCheck = 0xdead
 
@@ -297,9 +300,16 @@ export class ModbusRtuClient {
           throw new Error(`Target returned error code: 0x${statusCode.toString(16)}`)
         }
 
-        const md5Bytes = response.slice(9)
-        const md5String = new TextDecoder().decode(md5Bytes).trim()
-        return md5String
+        // Response trailer is a 2-byte runtime-driven sentinel: the
+        // runtime stores the literal 0xDEAD through a native
+        // uint16_t, so the bytes reflect target byte order.
+        const trailerHi = readUint8(response, response.length - 2)
+        const trailerLo = readUint8(response, response.length - 1)
+        const targetEndian = detectTargetEndian(trailerHi, trailerLo)
+
+        const md5Bytes = response.slice(9, response.length - 2)
+        const md5 = new TextDecoder().decode(md5Bytes).replace(/\0+$/, '').trim()
+        return { md5, targetEndian }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
         if (attempt < MD5_REQUEST_MAX_RETRIES) {
@@ -322,11 +332,17 @@ export class ModbusRtuClient {
       const functionCode = ModbusFunctionCode.DEBUG_GET_LIST
       const numIndexes = variableIndexes.length
 
-      const data = allocBytes(2 + 2 * numIndexes)
+      // Phase 4 PDU: (arr:u8, elem:u16) per address — 3 bytes each.
+      // Editor packs DebugAddr as (arr << 16) | elem.
+      const data = allocBytes(2 + 3 * numIndexes)
       writeUint16BE(data, 0, numIndexes)
 
       for (let i = 0; i < numIndexes; i++) {
-        writeUint16BE(data, 2 + i * 2, variableIndexes[i])
+        const packed = variableIndexes[i]
+        const arr = (packed >>> 16) & 0xff
+        const elem = packed & 0xffff
+        writeUint8(data, 2 + i * 3, arr)
+        writeUint16BE(data, 2 + i * 3 + 1, elem)
       }
 
       const request = this.assembleRequest(functionCode, data)
@@ -397,17 +413,22 @@ export class ModbusRtuClient {
     try {
       const functionCode = ModbusFunctionCode.DEBUG_SET
 
-      const dataLength = force && valueBuffer ? valueBuffer.length : 1
-      const data = allocBytes(5 + dataLength)
+      // Phase 4 PDU: [arr:u8, elem:u16, force:u8, len:u16, value...]
+      const arr = (variableIndex >>> 16) & 0xff
+      const elem = variableIndex & 0xffff
 
-      writeUint16BE(data, 0, variableIndex)
-      writeUint8(data, 2, force ? 1 : 0)
-      writeUint16BE(data, 3, dataLength)
+      const dataLength = force && valueBuffer ? valueBuffer.length : 1
+      const data = allocBytes(6 + dataLength)
+
+      writeUint8(data, 0, arr)
+      writeUint16BE(data, 1, elem)
+      writeUint8(data, 3, force ? 1 : 0)
+      writeUint16BE(data, 4, dataLength)
 
       if (force && valueBuffer) {
-        data.set(valueBuffer, 5)
+        data.set(valueBuffer, 6)
       } else {
-        writeUint8(data, 5, 0)
+        writeUint8(data, 6, 0)
       }
 
       const request = this.assembleRequest(functionCode, data)

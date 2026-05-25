@@ -71,19 +71,6 @@ const generateDisplayName = (variablePath: string): string => {
 }
 
 /**
- * Get default initial value based on type
- */
-const getDefaultInitialValue = (variableType?: string): string | number | boolean => {
-  if (!variableType) return 0
-  const type = variableType.toLowerCase()
-
-  if (type === 'bool') return false
-  if (type.includes('real') || type.includes('lreal')) return 0.0
-  if (type.includes('string')) return ''
-  return 0
-}
-
-/**
  * Determine node type from variable tree node
  */
 const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array' => {
@@ -117,7 +104,6 @@ const generateDefaultFieldConfigs = (
         fieldPath: child.name,
         displayName: child.name,
         datatype: child.variableType || 'UNKNOWN',
-        initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
         permissions: { ...parentPermissions },
       }
     } else {
@@ -128,7 +114,6 @@ const generateDefaultFieldConfigs = (
         fieldPath: child.name,
         displayName: child.name,
         datatype: child.variableType || 'UNKNOWN',
-        initialValue: getDefaultInitialValue(child.variableType || 'UNKNOWN'),
         permissions: { ...parentPermissions },
         fields: nestedFields.length > 0 ? nestedFields : undefined,
       }
@@ -199,7 +184,6 @@ export const VariableConfigModal = ({
   const [browseName, setBrowseName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
-  const [initialValue, setInitialValue] = useState<string>('')
   const [viewerPerm, setViewerPerm] = useState<PermissionLevel>('r')
   const [operatorPerm, setOperatorPerm] = useState<PermissionLevel>('r')
   const [engineerPerm, setEngineerPerm] = useState<PermissionLevel>('rw')
@@ -221,7 +205,6 @@ export const VariableConfigModal = ({
         setBrowseName(existingConfig.browseName)
         setDisplayName(existingConfig.displayName)
         setDescription(existingConfig.description)
-        setInitialValue(String(existingConfig.initialValue))
         setViewerPerm(existingConfig.permissions.viewer)
         setOperatorPerm(existingConfig.permissions.operator)
         setEngineerPerm(existingConfig.permissions.engineer)
@@ -233,7 +216,6 @@ export const VariableConfigModal = ({
         setBrowseName(generateBrowseName(variable.variablePath))
         setDisplayName(generateDisplayName(variable.variablePath))
         setDescription('')
-        setInitialValue(String(getDefaultInitialValue(variable.variableType)))
         setViewerPerm('r')
         setOperatorPerm('r')
         setEngineerPerm('rw')
@@ -335,21 +317,6 @@ export const VariableConfigModal = ({
   const handleSave = useCallback(() => {
     if (!isValid || !variable) return
 
-    // Parse initial value based on type
-    let parsedInitialValue: boolean | number | string = initialValue
-    const varType = variable.variableType?.toLowerCase() || ''
-    if (varType === 'bool') {
-      parsedInitialValue = initialValue.toLowerCase() === 'true' || initialValue === '1'
-    } else if (
-      varType.includes('int') ||
-      varType.includes('real') ||
-      varType.includes('word') ||
-      varType.includes('byte')
-    ) {
-      const num = parseFloat(initialValue)
-      parsedInitialValue = isNaN(num) ? 0 : num
-    }
-
     const permissions: OpcUaPermissions = {
       viewer: viewerPerm,
       operator: operatorPerm,
@@ -365,7 +332,6 @@ export const VariableConfigModal = ({
       browseName: browseName.trim(),
       displayName: displayName.trim(),
       description: description.trim(),
-      initialValue: parsedInitialValue,
       permissions,
       nodeType: getNodeType(variable),
       // Include field configs for complex types
@@ -384,7 +350,6 @@ export const VariableConfigModal = ({
     browseName,
     displayName,
     description,
-    initialValue,
     viewerPerm,
     operatorPerm,
     engineerPerm,
@@ -467,21 +432,6 @@ export const VariableConfigModal = ({
               rows={2}
               className={textareaStyles}
             />
-          </div>
-
-          {/* Initial Value */}
-          <div className='flex flex-col gap-2'>
-            <Label className='text-xs font-semibold text-neutral-950 dark:text-white'>Initial Value</Label>
-            <InputWithRef
-              type='text'
-              value={initialValue}
-              onChange={(e) => setInitialValue(e.target.value)}
-              placeholder={variable.variableType?.toLowerCase() === 'bool' ? 'true/false' : '0'}
-              className={inputStyles}
-            />
-            <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-              Default value when the OPC-UA server starts
-            </span>
           </div>
 
           {/* Permissions */}

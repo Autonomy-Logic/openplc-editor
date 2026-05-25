@@ -1,7 +1,6 @@
 import { addCppLocalVariables } from '../../../../frontend/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '../../../../frontend/utils/cpp/generateSTCode'
 import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
-import { wrapUnsupportedComments } from '../../../../frontend/utils/PLC/wrap-unsupported-comments'
 import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
 import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
@@ -40,27 +39,8 @@ const extractPythonData = (pous: PLCPou[]) => {
     }))
 }
 
-const applyEarlyCommentWrapping = (projectData: PLCProjectData): PLCProjectData => {
-  return {
-    ...projectData,
-    pous: projectData.pous.map((pou: PLCPou) => {
-      if (pou.body.language === 'st' || pou.body.language === 'il') {
-        const wrappedValue = wrapUnsupportedComments(pou.body.value as string)
-        return {
-          ...pou,
-          body: {
-            language: pou.body.language,
-            value: wrappedValue,
-          },
-        }
-      }
-      return pou
-    }),
-  }
-}
-
 function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: LogFn): PreprocessResult {
-  let processedProjectData: PLCProjectData = applyEarlyCommentWrapping(projectData)
+  let processedProjectData: PLCProjectData = projectData
 
   // --- Python processing ---
   const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.body.language === 'python')

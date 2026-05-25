@@ -21,6 +21,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'runtime-connection-lost',
   'debugger-message',
   'debugger-ip-input',
+  'missing-libraries',
 ]
 
 function createDefaultModals() {

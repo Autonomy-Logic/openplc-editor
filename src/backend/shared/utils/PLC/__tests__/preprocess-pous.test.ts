@@ -75,21 +75,20 @@ function collectLog(): { log: (level: 'info' | 'error', message: string) => void
 }
 
 // ---------------------------------------------------------------------------
-// ST only (comment wrapping)
+// ST/IL passthrough
 // ---------------------------------------------------------------------------
-describe('preprocessPous — ST/IL comment wrapping', () => {
-  it('wraps // comments in ST POUs', () => {
+describe('preprocessPous — ST/IL passthrough', () => {
+  it('returns ST POUs unchanged', () => {
     const project = makeProjectData([makeStPou('Main', '// line comment\nx := 1;')])
     const logger = collectLog()
     const { projectData, validationFailed } = preprocessPous(project, false, logger.log)
 
     expect(validationFailed).toBe(false)
-    const body = projectData.pous[0].body.value as string
-    expect(body).toContain('(*')
-    expect(body).toContain('*)')
+    expect(projectData.pous[0].body.value).toBe('// line comment\nx := 1;')
+    expect(projectData.pous[0].body.language).toBe('st')
   })
 
-  it('wraps // comments in IL POUs', () => {
+  it('returns IL POUs unchanged', () => {
     const project = makeProjectData([
       {
         name: 'IlProg',
@@ -102,18 +101,7 @@ describe('preprocessPous — ST/IL comment wrapping', () => {
     const logger = collectLog()
     const { projectData } = preprocessPous(project, false, logger.log)
 
-    const body = projectData.pous[0].body.value as string
-    expect(body).toContain('(*')
-  })
-
-  it('does not modify non-ST/IL POUs during comment wrapping', () => {
-    const project = makeProjectData([makePythonPou('PyProg', 'print("hello")')])
-    const logger = collectLog()
-    // Even though Python POUs get further processing, the comment wrapping step
-    // should pass them through unchanged
-    const { projectData } = preprocessPous(project, true, logger.log)
-    // In simulator mode, Python becomes ST stub, so language changed
-    expect(projectData.pous[0].body.language).toBe('st')
+    expect(projectData.pous[0].body.value).toBe('// il comment\nLD x')
   })
 })
 
@@ -141,7 +129,8 @@ describe('preprocessPous — Python', () => {
     expect(projectData.pous[0].body.language).toBe('st')
     // The generated ST code should contain C blocks and function references
     const body = projectData.pous[0].body.value as string
-    expect(body).toContain('{{')
+    // STruC++ uses `{external …}` pragma blocks for inline C/C++.
+    expect(body).toContain('{external')
     expect(logger.messages.some((m) => m.includes('Successfully processed'))).toBe(true)
   })
 
@@ -222,7 +211,8 @@ describe('preprocessPous — C++', () => {
     expect(validationFailed).toBe(false)
     expect(projectData.pous[0].body.language).toBe('st')
     const body = projectData.pous[0].body.value as string
-    expect(body).toContain('{{')
+    // STruC++ uses `{external …}` pragma blocks for inline C/C++.
+    expect(body).toContain('{external')
     expect(logger.messages.some((m) => m.includes('Successfully processed'))).toBe(true)
   })
 

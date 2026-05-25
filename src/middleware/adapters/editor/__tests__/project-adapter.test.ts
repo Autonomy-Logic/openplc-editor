@@ -43,15 +43,6 @@ const mockIpcProjectResponse = {
         deviceBoard: 'Arduino Uno',
         communicationPort: '/dev/ttyUSB0',
         compileOnly: false,
-        communicationConfiguration: {
-          modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
-          modbusTCP: {
-            tcpInterface: 'eth0',
-            tcpMacAddress: null,
-            tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-          },
-          communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
-        },
       },
       devicePinMapping: [{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }],
     },
@@ -92,15 +83,6 @@ const mockRawProjectFiles = {
       deviceBoard: 'Arduino Uno',
       communicationPort: '/dev/ttyUSB0',
       compileOnly: false,
-      communicationConfiguration: {
-        modbusRTU: { rtuInterface: '', rtuBaudRate: '115200', rtuSlaveId: null, rtuRS485ENPin: null },
-        modbusTCP: {
-          tcpInterface: 'eth0',
-          tcpMacAddress: null,
-          tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-        },
-        communicationPreferences: { enabledRTU: false, enabledTCP: false, enabledDHCP: true },
-      },
     }),
     pinMapping: JSON.stringify([{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }]),
     pouFiles: [
@@ -128,6 +110,7 @@ beforeEach(() => {
     deletePouFile: jest.fn().mockResolvedValue({ success: true }),
     renamePouFile: jest.fn().mockResolvedValue(mockPouResponse),
     pathPicker: jest.fn().mockResolvedValue({ success: true, path: '/picked/path' }),
+    openPathPicker: jest.fn().mockResolvedValue({ success: true, path: '/picked/path' }),
     retrieveRecent: jest.fn().mockResolvedValue(mockRecentProjects),
     fileReadContent: jest.fn().mockResolvedValue({ success: true, content: 'file content' }),
     fileWatchStart: jest.fn().mockResolvedValue({ success: true }),
@@ -281,20 +264,46 @@ describe('createEditorProjectAdapter', () => {
 
       expect(window.bridge.createProject).toHaveBeenCalledWith(expect.objectContaining({ path: '' }))
     })
+
+    it('threads libraryManifest from the IPC content level into projectData', async () => {
+      const manifestJson = '{ "name": "my-lib", "version": "0.1.0", "namespace": "my_lib" }\n'
+      ;(window.bridge.createProject as jest.Mock).mockResolvedValueOnce({
+        ...mockIpcProjectResponse,
+        data: {
+          ...mockIpcProjectResponse.data,
+          content: {
+            ...mockIpcProjectResponse.data.content,
+            libraryManifest: manifestJson,
+          },
+        },
+      })
+
+      const result = await adapter.createProject({ name: 'my-lib', type: 'plc-library' })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.projectData.libraryManifest).toBe(manifestJson)
+    })
+
+    it('omits libraryManifest when the IPC response does not carry one (PLC projects)', async () => {
+      const result = await adapter.createProject({ name: 'test', type: 'plc-project' })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.projectData.libraryManifest).toBeUndefined()
+    })
   })
 
   describe('openProject', () => {
     it('uses pathPicker then readProjectFiles and parses result', async () => {
       const result = await adapter.openProject()
 
-      expect(window.bridge.pathPicker).toHaveBeenCalledTimes(1)
+      expect(window.bridge.openPathPicker).toHaveBeenCalledTimes(1)
       expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/picked/path')
       expect(result.success).toBe(true)
       expect(result.data?.meta.name).toBe('my-project')
     })
 
     it('returns error when pathPicker fails', async () => {
-      ;(window.bridge.pathPicker as jest.Mock).mockResolvedValue({ success: false })
+      ;(window.bridge.openPathPicker as jest.Mock).mockResolvedValue({ success: false })
 
       const result = await adapter.openProject()
 

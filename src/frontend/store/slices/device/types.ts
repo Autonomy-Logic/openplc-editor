@@ -15,9 +15,6 @@ import type {
 export type DeviceAvailableOptions = {
   availableBoards: Map<string, BoardInfo>
   availableCommunicationPorts: CommunicationPort[]
-  availableRTUInterfaces: string[]
-  availableRTUBaudRates: string[]
-  availableTCPInterfaces: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -81,16 +78,6 @@ export type DeviceState = {
 // Action parameter types
 // ---------------------------------------------------------------------------
 
-export type RTUConfigParam =
-  | { rtuConfig: 'rtuInterface'; value: string }
-  | { rtuConfig: 'rtuBaudRate'; value: string }
-  | { rtuConfig: 'rtuSlaveId'; value: number }
-  | { rtuConfig: 'rtuRS485ENPin'; value: string | null }
-
-export type TCPConfigParam =
-  | { tcpConfig: 'tcpInterface'; value: string }
-  | { tcpConfig: 'tcpMacAddress'; value: string }
-
 export type PinUpdateResponse = {
   ok: boolean
   title: string
@@ -99,7 +86,7 @@ export type PinUpdateResponse = {
     pin: string
     pinType: string
     address: string
-    name: string
+    alias: string
   }
 }
 
@@ -124,11 +111,6 @@ export type DeviceActions = {
   updatePin: (updatedData: Partial<DevicePin>) => PinUpdateResponse
   setDeviceBoard: (board: string) => void
   setCommunicationPort: (port: string) => void
-  setCommunicationPreferences: (prefs: { enableRTU?: boolean; enableTCP?: boolean; enableDHCP?: boolean }) => void
-  setRTUConfig: (config: RTUConfigParam) => void
-  setTCPConfig: (config: TCPConfigParam) => void
-  setWifiConfig: (config: { tcpWifiSSID?: string; tcpWifiPassword?: string }) => void
-  setStaticHostConfiguration: (config: { ipAddress?: string; dns?: string; gateway?: string; subnet?: string }) => void
   setCompileOnly: (compileOnly: boolean) => void
   setRuntimeIpAddress: (ipAddress: string) => void
   setRuntimeJwtToken: (token: string | null) => void
@@ -142,6 +124,11 @@ export type DeviceActions = {
   setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
+  setVendorScreenData: (persistenceKey: string, data: unknown) => void
+  /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
+   *  `snapshot[k]` when present, else by deleting the key.  Used by
+   *  the vendor-screen tab's "Don't save" revert. */
+  restoreVendorScreenSlice: (ownedKeys: string[], snapshot: Record<string, unknown>) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -151,3 +138,15 @@ export type DeviceActions = {
 export type DeviceSlice = DeviceState & {
   deviceActions: DeviceActions
 }
+
+/**
+ * Cross-slice root-state view the device slice needs at runtime —
+ * `setAvailableOptions` triggers the alias sync once the workspace
+ * screen finishes board discovery (capabilities depend on the active
+ * board info), and the sync's summary log is routed through the
+ * console slice. Same shape pattern as `ProjectSliceRoot`.
+ */
+import type { ConsoleSlice } from '../console'
+import type { ProjectSlice } from '../project/types'
+
+export type DeviceSliceRoot = DeviceSlice & ProjectSlice & ConsoleSlice

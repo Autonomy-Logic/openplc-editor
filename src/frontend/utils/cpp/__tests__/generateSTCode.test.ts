@@ -26,8 +26,8 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
   debug: false,
 })
 
-describe('generateSTCode', () => {
-  it('generates ST code with struct, setup, and loop calls for scalar variables', () => {
+describe('generateSTCode (cpp)', () => {
+  it('generates ST stub with strucpp-style direct pointer assignment for scalars', () => {
     const result = generateSTCode({
       pouName: 'MyBlock',
       allVariables: [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')],
@@ -36,9 +36,15 @@ describe('generateSTCode', () => {
     // Struct variable declaration
     expect(result).toContain('MYBLOCK_VARS vars;')
 
-    // Scalar variable assignments
-    expect(result).toContain('vars.SPEED = &data__->SPEED.value;')
-    expect(result).toContain('vars.RESULT = &data__->RESULT.value;')
+    // Scalars: take the IECVar member's address directly. The struct
+    // field type is `strucpp::IEC_INT *` so user writes via the macro
+    // `*name = 5` route through `IECVar::operator=` → set() and respect
+    // forcing on the IEC side.
+    expect(result).toContain('vars.SPEED = &SPEED;')
+    expect(result).toContain('vars.RESULT = &RESULT;')
+
+    // No legacy MatIEC `data__` plumbing left.
+    expect(result).not.toContain('data__->')
 
     // Conditional setup
     expect(result).toContain('if hasBeenInitialized = False then')
@@ -49,44 +55,68 @@ describe('generateSTCode', () => {
     expect(result).toContain('myblock_loop(&vars);')
   })
 
-  it('generates flat array declarations and copy-in code for array variables', () => {
+  it('points struct field directly into the Array1D for base-type arrays', () => {
     const result = generateSTCode({
       pouName: 'ArrBlock',
       allVariables: [makeArrayVar('temps', 'input', 'REAL', '0..4')],
     })
 
-    // Flat array declaration
-    expect(result).toContain('IEC_REAL __flat_TEMPS[5];')
+    // Array1D<IEC_REAL,0,4> stores std::array<IECVar<REAL_t>,5>; element 0
+    // sits at &TEMPS[0]. Subtracting the lower bound shifts the pointer
+    // so vars->TEMPS[iec_idx] indexes correctly for any IEC range.
+    expect(result).toContain('vars.TEMPS = &TEMPS[0] - 0;')
 
-    // Copy-in loop
-    expect(result).toContain(
-      'for (int __i = 0; __i < 5; __i++) __flat_TEMPS[__i] = data__->TEMPS.value.table[__i].value;',
-    )
-
-    // Array pointer assignment with start index offset
-    expect(result).toContain('vars.TEMPS = __flat_TEMPS - 0;')
+    // No flat staging copies for base-type arrays — per-element forcing
+    // is preserved by pointing directly at the IECVar storage.
+    expect(result).not.toContain('__flat_TEMPS')
+    expect(result).not.toContain('data__->')
   })
 
-  it('generates output array copy-back code for output arrays', () => {
+  it('handles non-zero array start index correctly', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeArrayVar('arr', 'input', 'INT', '5..10')],
+    })
+    expect(result).toContain('vars.ARR = &ARR[5] - 5;')
+  })
+
+  it('skips output writeback for base-type array outputs (writes go through IECVar::operator=)', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeArrayVar('outArr', 'output', 'INT', '1..10')],
     })
 
-    // Output copy-back
-    expect(result).toContain(
-      'for (int __i = 0; __i < 10; __i++) data__->OUTARR.value.table[__i].value = __flat_OUTARR[__i];',
-    )
+    expect(result).toContain('vars.OUTARR = &OUTARR[1] - 1;')
+    // No explicit writeback — user's `name[i] = 5` already calls
+    // IECVar::operator= on the underlying element, force-respecting.
+    expect(result).not.toContain('for (int __i')
   })
 
-  it('does not generate output copy-back section when no output arrays exist', () => {
+  it('stages STRING variables through a flat raw struct and writes back via IECStringVar', () => {
     const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('x', 'output', 'INT')],
+      pouName: 'StrBlock',
+      allVariables: [makeScalarVar('inMsg', 'input', 'string'), makeScalarVar('outMsg', 'output', 'string')],
     })
 
-    // No copy-back loops (scalar outputs don't need it)
-    expect(result).not.toContain('for (int __i')
+    // Stage both strings — user keeps name.len / name.body[] syntax.
+    expect(result).toContain('IEC_STRING __INMSG_stage;')
+    expect(result).toContain('IEC_STRING __OUTMSG_stage;')
+
+    // Input copy: read through .get() to honour forcing.
+    expect(result).toContain('auto __s = INMSG.get();')
+    expect(result).toContain('__INMSG_stage.len = (__strlen_t)__s.length();')
+    expect(result).toContain('std::memcpy(__INMSG_stage.body, __s.c_str(), STR_MAX_LEN);')
+
+    // Pointer in struct points at the staging copy, NOT the IECStringVar.
+    expect(result).toContain('vars.INMSG = &__INMSG_stage;')
+    expect(result).toContain('vars.OUTMSG = &__OUTMSG_stage;')
+
+    // Writeback for outputs only — input strings are read-only from
+    // the IEC side after copy-in.
+    expect(result).toContain(
+      'OUTMSG = strucpp::IECString<254>(reinterpret_cast<const char*>(__OUTMSG_stage.body), __OUTMSG_stage.len);',
+    )
+    expect(result).not.toContain('INMSG = strucpp::IECString<254>')
   })
 
   it('handles no variables', () => {
@@ -100,32 +130,23 @@ describe('generateSTCode', () => {
     expect(result).toContain('empty_loop(&vars);')
   })
 
-  it('handles mixed scalar and array input/output variables', () => {
+  it('handles mixed scalar, array, and string variables', () => {
     const result = generateSTCode({
       pouName: 'mixed',
       allVariables: [
         makeScalarVar('a', 'input', 'INT'),
         makeArrayVar('b', 'input', 'REAL', '0..2'),
+        makeScalarVar('msg', 'input', 'string'),
         makeScalarVar('c', 'output', 'BOOL'),
         makeArrayVar('d', 'output', 'INT', '0..3'),
       ],
     })
 
-    // Scalar assignments
-    expect(result).toContain('vars.A = &data__->A.value;')
-    expect(result).toContain('vars.C = &data__->C.value;')
-
-    // Array assignments
-    expect(result).toContain('vars.B = __flat_B - 0;')
-    expect(result).toContain('vars.D = __flat_D - 0;')
-
-    // Flat array declarations for both input and output arrays
-    expect(result).toContain('IEC_REAL __flat_B[3];')
-    expect(result).toContain('IEC_INT __flat_D[4];')
-
-    // Copy-back only for output arrays
-    expect(result).toContain('data__->D.value.table[__i].value = __flat_D[__i]')
-    expect(result).not.toContain('data__->B.value.table[__i].value = __flat_B[__i]')
+    expect(result).toContain('vars.A = &A;')
+    expect(result).toContain('vars.B = &B[0] - 0;')
+    expect(result).toContain('vars.MSG = &__MSG_stage;')
+    expect(result).toContain('vars.C = &C;')
+    expect(result).toContain('vars.D = &D[0] - 0;')
   })
 
   it('filters out local variables', () => {
@@ -144,15 +165,5 @@ describe('generateSTCode', () => {
     })
 
     expect(result).not.toContain('LOCALVAL')
-  })
-
-  it('generates correct start index offset for non-zero-based arrays', () => {
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeArrayVar('arr', 'input', 'INT', '5..10')],
-    })
-
-    expect(result).toContain('vars.ARR = __flat_ARR - 5;')
-    expect(result).toContain('IEC_INT __flat_ARR[6];')
   })
 })

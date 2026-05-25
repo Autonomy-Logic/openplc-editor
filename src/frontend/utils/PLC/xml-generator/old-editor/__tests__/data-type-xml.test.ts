@@ -334,6 +334,56 @@ describe('oldEditorParseDataTypesToXML', () => {
       const result = oldEditorParseDataTypesToXML(xml, dataTypes)
       expect(structVars(result)[0].initialValue).toBeUndefined()
     })
+
+    // Regression: struct creation seeds new variables with an
+    // `initialValue: { simpleValue: { value: '' } }` wrapper instead
+    // of `undefined`.  The XML emitter must treat the empty inner
+    // value the same as absence — otherwise xml2st turns it into
+    // a stray `:= ` in the ST output and breaks compilation.
+    it('omits initialValue for an array struct variable whose inner value is empty', () => {
+      const xml = makeBaseXml()
+      const dataTypes: PLCDataType[] = [
+        {
+          name: 'A',
+          derivation: 'structure',
+          variable: [
+            {
+              name: 'data',
+              type: {
+                definition: 'array',
+                value: '',
+                data: {
+                  baseType: { definition: 'base-type', value: 'REAL' },
+                  dimensions: [{ dimension: '0..7' }],
+                },
+              },
+              initialValue: { simpleValue: { value: '' } },
+            },
+          ],
+        },
+      ]
+      const result = oldEditorParseDataTypesToXML(xml, dataTypes)
+      expect(structVars(result)[0].initialValue).toBeUndefined()
+    })
+
+    it('omits initialValue for a derived struct variable whose inner value is empty', () => {
+      const xml = makeBaseXml()
+      const dataTypes: PLCDataType[] = [
+        {
+          name: 'D2',
+          derivation: 'structure',
+          variable: [
+            {
+              name: 'r',
+              type: { definition: 'derived', value: 'X' },
+              initialValue: { simpleValue: { value: '' } },
+            },
+          ],
+        },
+      ]
+      const result = oldEditorParseDataTypesToXML(xml, dataTypes)
+      expect(structVars(result)[0].initialValue).toBeUndefined()
+    })
   })
 
   it('returns the xml object', () => {

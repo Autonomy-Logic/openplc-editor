@@ -3,22 +3,15 @@ import _ from 'lodash'
 import { useEffect, useMemo, useState } from 'react'
 
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
-import { cn } from '../../../utils/cn'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../modal'
 
-type ISelectableCellProps = CellContext<PLCTask, unknown> & { editable?: boolean }
+type ISelectableCellProps = CellContext<PLCTask, unknown>
 
 const triggerOptions = ['Cyclic', 'Interrupt']
 
-const SelectableTriggerCell = ({
-  getValue,
-  row: { index },
-  column: { id },
-  table,
-  editable = true,
-}: ISelectableCellProps) => {
+const SelectableTriggerCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
   const initialValue = getValue()
 
   const [cellValue, setCellValue] = useState(initialValue)
@@ -36,10 +29,7 @@ const SelectableTriggerCell = ({
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
       <SelectTrigger
         placeholder={cellValue as string}
-        className={cn(
-          'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !editable },
-        )}
+        className='flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300'
       />
       <SelectContent
         position='popper'
@@ -63,13 +53,7 @@ const SelectableTriggerCell = ({
   )
 }
 
-const SelectableIntervalCell = ({
-  getValue,
-  row: { index },
-  column: { id },
-  editable = true,
-  table,
-}: ISelectableCellProps) => {
+const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
   const initialValue: string = getValue() as string
   const [intervalModalOpen, setIntervalModalIsOpen] = useState(false)
   const [values, setValues] = useState({
@@ -154,11 +138,7 @@ const SelectableIntervalCell = ({
         asChild
         className='flex h-8 w-full cursor-pointer items-center justify-center outline-none dark:hover:bg-neutral-900'
       >
-        <div
-          className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
-            'pointer-events-none': !editable,
-          })}
-        >
+        <div className='flex h-full w-full cursor-pointer justify-center p-2 outline-none'>
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {formattedInterval}
           </span>

@@ -3,8 +3,8 @@
  * Used by both the debugger and OPC-UA config generator.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
-import { StandardFunctionBlocks } from '../data/library/standard-function-blocks'
 
 /**
  * Variable definition from a POU or library FB.
@@ -63,27 +63,72 @@ export const isBaseType = (typeName: string): boolean => {
 }
 
 /**
+ * Variable classes that are reachable through the runtime debug surface.
+ *
+ * Mirrors STruC++'s debug-table-gen contract
+ * (strucpp/src/backend/debug-table-gen.ts):
+ *
+ *  - Library FBs: only their public interface
+ *    (input / output / inOut). Locals are implementation details
+ *    that stay inside the compiled .stlib archive — the debugger
+ *    treats library FBs as black boxes, so VAR / VAR_TEMP /
+ *    VAR_EXTERNAL members of TON, R_TRIG, CTU, etc. are NOT
+ *    enumerated in debug-map.json and cannot be polled or written.
+ *
+ *  - User-defined FBs: every persistent member
+ *    (input / output / inOut / local). Excludes temp (VAR_TEMP) and
+ *    external (VAR_EXTERNAL — those point at globals handled
+ *    separately) since neither survives across scan cycles.
+ *
+ * Used by both the debugger watch panel and the OPC-UA variable
+ * picker — keeps both views consistent with what the runtime can
+ * actually address.
+ */
+const LIBRARY_FB_INTERFACE_CLASSES: ReadonlySet<string> = new Set(['input', 'output', 'inOut'])
+const USER_FB_PERSISTENT_CLASSES: ReadonlySet<string> = new Set(['input', 'output', 'inOut', 'local'])
+
+/**
  * Find a function block definition by name.
  * Searches BOTH the built-in library AND project POUs.
- * Returns the variables array from the FB definition, or null if not found.
+ * Returns the variables array from the FB definition, filtered to
+ * match the debugger's variable-enumeration contract (see comment on
+ * LIBRARY_FB_INTERFACE_CLASSES). Returns null if not found.
  */
-export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou[]): PouVariable[] | null => {
+export const findFunctionBlockVariables = (
+  typeName: string,
+  projectPous: PLCPou[],
+  systemLibraries: SystemLibrary[],
+): PouVariable[] | null => {
   const typeNameUpper = typeName.toUpperCase()
 
-  // Check standard library FBs
-  const standardFB = StandardFunctionBlocks.pous.find(
-    (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
-  )
-  if (standardFB) {
-    return standardFB.variables as PouVariable[]
+  // Check system library FBs across every loaded .stlib bundle —
+  // interface only.  Callers thread the loaded library set down from
+  // the store (or from a TraversalContext that already carries it) —
+  // utils don't import the store directly so the architecture
+  // validator stays clean.  We search every library because a
+  // typeName may belong to standard, additional, OSCAT, or a future
+  // user-installed lib; first match wins, and FB names are unique
+  // across IEC libraries by convention.
+  for (const lib of systemLibraries) {
+    const systemFB = lib.pous.find(
+      (pou) => pou.name.toUpperCase() === typeNameUpper && normalizeTypeString(pou.type) === 'functionblock',
+    )
+    if (systemFB) {
+      return (systemFB.variables as PouVariable[]).filter((v) =>
+        v.class === undefined ? false : LIBRARY_FB_INTERFACE_CLASSES.has(v.class),
+      )
+    }
   }
 
-  // Check project POUs (user-defined FBs)
+  // Check project POUs (user-defined FBs) — interface + locals,
+  // dropping temp / external.
   const customFB = projectPous.find(
     (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
   )
   if (customFB && customFB.pouType === 'function-block') {
-    return (customFB.interface?.variables ?? []) as PouVariable[]
+    return ((customFB.interface?.variables ?? []) as PouVariable[]).filter((v) =>
+      v.class === undefined ? true : USER_FB_PERSISTENT_CLASSES.has(v.class),
+    )
   }
 
   return null
@@ -92,8 +137,12 @@ export const findFunctionBlockVariables = (typeName: string, projectPous: PLCPou
 /**
  * Check if a type name is a function block (library or project).
  */
-export const isFunctionBlockType = (typeName: string, projectPous: PLCPou[]): boolean => {
-  return findFunctionBlockVariables(typeName, projectPous) !== null
+export const isFunctionBlockType = (
+  typeName: string,
+  projectPous: PLCPou[],
+  systemLibraries: SystemLibrary[],
+): boolean => {
+  return findFunctionBlockVariables(typeName, projectPous, systemLibraries) !== null
 }
 
 /**
@@ -148,6 +197,7 @@ export const findLeafVariables = (
   typeName: string,
   projectPous: PLCPou[],
   dataTypes: PLCDataType[],
+  systemLibraries: SystemLibrary[],
   pathPrefix: string = '',
   visited: Set<string> = new Set(),
 ): LeafVariable[] => {
@@ -162,7 +212,7 @@ export const findLeafVariables = (
   visited.add(typeNameNormalized)
 
   // Try to find as FB first
-  const fbVariables = findFunctionBlockVariables(typeName, projectPous)
+  const fbVariables = findFunctionBlockVariables(typeName, projectPous, systemLibraries)
   if (fbVariables) {
     for (const fbVar of fbVariables) {
       const varPath = pathPrefix ? `${pathPrefix}.${fbVar.name}` : fbVar.name
@@ -175,7 +225,14 @@ export const findLeafVariables = (
         // Skip for now as arrays need special handling
       } else if (!isEnumerationType(varTypeName, dataTypes)) {
         // Recurse into nested FBs or structures
-        const nestedLeaves = findLeafVariables(varTypeName, projectPous, dataTypes, varPath, new Set(visited))
+        const nestedLeaves = findLeafVariables(
+          varTypeName,
+          projectPous,
+          dataTypes,
+          systemLibraries,
+          varPath,
+          new Set(visited),
+        )
         leaves.push(...nestedLeaves)
       }
     }
@@ -193,7 +250,14 @@ export const findLeafVariables = (
         leaves.push({ relativePath: fieldPath, typeName: fieldTypeName.toUpperCase() })
       } else if (!isEnumerationType(fieldTypeName, dataTypes)) {
         // Recurse into nested types
-        const nestedLeaves = findLeafVariables(fieldTypeName, projectPous, dataTypes, fieldPath, new Set(visited))
+        const nestedLeaves = findLeafVariables(
+          fieldTypeName,
+          projectPous,
+          dataTypes,
+          systemLibraries,
+          fieldPath,
+          new Set(visited),
+        )
         leaves.push(...nestedLeaves)
       }
     }

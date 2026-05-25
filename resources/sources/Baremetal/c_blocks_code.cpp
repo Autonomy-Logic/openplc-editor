@@ -1,8 +1,29 @@
-#include <stdint.h>
+#include <cstdint>
+#include <cstring>
 
 #ifdef ARDUINO
 #include <Arduino.h>
+// Arduino.h defines min(a,b) and max(a,b) as 2-arg macros that collide
+// with std::min / std::max templates in <algorithm> (pulled in
+// transitively by iec_string.hpp below). Undef so the strucpp runtime
+// headers parse cleanly — standard Arduino+STL idiom.
+#undef min
+#undef max
 #endif
+
+// STruC++ runtime types — IEC_BOOL/IEC_INT/.../IEC_REAL all live under
+// `namespace strucpp` as IECVar<T> wrappers. The auto-generated POU
+// struct (emitted just below this preamble at compile time) refers to
+// them as `strucpp::IEC_*` so the user's `*name = 5` write routes
+// through `IECVar::operator=` and respects forcing on the IEC side.
+//
+// The user's setup() / loop() bodies meanwhile keep the historical
+// raw-type aliases at file scope for any user-local variables
+// (e.g. `IEC_INT my_temp = 0;` stays a plain int16_t). The struct
+// field's `strucpp::IEC_INT*` resolves separately and never collides
+// with these typedefs.
+#include "iec_var.hpp"
+#include "iec_string.hpp"
 
 /*********************/
 /*  IEC Types defs   */
@@ -37,7 +58,13 @@ typedef double   IEC_LREAL;
 #endif
 
 typedef STR_LEN_TYPE __strlen_t;
+// Raw STRING/WSTRING layout used in the auto-generated struct *and* by
+// the C++ stub's flat staging (see frontend/utils/cpp/generateSTCode.ts).
+// Matches what the user's c_blocks code expects via `name.len` /
+// `name.body[]`. This intentionally shadows nothing — the generated
+// struct refers to it unqualified, the strucpp wrapper as `strucpp::`.
 typedef struct {
     __strlen_t len;
     uint8_t body[STR_MAX_LEN];
 } IEC_STRING;
+typedef IEC_STRING IEC_WSTRING;

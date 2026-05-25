@@ -18,8 +18,11 @@
     "<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)",
     "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"
   ],
+  "transformIgnorePatterns": [
+    "node_modules/(?!strucpp)"
+  ],
   "transform": {
-    "\\.(ts|tsx)$": [
+    "\\.(ts|tsx|js|jsx)$": [
       "ts-jest",
       {
         "tsconfig": "tsconfig.json"

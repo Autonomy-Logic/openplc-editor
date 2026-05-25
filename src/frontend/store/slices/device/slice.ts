@@ -3,22 +3,19 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/types'
-import type { DeviceSlice, PinUpdateResponse } from './types'
+import type { DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import {
+  checkIfPinAliasIsValid,
   checkIfPinIsValid,
-  checkIfPinNameIsValid,
   createNewAddress,
   getHighestPinAddress,
   removeAddressPrefix,
 } from './validation/pins'
 
-const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
+const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
-    availableRTUInterfaces: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
-    availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
-    availableTCPInterfaces: ['Ethernet', 'Wi-Fi'],
   },
   deviceDefinitions: {
     configuration: defaultDeviceConfiguration,
@@ -55,6 +52,28 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           }
         }),
       )
+
+      // availableBoards drives target-capability resolution, which the
+      // alias registry depends on. This action is the project-load
+      // sync point: the workspace screen calls us once it finishes
+      // board discovery, so by the time we run, the active target's
+      // capabilities resolve correctly. Re-syncing on every subsequent
+      // boards refresh (e.g. VPP package install) catches capability
+      // shifts for the active board.
+      //
+      // We only sync when `availableBoards` was actually provided —
+      // ports-only updates (e.g. board.tsx refresh-ports) don't affect
+      // capabilities and shouldn't churn the alias registry.
+      if (availableBoards) {
+        const syncReport = getState().projectActions.syncVariableAliases()
+        if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
+          getState().consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Alias sync: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
+          })
+        }
+      }
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(
@@ -122,7 +141,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: '',
+            alias: '',
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
@@ -135,7 +154,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: '' }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, alias: '' }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
@@ -148,7 +167,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
-            name: '',
+            alias: '',
           }
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
@@ -193,7 +212,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         ok: true,
         title: '',
         message: '',
-        data: { pin: '', pinType: '', address: '', name: '' },
+        data: { pin: '', pinType: '', address: '', alias: '' },
       }
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
@@ -288,16 +307,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                 break
 
-              case 'name': {
-                const validation = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+              case 'alias': {
+                const validation = checkIfPinAliasIsValid(pinMapping.pins, updatedData.alias)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
                   returnMessage.message = validation.message
                   return
                 }
-                currentPin.name = updatedData.name
-                returnMessage.data!.name = updatedData.name || ''
+                currentPin.alias = updatedData.alias
+                returnMessage.data!.alias = updatedData.alias || ''
                 return
               }
 
@@ -322,93 +341,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
           deviceDefinitions.configuration.communicationPort = communicationPort
-        }),
-      )
-    },
-    setCommunicationPreferences: (preferences) => {
-      setState(
-        produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (preferences.enableRTU !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
-          }
-          if (preferences.enableTCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
-          }
-          if (preferences.enableDHCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
-          }
-        }),
-      )
-    },
-    setRTUConfig: (rtuConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { rtuConfig, value } = rtuConfigOption
-          switch (rtuConfig) {
-            case 'rtuBaudRate':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate = value
-              break
-            case 'rtuInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface = value
-              break
-            case 'rtuSlaveId':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId = value
-              break
-            case 'rtuRS485ENPin':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin = value
-              break
-          }
-        }),
-      )
-    },
-    setTCPConfig: (tcpConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { tcpConfig, value } = tcpConfigOption
-          switch (tcpConfig) {
-            case 'tcpInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface = value
-              break
-            case 'tcpMacAddress':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress = value
-              break
-          }
-        }),
-      )
-    },
-    setWifiConfig: (wifiConfig): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
-            if (wifiConfig.tcpWifiSSID)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
-            if (wifiConfig.tcpWifiPassword)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword =
-                wifiConfig.tcpWifiPassword
-          }
-        }),
-      )
-    },
-    setStaticHostConfiguration: (staticHostConfiguration): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (staticHostConfiguration.ipAddress !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
-              staticHostConfiguration.ipAddress
-          if (staticHostConfiguration.dns !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.dns =
-              staticHostConfiguration.dns
-          if (staticHostConfiguration.gateway !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.gateway =
-              staticHostConfiguration.gateway
-          if (staticHostConfiguration.subnet !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
-              staticHostConfiguration.subnet
         }),
       )
     },
@@ -514,6 +446,44 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setVendorScreenData: (persistenceKey, data): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+        }),
+      )
+    },
+    /**
+     * Restore a contiguous slice of `vendorScreenData` from a snapshot.
+     * Used by the vendor-screen tab's "Don't save" revert path: the
+     * snapshot was captured when the tab opened (or on last save),
+     * and applying it back means deleting any keys the user added in
+     * this session and putting the rest back to their original
+     * values.  Keys outside `ownedKeys` are left untouched so other
+     * vendor-screen tabs and the device editor don't see unrelated
+     * mutations.
+     */
+    restoreVendorScreenSlice: (ownedKeys, snapshot): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          const target = deviceDefinitions.configuration.vendorScreenData
+          for (const key of ownedKeys) {
+            if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+              target[key] = snapshot[key]
+            } else {
+              delete target[key]
+            }
+          }
+        }),
+      )
+    },
   },
 })
 
@@ -526,19 +496,7 @@ function mergeDeviceConfigWithDefaults(
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     compileOnly: provided.compileOnly ?? defaults.compileOnly,
-    communicationConfiguration: {
-      modbusRTU: {
-        ...defaults.communicationConfiguration.modbusRTU,
-        ...(provided.communicationConfiguration?.modbusRTU || {}),
-      },
-      modbusTCP: provided.communicationConfiguration?.modbusTCP?.tcpInterface
-        ? provided.communicationConfiguration.modbusTCP
-        : defaults.communicationConfiguration.modbusTCP,
-      communicationPreferences: {
-        ...defaults.communicationConfiguration.communicationPreferences,
-        ...(provided.communicationConfiguration?.communicationPreferences || {}),
-      },
-    },
+    vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
   }
 }
 

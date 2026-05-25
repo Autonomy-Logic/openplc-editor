@@ -1,14 +1,12 @@
-import { baseTypeSchema } from '@root/middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '@root/middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable } from '@root/middleware/shared/ports/types'
 import { useEffect, useState } from 'react'
-import type { z } from 'zod'
 
 import { useOpenPLCStore } from '../../../../../../store'
 import { arrayValidation } from '../../../../../../store/slices/project/validation/variables'
+import { hasStringName } from '../../../../../../utils/safe-upper'
 import { DimensionsModal } from '../../../../../_atoms/dimensions-modal'
 import { toast } from '../../../../../_features/[app]/toast/use-toast'
-
-type BaseType = z.infer<typeof baseTypeSchema>
 
 type ArrayModalProps = {
   variableName: string
@@ -39,23 +37,30 @@ export const ArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeEnum.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
 
   const userDataTypes = dataTypes
+    .filter(hasStringName)
     .map((type) => type.name)
     .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
 
   const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
-    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+    (lib.pous ?? [])
+      .filter((pou) => pou?.type === 'function-block')
+      .filter(hasStringName)
+      .map((pou) => pou.name.toUpperCase()),
   )
 
-  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-    'pous' in userLib && Array.isArray(userLib.pous)
-      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-      : (userLib as UserLibFunctionBlock).type === 'function-block'
-        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-        : [],
-  )
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+    if ('pous' in userLib && Array.isArray(userLib.pous)) {
+      return userLib.pous
+        .filter((pou) => pou?.type === 'function-block')
+        .filter(hasStringName)
+        .map((pou) => pou.name.toUpperCase())
+    }
+    const fb = userLib as UserLibFunctionBlock
+    return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+  })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
@@ -157,7 +162,7 @@ export const ArrayModal = ({
 
     const updatedVariables: PLCStructureVariable[] = structure.variable.map((variable) => {
       if (variable.name === variableName) {
-        const isBaseType = baseTypes.includes(typeValue as BaseType)
+        const isBaseType = (baseTypes as readonly string[]).includes(typeValue)
 
         return {
           ...variable,

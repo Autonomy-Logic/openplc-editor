@@ -1,11 +1,35 @@
-#include "Arduino_OpenPLC.h"
+// Baremetal.ino -- OpenPLC Arduino runtime entry sketch.
+//
+// This is a STATIC sketch -- the same code for every project. It hosts the
+// I/O buffers, Modbus glue, and the scan-cycle scheduler. Every strucpp
+// type, every PLC POU instance, and every library body lives in the
+// arduino library at src/ (compiled as separate translation units that
+// never see Arduino.h). The sketch only talks to that library through the
+// thin C-linkage surface in arduino_runtime_glue.h.
+//
+// Why the separation: arduino-cli auto-prepends <Arduino.h> to every .ino
+// translation unit. Arduino.h defines macros named DEFAULT / HIGH / LOW /
+// PI / B0..B7 / INPUT / OUTPUT and others that collide with struct member
+// names emitted by strucpp's library bodies (most visibly OSCAT's
+// CONSTANTS_LANGUAGE.DEFAULT). Keeping every strucpp class body out of
+// the .ino's TU removes the entire class of collisions in one move.
+
+// Arduino.h defines min/max/abs/round as function-like macros that break
+// C++ standard library templates (<algorithm>, <limits>, etc).
+#undef min
+#undef max
+#undef abs
+#undef round
+
+#include "openplc.h"
 #include "defines.h"
+#include "arduino_runtime_glue.h"
 
 #ifdef MODBUS_ENABLED
 #include "ModbusSlave.h"
 #endif
 
-//Include WiFi lib to turn off WiFi radio on ESP32 and ESP8266 boards if we're not using WiFi
+// Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
 #ifndef MBTCP
     #if defined(BOARD_ESP8266)
         #include <ESP8266WiFi.h>
@@ -14,12 +38,39 @@
     #endif
 #endif
 
-uint32_t __tick = 0;
+// ---------------------------------------------------------------------------
+// AVR: provide sized operator delete (virtual destructors generate this)
+// ---------------------------------------------------------------------------
+void operator delete(void* ptr, unsigned int)
+{
+    free(ptr);
+}
 
+// ---------------------------------------------------------------------------
+// I/O Buffer definitions (declared extern in openplc.h, must be defined
+// here so they have external linkage. The glue's runtime_bind_located_vars
+// reads/writes these slots.)
+// ---------------------------------------------------------------------------
+IEC_BOOL *bool_input[MAX_DIGITAL_INPUT/8][8] = {};
+IEC_BOOL *bool_output[MAX_DIGITAL_OUTPUT/8][8] = {};
+IEC_UINT *int_input[MAX_ANALOG_INPUT] = {};
+IEC_UINT *int_output[MAX_ANALOG_OUTPUT] = {};
+#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+IEC_UINT *int_memory[MAX_MEMORY_WORD] = {};
+IEC_UDINT *dint_memory[MAX_MEMORY_DWORD] = {};
+IEC_ULINT *lint_memory[MAX_MEMORY_LWORD] = {};
+#endif
+
+// ---------------------------------------------------------------------------
+// Scan cycle timing
+// ---------------------------------------------------------------------------
 unsigned long scan_cycle;
 unsigned long last_run = 0;
 bool first_cycle = false;
 
+// ---------------------------------------------------------------------------
+// Module includes and external sketch support
+// ---------------------------------------------------------------------------
 #include "arduino_libs.h"
 
 #ifdef USE_ARDUINO_SKETCH
@@ -31,123 +82,114 @@ extern uint8_t pinMask_AIN[];
 extern uint8_t pinMask_DOUT[];
 extern uint8_t pinMask_AOUT[];
 
-/*
-extern "C" int availableMemory(char *);
-
-int availableMemory(char *msg)
-{
-  int size = 8192; // Use 2048 with ATmega328
-  byte *buf;
-
-  while ((buf = (byte *) malloc(--size)) == NULL);
-
-  free(buf);
-  Serial.print(msg);
-  Serial.println(size);
-}
-*/
-
+// ---------------------------------------------------------------------------
+// Scan cycle delay setup
+// ---------------------------------------------------------------------------
 void setupCycleDelay(unsigned long long cycle_time)
 {
-    scan_cycle = (uint32_t)(cycle_time/1000);
+    scan_cycle = (uint32_t)(cycle_time / 1000);
     last_run = micros();
 }
 
+// =============================================================================
+// SETUP
+// =============================================================================
 void setup()
 {
-    //Turn off WiFi radio on ESP32 and ESP8266 boards if we're not using WiFi
+    // Turn off WiFi radio on ESP32/ESP8266 if not using WiFi
     #ifndef MBTCP
         #if defined(BOARD_ESP8266) || defined(BOARD_ESP32)
             WiFi.mode(WIFI_OFF);
         #endif
     #endif
-    config_init__();
-    glueVars();
+
+    // Bind located variables to I/O buffer pointers
+    runtime_bind_located_vars();
+
+    // Discover tasks and compute scheduling
+    runtime_discover_tasks();
+
+    // Initialize hardware (HAL -- unchanged)
     hardwareInit();
-	#ifdef MODBUS_ENABLED
+
+    #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
-	        //Config Modbus Serial (port, speed, rs485 tx pin)
             #ifdef MBSERIAL_TXPIN
-                //Disable TX pin from OpenPLC hardware layer
+                // Disable TX pin from OpenPLC hardware layer
                 for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
                 {
-                    if (pinMask_DIN[i] == MBSERIAL_TXPIN)
-                        pinMask_DIN[i] = 255;
+                    if (pinMask_DIN[i] == MBSERIAL_TXPIN) pinMask_DIN[i] = 255;
                 }
                 for (int i = 0; i < NUM_ANALOG_INPUT; i++)
                 {
-                    if (pinMask_AIN[i] == MBSERIAL_TXPIN)
-                        pinMask_AIN[i] = 255;
+                    if (pinMask_AIN[i] == MBSERIAL_TXPIN) pinMask_AIN[i] = 255;
                 }
                 for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
                 {
-                    if (pinMask_DOUT[i] == MBSERIAL_TXPIN)
-                        pinMask_DOUT[i] = 255;
+                    if (pinMask_DOUT[i] == MBSERIAL_TXPIN) pinMask_DOUT[i] = 255;
                 }
                 for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
                 {
-                    if (pinMask_AOUT[i] == MBSERIAL_TXPIN)
-                        pinMask_AOUT[i] = 255;
+                    if (pinMask_AOUT[i] == MBSERIAL_TXPIN) pinMask_AOUT[i] = 255;
                 }
-                MBSERIAL_IFACE.begin(MBSERIAL_BAUD); //Initialize serial interface
+                MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, MBSERIAL_TXPIN);
             #else
-                MBSERIAL_IFACE.begin(MBSERIAL_BAUD); //Initialize serial interface
-                mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);;
+                MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
+                mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
-
-	        //Set the Slave ID
-	        modbus.slaveid = MBSERIAL_SLAVE;
+            modbus.slaveid = MBSERIAL_SLAVE;
         #endif
 
         #ifdef MBTCP
-        uint8_t mac[] = { MBTCP_MAC };
-        uint8_t ip[] = { MBTCP_IP };
-        uint8_t dns[] = { MBTCP_DNS };
-        uint8_t gateway[] = { MBTCP_GATEWAY };
-        uint8_t subnet[] = { MBTCP_SUBNET };
+            uint8_t mac[] = { MBTCP_MAC };
+            uint8_t ip[] = { MBTCP_IP };
+            uint8_t dns[] = { MBTCP_DNS };
+            uint8_t gateway[] = { MBTCP_GATEWAY };
+            uint8_t subnet[] = { MBTCP_SUBNET };
 
-        if (sizeof(ip)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
-        else if (sizeof(dns)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
-        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
-        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
-        else
-            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
+            if (sizeof(ip)/sizeof(uint8_t) < 4)
+                mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
+            else if (sizeof(dns)/sizeof(uint8_t) < 4)
+                mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
+            else if (sizeof(gateway)/sizeof(uint8_t) < 4)
+                mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
+            else if (sizeof(subnet)/sizeof(uint8_t) < 4)
+                mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
+            else
+                mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
         #endif
 
-        //Add all modbus registers
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
-	#endif
+    #endif
 
-    setupCycleDelay(common_ticktime__);
+    setupCycleDelay(base_tick_ns);
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_setup();
     #endif
 }
 
+// =============================================================================
+// MAP EMPTY BUFFERS (for Modbus)
+// =============================================================================
 #ifdef MODBUS_ENABLED
 void mapEmptyBuffers()
 {
-    //Map all NULL I/O buffers to Modbus registers
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] == NULL)
         {
-			bool_output[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-			*bool_output[i/8][i%8] = 0;
+            bool_output[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
+            *bool_output[i/8][i%8] = 0;
         }
     }
     for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
     {
         if (int_output[i] == NULL)
         {
-			int_output[i] = (IEC_UINT *)(modbus.holding + i);
+            int_output[i] = (IEC_UINT *)(modbus.holding + i);
         }
     }
     for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
@@ -155,14 +197,14 @@ void mapEmptyBuffers()
         if (bool_input[i/8][i%8] == NULL)
         {
             bool_input[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-			*bool_input[i/8][i%8] = 0;
+            *bool_input[i/8][i%8] = 0;
         }
     }
     for (int i = 0; i < MAX_ANALOG_INPUT; i++)
     {
         if (int_input[i] == NULL)
         {
-			int_input[i] = (IEC_UINT *)(modbus.input_regs + i);
+            int_input[i] = (IEC_UINT *)(modbus.input_regs + i);
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
@@ -190,9 +232,12 @@ void mapEmptyBuffers()
     #endif
 }
 
+// =============================================================================
+// MODBUS TASK
+// =============================================================================
 void modbusTask()
 {
-    //Sync OpenPLC Buffers with Modbus Buffers
+    // Sync OpenPLC Buffers with Modbus Buffers
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] != NULL)
@@ -245,10 +290,10 @@ void modbusTask()
         }
     #endif
 
-    //Read changes from clients
+    // Read changes from clients
     mbtask();
 
-    //Write changes back to OpenPLC Buffers
+    // Write changes back to OpenPLC Buffers
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] != NULL)
@@ -289,19 +334,12 @@ void modbusTask()
 }
 #endif
 
-void plcCycleTask()
-{
-    updateInputBuffers();
-    config_run__(__tick++); //PLC Logic
-    updateOutputBuffers();
-    updateTime();
-}
-
+// =============================================================================
+// SCHEDULER
+// =============================================================================
 void scheduler()
 {
-    // Run tasks round robin - higher priority first
-
-    plcCycleTask();
+    runtime_plc_cycle();
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_loop();
@@ -319,21 +357,19 @@ void scheduler()
     }
 }
 
+// =============================================================================
+// MAIN LOOP
+// =============================================================================
 void loop()
 {
-    // ignore until next scan cycle (run lower priority tasks if time permits)
-    // always rely on the difference between now (aka micros() ) and the last_run,
-    // which always is a positive integer number, even when micros() wraps around every 71 minutes.
     if ((micros() - last_run) >= scan_cycle)
     {
         scheduler();
-
-        //set timer for the next scan cycle
         last_run += scan_cycle;
     }
 
     #ifdef MODBUS_ENABLED
-    //Only run Modbus task again if we have at least 10ms gap until the next cycle
+    // Only run Modbus task again if we have at least 10ms gap until the next cycle
     if ((micros() - last_run) >= 10000)
     {
         modbusTask();
@@ -341,10 +377,6 @@ void loop()
     #endif
 
     #ifdef SIMULATOR_MODE
-    // In the emulated ATmega2560, busy-waiting wastes host CPU executing
-    // millions of useless instructions. SLEEP (opcode 0x9588) is detected
-    // by the emulator which fast-forwards the clock to the next timer event
-    // instead of stepping through every idle cycle.
     __asm volatile("sleep");
     #endif
 }

@@ -1,5 +1,5 @@
 /**
- * Download external tool binaries (xml2st, matiec) from GitHub Releases.
+ * Download external tool binaries (xml2st, strucpp) from GitHub Releases.
  *
  * Usage:
  *   ts-node scripts/download-binaries.ts [--platform <platform>] [--arch <arch>] [--force]
@@ -22,12 +22,11 @@ interface ToolEntry {
 
 interface BinaryVersions {
   xml2st: ToolEntry
-  matiec: ToolEntry
+  strucpp: ToolEntry
 }
 
 interface CacheMetadata {
   xml2st: string
-  matiec: string
   platform: string
   arch: string
 }
@@ -42,7 +41,6 @@ type Arch = 'x64' | 'arm64'
 const ROOT_DIR = path.resolve(__dirname, '..')
 const VERSIONS_FILE = path.join(ROOT_DIR, 'binary-versions.json')
 const RESOURCES_DIR = path.join(ROOT_DIR, 'resources')
-const MATIEC_LIB_DIR = path.join(RESOURCES_DIR, 'sources', 'MatIEC', 'lib')
 
 function binDir(platform: Platform, arch: Arch): string {
   return path.join(RESOURCES_DIR, 'bin', platform, arch)
@@ -114,14 +112,20 @@ function needsXml2st(versions: BinaryVersions, cached: CacheMetadata | null, pla
   return false
 }
 
-function needsMatiec(versions: BinaryVersions, cached: CacheMetadata | null, platform: Platform, arch: Arch): boolean {
-  const dir = binDir(platform, arch)
-  const isWindows = platform === 'win32'
-
-  const iec2cPath = path.join(dir, isWindows ? 'iec2c.exe' : 'iec2c')
-
-  if (!fs.existsSync(iec2cPath)) return true
-  if (!cached || cached.matiec !== versions.matiec.version) return true
+function needsStrucpp(versions: BinaryVersions): boolean {
+  // strucpp is `npm install`-ed into `node_modules/`, so npm's own
+  // `package.json` is the canonical source of truth for what's
+  // installed.  Re-fetch only when the package isn't installed or
+  // its version doesn't match the pin — no parallel metadata cache.
+  const expected = versions.strucpp.version.replace(/^v/, '')
+  const pkgJsonPath = path.join(ROOT_DIR, 'node_modules', 'strucpp', 'package.json')
+  if (!fs.existsSync(pkgJsonPath)) return true
+  try {
+    const installed = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'))
+    if (installed.version !== expected) return true
+  } catch {
+    return true
+  }
 
   return false
 }
@@ -129,7 +133,6 @@ function needsMatiec(versions: BinaryVersions, cached: CacheMetadata | null, pla
 function writeCache(versions: BinaryVersions, platform: Platform, arch: Arch): void {
   const data: CacheMetadata = {
     xml2st: versions.xml2st.version,
-    matiec: versions.matiec.version,
     platform,
     arch,
   }
@@ -242,64 +245,40 @@ async function downloadXml2st(
 }
 
 // ---------------------------------------------------------------------------
-// matiec download and extraction
+// strucpp download and extraction
 // ---------------------------------------------------------------------------
 
-async function downloadMatiec(
-  tool: ToolEntry,
-  platform: Platform,
-  arch: Arch,
-  targetBinDir: string,
-): Promise<void> {
-  const isWindows = platform === 'win32'
-  const ext = isWindows ? 'zip' : 'tar.gz'
-  const url = `https://github.com/${tool.repository}/releases/download/${tool.version}/matiec-${platform}-${arch}.${ext}`
+async function downloadStrucpp(tool: ToolEntry): Promise<void> {
+  // The npm tarball is platform-independent (pure TypeScript + C++ headers)
+  const version = tool.version.replace(/^v/, '')
+  const url = `https://github.com/${tool.repository}/releases/download/${tool.version}/strucpp-${version}.tgz`
 
-  console.log(`  Downloading matiec ${tool.version} for ${platform}-${arch}...`)
-  const tmpDir = fs.mkdtempSync(path.join(RESOURCES_DIR, '.tmp-matiec-'))
+  console.log(`  Downloading strucpp ${tool.version}...`)
+  const tmpDir = fs.mkdtempSync(path.join(RESOURCES_DIR, '.tmp-strucpp-'))
 
   try {
-    const archivePath = path.join(tmpDir, `matiec.${ext}`)
-    await downloadToFile(url, archivePath)
+    const tgzPath = path.join(tmpDir, 'strucpp.tgz')
+    await downloadToFile(url, tgzPath)
 
-    const extractDir = path.join(tmpDir, 'extracted')
-    if (isWindows) {
-      extractZip(archivePath, extractDir)
-    } else {
-      extractTarGz(archivePath, extractDir)
-    }
-
-    const extractedToolDir = path.join(extractDir, 'matiec')
-
-    // Copy iec2c binary
-    const iec2cName = isWindows ? 'iec2c.exe' : 'iec2c'
-    const iec2cSrc = path.join(extractedToolDir, iec2cName)
-    const iec2cDest = path.join(targetBinDir, iec2cName)
-    fs.copyFileSync(iec2cSrc, iec2cDest)
-    if (!isWindows) {
-      fs.chmodSync(iec2cDest, 0o755)
-    }
-
-    // Copy iec2iec binary if present
-    const iec2iecName = isWindows ? 'iec2iec.exe' : 'iec2iec'
-    const iec2iecSrc = path.join(extractedToolDir, iec2iecName)
-    if (fs.existsSync(iec2iecSrc)) {
-      const iec2iecDest = path.join(targetBinDir, iec2iecName)
-      fs.copyFileSync(iec2iecSrc, iec2iecDest)
-      if (!isWindows) {
-        fs.chmodSync(iec2iecDest, 0o755)
-      }
-    }
-
-    // Copy lib/ to resources/sources/MatIEC/lib/
-    // Only do this once (for the first platform/arch downloaded), since lib/ is platform-independent
-    const libSrc = path.join(extractedToolDir, 'lib')
-    if (fs.existsSync(libSrc)) {
-      rmrf(MATIEC_LIB_DIR)
-      copyRecursive(libSrc, MATIEC_LIB_DIR)
-    }
-
-    console.log(`  matiec ${tool.version} installed.`)
+    // Install into node_modules via npm.  In dev (`npm run dev`),
+    // the compiler reads runtime headers from `node_modules/strucpp/
+    // src/runtime/include/` and bundled `.stlib` archives from
+    // `node_modules/strucpp/libs/` directly.  In packaged builds,
+    // electron-builder's `extraResources` config copies those two
+    // directories into `Resources/strucpp/` of the final app — see
+    // `electron-builder.json` and the dev/packaged path branching
+    // in `backend/editor/compiler/compiler-module.ts` and
+    // `backend/editor/library-manager/library-manager-module.ts`.
+    // We don't mirror the install into `release/app/node_modules`
+    // because electron-builder walks `release/app/package.json`'s
+    // dependency tree and prunes anything not listed there from the
+    // asar, regardless of whether the files exist on disk.
+    console.log(`  Installing strucpp ${tool.version} into node_modules...`)
+    execSync(`npm install "${tgzPath}" --no-save`, {
+      cwd: ROOT_DIR,
+      stdio: 'pipe',
+    })
+    console.log(`  strucpp ${tool.version} installed.`)
   } finally {
     rmrf(tmpDir)
   }
@@ -326,10 +305,10 @@ async function main(): Promise<void> {
 
   const cached = force ? null : getCachedMetadata(platform, arch)
   const downloadXml2stNeeded = force || needsXml2st(versions, cached, platform, arch)
-  const downloadMatiecNeeded = force || needsMatiec(versions, cached, platform, arch)
+  const downloadStrucppNeeded = force || needsStrucpp(versions)
 
-  if (!downloadXml2stNeeded && !downloadMatiecNeeded) {
-    console.log(`[download-binaries] Binaries up to date for ${platform}-${arch}, skipping.`)
+  if (!downloadXml2stNeeded && !downloadStrucppNeeded) {
+    console.log(`[download-binaries] All tools up to date, skipping.`)
     return
   }
 
@@ -339,10 +318,11 @@ async function main(): Promise<void> {
     console.log(`  xml2st ${versions.xml2st.version} already installed, skipping.`)
   }
 
-  if (downloadMatiecNeeded) {
-    await downloadMatiec(versions.matiec, platform, arch, targetBinDir)
+  // strucpp is platform-independent — only download once regardless of platform/arch
+  if (downloadStrucppNeeded) {
+    await downloadStrucpp(versions.strucpp)
   } else {
-    console.log(`  matiec ${versions.matiec.version} already installed, skipping.`)
+    console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
   }
 
   writeCache(versions, platform, arch)

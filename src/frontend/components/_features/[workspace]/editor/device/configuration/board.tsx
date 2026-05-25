@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
@@ -10,21 +11,16 @@ import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import {
-  isArduinoTarget,
-  isOpenPLCRuntimeTarget,
-  isOpenPLCRuntimeV4Target,
-  isSimulatorTarget,
-  validateRuntimeVersion,
-} from '../../../../../../utils/device'
-import { normalizeEthercatStatus } from '../../../../../../utils/ethercat-status'
+import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
 import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
+import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
+import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
-import { EthercatStatsSection } from '../ethercat/components/ethercat-stats-section'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
@@ -69,7 +65,6 @@ const Board = memo(function () {
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
   )
-  const ethercatStatus = useOpenPLCStore((state) => state.runtimeConnection.ethercatStatus)
   const setIncludeEthercatStatsInPolling = useOpenPLCStore(
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
   )
@@ -116,6 +111,16 @@ const Board = memo(function () {
     handleDeviceValueAtFirstRender()
   }, [])
 
+  // Sync alias-bound variables whenever the target changes. Producers
+  // gate by capability, so switching boards activates / deactivates
+  // entire I/O sources and the variables bound to their aliases may
+  // need to refresh or orphan. The effect fires after setDeviceBoard
+  // commits, regardless of which code path triggered the switch
+  // (regular pick, Python-warning confirm, V4-features-warning confirm).
+  useEffect(() => {
+    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+  }, [deviceBoard])
+
   useEffect(() => {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
   }, [deviceSelectIsOpen])
@@ -127,11 +132,11 @@ const Board = memo(function () {
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const boardInfos = availableBoards.get(deviceBoard)
-      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png')
+      const imagePath = await device.getPreviewImage(boardInfos?.preview || 'generic.png', boardInfos?.vpp?.packagePath)
       setPreviewImage(imagePath)
     }
     void fetchPreviewImage()
-  }, [deviceBoard, device])
+  }, [deviceBoard, device, availableBoards])
 
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {
@@ -163,6 +168,25 @@ const Board = memo(function () {
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
+      if (board === '__install_additional_boards__') {
+        const { tabsActions, editorActions } = useOpenPLCStore.getState()
+        const tab = {
+          name: 'Package Manager',
+          path: '/package-manager',
+          elementType: { type: 'package-manager' as const },
+        }
+        tabsActions.updateTabs(tab)
+        const existing = editorActions.getEditorFromEditors(tab.name)
+        if (!existing) {
+          const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
+          editorActions.addModel(model)
+          editorActions.setEditor(model)
+        } else {
+          editorActions.setEditor(existing)
+        }
+        return
+      }
+
       const normalizedBoard = board.split('[')[0].trim()
 
       if (connectionStatus === 'connected' && normalizedBoard !== deviceBoard) {
@@ -178,26 +202,30 @@ const Board = memo(function () {
       }
 
       const targetBoardInfo = availableBoards.get(normalizedBoard)
-      const isArduino = isArduinoTarget(targetBoardInfo)
+      const targetCaps = resolveTargetCapabilities(targetBoardInfo)
       const hasPythonFunctionBlocks = pous.some(
         (pou) => pou.pouType === 'function-block' && pou.body.language === 'python',
       )
 
-      if (isArduino && hasPythonFunctionBlocks) {
+      if (!targetCaps.pythonFunctionBlocks && hasPythonFunctionBlocks) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
         setShowPythonWarning(true)
         return
       }
 
-      // Check if switching to a non-v4 target when servers or remote devices exist
-      const isTargetV4 = isOpenPLCRuntimeV4Target(normalizedBoard)
-      const isTargetSimulator = isSimulatorTarget(targetBoardInfo)
+      // Warn when the new target can't host the servers or remote-device
+      // I/O the project currently has configured.
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
+      const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
+      const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
 
-      if (!isTargetV4 && !isTargetSimulator && (hasServers || hasRemoteDevices)) {
+      const losingServers = hasServers && targetCantHostServers
+      const losingRemoteIo = hasRemoteDevices && targetCantHostRemoteIo
+
+      if (losingServers || losingRemoteIo) {
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
-        setV4FeaturesAffected({ hasServers: !!hasServers, hasRemoteDevices: !!hasRemoteDevices })
+        setV4FeaturesAffected({ hasServers: !!losingServers, hasRemoteDevices: !!losingRemoteIo })
         setShowV4FeaturesWarning(true)
         return
       }
@@ -331,28 +359,29 @@ const Board = memo(function () {
     }
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
-  const ethercatMasters = useMemo(() => normalizeEthercatStatus(ethercatStatus), [ethercatStatus])
-
   return (
-    <DeviceEditorSlot heading='Board Settings'>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <div id='compile-only-container' className='flex select-none items-center gap-2'>
-          <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-            Compile Only
-          </Label>
-          <Checkbox
-            id='compile-only-checkbox'
-            className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-            checked={compileOnly}
-            onCheckedChange={handleCompileOnly}
-          />
-        </div>
-      )}
-      <div id='board-selection-container' className='flex h-2/5 min-h-[325px] w-full justify-between'>
+    <DeviceEditorSlot>
+      <div id='board-selection-container' className='flex w-full flex-wrap items-start gap-8 lg:gap-16'>
         <div
           id='board-preferences-container'
-          className='flex h-full w-1/2 max-w-[400px] flex-col items-start justify-start gap-3 overflow-hidden'
+          className='flex w-[360px] flex-shrink-0 flex-col items-start justify-start gap-3'
         >
+          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+            Board Settings
+          </h2>
+          {!isSimulatorTarget(currentBoardInfo) && (
+            <div id='compile-only-container' className='flex select-none items-center gap-2'>
+              <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
+                Compile Only
+              </Label>
+              <Checkbox
+                id='compile-only-checkbox'
+                className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
+                checked={compileOnly}
+                onCheckedChange={handleCompileOnly}
+              />
+            </div>
+          )}
           <div id='board-selector' className='flex w-full items-center justify-start gap-1 pr-5'>
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
@@ -395,6 +424,19 @@ const Board = memo(function () {
                     </SelectItem>
                   )
                 })}
+                {capabilities.hasPackageManager && (
+                  <>
+                    <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />
+                    <SelectItem
+                      value='__install_additional_boards__'
+                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
+                        + Install additional boards...
+                      </span>
+                    </SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -524,77 +566,31 @@ const Board = memo(function () {
             </div>
           )}
         </div>
-        <div id='board-preview-container' className='flex h-full w-1/2 items-center justify-center pb-8'>
+        <div id='board-preview-container' className='flex flex-shrink-0 items-start'>
           <div className='h-[16rem] w-[20rem]'>
             <img src={previewImage} alt='Device preview' className='h-full w-full object-contain' />
           </div>
         </div>
       </div>
-      {!isSimulatorTarget(currentBoardInfo) && (
-        <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      )}
+      {(() => {
+        // Only draw the divider when there's actually content below it:
+        // Runtime targets render stats only when connected (the stats
+        // section always shows the EtherCAT panel when connected, even
+        // before the first scan completes); pin mapping (future
+        // Arduino-family VPP path) always renders.
+        const isSim = isSimulatorTarget(currentBoardInfo)
+        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
+        const showDivider = !isSim && (isRuntime ? connectionStatus === 'connected' : true)
+        return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
+      })()}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
-        <>
-          {connectionStatus === 'connected' && timingStats && timingStats.scan_count > 0 && (
-            <div id='scan-cycle-stats-section' className='flex w-full flex-col gap-4'>
-              <h2
-                id='scan-cycle-stats-title'
-                className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-              >
-                Scan Cycle Statistics
-              </h2>
-              <div id='scan-cycle-stats-cards' className='grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'>
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {timingStats.scan_count.toLocaleString()}
-                  </span>
-                </div>
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>{timingStats.overruns}</span>
-                </div>
-                {timingStats.scan_time_avg !== null && (
-                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
-                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                      {timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
-                    </span>
-                    {timingStats.scan_time_min !== null && timingStats.scan_time_max !== null && (
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                        min: {timingStats.scan_time_min} / max: {timingStats.scan_time_max}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {timingStats.cycle_time_avg !== null && (
-                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
-                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                      {timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
-                    </span>
-                    {timingStats.cycle_time_min !== null && timingStats.cycle_time_max !== null && (
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                        min: {timingStats.cycle_time_min} / max: {timingStats.cycle_time_max}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {timingStats.cycle_latency_avg !== null && (
-                  <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
-                    <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                      {timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {connectionStatus === 'connected' && (
-            <EthercatStatsSection masters={ethercatMasters} className='flex w-full flex-col gap-4' withSectionId />
-          )}
-        </>
+        connectionStatus === 'connected' && (
+          <div className='flex w-full flex-col gap-6'>
+            {timingStats && <ScanCycleStats timingStats={timingStats} />}
+            <EtherCATStats />
+            <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
+          </div>
+        )
       ) : (
         <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
           <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>

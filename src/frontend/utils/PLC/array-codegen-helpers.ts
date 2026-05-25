@@ -91,11 +91,23 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * Both scalars and arrays use pointers:
  * - Scalars: pointer to the single value
  * - Arrays: pointer to the first element of the table
+ *
+ * Type qualification:
+ * - STRING / WSTRING resolve to the file-scope raw struct typedef in
+ *   c_blocks_code.cpp (`{ len; body[]; }`). The C++ stub copies these
+ *   in/out of strucpp's IECStringVar at the boundary, preserving the
+ *   historical `name.len` / `name.body[i]` user syntax.
+ * - Every other base type (BOOL/INT/REAL/TIME/...) resolves to the
+ *   strucpp IECVar wrapper (e.g. `strucpp::IEC_INT = IECVar<INT_t>`).
+ *   That gives the user's `*name = 5` write force-aware semantics
+ *   via `IECVar::operator=` while keeping the raw-pointer feel.
  */
 const generateStructMember = (variable: PLCVariable): string => {
   const iecType = getVariableIECType(variable)
   const name = variable.name.toUpperCase()
-  return `  ${iecType} *${name};\n`
+  const isStringType = iecType === 'IEC_STRING' || iecType === 'IEC_WSTRING'
+  const qualifiedType = isStringType ? iecType : `strucpp::${iecType}`
+  return `  ${qualifiedType} *${name};\n`
 }
 
 export {

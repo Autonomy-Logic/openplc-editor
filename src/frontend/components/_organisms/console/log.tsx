@@ -1,3 +1,4 @@
+import type { StructuredCompileError } from '@root/middleware/shared/ports/types'
 import { Copy } from 'lucide-react'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
 
@@ -17,6 +18,12 @@ type LogComponentProps = ComponentPropsWithoutRef<'p'> & {
   message: string
   tstamp: string
   searchTerm?: string
+  /** When set, the bracketed POU prefix on the first line becomes a
+   *  click-to-open button that calls {@link onCompileErrorClick}.
+   *  Multi-line gcc-style snippet renders as plain pre-wrapped text
+   *  underneath. */
+  compileError?: StructuredCompileError
+  onCompileErrorClick?: (err: StructuredCompileError) => void
 }
 
 /**
@@ -57,9 +64,64 @@ const HighlightedText = ({ text, searchTerm }: { text: string; searchTerm?: stri
 }
 
 /**
+ * Render a compile-error log line: the first line (the bracketed POU
+ * prefix the compiler-module emits, e.g. `[Manual_Override / body
+ * line 7]`) becomes a button that fires the passed click handler;
+ * the remaining lines stay as the plain gcc-style snippet so users
+ * can still read the file:line:col header and the source caret.
+ *
+ * Falls back to plain rendering when no click handler is supplied —
+ * keeps the component usable in test setups and snapshot rendering
+ * without forcing a navigator into every consumer.
+ */
+const CompileErrorMessage = ({
+  message,
+  searchTerm,
+  compileError,
+  onCompileErrorClick,
+}: {
+  message: string
+  searchTerm?: string
+  compileError: StructuredCompileError
+  onCompileErrorClick?: (err: StructuredCompileError) => void
+}) => {
+  const newlineIdx = message.indexOf('\n')
+  const headerText = newlineIdx === -1 ? message : message.slice(0, newlineIdx)
+  const restText = newlineIdx === -1 ? '' : message.slice(newlineIdx)
+
+  const handleClick = onCompileErrorClick ? () => onCompileErrorClick(compileError) : undefined
+
+  return (
+    <>
+      {handleClick ? (
+        <button
+          type='button'
+          onClick={handleClick}
+          className='cursor-pointer underline-offset-2 hover:underline focus:outline-none focus-visible:underline'
+          title='Open in editor'
+        >
+          <HighlightedText text={headerText} searchTerm={searchTerm} />
+        </button>
+      ) : (
+        <HighlightedText text={headerText} searchTerm={searchTerm} />
+      )}
+      {restText && <HighlightedText text={restText} searchTerm={searchTerm} />}
+    </>
+  )
+}
+
+/**
  * A single console log with copy and highlight support.
  */
-const LogComponent = ({ level, message, tstamp, searchTerm, ...rest }: LogComponentProps) => {
+const LogComponent = ({
+  level,
+  message,
+  tstamp,
+  searchTerm,
+  compileError,
+  onCompileErrorClick,
+  ...rest
+}: LogComponentProps) => {
   const [copied, setCopied] = useState(false)
 
   let classForMessage = 'text-[#011432] dark:text-white pl-2'
@@ -93,12 +155,29 @@ const LogComponent = ({ level, message, tstamp, searchTerm, ...rest }: LogCompon
     <>
       {message && (
         <div className='group flex items-start gap-1'>
-          <p className={cn('flex-1 font-normal', classForMessage)} {...rest}>
+          <p className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)} {...rest}>
             {level && tstamp ? (
               <>
                 [<HighlightedText text={tstamp} searchTerm={searchTerm} />
-                ]: <HighlightedText text={message} searchTerm={searchTerm} />
+                ]:{' '}
+                {compileError ? (
+                  <CompileErrorMessage
+                    message={message}
+                    searchTerm={searchTerm}
+                    compileError={compileError}
+                    onCompileErrorClick={onCompileErrorClick}
+                  />
+                ) : (
+                  <HighlightedText text={message} searchTerm={searchTerm} />
+                )}
               </>
+            ) : compileError ? (
+              <CompileErrorMessage
+                message={message}
+                searchTerm={searchTerm}
+                compileError={compileError}
+                onCompileErrorClick={onCompileErrorClick}
+              />
             ) : (
               <HighlightedText text={message} searchTerm={searchTerm} />
             )}

@@ -2,13 +2,11 @@
  * Shared debugger session helpers.
  *
  * Builds the debug variable index map, debug tree, and FB instance map
- * from parsed debug.c data and project structure. These artifacts are
- * stored in the workspace Zustand store for the debugger UI.
- *
- * Works with the port-format types (PLCPou flat format) used by both
- * the editor and web platforms.
+ * from STruC++'s debug-map.json and the project structure. The artifacts
+ * are stored in the workspace Zustand store for the debugger UI.
  */
 
+import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type {
   DebugTreeNode,
   FbInstanceInfo,
@@ -17,29 +15,55 @@ import type {
   PLCPou,
   PLCVariable,
 } from '../../middleware/shared/ports/types'
-import type { DebugVariableEntry, ParsedDebugData } from './debug-parser'
+import type { DebugMap, DebugVariableEntry } from './debug-parser'
+import { buildLeafPathMap, packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
-import {
-  buildDebugPathPrefix,
-  buildGlobalDebugPath,
-  findDebugVariable,
-  findGlobalVariableIndex,
-  findInstanceName,
-  findVariableIndex,
-  findVariableIndexWithFallback,
-  type PLCInstanceMapping,
-} from './debug-variable-finder'
+import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
 
 // ---------------------------------------------------------------------------
 // 0. logCompilerEvent — shared log helper for compile/debug progress
 // ---------------------------------------------------------------------------
 
-/** Forward compile/debug progress lines to the console log. */
+/**
+ * Forward compile/debug progress lines to the console log.
+ *
+ * Plain progress messages get split on newlines into one log entry
+ * per line — keeps the existing scroll/wrap/copy behaviour intact for
+ * the long Arduino-CLI / xml2st outputs.
+ *
+ * Events that carry a structured `compileError` are emitted as a
+ * single multi-line entry instead, with the structured field attached.
+ * The renderer's LogComponent uses `whitespace-pre-wrap` so the
+ * gcc-style snippet still displays correctly, and the bracketed POU
+ * prefix on the first line becomes a clickable affordance backed by
+ * the carried strucpp diagnostic.
+ */
 export function logCompilerEvent(
-  event: { message?: string; level?: string },
-  log: (entry: { id: string; level: 'error' | 'debug' | 'info' | 'warning'; message: string }) => void,
+  event: {
+    message?: string
+    level?: string
+    compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
+  },
+  log: (entry: {
+    id: string
+    level: 'error' | 'debug' | 'info' | 'warning'
+    message: string
+    compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
+  }) => void,
 ): void {
   if (!event.message) return
+  const level = (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info'
+
+  if (event.compileError) {
+    log({
+      id: crypto.randomUUID(),
+      level,
+      message: event.message.trim(),
+      compileError: event.compileError,
+    })
+    return
+  }
+
   event.message
     .trim()
     .split('\n')
@@ -47,7 +71,7 @@ export function logCompilerEvent(
       if (line) {
         log({
           id: crypto.randomUUID(),
-          level: (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info',
+          level,
           message: line,
         })
       }
@@ -55,7 +79,7 @@ export function logCompilerEvent(
 }
 
 // ---------------------------------------------------------------------------
-// 1. buildVariableIndexMap
+// 1. buildVariableIndexMap — composite-key -> packed-DebugAddr
 // ---------------------------------------------------------------------------
 
 export interface VariableIndexMapResult {
@@ -64,16 +88,24 @@ export interface VariableIndexMapResult {
 }
 
 /**
- * Build a composite-key -> debug-index map from parsed debug variables.
- * Pure function — caller is responsible for logging warnings.
+ * Build a composite-key -> packed-DebugAddr map from a DebugMap.
+ *
+ * The map addresses variables as (arrayIdx, elemIdx) pairs; we pack those
+ * into a single number `(arr << 16) | elem` so downstream store types and
+ * the polling loop see a plain `number` key.
+ *
+ * Path convention emitted by STruC++:
+ *   INSTANCE_NAME.VAR_NAME            (scalar)
+ *   INSTANCE_NAME.VAR_NAME[5]         (array element, IEC-indexed)
+ *   INSTANCE_NAME.FB_INST.FIELD       (nested struct/FB field)
  */
-export function buildVariableIndexMap(
-  pous: PLCPou[],
-  instances: PLCInstance[],
-  parsed: ParsedDebugData,
-): VariableIndexMapResult {
+export function buildVariableIndexMap(pous: PLCPou[], instances: PLCInstance[], map: DebugMap): VariableIndexMapResult {
   const indexMap = new Map<string, number>()
   const warnings: string[] = []
+
+  // Single source of truth for path → packed-address (case-insensitive).
+  // Same lookup the OPC-UA resolver uses.
+  const pathToAddr = buildLeafPathMap(map)
 
   const instanceMappings: PLCInstanceMapping[] = instances.map((inst) => ({
     name: inst.name,
@@ -89,7 +121,9 @@ export function buildVariableIndexMap(
       return
     }
 
+    const upperInstance = instanceName.toUpperCase()
     const variables = pou.interface?.variables ?? []
+
     variables.forEach((v: PLCVariable) => {
       if (v.type.definition === 'array' && v.type.data) {
         const dimensions = v.type.data.dimensions
@@ -99,45 +133,46 @@ export function buildVariableIndexMap(
             const startIdx = parseInt(dimMatch[1], 10)
             const endIdx = parseInt(dimMatch[2], 10)
             for (let i = 0; i <= endIdx - startIdx; i++) {
-              let elementIndex: number | null
-              if (v.class === 'external') {
-                const globalPath = `${buildGlobalDebugPath(v.name)}.value.table[${i}]`
-                const match = findDebugVariable(parsed.variables, globalPath)
-                elementIndex = match ? match.index : null
-              } else {
-                elementIndex = findVariableIndex(instanceName, v.name, parsed.variables, {
-                  isArrayElement: true,
-                  arrayIndex: i,
-                })
-              }
-              if (elementIndex !== null) {
-                const compositeKey = `${pou.name}:${v.name}[${startIdx + i}]`
-                indexMap.set(compositeKey, elementIndex)
+              const iecIdx = startIdx + i
+              const path = `${upperInstance}.${v.name.toUpperCase()}[${iecIdx}]`
+              const addr = pathToAddr.get(path)
+              if (addr !== undefined) {
+                indexMap.set(`${pou.name}:${v.name}[${iecIdx}]`, addr)
               }
             }
           }
         }
       } else {
-        const index =
-          v.class === 'external'
-            ? findGlobalVariableIndex(v.name, parsed.variables)
-            : findVariableIndexWithFallback(instanceName, v.name, parsed.variables)
-        if (index !== null) {
-          const compositeKey = `${pou.name}:${v.name}`
-          indexMap.set(compositeKey, index)
+        const path = `${upperInstance}.${v.name.toUpperCase()}`
+        const addr = pathToAddr.get(path)
+        if (addr !== undefined) {
+          indexMap.set(`${pou.name}:${v.name}`, addr)
         }
       }
     })
   })
 
-  // Append any unmatched parsed variables as fallback entries
-  parsed.variables.forEach((debugVar) => {
-    if (!indexMap.has(debugVar.name)) {
-      indexMap.set(debugVar.name, debugVar.index)
+  // Fallback: also key by the raw debug path so any leaves we didn't cover
+  // (nested fields, FB internals) remain reachable by path.
+  for (const leaf of map.leaves) {
+    if (!indexMap.has(leaf.path)) {
+      indexMap.set(leaf.path, packDebugAddr(leaf))
     }
-  })
+  }
 
   return { indexMap, warnings }
+}
+
+/**
+ * Flatten a DebugMap's leaves into the DebugVariableEntry[] shape the tree
+ * builder consumes. `index` carries the packed (arr<<16|elem) address.
+ */
+export function debugMapToEntries(map: DebugMap): DebugVariableEntry[] {
+  return map.leaves.map((leaf) => ({
+    name: leaf.path,
+    type: `${leaf.type}_ENUM`,
+    index: packDebugAddr(leaf),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +195,7 @@ export function buildDebugVariableTreeMap(
   instances: PLCInstance[],
   debugVariables: DebugVariableEntry[],
   projectData: { dataTypes: PLCDataType[]; pous: PLCPou[] },
+  systemLibraries: SystemLibrary[],
 ): DebugVariableTreeMapResult {
   const trees: DebugTreeNode[] = []
   const treeMap = new Map<string, DebugTreeNode>()
@@ -188,7 +224,7 @@ export function buildDebugVariableTreeMap(
     const variables = pou.interface?.variables ?? []
     variables.forEach((v: PLCVariable) => {
       try {
-        const node = buildDebugTree(v, pou.name, instanceName, debugVariables, projectData)
+        const node = buildDebugTree(v, pou.name, instanceName, debugVariables, projectData, systemLibraries)
         trees.push(node)
         addNodeAndChildrenToMap(node)
         if (node.isComplex) {

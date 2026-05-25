@@ -1,5 +1,5 @@
-import { cycleTimeUsToIecInterval, ethercatTaskName } from '@root/backend/shared/ethercat/ethercat-task-helpers'
 import { produce } from 'immer'
+import type { StoreApi } from 'zustand'
 import { StateCreator } from 'zustand'
 
 import type {
@@ -11,10 +11,19 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  nextFreeAddress,
+  syncVariableAliases as syncVariablesPure,
+} from '../../../../middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
-import type { ProjectResponse, ProjectSlice } from './types'
+import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
 
@@ -141,37 +150,118 @@ function generateIOPoints(
   functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
   length: number,
   groupName: string,
-  usedAddresses: Set<string>,
+  /* Pool of every claim active for the current target. The bulk
+   * allocator threads its own `pending` set alongside the pool so
+   * each new point in the same batch sees the prior batch picks
+   * without needing to rebuild the pool inside the loop. */
+  pool: Parameters<typeof nextFreeAddress>[0],
+  pending: Set<string>,
 ): ModbusIOPoint[] {
   const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
   const points: ModbusIOPoint[] = []
-  let currentAddress = 0
 
   for (let i = 0; i < length; i++) {
-    let iecLocation: string
-    if (isBit) {
-      iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${Math.floor(currentAddress / 8)}.${currentAddress % 8}`
-      }
-    } else {
-      iecLocation = `${iecPrefix}${currentAddress}`
-      while (usedAddresses.has(iecLocation)) {
-        currentAddress++
-        iecLocation = `${iecPrefix}${currentAddress}`
-      }
-    }
-
+    const iecLocation = nextFreeAddress(pool, iecPrefix, isBit, undefined, pending)
+    pending.add(iecLocation)
     points.push({ id: `${groupName}_${i}`, name: `${groupName}_${i}`, type, iecLocation, alias: '' })
-    usedAddresses.add(iecLocation)
-    currentAddress++
   }
 
   return points
 }
 
-const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
+// ---------------------------------------------------------------------------
+// Variables-text ⇄ variables-table reconcile helpers
+// ---------------------------------------------------------------------------
+
+// `createVariable`, `updateVariable`, and `deleteVariable` below are
+// reachable from outside the variables-editor itself — block drops,
+// autocomplete "Add variable", block deletion, node type changes, etc.
+// When that POU's variables editor is in text mode, the in-memory
+// `pou.interface.variables` array and the `editor.variable.code`
+// buffer are two views of the same data.  Mutating the array
+// directly would diverge them: switching back to table mode would
+// reparse the (stale) text and clobber the just-added variable.
+//
+// Each external mutation runs three steps to keep them in lockstep:
+//
+//   1. **Reconcile** (`reconcileVariablesText`) — if the editor is in
+//      code mode, parse the text and replace the variables array with
+//      the parsed result.  Mirrors what the explicit text→table mode
+//      switch does, minus the rename/type-change dialogs (those are
+//      polish for an explicit user mode switch, not an implicit
+//      reconcile triggered by an unrelated diagram action).  If the
+//      text doesn't parse, refuse the mutation — the call site
+//      surfaces the failure via toast through the standard
+//      `{ok: false, title, message}` return shape.
+//   2. **Mutate** — apply the requested change to the variables array.
+//   3. **Regenerate** (`regenerateVariablesText`) — if the editor is
+//      in code mode, regenerate `editor.variable.code` from the new
+//      variables so Monaco shows the new state immediately.
+//
+// Project save / load paths intentionally do NOT call these — the
+// serializer roundtrip preserves invalid text verbatim (see
+// `parse-project-files`), and we only need to reconcile when an
+// external mutation is requested.
+
+type ProjectSetState = StoreApi<ProjectSliceRoot>['setState']
+type ProjectGetState = () => ProjectSliceRoot
+
+const reconcileVariablesText = (
+  pouName: string | undefined,
+  getState: ProjectGetState,
+  setState: ProjectSetState,
+): ProjectResponse => {
+  if (!pouName) return ok()
+  const state = getState()
+  const editorModel =
+    state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
+  // Only the editors that expose a per-POU variables panel
+  // participate.  Other editor types (datatype, device, server, etc.)
+  // never own a variables-text view.
+  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return ok()
+  if (editorModel.variable.display !== 'code') return ok()
+  const code = editorModel.variable.code
+  if (typeof code !== 'string') return ok()
+
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  const currentVariables = pou?.interface?.variables ?? []
+  // Buffer is a verbatim serialisation of the current variables —
+  // user hasn't typed since the last sync, nothing to reconcile.
+  if (code === generateIecVariablesToString(currentVariables)) return ok()
+
+  try {
+    const parsed = parseIecStringToVariables(
+      code,
+      state.project.data.pous,
+      state.project.data.dataTypes,
+      state.libraries,
+    )
+    setState(
+      produce((slice: ProjectSlice) => {
+        const target = slice.project.data.pous.find((p) => p.name === pouName)
+        if (target?.interface) target.interface.variables = parsed
+      }),
+    )
+    return ok()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown parse error.'
+    return fail(message, 'Variables table is invalid')
+  }
+}
+
+const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
+  if (!pouName) return
+  const state = getState()
+  const editorModel =
+    state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
+  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return
+  if (editorModel.variable.display !== 'code') return
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  const newText = generateIecVariablesToString(pou?.interface?.variables ?? [])
+  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
+}
+
+const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: { name: '', type: 'plc-project', path: '' },
     data: {
@@ -180,6 +270,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
       servers: [],
       remoteDevices: [],
+      libraries: [],
     },
   },
   pendingDeletions: [],
@@ -192,26 +283,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           slice.project = state
-
-          // Migration: ensure system tasks exist for all EtherCAT devices
-          const ethercatDevices = (slice.project.data.remoteDevices ?? []).filter((d) => d.protocol === 'ethercat')
-          for (const device of ethercatDevices) {
-            const existingTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === device.name,
-            )
-            if (!existingTask) {
-              const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
-              const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
-              slice.project.data.configurations.resource.tasks.unshift({
-                name: ethercatTaskName(device.name),
-                triggering: 'Cyclic' as const,
-                interval: cycleTimeUsToIecInterval(cycleTimeUs),
-                priority: taskPriority,
-                isSystemTask: true,
-                associatedDevice: device.name,
-              })
-            }
-          }
         }),
       )
     },
@@ -233,6 +304,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
               servers: [],
               remoteDevices: [],
+              libraries: [],
             },
           }
           slice.pendingDeletions = []
@@ -261,6 +333,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           slice.project.meta.path = path
+        }),
+      )
+    },
+    updateLibraryManifest: (content) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.libraryManifest = content
         }),
       )
     },
@@ -374,6 +453,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         return fail(`'${data.name}' ${reason}`, 'Illegal Variable Name')
       }
 
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
@@ -407,6 +491,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           response.data = data
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     setPouVariables: ({ pouName, variables }) => {
@@ -427,7 +512,45 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return ok()
     },
     updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       let response: ProjectResponse = { ok: true }
+
+      // Auto-adopt path: whenever the location changes, look up the
+      // alias registry and patch updates.alias to match the new
+      // address. If the address has an alias, the variable adopts it
+      // (cell shows the alias name, Phase 4 sync will keep the
+      // location current as the alias moves). If not, the alias
+      // clears — re-typing a now-orphaned location intentionally
+      // drops the stale alias label too. Done outside `produce` so
+      // we read the live store state including pinMapping + caps.
+      let aliasOverride: { alias: string | undefined } | undefined
+      if (typeof updates.location === 'string') {
+        const live = getState()
+        const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+          live.deviceDefinitions.configuration.deviceBoard ?? '',
+        )
+        const ioMapping =
+          (
+            live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+              | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+              | undefined
+          )?.entries ?? []
+        const pool = buildAddressPool(
+          {
+            pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+            vendorIoMapping: { entries: ioMapping },
+            remoteDevices: live.project.data.remoteDevices,
+          },
+          resolveTargetCapabilities(boardInfo),
+        )
+        const registry = buildAliasRegistry(pool)
+        aliasOverride = { alias: registry.byAddress.get(updates.location)?.alias }
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           // Resolve the target variables array (local POU or global)
@@ -458,11 +581,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables[found.index] = {
             ...variables[found.index],
             ...updates,
+            ...(aliasOverride ?? {}),
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     getVariable: ({ scope, associatedPou, rowId, variableId }) => {
@@ -476,6 +601,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return found?.variable
     },
     deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName }) => {
+      if (scope === 'local') {
+        const reconcile = reconcileVariablesText(associatedPou, getState, setState)
+        if (!reconcile.ok) return reconcile
+      }
+
       if (scope === 'global') {
         const state = getState()
         const globalVars = state.project.data.configurations.resource.globalVariables
@@ -533,6 +663,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables.splice(found.index, 1)
         }),
       )
+      if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
     rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {
@@ -550,6 +681,82 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           variables.splice(newIndex, 0, item)
         }),
       )
+    },
+
+    syncVariableAliases: () => {
+      // Build pool + registry once from the live state before entering
+      // produce so we don't read draft proxies inside the registry
+      // build.
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (
+          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: live.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+      const registry = buildAliasRegistry(pool)
+
+      // Conflicts are unreachable under normal editor flows because
+      // the editor always assigns addresses uniquely. They can
+      // appear when a project file has been hand-edited or migrated
+      // incorrectly — silent first-wins is the worst failure mode,
+      // so surface them in the console panel.
+      if (pool.conflicts.length > 0) {
+        const sample = pool.conflicts
+          .slice(0, 5)
+          .map((c) => `${c.address} (${c.sources.map((s) => s.kind).join(', ')})`)
+          .join('; ')
+        const overflow = pool.conflicts.length > 5 ? ` (+${pool.conflicts.length - 5} more)` : ''
+        live.consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Address pool reports ${pool.conflicts.length} conflicting claim(s): ${sample}${overflow}. The first source wins; later ones lose their address binding.`,
+        })
+      }
+
+      let adopted = 0
+      let refreshed = 0
+      let orphaned = 0
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            if (!pou.interface?.variables) continue
+            const result = syncVariablesPure(pou.interface.variables, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            // Mutate in place to preserve draft semantics.
+            for (let i = 0; i < result.variables.length; i++) {
+              pou.interface.variables[i] = result.variables[i]
+            }
+          }
+
+          const globals = slice.project.data.configurations.resource.globalVariables
+          if (globals) {
+            const result = syncVariablesPure(globals, registry)
+            adopted += result.report.adopted.length
+            refreshed += result.report.refreshed.length
+            orphaned += result.report.orphaned.length
+            for (let i = 0; i < result.variables.length; i++) {
+              globals[i] = result.variables[i]
+            }
+          }
+        }),
+      )
+
+      return { adopted, refreshed, orphaned }
     },
 
     // -----------------------------------------------------------------------
@@ -640,34 +847,26 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     setTasks: ({ tasks }) => {
       setState(
         produce((slice: ProjectSlice) => {
-          // Preserve system tasks (auto-created for EtherCAT devices)
-          const systemTasks = slice.project.data.configurations.resource.tasks.filter((t) => t.isSystemTask)
-          slice.project.data.configurations.resource.tasks = [...systemTasks, ...tasks.filter((t) => !t.isSystemTask)]
+          slice.project.data.configurations.resource.tasks = tasks
         }),
       )
       return ok()
     },
     updateTask: (dto) => {
-      let response = ok()
       setState(
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
-          if (tasks[dto.rowId]?.isSystemTask) {
-            response = { ok: false, title: 'System task', message: 'System tasks cannot be modified' }
-            return
-          }
           if (dto.rowId >= 0 && dto.rowId < tasks.length) {
             tasks[dto.rowId] = { ...tasks[dto.rowId], ...dto.data }
           }
         }),
       )
-      return response
+      return ok()
     },
     deleteTask: ({ rowId }) => {
       setState(
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
-          if (tasks[rowId]?.isSystemTask) return
           if (rowId >= 0 && rowId < tasks.length) tasks.splice(rowId, 1)
         }),
       )
@@ -677,7 +876,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce((slice: ProjectSlice) => {
           const tasks = slice.project.data.configurations.resource.tasks
           if (rowId < 0 || rowId >= tasks.length) return
-          if (tasks[rowId].isSystemTask) return
           const [item] = tasks.splice(rowId, 1)
           tasks.splice(newIndex, 0, item)
         }),
@@ -1068,19 +1266,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
           slice.project.data.remoteDevices.push(device)
 
-          // Auto-create system task for EtherCAT devices
-          if (device.protocol === 'ethercat') {
-            const cycleTimeUs = device.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
-            const taskPriority = device.ethercatConfig?.masterConfig?.taskPriority ?? 1
-            slice.project.data.configurations.resource.tasks.unshift({
-              name: ethercatTaskName(device.name),
-              triggering: 'Cyclic' as const,
-              interval: cycleTimeUsToIecInterval(cycleTimeUs),
-              priority: taskPriority,
-              isSystemTask: true,
-              associatedDevice: device.name,
-            })
-          }
+          // EtherCAT bus is driven by a dedicated thread inside the
+          // runtime plugin, not by an injected IEC task. Nothing to do
+          // here on add/rename/delete.
         }),
       )
       return ok()
@@ -1089,19 +1277,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.remoteDevices) return
-          const deviceToDelete = slice.project.data.remoteDevices.find((d) => d.name === name)
           slice.pendingDeletions.push(`devices/remote/${name}.json`)
           slice.project.data.remoteDevices = slice.project.data.remoteDevices.filter((d) => d.name !== name)
-
-          // Remove associated system task for EtherCAT devices
-          if (deviceToDelete?.protocol === 'ethercat') {
-            const taskIndex = slice.project.data.configurations.resource.tasks.findIndex(
-              (t) => t.isSystemTask && t.associatedDevice === name,
-            )
-            if (taskIndex !== -1) {
-              slice.project.data.configurations.resource.tasks.splice(taskIndex, 1)
-            }
-          }
         }),
       )
       return ok()
@@ -1119,17 +1296,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           // See `updatePouName` — queue old path so the version-control
           // badge doesn't over-count the rename.
           slice.pendingDeletions.push(`devices/remote/${name}.json`)
-
-          // Update associated system task name for EtherCAT devices
-          if (device.protocol === 'ethercat') {
-            const systemTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === name,
-            )
-            if (systemTask) {
-              systemTask.name = ethercatTaskName(newName)
-              systemTask.associatedDevice = newName
-            }
-          }
 
           device.name = newName
         }),
@@ -1150,30 +1316,38 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       return ok()
     },
     addIOGroup: (deviceName, group) => {
+      // Read producer state from the live store before entering produce
+      // so the pool reflects every active source (pin-mapping, VPP,
+      // every Modbus / EtherCAT remote device — including this one's
+      // existing groups, which must not be reclaimed) under the
+      // current target's capabilities.
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (
+          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
+
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: live.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
           if (!device?.modbusTcpConfig) return
 
-          const usedAddresses = new Set<string>()
-          for (const g of device.modbusTcpConfig.ioGroups) {
-            /* istanbul ignore next -- defensive: ioPoints may be undefined */
-            for (const p of g.ioPoints ?? []) {
-              usedAddresses.add(p.iecLocation)
-            }
-          }
-          // Include EtherCAT channel mappings from all remote devices
-          for (const rd of slice.project.data.remoteDevices ?? []) {
-            if (rd.ethercatConfig?.devices) {
-              for (const dev of rd.ethercatConfig.devices) {
-                for (const mapping of dev.channelMappings) {
-                  usedAddresses.add(mapping.iecLocation)
-                }
-              }
-            }
-          }
-
-          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, usedAddresses)
+          const pending = new Set<string>()
+          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending)
           device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
         }),
       )
@@ -1211,6 +1385,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (point) point.alias = alias
         }),
       )
+      // Producer mutation: refresh variables that were bound to the
+      // old alias (or that now resolve to the new one).
+      getState().projectActions.syncVariableAliases()
       return ok()
     },
     updateEthercatConfig: (deviceName, ethercatConfig) => {
@@ -1231,22 +1408,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             return
           }
           device.ethercatConfig = ethercatConfig
-
-          // Sync master config fields to the associated system task
-          const masterCfg = ethercatConfig.masterConfig
-          if (masterCfg) {
-            const systemTask = slice.project.data.configurations.resource.tasks.find(
-              (t) => t.isSystemTask && t.associatedDevice === deviceName,
-            )
-            if (systemTask) {
-              if (masterCfg.cycleTimeUs !== undefined) {
-                systemTask.interval = cycleTimeUsToIecInterval(masterCfg.cycleTimeUs)
-              }
-              if (masterCfg.taskPriority !== undefined) {
-                systemTask.priority = masterCfg.taskPriority
-              }
-            }
-          }
+          // Bus timing now lives entirely in masterConfig (cycleTimeUs +
+          // taskPriority); the runtime plugin's bus thread reads them
+          // directly. No IEC task needs syncing.
         }),
       )
       return response

@@ -13,8 +13,17 @@ import type { ConfiguredEtherCATDevice } from './esi-types'
 // Result wrappers
 // ---------------------------------------------------------------------------
 
-/** Standard result for operations that can fail */
-export type Result<T = void> = ({ success: true } & T) | { success: false; error: string }
+/** Standard result for operations that can fail.
+ *
+ *  Default `T` is `unknown` — NOT `void` — because TS 5.5+ collapses
+ *  `{ success: true } & void` to `never`, which would make
+ *  `return { success: true }` an error at every call site that
+ *  consumes `Result<void>`.  Intersection with `unknown` is the
+ *  identity, so callers that don't pass `T` get the bare
+ *  `{ success: true }` shape, and callers that do (e.g.
+ *  `Result<{ value: number }>`) still get the extra fields merged in.
+ */
+export type Result<T = unknown> = ({ success: true } & T) | { success: false; error: string }
 
 /** Unsubscribe function returned by event subscriptions */
 export type Unsubscribe = () => void
@@ -49,6 +58,11 @@ export interface PLCVariable {
   class?: VariableClass
   type: PLCVariableType
   location: string
+  /** Stable alias name the variable is bound to, when present. Looked
+   *  up in the alias registry to keep `location` current as the
+   *  producer reassigns the address. Cell renders `alias (address)`
+   *  when set; falls back to raw `location` otherwise. */
+  alias?: string
   initialValue?: string | null
   documentation: string
   debug?: boolean
@@ -59,8 +73,6 @@ export interface PLCTask {
   triggering: 'Cyclic' | 'Interrupt'
   interval: string
   priority: number
-  isSystemTask?: boolean
-  associatedDevice?: string
 }
 
 export interface PLCInstance {
@@ -334,7 +346,6 @@ export interface OpcUaFieldConfig {
   fieldPath: string
   displayName: string
   datatype?: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   fields?: OpcUaFieldConfig[]
 }
@@ -348,7 +359,6 @@ export interface OpcUaNodeConfig {
   browseName: string
   displayName: string
   description: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   nodeType: 'variable' | 'structure' | 'array'
   fields?: OpcUaFieldConfig[]
@@ -412,6 +422,16 @@ export interface PLCRemoteDevice {
 // Project
 // ---------------------------------------------------------------------------
 
+export interface PLCProjectLibraryRef {
+  /** Strucpp manifest identifier — same value
+   *  `InstalledLibrary.name` carries.  Project ↔ system pool joins
+   *  go through this field. */
+  name: string
+  /** Informational on load (name-only match against the pool today);
+   *  the manager surfaces a soft warning when versions differ. */
+  version: string
+}
+
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
   pous: PLCPou[]
@@ -424,6 +444,20 @@ export interface PLCProjectData {
   }
   servers?: PLCServer[]
   remoteDevices?: PLCRemoteDevice[]
+  /** Opt-in libraries the project pulls into compile + UI surfaces.
+   *  Bundled / canonical strucpp libraries are always-on regardless
+   *  of this list and do not appear here.  Optional on the wire so
+   *  legacy fixtures and projects without the field type-check; the
+   *  store's default state and the parsed-project loader both
+   *  surface the absent case as `[]`. */
+  libraries?: PLCProjectLibraryRef[]
+  /** Raw bytes of the library project's `library.json` manifest.
+   *  Same in-memory pattern POU bodies use (`pous[i].body.value`):
+   *  loaded from disk on project open, serialised back to its own
+   *  file by the save pipeline, NEVER embedded in `project.json`.
+   *  Optional / undefined for PLC projects, which don't own this
+   *  file. */
+  libraryManifest?: string
   debugVariables?: {
     global?: string[]
     pous?: Record<string, string[]>
@@ -439,11 +473,111 @@ export interface ProjectMeta {
   path: string
 }
 
+/**
+ * Single source of truth for "is this project a library?"  Every UI
+ * conditional that hides or rearranges affordances for libraries
+ * funnels through this — never compare `meta.type` directly at a
+ * call site.  A future third project type (firmware project, board
+ * preset bundle, …) would change this helper, not every consumer.
+ */
+export function isLibraryProject(meta: { type: 'plc-project' | 'plc-library' } | null | undefined): boolean {
+  return meta?.type === 'plc-library'
+}
+
+/**
+ * Per-project-type capability matrix.  Drives every UI affordance
+ * that depends on what kind of project is open: project tree
+ * branches, sidebar actions, menu entries, the New Project modal's
+ * step count, etc.
+ *
+ * Layered on top of `useCapabilities()` (which gates by host
+ * platform — serial ports, native dialogs, …).  The two are
+ * independent: `useCapabilities` answers "what can this build of
+ * the editor do?", `projectCapabilities` answers "what makes sense
+ * for this project?".
+ *
+ * Pure function so the renderer can call it inline without
+ * memoising — `meta.type` only changes when the project changes,
+ * which is rare and always triggers a re-render anyway.
+ */
+export interface ProjectCapabilities {
+  /** Show the Programs branch in the project tree and allow the
+   *  create-element modal to make new programs. */
+  hasPrograms: boolean
+  /** Show the Resource entry in the project tree. */
+  hasResource: boolean
+  /** Show Device / Configuration / Orchestrators entries. */
+  hasDevices: boolean
+  /** Show Server entries (Modbus / OPC-UA servers). */
+  hasServers: boolean
+  /** Show Remote-Device entries (Modbus client, EtherCAT). */
+  hasRemoteDevices: boolean
+  /** Show VPP vendor screens for the current board. */
+  hasVendorScreens: boolean
+  /** Show the standard Compile / Run on Simulator / Upload /
+   *  Start-Stop / Debug affordances in the workspace activity bar. */
+  hasProgramBuild: boolean
+  /** Show the Library-specific build button (produces `.stlib`). */
+  hasLibraryBuild: boolean
+  /** Show the version-control affordance. */
+  hasVersionControl: boolean
+  /** Show the debugger panel + watch list. */
+  hasDebugger: boolean
+  /** Show the runtime-connection status and Start/Stop controls. */
+  hasRuntimeControls: boolean
+  /** Show the library manifest tab (the JSON-on-disk Monaco editor
+   *  that controls .stlib build output). */
+  hasLibraryManifest: boolean
+}
+
+export function projectCapabilities(
+  meta: { type: 'plc-project' | 'plc-library' } | null | undefined,
+): ProjectCapabilities {
+  if (isLibraryProject(meta)) {
+    return {
+      hasPrograms: false,
+      hasResource: false,
+      hasDevices: false,
+      hasServers: false,
+      hasRemoteDevices: false,
+      hasVendorScreens: false,
+      hasProgramBuild: false,
+      hasLibraryBuild: true,
+      hasVersionControl: false,
+      hasDebugger: false,
+      hasRuntimeControls: false,
+      hasLibraryManifest: true,
+    }
+  }
+  return {
+    hasPrograms: true,
+    hasResource: true,
+    hasDevices: true,
+    hasServers: true,
+    hasRemoteDevices: true,
+    hasVendorScreens: true,
+    hasProgramBuild: true,
+    hasLibraryBuild: false,
+    hasVersionControl: true,
+    hasDebugger: true,
+    hasRuntimeControls: true,
+    hasLibraryManifest: false,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Device & Board
 // ---------------------------------------------------------------------------
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
+
+/** Re-export of the canonical capability shape so consumers of
+ *  `BoardInfo` get the same union without crossing the utils layer
+ *  directly. Authoritative definition lives in
+ *  `middleware/shared/utils/target-capabilities`. */
+import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capabilities'
+
+export type { DebuggerTransport, TargetCapabilities }
 
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
@@ -457,6 +591,157 @@ export interface BoardInfo {
     defaultDin?: string[]
     defaultDout?: string[]
   }
+  /** Optional explicit capability declaration. When absent, the resolver
+   *  in backend/shared infers capabilities from the legacy `compiler`
+   *  field (back-compat for pre-migration data). */
+  capabilities?: Partial<TargetCapabilities>
+  vpp?: VppMetadata
+}
+
+// ---------------------------------------------------------------------------
+// VPP (Vendor Plugin Package)
+// ---------------------------------------------------------------------------
+
+export interface VppModuleDefinition {
+  id: string
+  name: string
+  /** Vendor-specific hardware id (e.g. board model number) used by the
+   *  module-discovery flow to match a detected device against this
+   *  definition. Optional — modules with no hwId can only be added
+   *  manually. */
+  hwId?: string
+  image?: string
+  /** One-line prose displayed in the per-slot detail pane of the
+   *  backplane editor. */
+  description?: string
+  /** Key/value pairs (channels, resolution, range, ...) rendered as a
+   *  spec list in the per-slot detail pane. */
+  specs?: Record<string, string>
+  /** Path (in the manifest) to this module's configuration screen. The
+   *  backend loads it eagerly and exposes the parsed JSON via
+   *  `configScreenDefinition`; consumers should prefer that field. */
+  configScreen?: string
+  /** Parsed config-screen JSON for this module. Populated by the
+   *  hardware-module loader when `configScreen` resolves to an
+   *  existing, valid screen file. */
+  configScreenDefinition?: unknown
+  io: {
+    digitalInputs: number
+    digitalOutputs: number
+    analogInputs: number
+    analogOutputs: number
+  }
+  parameters?: Array<{
+    id: string
+    name: string
+    type: string
+    options?: string[]
+    default?: unknown
+    min?: number
+    max?: number
+  }>
+  addressMapping?: unknown
+}
+
+export interface VppMetadata {
+  packageId: string
+  deviceId: string
+  packagePath: string
+  screens: Record<string, unknown>
+  moduleSystem: {
+    enabled: boolean
+    maxSlots: number
+    modules: VppModuleDefinition[]
+  } | null
+}
+
+export interface PackageManifest {
+  formatVersion: string
+  package: {
+    id: string
+    name: string
+    version: string
+    vendor: {
+      name: string
+      url?: string
+      logo: string
+    }
+    description: string
+    license?: string
+    minEditorVersion?: string
+  }
+  devices: Array<{
+    id: string
+    name: string
+    category?: string
+    preview: string
+    target: {
+      type: string
+      platform?: string
+      core?: string
+    }
+    specs?: Record<string, string>
+    hal: {
+      type: string
+      pluginType?: string
+      pluginEntry?: string
+      configTemplate?: string
+      requirements?: string
+      source?: string
+    }
+    defaults?: {
+      runtimeIpAddress?: string
+      pins?: {
+        defaultDin?: string[]
+        defaultDout?: string[]
+        defaultAin?: string[]
+        defaultAout?: string[]
+      }
+    }
+    screens?: Record<string, string>
+    moduleSystem?: {
+      enabled: boolean
+      maxSlots: number
+      discoverySupported?: boolean
+      /** Shell command the editor invokes to ask a connected device
+       *  to enumerate its modules. Returns lines parsed by the
+       *  module-system's discovery flow; format defined per package. */
+      discoveryCommand?: string
+      modules: VppModuleDefinition[]
+    }
+  }>
+}
+
+export interface InstalledPackage {
+  packageId: string
+  version: string
+  installedAt: string
+  path: string
+  devices: string[]
+}
+
+export interface ImportResult {
+  success: boolean
+  canceled?: boolean
+  packageId?: string
+  packageName?: string
+  devices?: string[]
+  error?: string
+}
+
+export interface IoMappingEntry {
+  slot: number
+  moduleId: string
+  moduleName: string
+  channelName: string
+  channelType: string
+  dataType: string
+  iecAddress: string
+  alias: string
+}
+
+export interface VendorIoMapping {
+  entries: IoMappingEntry[]
 }
 
 export interface CommunicationPort {
@@ -475,27 +760,9 @@ export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
-  name?: string
-}
-
-export interface ModbusRTUConfig {
-  rtuInterface: string
-  rtuBaudRate: string
-  rtuSlaveId: number | null
-  rtuRS485ENPin: string | null
-}
-
-export interface ModbusTCPConfig {
-  tcpInterface: string
-  tcpMacAddress: string | null
-  tcpWifiSSID?: string | null
-  tcpWifiPassword?: string | null
-  tcpStaticHostConfiguration: {
-    ipAddress: string
-    dns: string
-    gateway: string
-    subnet: string
-  }
+  /** User-supplied label that participates in the alias registry.
+   *  Used to be `name` — legacy projects are auto-upgraded on load. */
+  alias?: string
 }
 
 export interface DeviceConfiguration {
@@ -503,24 +770,24 @@ export interface DeviceConfiguration {
   communicationPort: string
   runtimeIpAddress?: string
   compileOnly: boolean
-  communicationConfiguration: {
-    modbusRTU: ModbusRTUConfig
-    modbusTCP: ModbusTCPConfig
-    communicationPreferences: {
-      enabledRTU: boolean
-      enabledTCP: boolean
-      enabledDHCP: boolean
-    }
-  }
+  vendorScreenData?: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------
 // Runtime
 // ---------------------------------------------------------------------------
 
-export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'UNKNOWN'
+export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'
 
-export interface TimingStats {
+/**
+ * Per-task scan/cycle/latency stats from the runtime. Each IEC task
+ * runs on its own thread under STruC++, so stats are reported per
+ * task and the editor renders one row per entry. The `name` field
+ * is the IEC task name from the project (falls back to `plc-task-<idx>`
+ * when the compiled .so doesn't expose a name).
+ */
+export interface TaskTimingStats {
+  name: string
   scan_count: number
   scan_time_min: number | null
   scan_time_max: number | null
@@ -532,6 +799,34 @@ export interface TimingStats {
   cycle_latency_max: number | null
   cycle_latency_avg: number | null
   overruns: number
+}
+
+/**
+ * Plugin-contributed stat field. The runtime aggregates one of these
+ * for each metric a loaded plugin exports via its `get_stats` hook
+ * (e.g. EtherCAT cycle counters, VPP-package telemetry). The editor
+ * renders them grouped under the plugin's `label` without needing to
+ * know what the metric semantically represents.
+ */
+export interface PluginStatsField {
+  label: string
+  value: string | number | boolean
+  unit?: string
+}
+
+export interface PluginStatsPayload {
+  label: string
+  fields: PluginStatsField[]
+}
+
+/**
+ * Container for runtime timing stats. The runtime emits one entry per
+ * IEC task plus an optional opaque map of plugin-contributed stats.
+ * Pulled via the runtime's `/api/status?include_stats=true` endpoint.
+ */
+export interface TimingStats {
+  tasks: TaskTimingStats[]
+  plugin_stats?: Record<string, PluginStatsPayload>
 }
 
 export type RuntimeLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR'
@@ -578,6 +873,10 @@ export interface Md5VerifyResult {
   success: boolean
   match?: boolean
   targetMd5?: string
+  /** Target byte order, detected from the runtime's MD5 response
+   *  trailer.  Renderer-side debug components feed this into the
+   *  swap layer at read / write boundaries.  Omitted on failure. */
+  targetEndian?: 'le' | 'be'
   error?: string
 }
 
@@ -604,6 +903,34 @@ export interface CompileProgressEvent {
   level?: string
   firmwarePath?: string
   plcStatus?: string
+  /**
+   * Structured strucpp diagnostic for click-to-open in the console.
+   * Set on the per-error events emitted during a failed strucpp
+   * compile; absent for plain progress messages.  Consumers that
+   * don't care about navigation can ignore it.
+   */
+  compileError?: StructuredCompileError
+}
+
+/**
+ * Subset of strucpp's `CompileError` carried over IPC.  Kept narrow
+ * on purpose — only the fields the editor's console / navigation
+ * actually consume travel across the bridge, to avoid coupling the
+ * IPC shape to every internal strucpp detail.
+ */
+export interface StructuredCompileError {
+  message: string
+  line: number
+  column: number
+  endLine?: number
+  endColumn?: number
+  file?: string
+  severity: 'error' | 'warning' | 'info'
+  pouName?: string
+  pouKind?: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK'
+  section?: 'interface' | 'var-block' | 'body'
+  bodyLine?: number
+  variableName?: string
 }
 
 export interface CompileResult {
@@ -620,6 +947,31 @@ export interface DebugCompileResult {
   debugContent?: string
   md5?: string
   error?: string
+}
+
+/**
+ * Result of building a `.stlib` from a Library Project.  Mirrors the
+ * shape of `CompileResult` (success / error) plus the artefact path
+ * the console surfaces so the user can find the produced archive.
+ *
+ * The verification step (Phase 8 — running the synthetic project
+ * through avr-gcc on the simulator target) reports its outcome
+ * through `verification`: missing means the step hasn't been wired
+ * yet; `success: true` means it ran clean; `success: false` does NOT
+ * fail the build, the warning surfaces to the console instead (a
+ * legitimate target may have more memory than the AVR simulator).
+ */
+export interface CompileLibraryResult {
+  success: boolean
+  /** Absolute path to the produced `<libname>.stlib`.  Only set on success. */
+  stlibPath?: string
+  /** Manifest name extracted from `library.json`. */
+  libraryName?: string
+  error?: string
+  verification?: {
+    success: boolean
+    message?: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -646,6 +998,14 @@ export interface DebugTreeNode {
   children?: DebugTreeNode[]
   debugIndex?: number
   arrayIndices?: number[]
+  /**
+   * Member names of an enumerated type, indexed by the underlying integer
+   * value. Set only for leaves whose project type is a `derivation:
+   * 'enumerated'` data type. The wire still carries an INT; the polling
+   * loop maps it to the member name (`enumValues[i]`) on read, and the
+   * force path maps the user-entered name back to its index on write.
+   */
+  enumValues?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -677,6 +1037,13 @@ export interface LogObject {
   level?: 'debug' | 'info' | 'warning' | 'error'
   message: string
   tstamp?: Date
+  /**
+   * Optional structured strucpp diagnostic that originated this log.
+   * When set, the console renders the bracketed POU prefix as a
+   * clickable button that opens the right tab/section. Plain
+   * progress / informational logs leave this undefined.
+   */
+  compileError?: StructuredCompileError
 }
 
 // ---------------------------------------------------------------------------

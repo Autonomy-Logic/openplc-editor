@@ -1,8 +1,9 @@
 /**
  * Debug Session Hook
  *
- * Manages the debug session lifecycle: read debug.c, build index/tree maps,
- * commit debug artifacts to the store, connect/disconnect via DebuggerPort.
+ * Manages the debug session lifecycle: read debug-map.json, build index/tree
+ * maps, commit debug artifacts to the store, connect/disconnect via
+ * DebuggerPort.
  *
  * Platform-agnostic — all protocol operations are delegated to the
  * DebuggerPort and SimulatorPort provided by the PlatformProvider.
@@ -14,9 +15,14 @@ import { useCallback, useRef } from 'react'
 import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger, useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
-import { parseDebugFile } from '../utils/debug-parser'
-import { buildDebugVariableTreeMap, buildFbInstanceMap, buildVariableIndexMap } from '../utils/debugger-session'
-import { hexToBytes } from '../utils/hex'
+import { parseDebugMap } from '../utils/debug-parser'
+import {
+  buildDebugVariableTreeMap,
+  buildFbInstanceMap,
+  buildVariableIndexMap,
+  debugMapToEntries,
+} from '../utils/debugger-session'
+import { encodeForceValue } from '../utils/variable-sizes'
 
 export interface UseDebugSessionReturn {
   /**
@@ -64,22 +70,32 @@ export function useDebugSession(): UseDebugSessionReturn {
       logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
 
       try {
-        // Read debug file
         const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
         if (!debugFileResult.success || !debugFileResult.content) {
-          const error = `Failed to read debug file: ${debugFileResult.error ?? 'No content'}`
+          const error = `Failed to read debug-map.json: ${debugFileResult.error ?? 'No content'}`
           logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
           return { success: false, error }
         }
 
         wsActions.setDebugCContent(debugFileResult.content)
 
-        // Parse debug file and build variable maps
-        const parsed = parseDebugFile(debugFileResult.content)
         const instances = project.data.configurations.resource.instances
 
-        // Build variable index map
-        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, parsed)
+        const debugMap = parseDebugMap(debugFileResult.content)
+        if (!debugMap) {
+          const error = 'Invalid debug-map.json (expected schema version 2)'
+          logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+          return { success: false, error }
+        }
+
+        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, debugMap)
+        const entriesForTree = debugMapToEntries(debugMap)
+        logActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Debug map: ${debugMap.leaves.length} leaves across ${debugMap.arrays.length} arrays.`,
+        })
+
         for (const w of warnings) {
           logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
         }
@@ -88,7 +104,13 @@ export function useDebugSession(): UseDebugSessionReturn {
         let treeMap = new Map<string, DebugTreeNode>()
         const pouTrees: Record<string, DebugTreeNode[]> = {}
         try {
-          const treeResult = buildDebugVariableTreeMap(project.data.pous, instances, parsed.variables, project.data)
+          const treeResult = buildDebugVariableTreeMap(
+            project.data.pous,
+            instances,
+            entriesForTree,
+            project.data,
+            useOpenPLCStore.getState().libraries.system,
+          )
           treeMap = treeResult.treeMap
 
           // Group trees by POU name for polling hook
@@ -183,9 +205,21 @@ export function useDebugSession(): UseDebugSessionReturn {
   }, [simulator, debuggerPort, workspaceActions])
 
   const forceVariable = useCallback(
-    async (index: number, force: boolean, valueHex = '00'): Promise<boolean> => {
-      const valueBuffer = hexToBytes(valueHex)
-      const result = await debuggerPort.setVariable(index, force, force ? valueBuffer : undefined)
+    async (index: number, force: boolean, value?: string, type?: string, enumValues?: string[]): Promise<boolean> => {
+      let valueBuffer: Uint8Array | undefined
+      if (force) {
+        try {
+          valueBuffer = encodeForceValue(value ?? '0', type ?? 'BOOL', enumValues)
+        } catch (err) {
+          consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Force input error: ${err instanceof Error ? err.message : String(err)}`,
+          })
+          return false
+        }
+      }
+      const result = await debuggerPort.setVariable(index, force, valueBuffer)
       if (result.success) {
         consoleActions.addLog({
           id: crypto.randomUUID(),

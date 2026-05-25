@@ -1,18 +1,24 @@
 import { Position } from '@xyflow/react'
-import { ZodLiteral } from 'zod'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
-import { baseTypeSchema, genericTypeSchema } from '../../../../../../middleware/shared/ports'
-import type { EditorModel } from '../../../../../store/slices/editor'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
+import {
+  getVariableRestrictionType as _getVariableRestrictionType,
+  validateVariableType as _validateVariableType,
+} from '../../../../../utils/PLC/validate-variable-type'
 import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
 
+// `pouName` is the bound POU for the caller's editor instance — see
+// the FBD helper next door for the full rationale.  In short: the
+// editor used to be passed in so we could read `editor.meta.name`,
+// but that always resolves to the globally-active editor and breaks
+// multi-mounted instances.
 export const getLadderPouVariablesRungNodeAndEdges = (
-  editor: EditorModel,
+  pouName: string,
   pous: PLCPou[],
   ladderFlows: LadderFlowType[],
   data: { nodeId: string; variableName?: string },
@@ -26,10 +32,10 @@ export const getLadderPouVariablesRungNodeAndEdges = (
   }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
-  const pou = pous.find((pou) => pou.name === editor.meta.name)
+  const pou = pous.find((pou) => pou.name === pouName)
 
   const rung = ladderFlows
-    .find((flow) => flow.name === editor.meta.name)
+    .find((flow) => flow.name === pouName)
     ?.rungs.find((rung) => rung.nodes.some((node) => node.id === data.nodeId))
 
   const node = rung?.nodes.find((node) => node.id === data.nodeId)
@@ -91,111 +97,22 @@ export const getVariableByName = (variables: PLCVariable[], name: string): PLCVa
   return resolveArrayVariableByName(variables, name)
 }
 
+/** Validate a selected type against a block input/output type.  Thin
+ *  wrapper around the shared PLC validator so callers can pass either
+ *  a `BlockVariant` variable object or a bare type-name string.  The
+ *  shared validator walks `genericTypeSchema` recursively, so composite
+ *  generics like `ANY_NUM` / `ANY_MAGNITUDE` / `ANY_ELEMENTARY` (whose
+ *  `.options` are unions of other generic literals, not flat strings)
+ *  resolve correctly. */
 export const validateVariableType = (
   selectedType: string,
   expectedType: BlockVariant['variables'][0] | string,
 ): { isValid: boolean; error?: string } => {
-  const upperSelectedType = selectedType.toUpperCase()
-  const upperExpectedType = typeof expectedType === 'string' ? expectedType : expectedType.type.value.toUpperCase()
-
-  if (upperExpectedType === 'ANY') {
-    return {
-      isValid: true,
-      error: undefined,
-    }
-  }
-
-  // Handle generic types
-  if (upperExpectedType.includes('ANY_')) {
-    const validTypes = genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options
-    if (validTypes.length > 1) {
-      const subValues: string[] = []
-      validTypes.forEach((value) => {
-        if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
-          return
-        }
-
-        if (value instanceof ZodLiteral) {
-          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-            (subValue) => {
-              subValues.push(subValue.toLowerCase())
-            },
-          )
-          return
-        }
-      })
-
-      return {
-        isValid: subValues.includes(upperSelectedType.toLowerCase()),
-        error: subValues.includes(upperSelectedType.toLowerCase())
-          ? undefined
-          : `Expected one of: ${subValues.join(', ')}`,
-      }
-    }
-    return {
-      isValid: Object.values(validTypes).includes(upperSelectedType),
-      error: Object.values(validTypes).includes(upperSelectedType)
-        ? undefined
-        : `Expected one of: ${Object.values(validTypes).join(', ')}`,
-    }
-  }
-
-  // Handle specific types
-  return {
-    isValid: upperSelectedType === upperExpectedType,
-    error:
-      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
-  }
+  const typeName = typeof expectedType === 'string' ? expectedType : expectedType.type.value
+  return _validateVariableType(selectedType, typeName)
 }
 
-export const getVariableRestrictionType = (variableType: string) => {
-  if (variableType === 'ANY') {
-    return {
-      values: undefined,
-      definition: undefined,
-    }
-  }
-
-  if (variableType.includes('ANY_')) {
-    const values = genericTypeSchema.shape[variableType as keyof typeof genericTypeSchema.shape].options
-    if (values.length > 1) {
-      const subValues: string[] = []
-      values.forEach((value) => {
-        if (typeof value === 'string') {
-          subValues.push(value.toLowerCase())
-          return
-        }
-
-        if (value instanceof ZodLiteral) {
-          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-            (subValue) => {
-              subValues.push(subValue.toLowerCase())
-            },
-          )
-          return
-        }
-      })
-      return {
-        values: subValues,
-        definition: 'base-type',
-      }
-    }
-    return {
-      values: (values as string[]).map((value) => value.toLowerCase()),
-      definition: 'base-type',
-    }
-  }
-
-  const isABaseType = baseTypeSchema.safeParse(variableType.toLowerCase())
-
-  return {
-    // For base types, lowercase is fine (they're standardized and compared case-insensitively)
-    // For derived/custom types, preserve original case to match user-defined type names
-    values: isABaseType.success ? variableType.toLowerCase() : variableType,
-    definition: isABaseType.success ? 'base-type' : 'derived',
-  }
-}
+export const getVariableRestrictionType = _getVariableRestrictionType
 
 export const getBlockSize = (
   variant: BlockVariant,

@@ -18,7 +18,7 @@ import type {
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
-import { app, nativeTheme, shell } from 'electron'
+import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
@@ -26,11 +26,13 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
-import { WebSocketDebugClient } from '../../../backend/editor/websocket/websocket-debug-client'
+import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
@@ -45,7 +47,7 @@ class MainProcessBridge implements MainIpcModule {
   hardwareModule
   private registeredHandleChannels: string[] = []
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
-  private debuggerWebSocketClient: WebSocketDebugClient | null = null
+  private debuggerWebSocketClient: WebSocketDebugTransport | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
@@ -61,6 +63,10 @@ class MainProcessBridge implements MainIpcModule {
   private fileWatchers: Map<string, { lastMtime: number }> = new Map()
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
+  // VPP package manager for board package operations
+  private packageManagerModule = new PackageManagerModule()
+  // System-wide IEC 61131-3 library pool (bundled + user-installed)
+  private libraryManagerModule = new LibraryManagerModule()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -416,46 +422,65 @@ class MainProcessBridge implements MainIpcModule {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
 
+      // strucpp+ runtimes report per-task stats: timing_stats = { tasks: [...] }.
+      // Pre-strucpp runtimes report a flat object: { scan_count, scan_time_min, ... }.
+      // Both shapes can carry an optional plugin_stats map populated by
+      // get_stats hooks on loaded native/VPP plugins. Accept either
+      // task-shape and forward plugin_stats verbatim so the renderer
+      // stays alive when pointed at an older PLC and gets new plugin
+      // metrics without IPC churn.
+      type PluginStatsField = { label: string; value: string | number | boolean; unit?: string }
+      type PluginStatsPayload = { label: string; fields: PluginStatsField[] }
+      type PluginStatsMap = Record<string, PluginStatsPayload>
+      type TaskStats = {
+        name: string
+        scan_count: number
+        scan_time_min: number | null
+        scan_time_max: number | null
+        scan_time_avg: number | null
+        cycle_time_min: number | null
+        cycle_time_max: number | null
+        cycle_time_avg: number | null
+        cycle_latency_min: number | null
+        cycle_latency_max: number | null
+        cycle_latency_avg: number | null
+        overruns: number
+      }
+      type TimingStatsResponse =
+        | { tasks: TaskStats[]; plugin_stats?: PluginStatsMap }
+        | (Omit<TaskStats, 'name'> & { tasks?: undefined; plugin_stats?: PluginStatsMap })
+
       const result = await this.makeRuntimeApiRequest<{
         status: string
-        timing_stats?: {
-          scan_count: number
-          scan_time_min: number | null
-          scan_time_max: number | null
-          scan_time_avg: number | null
-          cycle_time_min: number | null
-          cycle_time_max: number | null
-          cycle_time_avg: number | null
-          cycle_latency_min: number | null
-          cycle_latency_max: number | null
-          cycle_latency_avg: number | null
-          overruns: number
-        }
+        timing_stats?: TimingStatsResponse
       }>(ipAddress, jwtToken, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
-          timing_stats?: {
-            scan_count: number
-            scan_time_min: number | null
-            scan_time_max: number | null
-            scan_time_avg: number | null
-            cycle_time_min: number | null
-            cycle_time_max: number | null
-            cycle_time_avg: number | null
-            cycle_latency_min: number | null
-            cycle_latency_max: number | null
-            cycle_latency_avg: number | null
-            overruns: number
-          }
+          timing_stats?: TimingStatsResponse
         }
         return response
       })
 
       if (result.success && result.data) {
+        const raw = result.data.timing_stats
+        let timingStats: { tasks: TaskStats[]; plugin_stats?: PluginStatsMap } | undefined
+        if (raw && Array.isArray((raw as { tasks?: TaskStats[] }).tasks)) {
+          timingStats = raw as { tasks: TaskStats[]; plugin_stats?: PluginStatsMap }
+        } else if (raw && typeof (raw as { scan_count?: number }).scan_count === 'number') {
+          // Legacy flat shape — wrap into a single-entry tasks array so
+          // the renderer can iterate uniformly. Forward plugin_stats
+          // verbatim if it was attached at the top level.
+          const flat = raw as Omit<TaskStats, 'name'> & { plugin_stats?: PluginStatsMap }
+          const { plugin_stats, ...flatStats } = flat
+          timingStats = {
+            tasks: [{ name: 'plc', ...flatStats }],
+            ...(plugin_stats ? { plugin_stats } : {}),
+          }
+        }
         return {
           success: true,
           status: result.data.status,
-          timingStats: result.data.timing_stats,
+          timingStats,
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
@@ -467,7 +492,19 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
     try {
-      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/start-plc')
+      // Parse the body so the renderer can drive a retry-on-BUSY
+      // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
+      // while it's still unloading the previous program after an
+      // upload).  See `backend/shared/library/start-plc-after-build.ts`.
+      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
+        ipAddress,
+        jwtToken,
+        '/api/start-plc',
+        (data: string) => JSON.parse(data) as { status?: string },
+      )
+      if (!result.success) return { success: false, error: result.error }
+      const status = (result.data?.status ?? '').trim()
+      return { success: true, status }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
@@ -599,6 +636,10 @@ class MainProcessBridge implements MainIpcModule {
     // App and system handlers
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
+    this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
+    this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
+    this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -612,6 +653,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
+    this.ipcMain.on('compiler:run-compile-library', this.handleRunCompileLibrary)
 
     // +++ !! Deprecated: These handlers are outdated and should be removed. +++
 
@@ -635,6 +677,12 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('hardware:get-available-boards', this.handleHardwareGetAvailableBoards)
     this.registerHandle('hardware:refresh-communication-ports', this.handleHardwareRefreshCommunicationPorts)
     this.registerHandle('hardware:refresh-available-boards', this.handleHardwareRefreshAvailableBoards)
+
+    // ===================== PACKAGE MANAGER =====================
+    this.registerHandle('packages:import-from-file', this.handlePackagesImportFromFile)
+    this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
+    this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
+    this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -697,6 +745,15 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
     this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
+    // Mirror `handleProjectOpen`: a freshly-created project is the
+    // active project from this point on, so any sandboxed file IPC
+    // that gates on `validateFilePath` (file:read-content, watcher
+    // start/stop) has a project root to compare against.  Skipping
+    // this left newly-created library projects unable to read their
+    // own `library.json` on first mount of the manifest tab.
+    if (response.success && response.data?.meta.path) {
+      this.currentProjectPath = response.data.meta.path
+    }
     return response
   }
   handleProjectOpen = async () => {
@@ -870,6 +927,56 @@ class MainProcessBridge implements MainIpcModule {
       isWindowMaximized: this.mainWindow?.isMaximized(),
     }
   }
+
+  /**
+   * Load every bundled .stlib archive shipped with the app.
+   *
+   * The archives live alongside the strucpp compiler binaries under
+   * `<resources>/strucpp/libs/` — same dev-vs-packaged resolution
+   * Electron uses for any other resource (`process.resourcesPath`
+   * after packaging, the project root in dev). The .stlib files are
+   * synced into that directory by the strucpp build pipeline so they
+   * always travel with the strucpp version the compiler targets.
+   *
+   * Returns the parsed JSON contents in alphabetical filename order so
+   * the renderer-side library tree renders deterministically across
+   * platforms. Errors (missing dir, malformed JSON) propagate back to
+   * the renderer so a startup failure surfaces as a UI error rather
+   * than silently dropping libraries.
+   */
+  // Library manager handlers — system-wide IEC 61131-3 library pool
+  // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
+  // Library identity is the strucpp manifest `name` shared with the
+  // project's `libraries[]` field.
+  handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
+  handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
+  handleLibrariesInstallFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Install Library',
+      filters: [
+        { name: 'Library files', extensions: ['stlib', 'lib', 'library'] },
+        { name: 'STruC++ archive', extensions: ['stlib'] },
+        { name: 'CODESYS library', extensions: ['lib', 'library'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: true, canceled: true }
+    }
+    const installResult = await this.libraryManagerModule.installFromFile(result.filePaths[0])
+    if (installResult.success && !installResult.canceled) {
+      this.mainWindow.webContents.send('libraries:changed')
+    }
+    return installResult
+  }
+  handleLibrariesUninstall = async (_event: IpcMainInvokeEvent, name: string) => {
+    const result = this.libraryManagerModule.uninstall(name)
+    if (result.success) {
+      this.mainWindow?.webContents.send('libraries:changed')
+    }
+    return result
+  }
   handleStoreRetrieveRecent = async () => {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
     const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
@@ -906,8 +1013,27 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileForDebugger(args, mainProcessPort)
+    void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
+
+  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
+    const mainProcessPort = event.ports[0]
+    void this.compilerModule.compileLibrary(args, mainProcessPort, this)
+  }
+
+  /**
+   * Bridge method consumed by the compiler module and the Library
+   * Project build pipeline.  Resolves project-enabled library names
+   * to parsed `.stlib` archives — bundled libs are always included,
+   * the user-installed subset is filtered by name, and missing-
+   * but-enabled names come back for the caller to surface as a
+   * pre-compile "open the Library Manager" error.  Same call feeds
+   * both the program build (strucpp.compile's `libraries:` option)
+   * and the library build (compileStlib's dependency list) so the
+   * verify pass can't drift from the actual compile.
+   */
+  loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
+    this.libraryManagerModule.loadEnabledArchives(enabledNames)
 
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
@@ -960,9 +1086,37 @@ class MainProcessBridge implements MainIpcModule {
   handleHardwareRefreshCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
   handleHardwareRefreshAvailableBoards = async () => this.hardwareModule.getAvailableBoards()
 
+  // Package manager handlers
+  handlePackagesImportFromFile = async () => {
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const result = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Import Board Package',
+      filters: [{ name: 'VPP Package', extensions: ['vpp'] }],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true }
+    }
+    const importResult = await this.packageManagerModule.importFromFile(result.filePaths[0])
+    if (importResult.success) {
+      this.mainWindow.webContents.send('packages:boards-updated')
+    }
+    return importResult
+  }
+  handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
+  handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {
+    const result = this.packageManagerModule.uninstall(packageId)
+    if (result.success) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return result
+  }
+  handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
+    this.packageManagerModule.getInstalledPackageManifest(packageId)
+
   // Utility handlers
-  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string) =>
-    this.hardwareModule.getBoardImagePreview(image)
+  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
+    this.hardwareModule.getBoardImagePreview(image, packagePath)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }
@@ -971,19 +1125,19 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      // projectPath is already the project directory, not a file path
-      // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      const debugFilePath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug.c')
 
-      const content = await fs.readFile(debugFilePath, 'utf-8')
+      // STruC++ writes debug-map.json alongside generated_debug.cpp.
+      // Consumed by the renderer via parseDebugMap.
+      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      const content = await fs.readFile(debugMapPath, 'utf-8')
       return { success: true, content }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read debug.c file',
+        error: error instanceof Error ? error.message : 'Failed to read debug-map.json',
       }
     }
   }
@@ -999,9 +1153,15 @@ class MainProcessBridge implements MainIpcModule {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> => {
+  ): Promise<{
+    success: boolean
+    match?: boolean
+    targetMd5?: string
+    targetEndian?: 'le' | 'be'
+    error?: string
+  }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
-    let wsClient: WebSocketDebugClient | null = null
+    let wsClient: WebSocketDebugTransport | null = null
     try {
       if (connectionType === 'simulator') {
         const virtualPort = new VirtualSerialPort(this.simulatorModule)
@@ -1013,20 +1173,20 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await client.connect()
-        const targetMd5 = await client.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
         // Keep the client for subsequent debug operations
         this.debuggerModbusClient = client
         this.debuggerConnectionType = 'simulator'
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
         if (!this.debuggerWebSocketClient) {
-          wsClient = new WebSocketDebugClient({
+          wsClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
             token: connectionParams.jwtToken,
@@ -1037,7 +1197,7 @@ class MainProcessBridge implements MainIpcModule {
           wsClient = this.debuggerWebSocketClient
         }
 
-        const targetMd5 = await wsClient.getMd5Hash()
+        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1048,7 +1208,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType = 'websocket'
         }
 
-        return { success: true, match, targetMd5 }
+        return { success: true, match, targetMd5, targetEndian }
       } else if (connectionType === 'tcp') {
         if (!connectionParams.ipAddress) {
           return { success: false, error: 'IP address is required for TCP connection' }
@@ -1069,9 +1229,9 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType === 'rtu' &&
           this.debuggerRtuPort === connectionParams.port
         ) {
-          const targetMd5 = await this.debuggerModbusClient.getMd5Hash()
+          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
           const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-          return { success: true, match, targetMd5 }
+          return { success: true, match, targetMd5, targetEndian }
         }
 
         client = new ModbusRtuClient({
@@ -1083,7 +1243,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       await client.connect()
-      const targetMd5 = await client.getMd5Hash()
+      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1097,7 +1257,7 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerRtuSlaveId = connectionParams.slaveId!
       }
 
-      return { success: true, match, targetMd5 }
+      return { success: true, match, targetMd5, targetEndian }
     } catch (error) {
       client?.disconnect()
       wsClient?.disconnect()
@@ -1117,30 +1277,25 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const path = await import('path')
 
-      // projectPath is already the project directory, not a file path
-      // Guard against traversal/absolute input in boardTarget
       if (path.isAbsolute(boardTarget) || boardTarget.includes('..') || boardTarget.includes(path.sep)) {
         return { success: false, error: 'Invalid board target' }
       }
-      const programStPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'program.st')
 
-      const content = await fs.readFile(programStPath, 'utf-8')
+      // STruC++ writes the MD5 into debug-map.json alongside the pointer
+      // tables. It's the single source of truth the editor and the target
+      // agree on (target exposes the same value via FC 0x45).
+      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      const raw = await fs.readFile(debugMapPath, 'utf-8')
+      const parsed = JSON.parse(raw) as { md5?: unknown }
 
-      const md5Pattern = /\(\*DBG:char md5\[\] = "([a-fA-F0-9]{32})";?\*\)/
-      const match = content.match(md5Pattern)
-
-      if (!match || !match[1]) {
-        return {
-          success: false,
-          error: 'Could not find MD5 hash in program.st file',
-        }
+      if (typeof parsed.md5 !== 'string' || !/^[a-fA-F0-9]{32}$/.test(parsed.md5)) {
+        return { success: false, error: 'debug-map.json is missing a valid md5 field' }
       }
-
-      return { success: true, md5: match[1] }
+      return { success: true, md5: parsed.md5 }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to read program.st file',
+        error: error instanceof Error ? error.message : 'Failed to read debug-map.json',
       }
     }
   }
@@ -1174,7 +1329,7 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerReconnecting = false
             return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
           }
-          this.debuggerWebSocketClient = new WebSocketDebugClient({
+          this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: this.debuggerTargetIp,
             port: 8443,
             token: this.debuggerJwtToken,
@@ -1312,11 +1467,11 @@ class MainProcessBridge implements MainIpcModule {
         })
         await this.debuggerModbusClient.connect()
 
-        // Trigger endianness detection on the emulated runtime.
-        // getMd5Hash sends 0xDEAD which the runtime uses to detect byte order
-        // and call set_endianness(). Without this, the default SAME_ENDIANNESS
-        // causes multi-byte values to be stored with swapped bytes on the
-        // little-endian AVR emulator.
+        // MD5 fetch warms the connection and exercises the
+        // runtime's endianness-sentinel path.  Endianness detection
+        // itself is handled at the editor's verify-MD5 step (see
+        // handleDebuggerVerifyMd5) where the result feeds the swap
+        // layer; here we just need the connection live.
         await this.debuggerModbusClient.getMd5Hash()
       } else if (connectionType === 'websocket') {
         if (this.debuggerModbusClient) {
@@ -1334,7 +1489,7 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerWebSocketClient = null
           }
 
-          this.debuggerWebSocketClient = new WebSocketDebugClient({
+          this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
             token: connectionParams.jwtToken,
@@ -1445,7 +1600,11 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       try {
-        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, buffer)
+        // Shared transport takes Uint8Array; convert from the IPC's
+        // Buffer payload (Buffer is a Uint8Array subclass so the cast
+        // is a no-op at runtime, but TS wants the explicit step).
+        const valueBytes = buffer ? new Uint8Array(buffer) : undefined
+        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, valueBytes)
         logger.info('[IPC Handler] WebSocket setVariable result: ' + JSON.stringify(result))
         return result
       } catch (error) {

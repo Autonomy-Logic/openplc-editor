@@ -20,6 +20,7 @@ export type ModalTypes =
   | 'runtime-connection-lost'
   | 'debugger-message'
   | 'debugger-ip-input'
+  | 'missing-libraries'
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

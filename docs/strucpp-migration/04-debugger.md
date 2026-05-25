@@ -32,20 +32,26 @@ that element count. Moving metadata to Flash is necessary but not sufficient: th
 
 1. **Every leaf is expanded.** No runtime walking of composite variables — each array
    element and struct/FB field gets its own table entry.
-2. **Multiple debug arrays.** The compiler emits the table as a set of arrays, each capped
+2. **Multiple debug arrays.** STruC++ emits the table as a set of arrays, each capped
    at 8,000 entries (safe margin under AVR's 32,767-byte object limit, assuming 4 B/entry).
    On Linux the same split is used for consistency.
 3. **Compact per-entry format.** `struct Entry { void* ptr; uint8_t type_tag; uint8_t _pad; }`
    = 4 bytes. Entry table lives in Flash (`PROGMEM` on AVR, `.rodata` on Linux). Zero SRAM
    cost.
-4. **Agnostic runtime dispatcher.** Part of the STruC++ runtime headers — not per-project
-   generated code. A `TypeOps` table indexed by `type_tag` holds function pointers to
-   `force_impl<T>`, `unforce_impl<T>`, `read_impl<T>` instantiated for each IEC elementary
-   type. Covers all leaves because STruC++ wraps every leaf as `IECVar<T>` where T is an
-   elementary type.
-5. **Protocol addressing: `(array_idx: u8, elem_idx: u16)`.** 256 arrays × 65K entries =
+4. **All C++ artifacts owned by STruC++.** Both the shared runtime headers (dispatch
+   table, templated helpers) **and** the per-project generated code (`generated_debug.cpp`
+   + `debug-map.json`) are emitted by STruC++. The editor is a pure consumer: it writes
+   the files STruC++ returns from `compile()` to disk and reads `debug-map.json` for its
+   own name→address lookups. This keeps layout-sensitive code colocated with the
+   generator that produced it, so a STruC++ version bump can't desync runtime headers
+   from compiler output.
+5. **Agnostic runtime dispatcher.** A `TypeOps` table indexed by `type_tag` holds
+   function pointers to `force_impl<T>`, `unforce_impl<T>`, `read_impl<T>` instantiated
+   for each IEC elementary type. Covers all leaves because STruC++ wraps every leaf as
+   `IECVar<T>` where T is an elementary type. No per-project dispatch code.
+6. **Protocol addressing: `(array_idx: u8, elem_idx: u16)`.** 256 arrays × 65K entries =
    16M addressable leaves. More than enough for any realistic project.
-6. **Two-stage rollout:** polling-based first (Modbus FCs 0x41–0x45 with the new PDU
+7. **Two-stage rollout:** polling-based first (Modbus FCs 0x41–0x45 with the new PDU
    layout), subscription/stream later (0x46–0x48). Subscription is orthogonal to addressing
    and can ship as a follow-up without breaking the base protocol.
 
@@ -53,7 +59,29 @@ that element count. Moving metadata to Flash is necessary but not sufficient: th
 
 ## What gets generated vs. what ships in the runtime
 
-### Per-project (emitted by `strucpp-compiler.ts`)
+STruC++ owns every C++ artifact and the editor-side manifest. The editor's only job is
+to persist them to disk and consume the manifest for name lookups.
+
+`compile()` is extended to return two additional fields alongside `cppCode` /
+`headerCode`:
+
+```ts
+interface CompileResult {
+  // existing
+  cppCode: string
+  headerCode: string
+  // new — Phase 4
+  debugTableCpp: string   // contents for generated_debug.cpp
+  debugMap: DebugMapV2    // path → (arrayIdx, elemIdx), serializable to JSON
+  // ...
+}
+```
+
+The editor's `strucpp-compiler.ts` wrapper writes `debugTableCpp` to
+`<board>/src/generated_debug.cpp` and `JSON.stringify(debugMap)` to
+`<board>/src/debug-map.json`. That's the entire editor side of the pipeline.
+
+### Per-project artifacts (emitted by STruC++'s `compile()`)
 
 **`generated_debug.cpp`** — pointer tables only:
 
@@ -64,21 +92,25 @@ that element count. Moving metadata to Flash is necessary but not sufficient: th
 using namespace strucpp::debug;
 
 // Each array caps at ~8000 entries to stay under AVR's 32767-byte single-object limit.
-const Entry debug_arr_0[] PROGMEM = {
+const Entry debug_arr_0[] STRUCPP_DEBUG_FLASH = {
     { (void*)&g_config.INSTANCE0.blink,     TAG_BOOL },
     { (void*)&g_config.INSTANCE0.counter,   TAG_INT  },
     { (void*)&g_config.INSTANCE0.speeds[0], TAG_INT  },
     { (void*)&g_config.INSTANCE0.speeds[1], TAG_INT  },
     // ...
 };
-const Entry debug_arr_1[] PROGMEM = { /* next batch */ };
+const Entry debug_arr_1[] STRUCPP_DEBUG_FLASH = { /* next batch */ };
 
-const Entry* const debug_arrays[]     PROGMEM = { debug_arr_0, debug_arr_1 };
-const uint16_t    debug_array_counts[] PROGMEM = { 8000, 5231 };
-const uint8_t     debug_array_count             = 2;
+const Entry* const debug_arrays[]     STRUCPP_DEBUG_FLASH = { debug_arr_0, debug_arr_1 };
+const uint16_t    debug_array_counts[] STRUCPP_DEBUG_FLASH = { 8000, 5231 };
+const uint8_t     debug_array_count                        = 2;
 ```
 
-**`debug-map.json`** — editor-only manifest:
+`STRUCPP_DEBUG_FLASH` is defined in `debug_dispatch.hpp` — expands to `PROGMEM` on AVR,
+empty elsewhere. This keeps the generated code target-neutral; the runtime header
+decides placement.
+
+**`debug-map.json`** — editor-consumed manifest, also emitted by STruC++:
 
 ```json
 {
@@ -101,15 +133,24 @@ const uint8_t     debug_array_count             = 2;
 }
 ```
 
-Packing rule: emit leaves in declaration order, flush to a new debug array when the
-current one reaches 8,000 entries **or** at a program boundary (whichever comes first).
-Program-boundary flush isolates per-program churn from downstream arrays.
+Packing rule (implemented by the STruC++ codegen): emit leaves in declaration order,
+flush to a new debug array when the current one reaches 8,000 entries **or** at a
+program boundary (whichever comes first). Program-boundary flush isolates per-program
+churn from downstream arrays.
 
 ### Shared across all projects (STruC++ runtime headers)
 
 **`strucpp/debug_dispatch.hpp`** — the generic handler, unchanged across projects:
 
 ```cpp
+// Flash-placement macro used by generated_debug.cpp
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+#define STRUCPP_DEBUG_FLASH PROGMEM
+#else
+#define STRUCPP_DEBUG_FLASH
+#endif
+
 namespace strucpp::debug {
 
 enum TypeTag : uint8_t {
@@ -250,19 +291,25 @@ Notes:
 **Exit criteria:** STruC++ runtime exports a single `strucpp::debug::handle_*` API that the
 editor's Arduino sketch and the Runtime v4 `.so` can both call. No per-project code here.
 
-### 4.2 Editor — code generator for `generated_debug.cpp` + `debug-map.json`
+### 4.2 STruC++ — debug table & map generator *(ships in strucpp@≥0.3.0)*
 
-Location: `src/backend/shared/utils/PLC/generate-debug-table.ts`
+Location: inside the STruC++ repo, alongside the existing `generated.cpp`/`generated.hpp`
+emitter. Not a separate module — same AST walk that already produces the main C++
+output.
 
 Inputs:
-- `CompileResult` from the STruC++ compile wrapper (AST + symbol tables + project model).
-- The `program.st` source (for MD5).
+- STruC++'s internal AST + symbol table + project model (already built for the main
+  compile pass).
+- Target hint (optional): `"avr" | "arm" | "linux"` — only used to validate the 8,000
+  entries/array cap is sufficient for the target. Emitted output is target-neutral
+  thanks to the `STRUCPP_DEBUG_FLASH` macro in the runtime header.
 
-Outputs (written to the board's `src/` directory alongside `generated.cpp`):
-- `generated_debug.cpp` (Flash-resident pointer tables, packing rule described above).
-- `debug-map.json` (editor-side path→address manifest).
+Outputs added to `CompileResult`:
+- `debugTableCpp: string` — the full contents of `generated_debug.cpp`.
+- `debugMap: DebugMapV2` — a structured object the editor serializes to
+  `debug-map.json`.
 
-Core algorithm:
+Core algorithm (lives in the STruC++ codegen):
 
 ```
 for each program instance in projectModel:
@@ -282,18 +329,31 @@ for each program instance in projectModel:
 Cap per array at 8,000 entries; new array also starts when an element would push the
 byte count past 32,000 (safety margin vs. AVR's 32,767 limit).
 
+The TypeTag enum emitted into the cpp file **must match** the one in
+`debug_dispatch.hpp`. Both live in the STruC++ repo, so this coupling is enforced by
+colocation — no cross-repo drift possible.
+
+**Exit criteria:** `compile()` returns `debugTableCpp` + `debugMap` that together
+compile + link + run correctly with the runtime headers. Unit-tested inside STruC++
+against projects with mixed scalars/arrays/structs/FBs.
+
 ### 4.3 Editor — compiler-module wiring
 
-`src/backend/editor/compiler/compiler-module.ts`:
-- After `handleCompileSTtoCpp()` produces `generated.cpp/.hpp`, call
-  `generateDebugTable(compileResult)` to emit the two new files.
-- Add `generated_debug.cpp` to the list of sources arduino-cli compiles (lives in the
-  `src/` library directory, picked up automatically).
-- No changes to the Arduino sketch itself — it doesn't need to know about debug tables.
+`src/backend/editor/compiler/compiler-module.ts` becomes a thin pass-through:
+
+- After `handleCompileSTtoCpp()` resolves with the extended `CompileResult`, write
+  `result.debugTableCpp` to `<compilationPath>/src/generated_debug.cpp` and
+  `JSON.stringify(result.debugMap, null, 2)` to `<compilationPath>/src/debug-map.json`.
+- arduino-cli picks up `generated_debug.cpp` automatically (library dir is already
+  included).
+- No changes to the Arduino sketch — it doesn't reference the debug tables directly;
+  the ModbusSlave handlers reach them via the runtime header's `read_entry()`.
+
+That's the entire editor-side generator change: two extra writeFile calls.
 
 ### 4.4 Embedded — ModbusSlave integration
 
-`resources/sources/StrucppBaremetal/ModbusSlave.cpp`:
+`resources/sources/Baremetal/ModbusSlave.cpp`:
 - Replace the existing 0x41–0x45 handler bodies (which call the MatIEC-era
   `get_var_count()` / `get_var_addr()` / `set_trace()` weak externs) with direct calls
   into `strucpp::debug::handle_*`.
@@ -396,13 +456,15 @@ embedded deployments top out well below that.)
 
 ## Testing strategy
 
-1. **Unit tests (STruC++ repo):** `debug_dispatch.hpp` force/read cycle for each
-   `TypeTag`, using a synthetic Entry table and a mock IECVar.
-2. **Compile test:** run `generate-debug-table.ts` against a project with mixed scalars,
-   arrays, structs, FBs → verify `generated_debug.cpp` compiles on AVR (arduino-cli
-   `arduino:avr:mega`) and `debug-map.json` shape matches.
-3. **Size regression:** the 35K-leaf user project that currently fails MatIEC must
-   compile cleanly with the new pipeline.
+1. **STruC++ runtime tests:** `debug_dispatch.hpp` force/read cycle for each
+   `TypeTag`, using a synthetic Entry table and a mock IECVar. Covers all elementary
+   IEC types including STRING/WSTRING special-cases.
+2. **STruC++ codegen tests:** `compile()` on projects with mixed scalars, arrays,
+   structs, FBs → `debugTableCpp` compiles cleanly with the runtime headers;
+   `debugMap` has the expected path/address entries; array packing respects the
+   8,000-entry + program-boundary rules.
+3. **Size regression (STruC++ + editor):** the 35K-leaf user project that currently
+   fails MatIEC must compile cleanly with the new pipeline end-to-end.
 4. **End-to-end (Arduino Mega):** reuse the Chris Demo blink project. Force `blink :=
    TRUE` from the editor, verify PB7 stays HIGH across scan cycles. Unforce, verify
    oscillation resumes. Validate in the avr8js simulator first, then hardware.
@@ -436,6 +498,8 @@ embedded deployments top out well below that.)
    up to N bytes of data. Wire encoding for Phase 4a: `{u16 len, bytes[len]}`. Confirm
    that forcing a longer value than N is rejected cleanly (return an error status in FC
    0x42).
-3. **MD5 scope.** Current MatIEC MD5 covers `program.st`. Under v2 the debug-map layout
-   depends on STruC++ version too — consider hashing `{program.st, strucpp_version}` so
-   that a runtime library bump invalidates stale editor state automatically.
+3. **MD5 scope.** Since STruC++ now owns both the runtime headers and the debug-map
+   generator, it should compute the MD5 itself over the inputs it actually consumed —
+   at minimum `{program.st, strucpp_version}`, optionally including the serialized
+   `debugMap` so any generator change invalidates stale editor state. Emit the MD5
+   as a field on `debugMap` and expose the same value to the target via FC 0x45.

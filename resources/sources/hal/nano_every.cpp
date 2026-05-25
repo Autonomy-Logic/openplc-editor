@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 //OpenPLC HAL for Arduino Nano form factor (Nano Every, Nano 33 BLE, Nano 33 IoT)
 

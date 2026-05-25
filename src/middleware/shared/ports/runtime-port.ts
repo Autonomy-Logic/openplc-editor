@@ -111,8 +111,13 @@ export interface RuntimePort {
   /** Get current PLC runtime status with optional timing statistics. */
   getStatus(includeStats?: boolean): Promise<RuntimeStatusResult>
 
-  /** Start the PLC program on the runtime. */
-  startPlc(): Promise<{ success: boolean; error?: string }>
+  /** Start the PLC program on the runtime.  `status`, when present,
+   *  carries the raw `status` field of the runtime's response body
+   *  (e.g. `START:OK`, `ALREADY_RUNNING`, `COMMAND:BUSY`).  Callers
+   *  building a retry loop around the runtime's post-upload BUSY
+   *  window need that string — see
+   *  `backend/shared/library/start-plc-after-build.ts`. */
+  startPlc(): Promise<{ success: boolean; error?: string; status?: string }>
 
   /** Stop the PLC program on the runtime. */
   stopPlc(): Promise<{ success: boolean; error?: string }>

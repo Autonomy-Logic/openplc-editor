@@ -1,5 +1,4 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { collectUsedIecAddresses } from '@root/backend/shared/ethercat'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -13,6 +12,8 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -39,19 +40,37 @@ const TabItem = ({ value, label, isActive }: { value: string; label: string; isA
   </Tabs.Trigger>
 )
 
+interface EtherCATDeviceEditorProps {
+  /**
+   * Bus this device belongs to.  When omitted (legacy callers), the
+   * editor falls back to reading `busName` from the currently-active
+   * editor's meta — the pre-multi-mount behaviour.
+   */
+  busName?: string
+  /**
+   * Device identifier within the bus.  Same fallback semantics as
+   * `busName`.
+   */
+  deviceId?: string
+}
+
 /**
  * Standalone full-page editor for a single EtherCAT slave device.
  *
- * Opened when the user clicks on a device child node in the project tree.
- * Reads `busName` and `deviceId` from the editor meta and looks up the
- * device from the Zustand store.
+ * Opened when the user clicks on a device child node in the project
+ * tree.  When the workspace multi-mounts EtherCAT editors (one per
+ * `deviceId`), `busName` and `deviceId` are passed explicitly so each
+ * instance reads its own device regardless of which tab is active.
  */
-const EtherCATDeviceEditor = () => {
+const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: EtherCATDeviceEditorProps = {}) => {
   const { editor, project, projectActions, workspaceActions } = useOpenPLCStore()
+  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const esi = useEsi()
 
-  const busName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
-  const deviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
+  const fallbackBusName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
+  const fallbackDeviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
+  const busName = propBusName ?? fallbackBusName
+  const deviceId = propDeviceId ?? fallbackDeviceId
   const projectPath = project.meta.path
 
   const [activeTab, setActiveTab] = useState<DeviceDetailTab>('channel-mappings')
@@ -83,8 +102,31 @@ const EtherCATDeviceEditor = () => {
     )
   }, [remoteDevice])
 
-  // Collect all IEC addresses used across all remote devices
-  const usedAddresses = useMemo(() => collectUsedIecAddresses(project.data.remoteDevices), [project.data.remoteDevices])
+  // Pool of every claim from producers active on the current target.
+  // EtherCAT is sharing the image table with VPP and Modbus TCP on
+  // Runtime v4, so all three feed into the pool — but capability
+  // scoping ensures inactive producers don't claim.
+  const usedAddresses = useMemo(() => {
+    const state = useOpenPLCStore.getState()
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+      state.deviceDefinitions.configuration.deviceBoard,
+    )
+    const ioMapping =
+      (
+        vendorScreenData?.['io-mapping'] as
+          | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
+          | undefined
+      )?.entries ?? []
+    const pool = buildAddressPool(
+      {
+        pinMapping: { pins: state.deviceDefinitions.pinMapping.pins },
+        vendorIoMapping: { entries: ioMapping },
+        remoteDevices: project.data.remoteDevices,
+      },
+      resolveTargetCapabilities(boardInfo),
+    )
+    return new Set(pool.byAddress.keys())
+  }, [project.data.remoteDevices, vendorScreenData])
 
   // Exclude the current device's own addresses from the "external" set
   const externalAddresses = useMemo(() => {
@@ -102,6 +144,11 @@ const EtherCATDeviceEditor = () => {
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
+      // Producer mutation: any change to channelMappings or aliases
+      // may move addresses or attach/detach aliases. Refresh the
+      // variables bound to those aliases so the table reflects the
+      // new bindings without waiting for save/reload.
+      projectActions.syncVariableAliases()
       // Mark the slave file dirty (same pattern as other file types)
       const { sharedWorkspaceActions } = useOpenPLCStore.getState()
       if (deviceName) {

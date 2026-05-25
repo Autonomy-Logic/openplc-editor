@@ -1,9 +1,12 @@
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { buildLibraryTree, type LibraryTreeNode } from '@root/frontend/utils/library-tree'
+import type { SystemLibraryPou } from '@root/middleware/shared/ports/library-types'
 import { useState } from 'react'
 
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../../../../../../_molecules/library-tree'
+import { useBoundPou } from '../../../active-context'
 
 export const ModalBlockLibrary = ({
   selectedFileKey,
@@ -12,23 +15,31 @@ export const ModalBlockLibrary = ({
   selectedFileKey: string | null
   setSelectedFileKey: (string: string) => void
 }) => {
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
     libraries: { system, user },
   } = useOpenPLCStore()
+  // Scope the visible system pool to bundled (canonical) +
+  // project-enabled libraries — same gate the FBD picker and the
+  // explorer's library tree use.
+  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
+  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
 
   const [filterText, setFilterText] = useState('')
 
-  const systemLibraries = system.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+  const visiblePool = system.filter(
+    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
+  )
+  const systemLibraries = visiblePool.filter((library) =>
+    pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
   const userLibraries = user.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+    pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.type === 'function' && library.name.toLowerCase().includes(filterText)
       : library.name.toLowerCase().includes(filterText),
   )
@@ -58,26 +69,31 @@ export const ModalBlockLibrary = ({
       <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
         <div className='h-full w-full overflow-auto'>
           <LibraryRoot>
-            {systemLibraries.map((library) => (
-              <LibraryFolder
-                key={library.name}
-                label={library.name}
-                initiallyOpen={false}
-                shouldBeOpen={filterText.length > 0}
-              >
-                {library.pous
-                  .filter((pou) => pou.name.toLowerCase().includes(filterText))
-                  .map((pou) => (
-                    <LibraryFile
-                      key={pou.name}
-                      label={pou.name}
-                      isSelected={selectedFileKey === pou.name}
-                      onSelect={() => setSelectedFileKey(`system/${library.name}/${pou.name}`)}
-                      onClick={() => setSelectedFileKey(`system/${library.name}/${pou.name}`)}
-                    />
-                  ))}
-              </LibraryFolder>
-            ))}
+            {systemLibraries.map((library) => {
+              const isFunctionEditor = pous.find((p) => p.name === pouName)?.pouType === 'function'
+              const tree = buildLibraryTree(library, (pou) => {
+                if (!pou.name.toLowerCase().includes(filterText)) return false
+                if (isFunctionEditor && pou.type !== 'function') return false
+                return true
+              })
+              return (
+                <LibraryFolder
+                  key={library.name}
+                  label={tree.label}
+                  initiallyOpen={false}
+                  shouldBeOpen={filterText.length > 0}
+                >
+                  {tree.children.map((child, idx) =>
+                    renderModalTreeNode(child, library.name, {
+                      filterText,
+                      selectedFileKey,
+                      setSelectedFileKey,
+                      keySuffix: `${library.name}-${idx}`,
+                    }),
+                  )}
+                </LibraryFolder>
+              )
+            })}
             <LibraryFolder
               key={'user'}
               label={'User Libraries'}
@@ -100,5 +116,52 @@ export const ModalBlockLibrary = ({
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Render one node of a system-library category tree inside the
+ * Ladder block-picker modal. Mirrors the FBD modal renderer — kept
+ * inline rather than extracted to a shared module because the
+ * resulting two short helpers are easier to follow than a shared
+ * abstraction with its own prop surface.
+ */
+function renderModalTreeNode(
+  node: LibraryTreeNode,
+  libraryName: string,
+  ctx: {
+    filterText: string
+    selectedFileKey: string | null
+    setSelectedFileKey: (key: string) => void
+    keySuffix: string
+  },
+): React.ReactNode {
+  if (node.kind === 'folder') {
+    return (
+      <LibraryFolder
+        key={`${ctx.keySuffix}-${node.label}`}
+        label={node.label}
+        initiallyOpen={false}
+        shouldBeOpen={ctx.filterText.length > 0}
+      >
+        {node.children.map((child, idx) =>
+          renderModalTreeNode(child, libraryName, {
+            ...ctx,
+            keySuffix: `${ctx.keySuffix}-${idx}`,
+          }),
+        )}
+      </LibraryFolder>
+    )
+  }
+  const pou: SystemLibraryPou = node.pou
+  const fileKey = `system/${libraryName}/${pou.name}`
+  return (
+    <LibraryFile
+      key={`${ctx.keySuffix}-${pou.name}`}
+      label={pou.name}
+      isSelected={ctx.selectedFileKey === pou.name}
+      onSelect={() => ctx.setSelectedFileKey(fileKey)}
+      onClick={() => ctx.setSelectedFileKey(fileKey)}
+    />
   )
 }

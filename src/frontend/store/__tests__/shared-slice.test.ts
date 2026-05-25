@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'
@@ -34,6 +35,7 @@ function makeStore() {
     ...createLadderFlowSlice(...args),
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
+    ...createAISlice(...args),
     ...createSharedSlice(...args),
   }))
 }
@@ -127,6 +129,23 @@ describe('createSharedSlice', () => {
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
         expect(state.libraries.user).toHaveLength(3)
+      })
+
+      it('seeds ladderFlows when creating an LD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdProg', language: 'ld' })
+        const state = store.getState()
+        const flow = state.ladderFlows.find((f) => f.name === 'LdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rungs).toEqual([])
+      })
+
+      it('seeds fbdFlows when creating an FBD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdProg', language: 'fbd' })
+        const state = store.getState()
+        const flow = state.fbdFlows.find((f) => f.name === 'FbdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rung.nodes).toEqual([])
+        expect(flow!.rung.edges).toEqual([])
       })
     })
 
@@ -279,6 +298,23 @@ describe('createSharedSlice', () => {
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'LdCopy')
         expect(copyPou).toBeDefined()
         expect(copyPou!.body.language).toBe('ld')
+
+        // The duplicate must also seed ladderFlows so the editor renders.
+        const flow = store.getState().ladderFlows.find((f) => f.name === 'LdCopy')
+        expect(flow).toBeDefined()
+      })
+
+      it('duplicates a POU with FBD language and seeds fbdFlows', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdSource', language: 'fbd' })
+        const result = store.getState().pouActions.duplicate('FbdSource', 'FbdCopy')
+        expect(result.ok).toBe(true)
+
+        const copyPou = store.getState().project.data.pous.find((p) => p.name === 'FbdCopy')
+        expect(copyPou).toBeDefined()
+        expect(copyPou!.body.language).toBe('fbd')
+
+        const flow = store.getState().fbdFlows.find((f) => f.name === 'FbdCopy')
+        expect(flow).toBeDefined()
       })
 
       it('duplicates a POU that has no interface variables (null branch)', () => {
@@ -1420,6 +1456,28 @@ describe('createSharedSlice', () => {
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().editor.type).toBe('available')
       })
+
+      it('does not resurrect the closed model in editors[]', () => {
+        // Multi-mount keeps every open POU's editor model in `editors[]`.
+        // `forceCloseFile` removes the active model from `editors[]`
+        // BEFORE handing off to `setEditor` for the next tab.  If
+        // `setEditor` ever started snapshotting the *outgoing* editor
+        // back into `editors[]` unconditionally, the freshly-closed
+        // model would reappear and the user would see a "closed" tab
+        // pop back on the next focus switch.  Lock the invariant here.
+        store.getState().pouActions.create({ type: 'program', name: 'A', language: 'st' })
+        store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
+        // A becomes active (creation flips active to the new one), then
+        // we explicitly switch to A for the regression scenario.
+        store.getState().editorActions.setEditor(store.getState().editorActions.getEditorFromEditors('A')!)
+        expect(store.getState().editor.meta.name).toBe('A')
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('A')
+
+        expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
+        // And the next tab took over cleanly.
+        expect(store.getState().editor.meta.name).toBe('B')
+      })
     })
 
     // -----------------------------------------------------------------------
@@ -1649,29 +1707,6 @@ describe('createSharedSlice', () => {
           deviceBoard: 'test-board',
           communicationPort: '',
           compileOnly: false,
-          communicationConfiguration: {
-            modbusRTU: {
-              rtuInterface: '',
-              rtuBaudRate: '',
-              rtuSlaveId: null,
-              rtuRS485ENPin: null,
-            },
-            modbusTCP: {
-              tcpInterface: '',
-              tcpMacAddress: null,
-              tcpStaticHostConfiguration: {
-                ipAddress: '',
-                dns: '',
-                gateway: '',
-                subnet: '',
-              },
-            },
-            communicationPreferences: {
-              enabledRTU: false,
-              enabledTCP: false,
-              enabledDHCP: false,
-            },
-          },
         }
         const data = {
           ...makeMinimalProjectResponse(),

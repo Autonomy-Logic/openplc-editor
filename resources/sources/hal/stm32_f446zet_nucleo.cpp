@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 //OpenPLC HAL for STM32F411CE boards (blackpill)
 /******************PINOUT CONFIGURATION**************************

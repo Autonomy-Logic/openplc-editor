@@ -65,7 +65,12 @@ describe('createEditorDeviceAdapter', () => {
 
   it('delegates getPreviewImage to window.bridge with image name', async () => {
     const result = await adapter.getPreviewImage('uno.png')
-    expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('uno.png')
+    expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('uno.png', undefined)
     expect(result).toBe('data:image/png;base64,abc123')
+  })
+
+  it('forwards vppPackagePath to window.bridge for VPP-shipped previews', async () => {
+    await adapter.getPreviewImage('motor-shield.png', '/path/to/pkg')
+    expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('motor-shield.png', '/path/to/pkg')
   })
 })

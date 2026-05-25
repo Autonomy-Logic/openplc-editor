@@ -1,5 +1,6 @@
 import type {
   Architecture,
+  DebugConnectionType,
   DebugTreeNode,
   FbInstanceInfo,
   Platform,
@@ -34,6 +35,10 @@ export type WorkspaceProjectTreeLeafType =
   | 'resource'
   | 'server'
   | 'remote-device'
+  | 'vendor-screen'
+  | 'package-manager'
+  | 'library-manager'
+  | 'library-manifest'
   | 'ethercat-device'
   | null
 
@@ -91,6 +96,21 @@ export type WorkspaceState = {
     debugGraphList: string[]
     debugDataStale: boolean
     debugMd5Mismatch: { runtimeMd5: string; localMd5: string } | null
+    /** Active transport for the running debug session — drives the
+     *  per-poll batch size and any other transport-specific behaviour.
+     *  Null when no session is active. */
+    debugConnectionType: DebugConnectionType | null
+    /** Target's native byte order for multi-byte variable values on
+     *  the wire.  Detected from the 0xDEAD sentinel in the MD5
+     *  response: LE target writes the trailer as `[0xAD, 0xDE]`, BE
+     *  target writes `[0xDE, 0xAD]`.  The editor's internal codecs
+     *  always produce / consume little-endian bytes; the swap layer
+     *  at the read / write boundaries flips on BE targets only.
+     *
+     *  Defaults to `'le'` because every shipped target today is LE.
+     *  MD5 verification runs before any force / read transaction so
+     *  the value is correct by the time any swap path executes. */
+    debugTargetEndian: 'le' | 'be'
     // Project loading state
     isProjectLoading: boolean
     projectLoadingMessage: string
@@ -152,6 +172,8 @@ export type WorkspaceActions = {
   setDebugGraphList: (list: string[]) => void
   setDebugDataStale: (stale: boolean) => void
   setDebugMd5Mismatch: (mismatch: { runtimeMd5: string; localMd5: string } | null) => void
+  setDebugConnectionType: (connectionType: DebugConnectionType | null) => void
+  setDebugTargetEndian: (endian: 'le' | 'be') => void
   clearDebugState: () => void
   clearFbDebugContext: () => void
   removeDebugVariable: (compositeKey: string) => void

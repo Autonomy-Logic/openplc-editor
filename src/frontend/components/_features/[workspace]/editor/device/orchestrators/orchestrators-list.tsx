@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
 import { useOrchestrator, useRuntime } from '../../../../../../../middleware/shared/providers'
@@ -7,11 +8,12 @@ import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
-import { normalizeEthercatStatus } from '../../../../../../utils/ethercat-status'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
+import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
+import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
+import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
-import { EthercatStatsSection } from '../ethercat/components/ethercat-stats-section'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
 // This component sets includeTimingStatsInPolling=true on mount to request timing stats.
@@ -80,7 +82,7 @@ const OrchestratorsList = () => {
   const isSimulatorSelected = useOpenPLCStore((state) => {
     const boardName = state.deviceDefinitions.configuration.deviceBoard
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardName)
-    return boardInfo?.compiler === 'simulator'
+    return resolveTargetCapabilities(boardInfo).isInProcessSimulator
   })
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -313,11 +315,6 @@ const OrchestratorsList = () => {
       deviceActions.setIncludeEthercatStatsInPolling(false)
     }
   }, [deviceActions])
-
-  const ethercatMasters = useMemo(
-    () => normalizeEthercatStatus(runtimeConnection.ethercatStatus),
-    [runtimeConnection.ethercatStatus],
-  )
 
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
@@ -590,82 +587,22 @@ const OrchestratorsList = () => {
         </div>
       </DeviceEditorSlot>
 
-      {/* Right side panel - Scan Cycle Statistics */}
-      {runtimeConnection.connectionStatus === 'connected' &&
-        runtimeConnection.timingStats &&
-        runtimeConnection.timingStats.scan_count > 0 && (
-          <div
-            id='scan-cycle-stats-panel'
-            className='flex h-full w-1/2 flex-col gap-4 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
-          >
-            <h2
-              id='scan-cycle-stats-title'
-              className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-            >
-              Scan Cycle Statistics
-            </h2>
-            <div
-              id='scan-cycle-stats-cards'
-              className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
-            >
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Count</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                  {runtimeConnection.timingStats.scan_count.toLocaleString()}
-                </span>
-              </div>
-              <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                <span className='text-xs text-neutral-500 dark:text-neutral-400'>Overruns</span>
-                <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                  {runtimeConnection.timingStats.overruns}
-                </span>
-              </div>
-              {runtimeConnection.timingStats.scan_time_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Scan Time (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {runtimeConnection.timingStats.scan_time_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                  {runtimeConnection.timingStats.scan_time_min !== null &&
-                    runtimeConnection.timingStats.scan_time_max !== null && (
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                        min: {runtimeConnection.timingStats.scan_time_min} / max:{' '}
-                        {runtimeConnection.timingStats.scan_time_max}
-                      </span>
-                    )}
-                </div>
-              )}
-              {runtimeConnection.timingStats.cycle_time_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Time (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {runtimeConnection.timingStats.cycle_time_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                  {runtimeConnection.timingStats.cycle_time_min !== null &&
-                    runtimeConnection.timingStats.cycle_time_max !== null && (
-                      <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                        min: {runtimeConnection.timingStats.cycle_time_min} / max:{' '}
-                        {runtimeConnection.timingStats.cycle_time_max}
-                      </span>
-                    )}
-                </div>
-              )}
-              {runtimeConnection.timingStats.cycle_latency_avg !== null && (
-                <div className='flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900'>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Cycle Latency (avg)</span>
-                  <span className='text-lg font-semibold text-neutral-900 dark:text-white'>
-                    {runtimeConnection.timingStats.cycle_latency_avg} <span className='text-sm font-normal'>us</span>
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <EthercatStatsSection
-              masters={ethercatMasters}
-              cardsClassName='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'
-            />
-          </div>
-        )}
+      {/* Right side panel - Scan Cycle + EtherCAT + plugin-contributed
+       *  statistics. Mirrors the board screen's stats panel: same
+       *  components, same TimingStats shape, same plugin_stats fan-out.
+       *  Web builds (orchestrator-driven) and Electron builds (board-
+       *  screen-driven) thus render identical stats regardless of how
+       *  the user navigated to the device. */}
+      {runtimeConnection.connectionStatus === 'connected' && (
+        <div
+          id='scan-cycle-stats-panel'
+          className='flex h-full w-1/2 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
+        >
+          {runtimeConnection.timingStats && <ScanCycleStats timingStats={runtimeConnection.timingStats} />}
+          <EtherCATStats />
+          <PluginStatsPanel pluginStats={runtimeConnection.timingStats?.plugin_stats} />
+        </div>
+      )}
     </div>
   )
 }

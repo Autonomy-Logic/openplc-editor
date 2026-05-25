@@ -1,7 +1,16 @@
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
-import { useCompiler, useDebugger, useProject, useRuntime, useSimulator } from '../../../../middleware/shared/providers'
+import { projectCapabilities } from '../../../../middleware/shared/ports/types'
+import {
+  useCapabilities,
+  useCompiler,
+  useDebugger,
+  useProject,
+  useRuntime,
+  useSimulator,
+} from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
@@ -10,11 +19,11 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
-import { isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
+import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
+import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
-import { DownloadButton } from '../../_molecules/workspace-activity-bar/default/download'
 import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
 import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
 import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
@@ -37,18 +46,6 @@ const showDebuggerMessage = (
   })
 }
 
-const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
-  return new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
-      title,
-      message,
-      defaultValue,
-      onSubmit: (value: string) => resolve(value),
-      onCancel: () => resolve(null),
-    })
-  })
-}
-
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
 type DefaultWorkspaceActivityBarProps = {
@@ -65,11 +62,19 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     consoleActions: { addLog },
   } = useOpenPLCStore()
 
+  // Project-type capability matrix.  Drives which set of action
+  // buttons the activity bar shows — the program path (Build /
+  // Run / Debug) for PLC projects, the library path (Build
+  // Library) for library projects.  See `projectCapabilities` in
+  // `middleware/shared/ports/types.ts`.
+  const projectCaps = projectCapabilities(projectMeta)
+
   const compiler = useCompiler()
   const runtime = useRuntime()
   const simulator = useSimulator()
   const debuggerPort = useDebugger()
   const projectPort = useProject()
+  const capabilities = useCapabilities()
   const debugSession = useDebugSession()
   useDebugPolling({ debugTreesRef: debugSession.debugTreesRef })
 
@@ -85,7 +90,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
-  const isSimulatorBoard = currentBoardInfo?.compiler === 'simulator'
+  const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
 
   // Sync simulatorRunning when the simulator stops externally
   useEffect(() => {
@@ -121,7 +126,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
 
   const executeSave = useCallback(async (): Promise<boolean> => {
-    const result = await executeSaveProject(projectPort)
+    const result = await executeSaveProject(projectPort, capabilities)
     return result.success
   }, [projectPort])
 
@@ -129,82 +134,169 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build (Compile)
   // ---------------------------------------------------------------------------
 
-  const handleBuild = useCallback(async () => {
-    if (isCompiling) return
+  const handleBuild = useCallback(
+    async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
+      if (isCompiling) return
 
-    if (editingState === 'unsaved') {
-      const saved = await executeSave()
-      if (!saved) return
-    }
-
-    setIsCompiling(true)
-    addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
-
-    try {
-      const result = await compiler.compileProgram(
-        {
-          projectData,
-          boardTarget: deviceDefinitions.configuration.deviceBoard,
-          projectPath: projectMeta.path,
-          compileOnly: deviceDefinitions.configuration.compileOnly,
-          isSimulator: isSimulatorBoard,
-          runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
-          runtimeJwtToken: jwtToken || null,
-        },
-        (event) => {
-          if (event.plcStatus) {
-            useOpenPLCStore
-              .getState()
-              .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
-          }
-          logCompilerEvent(event, addLog)
-          if (event.firmwarePath && isSimulatorBoard) {
-            void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
-              if (loadResult.success) {
-                setSimulatorRunning(true)
-                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
-                if (pendingSimulatorDebugRef.current) {
-                  pendingSimulatorDebugRef.current = false
-                  void debugSession.connectAndStart()
-                }
-              } else {
-                pendingSimulatorDebugRef.current = false
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'error',
-                  message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
-                })
-              }
-            })
-          }
-        },
-      )
-
-      if (!result.success) {
-        addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+      if (editingState === 'unsaved') {
+        const saved = await executeSave()
+        if (!saved) return
       }
-    } catch (err: unknown) {
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
-    } finally {
-      setIsCompiling(false)
-    }
-  }, [
-    compiler,
-    projectData,
-    projectMeta,
-    deviceDefinitions,
-    isSimulatorBoard,
-    simulator,
-    debugSession,
-    addLog,
-    isCompiling,
-    editingState,
-    executeSave,
-    jwtToken,
-  ])
+
+      setIsCompiling(true)
+      addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
+
+      // Pre-compile alias sync: ensure every located variable's
+      // `location` reflects the latest address its alias points to,
+      // before we snapshot projectData for the compiler. The compile
+      // pipeline itself reads `variable.location` verbatim — same
+      // contract as before, just guaranteed-fresh now.
+      useOpenPLCStore.getState().projectActions.syncVariableAliases()
+      const freshProjectData = useOpenPLCStore.getState().project.data
+
+      try {
+        const result = await compiler.compileProgram(
+          {
+            projectData: freshProjectData,
+            boardTarget: deviceDefinitions.configuration.deviceBoard,
+            projectPath: projectMeta.path,
+            compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
+            cleanBuild: overrides?.cleanBuild ?? false,
+            isSimulator: isSimulatorBoard,
+            runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
+            runtimeJwtToken: jwtToken || null,
+          },
+          (event) => {
+            if (event.plcStatus) {
+              useOpenPLCStore
+                .getState()
+                .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
+            }
+            logCompilerEvent(event, addLog)
+            if (event.firmwarePath && isSimulatorBoard) {
+              void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
+                if (loadResult.success) {
+                  setSimulatorRunning(true)
+                  addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+                  if (pendingSimulatorDebugRef.current) {
+                    pendingSimulatorDebugRef.current = false
+                    void debugSession.connectAndStart()
+                  }
+                } else {
+                  pendingSimulatorDebugRef.current = false
+                  addLog({
+                    id: crypto.randomUUID(),
+                    level: 'error',
+                    message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
+                  })
+                }
+              })
+            }
+          },
+        )
+
+        if (!result.success) {
+          addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+        }
+      } catch (err: unknown) {
+        addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+      } finally {
+        setIsCompiling(false)
+      }
+    },
+    [
+      compiler,
+      projectData,
+      projectMeta,
+      deviceDefinitions,
+      isSimulatorBoard,
+      simulator,
+      debugSession,
+      addLog,
+      isCompiling,
+      editingState,
+      executeSave,
+      jwtToken,
+    ],
+  )
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
+
+  // ---------------------------------------------------------------------------
+  // Build Library (.stlib)
+  // ---------------------------------------------------------------------------
+
+  const handleBuildLibrary = useCallback(
+    async (overrides?: { cleanBuild?: boolean }) => {
+      if (isCompiling) return
+
+      // Always save before building.  The manifest tab and any POU
+      // bodies may have edits the workspace-level `editingState`
+      // doesn't track (each editor manages its own dirty flag against
+      // its file-slice entry), and the build pipeline reads everything
+      // off disk — `library.json`, `pous/**`, and the rest — so a
+      // stale on-disk copy would compile from the previous session's
+      // content.  `executeSaveProject` is the same full-project save
+      // the PLC build invokes; it walks every file the project owns
+      // and flushes the in-memory buffer to disk before the build
+      // starts.
+      const saved = await executeSave()
+      if (!saved) return
+
+      if (!compiler.compileLibrary) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: 'Current platform does not implement library builds.',
+        })
+        return
+      }
+
+      setIsCompiling(true)
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
+      })
+
+      try {
+        const result = await compiler.compileLibrary(
+          { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
+          (event) => {
+            if (!event.message) return
+            addLog({
+              id: crypto.randomUUID(),
+              level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
+              message: event.message,
+            })
+          },
+        )
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: result.error ?? 'Library build failed.',
+          })
+        } else if (result.verification && !result.verification.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'warning',
+            message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
+          })
+        }
+      } catch (err) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Library build error: ${getErrorMessage(err)}`,
+        })
+      } finally {
+        setIsCompiling(false)
+      }
+    },
+    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave],
+  )
 
   // ---------------------------------------------------------------------------
   // PLC control (Start/Stop for runtime targets)
@@ -351,6 +443,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
+        // Surface the active transport in the store so transport-specific
+        // pollers (useDebugPolling) can size their batches against the
+        // real frame budget rather than guessing from the board target.
+        useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(debugConfig.connectionType)
+        // Persist the target's byte order — detected from the MD5
+        // response trailer in the runtime — so the swap layer at the
+        // read / write boundaries flips on BE targets.  Default to
+        // `'le'` when the trailer was missing or malformed (older
+        // runtimes); detectTargetEndian already logged a warning.
+        useOpenPLCStore.getState().workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
         await debugSession.connectAndStart(debugConfig)
         setIsDebuggerProcessing(false)
       } else {
@@ -371,9 +473,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (response === 0) {
           const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
+          // See the handleBuild call above — same pre-compile sync pass.
+          useOpenPLCStore.getState().projectActions.syncVariableAliases()
+          const freshProjectData = useOpenPLCStore.getState().project.data
           const compileResult = await compiler.compileProgram(
             {
-              projectData,
+              projectData: freshProjectData,
               boardTarget,
               projectPath,
               compileOnly: false,
@@ -421,7 +526,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleDebuggerClick = useCallback(async () => {
     if (isSimulatorBoard) return
 
-    const { workspace, project, deviceDefinitions: devDefs, consoleActions, deviceActions } = useOpenPLCStore.getState()
+    const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
@@ -457,7 +562,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           setIsDebuggerProcessing(false)
           return
         }
-        if (isOpenPLCRuntimeV4Target(boardTarget)) {
+        if (isOpenPLCRuntimeV4Target(boardTarget, boardInfo)) {
           const token = rtConn.jwtToken || undefined
           if (!token) {
             await showDebuggerMessage(
@@ -477,66 +582,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: runtimeIpAddress } }
         }
       } else {
-        // Embedded hardware — determine TCP or RTU
-        const { modbusTCP, modbusRTU, communicationPreferences } = devDefs.configuration.communicationConfiguration
-        if (!communicationPreferences.enabledRTU && !communicationPreferences.enabledTCP) {
-          await showDebuggerMessage('warning', 'Modbus Required', 'Modbus must be enabled for debugging.', ['OK'])
-          setIsDebuggerProcessing(false)
-          return
-        }
-
-        let useModbusTcp = communicationPreferences.enabledTCP
-        if (communicationPreferences.enabledRTU && communicationPreferences.enabledTCP) {
-          const resp = await showDebuggerMessage('question', 'Select Protocol', 'Which Modbus protocol?', [
-            'RTU (Serial)',
-            'TCP',
-          ])
-          useModbusTcp = resp === 1
-        }
-
-        if (useModbusTcp) {
-          let targetIp: string | undefined
-          if (communicationPreferences.enabledDHCP) {
-            const previousIp = useOpenPLCStore.getState().deviceDefinitions.temporaryDhcpIp || ''
-            const result = await showDebuggerIpInput('Target IP Address', 'Enter the target device IP:', previousIp)
-            if (!result) {
-              setIsDebuggerProcessing(false)
-              return
-            }
-            targetIp = result
-            deviceActions.setTemporaryDhcpIp(targetIp)
-          } else {
-            targetIp = modbusTCP.tcpStaticHostConfiguration.ipAddress || undefined
-            if (!targetIp) {
-              await showDebuggerMessage('error', 'Configuration Error', 'No IP configured for Modbus TCP.', ['OK'])
-              setIsDebuggerProcessing(false)
-              return
-            }
-          }
-          debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: targetIp } }
-        } else {
-          const rtuPort = devDefs.configuration.communicationPort
-          const rtuSlaveId = modbusRTU.rtuSlaveId ?? undefined
-          if (!rtuPort) {
-            await showDebuggerMessage('error', 'Configuration Error', 'No port selected for Modbus RTU.', ['OK'])
-            setIsDebuggerProcessing(false)
-            return
-          }
-          if (rtuSlaveId === undefined) {
-            await showDebuggerMessage('error', 'Configuration Error', 'No slave ID configured for Modbus RTU.', ['OK'])
-            setIsDebuggerProcessing(false)
-            return
-          }
-          consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Using RTU: Port=${rtuPort}, Baud=${modbusRTU.rtuBaudRate}, SlaveID=${rtuSlaveId}`,
-          })
-          debugConfig = {
-            connectionType: 'rtu',
-            connectionParams: { port: rtuPort, baudRate: parseInt(modbusRTU.rtuBaudRate, 10), slaveId: rtuSlaveId },
-          }
-        }
+        // Non-runtime, non-simulator boards are expected to come back as
+        // VPP Arduino-family packages, each owning its own debug-connection
+        // surface. Refuse gracefully until that's wired in.
+        await showDebuggerMessage(
+          'warning',
+          'Debugging Not Available',
+          "Debugging for this target is not supported in the core editor. The selected board's VPP package must provide a debug adapter.",
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
       }
 
       // Debug compilation
@@ -591,50 +647,109 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <TooltipSidebarWrapperButton tooltipContent='Open/Close Toolbox'>
         <ZoomButton {...zoom} />
       </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to build and run' : 'Compile'}>
-        <DownloadButton
-          disabled={isCompiling || isSimulatorBoard}
-          className={cn((isCompiling || isSimulatorBoard) && disabledButtonClass)}
-          onClick={() => void handleBuild()}
+      {/* Program-build affordances: hidden for library projects.
+          Library builds use a dedicated button (Phase 7 wires the
+          actual compile dispatch — for Phase 3 we render a disabled
+          placeholder that surfaces in the right spot). */}
+      {projectCaps.hasProgramBuild && (
+        <>
+          <BuildOptionsPopover
+            disabled={isCompiling || isSimulatorBoard}
+            triggerTooltip={
+              isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
+            }
+            // Arduino targets always allow upload (arduino-cli connects via USB
+            // at upload time). Runtime v3/v4 targets must be connected first
+            // since the upload goes over the network to the on-device webserver.
+            uploadAvailable={(() => {
+              const arduino = isArduinoTarget(currentBoardInfo)
+              if (arduino) return true
+              return connectionStatus === 'connected'
+            })()}
+            uploadDisabledReason='must be connected to the device to upload'
+            onSelect={(option: BuildOption) => {
+              switch (option) {
+                case 'build-only':
+                  void handleBuild({ compileOnly: true, cleanBuild: false })
+                  break
+                case 'build-upload':
+                  void handleBuild({ compileOnly: false, cleanBuild: false })
+                  break
+                case 'clean-upload':
+                  void handleBuild({ compileOnly: false, cleanBuild: true })
+                  break
+              }
+            }}
+          />
+          <TooltipSidebarWrapperButton
+            tooltipContent={
+              isSimulatorBoard
+                ? simulatorRunning
+                  ? 'Stop Simulator'
+                  : 'Start Simulator'
+                : connectionStatus !== 'connected'
+                  ? 'Connect to runtime first'
+                  : plcStatus === 'RUNNING'
+                    ? 'Stop PLC'
+                    : 'Start PLC'
+            }
+          >
+            <PlayButton
+              onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+              className={cn(
+                isSimulatorBoard
+                  ? isCompiling || isDebuggerProcessing
+                    ? disabledButtonClass
+                    : ''
+                  : connectionStatus !== 'connected'
+                    ? disabledButtonClass
+                    : '',
+              )}
+            >
+              {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
+            </PlayButton>
+          </TooltipSidebarWrapperButton>
+          <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+            <DebuggerButton
+              onClick={() => void handleDebuggerClick()}
+              disabled={isDebuggerProcessing || isSimulatorBoard}
+              isActive={isDebuggerVisible}
+              className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+            />
+          </TooltipSidebarWrapperButton>
+        </>
+      )}
+      {/* Library-build affordance: shown only for library projects.
+          Two options surface via the `libraryMode` popover:
+            - "Build"       → fast build (verification short-
+              circuited by MD5 cache hit, when warm).
+            - "Clean build" → skip verification cache and force a
+              fresh avr-gcc verify against the simulator target. */}
+      {projectCaps.hasLibraryBuild && (
+        // No outer `TooltipSidebarWrapperButton`: `BuildOptionsPopover`
+        // already renders its own Radix tooltip via `triggerTooltip`,
+        // and the wrapper's tooltip persisted on top of the popover
+        // contents once the menu opened (PLC build button doesn't wrap
+        // either — same idiom here for consistency).
+        <BuildOptionsPopover
+          disabled={isCompiling}
+          triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
+          libraryMode={true}
+          uploadAvailable={false}
+          uploadDisabledReason='library builds do not upload'
+          onSelect={(option: BuildOption) => {
+            switch (option) {
+              case 'build-only':
+                void handleBuildLibrary({ cleanBuild: false })
+                break
+              case 'clean-upload':
+                void handleBuildLibrary({ cleanBuild: true })
+                break
+            }
+          }}
         />
-      </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton
-        tooltipContent={
-          isSimulatorBoard
-            ? simulatorRunning
-              ? 'Stop Simulator'
-              : 'Start Simulator'
-            : connectionStatus !== 'connected'
-              ? 'Connect to runtime first'
-              : plcStatus === 'RUNNING'
-                ? 'Stop PLC'
-                : 'Start PLC'
-        }
-      >
-        <PlayButton
-          onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-          disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
-          className={cn(
-            isSimulatorBoard
-              ? isCompiling || isDebuggerProcessing
-                ? disabledButtonClass
-                : ''
-              : connectionStatus !== 'connected'
-                ? disabledButtonClass
-                : '',
-          )}
-        >
-          {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
-        </PlayButton>
-      </TooltipSidebarWrapperButton>
-      <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
-        <DebuggerButton
-          onClick={() => void handleDebuggerClick()}
-          disabled={isDebuggerProcessing || isSimulatorBoard}
-          isActive={isDebuggerVisible}
-          className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
-        />
-      </TooltipSidebarWrapperButton>
+      )}
       <TooltipSidebarWrapperButton tooltipContent='AI Chat'>
         <ChatButton />
       </TooltipSidebarWrapperButton>

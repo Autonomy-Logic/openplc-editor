@@ -261,4 +261,97 @@ describe('createLibrarySlice', () => {
     expect(store.getState().libraries.system).toHaveLength(1)
     expect(store.getState().libraries.user).toEqual([])
   })
+
+  // ---------------------------------------------------------------------------
+  // Library Manager — project enablement + missing diff
+  // ---------------------------------------------------------------------------
+
+  describe('setProjectLibraries', () => {
+    it('marks pool entries as enabled, leaves the rest under missing', () => {
+      store.getState().libraryActions.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' })])
+      store.getState().libraryActions.setProjectLibraries([
+        { name: 'oscat-basic', version: '3.4.0' },
+        { name: 'phantom', version: '0.1.0' },
+      ])
+
+      expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+      expect(store.getState().missingLibraries).toEqual([{ name: 'phantom', version: '0.1.0' }])
+    })
+
+    it('clears the previous project view when called with a different list', () => {
+      store
+        .getState()
+        .libraryActions.setSystemLibraries([
+          makeSystemLibrary({ name: 'oscat-basic' }),
+          makeSystemLibrary({ name: 'additional-fb' }),
+        ])
+      const a = store.getState().libraryActions
+      a.setProjectLibraries([{ name: 'oscat-basic', version: '3.4.0' }])
+      expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+      a.setProjectLibraries([{ name: 'additional-fb', version: '1.0.0' }])
+      expect(store.getState().enabledLibraries).toEqual(['additional-fb'])
+    })
+  })
+
+  describe('setSystemLibraries (post-load diff refresh)', () => {
+    it('recomputes enabled/missing against the project list when the pool changes', () => {
+      const a = store.getState().libraryActions
+      // Project asks for `late-arrival` which the pool doesn't have yet.
+      a.setProjectLibraries([{ name: 'late-arrival', version: '1.0.0' }])
+      expect(store.getState().missingLibraries).toEqual([{ name: 'late-arrival', version: '1.0.0' }])
+
+      // Now the user installs it — the diff should refresh.
+      a.setSystemLibraries([makeSystemLibrary({ name: 'late-arrival', version: '1.0.0' })])
+      expect(store.getState().missingLibraries).toEqual([])
+      expect(store.getState().enabledLibraries).toEqual([])
+      // (Without the project slice wired, the durable refs aren't
+      // re-read on pool-change — slim test harness just resets the
+      // diff to empty against the now-installed pool.)
+    })
+  })
+
+  describe('enableLibrary', () => {
+    it('adds the library name to enabledLibraries when it lives in the pool', () => {
+      store.getState().libraryActions.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' })])
+      store.getState().libraryActions.enableLibrary('oscat-basic')
+      expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+    })
+
+    it('is a no-op when the library is not in the pool', () => {
+      store.getState().libraryActions.enableLibrary('phantom')
+      expect(store.getState().enabledLibraries).toEqual([])
+    })
+
+    it('clears the same name from missingLibraries (e.g. user just installed it)', () => {
+      const a = store.getState().libraryActions
+      a.setProjectLibraries([{ name: 'just-installed', version: '1.0.0' }])
+      expect(store.getState().missingLibraries).toHaveLength(1)
+      a.setSystemLibraries([makeSystemLibrary({ name: 'just-installed', version: '1.0.0' })])
+      a.enableLibrary('just-installed')
+      expect(store.getState().missingLibraries).toEqual([])
+    })
+
+    it('does not duplicate when called twice for the same name', () => {
+      const a = store.getState().libraryActions
+      a.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic' })])
+      a.enableLibrary('oscat-basic')
+      a.enableLibrary('oscat-basic')
+      expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+    })
+  })
+
+  describe('disableLibrary', () => {
+    it('removes the name from enabledLibraries', () => {
+      const a = store.getState().libraryActions
+      a.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic' })])
+      a.enableLibrary('oscat-basic')
+      a.disableLibrary('oscat-basic')
+      expect(store.getState().enabledLibraries).toEqual([])
+    })
+
+    it('is a no-op when the library was never enabled', () => {
+      store.getState().libraryActions.disableLibrary('phantom')
+      expect(store.getState().enabledLibraries).toEqual([])
+    })
+  })
 })

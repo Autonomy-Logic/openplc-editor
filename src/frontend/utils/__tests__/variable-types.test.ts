@@ -167,15 +167,17 @@ describe('integerToBuffer', () => {
     expect(result).toEqual(new Uint8Array([0x00, 0x00]))
   })
 
-  it('converts multi-byte unsigned value', () => {
-    // 0x0102 in big-endian buffer
+  it('converts multi-byte unsigned value in little-endian order', () => {
+    // 0x0102 → LE bytes [0x02, 0x01].  Wire format the runtime
+    // memcpy's straight into IEC ints — every supported target
+    // (AVR / ARM Cortex-M / x86_64) is little-endian.
     const result = integerToBuffer(0x0102n, 2, false)
-    expect(result).toEqual(new Uint8Array([0x01, 0x02]))
+    expect(result).toEqual(new Uint8Array([0x02, 0x01]))
   })
 
-  it('converts 4-byte value', () => {
+  it('converts 4-byte value in little-endian order', () => {
     const result = integerToBuffer(0xdeadbeefn, 4, false)
-    expect(result).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]))
+    expect(result).toEqual(new Uint8Array([0xef, 0xbe, 0xad, 0xde]))
   })
 
   it('converts negative 4-byte signed value', () => {
@@ -244,25 +246,42 @@ describe('parseFloatValue', () => {
 // ---------------------------------------------------------------------------
 
 describe('floatToBuffer', () => {
-  it('creates 4-byte buffer for float32', () => {
+  // Wire format: little-endian IEEE 754, matching what the runtime
+  // memcpy's into the IEC `REAL`/`LREAL` variable on every supported
+  // target.  The read-side decoder (`variable-sizes.ts:decodeWireValue`)
+  // uses `getFloat32(0, true)` — these tests confirm the writer agrees.
+
+  it('writes float32 as 4 little-endian bytes', () => {
     const result = floatToBuffer(1.0, 4)
     expect(result.length).toBe(4)
     const view = new DataView(result.buffer)
-    expect(view.getFloat32(0, false)).toBe(1.0)
+    expect(view.getFloat32(0, true)).toBe(1.0)
+    // 1.0 IEEE 754 = 0x3F800000 → LE bytes [0x00, 0x00, 0x80, 0x3F]
+    expect(result).toEqual(new Uint8Array([0x00, 0x00, 0x80, 0x3f]))
   })
 
-  it('creates 8-byte buffer for float64', () => {
+  it('writes float64 as 8 little-endian bytes', () => {
     const result = floatToBuffer(3.141592653589793, 8)
     expect(result.length).toBe(8)
     const view = new DataView(result.buffer)
-    expect(view.getFloat64(0, false)).toBeCloseTo(3.141592653589793, 12)
+    expect(view.getFloat64(0, true)).toBeCloseTo(3.141592653589793, 12)
   })
 
   it('handles zero', () => {
     const result = floatToBuffer(0, 4)
     expect(result.length).toBe(4)
     const view = new DataView(result.buffer)
-    expect(view.getFloat32(0, false)).toBe(0)
+    expect(view.getFloat32(0, true)).toBe(0)
+  })
+
+  it('writes 123.4 with the byte order the runtime expects', () => {
+    // Regression for the byte-swap bug: forcing a REAL to 123.4
+    // used to store -429836352 on the runtime side because this
+    // helper wrote big-endian (0x42 0xF6 0xCC 0xCD) but the runtime
+    // memcpy'd those bytes into a little-endian float, swapping
+    // sign / exponent / mantissa.
+    const result = floatToBuffer(123.4, 4)
+    expect(result).toEqual(new Uint8Array([0xcd, 0xcc, 0xf6, 0x42]))
   })
 
   it('returns buffer of requested size for other sizes (no write)', () => {

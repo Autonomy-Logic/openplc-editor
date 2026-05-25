@@ -235,6 +235,11 @@ export default class MenuBuilder {
           accelerator: 'Cmd+U',
           enabled: false,
         },
+        { type: 'separator' },
+        {
+          label: 'Board Package Manager...',
+          click: () => this.mainWindow.webContents.send('packages:open-manager'),
+        },
       ],
     }
 
@@ -407,6 +412,10 @@ export default class MenuBuilder {
           click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
         },
         {
+          label: i18n.t('menu:help.submenu.documentation'),
+          click: () => void this.handleOpenExternalLink('https://edge.autonomylogic.com/docs'),
+        },
+        {
           label: i18n.t('menu:help.submenu.about'),
           accelerator: 'F1',
           click: () => void this.handleOpenAboutModal(),
@@ -500,6 +509,11 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.updates'),
             enabled: false,
             accelerator: 'Ctrl+U',
+          },
+          { type: 'separator' },
+          {
+            label: 'Board Package Manager...',
+            click: () => this.mainWindow.webContents.send('packages:open-manager'),
           },
           { type: 'separator' },
           {
@@ -655,6 +669,10 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:help.submenu.communitySupport'),
             click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
+          },
+          {
+            label: i18n.t('menu:help.submenu.documentation'),
+            click: () => void this.handleOpenExternalLink('https://edge.autonomylogic.com/docs'),
           },
           {
             label: i18n.t('menu:help.submenu.about'),

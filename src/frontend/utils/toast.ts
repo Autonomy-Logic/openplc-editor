@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react'
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+// Dismiss-to-remove window: how long a toast stays in the array
+// after Radix marks it closed (open=false) before we strip it from
+// state.  Long enough for Radix's slide-out animation (~300ms in
+// the default config) plus a small buffer; well under the 3s
+// auto-dismiss duration set on the `<ToastProvider>` in `toaster.tsx`.
+const TOAST_REMOVE_DELAY = 1000
 
 type ToasterToast = {
   id: string

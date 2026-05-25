@@ -32,17 +32,34 @@ describe('generateCBlocksCode', () => {
     expect(result).toBe('')
   })
 
+  it('emits the c_blocks baseline (strucpp includes + raw IEC typedefs) before per-POU code', () => {
+    const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
+    const code = 'void setup() { }\nvoid loop() { }'
+    const result = generateCBlocksCode([{ name: 'B', code, variables }])
+
+    // Baseline: strucpp wrappers visible to the auto-generated struct.
+    expect(result).toContain('#include "iec_var.hpp"')
+    expect(result).toContain('#include "iec_string.hpp"')
+    // Baseline: raw file-scope typedefs for user-local variables.
+    expect(result).toContain('typedef int16_t   IEC_INT;')
+    expect(result).toContain('typedef float    IEC_REAL;')
+    // Baseline: raw STRING struct (`{ len; body[]; }`) shared with the
+    // auto-generated struct field type.
+    expect(result).toMatch(/typedef\s+struct\s+\{[\s\S]*?__strlen_t len;[\s\S]*?\}\s+IEC_STRING;/)
+  })
+
   it('generates struct, extern declarations, defines, code, and undefs for a pou', () => {
     const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
     const code = 'void setup() { }\nvoid loop() { }'
 
     const result = generateCBlocksCode([{ name: 'MyBlock', code, variables }])
 
-    // Struct definition
+    // Struct definition — fields are strucpp::IEC_* so user writes
+    // route through IECVar::operator= (force-respect).
     expect(result).toContain('//definition of external blocks - MYBLOCK')
     expect(result).toContain('typedef struct {')
-    expect(result).toContain('  IEC_INT *SPEED;')
-    expect(result).toContain('  IEC_REAL *RESULT;')
+    expect(result).toContain('  strucpp::IEC_INT *SPEED;')
+    expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
     expect(result).toContain('} MYBLOCK_VARS;')
 
     // Extern declarations
@@ -82,9 +99,10 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('typedef struct {')
     expect(result).toContain('} EMPTY_VARS;')
-    // No defines or undefs for variables
-    expect(result).not.toContain('#define')
-    expect(result).not.toContain('#undef')
+    // No #define / #undef for variables (the baseline's STR_MAX_LEN /
+    // STR_LEN_TYPE defines are unrelated bookkeeping).
+    expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
+    expect(result).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 
   it('processes multiple pous', () => {

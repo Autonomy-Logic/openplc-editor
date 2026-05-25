@@ -110,6 +110,18 @@ export function useAI() {
   return usePlatform().ai
 }
 
+export function usePackages() {
+  return usePlatform().packages
+}
+
 export function useEsi() {
   return usePlatform().esi
+}
+
+export function useLibrary() {
+  return usePlatform().library
+}
+
+export function useStlibSource() {
+  return usePlatform().stlibSource
 }
