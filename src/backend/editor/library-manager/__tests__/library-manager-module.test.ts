@@ -54,7 +54,11 @@ jest.mock(
         },
       }),
     ),
-    loadStlibFromString: jest.fn(),
+    // Passthrough: real strucpp parses + validates the archive shape;
+    // the mock just JSON.parses so the install path exercises the
+    // same code without pulling in the ESM package.  Malformed input
+    // throws, matching production behaviour.
+    loadStlibFromString: jest.fn((text: string) => JSON.parse(text)),
   }),
   { virtual: true },
 )
