@@ -81,5 +81,5 @@ export function StatsTable<R>({ context, title, description, columns, rows, rowK
   )
 }
 
-export { RangeCell } from './range-cell'
 export { formatNumber, formatRange } from './format-helpers'
+export { RangeCell } from './range-cell'

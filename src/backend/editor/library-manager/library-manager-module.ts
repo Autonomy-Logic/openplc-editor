@@ -9,12 +9,12 @@ import {
   userArchiveToInstalledRow,
 } from '../../shared/library/installed-library-rows'
 import {
-  type PreparedLibrary,
   prepareCodesysUpload,
+  type PreparedLibrary,
   prepareStlibUpload,
 } from '../../shared/library/prepare-library-upload'
-import { assertPathContained } from '../utils/path-containment'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { assertPathContained } from '../utils/path-containment'
 import type { LibraryRegistry } from './types'
 
 /**

@@ -81,7 +81,7 @@ export const DimensionsModal = ({
 
               <TypeDropdownSelector
                 value={typeValue}
-                onSelect={(_definition, value) => onTypeChange(value as PLCBaseType)}
+                onSelect={(_definition, value) => onTypeChange(value)}
                 variableTypes={variableTypes}
                 libraryTypes={libraryTypes}
               />

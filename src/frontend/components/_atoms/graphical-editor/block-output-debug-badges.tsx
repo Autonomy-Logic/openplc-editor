@@ -1,6 +1,6 @@
-import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { useDebugCompositeKey } from '../../../hooks/use-debug-composite-key'
 import { useIsDebuggerVisible } from '../../../hooks/use-debug-value'
+import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { DebugValueBadge } from './debug-value-badge'
 
 type BlockOutputDebugBadgesProps = {

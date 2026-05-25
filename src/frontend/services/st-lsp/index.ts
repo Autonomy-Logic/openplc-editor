@@ -22,7 +22,6 @@ import {
   InitializedNotification,
   type InitializeParams,
   InitializeRequest,
-  type InitializeResult,
   SemanticTokensRefreshRequest,
 } from 'vscode-languageserver-protocol'
 
@@ -169,7 +168,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     const initResult = (await connection.sendRequest(
       InitializeRequest.type,
       initParams,
-    )) as InitializeResult
+    ))
     await connection.sendNotification(InitializedNotification.type, {})
 
     // Wire semantic tokens once we know the worker's legend.  The

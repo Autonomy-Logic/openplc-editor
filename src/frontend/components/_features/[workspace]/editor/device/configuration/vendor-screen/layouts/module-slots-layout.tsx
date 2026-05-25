@@ -1,8 +1,6 @@
 import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { DragHandleIcon } from '@root/frontend/assets/icons/interface/DragHandle'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
@@ -15,6 +13,8 @@ import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-k
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'

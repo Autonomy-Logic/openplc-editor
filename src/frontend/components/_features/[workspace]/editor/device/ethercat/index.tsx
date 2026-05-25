@@ -3,8 +3,6 @@ import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-c
 import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
-import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -19,6 +17,8 @@ import type {
 } from '@root/middleware/shared/ports/esi-types'
 import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 

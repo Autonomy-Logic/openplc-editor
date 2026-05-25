@@ -23,13 +23,12 @@
  * Libraries tab.
  */
 
-import { useMemo, useState } from 'react'
-
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
+import { useMemo, useState } from 'react'
 
 interface ProjectLibrariesTabProps {
   installed: InstalledLibrary[]

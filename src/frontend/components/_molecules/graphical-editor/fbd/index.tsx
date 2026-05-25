@@ -22,7 +22,7 @@ import {
   useIsDebuggerVisible,
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'

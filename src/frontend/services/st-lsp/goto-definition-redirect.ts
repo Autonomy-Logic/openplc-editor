@@ -29,9 +29,9 @@
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType } from '../../../middleware/shared/ports/types'
-import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
+import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { getBodyLineOffset } from './body-offsets'
 import { DATA_TYPES_URI, parsePouUri } from './types'
 

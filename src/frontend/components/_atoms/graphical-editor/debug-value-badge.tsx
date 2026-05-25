@@ -1,6 +1,6 @@
-import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { useDebugVariableValue } from '../../../hooks/use-debug-value'
 import { cn } from '../../../utils/cn'
+import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 
 type DebugValueBadgeProps = {
   compositeKey: string

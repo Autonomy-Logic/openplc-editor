@@ -18,6 +18,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
@@ -27,7 +28,6 @@ import { BlockVariant } from '../types/block'
 import { validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
-import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { BlockNode, VariableNode, VariableProps } from './utils'
 import {
   DEFAULT_VARIABLE_HEIGHT,

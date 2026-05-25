@@ -1,9 +1,9 @@
-import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
+import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from '../index'

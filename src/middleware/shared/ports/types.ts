@@ -13,8 +13,17 @@ import type { ConfiguredEtherCATDevice } from './esi-types'
 // Result wrappers
 // ---------------------------------------------------------------------------
 
-/** Standard result for operations that can fail */
-export type Result<T = void> = ({ success: true } & T) | { success: false; error: string }
+/** Standard result for operations that can fail.
+ *
+ *  Default `T` is `unknown` — NOT `void` — because TS 5.5+ collapses
+ *  `{ success: true } & void` to `never`, which would make
+ *  `return { success: true }` an error at every call site that
+ *  consumes `Result<void>`.  Intersection with `unknown` is the
+ *  identity, so callers that don't pass `T` get the bare
+ *  `{ success: true }` shape, and callers that do (e.g.
+ *  `Result<{ value: number }>`) still get the extra fields merged in.
+ */
+export type Result<T = unknown> = ({ success: true } & T) | { success: false; error: string }
 
 /** Unsubscribe function returned by event subscriptions */
 export type Unsubscribe = () => void

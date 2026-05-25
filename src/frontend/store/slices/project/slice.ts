@@ -18,8 +18,8 @@ import {
   syncVariableAliases as syncVariablesPure,
 } from '../../../../middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
-import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
