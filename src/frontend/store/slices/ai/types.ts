@@ -193,9 +193,3 @@ export type AIActions = {
 export type AISlice = AIState & {
   aiActions: AIActions
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-export const MAX_CONVERSATION_MESSAGES = 50

@@ -2,7 +2,6 @@ import { createStore, StoreApi } from 'zustand/vanilla'
 
 import { createAISlice, createAISliceFactory } from '../slices/ai/slice'
 import type { AISlice, ChatMessage } from '../slices/ai/types'
-import { MAX_CONVERSATION_MESSAGES } from '../slices/ai/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -282,17 +281,16 @@ describe('createAISlice', () => {
       expect(messages[1].id).toBe('msg-2')
     })
 
-    it('enforces MAX_CONVERSATION_MESSAGES by keeping the most recent messages', () => {
-      expect(MAX_CONVERSATION_MESSAGES).toBe(50)
-
-      for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 5; i++) {
+    it('retains every appended message without truncation', () => {
+      const total = 75
+      for (let i = 0; i < total; i++) {
         store.getState().aiActions.addMessage(makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
       }
 
       const messages = store.getState().ai.messages
-      expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-      expect(messages[0].id).toBe('msg-5')
-      expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`msg-${MAX_CONVERSATION_MESSAGES + 4}`)
+      expect(messages).toHaveLength(total)
+      expect(messages[0].id).toBe('msg-0')
+      expect(messages[total - 1].id).toBe(`msg-${total - 1}`)
     })
   })
 
@@ -613,17 +611,18 @@ describe('createAISlice', () => {
         expect(store.getState().ai.error).toBeNull()
       })
 
-      it('caps at MAX_CONVERSATION_MESSAGES, keeping the most recent', () => {
+      it('replaces with the full payload without truncation', () => {
+        const total = 75
         const many: ChatMessage[] = []
-        for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 7; i++) {
+        for (let i = 0; i < total; i++) {
           many.push(makeMessage({ id: `m-${i}`, content: `Message ${i}` }))
         }
         store.getState().aiActions.replaceMessages(many)
 
         const messages = store.getState().ai.messages
-        expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-        expect(messages[0].id).toBe('m-7')
-        expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`m-${MAX_CONVERSATION_MESSAGES + 6}`)
+        expect(messages).toHaveLength(total)
+        expect(messages[0].id).toBe('m-0')
+        expect(messages[total - 1].id).toBe(`m-${total - 1}`)
       })
     })
 
