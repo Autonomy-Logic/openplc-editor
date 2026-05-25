@@ -4,12 +4,15 @@ import { basename, extname, join } from 'path'
 
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
-import { importCodesysLibrary as sharedImportCodesys } from '../../shared/library/codesys-import'
-import { compileStlib as sharedCompileStlib } from '../../shared/library/compile-stlib'
 import {
   bundledArchiveToInstalledRow,
   userArchiveToInstalledRow,
 } from '../../shared/library/installed-library-rows'
+import {
+  type PreparedLibrary,
+  prepareCodesysUpload,
+  prepareStlibUpload,
+} from '../../shared/library/prepare-library-upload'
 import { assertPathContained } from '../utils/path-containment'
 import { validatePathId } from '../../shared/utils/path-safety'
 import type { LibraryRegistry } from './types'
@@ -220,101 +223,74 @@ export class LibraryManagerModule {
   // -------------------------------------------------------------------------
 
   private async installStlib(filePath: string): Promise<LibraryInstallResult> {
-    let raw: unknown
+    let prepared: PreparedLibrary
     try {
-      raw = JSON.parse(readFileSync(filePath, 'utf-8'))
-    } catch {
-      return { success: false, error: 'Invalid .stlib: not valid JSON' }
+      prepared = prepareStlibUpload(readFileSync(filePath, 'utf-8'))
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
-    return this.persistArchive(raw, 'stlib')
+    return this.persistPrepared(prepared)
   }
 
   private async installFromCodesys(filePath: string): Promise<LibraryInstallResult> {
     // Read the .lib/.library bytes here (Node-only territory) and
-    // hand them to the browser-pure shared importer.  The bytes-in
-    // shape is the same the web backend uses against an HTTP upload
-    // body, so the shared importer doesn't grow a path coupling.
-    const bytes = new Uint8Array(readFileSync(filePath))
-    const importResult = await sharedImportCodesys(bytes)
-    if (!importResult.success || !importResult.sources) {
-      const errs = (importResult.errors ?? ['unknown error']).join('; ')
-      return { success: false, error: `CODESYS import failed: ${errs}` }
+    // hand them to the platform-agnostic shared preparer.  The
+    // bytes-in / filename-in shape is the same web's library-adapter
+    // uses against an HTTP upload, so the shared module isn't coupled
+    // to either backend's storage.
+    let prepared: PreparedLibrary
+    try {
+      prepared = await prepareCodesysUpload(
+        new Uint8Array(readFileSync(filePath)),
+        basename(filePath),
+      )
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
-
-    // Derive a stable name + version from the file basename.  CODESYS
-    // .library files have richer metadata in the binary header, but
-    // strucpp's importer doesn't currently surface it; falling back to
-    // the filename gives the user a predictable identifier they can
-    // rename later if needed.
-    const baseName = basename(filePath, extname(filePath))
-    let identifier = baseName.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[.-]+/, '')
-    if (!identifier) identifier = 'imported-library'
-
-    const compileResult = sharedCompileStlib(importResult.sources, {
-      name: identifier,
-      version: '1.0.0',
-      namespace: identifier.replace(/[^A-Za-z0-9_]/g, '_'),
-      noSource: false,
-      builtin: false,
-      ...(importResult.globalConstants ? { globalConstants: importResult.globalConstants } : {}),
-    })
-    if (!compileResult.success || !compileResult.archive) {
-      const errs = (compileResult.errors ?? []).map((e) => e.message).join('; ')
-      return { success: false, error: `CODESYS compile failed: ${errs || 'unknown error'}` }
-    }
-
-    return this.persistArchive(compileResult.archive, 'codesys')
+    return this.persistPrepared(prepared)
   }
 
   /**
-   * Validate an in-memory archive (must look like an `StlibArchive`),
-   * write it to disk under `{userData}/libraries/<name>/<name>.stlib`,
-   * and register the entry.  Shared between the .stlib and CODESYS
-   * paths so disk shape stays uniform regardless of origin.
+   * Write a strucpp-validated archive under
+   * `{userData}/libraries/<name>/<name>.stlib` and register it.
+   * Manifest parsing + extraction already happened in the shared
+   * preparer; this step is pure storage + filesystem-safety checks.
    */
-  private async persistArchive(raw: unknown, origin: 'stlib' | 'codesys'): Promise<LibraryInstallResult> {
-    const archive = this.coerceArchive(raw)
-    if (!archive) {
-      return { success: false, error: 'Library archive is missing a manifest' }
-    }
-    const name = archive.manifest.name
-    const version = archive.manifest.version
-    if (typeof name !== 'string' || !name) {
-      return { success: false, error: 'Library archive manifest is missing a name' }
-    }
-    if (typeof version !== 'string' || !version) {
-      return { success: false, error: 'Library archive manifest is missing a version' }
-    }
-
+  private persistPrepared(prepared: PreparedLibrary): LibraryInstallResult {
     try {
-      validatePathId(name, 'manifest.name')
+      validatePathId(prepared.name, 'manifest.name')
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
 
-    if (this.isBundled(name)) {
+    if (this.isBundled(prepared.name)) {
       return {
         success: false,
-        error: `Cannot install '${name}' — a bundled library with this name already exists`,
+        error: `Cannot install '${prepared.name}' — a bundled library with this name already exists`,
       }
     }
 
-    const libraryDir = join(this.librariesDir, name)
+    const libraryDir = join(this.librariesDir, prepared.name)
     assertPathContained(this.librariesDir, libraryDir, 'library install path')
     mkdirSync(libraryDir, { recursive: true })
-    const stlibPath = join(libraryDir, `${name}.stlib`)
-    writeFileSync(stlibPath, JSON.stringify(archive, null, 2) + '\n', 'utf-8')
+    const stlibPath = join(libraryDir, `${prepared.name}.stlib`)
+    writeFileSync(stlibPath, prepared.archive, 'utf-8')
 
     const registry = this.readRegistry()
-    registry.libraries[name] = {
-      version,
+    registry.libraries[prepared.name] = {
+      version: prepared.version,
       installedAt: new Date().toISOString(),
       stlibPath,
-      origin,
+      origin: prepared.origin,
     }
     this.writeRegistry(registry)
 
-    return { success: true, name, version, origin }
+    return {
+      success: true,
+      name: prepared.name,
+      version: prepared.version,
+      origin: prepared.origin,
+    }
   }
 
   // -------------------------------------------------------------------------
