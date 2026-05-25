@@ -11,6 +11,7 @@
  * cleaner "does this target support <feature>?".
  */
 
+import { parseRuntimeVersion } from '@root/backend/shared/firmware/runtime-version-gate'
 import { type BoardInfoLike, resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 /**
@@ -94,13 +95,22 @@ export type RuntimeVersionValidationResult = {
  *   - Full SemVer-ish: `"4.1.0-RC3"`, `"4.2.0-rc1"`, `"3.0.0"` (what
  *     `/api/version` actually emits on the wire today).
  *
- * In both cases the *major* digit is what matters for compatibility —
- * a "v4 runtime" is any 4.x.y release.  Returns the leading digit(s)
- * with no `v` prefix; falls back to the raw input when the string
- * starts with neither a `v` nor a digit (so unexpected formats stay
- * loud rather than silently passing).
+ * For SemVer-ish strings we route through the shared
+ * `parseRuntimeVersion` so the parser stays in one place; legacy
+ * short forms (`"v4"` / `"v3"`) are pre-strucpp and don't parse,
+ * so we strip the leading `v` ourselves and pull the first numeric
+ * run.  Returns the leading digit(s) with no `v` prefix; falls back
+ * to the raw input when the string starts with neither a `v` nor a
+ * digit (so unexpected formats stay loud rather than silently
+ * passing).
  */
 function extractRuntimeMajor(version: string): string {
+  const parsed = parseRuntimeVersion(version)
+  if (parsed) return String(parsed.major)
+  // Pre-strucpp short forms (`"v4"`, `"v3"`) — `parseRuntimeVersion`
+  // rejects these on purpose because they're not enough to gate
+  // strucpp compatibility, but the *major* digit is still well-defined
+  // and useful for the board-target equality check below.
   const stripped = version.replace(/^v/i, '')
   const match = stripped.match(/^\d+/)
   return match ? match[0] : version
