@@ -47,7 +47,6 @@ const hydrateLibraries = () => {
       actions.setBundledLibraryNames(installed.filter((l) => l.bundled).map((l) => l.name))
     })
     .catch((err) => {
-       
       console.error('Failed to load .stlib libraries:', err)
     })
 }

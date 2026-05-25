@@ -1,5 +1,10 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayStartIndex, getArrayTotalElements, getVariableIECType, isArrayVariable } from '../PLC/array-codegen-helpers'
+import {
+  getArrayStartIndex,
+  getArrayTotalElements,
+  getVariableIECType,
+  isArrayVariable,
+} from '../PLC/array-codegen-helpers'
 
 type STCodeGenerationParams = {
   pouName: string

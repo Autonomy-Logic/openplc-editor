@@ -274,15 +274,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       return edge
     })
-  }, [
-    rungLocal.edges,
-    rungLocal.nodes,
-    isDebuggerVisible,
-    debugVariableValues,
-    pouName,
-    project,
-    getCompositeKey,
-  ])
+  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, pouName, project, getCompositeKey])
 
   const styledNodes = useMemo(() => {
     const baseNodes = !isDebuggerVisible
@@ -533,12 +525,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       })
 
     if (pouRef) {
-      syncNodesWithVariables(
-        pouRef.interface?.variables ?? [],
-        ladderFlows,
-        ladderFlowActions.updateNode,
-        pouName,
-      )
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
     }
   }
 
@@ -613,12 +600,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     if (pouRef) {
-      syncNodesWithVariables(
-        pouRef.interface?.variables ?? [],
-        ladderFlows,
-        ladderFlowActions.updateNode,
-        pouName,
-      )
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
     }
   }
 
@@ -676,12 +658,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     }
 
     if (pouRef) {
-      syncNodesWithVariables(
-        pouRef.interface?.variables ?? [],
-        ladderFlows,
-        ladderFlowActions.updateNode,
-        pouName,
-      )
+      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
     }
   }
 

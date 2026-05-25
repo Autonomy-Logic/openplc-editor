@@ -298,9 +298,7 @@ class HardwareModule {
     // For VPP boards: contain under the package's own directory, since
     // package authors expect to ship their preview alongside other
     // package assets.
-    const baseDir = packagePath
-      ? packagePath
-      : join(this.sourcesDirectoryPath, 'boards', 'previews')
+    const baseDir = packagePath ? packagePath : join(this.sourcesDirectoryPath, 'boards', 'previews')
     const imagePath = join(baseDir, image)
     assertPathContained(baseDir, imagePath, 'preview image path')
 

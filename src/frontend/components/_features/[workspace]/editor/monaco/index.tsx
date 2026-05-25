@@ -505,10 +505,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
     // ST models live under `inmemory://pou/<name>.st` (the LSP scheme); other languages
     // keep their project-scoped filesystem URI.
-    const expectedUri =
-      language === 'st'
-        ? editorModelPath
-        : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
+    const expectedUri = language === 'st' ? editorModelPath : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
     if (model.uri.toString() !== expectedUri) return null
 
     const prefix = fbInstanceContext
@@ -619,18 +616,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     [sliceLibraries],
   )
 
-  const keywordsSuggestions = useCallback(
-    (range: monaco.IRange) => {
-      const allSuggestions = keywordsCompletion({
-        range,
-        language: 'il',
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(allSuggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [],
-  )
+  const keywordsSuggestions = useCallback((range: monaco.IRange) => {
+    const allSuggestions = keywordsCompletion({
+      range,
+      language: 'il',
+    }).suggestions
+    const uniqueSuggestions = Array.from(new Map(allSuggestions.map((s) => [s.label, s])).values())
+    const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
+    return { suggestions: uniqueSuggestions, labels }
+  }, [])
 
   // -----------------------------------------------------------------------
   // IL completion provider
@@ -900,7 +894,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const monacoInst = monacoInstance
       const model = editorInstance.getModel()
       const lineLength = model ? model.getLineMaxColumn(editor.cursorPosition.lineNumber) : editor.cursorPosition.column
-      const range = new monacoInst.Range(editor.cursorPosition.lineNumber, 1, editor.cursorPosition.lineNumber, lineLength)
+      const range = new monacoInst.Range(
+        editor.cursorPosition.lineNumber,
+        1,
+        editor.cursorPosition.lineNumber,
+        lineLength,
+      )
       editorInstance.setSelection(range)
       editorInstance.revealRangeInCenter(range)
     }

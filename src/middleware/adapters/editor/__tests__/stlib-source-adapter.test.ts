@@ -25,9 +25,7 @@ function makeArchive(name: string, version: string) {
 beforeEach(() => {
   onLibrariesChangedHandlers = []
   window.bridge = {
-    loadAllLibraries: jest
-      .fn()
-      .mockResolvedValue([makeArchive('IEC', '1.0.0'), makeArchive('Oscat', '3.3.5')]),
+    loadAllLibraries: jest.fn().mockResolvedValue([makeArchive('IEC', '1.0.0'), makeArchive('Oscat', '3.3.5')]),
     onLibrariesChanged: jest.fn((cb: () => void) => {
       onLibrariesChangedHandlers.push(cb)
       return () => undefined

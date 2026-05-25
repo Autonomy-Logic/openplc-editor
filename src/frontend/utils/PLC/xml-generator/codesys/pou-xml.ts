@@ -81,9 +81,7 @@ export const codeSysParseInterface = (pou: PLCPou) => {
       if (!xml.returnType) xml.returnType = {}
 
       const isBaseType = baseTypes.includes(returnType)
-      xml.returnType = isBaseType
-        ? { [baseTypeTag(returnType)]: '' }
-        : { ['derived']: { '@name': returnType } }
+      xml.returnType = isBaseType ? { [baseTypeTag(returnType)]: '' } : { ['derived']: { '@name': returnType } }
     }
 
     switch (variable.class) {

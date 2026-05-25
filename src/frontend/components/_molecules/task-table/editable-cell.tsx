@@ -51,10 +51,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
       className='flex w-full flex-1 bg-transparent p-2 text-center outline-none'
     />
   ) : (
-    <div
-      onClick={() => setIsEditing(true)}
-      className='flex w-full flex-1 bg-transparent p-2 text-center'
-    >
+    <div onClick={() => setIsEditing(true)} className='flex w-full flex-1 bg-transparent p-2 text-center'>
       <HighlightedText
         text={cellValue}
         searchQuery={searchQuery}

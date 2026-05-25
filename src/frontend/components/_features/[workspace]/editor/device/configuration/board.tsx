@@ -217,8 +217,7 @@ const Board = memo(function () {
       // I/O the project currently has configured.
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
-      const targetCantHostServers =
-        !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
+      const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
       const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
 
       const losingServers = hasServers && targetCantHostServers
@@ -362,10 +361,7 @@ const Board = memo(function () {
 
   return (
     <DeviceEditorSlot>
-      <div
-        id='board-selection-container'
-        className='flex w-full flex-wrap items-start gap-8 lg:gap-16'
-      >
+      <div id='board-selection-container' className='flex w-full flex-wrap items-start gap-8 lg:gap-16'>
         <div
           id='board-preferences-container'
           className='flex w-[360px] flex-shrink-0 flex-col items-start justify-start gap-3'
@@ -585,9 +581,7 @@ const Board = memo(function () {
         const isSim = isSimulatorTarget(currentBoardInfo)
         const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
         const showDivider = !isSim && (isRuntime ? connectionStatus === 'connected' : true)
-        return showDivider ? (
-          <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-        ) : null
+        return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         connectionStatus === 'connected' && (

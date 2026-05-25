@@ -29,9 +29,7 @@ const columns: StatsTableColumn<EtherCATMasterStatus>[] = [
   {
     key: 'bus-cycle',
     header: 'Bus Cycle',
-    render: (m) => (
-      <RangeCell avg={m.metrics.avg_cycle_us} min={m.metrics.min_cycle_us} max={m.metrics.max_cycle_us} />
-    ),
+    render: (m) => <RangeCell avg={m.metrics.avg_cycle_us} min={m.metrics.min_cycle_us} max={m.metrics.max_cycle_us} />,
   },
   {
     key: 'period',

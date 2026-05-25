@@ -214,8 +214,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   // whichever happens to be active.  Driven off `editor.meta.name` so
   // unrelated mutations (cursorPosition, variable list edits) don't
   // re-fire it.
-  const editorVariableState =
-    editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable : null
+  const editorVariableState = editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.variable : null
   const editorVariableDisplay = editorVariableState?.display
 
   useEffect(() => {

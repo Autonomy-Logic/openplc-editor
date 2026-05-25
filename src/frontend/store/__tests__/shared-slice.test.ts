@@ -1469,9 +1469,7 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
         // A becomes active (creation flips active to the new one), then
         // we explicitly switch to A for the regression scenario.
-        store.getState().editorActions.setEditor(
-          store.getState().editorActions.getEditorFromEditors('A')!,
-        )
+        store.getState().editorActions.setEditor(store.getState().editorActions.getEditorFromEditors('A')!)
         expect(store.getState().editor.meta.name).toBe('A')
 
         store.getState().sharedWorkspaceActions.forceCloseFile('A')

@@ -114,9 +114,7 @@ describe('composeRuntimeV4Bundle', () => {
     const files = composeRuntimeV4Bundle(baseInput())
     expect('generated.hpp' in files).toBe(true)
     expect(Object.keys(files).some((p) => p.endsWith('.cpp'))).toBe(true)
-    expect(
-      Object.keys(files).some((p) => p.startsWith('strucpp_runtime/include/')),
-    ).toBe(true)
+    expect(Object.keys(files).some((p) => p.startsWith('strucpp_runtime/include/'))).toBe(true)
   })
 
   it('returns a fresh file map per call (does not mutate input)', () => {

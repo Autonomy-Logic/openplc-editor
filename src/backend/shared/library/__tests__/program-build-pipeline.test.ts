@@ -168,9 +168,7 @@ describe('runProgramBuildPipeline — successful split compile', () => {
     const [primarySource, options] = strucppCompile.mock.calls[0]
     expect(primarySource).toBe('PROGRAM Main … END_PROGRAM')
     expect(options?.fileName).toBe('Main.st')
-    expect(options?.additionalSources).toEqual([
-      { fileName: 'Helper.st', source: 'FUNCTION Helper … END_FUNCTION' },
-    ])
+    expect(options?.additionalSources).toEqual([{ fileName: 'Helper.st', source: 'FUNCTION Helper … END_FUNCTION' }])
   })
 
   it('does not set splitterFallbackMessage when the split succeeded', () => {
@@ -252,7 +250,9 @@ describe('runProgramBuildPipeline — compile failure', () => {
   it('formats every error and every warning through formatErrorWithPouContext', () => {
     strucppCompile.mockReturnValue({
       success: false,
-      errors: [{ message: 'oops', line: 1, column: 1, severity: 'error', pouName: 'Main', section: 'body', bodyLine: 7 }],
+      errors: [
+        { message: 'oops', line: 1, column: 1, severity: 'error', pouName: 'Main', section: 'body', bodyLine: 7 },
+      ],
       warnings: [{ message: 'careful', line: 2, column: 1, severity: 'warning' }],
     } as unknown as CompileResult)
     const result = runProgramBuildPipeline({ ...baseOpts, pous: [] })

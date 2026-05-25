@@ -2,12 +2,7 @@ import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/share
 import { openPLCStoreBase } from '../../store'
 import type { DebugVariableEntry } from '../debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from '../debug-tree-traversal'
-import {
-  lookupEnumValues,
-  resolveLeafType,
-  traverseNestedType,
-  traverseVariable,
-} from '../debug-tree-traversal'
+import { lookupEnumValues, resolveLeafType, traverseNestedType, traverseVariable } from '../debug-tree-traversal'
 
 /** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
 const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
@@ -310,10 +305,7 @@ describe('traverseVariable', () => {
         { name: 'y', type: { definition: 'base-type', value: 'INT' } },
       ])
       const variable = makeUdtVariable('pos', 'Point')
-      const debugVars = [
-        makeDebugVar('INSTANCE0.POSX', 'INT_ENUM', 10),
-        makeDebugVar('INSTANCE0.POSY', 'INT_ENUM', 11),
-      ]
+      const debugVars = [makeDebugVar('INSTANCE0.POSX', 'INT_ENUM', 10), makeDebugVar('INSTANCE0.POSY', 'INT_ENUM', 11)]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -568,15 +560,7 @@ describe('traverseNestedType', () => {
     const debugVars = [makeDebugVar('INSTANCE0.INST.X', 'INT_ENUM', 0)]
     const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
-    const result = traverseNestedType(
-      'inst',
-      'INSTANCE0.INST',
-      'Main:inst',
-      'MyFB',
-      'derived',
-      ctx,
-      simpleVisitor,
-    )
+    const result = traverseNestedType('inst', 'INSTANCE0.INST', 'Main:inst', 'MyFB', 'derived', ctx, simpleVisitor)
 
     expect(result.kind).toBe('complex')
     expect(result.children![0].name).toBe('X')
@@ -587,15 +571,7 @@ describe('traverseNestedType', () => {
     const debugVars = [makeDebugVar('INSTANCE0.VARF', 'BOOL_ENUM', 5)]
     const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
 
-    const result = traverseNestedType(
-      'var',
-      'INSTANCE0.VAR',
-      'Main:var',
-      'S',
-      'user-data-type',
-      ctx,
-      simpleVisitor,
-    )
+    const result = traverseNestedType('var', 'INSTANCE0.VAR', 'Main:var', 'S', 'user-data-type', ctx, simpleVisitor)
 
     expect(result.kind).toBe('complex')
     expect(result.children![0].name).toBe('f')

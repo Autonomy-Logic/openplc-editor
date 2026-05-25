@@ -1,9 +1,7 @@
 import { deployRuntimeProgram } from '../deploy-runtime-program'
 import type { RuntimeCompilationStatus } from '../poll-runtime-compilation'
 
-function makeStatusFetcher(
-  ...responses: Array<RuntimeCompilationStatus | { error: string }>
-) {
+function makeStatusFetcher(...responses: Array<RuntimeCompilationStatus | { error: string }>) {
   let i = 0
   return async () => {
     const r = responses[Math.min(i, responses.length - 1)]

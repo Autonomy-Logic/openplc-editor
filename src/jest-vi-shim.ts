@@ -51,6 +51,5 @@ try {
     .map((f) => JSON.parse(readFileSync(join(stlibsDir, f), 'utf-8')))
   openPLCStoreBase.getState().libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
 } catch (err) {
-
   console.warn(`[jest-setup] could not pre-load bundled .stlibs from ${stlibsDir}:`, err)
 }

@@ -11,15 +11,7 @@
  * automation flows should keep polling until they see a settled
  * state.
  */
-export const PLC_VALID_STATUSES = [
-  'INIT',
-  'RUNNING',
-  'STOPPED',
-  'ERROR',
-  'EMPTY',
-  'TRANSITIONING',
-  'UNKNOWN',
-] as const
+export const PLC_VALID_STATUSES = ['INIT', 'RUNNING', 'STOPPED', 'ERROR', 'EMPTY', 'TRANSITIONING', 'UNKNOWN'] as const
 
 /**
  * Type representing valid PLC runtime status values

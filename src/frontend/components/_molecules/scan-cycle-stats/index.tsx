@@ -22,16 +22,12 @@ const columns: StatsTableColumn<TaskTimingStats>[] = [
   {
     key: 'scan-time',
     header: 'Scan Time',
-    render: (task) => (
-      <RangeCell avg={task.scan_time_avg} min={task.scan_time_min} max={task.scan_time_max} />
-    ),
+    render: (task) => <RangeCell avg={task.scan_time_avg} min={task.scan_time_min} max={task.scan_time_max} />,
   },
   {
     key: 'cycle-time',
     header: 'Cycle Time',
-    render: (task) => (
-      <RangeCell avg={task.cycle_time_avg} min={task.cycle_time_min} max={task.cycle_time_max} />
-    ),
+    render: (task) => <RangeCell avg={task.cycle_time_avg} min={task.cycle_time_min} max={task.cycle_time_max} />,
   },
   {
     key: 'latency',

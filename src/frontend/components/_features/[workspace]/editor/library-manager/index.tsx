@@ -50,15 +50,7 @@ function serializeProjectLibraries(refs: { name: string; version: string }[]): s
 
 type ManagerTab = 'system' | 'project'
 
-const TabItem = ({
-  value,
-  label,
-  isActive,
-}: {
-  value: string
-  label: string
-  isActive: boolean
-}) => (
+const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
     value={value}
     className={cn(

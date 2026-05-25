@@ -606,7 +606,6 @@ class CompilerModule {
     return files
   }
 
-
   /**
    * Mirror the bundled avr-libstdcpp headers into a stable no-space
    * cache path so arduino-cli's compiler.cpp.extra_flags substitution
@@ -690,11 +689,7 @@ class CompilerModule {
 
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
-    handleOutputData: (
-      chunk: Buffer | string,
-      logLevel?: 'info' | 'error',
-      compileError?: StrucppCompileError,
-    ) => void,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error', compileError?: StrucppCompileError) => void,
     options: {
       hasCBlocks?: boolean
       pous?: KnownPou[]
@@ -771,9 +766,7 @@ class CompilerModule {
     }
 
     await Promise.all(
-      result.files.map((f) =>
-        writeFile(join(sourceTargetFolderPath, f.name), f.content, { encoding: 'utf8' }),
-      ),
+      result.files.map((f) => writeFile(join(sourceTargetFolderPath, f.name), f.content, { encoding: 'utf8' })),
     )
 
     if (result.debugMapSummary) handleOutputData(result.debugMapSummary, 'info')
@@ -1636,11 +1629,8 @@ class CompilerModule {
       // failures (stale library-FB internals, renamed/deleted vars)
       // surface as build warnings instead of aborting; the generator
       // drops them and we forward each to the compile log.
-      const opcuaJson: string | null = generateOpcUaConfig(
-        projectData.servers,
-        debugMapContent,
-        instances,
-        (msg) => handleOutputData(msg, 'info'),
+      const opcuaJson: string | null = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
+        handleOutputData(msg, 'info'),
       )
 
       if (opcuaJson) {
@@ -1863,8 +1853,7 @@ class CompilerModule {
           // Format matches plugins.conf: name,path,enabled,type,config_path,venv_path
           // The paths are the deterministic locations that compile.sh and the
           // runtime's apply_vpp_plugin_conf() agree on.
-          const vppPluginsConfContent =
-            `${pluginName},./build/vpp/lib${pluginName}_plugin.so,1,1,./build/vpp/${pluginName}.json,\n`
+          const vppPluginsConfContent = `${pluginName},./build/vpp/lib${pluginName}_plugin.so,1,1,./build/vpp/${pluginName}.json,\n`
           const vppPluginsConfPath = join(sourceTargetFolderPath, 'vpp_plugins.conf')
           await writeFile(vppPluginsConfPath, vppPluginsConfContent, 'utf-8')
           handleOutputData('Generated vpp_plugins.conf', 'info')
@@ -1967,7 +1956,9 @@ class CompilerModule {
       const hash = createHash('sha256')
       for (const relFile of copiedFiles) {
         const fileContent = await readFile(join(destPluginDir, relFile))
-        const fileHash = createHash('sha256').update(fileContent as unknown as Uint8Array).digest('hex')
+        const fileHash = createHash('sha256')
+          .update(fileContent as unknown as Uint8Array)
+          .digest('hex')
         hash.update(`${fileHash}  ${relFile}\n`)
       }
       const combinedHash = hash.digest('hex')
@@ -3256,11 +3247,7 @@ class CompilerModule {
             }),
         )
         try {
-          await writeFile(
-            verifyCachePath,
-            JSON.stringify({ md5: programStMd5, ...verification }, null, 2),
-            'utf-8',
-          )
+          await writeFile(verifyCachePath, JSON.stringify({ md5: programStMd5, ...verification }, null, 2), 'utf-8')
         } catch (cacheErr) {
           post(`Could not write verification cache: ${getErrorMessage(cacheErr)}`, 'warning')
         }

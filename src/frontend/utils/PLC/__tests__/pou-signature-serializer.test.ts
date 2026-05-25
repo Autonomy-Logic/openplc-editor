@@ -1,8 +1,5 @@
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import {
-  OPAQUE_BODY_PLACEHOLDER,
-  serializePouSignatureToST,
-} from '../pou-signature-serializer'
+import { OPAQUE_BODY_PLACEHOLDER, serializePouSignatureToST } from '../pou-signature-serializer'
 
 function makePou(overrides: Partial<PLCPou> = {}): PLCPou {
   return {
@@ -150,9 +147,7 @@ describe('serializePouSignatureToST', () => {
       })
       const lines = serializePouSignatureToST(pou).split('\n')
       const inputBlockStart = lines.findIndex((l) => l.startsWith('VAR_INPUT'))
-      const inputBlockEnd = lines.findIndex(
-        (l, idx) => idx > inputBlockStart && l.startsWith('END_VAR'),
-      )
+      const inputBlockEnd = lines.findIndex((l, idx) => idx > inputBlockStart && l.startsWith('END_VAR'))
       const inputSlice = lines.slice(inputBlockStart, inputBlockEnd + 1).join('\n')
       expect(inputSlice).toContain('in1')
       expect(inputSlice).not.toContain('out1')

@@ -12,14 +12,14 @@ interface Row {
 }
 
 const rows: Row[] = [
-  { id: 'a', name: 'task-A', count: 1234, avg: 100, min: 50,   max: 200 },
-  { id: 'b', name: 'task-B', count: 99,   avg: null, min: null, max: null },
+  { id: 'a', name: 'task-A', count: 1234, avg: 100, min: 50, max: 200 },
+  { id: 'b', name: 'task-B', count: 99, avg: null, min: null, max: null },
 ]
 
 const columns: StatsTableColumn<Row>[] = [
-  { key: 'name',  header: 'Task',       align: 'left', render: (r) => r.name },
+  { key: 'name', header: 'Task', align: 'left', render: (r) => r.name },
   { key: 'count', header: 'Scan Count', render: (r) => r.count.toLocaleString() },
-  { key: 'time',  header: 'Time',       render: (r) => <RangeCell avg={r.avg} min={r.min} max={r.max} /> },
+  { key: 'time', header: 'Time', render: (r) => <RangeCell avg={r.avg} min={r.min} max={r.max} /> },
 ]
 
 describe('StatsTable', () => {

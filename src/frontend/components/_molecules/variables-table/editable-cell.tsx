@@ -560,10 +560,13 @@ const EditableLocationCell = ({
   ) : (
     <div
       title={orphanTooltip ?? (variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined)}
-      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !selected,
-        'cursor-not-allowed': !isEditable(),
-      })}
+      className={cn(
+        'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
+        {
+          'pointer-events-none': !selected,
+          'cursor-not-allowed': !isEditable(),
+        },
+      )}
     >
       {isOrphaned && (
         <span
@@ -571,12 +574,7 @@ const EditableLocationCell = ({
           className='text-amber-500 dark:text-amber-400'
           /* small inline-svg keeps the cell self-contained */
         >
-          <svg
-            viewBox='0 0 16 16'
-            fill='currentColor'
-            className='h-3.5 w-3.5'
-            aria-hidden='true'
-          >
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
             <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
           </svg>
         </span>

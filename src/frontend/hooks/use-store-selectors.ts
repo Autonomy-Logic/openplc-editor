@@ -119,13 +119,6 @@ const vendorIoSelectors = {
   },
 }
 
-export {
-  boardSelectors,
-  compileOnlySelectors,
-  ladderSelectors,
-  pinSelectors,
-  remoteDeviceSelectors,
-  vendorIoSelectors,
-}
+export { boardSelectors, compileOnlySelectors, ladderSelectors, pinSelectors, remoteDeviceSelectors, vendorIoSelectors }
 
 export type { RemoteDeviceIOPoint }

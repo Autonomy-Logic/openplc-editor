@@ -6,7 +6,6 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 
-
 // Runtime JSON interfaces (snake_case for plugin consumption)
 
 interface RuntimePdoEntry {

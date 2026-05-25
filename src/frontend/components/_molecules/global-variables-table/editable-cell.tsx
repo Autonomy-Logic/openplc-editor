@@ -377,9 +377,12 @@ const EditableLocationCell = ({
   ) : (
     <div
       title={orphanTooltip ?? (variableAlias ? `${variableAlias} -> ${cellValue}` : undefined)}
-      className={cn('flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !editable,
-      })}
+      className={cn(
+        'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
+        {
+          'pointer-events-none': !editable,
+        },
+      )}
     >
       {isOrphaned && (
         <span aria-label='Orphaned alias' className='text-amber-500 dark:text-amber-400'>

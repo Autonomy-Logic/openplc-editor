@@ -80,13 +80,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     if (allocKey === lastAllocKey.current) return
     lastAllocKey.current = allocKey
 
-    const {
-      remoteDevices,
-      slotsConfig: liveSlotsConfig,
-      storedMapping,
-      pinMappingPins,
-      capabilities,
-    } = getStoreState()
+    const { remoteDevices, slotsConfig: liveSlotsConfig, storedMapping, pinMappingPins, capabilities } = getStoreState()
 
     const existingAliases = new Map<string, string>()
     const existingEntries = storedMapping?.entries ?? entries

@@ -1,9 +1,6 @@
 import type { StlibArchiveDTO } from '../../../../middleware/shared/ports/library-port'
 
-import {
-  bundledArchiveToInstalledRow,
-  userArchiveToInstalledRow,
-} from '../installed-library-rows'
+import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../installed-library-rows'
 
 function makeArchive(manifest: Partial<StlibArchiveDTO['manifest']>): StlibArchiveDTO {
   return {
@@ -22,9 +19,7 @@ function makeArchive(manifest: Partial<StlibArchiveDTO['manifest']>): StlibArchi
 
 describe('bundledArchiveToInstalledRow', () => {
   it('pins bundled=true / origin=bundled and clears installedAt', () => {
-    expect(
-      bundledArchiveToInstalledRow(makeArchive({ name: 'iec-std-functions', version: '2.0.0' })),
-    ).toEqual({
+    expect(bundledArchiveToInstalledRow(makeArchive({ name: 'iec-std-functions', version: '2.0.0' }))).toEqual({
       name: 'iec-std-functions',
       version: '2.0.0',
       bundled: true,
@@ -85,10 +80,12 @@ describe('userArchiveToInstalledRow', () => {
   })
 
   it('includes manifest displayName + description when present', () => {
-    const row = userArchiveToInstalledRow(
-      makeArchive({ displayName: 'User Lib', description: 'A user library' }),
-      { name: 'user-lib', version: '0.1.0', installedAt: '2026-05-22T12:00:00Z', origin: 'stlib' },
-    )
+    const row = userArchiveToInstalledRow(makeArchive({ displayName: 'User Lib', description: 'A user library' }), {
+      name: 'user-lib',
+      version: '0.1.0',
+      installedAt: '2026-05-22T12:00:00Z',
+      origin: 'stlib',
+    })
     expect(row.displayName).toBe('User Lib')
     expect(row.description).toBe('A user library')
   })

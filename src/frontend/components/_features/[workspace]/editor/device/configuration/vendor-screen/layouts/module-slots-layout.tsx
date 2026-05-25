@@ -146,7 +146,7 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
       style={style}
       className={`flex shrink-0 items-stretch border-b border-neutral-100 dark:border-neutral-800 ${
         isSelected
-          ? 'bg-brand/20 shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+          ? 'bg-brand/20 dark:bg-brand/30 shadow-[inset_3px_0_0_var(--primary-default)]'
           : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
       }`}
     >
@@ -321,7 +321,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const storedMapping = vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined
     const remoteDevices = state.project.data.remoteDevices ?? []
-    const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+      state.deviceDefinitions.configuration.deviceBoard,
+    )
     const capabilities = resolveTargetCapabilities(boardInfo)
 
     const existingAliases = new Map<string, string>()
@@ -612,7 +614,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               type='button'
               onClick={handleAddModule}
               disabled={populatedCount >= maxSlots || availableModules.length === 0}
-              className='flex shrink-0 items-center justify-center gap-1 border-t border-neutral-100 px-3 py-2 text-xs font-medium text-brand hover:bg-brand-light/10 disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent dark:border-neutral-800 dark:text-brand-light dark:hover:bg-brand-medium-dark/10 dark:disabled:text-neutral-600'
+              className='hover:bg-brand-light/10 dark:hover:bg-brand-medium-dark/10 flex shrink-0 items-center justify-center gap-1 border-t border-neutral-100 px-3 py-2 text-xs font-medium text-brand disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent dark:border-neutral-800 dark:text-brand-light dark:disabled:text-neutral-600'
             >
               + Add module
             </button>
@@ -621,297 +623,298 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
         {/* ------ Right: contextual detail pane ------ */}
         <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
-        {stackable && populatedCount === 0 ? (
-          <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
-            <p>No modules configured.</p>
-            <p className='mt-1 text-xs'>Use &quot;+ Add module&quot; in the slot list to start a backplane.</p>
-          </div>
-        ) : (
-          <>
-          {/* Header: Slot title, module picker, description, specs
+          {stackable && populatedCount === 0 ? (
+            <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
+              <p>No modules configured.</p>
+              <p className='mt-1 text-xs'>Use &quot;+ Add module&quot; in the slot list to start a backplane.</p>
+            </div>
+          ) : (
+            <>
+              {/* Header: Slot title, module picker, description, specs
               on the left; module image fills the right column from
               the top of the card down to the end of the specs. */}
-          <div className='mb-5 flex gap-5'>
-            <div className='flex min-w-0 flex-1 flex-col'>
-              <h3 className='mb-3 font-caption text-base font-semibold text-neutral-950 dark:text-white'>
-                Slot {selectedSlot + 1}
-              </h3>
+              <div className='mb-5 flex gap-5'>
+                <div className='flex min-w-0 flex-1 flex-col'>
+                  <h3 className='mb-3 font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+                    Slot {selectedSlot + 1}
+                  </h3>
 
-              {/* Module picker — always visible. In physical mode,
+                  {/* Module picker — always visible. In physical mode,
                   selecting "-- Empty --" clears the slot; in stackable
                   mode there is no empty option and removal goes through
                   the Remove button so the remaining slots shift up. */}
-              <div className='mb-4 flex items-center gap-3'>
-                <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
-                <Select
-                  value={selectedModule ? selectedModule.id : '__empty__'}
-                  onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
-                >
-                  <SelectTrigger
-                    aria-label={`Module for slot ${selectedSlot + 1}`}
-                    placeholder='-- Empty --'
-                    withIndicator
-                    className='flex h-[32px] w-80 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                  />
-                  <SelectContent
-                    className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                    sideOffset={5}
-                    position='popper'
-                    align='center'
-                    side='bottom'
-                  >
-                    {!stackable && (
-                      <SelectItem
-                        value='__empty__'
-                        className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                  <div className='mb-4 flex items-center gap-3'>
+                    <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
+                    <Select
+                      value={selectedModule ? selectedModule.id : '__empty__'}
+                      onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
+                    >
+                      <SelectTrigger
+                        aria-label={`Module for slot ${selectedSlot + 1}`}
+                        placeholder='-- Empty --'
+                        withIndicator
+                        className='flex h-[32px] w-80 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                      />
+                      <SelectContent
+                        className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                        sideOffset={5}
+                        position='popper'
+                        align='center'
+                        side='bottom'
                       >
-                        <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
-                          -- Empty --
-                        </span>
-                      </SelectItem>
+                        {!stackable && (
+                          <SelectItem
+                            value='__empty__'
+                            className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                          >
+                            <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
+                              -- Empty --
+                            </span>
+                          </SelectItem>
+                        )}
+                        {availableModules.map((mod) => (
+                          <SelectItem
+                            key={mod.id}
+                            value={mod.id}
+                            className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                          >
+                            <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                              {mod.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {stackable && selectedModule && (
+                      <button
+                        type='button'
+                        onClick={() => setRemoveModalOpen(true)}
+                        className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                      >
+                        Remove module
+                      </button>
                     )}
-                    {availableModules.map((mod) => (
-                      <SelectItem
-                        key={mod.id}
-                        value={mod.id}
-                        className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                      >
-                        <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {mod.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {stackable && selectedModule && (
-                  <button
-                    type='button'
-                    onClick={() => setRemoveModalOpen(true)}
-                    className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
-                  >
-                    Remove module
-                  </button>
+                  </div>
+
+                  {selectedModule && (
+                    <>
+                      {(selectedModule as { description?: string }).description && (
+                        <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                          {(selectedModule as { description?: string }).description}
+                        </p>
+                      )}
+                      {(selectedModule as { specs?: Record<string, string> }).specs && (
+                        <dl className='mt-2 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-400'>
+                          {Object.entries((selectedModule as { specs?: Record<string, string> }).specs ?? {}).map(
+                            ([k, v]) => (
+                              <div key={k} className='flex gap-1'>
+                                <dt className='font-medium text-neutral-500 dark:text-neutral-400'>{k}:</dt>
+                                <dd className='text-neutral-700 dark:text-neutral-300'>{v}</dd>
+                              </div>
+                            ),
+                          )}
+                        </dl>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Module image — frameless. The PNGs ship with a
+                transparent background, so no card chrome is needed. */}
+                {selectedModule && moduleImage && (
+                  <img
+                    src={moduleImage}
+                    alt={selectedModule.name}
+                    className='h-80 w-80 shrink-0 self-start object-contain'
+                  />
                 )}
               </div>
 
-              {selectedModule && (
-                <>
-                  {(selectedModule as { description?: string }).description && (
-                    <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                      {(selectedModule as { description?: string }).description}
-                    </p>
+              {selectedModule ? (
+                <div className='flex flex-col gap-5'>
+                  {/* I/O Mapping */}
+                  {ioEntriesForSelected.length > 0 && (
+                    <section>
+                      <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
+                        I/O Mapping
+                      </h4>
+                      <table className='w-full text-left'>
+                        <thead>
+                          <tr className='border-b border-neutral-200 dark:border-neutral-700'>
+                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
+                              Channel
+                            </th>
+                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
+                              Type
+                            </th>
+                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
+                              IEC Address
+                            </th>
+                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
+                              Alias
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ioEntriesForSelected.map((entry) => (
+                            <tr
+                              key={`${entry.slot}-${entry.channelName}`}
+                              className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-800'
+                            >
+                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
+                                {entry.channelName}
+                              </td>
+                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
+                                {entry.channelType}
+                              </td>
+                              <td className='px-2 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
+                                {entry.iecAddress}
+                              </td>
+                              <td className='px-1 py-1'>
+                                <input
+                                  type='text'
+                                  value={entry.alias}
+                                  onChange={(e) => handleAliasChange(entry.slot, entry.channelName, e.target.value)}
+                                  placeholder='Alias...'
+                                  className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </section>
                   )}
-                  {(selectedModule as { specs?: Record<string, string> }).specs && (
-                    <dl className='mt-2 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-400'>
-                      {Object.entries((selectedModule as { specs?: Record<string, string> }).specs ?? {}).map(
-                        ([k, v]) => (
-                          <div key={k} className='flex gap-1'>
-                            <dt className='font-medium text-neutral-500 dark:text-neutral-400'>{k}:</dt>
-                            <dd className='text-neutral-700 dark:text-neutral-300'>{v}</dd>
-                          </div>
-                        ),
-                      )}
-                    </dl>
-                  )}
-                </>
-              )}
-            </div>
 
-            {/* Module image — frameless. The PNGs ship with a
-                transparent background, so no card chrome is needed. */}
-            {selectedModule && moduleImage && (
-              <img
-                src={moduleImage}
-                alt={selectedModule.name}
-                className='h-80 w-80 shrink-0 self-start object-contain'
-              />
-            )}
-          </div>
-
-          {selectedModule ? (
-            <div className='flex flex-col gap-5'>
-              {/* I/O Mapping */}
-              {ioEntriesForSelected.length > 0 && (
-                <section>
-                  <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                    I/O Mapping
-                  </h4>
-                  <table className='w-full text-left'>
-                    <thead>
-                      <tr className='border-b border-neutral-200 dark:border-neutral-700'>
-                        <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                          Channel
-                        </th>
-                        <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                          Type
-                        </th>
-                        <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                          IEC Address
-                        </th>
-                        <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                          Alias
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ioEntriesForSelected.map((entry) => (
-                        <tr
-                          key={`${entry.slot}-${entry.channelName}`}
-                          className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-800'
-                        >
-                          <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
-                            {entry.channelName}
-                          </td>
-                          <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
-                            {entry.channelType}
-                          </td>
-                          <td className='px-2 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
-                            {entry.iecAddress}
-                          </td>
-                          <td className='px-1 py-1'>
-                            <input
-                              type='text'
-                              value={entry.alias}
-                              onChange={(e) => handleAliasChange(entry.slot, entry.channelName, e.target.value)}
-                              placeholder='Alias...'
-                              className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </section>
-              )}
-
-              {/* Defensive hint: manifest declared a configScreen path
+                  {/* Defensive hint: manifest declared a configScreen path
                   but the parsed definition didn't reach us. Almost
                   always means an installed vpp predates the per-module
                   screens. Surface it instead of silently dropping the
                   config form. */}
-              {(selectedModule as { configScreen?: string }).configScreen &&
-                !(selectedModule as { configScreenDefinition?: unknown }).configScreenDefinition && (
-                  <p className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300'>
-                    This module ships a configuration screen but it could not be loaded. Reinstall the vendor package to
-                    pick up the latest assets.
-                  </p>
-                )}
+                  {(selectedModule as { configScreen?: string }).configScreen &&
+                    !(selectedModule as { configScreenDefinition?: unknown }).configScreenDefinition && (
+                      <p className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300'>
+                        This module ships a configuration screen but it could not be loaded. Reinstall the vendor
+                        package to pick up the latest assets.
+                      </p>
+                    )}
 
-              {/* Configuration (only when this module has a configScreen).
+                  {/* Configuration (only when this module has a configScreen).
                   TooltipProvider scopes the help-icon hover behaviour. */}
-              {configFields.length > 0 && (
-                <TooltipProvider>
-                <section>
-                  <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                    Configuration
-                  </h4>
-                  <div className='flex flex-col gap-3'>
-                    {configFields.map((field) => {
-                      if (!evalVisible(field.visible, slotValues)) return null
-                      const current = slotValues[field.id]
-                      const setValue = (v: FieldValue) => handleFieldChange(selectedSlot, field.id, v)
-                      return (
-                        <div key={field.id} className='flex items-center gap-2'>
-                          {field.type === 'boolean' ? (
-                            <>
-                              <Checkbox
-                                id={`slot${selectedSlot + 1}-${field.id}`}
-                                checked={current === true}
-                                onCheckedChange={(c) => setValue(c as boolean)}
-                                className={
-                                  current === true
-                                    ? 'h-[14px] w-[14px] border-brand'
-                                    : 'h-[14px] w-[14px] border-neutral-300'
-                                }
-                              />
-                              <Label
-                                htmlFor={`slot${selectedSlot + 1}-${field.id}`}
-                                className='text-xs text-neutral-950 dark:text-white'
-                              >
-                                {field.label}
-                              </Label>
-                            </>
-                          ) : (
-                            <>
-                              <Label className='w-44 shrink-0 text-xs text-neutral-950 dark:text-white'>
-                                {field.label}
-                              </Label>
-                              {field.type === 'number' ? (
-                                <div className='flex items-center gap-1'>
-                                  <input
-                                    type='number'
-                                    value={String(current ?? '')}
-                                    min={field.min}
-                                    max={field.max}
-                                    step={field.step}
-                                    onChange={(e) => setValue(Number(e.target.value))}
-                                    className='flex h-[30px] w-32 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                                  />
-                                  {field.unit && (
-                                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>{field.unit}</span>
-                                  )}
-                                </div>
-                              ) : field.type === 'select' ? (
-                                <Select value={String(current ?? '')} onValueChange={(v) => setValue(v)}>
-                                  <SelectTrigger
-                                    aria-label={field.label}
-                                    placeholder='Select...'
-                                    withIndicator
-                                    className='flex h-[30px] w-64 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                                  />
-                                  <SelectContent
-                                    className='h-fit max-h-[240px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                                    sideOffset={5}
-                                    position='popper'
-                                    align='center'
-                                    side='bottom'
-                                  >
-                                    {(field.options ?? []).map((opt) => {
-                                      const v = typeof opt === 'string' ? opt : opt.value
-                                      const l = typeof opt === 'string' ? opt : opt.label
-                                      return (
-                                        <SelectItem
-                                          key={v}
-                                          value={v}
-                                          className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                                        >
-                                          <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                            {l}
+                  {configFields.length > 0 && (
+                    <TooltipProvider>
+                      <section>
+                        <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
+                          Configuration
+                        </h4>
+                        <div className='flex flex-col gap-3'>
+                          {configFields.map((field) => {
+                            if (!evalVisible(field.visible, slotValues)) return null
+                            const current = slotValues[field.id]
+                            const setValue = (v: FieldValue) => handleFieldChange(selectedSlot, field.id, v)
+                            return (
+                              <div key={field.id} className='flex items-center gap-2'>
+                                {field.type === 'boolean' ? (
+                                  <>
+                                    <Checkbox
+                                      id={`slot${selectedSlot + 1}-${field.id}`}
+                                      checked={current === true}
+                                      onCheckedChange={(c) => setValue(c as boolean)}
+                                      className={
+                                        current === true
+                                          ? 'h-[14px] w-[14px] border-brand'
+                                          : 'h-[14px] w-[14px] border-neutral-300'
+                                      }
+                                    />
+                                    <Label
+                                      htmlFor={`slot${selectedSlot + 1}-${field.id}`}
+                                      className='text-xs text-neutral-950 dark:text-white'
+                                    >
+                                      {field.label}
+                                    </Label>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Label className='w-44 shrink-0 text-xs text-neutral-950 dark:text-white'>
+                                      {field.label}
+                                    </Label>
+                                    {field.type === 'number' ? (
+                                      <div className='flex items-center gap-1'>
+                                        <input
+                                          type='number'
+                                          value={String(current ?? '')}
+                                          min={field.min}
+                                          max={field.max}
+                                          step={field.step}
+                                          onChange={(e) => setValue(Number(e.target.value))}
+                                          className='flex h-[30px] w-32 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                                        />
+                                        {field.unit && (
+                                          <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                                            {field.unit}
                                           </span>
-                                        </SelectItem>
-                                      )
-                                    })}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <input
-                                  type='text'
-                                  value={String(current ?? '')}
-                                  onChange={(e) => setValue(e.target.value)}
-                                  className='flex h-[30px] w-64 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                                />
-                              )}
-                            </>
-                          )}
-                          {field.help && <FieldHelpIcon text={field.help} />}
+                                        )}
+                                      </div>
+                                    ) : field.type === 'select' ? (
+                                      <Select value={String(current ?? '')} onValueChange={(v) => setValue(v)}>
+                                        <SelectTrigger
+                                          aria-label={field.label}
+                                          placeholder='Select...'
+                                          withIndicator
+                                          className='flex h-[30px] w-64 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                                        />
+                                        <SelectContent
+                                          className='h-fit max-h-[240px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                                          sideOffset={5}
+                                          position='popper'
+                                          align='center'
+                                          side='bottom'
+                                        >
+                                          {(field.options ?? []).map((opt) => {
+                                            const v = typeof opt === 'string' ? opt : opt.value
+                                            const l = typeof opt === 'string' ? opt : opt.label
+                                            return (
+                                              <SelectItem
+                                                key={v}
+                                                value={v}
+                                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                                              >
+                                                <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                                  {l}
+                                                </span>
+                                              </SelectItem>
+                                            )
+                                          })}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      <input
+                                        type='text'
+                                        value={String(current ?? '')}
+                                        onChange={(e) => setValue(e.target.value)}
+                                        className='flex h-[30px] w-64 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                                      />
+                                    )}
+                                  </>
+                                )}
+                                {field.help && <FieldHelpIcon text={field.help} />}
+                              </div>
+                            )
+                          })}
                         </div>
-                      )
-                    })}
-                  </div>
-                </section>
-                </TooltipProvider>
-              )}
-
-            </div>
-          ) : (
-            /* Empty-slot state: nothing else to show — the always-
+                      </section>
+                    </TooltipProvider>
+                  )}
+                </div>
+              ) : (
+                /* Empty-slot state: nothing else to show — the always-
                 visible Module picker above is the only action. */
-            <p className='py-4 text-xs italic text-neutral-500 dark:text-neutral-400'>
-              This slot is empty. Pick a module above to populate it.
-            </p>
+                <p className='py-4 text-xs italic text-neutral-500 dark:text-neutral-400'>
+                  This slot is empty. Pick a module above to populate it.
+                </p>
+              )}
+            </>
           )}
-          </>
-        )}
         </div>
       </div>
 
@@ -926,8 +929,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
             </ModalTitle>
             <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
               {selectedModule ? <strong>{selectedModule.name}</strong> : 'This module'} will be removed and all
-              following slots will shift up to keep the backplane contiguous. I/O addresses on the affected slots
-              will be re-allocated.
+              following slots will shift up to keep the backplane contiguous. I/O addresses on the affected slots will
+              be re-allocated.
             </p>
             <div className='flex w-full flex-col gap-2'>
               <button
@@ -961,8 +964,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
             Clear all slots?
           </ModalTitle>
           <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
-            Every module will be removed from the backplane and the slot configuration cleared. I/O addresses
-            allocated to those modules will be released.
+            Every module will be removed from the backplane and the slot configuration cleared. I/O addresses allocated
+            to those modules will be released.
           </p>
           <div className='flex w-full flex-col gap-2'>
             <button

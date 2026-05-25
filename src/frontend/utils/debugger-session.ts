@@ -99,11 +99,7 @@ export interface VariableIndexMapResult {
  *   INSTANCE_NAME.VAR_NAME[5]         (array element, IEC-indexed)
  *   INSTANCE_NAME.FB_INST.FIELD       (nested struct/FB field)
  */
-export function buildVariableIndexMap(
-  pous: PLCPou[],
-  instances: PLCInstance[],
-  map: DebugMap,
-): VariableIndexMapResult {
+export function buildVariableIndexMap(pous: PLCPou[], instances: PLCInstance[], map: DebugMap): VariableIndexMapResult {
   const indexMap = new Map<string, number>()
   const warnings: string[] = []
 

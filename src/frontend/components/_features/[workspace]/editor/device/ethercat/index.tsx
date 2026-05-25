@@ -40,16 +40,18 @@ type EditorTab = 'scan-bus' | 'repository' | 'advanced'
  */
 function buildClaimedAddressSet(
   remoteDevices: ReturnType<typeof useOpenPLCStore.getState>['project']['data']['remoteDevices'],
-  vendorScreenData: ReturnType<typeof useOpenPLCStore.getState>['deviceDefinitions']['configuration']['vendorScreenData'],
+  vendorScreenData: ReturnType<
+    typeof useOpenPLCStore.getState
+  >['deviceDefinitions']['configuration']['vendorScreenData'],
 ): Set<string> {
   const state = useOpenPLCStore.getState()
-  const boardInfo = state.deviceAvailableOptions.availableBoards.get(
-    state.deviceDefinitions.configuration.deviceBoard,
-  )
+  const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
   const ioMapping =
-    (vendorScreenData?.['io-mapping'] as
-      | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
-      | undefined)?.entries ?? []
+    (
+      vendorScreenData?.['io-mapping'] as
+        | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
+        | undefined
+    )?.entries ?? []
   const pool = buildAddressPool(
     {
       pinMapping: { pins: state.deviceDefinitions.pinMapping.pins },

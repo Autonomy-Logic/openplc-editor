@@ -53,10 +53,7 @@ export interface LspTransport {
  * on requests that never resolve.  The orchestrator forwards the
  * error to whoever owns the user-facing UI.
  */
-export function createLspTransport(
-  workerUrl: string,
-  options: { onError?: (err: Error) => void } = {},
-): LspTransport {
+export function createLspTransport(workerUrl: string, options: { onError?: (err: Error) => void } = {}): LspTransport {
   const worker = new Worker(workerUrl, { name: 'strucpp-lsp' })
 
   // Surface worker-level errors as connection errors.  The browser
@@ -71,10 +68,7 @@ export function createLspTransport(
   const handleError = (ev: Event | ErrorEvent) => {
     if (crashed) return
     crashed = true
-    const message =
-      ev instanceof ErrorEvent
-        ? ev.message
-        : '[strucpp LSP worker] worker reported a non-Error event'
+    const message = ev instanceof ErrorEvent ? ev.message : '[strucpp LSP worker] worker reported a non-Error event'
     const error = ev instanceof ErrorEvent && ev.error instanceof Error ? ev.error : new Error(message)
     connection.dispose()
     console.error(message, ev)

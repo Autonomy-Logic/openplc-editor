@@ -1,11 +1,4 @@
-import {
-  parsePouUri,
-  parsePouVarsUri,
-  POU_DECLARATION_LINE_COUNT,
-  pouUri,
-  pouVarsUri,
-  stubUri,
-} from '../types'
+import { parsePouUri, parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri, pouVarsUri, stubUri } from '../types'
 
 describe('pouUri / stubUri', () => {
   it('produces well-formed in-memory URIs', () => {
@@ -14,9 +7,7 @@ describe('pouUri / stubUri', () => {
   })
 
   it('encodes characters that would break a path segment', () => {
-    expect(pouUri('My POU/with spaces')).toBe(
-      'inmemory://pou/My%20POU%2Fwith%20spaces.st',
-    )
+    expect(pouUri('My POU/with spaces')).toBe('inmemory://pou/My%20POU%2Fwith%20spaces.st')
   })
 })
 
@@ -51,9 +42,7 @@ describe('parsePouUri', () => {
 describe('pouVarsUri / parsePouVarsUri', () => {
   it('produces well-formed pouvars:// URIs that encode their name', () => {
     expect(pouVarsUri('Main')).toBe('inmemory://pouvars/Main.st')
-    expect(pouVarsUri('My POU/with spaces')).toBe(
-      'inmemory://pouvars/My%20POU%2Fwith%20spaces.st',
-    )
+    expect(pouVarsUri('My POU/with spaces')).toBe('inmemory://pouvars/My%20POU%2Fwith%20spaces.st')
   })
 
   it('round-trips a name through encode/decode', () => {

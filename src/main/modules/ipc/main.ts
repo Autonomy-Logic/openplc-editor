@@ -948,8 +948,7 @@ class MainProcessBridge implements MainIpcModule {
   // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
   // Library identity is the strucpp manifest `name` shared with the
   // project's `libraries[]` field.
-  handleLibrariesLoadAll = async (): Promise<unknown[]> =>
-    this.libraryManagerModule.loadAll()
+  handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
     if (!this.mainWindow) return { success: false, error: 'No main window' }

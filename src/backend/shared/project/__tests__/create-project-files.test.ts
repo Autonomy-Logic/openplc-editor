@@ -10,11 +10,7 @@
  * the remaining phases.
  */
 
-import {
-  buildLibraryManifestTemplate,
-  buildProjectFileContent,
-  toSnakeCaseNamespace,
-} from '../create-project-files'
+import { buildLibraryManifestTemplate, buildProjectFileContent, toSnakeCaseNamespace } from '../create-project-files'
 
 describe('toSnakeCaseNamespace', () => {
   it('normalises spaces to underscores', () => {

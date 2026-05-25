@@ -534,9 +534,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           live.deviceDefinitions.configuration.deviceBoard ?? '',
         )
         const ioMapping =
-          (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined)?.entries ?? []
+          (
+            live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+              | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+              | undefined
+          )?.entries ?? []
         const pool = buildAddressPool(
           {
             pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
@@ -690,9 +692,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         live.deviceDefinitions.configuration.deviceBoard ?? '',
       )
       const ioMapping =
-        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-          | undefined)?.entries ?? []
+        (
+          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
       const pool = buildAddressPool(
         {
           pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
@@ -1322,9 +1326,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         live.deviceDefinitions.configuration.deviceBoard ?? '',
       )
       const ioMapping =
-        (live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-          | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-          | undefined)?.entries ?? []
+        (
+          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
 
       const pool = buildAddressPool(
         {

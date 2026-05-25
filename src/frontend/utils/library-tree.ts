@@ -90,9 +90,6 @@ function sortNode(node: LibraryTreeNode): void {
  * the block picker / explorer to decide whether to render a library
  * folder at all when a search filter is active.
  */
-export function libraryHasMatch(
-  library: SystemLibrary,
-  predicate: (pou: SystemLibraryPou) => boolean,
-): boolean {
+export function libraryHasMatch(library: SystemLibrary, predicate: (pou: SystemLibraryPou) => boolean): boolean {
   return library.pous.some(predicate)
 }

@@ -18,14 +18,8 @@
  * interaction goes through the injected callbacks.
  */
 
-import {
-  pollRuntimeCompilation,
-  type PollRuntimeCompilationOptions,
-} from './poll-runtime-compilation'
-import {
-  startPlcAfterBuild,
-  type StartPlcAfterBuildOptions,
-} from './start-plc-after-build'
+import { pollRuntimeCompilation, type PollRuntimeCompilationOptions } from './poll-runtime-compilation'
+import { startPlcAfterBuild, type StartPlcAfterBuildOptions } from './start-plc-after-build'
 
 export type DeployRuntimeProgramOutcome =
   | 'STARTED'
@@ -72,9 +66,7 @@ export interface DeployRuntimeProgramOptions {
  * program, and the caller should surface the corresponding log
  * entry to the user.
  */
-export async function deployRuntimeProgram(
-  opts: DeployRuntimeProgramOptions,
-): Promise<DeployRuntimeProgramOutcome> {
+export async function deployRuntimeProgram(opts: DeployRuntimeProgramOptions): Promise<DeployRuntimeProgramOutcome> {
   // 1. Upload.  The runtime answers HTTP 200 the moment the zip is
   //    accepted; the actual build runs async on the device and is
   //    surfaced through `/api/compilation-status` below.  The caller

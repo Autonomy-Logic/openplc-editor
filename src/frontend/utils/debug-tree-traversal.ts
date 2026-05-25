@@ -221,7 +221,9 @@ function traverseNestedNode<T>(
           )
         } else if (fbVar.type.definition === 'user-data-type') {
           // Could be FB or struct - check
-          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
+          const childTypeDef = isFunctionBlock(fbVar.type.value, projectPous, systemLibraries)
+            ? 'derived'
+            : 'user-data-type'
           children.push(
             traverseNestedNode(
               fbVar.name,
@@ -286,7 +288,9 @@ function traverseNestedNode<T>(
           ),
         )
       } else if (field.type.definition === 'user-data-type') {
-        const childTypeDef = isFunctionBlock(field.type.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
+        const childTypeDef = isFunctionBlock(field.type.value, projectPous, systemLibraries)
+          ? 'derived'
+          : 'user-data-type'
         children.push(
           traverseNestedNode(
             field.name,
@@ -357,7 +361,9 @@ function traverseNestedNode<T>(
         // 'base-type' | 'user-data-type' (see middleware/.../types.ts),
         // so 'user-data-type' is the single entry point for both shapes;
         // disambiguate by name lookup against the project's POUs.
-        const childTypeDef = isFunctionBlock(baseType.value, projectPous, systemLibraries) ? 'derived' : 'user-data-type'
+        const childTypeDef = isFunctionBlock(baseType.value, projectPous, systemLibraries)
+          ? 'derived'
+          : 'user-data-type'
         children.push(
           traverseNestedNode(
             `[${elementIndex}]`,
@@ -406,7 +412,13 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
     const debugVar = findDebugVariable(debugVariables, fullPath)
-    return visitor.visitLeaf(variable.name, fullPath, compositeKey, resolveLeafType(baseType, debugVar), debugVar?.index)
+    return visitor.visitLeaf(
+      variable.name,
+      fullPath,
+      compositeKey,
+      resolveLeafType(baseType, debugVar),
+      debugVar?.index,
+    )
   } else if (variable.type.definition === 'derived') {
     return traverseNestedNode(variable.name, fullPath, compositeKey, variable.type.value, 'derived', context, visitor)
   } else if (variable.type.definition === 'array') {

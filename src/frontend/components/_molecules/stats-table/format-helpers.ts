@@ -7,8 +7,7 @@
  * distinguish "not yet observed" from "observed and equal to zero".
  */
 
-export const formatNumber = (value: number | null | undefined) =>
-  value != null ? value.toLocaleString() : '—'
+export const formatNumber = (value: number | null | undefined) => (value != null ? value.toLocaleString() : '—')
 
 export const formatRange = (min: number | null | undefined, max: number | null | undefined) =>
   min != null && max != null ? `${min} / ${max}` : '—'

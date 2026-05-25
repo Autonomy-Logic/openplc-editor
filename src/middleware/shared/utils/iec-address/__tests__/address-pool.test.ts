@@ -4,13 +4,7 @@ import {
   SIMULATOR_CAPABILITIES,
   type TargetCapabilities,
 } from '../../target-capabilities'
-import {
-  buildAddressPool,
-  isAddressClaimed,
-  listClaims,
-  nextFreeAddress,
-  type PoolInputs,
-} from '../address-pool'
+import { buildAddressPool, isAddressClaimed, listClaims, nextFreeAddress, type PoolInputs } from '../address-pool'
 
 const arduinoCaps: TargetCapabilities = ARDUINO_CLI_CAPABILITIES
 const v4Caps: TargetCapabilities = RUNTIME_V4_CAPABILITIES
@@ -260,10 +254,7 @@ describe('nextFreeAddress', () => {
 
 describe('isAddressClaimed / listClaims', () => {
   it('isAddressClaimed returns true for claimed and false otherwise', () => {
-    const pool = buildAddressPool(
-      { pinMapping: { pins: [{ address: '%QX0.0' }] } },
-      arduinoCaps,
-    )
+    const pool = buildAddressPool({ pinMapping: { pins: [{ address: '%QX0.0' }] } }, arduinoCaps)
     expect(isAddressClaimed(pool, '%QX0.0')).toBe(true)
     expect(isAddressClaimed(pool, '%QX0.1')).toBe(false)
   })

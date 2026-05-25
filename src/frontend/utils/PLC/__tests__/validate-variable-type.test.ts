@@ -56,11 +56,25 @@ describe('validateVariableType', () => {
       // what triggered the original "subValue.toLowerCase is not a
       // function" crash when adding an EQ block to a Ladder rung.
       for (const t of [
-        'SINT', 'INT', 'DINT', 'LINT',
-        'USINT', 'UINT', 'UDINT', 'ULINT',
-        'REAL', 'LREAL',
-        'BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD',
-        'TIME', 'DATE', 'TOD', 'DT',
+        'SINT',
+        'INT',
+        'DINT',
+        'LINT',
+        'USINT',
+        'UINT',
+        'UDINT',
+        'ULINT',
+        'REAL',
+        'LREAL',
+        'BOOL',
+        'BYTE',
+        'WORD',
+        'DWORD',
+        'LWORD',
+        'TIME',
+        'DATE',
+        'TOD',
+        'DT',
       ]) {
         expect(validateVariableType(t, 'ANY_ELEMENTARY')).toEqual({ isValid: true })
       }

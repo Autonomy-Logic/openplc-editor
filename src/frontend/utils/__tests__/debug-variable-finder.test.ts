@@ -100,10 +100,7 @@ describe('buildGlobalDebugPath', () => {
 })
 
 describe('findDebugVariable', () => {
-  const debugVars = [
-    makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 0),
-    makeDebugVar('INSTANCE0.TEMP', 'REAL_ENUM', 1),
-  ]
+  const debugVars = [makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 0), makeDebugVar('INSTANCE0.TEMP', 'REAL_ENUM', 1)]
 
   it('finds variable by exact path (case-insensitive)', () => {
     const result = findDebugVariable(debugVars, 'INSTANCE0.SPEED')
@@ -304,4 +301,3 @@ describe('appendToDebugPath', () => {
     expect(appendToDebugPath('INSTANCE0', 'VAR')).toBe('INSTANCE0.VAR')
   })
 })
-

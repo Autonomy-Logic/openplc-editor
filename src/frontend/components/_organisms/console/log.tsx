@@ -89,9 +89,7 @@ const CompileErrorMessage = ({
   const headerText = newlineIdx === -1 ? message : message.slice(0, newlineIdx)
   const restText = newlineIdx === -1 ? '' : message.slice(newlineIdx)
 
-  const handleClick = onCompileErrorClick
-    ? () => onCompileErrorClick(compileError)
-    : undefined
+  const handleClick = onCompileErrorClick ? () => onCompileErrorClick(compileError) : undefined
 
   return (
     <>
@@ -115,7 +113,15 @@ const CompileErrorMessage = ({
 /**
  * A single console log with copy and highlight support.
  */
-const LogComponent = ({ level, message, tstamp, searchTerm, compileError, onCompileErrorClick, ...rest }: LogComponentProps) => {
+const LogComponent = ({
+  level,
+  message,
+  tstamp,
+  searchTerm,
+  compileError,
+  onCompileErrorClick,
+  ...rest
+}: LogComponentProps) => {
   const [copied, setCopied] = useState(false)
 
   let classForMessage = 'text-[#011432] dark:text-white pl-2'
@@ -149,10 +155,7 @@ const LogComponent = ({ level, message, tstamp, searchTerm, compileError, onComp
     <>
       {message && (
         <div className='group flex items-start gap-1'>
-          <p
-            className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)}
-            {...rest}
-          >
+          <p className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)} {...rest}>
             {level && tstamp ? (
               <>
                 [<HighlightedText text={tstamp} searchTerm={searchTerm} />

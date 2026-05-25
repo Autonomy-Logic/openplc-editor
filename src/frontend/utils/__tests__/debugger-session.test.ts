@@ -325,13 +325,16 @@ describe('buildDebugVariableTreeMap', () => {
   it('builds tree map for simple base-type variables', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('X', 'INT'), makeBaseVariable('Y', 'BOOL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVars = [
-      makeDebugVar('INSTANCE0.X', 'INT_ENUM', 0),
-      makeDebugVar('INSTANCE0.Y', 'BOOL_ENUM', 1),
-    ]
+    const debugVars = [makeDebugVar('INSTANCE0.X', 'INT_ENUM', 0), makeDebugVar('INSTANCE0.Y', 'BOOL_ENUM', 1)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
-    const { treeMap, trees, complexCount } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)
+    const { treeMap, trees, complexCount } = buildDebugVariableTreeMap(
+      [pou],
+      instances,
+      debugVars,
+      projectData,
+      SYSTEM_LIBS,
+    )
 
     expect(trees).toHaveLength(2)
     expect(treeMap.has('Main:X')).toBe(true)
@@ -438,10 +441,7 @@ describe('buildDebugVariableTreeMap', () => {
   it('skips debug vars not starting with instance prefix', () => {
     const pou = makePou('Main', 'program', [])
     const instances = [makeInstance('INSTANCE0', 'Main')]
-    const debugVars = [
-      makeDebugVar('GLOBAL_VAR', 'INT_ENUM', 200),
-      makeDebugVar('INSTANCE1._TMP_X', 'INT_ENUM', 201),
-    ]
+    const debugVars = [makeDebugVar('GLOBAL_VAR', 'INT_ENUM', 200), makeDebugVar('INSTANCE1._TMP_X', 'INT_ENUM', 201)]
     const projectData = { dataTypes: [] as PLCDataType[], pous: [pou] }
 
     const { trees } = buildDebugVariableTreeMap([pou], instances, debugVars, projectData, SYSTEM_LIBS)

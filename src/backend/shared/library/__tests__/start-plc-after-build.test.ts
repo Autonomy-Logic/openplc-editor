@@ -3,9 +3,10 @@ import { startPlcAfterBuild } from '../start-plc-after-build'
 /** Scripted fetch: returns the i-th canned reply on the i-th call.
  *  Each reply is either a status string (success) or { error }
  *  (network failure). */
-function scriptedFetch(
-  replies: ReadonlyArray<string | { error: string }>,
-): { fetch: () => Promise<{ success: true; status: string } | { success: false; error: string }>; calls: () => number } {
+function scriptedFetch(replies: ReadonlyArray<string | { error: string }>): {
+  fetch: () => Promise<{ success: true; status: string } | { success: false; error: string }>
+  calls: () => number
+} {
   let i = 0
   return {
     fetch: async () => {

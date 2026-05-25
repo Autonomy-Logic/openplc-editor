@@ -132,9 +132,7 @@ describe('generateSTCode (python)', () => {
     })
 
     // 5 elements, IEC indices 5..9. Reads through .get() per element.
-    expect(result).toContain(
-      'for (int __i = 0; __i < 5; __i++) data_in.data[__i] = DATA[5 + __i].get();',
-    )
+    expect(result).toContain('for (int __i = 0; __i < 5; __i++) data_in.data[__i] = DATA[5 + __i].get();')
   })
 
   it('writes back array outputs via IECVar element-wise (force-respect)', () => {

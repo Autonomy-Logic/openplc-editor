@@ -205,13 +205,7 @@ export function useDebugSession(): UseDebugSessionReturn {
   }, [simulator, debuggerPort, workspaceActions])
 
   const forceVariable = useCallback(
-    async (
-      index: number,
-      force: boolean,
-      value?: string,
-      type?: string,
-      enumValues?: string[],
-    ): Promise<boolean> => {
+    async (index: number, force: boolean, value?: string, type?: string, enumValues?: string[]): Promise<boolean> => {
       let valueBuffer: Uint8Array | undefined
       if (force) {
         try {

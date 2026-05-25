@@ -47,8 +47,7 @@ const conf: monaco.languages.LanguageConfiguration = {
   ],
   wordPattern: /(-?\d*\.\d\w*)|([^`~!@#%^&*()\-=+[{\]}\\|;:'",.<>/?\s]+)/,
   indentationRules: {
-    increaseIndentPattern:
-      /^\s*(IF|FOR|WHILE|REPEAT|CASE|FUNCTION|FUNCTION_BLOCK|PROGRAM|VAR|STRUCT|CLASS|METHOD)\b/i,
+    increaseIndentPattern: /^\s*(IF|FOR|WHILE|REPEAT|CASE|FUNCTION|FUNCTION_BLOCK|PROGRAM|VAR|STRUCT|CLASS|METHOD)\b/i,
     decreaseIndentPattern:
       /^\s*(END_IF|END_FOR|END_WHILE|END_REPEAT|END_CASE|END_FUNCTION|END_FUNCTION_BLOCK|END_PROGRAM|END_VAR|END_STRUCT|END_CLASS|END_METHOD)\b/i,
   },

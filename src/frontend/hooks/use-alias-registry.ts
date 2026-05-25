@@ -53,9 +53,11 @@ export function useAliasRegistry(): AliasRegistry {
 
   const boardInfo = availableBoards.get(deviceBoard)
   const ioMapping =
-    (vsd?.['io-mapping'] as
-      | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-      | undefined)?.entries ?? []
+    (
+      vsd?.['io-mapping'] as
+        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+        | undefined
+    )?.entries ?? []
   const pool = buildAddressPool(
     {
       pinMapping: { pins },

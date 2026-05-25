@@ -27,12 +27,7 @@ function makeDerivedVariable(name: string, typeName: string, debug = false): PLC
   }
 }
 
-function makeArrayVariable(
-  name: string,
-  baseType: string,
-  range: string,
-  debug = false,
-): PLCVariable {
+function makeArrayVariable(name: string, baseType: string, range: string, debug = false): PLCVariable {
   return {
     name,
     class: 'local',
@@ -359,9 +354,7 @@ describe('buildActiveIndexSet', () => {
           ['Main:FB.ARR', true],
         ]),
       })
-      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(
-        expect.arrayContaining([21, 22]),
-      )
+      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([21, 22]))
     })
 
     // Array of complex elements (FBs / structs). Expanding the array
@@ -423,9 +416,7 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: new Map([['Main:BOOLS', true]]),
       })
-      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(
-        expect.arrayContaining([91, 92, 93]),
-      )
+      expect(buildActiveIndexSet(state, allLeaves, null).activeIndexes).toEqual(expect.arrayContaining([91, 92, 93]))
     })
 
     it('skips leaf without dot in variable part (not nested)', () => {

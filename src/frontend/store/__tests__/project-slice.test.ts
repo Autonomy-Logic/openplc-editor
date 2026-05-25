@@ -2161,10 +2161,46 @@ describe('createProjectSlice', () => {
       // upward, not skip past the inactive VPP block.
       store.getState().deviceActions.setVendorScreenData('io-mapping', {
         entries: [
-          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI0', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW0', alias: '' },
-          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI1', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW1', alias: '' },
-          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI2', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW2', alias: '' },
-          { slot: 1, moduleId: 'm', moduleName: 'M', channelName: 'AI3', channelType: 'analogInput', dataType: 'INT', iecAddress: '%IW3', alias: '' },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI0',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW0',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI1',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW1',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI2',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW2',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI3',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW3',
+            alias: '',
+          },
         ],
       })
 

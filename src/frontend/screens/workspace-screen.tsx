@@ -4,7 +4,14 @@ import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
 
 import { projectCapabilities } from '../../middleware/shared/ports/types'
-import { useCapabilities, useChatPanel, useDebugger, useDevice, usePlatform, useProject } from '../../middleware/shared/providers'
+import {
+  useCapabilities,
+  useChatPanel,
+  useDebugger,
+  useDevice,
+  usePlatform,
+  useProject,
+} from '../../middleware/shared/providers'
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
@@ -246,14 +253,7 @@ const WorkspaceScreen = () => {
         // Pass variableType so the wire-endianness swap inside the
         // service knows whether to skip swapping (BOOL one-byte
         // paths, STRING / WSTRING) — see services/debug-force-variable.
-        await forceDebugVariable(
-          debuggerPort,
-          compositeKey,
-          variableIndex,
-          buffer,
-          value ?? true,
-          variableType,
-        )
+        await forceDebugVariable(debuggerPort, compositeKey, variableIndex, buffer, value ?? true, variableType)
       }
     },
     [debugVariableIndexes, debuggerPort],
@@ -544,10 +544,7 @@ const WorkspaceScreen = () => {
                             const isActive =
                               editor.type === 'plc-ethercat-device' && editor.meta.deviceId === model.meta.deviceId
                             return (
-                              <div
-                                key={model.meta.deviceId}
-                                className={cn('h-full w-full', !isActive && 'hidden')}
-                              >
+                              <div key={model.meta.deviceId} className={cn('h-full w-full', !isActive && 'hidden')}>
                                 <EtherCATDeviceEditor busName={model.meta.busName} deviceId={model.meta.deviceId} />
                               </div>
                             )
@@ -568,13 +565,9 @@ const WorkspaceScreen = () => {
                             {editors
                               .filter((m) => m.type === 'plc-datatype')
                               .map((model) => {
-                                const isActive =
-                                  editor.type === 'plc-datatype' && editor.meta.name === model.meta.name
+                                const isActive = editor.type === 'plc-datatype' && editor.meta.name === model.meta.name
                                 return (
-                                  <div
-                                    key={model.meta.name}
-                                    className={cn('h-full w-full', !isActive && 'hidden')}
-                                  >
+                                  <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
                                     <DataTypeEditor dataTypeName={model.meta.name} />
                                   </div>
                                 )
@@ -621,10 +614,7 @@ const WorkspaceScreen = () => {
                                   .map((model) => {
                                     const isActive = editor.meta.name === model.meta.name
                                     return (
-                                      <div
-                                        key={model.meta.name}
-                                        className={cn('h-full w-full', !isActive && 'hidden')}
-                                      >
+                                      <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
                                         <VariablesEditor name={model.meta.name} isActive={isActive} />
                                       </div>
                                     )
@@ -647,10 +637,7 @@ const WorkspaceScreen = () => {
                                   .map((model) => {
                                     const isActive = editor.meta.name === model.meta.name
                                     return (
-                                      <div
-                                        key={model.meta.name}
-                                        className={cn('h-full w-full', !isActive && 'hidden')}
-                                      >
+                                      <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
                                         {model.type === 'plc-textual' ? (
                                           <MonacoEditor
                                             name={model.meta.name}

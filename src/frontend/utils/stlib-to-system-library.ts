@@ -94,9 +94,7 @@ function typeRef(typeName: string): SystemLibraryVariable['type'] {
   return { definition: 'derived-type', value: typeName }
 }
 
-function classFromDirection(
-  d: 'input' | 'output' | 'inout',
-): SystemLibraryVariable['class'] {
+function classFromDirection(d: 'input' | 'output' | 'inout'): SystemLibraryVariable['class'] {
   if (d === 'inout') return 'inOut'
   return d
 }
@@ -211,8 +209,6 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
   return result
 }
 
-export function stlibsToSystemLibraries(
-  archives: StlibArchiveDTO[],
-): SystemLibrary[] {
+export function stlibsToSystemLibraries(archives: StlibArchiveDTO[]): SystemLibrary[] {
   return archives.map(stlibToSystemLibrary)
 }

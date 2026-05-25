@@ -1,10 +1,4 @@
-import {
-  buildLeafPathMap,
-  type DebugMap,
-  packDebugAddr,
-  parseDebugMap,
-  unpackDebugAddr,
-} from '../debug-parser'
+import { buildLeafPathMap, type DebugMap, packDebugAddr, parseDebugMap, unpackDebugAddr } from '../debug-parser'
 
 describe('packDebugAddr / unpackDebugAddr', () => {
   it('packs (0, 0) as 0', () => {

@@ -20,10 +20,7 @@ const enumerated = (name: string, values: string[], initialValue?: string): PLCD
   ...(initialValue !== undefined ? { initialValue } : {}),
 })
 
-const structure = (
-  name: string,
-  fields: { name: string; type: string; initial?: string }[],
-): PLCDataType => ({
+const structure = (name: string, fields: { name: string; type: string; initial?: string }[]): PLCDataType => ({
   name,
   derivation: 'structure',
   variable: fields.map((f) => ({
@@ -33,12 +30,7 @@ const structure = (
   })),
 })
 
-const array = (
-  name: string,
-  baseType: string,
-  dimensions: string[],
-  initialValue?: string,
-): PLCDataType => ({
+const array = (name: string, baseType: string, dimensions: string[], initialValue?: string): PLCDataType => ({
   name,
   derivation: 'array',
   baseType: { definition: 'base-type', value: baseType },
@@ -123,9 +115,7 @@ describe('serializeDataTypesToST', () => {
     // doesn't take the whole LSP sync down with it.
     const unknown = { name: 'Mystery', derivation: 'pointer' } as unknown as PLCDataType
     expect(serializeDataTypesToST([unknown])).toBe('')
-    expect(serializeDataTypesToST([enumerated('Color', ['Red']), unknown])).toBe(
-      'TYPE\n  Color : (Red);\nEND_TYPE\n',
-    )
+    expect(serializeDataTypesToST([enumerated('Color', ['Red']), unknown])).toBe('TYPE\n  Color : (Red);\nEND_TYPE\n')
   })
 })
 
@@ -170,10 +160,7 @@ describe('serializeDataTypesToLines', () => {
     // walks the same line counts to find which data type owns an
     // LSP line, so if the join here ever changes (extra blank
     // separators, etc.) the redirect would silently misroute.
-    const dataTypes: PLCDataType[] = [
-      enumerated('Color', ['Red']),
-      structure('Point', [{ name: 'x', type: 'INT' }]),
-    ]
+    const dataTypes: PLCDataType[] = [enumerated('Color', ['Red']), structure('Point', [{ name: 'x', type: 'INT' }])]
     const flat = serializeDataTypesToST(dataTypes)
     const entries = serializeDataTypesToLines(dataTypes)
     const reconstructed = `TYPE\n${entries.flatMap((e) => e.lines).join('\n')}\nEND_TYPE\n`

@@ -81,11 +81,9 @@ beforeEach(() => {
       .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
         debugCallback = cb
       }),
-    runCompileLibrary: jest
-      .fn()
-      .mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
-        libraryCallback = cb
-      }),
+    runCompileLibrary: jest.fn().mockImplementation((_args: unknown[], cb: (data: Record<string, unknown>) => void) => {
+      libraryCallback = cb
+    }),
     loadAllLibraries: jest.fn().mockResolvedValue([]),
     exportProjectXml: jest.fn().mockResolvedValue({ success: true, message: 'Exported successfully' }),
   } as unknown as typeof window.bridge
@@ -488,7 +486,7 @@ describe('createEditorCompilerAdapter', () => {
   })
 
   describe('library-cpp-block injection', () => {
-    it('grafts each enabled library archive\'s cppBlocks into the project before preprocessing', async () => {
+    it("grafts each enabled library archive's cppBlocks into the project before preprocessing", async () => {
       // Project enables a library called `motor_lib` that ships a
       // C++ FB called `Driver`.  The bridge returns the archive with
       // its cppBlocks; the adapter must inject a synthesized
@@ -533,13 +531,16 @@ describe('createEditorCompilerAdapter', () => {
       // cpp body into an ST stub.  preprocessPous also stamps an
       // `originalCppPous` entry alongside.
       const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
-      const ipcProjectData = ipcArgs[4] as { pous: Array<{ data: { name: string } }>; originalCppPous?: Array<{ name: string }> }
+      const ipcProjectData = ipcArgs[4] as {
+        pous: Array<{ data: { name: string } }>
+        originalCppPous?: Array<{ name: string }>
+      }
       const pouNames = ipcProjectData.pous.map((p) => p.data.name)
       expect(pouNames).toContain('motor_lib__Driver')
       expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('motor_lib__Driver')
     })
 
-    it('skips library cppBlocks that are not on the project\'s enabled list', async () => {
+    it("skips library cppBlocks that are not on the project's enabled list", async () => {
       const projectWithLib: PLCProjectData = {
         ...mockProjectData,
         libraries: [{ name: 'enabled_lib', version: '1.0.0' }],
@@ -575,9 +576,8 @@ describe('createEditorCompilerAdapter', () => {
   describe('compileLibrary', () => {
     it('posts project path + IPC data to runCompileLibrary and resolves the structured result', async () => {
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -621,9 +621,8 @@ describe('createEditorCompilerAdapter', () => {
 
     it('forwards error log entries and resolves the failure result', async () => {
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -647,9 +646,8 @@ describe('createEditorCompilerAdapter', () => {
 
     it('resolves with a fallback error when the port closes without a structured result', async () => {
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -662,10 +660,7 @@ describe('createEditorCompilerAdapter', () => {
     })
 
     it('captures the last error message when no structured result arrives', async () => {
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        () => {},
-      )
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, () => {})
 
       await flushMicrotasks()
       libraryCallback!({ message: 'something went wrong', logLevel: 'error' })
@@ -678,9 +673,8 @@ describe('createEditorCompilerAdapter', () => {
 
     it('routes non-error log messages through inferStage', async () => {
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -712,9 +706,8 @@ describe('createEditorCompilerAdapter', () => {
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: mockProjectData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -747,9 +740,8 @@ describe('createEditorCompilerAdapter', () => {
       }
 
       const progressEvents: CompileProgressEvent[] = []
-      const promise = adapter.compileLibrary!(
-        { projectData: cppLibraryData, projectPath: '/lib/project' },
-        (event) => progressEvents.push(event),
+      const promise = adapter.compileLibrary!({ projectData: cppLibraryData, projectPath: '/lib/project' }, (event) =>
+        progressEvents.push(event),
       )
 
       await flushMicrotasks()

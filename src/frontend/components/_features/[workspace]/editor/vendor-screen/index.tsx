@@ -11,10 +11,7 @@ import { VendorScreenRenderer } from '../device/configuration/vendor-screen'
  * mount and on every successful save; "Don't save" parses it and
  * writes it back via the device slice's bulk setter.
  */
-function serializeOwnedSlice(
-  vendorScreenData: Record<string, unknown> | undefined,
-  ownedKeys: string[],
-): string {
+function serializeOwnedSlice(vendorScreenData: Record<string, unknown> | undefined, ownedKeys: string[]): string {
   const slice: Record<string, unknown> = {}
   for (const k of [...ownedKeys].sort()) {
     if (vendorScreenData && Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {

@@ -68,22 +68,12 @@ describe('lspDiagnosticToMonaco', () => {
   }
 
   it('maps each LSP severity to the matching Monaco MarkerSeverity', () => {
-    expect(
-      lspDiagnosticToMonaco({ range: baseRange, message: 'e', severity: 1 }, monacoStub).severity,
-    ).toBe(8) // Error
-    expect(
-      lspDiagnosticToMonaco({ range: baseRange, message: 'w', severity: 2 }, monacoStub).severity,
-    ).toBe(4) // Warning
-    expect(
-      lspDiagnosticToMonaco({ range: baseRange, message: 'i', severity: 3 }, monacoStub).severity,
-    ).toBe(2) // Info
-    expect(
-      lspDiagnosticToMonaco({ range: baseRange, message: 'h', severity: 4 }, monacoStub).severity,
-    ).toBe(1) // Hint
+    expect(lspDiagnosticToMonaco({ range: baseRange, message: 'e', severity: 1 }, monacoStub).severity).toBe(8) // Error
+    expect(lspDiagnosticToMonaco({ range: baseRange, message: 'w', severity: 2 }, monacoStub).severity).toBe(4) // Warning
+    expect(lspDiagnosticToMonaco({ range: baseRange, message: 'i', severity: 3 }, monacoStub).severity).toBe(2) // Info
+    expect(lspDiagnosticToMonaco({ range: baseRange, message: 'h', severity: 4 }, monacoStub).severity).toBe(1) // Hint
     // Missing severity defaults to Error so user always sees the issue.
-    expect(
-      lspDiagnosticToMonaco({ range: baseRange, message: 'd' }, monacoStub).severity,
-    ).toBe(8)
+    expect(lspDiagnosticToMonaco({ range: baseRange, message: 'd' }, monacoStub).severity).toBe(8)
   })
 
   it('preserves message, source, and code when present', () => {
@@ -101,10 +91,7 @@ describe('lspDiagnosticToMonaco', () => {
   })
 
   it('defaults source to "strucpp" when LSP omits it', () => {
-    const marker = lspDiagnosticToMonaco(
-      { range: baseRange, message: 'x', severity: 1 },
-      monacoStub,
-    )
+    const marker = lspDiagnosticToMonaco({ range: baseRange, message: 'x', severity: 1 }, monacoStub)
     expect(marker.source).toBe('strucpp')
   })
 })
@@ -124,11 +111,7 @@ describe('lspCompletionToMonaco', () => {
   })
 
   it('honors item.insertText over label', () => {
-    const result = lspCompletionToMonaco(
-      { label: 'TIMER', insertText: 'TIMER(IN := $0)' },
-      defaultRange,
-      monacoStub,
-    )
+    const result = lspCompletionToMonaco({ label: 'TIMER', insertText: 'TIMER(IN := $0)' }, defaultRange, monacoStub)
     expect(result.insertText).toBe('TIMER(IN := $0)')
   })
 
@@ -209,21 +192,13 @@ describe('lspCompletionListToMonaco', () => {
   })
 
   it('handles a plain array', () => {
-    const result = lspCompletionListToMonaco(
-      [{ label: 'A' }, { label: 'B' }],
-      defaultRange,
-      monacoStub,
-    )
+    const result = lspCompletionListToMonaco([{ label: 'A' }, { label: 'B' }], defaultRange, monacoStub)
     expect(result.suggestions.map((s) => s.label)).toEqual(['A', 'B'])
     expect(result.incomplete).toBe(false)
   })
 
   it('preserves the isIncomplete flag', () => {
-    const result = lspCompletionListToMonaco(
-      { isIncomplete: true, items: [{ label: 'A' }] },
-      defaultRange,
-      monacoStub,
-    )
+    const result = lspCompletionListToMonaco({ isIncomplete: true, items: [{ label: 'A' }] }, defaultRange, monacoStub)
     expect(result.incomplete).toBe(true)
   })
 })
@@ -289,10 +264,7 @@ describe('lspLocationsToMonaco', () => {
       ],
       monacoStub,
     ) as monaco.languages.Location[]
-    expect(result.map((l) => l.uri.toString())).toEqual([
-      'inmemory://pou/a.st',
-      'inmemory://pou/b.st',
-    ])
+    expect(result.map((l) => l.uri.toString())).toEqual(['inmemory://pou/a.st', 'inmemory://pou/b.st'])
   })
 })
 

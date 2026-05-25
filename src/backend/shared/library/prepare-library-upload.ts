@@ -109,10 +109,7 @@ export function prepareStlibUpload(text: string): PreparedLibrary {
  * serialized archive text; throws on import / compile failure with
  * the strucpp error rolled up into the message.
  */
-export async function prepareCodesysUpload(
-  bytes: Uint8Array,
-  filename: string,
-): Promise<PreparedLibrary> {
+export async function prepareCodesysUpload(bytes: Uint8Array, filename: string): Promise<PreparedLibrary> {
   const importResult = await importCodesysLibrary(bytes)
   if (!importResult.success || !importResult.sources) {
     const errs = (importResult.errors ?? ['unknown error']).join('; ')

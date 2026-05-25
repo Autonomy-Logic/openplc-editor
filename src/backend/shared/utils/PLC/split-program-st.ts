@@ -68,11 +68,7 @@ interface RangeMatch {
  * matches on identifiers that contain the POU name as a substring
  * (`MAIN_LOOP` matching when looking for `MAIN`).
  */
-function findPouHeader(
-  lines: string[],
-  start: number,
-  pou: KnownPou,
-): number {
+function findPouHeader(lines: string[], start: number, pou: KnownPou): number {
   // Anchor to start-of-line so an indented `function_block manual_override`
   // inside a comment string never matches.  Word boundary at the end so
   // `Manual` doesn't match `Manual_Override`.
@@ -88,11 +84,7 @@ function findPouHeader(
  * `headerLine`.  Returns -1 if no closing keyword appears before EOF
  * or before another POU header.
  */
-function findPouEnd(
-  lines: string[],
-  headerLine: number,
-  kind: KnownPou['kind'],
-): number {
+function findPouEnd(lines: string[], headerLine: number, kind: KnownPou['kind']): number {
   const endRe = new RegExp(`^END_${kind}\\b`, 'i')
   // Bail out if a new top-level keyword appears before the closing
   // keyword — implies a malformed file or a POU we didn't expect.

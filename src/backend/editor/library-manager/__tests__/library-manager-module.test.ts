@@ -34,26 +34,21 @@ jest.mock(
       sources: [{ fileName: 'mock.st', source: `(* imported from ${bytes.byteLength}-byte buffer *)` }],
       globalConstants: { STRING_LENGTH: 254 },
     })),
-    compileStlib: jest.fn(
-      (
-        _sources: unknown,
-        options: { name: string; version: string; namespace: string },
-      ) => ({
-        success: true,
-        archive: {
-          manifest: {
-            name: options.name,
-            version: options.version,
-            namespace: options.namespace,
-            description: 'mock codesys-imported library',
-            isBuiltin: false,
-            functions: [],
-            functionBlocks: [],
-            types: [],
-          },
+    compileStlib: jest.fn((_sources: unknown, options: { name: string; version: string; namespace: string }) => ({
+      success: true,
+      archive: {
+        manifest: {
+          name: options.name,
+          version: options.version,
+          namespace: options.namespace,
+          description: 'mock codesys-imported library',
+          isBuiltin: false,
+          functions: [],
+          functionBlocks: [],
+          types: [],
         },
-      }),
-    ),
+      },
+    })),
     // Passthrough: real strucpp parses + validates the archive shape;
     // the mock just JSON.parses so the install path exercises the
     // same code without pulling in the ESM package.  Malformed input

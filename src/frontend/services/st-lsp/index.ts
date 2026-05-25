@@ -60,11 +60,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // The require lives inside the function so the bundler probe
     // never runs under test (jsdom test envs don't ship the asset).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const moduleExports = require('strucpp/dist/browser-server.js?url') as
-      | { default: string }
-      | string
-    workerUrl =
-      typeof moduleExports === 'string' ? moduleExports : moduleExports.default
+    const moduleExports = require('strucpp/dist/browser-server.js?url') as { default: string } | string
+    workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
   // Forward worker crashes to the renderer's callback ONLY after
@@ -104,12 +101,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   const { connection } = transport
   const documents = new Map<string, DocumentState>()
 
-  const providerDisposable = monaco
-    ? registerStLspProviders({ connection, monacoApi: monaco })
-    : null
-  const diagnosticsDisposable = monaco
-    ? attachDiagnosticsBridge(connection, monaco)
-    : null
+  const providerDisposable = monaco ? registerStLspProviders({ connection, monacoApi: monaco }) : null
+  const diagnosticsDisposable = monaco ? attachDiagnosticsBridge(connection, monaco) : null
   // Semantic-tokens provider needs the legend from the worker's
   // `initialize` result, so it can't be registered synchronously
   // alongside the others.  Filled in inside the ready promise below.
@@ -165,10 +158,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       },
       workspaceFolders: null,
     }
-    const initResult = (await connection.sendRequest(
-      InitializeRequest.type,
-      initParams,
-    ))
+    const initResult = await connection.sendRequest(InitializeRequest.type, initParams)
     await connection.sendNotification(InitializedNotification.type, {})
 
     // Wire semantic tokens once we know the worker's legend.  The
@@ -221,10 +211,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         // One bad archive shouldn't starve the rest.  Surface
         // diagnostically — completion still works for the libraries
         // that did load.
-        console.warn(
-          `[strucpp-lsp] failed to load stlib "${source.sourceLabel}":`,
-          err,
-        )
+        console.warn(`[strucpp-lsp] failed to load stlib "${source.sourceLabel}":`, err)
       }
     }
   }

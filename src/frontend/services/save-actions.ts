@@ -64,8 +64,7 @@ function buildProjectJsonContent(state: StoreState): string {
   // a PLC project on first save, so the project would re-open with
   // the wrong sidebar shape (Resource / Servers / Devices visible
   // instead of the Manifest tab).
-  const metaType: 'plc-project' | 'plc-library' =
-    project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
+  const metaType: 'plc-project' | 'plc-library' = project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: metaType },
@@ -791,9 +790,10 @@ async function saveLibraryManagerOnly(
     return { success: false, error: 'project.json on disk is malformed' }
   }
 
-  const data = (onDisk.data && typeof onDisk.data === 'object'
-    ? (onDisk.data as Record<string, unknown>)
-    : ((onDisk.data = {}), onDisk.data as Record<string, unknown>))
+  const data =
+    onDisk.data && typeof onDisk.data === 'object'
+      ? (onDisk.data as Record<string, unknown>)
+      : ((onDisk.data = {}), onDisk.data as Record<string, unknown>)
   data.libraries = sortedRefs
 
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
@@ -807,20 +807,14 @@ async function saveLibraryManagerOnly(
  * screen / board is no longer available (e.g. board changed since
  * the tab opened) — callers fall through to a no-op.
  */
-function vendorScreenOwnedKeysFor(
-  state: ReturnType<typeof openPLCStoreBase.getState>,
-  screenName: string,
-): string[] {
+function vendorScreenOwnedKeysFor(state: ReturnType<typeof openPLCStoreBase.getState>, screenName: string): string[] {
   const boardId = state.deviceDefinitions.configuration.deviceBoard
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
   const screen = boardInfo?.vpp?.screens?.[screenName]
   return collectScreenPersistenceKeys(screen)
 }
 
-function serializeVendorScreenSlice(
-  state: ReturnType<typeof openPLCStoreBase.getState>,
-  ownedKeys: string[],
-): string {
+function serializeVendorScreenSlice(state: ReturnType<typeof openPLCStoreBase.getState>, ownedKeys: string[]): string {
   const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
   const slice: Record<string, unknown> = {}
   for (const k of [...ownedKeys].sort()) {
@@ -996,10 +990,7 @@ function reloadLibraryManagerFromCleanState(fileName: string): { success: boolea
  * means the revert was *meant* to happen but failed (logged
  * upstream).
  */
-export async function reloadFileFromDisk(
-  fileName: string,
-  projectPort: ProjectPort,
-): Promise<{ success: boolean }> {
+export async function reloadFileFromDisk(fileName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file) {
