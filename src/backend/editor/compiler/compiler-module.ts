@@ -276,33 +276,6 @@ class CompilerModule {
     return properties
   }
 
-  // Synthesise the simulator's pin mapping from its hals.json default_*
-  // strings. The simulator HAL (simulator.cpp) expects PINMASK_DIN/DOUT/AIN/AOUT
-  // populated, but those values are a property of the virtual device — not
-  // of the user's project. The UI already hides the pin table when Simulator
-  // is selected; this override makes the compile path follow the same rule
-  // so a stale pin saved from a previous board doesn't poison the build.
-  static synthesizeSimulatorPinMapping(boardEntry: {
-    default_din?: string
-    default_dout?: string
-    default_ain?: string
-    default_aout?: string
-  }): DevicePin[] {
-    const parse = (s: string | undefined): string[] =>
-      s
-        ? s
-            .split(',')
-            .map((p) => p.trim())
-            .filter(Boolean)
-        : []
-    const pins: DevicePin[] = []
-    for (const pin of parse(boardEntry.default_din)) pins.push({ pin, pinType: 'digitalInput', address: '', alias: '' })
-    for (const pin of parse(boardEntry.default_ain)) pins.push({ pin, pinType: 'analogInput', address: '', alias: '' })
-    for (const pin of parse(boardEntry.default_dout)) pins.push({ pin, pinType: 'digitalOutput', address: '', alias: '' })
-    for (const pin of parse(boardEntry.default_aout)) pins.push({ pin, pinType: 'analogOutput', address: '', alias: '' })
-    return pins
-  }
-
   // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
@@ -1200,20 +1173,11 @@ class CompilerModule {
     // INFO: If null, only the define value
     // 3.3. IO Config defines
     DEFINES_CONTENT += '//IO Config\n'
-    // Simulator overrides the project's pin-mapping with the board's canonical
-    // hals.json default_* layout. The pin-mapping table is hidden in the UI for
-    // this target, but the file persists so switching back to a real board
-    // preserves the user's wiring. Sourcing from hals.json here keeps the
-    // compile aligned with what the UI advertises.
-    const effectivePinMapping =
-      boardRuntime === 'simulator' && boardEntry
-        ? CompilerModule.synthesizeSimulatorPinMapping(boardEntry)
-        : devicePinMapping
     // INFO: This approach assumes that the pins are sorted.
-    const digitalInputPins = effectivePinMapping.filter((pin) => pin.pinType === 'digitalInput')
-    const analogInputPins = effectivePinMapping.filter((pin) => pin.pinType === 'analogInput')
-    const digitalOutputPins = effectivePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
-    const analogOutputPins = effectivePinMapping.filter((pin) => pin.pinType === 'analogOutput')
+    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
+    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
+    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
+    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
 
     DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
     DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`

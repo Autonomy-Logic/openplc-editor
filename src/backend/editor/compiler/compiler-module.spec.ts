@@ -202,49 +202,6 @@ describe('CompilerModule', () => {
     })
   })
 
-  describe('synthesizeSimulatorPinMapping (Simulator pin layout from hals.json)', () => {
-    it('parses the comma-separated default_* strings into typed DevicePin entries', () => {
-      const pins = CompilerModule.synthesizeSimulatorPinMapping({
-        default_din: '62, 63, 64, 65',
-        default_dout: '14, 15, 16',
-        default_ain: 'A0, A1',
-        default_aout: '2, 3',
-      })
-      // Order: digitalInput, analogInput, digitalOutput, analogOutput
-      expect(pins.map((p) => p.pin)).toEqual(['62', '63', '64', '65', 'A0', 'A1', '14', '15', '16', '2', '3'])
-      expect(pins.map((p) => p.pinType)).toEqual([
-        'digitalInput',
-        'digitalInput',
-        'digitalInput',
-        'digitalInput',
-        'analogInput',
-        'analogInput',
-        'digitalOutput',
-        'digitalOutput',
-        'digitalOutput',
-        'analogOutput',
-        'analogOutput',
-      ])
-    })
-
-    it('skips empty/whitespace entries so a trailing comma does not produce a blank pin', () => {
-      const pins = CompilerModule.synthesizeSimulatorPinMapping({
-        default_din: '62,  ,63,',
-        default_dout: '',
-        default_ain: '',
-        default_aout: '',
-      })
-      expect(pins).toEqual([
-        { pin: '62', pinType: 'digitalInput', address: '', alias: '' },
-        { pin: '63', pinType: 'digitalInput', address: '', alias: '' },
-      ])
-    })
-
-    it('returns an empty list when the board declares no pin defaults', () => {
-      expect(CompilerModule.synthesizeSimulatorPinMapping({})).toEqual([])
-    })
-  })
-
   describe('installAsArduinoLibrary (precompiled library layout)', () => {
     const fs = jest.requireActual('node:fs') as typeof import('node:fs')
     const fsPromises = jest.requireActual('node:fs/promises') as typeof import('node:fs/promises')
