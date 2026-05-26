@@ -14,7 +14,7 @@ export const HelpMenu = () => {
 
   const handleOpenCommunitySupport = () => {
     try {
-      window.open('https://openplc.discussion.community/', '_blank')
+      window.open('https://edge.autonomylogic.com/forum', '_blank')
     } catch (error) {
       console.error('Error opening link:', error)
     }
