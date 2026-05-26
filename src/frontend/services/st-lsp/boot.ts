@@ -20,7 +20,12 @@ import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import { toast } from '../../utils/toast'
 import { startStLsp } from './index'
 import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
-import { attachEnabledLibrariesSync, attachLibrarySync, attachProjectSync } from './project-sync'
+import {
+  attachBundledLibrariesSync,
+  attachEnabledLibrariesSync,
+  attachLibrarySync,
+  attachProjectSync,
+} from './project-sync'
 import type { StLspService } from './types'
 
 export interface StLspBootHandle {
@@ -92,6 +97,7 @@ export function bootStLsp(
   const forceResync = () => projectSync.forceResync()
   const unsubscribeLibrarySync = attachLibrarySync(service, forceResync)
   const unsubscribeEnabledLibrariesSync = attachEnabledLibrariesSync(service, forceResync)
+  const unsubscribeBundledLibrariesSync = attachBundledLibrariesSync(service, forceResync)
 
   // Pre-register Monaco models for every POU so cross-POU
   // references / peek-definition / go-to-references resolve through
@@ -110,6 +116,7 @@ export function bootStLsp(
   return {
     service,
     dispose() {
+      unsubscribeBundledLibrariesSync()
       unsubscribeEnabledLibrariesSync()
       unsubscribeLibrarySync()
       projectSync.dispose()

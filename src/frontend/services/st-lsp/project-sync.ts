@@ -263,3 +263,27 @@ export function attachEnabledLibrariesSync(service: StLspService, onAfterRefresh
     },
   )
 }
+
+/**
+ * Wires the always-on bundled-library list to `refreshStlibs()`.
+ *
+ * `bundledLibraryNames` is populated asynchronously at app boot by
+ * `hydrateLibraries()` in `App.tsx`, in parallel with `bootStLsp`.
+ * If the LSP finishes initialising before the bundled list lands,
+ * the initial `pushAllStlibs` filters with an empty bundled set and
+ * standard archives (IEC FBs like `TON`, `CTU`, …) never reach the
+ * worker — surfacing as "Undefined type 'TON'" diagnostics.  This
+ * subscription closes that race: as soon as bundled names arrive
+ * (or later toggle), the cache is repushed and open documents are
+ * re-analysed.
+ */
+export function attachBundledLibrariesSync(service: StLspService, onAfterRefresh?: () => void): () => void {
+  return openPLCStoreBase.subscribe(
+    (state) => state.bundledLibraryNames.slice().sort().join('|'),
+    () => {
+      void service.refreshStlibs().then(() => {
+        onAfterRefresh?.()
+      })
+    },
+  )
+}
