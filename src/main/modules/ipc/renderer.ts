@@ -1,4 +1,4 @@
-import type { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -462,6 +462,14 @@ const rendererProcessBridge = {
     jwtToken: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>
     ipcRenderer.invoke('runtime:get-serial-ports', ipAddress, jwtToken),
+  runtimeDiscoverDevices: (opts?: {
+    durationMs?: number
+  }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
+    ipcRenderer.invoke('runtime:discover-devices', opts),
+  onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
+    ipcRenderer.on('runtime:device-discovered', callback)
+    return () => ipcRenderer.removeListener('runtime:device-discovered', callback)
+  },
   onRuntimeTokenRefreshed: (callback: (_event: IpcRendererEvent, newToken: string) => void) => {
     ipcRenderer.on('runtime:token-refreshed', callback)
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)

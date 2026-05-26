@@ -153,6 +153,9 @@ export type {
 export type {
   CompilationStatusResult,
   CreateUserParams,
+  DiscoverDevicesOptions,
+  DiscoverDevicesResult,
+  DiscoveredRuntimeDevice,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,

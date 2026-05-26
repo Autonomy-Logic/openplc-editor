@@ -9,7 +9,7 @@ import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import AboutModal from '../_organisms/about-modal'
-import { RuntimeCreateUserModal, RuntimeLoginModal } from '../_organisms/modals'
+import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal } from '../_organisms/modals'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
@@ -121,6 +121,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
+          {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AboutModal />
           <AcceleratorHandler />
