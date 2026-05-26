@@ -11,22 +11,28 @@ const makeVariable = (overrides: Partial<PLCVariable> & Pick<PLCVariable, 'name'
   debug: overrides.debug ?? false,
 })
 
+// Format matches xml2st's PouProgramGenerator output:
+//   * VAR / END_VAR keywords are indented by 2 spaces
+//   * variable declaration lines by 4 spaces
+//   * consecutive var-class blocks have no blank line between them
+// See `generate-iec-variables-to-string.ts` for the rationale.
+
 describe('generateIecVariablesToString', () => {
   it('returns a bare VAR/END_VAR block for an empty array', () => {
-    expect(generateIecVariablesToString([])).toBe('VAR\nEND_VAR')
+    expect(generateIecVariablesToString([])).toBe('  VAR\n  END_VAR')
   })
 
   it('returns a bare VAR/END_VAR block for null/undefined input', () => {
-    expect(generateIecVariablesToString(null as unknown as PLCVariable[])).toBe('VAR\nEND_VAR')
+    expect(generateIecVariablesToString(null as unknown as PLCVariable[])).toBe('  VAR\n  END_VAR')
   })
 
   it('generates a single local variable', () => {
     const vars: PLCVariable[] = [makeVariable({ name: 'counter', class: 'local' })]
     const result = generateIecVariablesToString(vars)
 
-    expect(result).toContain('VAR')
-    expect(result).toContain('\tcounter : INT;')
-    expect(result).toContain('END_VAR')
+    expect(result).toContain('  VAR\n')
+    expect(result).toContain('    counter : INT;')
+    expect(result).toContain('  END_VAR')
   })
 
   it('uses the correct block header for each variable class', () => {
@@ -59,28 +65,28 @@ describe('generateIecVariablesToString', () => {
     const vars: PLCVariable[] = [makeVariable({ name: 'sensor', class: 'local', location: '%IX0.0' })]
     const result = generateIecVariablesToString(vars)
 
-    expect(result).toContain('\tsensor : INT AT %IX0.0;')
+    expect(result).toContain('    sensor : INT AT %IX0.0;')
   })
 
   it('includes the initial value when present', () => {
     const vars: PLCVariable[] = [makeVariable({ name: 'counter', class: 'local', initialValue: '42' })]
     const result = generateIecVariablesToString(vars)
 
-    expect(result).toContain('\tcounter : INT := 42;')
+    expect(result).toContain('    counter : INT := 42;')
   })
 
   it('includes both location and initial value together', () => {
     const vars: PLCVariable[] = [makeVariable({ name: 'x', class: 'local', location: '%QW0', initialValue: '100' })]
     const result = generateIecVariablesToString(vars)
 
-    expect(result).toContain('\tx : INT AT %QW0 := 100;')
+    expect(result).toContain('    x : INT AT %QW0 := 100;')
   })
 
   it('appends documentation as a single-line comment', () => {
     const vars: PLCVariable[] = [makeVariable({ name: 'temp', class: 'local', documentation: 'Temperature sensor' })]
     const result = generateIecVariablesToString(vars)
 
-    expect(result).toContain('\ttemp : INT; (* Temperature sensor *)')
+    expect(result).toContain('    temp : INT; (* Temperature sensor *)')
   })
 
   it('collapses multi-line documentation to a single line', () => {
@@ -116,7 +122,10 @@ describe('generateIecVariablesToString', () => {
     const iIdx = result.indexOf('VAR_INPUT')
     const oIdx = result.indexOf('VAR_OUTPUT')
     const ioIdx = result.indexOf('VAR_IN_OUT')
-    const lIdx = result.indexOf('\nVAR\n')
+    // The local block is bare `VAR` (not VAR_*).  Search for `  VAR\n`
+    // so the index lookup doesn't accidentally hit the start of any
+    // `VAR_INPUT`/`VAR_OUTPUT`/etc. header earlier in the output.
+    const lIdx = result.indexOf('  VAR\n')
     const tIdx = result.indexOf('VAR_TEMP')
 
     expect(gIdx).toBeLessThan(eIdx)
@@ -135,9 +144,23 @@ describe('generateIecVariablesToString', () => {
     const result = generateIecVariablesToString(vars)
 
     expect(result).toContain('VAR_INPUT')
-    expect(result).toContain('\ta : INT;')
-    expect(result).toContain('\tb : BOOL;')
+    expect(result).toContain('    a : INT;')
+    expect(result).toContain('    b : BOOL;')
     // Only one VAR_INPUT block
     expect(result.split('VAR_INPUT').length).toBe(2) // one occurrence = 2 parts
+  })
+
+  it('emits consecutive var-class blocks with no blank line between them (xml2st parity)', () => {
+    // xml2st walks `self.Interface` and emits each var-class block
+    // back-to-back, immediately closing one END_VAR before opening the
+    // next header.  The vars-text editor needs to mirror that exactly
+    // so a manual edit of the text view doesn't get re-formatted into
+    // a different shape on the next save / round-trip.
+    const vars: PLCVariable[] = [
+      makeVariable({ name: 'inA', class: 'input' }),
+      makeVariable({ name: 'outA', class: 'output' }),
+    ]
+    const result = generateIecVariablesToString(vars)
+    expect(result).toBe(['  VAR_INPUT', '    inA : INT;', '  END_VAR', '  VAR_OUTPUT', '    outA : INT;', '  END_VAR'].join('\n'))
   })
 })
