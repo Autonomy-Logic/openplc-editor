@@ -840,6 +840,45 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
+    // ST POU body editors silently lose plain-Space keystrokes after
+    // the STruC++ LSP completion provider became active in the v4.2.0
+    // RC line.  Symptom: with the suggest widget mounted (visible OR
+    // just tracking — the "active suggest model" state), `onKeyDown`
+    // for Space fires, `defaultPrevented` is false, no built-in
+    // Space binding exists in the editor surface (only Ctrl+Space /
+    // Cmd+Space for trigger-suggest), yet `onDidType(" ")` never
+    // fires and the model stays unchanged.  The break only shows up
+    // when the LSP provider is registered; every other Monaco editor
+    // surface in the app (IL, Python, C++) types space fine because
+    // no LSP provider attaches.  Reproduced cleanly with `if<Space>`
+    // (widget filtering on the keyword list) and inside snippet
+    // placeholders after Tab-accepting a suggestion.
+    //
+    // The fix is byte-equivalent to what Monaco's default Space
+    // dispatch *should* do: invoke the `type` core command with a
+    // single space, and dismiss the suggest widget so it doesn't
+    // dangle.  Binding via `addCommand(KeyCode.Space, …)` registers
+    // an editor-scoped keybinding at the highest user-priority slot;
+    // it never collides with built-in shortcuts because Monaco
+    // reserves Space only with modifiers (Ctrl/Cmd) and only for
+    // trigger-suggest, which still works because that binding lives
+    // at a different chord.  See `node_modules/monaco-editor/esm/vs/
+    // editor/contrib/suggest/browser/suggestController.js:676` for
+    // the only Space-key registration in editor scope.
+    //
+    // Root cause of the upstream interference between the LSP
+    // semantic-tokens / completion-model flow and Monaco's default
+    // type pipeline is still open — left for an upstream Monaco /
+    // strucpp-LSP investigation since the regression sits below the
+    // surface our converters touch (items carry no commitCharacters
+    // and no itemDefaults; the suggestModel just stops dispatching
+    // type for Space).  This binding restores the expected typing
+    // behaviour with zero side effects on other editors.
+    editorInstance.addCommand(monacoInstance.KeyCode.Space, () => {
+      editorInstance.trigger('keyboard', 'type', { text: ' ' })
+      editorInstance.trigger('keyboard', 'hideSuggestWidget', {})
+    })
+
     focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
       openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
     })
