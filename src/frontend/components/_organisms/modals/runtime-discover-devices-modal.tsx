@@ -123,7 +123,7 @@ const RuntimeDiscoverDevicesModal = () => {
         <div className='mb-3 flex items-center justify-between'>
           <span className='text-sm font-medium text-neutral-850 dark:text-neutral-300'>
             {phase === 'scanning' && (
-              <span className='inline-block h-3 w-3 animate-pulse rounded-full bg-brand mr-2 align-middle' />
+              <span className='mr-2 inline-block h-3 w-3 animate-pulse rounded-full bg-brand align-middle' />
             )}
             {headline}
           </span>
@@ -155,15 +155,12 @@ const RuntimeDiscoverDevicesModal = () => {
                       className={cn(
                         'flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm',
                         isSelected
-                          ? 'bg-brand/20 font-bold shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+                          ? 'bg-brand/20 dark:bg-brand/30 font-bold shadow-[inset_3px_0_0_var(--primary-default)]'
                           : 'text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850',
                       )}
                     >
                       <span
-                        className={cn(
-                          'text-neutral-950 dark:text-white',
-                          isSelected ? 'font-bold' : 'font-medium',
-                        )}
+                        className={cn('text-neutral-950 dark:text-white', isSelected ? 'font-bold' : 'font-medium')}
                       >
                         {device.hostname || '(unknown host)'}
                       </span>

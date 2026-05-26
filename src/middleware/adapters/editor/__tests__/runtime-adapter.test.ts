@@ -393,9 +393,7 @@ describe('IP address getter', () => {
 
 describe('discoverDevices', () => {
   it('delegates to bridge with options', async () => {
-    const devices = [
-      { ipAddress: '192.168.1.50', hostname: 'plc-1', runtimeVersion: 'v4.1.0', apiPort: 8443 },
-    ]
+    const devices = [{ ipAddress: '192.168.1.50', hostname: 'plc-1', runtimeVersion: 'v4.1.0', apiPort: 8443 }]
     ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({ success: true, devices })
 
     const result = await adapter.discoverDevices!({ durationMs: 2000 })
