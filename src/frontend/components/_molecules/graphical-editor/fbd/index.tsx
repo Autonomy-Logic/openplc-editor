@@ -678,7 +678,12 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
-    [rung, reactFlowInstance],
+    // `libraries.user` and `pous` aren't read here, but
+    // `handleAddElementByDropping` captures both — omit them and a
+    // freshly created user FB stays invisible to the memoized closure
+    // until something else forces a re-bind (full project save resets
+    // `rung`, which is why "Save Project" used to mask this).
+    [rung, reactFlowInstance, libraries.user, pous],
   )
 
   /**
