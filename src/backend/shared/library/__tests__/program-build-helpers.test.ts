@@ -13,7 +13,12 @@ import type * as strucpp from 'strucpp'
 
 import type { PLCPou } from '../../types/PLC/open-plc'
 import type { KnownPou } from '../../utils/PLC/split-program-st'
-import { buildKnownPous, enrichErrorWithPouContext, formatErrorWithPouContext } from '../program-build-helpers'
+import {
+  buildKnownPous,
+  emitCompileErrorEvents,
+  enrichErrorWithPouContext,
+  formatErrorWithPouContext,
+} from '../program-build-helpers'
 
 type StrucppCompileError = strucpp.CompileError
 type StrucppFormatDiagnostic = typeof strucpp.formatDiagnostic
@@ -316,5 +321,59 @@ describe('enrichErrorWithPouContext', () => {
     const enriched = enrichErrorWithPouContext(err, knownPous, perPou)
     expect(enriched.pouName).toBe('CVAVAVA')
     expect(enriched.section).toBeUndefined()
+  })
+})
+
+describe('emitCompileErrorEvents', () => {
+  const mkErr = (overrides: Partial<StrucppCompileError> = {}): StrucppCompileError => ({
+    message: 'test error',
+    line: 1,
+    column: 1,
+    severity: 'error',
+    ...overrides,
+  })
+
+  it('emits a single header line when the errors list is empty', () => {
+    // Defensive: callers shouldn't invoke this with an empty list
+    // (success path is gated elsewhere), but if they do, the header
+    // alone is still useful and the loop must not throw.
+    const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
+    emitCompileErrorEvents([], (msg, level, raw) => calls.push({ msg, level, raw }))
+    expect(calls).toEqual([{ msg: 'STruC++ compilation failed:', level: 'error', raw: undefined }])
+  })
+
+  it('emits one event per error, each carrying the structured `raw`', () => {
+    // The renderer keys click-to-navigate off `compileError.pouName`
+    // — every per-error event must therefore reach the sink with the
+    // raw attached, never as a joined string that drops the
+    // structured fields.
+    const e1 = mkErr({ pouName: 'Foo', section: 'body', bodyLine: 3, message: 'first' })
+    const e2 = mkErr({ pouName: 'Bar', section: 'var-block', message: 'second' })
+    const diags = [
+      { formatted: '[Foo / body line 3]\nfoo.st:5:1: error: first', raw: e1 },
+      { formatted: '[Bar / variable x]\nbar.st:2:1: error: second', raw: e2 },
+    ]
+    const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
+    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }))
+    expect(calls).toHaveLength(3)
+    expect(calls[0]).toEqual({ msg: 'STruC++ compilation failed:', level: 'error', raw: undefined })
+    expect(calls[1]).toEqual({ msg: diags[0].formatted, level: 'error', raw: e1 })
+    expect(calls[2]).toEqual({ msg: diags[1].formatted, level: 'error', raw: e2 })
+  })
+
+  it('falls back through formatted → raw.message → "unknown error" when formatted is missing', () => {
+    // Defensive: a malformed entry where `formatted` is empty should
+    // still produce something the user can read.  The raw is still
+    // attached so click-to-navigate works even on the fallback path.
+    const eOk = mkErr({ pouName: 'Ok', message: 'has message' })
+    const eEmpty = mkErr({ pouName: 'Empty', message: '' })
+    const diags = [
+      { formatted: '', raw: eOk }, // empty formatted, falls to raw.message
+      { formatted: '', raw: eEmpty }, // empty formatted + empty message → last-resort literal
+    ]
+    const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
+    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }))
+    expect(calls[1]).toEqual({ msg: 'has message', level: 'error', raw: eOk })
+    expect(calls[2]).toEqual({ msg: 'unknown error', level: 'error', raw: eEmpty })
   })
 })
