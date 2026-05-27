@@ -1,6 +1,8 @@
+import { iterateWriteProjectFiles } from '@root/backend/shared/project/iterate-write-project-files'
 import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
+import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
@@ -377,39 +379,15 @@ class ProjectService {
   /**
    * Write pre-serialized project files to disk.
    * The frontend handles all serialization — this method is a dumb batch file writer.
+   *
+   * The "which files exist in a save" enumeration lives in the
+   * shared `iterateWriteProjectFiles` so the web adapter's API
+   * envelope packer walks the same category list — no more
+   * hand-maintained twin lists drifting when a new file category
+   * (like `library.json`) gets added.
    */
-  async writeProjectFiles(files: {
-    projectPath: string
-    projectJson: string
-    /** Library projects don't own `devices/configuration.json`; the
-     *  renderer sends `undefined` for those, and we skip the write
-     *  here instead of truncating the on-disk copy to an empty
-     *  string. */
-    deviceConfig?: string
-    /** Same optional-on-libraries semantics as `deviceConfig`. */
-    pinMapping?: string
-    /** Library projects' manifest (`library.json`).  PLC projects
-     *  send `undefined`; libraries whose manifest tab hasn't been
-     *  mounted this session also send `undefined` (no pending edits
-     *  to flush).  Skipped on the write side when undefined so the
-     *  on-disk copy stays intact. */
-    libraryManifest?: string
-    pouFiles: Array<{ relativePath: string; content: string }>
-    serverFiles: Array<{ relativePath: string; content: string }>
-    remoteDeviceFiles: Array<{ relativePath: string; content: string }>
-    deletions: string[]
-  }): Promise<IProjectServiceResponse> {
-    const {
-      projectPath,
-      projectJson,
-      deviceConfig,
-      pinMapping,
-      libraryManifest,
-      pouFiles,
-      serverFiles,
-      remoteDeviceFiles,
-      deletions,
-    } = files
+  async writeProjectFiles(files: WriteProjectFiles): Promise<IProjectServiceResponse> {
+    const { projectPath, deletions } = files
 
     if (!projectPath) {
       return {
@@ -422,46 +400,27 @@ class ProjectService {
     const dir = normalized.endsWith('/project.json') ? normalized.slice(0, -'/project.json'.length) : normalized
 
     try {
-      // Ensure standard directories exist
+      // Defensive mkdir for the project's canonical directory shape.
+      // Keeps these paths present even when the corresponding file
+      // arrays are empty (e.g. fresh library with no servers yet),
+      // so callers can rely on them existing.
       await Promise.all(
         ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote'].map((d) =>
           promises.mkdir(join(dir, d), { recursive: true }),
         ),
       )
 
-      // Write config files.  `deviceConfig` / `pinMapping` /
-      // `libraryManifest` are optional — each is skipped by project
-      // types that don't own it, so the renderer sends `undefined`
-      // and we leave the on-disk copies untouched rather than
-      // overwriting them with an empty string.
-      const writes: Promise<void>[] = [promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8')]
-      if (deviceConfig !== undefined) {
-        writes.push(promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'))
-      }
-      if (pinMapping !== undefined) {
-        writes.push(promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'))
-      }
-      if (libraryManifest !== undefined) {
-        writes.push(promises.writeFile(join(dir, 'library.json'), libraryManifest, 'utf-8'))
-      }
-      await Promise.all(writes)
-
-      // Write POU files
-      for (const file of pouFiles) {
-        const filePath = join(dir, file.relativePath)
-        await promises.mkdir(dirname(filePath), { recursive: true })
-        await promises.writeFile(filePath, file.content, 'utf-8')
-      }
-
-      // Write server files
-      for (const file of serverFiles) {
-        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
-      }
-
-      // Write remote device files
-      for (const file of remoteDeviceFiles) {
-        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
-      }
+      // Single source of truth for the file shape lives in the
+      // shared iterator.  Each yielded entry is one independent
+      // file write; the batch fans out in parallel since paths
+      // are distinct and mkdir(recursive) is idempotent.
+      await Promise.all(
+        Array.from(iterateWriteProjectFiles(files), async (entry) => {
+          const filePath = join(dir, entry.relativePath)
+          await promises.mkdir(dirname(filePath), { recursive: true })
+          await promises.writeFile(filePath, entry.content, 'utf-8')
+        }),
+      )
 
       // Process deletions
       for (const relativePath of deletions) {
