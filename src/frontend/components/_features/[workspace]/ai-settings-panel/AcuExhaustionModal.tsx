@@ -76,7 +76,8 @@ export const AcuExhaustionModal = ({
           typeof billingError.remaining === 'number' &&
           typeof billingError.required === 'number' && (
             <p className='text-[12px] text-neutral-500 dark:text-neutral-400'>
-              This request needed {billingError.required} ACU; only {billingError.remaining} remaining.
+              This request needed {Math.round(billingError.required)} ACU; only {Math.round(billingError.remaining)}{' '}
+              remaining.
             </p>
           )}
         <div className='mt-2 flex items-center justify-end gap-2'>
