@@ -150,7 +150,16 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasProjectExport: false,
   hasVersionControl: true,
   hasAboutDialog: true,
-  hasPythonLSP: false,
+  // `monaco-pyright-lsp` ships its own ESM worker via
+  // `new Worker(new URL('./worker.js', import.meta.url))` which Vite
+  // resolves to an emitted chunk at build time — no `MonacoEnvironment`
+  // worker-URL handoff required (unlike STruC++, which we pre-warm
+  // through `bootStLsp` with a `?url` import).  Pyright bundle is
+  // ~MB-scale; web users editing Python POUs pay the load once on the
+  // first Python file open since the import is at module-evaluation
+  // time in the body Monaco editor.  Lazy-loading is a follow-up
+  // optimisation if first-paint cost becomes a real concern.
+  hasPythonLSP: true,
   // The STruC++ worker bundle runs in any modern browser; web's
   // stlib-source adapter (HTTP-backed, mirror of editor's IPC-backed
   // one) lands alongside the library port and lets `bootStLsp`
