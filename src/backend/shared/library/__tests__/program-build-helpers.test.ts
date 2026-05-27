@@ -282,9 +282,7 @@ describe('enrichErrorWithPouContext', () => {
     // the header still needs section/bodyLine — otherwise body errors
     // here would slip through as untagged and the hook would only open
     // the tab without moving the cursor.
-    const perPou = new Map([
-      ['noop.st', ['FUNCTION_BLOCK NOOP', '  ;', 'END_FUNCTION_BLOCK'].join('\n')],
-    ])
+    const perPou = new Map([['noop.st', ['FUNCTION_BLOCK NOOP', '  ;', 'END_FUNCTION_BLOCK'].join('\n')]])
     const pous: KnownPou[] = [{ name: 'NOOP', kind: 'FUNCTION_BLOCK', language: 'st' }]
     const err: StrucppCompileError = { ...baseError, file: 'noop.st', line: 2 }
     const enriched = enrichErrorWithPouContext(err, pous, perPou)
@@ -309,7 +307,10 @@ describe('enrichErrorWithPouContext', () => {
     // no filename, but defensively: an err.file with line === 0
     // shouldn't divide by section either.
     const perPou = new Map([
-      ['cvavava.st', ['FUNCTION_BLOCK CVAVAVA', 'VAR', '  X : INT;', 'END_VAR', '  ;', 'END_FUNCTION_BLOCK'].join('\n')],
+      [
+        'cvavava.st',
+        ['FUNCTION_BLOCK CVAVAVA', 'VAR', '  X : INT;', 'END_VAR', '  ;', 'END_FUNCTION_BLOCK'].join('\n'),
+      ],
     ])
     const err: StrucppCompileError = { ...baseError, file: 'cvavava.st', line: 0 }
     const enriched = enrichErrorWithPouContext(err, knownPous, perPou)

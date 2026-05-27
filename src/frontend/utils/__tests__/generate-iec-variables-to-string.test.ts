@@ -161,6 +161,8 @@ describe('generateIecVariablesToString', () => {
       makeVariable({ name: 'outA', class: 'output' }),
     ]
     const result = generateIecVariablesToString(vars)
-    expect(result).toBe(['  VAR_INPUT', '    inA : INT;', '  END_VAR', '  VAR_OUTPUT', '    outA : INT;', '  END_VAR'].join('\n'))
+    expect(result).toBe(
+      ['  VAR_INPUT', '    inA : INT;', '  END_VAR', '  VAR_OUTPUT', '    outA : INT;', '  END_VAR'].join('\n'),
+    )
   })
 })
