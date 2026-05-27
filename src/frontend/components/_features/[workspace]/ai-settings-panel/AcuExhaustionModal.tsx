@@ -51,7 +51,7 @@ export const AcuExhaustionModal = ({
   const description = isInactive
     ? `Your subscription is ${billingError.subscriptionStatus ?? 'inactive'}. Reactivate it to keep using AI features.`
     : billingError.monthlyLimit != null
-      ? `You've used all ${billingError.monthlyLimit} ACU for this billing period. Buy more ACU or upgrade your plan to keep going.`
+      ? `You've used all ${Math.round(billingError.monthlyLimit)} ACU for this billing period. Buy more ACU or upgrade your plan to keep going.`
       : "You're out of ACU for this billing period. Buy more ACU or upgrade your plan to keep going."
   const ctaLabel = isInactive ? 'Reactivate subscription' : 'Upgrade plan'
   // subscription_inactive carries its own reactivation URL; insufficient_acu doesn't.
