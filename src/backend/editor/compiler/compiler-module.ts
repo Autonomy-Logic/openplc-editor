@@ -1453,21 +1453,48 @@ class CompilerModule {
 
     const srcDir = join(compilationPath, 'src')
     const baremetalDir = join(compilationPath, 'examples', 'Baremetal')
+    const sourcesStash = join(compilationPath, 'precompile', 'sources')
+    const objDir = join(compilationPath, 'precompile', 'obj')
 
-    // arduino.cpp is the board HAL; arduino-cli must compile it so it sees
-    // the core's external libraries (Ethernet, SPI, ...) it discovers via
-    // sketch-tree includes.
-    const allEntries = await readdir(srcDir)
-    const sources = allEntries
-      .filter((name) => name.endsWith('.cpp') && name !== 'arduino.cpp')
-      .map((name) => join(srcDir, name))
+    // Stash strucpp-emitted .cpp out of src/ BEFORE compile, then read the
+    // stash to discover the TU set. Two reasons:
+    //
+    //   1. arduino-cli's library discovery walks the sketch tree and will
+    //      recompile any .cpp it finds under src/ with the core's default
+    //      C++ standard. Moving the strucpp TUs out before arduino-cli runs
+    //      keeps the gnu++17 archive's symbols as the only definition.
+    //
+    //   2. Recovery from a partial previous run becomes trivial. If a prior
+    //      invocation crashed between compile and archive, the .cpp files
+    //      are already in the stash — a retry stashes the (now empty) src/,
+    //      reads the stash, and re-runs the whole pipeline from there. No
+    //      half-stashed split-brain state.
+    //
+    // arduino.cpp (the board HAL) is excluded — arduino-cli must compile
+    // that one alongside the sketch so it picks up the core's external
+    // libraries (Ethernet, SPI, …) discovered via sketch-tree includes.
+    await mkdir(sourcesStash, { recursive: true })
+    await mkdir(objDir, { recursive: true })
 
-    if (sources.length === 0) {
-      throw new Error(`handlePrecompileUserLib: no .cpp sources found under ${srcDir}`)
+    const srcEntries = await readdir(srcDir)
+    for (const name of srcEntries) {
+      if (!name.endsWith('.cpp') || name === 'arduino.cpp') continue
+      // rename overwrites the stash entry if a previous run left a stale
+      // copy — the src/ version is the latest strucpp output and wins.
+      await fs.rename(join(srcDir, name), join(sourcesStash, name))
     }
 
-    const objDir = join(compilationPath, 'precompile', 'obj')
-    await mkdir(objDir, { recursive: true })
+    // Discover the TU set from the stash so newly-moved files AND any
+    // leftovers from a previous failed run get picked up uniformly.
+    // Sorted for deterministic archive-member ordering downstream.
+    const stashEntries = (await readdir(sourcesStash)).filter((name) => name.endsWith('.cpp')).sort()
+    const sources = stashEntries.map((name) => join(sourcesStash, name))
+
+    if (sources.length === 0) {
+      throw new Error(
+        `handlePrecompileUserLib: no .cpp sources found under ${srcDir} or ${sourcesStash}`,
+      )
+    }
 
     // -I arguments are passed as bare argv entries (no extra quoting) —
     // execFile delivers them literally to the toolchain on every host.
@@ -1560,18 +1587,9 @@ class CompilerModule {
     )
     await execRecipeArgv(archiveArgv, { maxBuffer: execMaxBuffer })
 
-    // Move pre-compiled sources out of src/ so arduino-cli library discovery
-    // doesn't recompile them; preserved under precompile/sources/ for debug.
-    const sourcesStash = join(compilationPath, 'precompile', 'sources')
-    await mkdir(sourcesStash, { recursive: true })
-    for (const sourcePath of sources) {
-      const stashedPath = join(sourcesStash, path.basename(sourcePath))
-      await fs.rename(sourcePath, stashedPath)
-    }
-    handleOutputData(
-      `[precompile] Moved ${sources.length} compiled source(s) to precompile/sources/ (won't be recompiled by arduino-cli)`,
-      'info',
-    )
+    // Sources were stashed before compile (see `await fs.rename` block at
+    // the top of this method) so arduino-cli's library discovery doesn't
+    // see them in src/ at all. No post-archive move step needed.
 
     // arduino-cli's precompiled-lib resolution picks ONE subdir per core,
     // and the convention varies: AVR uses build.mcu ("atmega2560"), mbed

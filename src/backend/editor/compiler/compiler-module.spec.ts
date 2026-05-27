@@ -563,5 +563,58 @@ describe('CompilerModule', () => {
         }),
       ).rejects.toThrow(/compiler\.path \+ compiler\.ar\.cmd.*core is likely not installed/s)
     })
+
+    it('stashes sources before compile so a failed archive leaves a recoverable state for retry', async () => {
+      // Two strucpp-side TUs and the board HAL. After a failed first run
+      // we expect src/ to retain only arduino.cpp and the stash to hold
+      // the two pre-compile sources verbatim — a subsequent retry must
+      // pick them up from the stash and complete successfully.
+      fs.writeFileSync(join(srcDir, 'arduino.cpp'), '// HAL\n', 'utf-8')
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou body\n', 'utf-8')
+      fs.writeFileSync(join(srcDir, 'configuration.cpp'), '// config body\n', 'utf-8')
+
+      const stashDir = join(buildDir, 'precompile', 'sources')
+
+      let failNextArchive = true
+      execImpl.current = async (cmd) => {
+        if (cmd.includes('avr-ar') && failNextArchive) {
+          throw new Error('simulated archive failure')
+        }
+        return { stdout: '', stderr: '' }
+      }
+
+      await expect(
+        compilerModule.handlePrecompileUserLib({
+          compilationPath: buildDir,
+          fqbn: 'arduino:avr:uno',
+          handleOutputData: noopLog,
+        }),
+      ).rejects.toThrow(/simulated archive failure/)
+
+      // Post-failure state: stash holds the strucpp sources, src/ has only
+      // arduino.cpp — exactly the invariant arduino-cli depends on.
+      expect(fs.existsSync(join(stashDir, 'pou_MAIN.cpp'))).toBe(true)
+      expect(fs.existsSync(join(stashDir, 'configuration.cpp'))).toBe(true)
+      expect(fs.existsSync(join(srcDir, 'pou_MAIN.cpp'))).toBe(false)
+      expect(fs.existsSync(join(srcDir, 'configuration.cpp'))).toBe(false)
+      expect(fs.existsSync(join(srcDir, 'arduino.cpp'))).toBe(true)
+      // Content survived the move untouched (no truncation, no swap).
+      expect(fs.readFileSync(join(stashDir, 'pou_MAIN.cpp'), 'utf-8')).toBe('// pou body\n')
+
+      // Second run resolves the simulated failure and completes.
+      failNextArchive = false
+      const result = await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      // The TU set discovered from the stash matches the original two
+      // strucpp sources — order is deterministic (sorted basenames).
+      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual([
+        'configuration.o',
+        'pou_MAIN.o',
+      ])
+    })
   })
 })
