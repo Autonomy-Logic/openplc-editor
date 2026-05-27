@@ -19,8 +19,8 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
-import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
 import { DebugValueBadge } from '../debug-value-badge'
@@ -373,14 +373,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(
-      debugger_,
-      compositeKey,
-      debugIndex,
-      valueBuffer,
-      forcedValueForState,
-      variableType,
-    )
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, variableType)
 
     setForceValueModalOpen(false)
     setForceValue('')

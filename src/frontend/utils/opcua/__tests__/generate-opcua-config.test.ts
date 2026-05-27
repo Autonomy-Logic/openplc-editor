@@ -227,10 +227,7 @@ describe('generateOpcUaConfig', () => {
       makeNode({
         nodeType: 'structure',
         variablePath: 'SENSOR',
-        fields: [
-          makeField({ fieldPath: 'A', datatype: 'INT' }),
-          makeField({ fieldPath: 'B', datatype: 'REAL' }),
-        ],
+        fields: [makeField({ fieldPath: 'A', datatype: 'INT' }), makeField({ fieldPath: 'B', datatype: 'REAL' })],
       }),
     ]
     const json = generateOpcUaConfig(
@@ -394,9 +391,7 @@ describe('generateOpcUaConfig', () => {
 
   it('defaults arrayLength to 1 when not set', () => {
     const cfg = baseServerConfig()
-    cfg.addressSpace.nodes = [
-      makeNode({ nodeType: 'array', variablePath: 'A', variableType: 'ARRAY[1..1] OF INT' }),
-    ]
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'A', variableType: 'ARRAY[1..1] OF INT' })]
     const json = generateOpcUaConfig(
       [makePLCServer(cfg)],
       debugMapJson([{ path: 'INSTANCE0.A[0]', type: 'INT', arr: 0, elem: 0 }]),
@@ -441,9 +436,9 @@ describe('generateOpcUaConfig', () => {
       makeNode({ pouName: 'MAIN', variablePath: 'GHOST_A' }),
       makeNode({ pouName: 'MAIN', variablePath: 'GHOST_B' }),
     ]
-    expect(() => generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([{ path: 'X', type: 'INT', arr: 0, elem: 0 }]), instances)).toThrow(
-      /Failed to resolve 2 OPC-UA variable/,
-    )
+    expect(() =>
+      generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([{ path: 'X', type: 'INT', arr: 0, elem: 0 }]), instances),
+    ).toThrow(/Failed to resolve 2 OPC-UA variable/)
   })
 
   it('re-throws non-OpcUaConfigError from address space building', () => {
@@ -454,7 +449,11 @@ describe('generateOpcUaConfig', () => {
     })
     try {
       expect(() =>
-        generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([{ path: 'X', type: 'INT', arr: 0, elem: 0 }]), instances),
+        generateOpcUaConfig(
+          [makePLCServer(cfg)],
+          debugMapJson([{ path: 'X', type: 'INT', arr: 0, elem: 0 }]),
+          instances,
+        ),
       ).toThrow('boom')
     } finally {
       spy.mockRestore()

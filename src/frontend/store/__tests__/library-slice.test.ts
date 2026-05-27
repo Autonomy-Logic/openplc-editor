@@ -268,9 +268,7 @@ describe('createLibrarySlice', () => {
 
   describe('setProjectLibraries', () => {
     it('marks pool entries as enabled, leaves the rest under missing', () => {
-      store.getState().libraryActions.setSystemLibraries([
-        makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' }),
-      ])
+      store.getState().libraryActions.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' })])
       store.getState().libraryActions.setProjectLibraries([
         { name: 'oscat-basic', version: '3.4.0' },
         { name: 'phantom', version: '0.1.0' },
@@ -281,10 +279,12 @@ describe('createLibrarySlice', () => {
     })
 
     it('clears the previous project view when called with a different list', () => {
-      store.getState().libraryActions.setSystemLibraries([
-        makeSystemLibrary({ name: 'oscat-basic' }),
-        makeSystemLibrary({ name: 'additional-fb' }),
-      ])
+      store
+        .getState()
+        .libraryActions.setSystemLibraries([
+          makeSystemLibrary({ name: 'oscat-basic' }),
+          makeSystemLibrary({ name: 'additional-fb' }),
+        ])
       const a = store.getState().libraryActions
       a.setProjectLibraries([{ name: 'oscat-basic', version: '3.4.0' }])
       expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
@@ -312,9 +312,7 @@ describe('createLibrarySlice', () => {
 
   describe('enableLibrary', () => {
     it('adds the library name to enabledLibraries when it lives in the pool', () => {
-      store.getState().libraryActions.setSystemLibraries([
-        makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' }),
-      ])
+      store.getState().libraryActions.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' })])
       store.getState().libraryActions.enableLibrary('oscat-basic')
       expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
     })

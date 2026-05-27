@@ -4,17 +4,14 @@ import { basename, extname, join } from 'path'
 
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
+import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../../shared/library/installed-library-rows'
 import {
-  bundledArchiveToInstalledRow,
-  userArchiveToInstalledRow,
-} from '../../shared/library/installed-library-rows'
-import {
-  type PreparedLibrary,
   prepareCodesysUpload,
+  type PreparedLibrary,
   prepareStlibUpload,
 } from '../../shared/library/prepare-library-upload'
-import { assertPathContained } from '../utils/path-containment'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { assertPathContained } from '../utils/path-containment'
 import type { LibraryRegistry } from './types'
 
 /**
@@ -45,8 +42,7 @@ export class LibraryManagerModule {
   constructor(opts?: { librariesDir?: string; bundledDir?: string }) {
     this.librariesDir = opts?.librariesDir ?? join(app.getPath('userData'), 'libraries')
     this.registryPath = join(this.librariesDir, 'registry.json')
-    this.bundledDir =
-      opts?.bundledDir ?? this.resolveDefaultBundledDir()
+    this.bundledDir = opts?.bundledDir ?? this.resolveDefaultBundledDir()
     mkdirSync(this.librariesDir, { recursive: true })
   }
 
@@ -240,10 +236,7 @@ export class LibraryManagerModule {
     // to either backend's storage.
     let prepared: PreparedLibrary
     try {
-      prepared = await prepareCodesysUpload(
-        new Uint8Array(readFileSync(filePath)),
-        basename(filePath),
-      )
+      prepared = await prepareCodesysUpload(new Uint8Array(readFileSync(filePath)), basename(filePath))
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -309,7 +302,9 @@ export class LibraryManagerModule {
       this.bundledNamesCache = new Set()
       return []
     }
-    const entries = readdirSync(this.bundledDir).filter((f) => f.endsWith('.stlib')).sort()
+    const entries = readdirSync(this.bundledDir)
+      .filter((f) => f.endsWith('.stlib'))
+      .sort()
     const archives: StlibArchiveDTO[] = []
     const names = new Set<string>()
     for (const file of entries) {

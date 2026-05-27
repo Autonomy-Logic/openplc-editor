@@ -39,8 +39,6 @@ export function assertPathContained(parent: string, child: string, fieldName: st
   const childResolved = path.resolve(child)
   const rel = path.relative(parentResolved, childResolved)
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(
-      `${fieldName} resolves outside of ${parentResolved} (got ${childResolved})`,
-    )
+    throw new Error(`${fieldName} resolves outside of ${parentResolved} (got ${childResolved})`)
   }
 }

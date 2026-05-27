@@ -26,10 +26,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
   /** Mutate the project's durable list under the same wide-state
    *  draft.  No-op when the project slice isn't present (test
    *  harness). */
-  const mutateProjectRefs = (
-    state: LibrarySlice,
-    fn: (refs: LibraryProjectRef[]) => LibraryProjectRef[],
-  ): void => {
+  const mutateProjectRefs = (state: LibrarySlice, fn: (refs: LibraryProjectRef[]) => LibraryProjectRef[]): void => {
     const wider = state as unknown as Partial<SharedRootState>
     if (!wider.project) return
     if (!wider.project.data.libraries) wider.project.data.libraries = []
@@ -55,9 +52,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         // by construction; no per-component defensive code.
         const sanitized = libraries.map((lib) => ({
           ...lib,
-          pous: (lib.pous ?? []).filter(
-            (pou) => typeof pou?.name === 'string' && pou.name.length > 0,
-          ),
+          pous: (lib.pous ?? []).filter((pou) => typeof pou?.name === 'string' && pou.name.length > 0),
         }))
         setState(
           produce((state: LibrarySlice) => {

@@ -4,12 +4,10 @@
 import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util'
 
 if (typeof globalThis.TextEncoder === 'undefined') {
-  ;(globalThis as { TextEncoder: typeof TextEncoder }).TextEncoder =
-    NodeTextEncoder as unknown as typeof TextEncoder
+  ;(globalThis as { TextEncoder: typeof TextEncoder }).TextEncoder = NodeTextEncoder as unknown as typeof TextEncoder
 }
 if (typeof globalThis.TextDecoder === 'undefined') {
-  ;(globalThis as { TextDecoder: typeof TextDecoder }).TextDecoder =
-    NodeTextDecoder as unknown as typeof TextDecoder
+  ;(globalThis as { TextDecoder: typeof TextDecoder }).TextDecoder = NodeTextDecoder as unknown as typeof TextDecoder
 }
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../../simulator/types'
@@ -84,9 +82,9 @@ describe('parseGetMd5Response', () => {
   })
 
   it('throws on function code mismatch', () => {
-    expect(() =>
-      parseGetMd5Response(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS, 0xad, 0xde])),
-    ).toThrow('Function code mismatch')
+    expect(() => parseGetMd5Response(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS, 0xad, 0xde]))).toThrow(
+      'Function code mismatch',
+    )
   })
 
   it('throws on error status OUT_OF_BOUNDS', () => {

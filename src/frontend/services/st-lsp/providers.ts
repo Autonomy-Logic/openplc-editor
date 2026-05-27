@@ -85,10 +85,7 @@ function effectiveLspContext(modelUri: string): { lspUri: string; lineOffset: nu
   return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
 }
 
-export function registerStLspProviders({
-  connection,
-  monacoApi,
-}: ProviderOptions): monaco.IDisposable {
+export function registerStLspProviders({ connection, monacoApi }: ProviderOptions): monaco.IDisposable {
   const disposables: monaco.IDisposable[] = []
 
   // -------------------------------------------------------------------------
@@ -220,12 +217,7 @@ export function registerStLspProviders({
           position: monacoPositionToLsp(position, offset),
           context: { includeDeclaration: context.includeDeclaration },
         })
-        return (
-          (lspLocationsToMonaco(
-            result,
-            monacoApi,
-          ) as monaco.languages.Location[] | null) ?? []
-        )
+        return (lspLocationsToMonaco(result, monacoApi) as monaco.languages.Location[] | null) ?? []
       },
     }),
   )
@@ -249,13 +241,9 @@ export function registerStLspProviders({
         if (result.length === 0) return []
         if ('range' in result[0]) {
           // DocumentSymbol[]
-          return (result as DocumentSymbol[]).map((s) =>
-            lspDocumentSymbolToMonaco(s, monacoApi, offset),
-          )
+          return (result as DocumentSymbol[]).map((s) => lspDocumentSymbolToMonaco(s, monacoApi, offset))
         }
-        return (result as SymbolInformation[]).map((s) =>
-          symbolInformationToDocumentSymbol(s, offset),
-        )
+        return (result as SymbolInformation[]).map((s) => symbolInformationToDocumentSymbol(s, offset))
       },
     }),
   )
@@ -353,10 +341,9 @@ export function registerStLspSemanticTokens({
     onDidChange: changeEmitter.event,
     async provideDocumentSemanticTokens(model): Promise<monaco.languages.SemanticTokens | null> {
       const { lspUri, lineOffset } = effectiveLspContext(model.uri.toString())
-      const result: SemanticTokens | null = await connection.sendRequest(
-        SemanticTokensRequest.type,
-        { textDocument: { uri: lspUri } },
-      )
+      const result: SemanticTokens | null = await connection.sendRequest(SemanticTokensRequest.type, {
+        textDocument: { uri: lspUri },
+      })
       if (!result) return null
       // For body editors: keep tokens at LSP line >= lineOffset (skip
       // the synthesized declaration + VAR preamble) and shift down.
@@ -515,16 +502,11 @@ function lspDocumentSymbolToMonaco(
     range: lspRangeToMonaco(sym.range, lineOffset),
     selectionRange: lspRangeToMonaco(sym.selectionRange, lineOffset),
     tags: [],
-    children: (sym.children ?? []).map((c) =>
-      lspDocumentSymbolToMonaco(c, monacoApi, lineOffset),
-    ),
+    children: (sym.children ?? []).map((c) => lspDocumentSymbolToMonaco(c, monacoApi, lineOffset)),
   }
 }
 
-function symbolInformationToDocumentSymbol(
-  sym: SymbolInformation,
-  lineOffset = 0,
-): monaco.languages.DocumentSymbol {
+function symbolInformationToDocumentSymbol(sym: SymbolInformation, lineOffset = 0): monaco.languages.DocumentSymbol {
   return {
     name: sym.name,
     detail: sym.containerName ?? '',

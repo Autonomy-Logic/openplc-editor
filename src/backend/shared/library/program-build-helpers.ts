@@ -60,6 +60,89 @@ export function buildKnownPous(pous: PLCPou[]): KnownPou[] {
  * new fields are populated (e.g. errors in synthetic _types.st /
  * _config.st sections, or before the splitter ran).
  */
+/**
+ * Strucpp populates `pouName` / `section` / `bodyLine` on errors during
+ * its semantic annotation pass.  Parse errors short-circuit that pass:
+ * they ship with `file` (the per-POU `.st` filename) and `line`/`column`,
+ * but no POU context — so both the editor's bracketed click target
+ * (rendered from `formatErrorWithPouContext`) and the navigation hook's
+ * `pouName` lookup (see `use-navigate-to-compile-error.ts`) lose their
+ * anchor and clicking the diagnostic becomes a no-op.
+ *
+ * Derive the missing fields from the filename + per-POU source:
+ *   - `pouName` / `pouKind` come from matching `err.file` against the
+ *     project's known POUs (case-insensitive — strucpp uppercases per
+ *     IEC).
+ *   - `section` / `bodyLine` come from scanning the synthetic per-POU
+ *     `.st` text the splitter handed strucpp.  Body starts on the line
+ *     after the last `END_VAR` (or line 2 when the POU has no var
+ *     blocks).  Errors before that boundary are tagged `'var-block'`;
+ *     errors at/after it are `'body'` with the offset remapped to the
+ *     body view's 1-indexed numbering.
+ *
+ * Returns the error unchanged when there's nothing useful to add
+ * (already enriched, no filename, or no matching POU).
+ */
+export function enrichErrorWithPouContext(
+  err: StrucppCompileError,
+  pous: KnownPou[],
+  perPouSources?: Map<string, string>,
+): StrucppCompileError {
+  if (err.pouName) return err
+  if (!err.file) return err
+  const baseName = err.file.replace(/\.st$/i, '')
+  const pou = pous.find((p) => p.name.toLowerCase() === baseName.toLowerCase())
+  if (!pou) return err
+
+  const enriched: StrucppCompileError = { ...err, pouName: pou.name, pouKind: pou.kind }
+
+  // Case-insensitive filename lookup: strucpp may emit `cvavava.st`
+  // (lowercase) while the splitter keyed the map by the project's
+  // canonical casing.  Matching pouName already normalised via the
+  // pou table lookup above, but the per-POU file map is keyed by the
+  // filename string strucpp can echo back in any case the user
+  // originally typed.
+  let source: string | undefined
+  if (perPouSources) {
+    const targetKey = err.file.toLowerCase()
+    for (const [key, value] of perPouSources) {
+      if (key.toLowerCase() === targetKey) {
+        source = value
+        break
+      }
+    }
+  }
+  if (source && err.line > 0) {
+    const lines = source.split('\n')
+    let lastEndVar = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*END_VAR\b/i.test(lines[i])) lastEndVar = i + 1 // 1-indexed
+    }
+    // Body starts after the last END_VAR, but the ST generator
+    // (`pou-text-serializer.ts` and xml2st on the compile path)
+    // inserts blank separator lines between END_VAR and the body
+    // content.  Those blank lines exist in the per-POU file the
+    // splitter handed strucpp but NOT in `pou.body.value`, which is
+    // what the body Monaco editor renders.  Counting them shifts
+    // bodyLine past the editor's actual line count and used to
+    // surface as `BugIndicatingError: Illegal value for lineNumber`
+    // from `getLineMaxColumn` on click-to-navigate.  Scan past any
+    // consecutive blank lines to land on the first real body line.
+    let bodyStart = lastEndVar > 0 ? lastEndVar + 1 : 2
+    while (bodyStart <= lines.length && /^\s*$/.test(lines[bodyStart - 1])) {
+      bodyStart++
+    }
+    if (err.line >= bodyStart) {
+      enriched.section = 'body'
+      enriched.bodyLine = err.line - bodyStart + 1
+    } else if (err.line >= 2) {
+      enriched.section = 'var-block'
+    }
+  }
+
+  return enriched
+}
+
 export function formatErrorWithPouContext(
   err: StrucppCompileError,
   formatDiagnostic: StrucppFormatDiagnostic,
@@ -85,4 +168,49 @@ export function formatErrorWithPouContext(
     prefix = `[${err.pouName}]`
   }
   return `${prefix}\n${base}`
+}
+
+/**
+ * Platform-agnostic log sink the compile orchestrator hands to
+ * `emitCompileErrorEvents`.  Editor and web wire this to their
+ * respective channels — Electron's `handleOutputData(text, level,
+ * compileError?)` IPC callback, and web's `onProgress({ stage:
+ * 'error', message, compileError? })` event bus — by adapting their
+ * own signature to this minimal shape inside a one-line closure.
+ *
+ * Keeping the adapter trivial is the whole point: the iteration
+ * pattern + bracketed header + per-error attachment of
+ * `compileError` lives in one shared place, while platforms keep
+ * full control of how the emission actually reaches the renderer.
+ */
+export type CompileLogEmit = (message: string, level: 'info' | 'error', compileError?: StrucppCompileError) => void
+
+/**
+ * Emit one log entry per error in a failed strucpp pipeline result,
+ * with the structured `CompileError` attached to each line.
+ *
+ * The renderer's console (see `console/log.tsx`) keys click-to-open
+ * navigation off `compileError.pouName`.  Joining errors into a
+ * single string discards that structured data and breaks the
+ * bracketed-prefix click target — every consumer must funnel through
+ * here so the shape stays uniform across platforms.
+ *
+ * Emits a plain "STruC++ compilation failed:" header first (no
+ * `compileError` — it's a section break, not navigable), then one
+ * event per error carrying `err.raw`.  Callers should pass through
+ * the diagnostics exactly as returned by `runProgramBuildPipeline`;
+ * no preprocessing is required.
+ */
+export function emitCompileErrorEvents(
+  errors: { formatted: string; raw: StrucppCompileError }[],
+  emit: CompileLogEmit,
+): void {
+  emit('STruC++ compilation failed:', 'error')
+  for (const err of errors) {
+    // Falsy fallback (`||`) rather than nullish (`??`) so an
+    // accidentally-empty `formatted` (defensive, the pipeline never
+    // produces one in practice) still surfaces something readable
+    // from the raw strucpp message instead of an empty log row.
+    emit(err.formatted || err.raw?.message || 'unknown error', 'error', err.raw)
+  }
 }

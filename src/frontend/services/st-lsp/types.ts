@@ -120,9 +120,7 @@ export function pouVarsUri(name: string): string {
  * route queries to the corresponding live `pou://` document.
  */
 export function parsePouVarsUri(uri: string): string | null {
-  const match = new RegExp(
-    `^${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/(.+)\\.st$`,
-  ).exec(uri)
+  const match = new RegExp(`^${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/(.+)\\.st$`).exec(uri)
   if (!match) return null
   return decodeURIComponent(match[1])
 }
@@ -142,12 +140,8 @@ export const POU_DECLARATION_LINE_COUNT = 1
  * patterns.  Callers use this to map LSP definition / reference
  * URIs back to project entities.
  */
-export function parsePouUri(
-  uri: string,
-): { kind: 'pou' | 'stub'; name: string } | null {
-  const match = new RegExp(
-    `^${POU_URI_SCHEME}://(${POU_URI_AUTHORITY}|${STUB_URI_AUTHORITY})/(.+)\\.st$`,
-  ).exec(uri)
+export function parsePouUri(uri: string): { kind: 'pou' | 'stub'; name: string } | null {
+  const match = new RegExp(`^${POU_URI_SCHEME}://(${POU_URI_AUTHORITY}|${STUB_URI_AUTHORITY})/(.+)\\.st$`).exec(uri)
   if (!match) return null
   return {
     kind: match[1] === POU_URI_AUTHORITY ? 'pou' : 'stub',

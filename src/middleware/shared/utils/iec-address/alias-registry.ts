@@ -84,11 +84,7 @@ export function aliasForAddress(registry: AliasRegistry, address: string): strin
 /** True when the alias name is not currently in use by any producer.
  *  Used by the system-wide uniqueness validator (Phase 5) — newly
  *  typed alias names go through this check before being committed. */
-export function isAliasNameAvailable(
-  registry: AliasRegistry,
-  alias: string,
-  ignoring?: SourceRef,
-): boolean {
+export function isAliasNameAvailable(registry: AliasRegistry, alias: string, ignoring?: SourceRef): boolean {
   const entry = registry.byAlias.get(alias)
   if (!entry) return true
   if (!ignoring) return false

@@ -37,7 +37,7 @@ import type * as strucpp from 'strucpp'
 
 import type { KnownPou } from '../utils/PLC/split-program-st'
 import { splitProgramSt } from '../utils/PLC/split-program-st'
-import { formatErrorWithPouContext } from './program-build-helpers'
+import { enrichErrorWithPouContext, formatErrorWithPouContext } from './program-build-helpers'
 import { loadStrucpp } from './strucpp-runtime'
 
 type StrucppCompileError = strucpp.CompileError
@@ -196,18 +196,32 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     : [{ fileName: stFileName, source }]
   const diagSourceMap = strucppBuildSourceMap(diagFiles)
 
+  // Per-POU file map so the error enricher can locate `END_VAR` and
+  // remap parse-error line numbers into the editor's body / var-block
+  // sections.  Only meaningful when the splitter ran — monolithic
+  // fallback skips enrichment, which is fine because the only
+  // available filename there is `program.st` and there's no per-POU
+  // segmentation to remap into.
+  const perPouSources = split ? split.files : undefined
+
   if (!result.success) {
     return {
       success: false,
       files: [],
-      errors: result.errors.map((err) => ({
-        formatted: formatErrorWithPouContext(err, strucppFormatDiagnostic, diagSourceMap),
-        raw: err,
-      })),
-      warnings: result.warnings.map((warn) => ({
-        formatted: formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap),
-        raw: warn,
-      })),
+      errors: result.errors.map((err) => {
+        const enriched = enrichErrorWithPouContext(err, pous, perPouSources)
+        return {
+          formatted: formatErrorWithPouContext(enriched, strucppFormatDiagnostic, diagSourceMap),
+          raw: enriched,
+        }
+      }),
+      warnings: result.warnings.map((warn) => {
+        const enriched = enrichErrorWithPouContext(warn, pous, perPouSources)
+        return {
+          formatted: formatErrorWithPouContext(enriched, strucppFormatDiagnostic, diagSourceMap),
+          raw: enriched,
+        }
+      }),
       md5Hash: md5,
       splitterFallbackMessage,
       debugMapSummary: null,
@@ -263,10 +277,13 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     success: true,
     files,
     errors: [],
-    warnings: result.warnings.map((warn) => ({
-      formatted: formatErrorWithPouContext(warn, strucppFormatDiagnostic, diagSourceMap),
-      raw: warn,
-    })),
+    warnings: result.warnings.map((warn) => {
+      const enriched = enrichErrorWithPouContext(warn, pous, perPouSources)
+      return {
+        formatted: formatErrorWithPouContext(enriched, strucppFormatDiagnostic, diagSourceMap),
+        raw: enriched,
+      }
+    }),
     md5Hash: md5,
     splitterFallbackMessage,
     debugMapSummary,

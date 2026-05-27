@@ -153,7 +153,5 @@ export function encodeConfigBytes(
 
 /** Format bytes as a space-separated hex string, e.g. "40 03 60 05". */
 export function bytesToHexString(bytes: number[]): string {
-  return bytes
-    .map((b) => (b & 0xff).toString(16).padStart(2, '0').toUpperCase())
-    .join(' ')
+  return bytes.map((b) => (b & 0xff).toString(16).padStart(2, '0').toUpperCase()).join(' ')
 }

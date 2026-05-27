@@ -1,13 +1,8 @@
-import {
-  BASE_TYPE_NAMES,
-  IEC_BASE_TYPES,
-  isBaseTypeName,
-  lookupBaseType,
-} from '../iec-types-registry'
+import { BASE_TYPE_NAMES, IEC_BASE_TYPES, isBaseTypeName, lookupBaseType } from '../iec-types-registry'
 
 describe('iec-types-registry', () => {
   describe('IEC_BASE_TYPES', () => {
-    it('loads strucpp\'s full elementary type list', () => {
+    it("loads strucpp's full elementary type list", () => {
       // Spot-check across categories — the strucpp side has its own
       // full pin suite. Failure here means the JSON shipped with the
       // bundled strucpp lost rows.
@@ -94,7 +89,7 @@ describe('iec-types-registry', () => {
       expect(BASE_TYPE_NAMES).not.toContain('DATE_AND_TIME')
     })
 
-    it('preserves the order from strucpp\'s canonical list', () => {
+    it("preserves the order from strucpp's canonical list", () => {
       // Order is stable and intended for UI dropdowns. If strucpp
       // reorders, the editor follows.
       expect(BASE_TYPE_NAMES.length).toBe(IEC_BASE_TYPES.length)

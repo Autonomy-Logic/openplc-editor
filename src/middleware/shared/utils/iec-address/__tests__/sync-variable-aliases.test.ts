@@ -5,7 +5,9 @@ import { syncMadeChanges, syncVariableAliases, type SyncableVariable } from '../
 
 const vppCaps = { ...RUNTIME_V4_CAPABILITIES, vppIo: true }
 
-function buildRegistryFromVpp(entries: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }>) {
+function buildRegistryFromVpp(
+  entries: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }>,
+) {
   const pool = buildAddressPool({ vendorIoMapping: { entries } }, vppCaps)
   return buildAliasRegistry(pool)
 }
@@ -27,7 +29,7 @@ describe('syncVariableAliases', () => {
     expect(result.report.orphaned).toEqual([])
   })
 
-  it('adopts an alias when a variable\'s location matches a registry entry (self-upgrade)', () => {
+  it("adopts an alias when a variable's location matches a registry entry (self-upgrade)", () => {
     const registry = buildRegistryFromVpp([
       { iecAddress: '%QX0.0', alias: 'conveyor_motor', slot: 1, channelName: 'DO1' },
     ])
@@ -35,9 +37,7 @@ describe('syncVariableAliases', () => {
     const result = syncVariableAliases(vars, registry)
     expect(result.variables[0].alias).toBe('conveyor_motor')
     expect(result.variables[0].location).toBe('%QX0.0')
-    expect(result.report.adopted).toEqual([
-      { varName: 'motor', alias: 'conveyor_motor', address: '%QX0.0' },
-    ])
+    expect(result.report.adopted).toEqual([{ varName: 'motor', alias: 'conveyor_motor', address: '%QX0.0' }])
   })
 
   it('refreshes location when the alias has moved to a new address', () => {
@@ -54,9 +54,7 @@ describe('syncVariableAliases', () => {
   })
 
   it('leaves location and alias intact when the alias is still bound to the same address', () => {
-    const registry = buildRegistryFromVpp([
-      { iecAddress: '%IW3', alias: 'tank_level', slot: 2, channelName: 'AI1' },
-    ])
+    const registry = buildRegistryFromVpp([{ iecAddress: '%IW3', alias: 'tank_level', slot: 2, channelName: 'AI1' }])
     const vars = [VAR({ name: 'tank', location: '%IW3', alias: 'tank_level' })]
     const result = syncVariableAliases(vars, registry)
     expect(result.variables).toEqual(vars)
@@ -70,9 +68,7 @@ describe('syncVariableAliases', () => {
     // Variable kept as-is so the user can re-bind manually.
     expect(result.variables[0].location).toBe('%QX2.0')
     expect(result.variables[0].alias).toBe('removed_module')
-    expect(result.report.orphaned).toEqual([
-      { varName: 'ghost', alias: 'removed_module', lastKnownAddress: '%QX2.0' },
-    ])
+    expect(result.report.orphaned).toEqual([{ varName: 'ghost', alias: 'removed_module', lastKnownAddress: '%QX2.0' }])
     expect(result.report.adopted).toEqual([])
     expect(result.report.refreshed).toEqual([])
   })
@@ -109,9 +105,7 @@ describe('syncVariableAliases', () => {
       {
         // VPP: alias "tank_level" relocated from %IW2 to %IW10.
         vendorIoMapping: {
-          entries: [
-            { iecAddress: '%IW10', alias: 'tank_level', slot: 1, channelName: 'AI0' },
-          ],
+          entries: [{ iecAddress: '%IW10', alias: 'tank_level', slot: 1, channelName: 'AI0' }],
         },
         remoteDevices: [
           {
@@ -160,9 +154,7 @@ describe('syncVariableAliases', () => {
   })
 
   it('preserves carry-through fields (type, class, etc.) on changed variables', () => {
-    const registry = buildRegistryFromVpp([
-      { iecAddress: '%QX0.0', alias: 'motor', slot: 1, channelName: 'DO1' },
-    ])
+    const registry = buildRegistryFromVpp([{ iecAddress: '%QX0.0', alias: 'motor', slot: 1, channelName: 'DO1' }])
     const vars = [
       {
         name: 'motor',
@@ -183,9 +175,9 @@ describe('syncVariableAliases', () => {
 
 describe('syncMadeChanges', () => {
   it('returns true when adopted is non-empty', () => {
-    expect(syncMadeChanges({ adopted: [{ varName: 'v', alias: 'a', address: 'x' }], refreshed: [], orphaned: [] })).toBe(
-      true,
-    )
+    expect(
+      syncMadeChanges({ adopted: [{ varName: 'v', alias: 'a', address: 'x' }], refreshed: [], orphaned: [] }),
+    ).toBe(true)
   })
 
   it('returns true when refreshed is non-empty', () => {

@@ -103,9 +103,7 @@ export const BuildOptionsPopover = ({
                 <ActivityBarButton
                   aria-label='Build options'
                   disabled={disabled}
-                  className={cn(
-                    disabled && 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent',
-                  )}
+                  className={cn(disabled && 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')}
                 >
                   <DownloadIcon />
                 </ActivityBarButton>

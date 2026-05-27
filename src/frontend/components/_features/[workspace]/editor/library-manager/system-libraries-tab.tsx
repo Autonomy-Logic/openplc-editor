@@ -169,7 +169,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                 aria-selected={selectedName === lib.name}
                 className={`flex w-full items-center justify-between border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 dark:border-neutral-800 ${
                   selectedName === lib.name
-                    ? 'bg-brand/20 font-medium shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-brand/30'
+                    ? 'bg-brand/20 dark:bg-brand/30 font-medium shadow-[inset_3px_0_0_var(--primary-default)]'
                     : 'hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 }`}
               >
@@ -179,15 +179,11 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                   </span>
                   <span className='text-[11px] text-neutral-500 dark:text-neutral-400'>
                     v{lib.version}
-                    {lib.bundled
-                      ? ' · bundled'
-                      : lib.origin === 'codesys'
-                        ? ' · CODESYS import'
-                        : ''}
+                    {lib.bundled ? ' · bundled' : lib.origin === 'codesys' ? ' · CODESYS import' : ''}
                   </span>
                 </div>
                 {lib.bundled && (
-                  <span className='rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'>
+                  <span className='bg-brand/15 rounded-full px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'>
                     bundled
                   </span>
                 )}

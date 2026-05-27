@@ -22,6 +22,8 @@ beforeEach(() => {
     }),
     runtimeClearCredentials: jest.fn().mockResolvedValue({ success: true }),
     onRuntimeTokenRefreshed: jest.fn().mockImplementation(() => jest.fn()),
+    runtimeDiscoverDevices: jest.fn().mockResolvedValue({ success: true, devices: [] }),
+    onRuntimeDeviceDiscovered: jest.fn().mockImplementation(() => jest.fn()),
   } as unknown as typeof window.bridge
 
   adapter = createEditorRuntimeAdapter(() => mockIpAddress)
@@ -384,6 +386,55 @@ describe('IP address getter', () => {
 // ---------------------------------------------------------------------------
 // isReadyForDebug
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// discoverDevices / onDeviceDiscovered
+// ---------------------------------------------------------------------------
+
+describe('discoverDevices', () => {
+  it('delegates to bridge with options', async () => {
+    const devices = [{ ipAddress: '192.168.1.50', hostname: 'plc-1', runtimeVersion: 'v4.1.0', apiPort: 8443 }]
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({ success: true, devices })
+
+    const result = await adapter.discoverDevices!({ durationMs: 2000 })
+
+    expect(window.bridge.runtimeDiscoverDevices).toHaveBeenCalledWith({ durationMs: 2000 })
+    expect(result).toEqual({ success: true, devices })
+  })
+
+  it('works without options', async () => {
+    await adapter.discoverDevices!()
+    expect(window.bridge.runtimeDiscoverDevices).toHaveBeenCalledWith(undefined)
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockRejectedValue(new Error('UDP bind failed'))
+    const result = await adapter.discoverDevices!()
+    expect(result).toEqual({ success: false, error: 'UDP bind failed' })
+  })
+})
+
+describe('onDeviceDiscovered', () => {
+  it('subscribes to bridge events and forwards device payload', () => {
+    let bridgeHandler: ((_event: unknown, device: unknown) => void) | null = null
+    const unsubscribe = jest.fn()
+    ;(window.bridge.onRuntimeDeviceDiscovered as jest.Mock).mockImplementation(
+      (handler: (_event: unknown, device: unknown) => void) => {
+        bridgeHandler = handler
+        return unsubscribe
+      },
+    )
+
+    const callback = jest.fn()
+    const unsub = adapter.onDeviceDiscovered!(callback)
+
+    const device = { ipAddress: '10.0.0.5', hostname: 'rpi-3', runtimeVersion: 'v4.1.0', apiPort: 8443 }
+    bridgeHandler!({}, device)
+
+    expect(callback).toHaveBeenCalledWith(device)
+    expect(unsub).toBe(unsubscribe)
+  })
+})
 
 describe('isReadyForDebug', () => {
   it('returns false when no IP and no token', () => {

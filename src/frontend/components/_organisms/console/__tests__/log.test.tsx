@@ -150,8 +150,7 @@ describe('LogComponent compile-error click affordance', () => {
 
   it('still renders the multi-line snippet underneath the clickable prefix', () => {
     const onClick = jest.fn()
-    const message =
-      '[MANUAL_OVERRIDE / body line 7]\nManual_Override.st:7:10: error: Cannot assign WSTRING to BOOL'
+    const message = '[MANUAL_OVERRIDE / body line 7]\nManual_Override.st:7:10: error: Cannot assign WSTRING to BOOL'
     render(
       <LogComponent
         level='error'

@@ -1,8 +1,5 @@
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import {
-  OPAQUE_BODY_PLACEHOLDER,
-  serializePouSignatureToST,
-} from '../pou-signature-serializer'
+import { OPAQUE_BODY_PLACEHOLDER, serializePouSignatureToST } from '../pou-signature-serializer'
 
 function makePou(overrides: Partial<PLCPou> = {}): PLCPou {
   return {
@@ -138,7 +135,8 @@ describe('serializePouSignatureToST', () => {
         body: { language: 'fbd', value: {} as never },
       })
       const result = serializePouSignatureToST(pou)
-      expect(result).toContain('VAR\nEND_VAR')
+      // Block keywords carry the xml2st-parity 2-space indent.
+      expect(result).toContain('  VAR\n  END_VAR')
     })
 
     it('respects variable class — input goes to VAR_INPUT', () => {
@@ -149,10 +147,10 @@ describe('serializePouSignatureToST', () => {
         body: { language: 'ld', value: {} as never },
       })
       const lines = serializePouSignatureToST(pou).split('\n')
-      const inputBlockStart = lines.findIndex((l) => l.startsWith('VAR_INPUT'))
-      const inputBlockEnd = lines.findIndex(
-        (l, idx) => idx > inputBlockStart && l.startsWith('END_VAR'),
-      )
+      // Block keywords ship with a 2-space indent now; the closing
+      // keyword check needs to ignore that prefix.
+      const inputBlockStart = lines.findIndex((l) => l.trimStart().startsWith('VAR_INPUT'))
+      const inputBlockEnd = lines.findIndex((l, idx) => idx > inputBlockStart && l.trimStart().startsWith('END_VAR'))
       const inputSlice = lines.slice(inputBlockStart, inputBlockEnd + 1).join('\n')
       expect(inputSlice).toContain('in1')
       expect(inputSlice).not.toContain('out1')

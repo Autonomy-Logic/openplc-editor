@@ -67,15 +67,14 @@ function makeMonacoStub() {
 
   return {
     Uri: {
-      parse: (uri: string) => ({
-        toString: () => uri,
-      }) as unknown as ReturnType<typeof import('monaco-editor').Uri.parse>,
+      parse: (uri: string) =>
+        ({
+          toString: () => uri,
+        }) as unknown as ReturnType<typeof import('monaco-editor').Uri.parse>,
     },
     editor: {
       getModel: (uri: { toString: () => string }) =>
-        (wrappers.get(uri.toString()) ?? null) as unknown as ReturnType<
-          typeof import('monaco-editor').editor.getModel
-        >,
+        (wrappers.get(uri.toString()) ?? null) as unknown as ReturnType<typeof import('monaco-editor').editor.getModel>,
       createModel: (value: string, language: string, uri: { toString: () => string }) => {
         const m: FakeModel = {
           uri: uri.toString(),

@@ -68,9 +68,7 @@ describe('attachProjectSync', () => {
 
     expect(service.openDocument).toHaveBeenCalledTimes(2)
     const calls = service.openDocument.mock.calls.map((c) => c[0])
-    expect(calls).toEqual(
-      expect.arrayContaining(['inmemory://pou/Main.st', 'inmemory://stub/TankFB.st']),
-    )
+    expect(calls).toEqual(expect.arrayContaining(['inmemory://pou/Main.st', 'inmemory://stub/TankFB.st']))
     handle.dispose()
   })
 
@@ -145,7 +143,7 @@ describe('attachProjectSync', () => {
     handle.dispose()
   })
 
-  it('regenerates stub text when a graphical POU\'s variable interface changes', () => {
+  it("regenerates stub text when a graphical POU's variable interface changes", () => {
     const initial = makeFbdPou('Tank')
     setProjectPous([initial])
     const service = makeStubService()

@@ -7,13 +7,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
 
-type CreatePLCElementType =
-  | 'function'
-  | 'function-block'
-  | 'program'
-  | 'data-type'
-  | 'server'
-  | 'remote-device'
+type CreatePLCElementType = 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
 
 const CreatePLCElement = () => {
   const {

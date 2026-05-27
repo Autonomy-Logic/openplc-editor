@@ -282,14 +282,16 @@ describe('generateVendorPluginConfig', () => {
       },
     }
     const result = generateVendorPluginConfig({}, data, [channelsByFormatModule])
-    const slot = (result.slots as Array<{
-      io_mapping: {
-        analog_inputs?: unknown
-        analog_outputs?: unknown
-        analog_real_inputs?: unknown
-        analog_real_outputs?: unknown
-      }
-    }>)[0]
+    const slot = (
+      result.slots as Array<{
+        io_mapping: {
+          analog_inputs?: unknown
+          analog_outputs?: unknown
+          analog_real_inputs?: unknown
+          analog_real_outputs?: unknown
+        }
+      }>
+    )[0]
     expect(slot.io_mapping.analog_real_inputs).toEqual({ base_dword: 0, count: 2 })
     expect(slot.io_mapping.analog_real_outputs).toEqual({ base_dword: 0, count: 1 })
     expect(slot.io_mapping.analog_inputs).toBeUndefined()

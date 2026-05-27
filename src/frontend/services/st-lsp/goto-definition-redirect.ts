@@ -29,9 +29,9 @@
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType } from '../../../middleware/shared/ports/types'
-import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
+import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { getBodyLineOffset } from './body-offsets'
 import { DATA_TYPES_URI, parsePouUri } from './types'
 
@@ -61,9 +61,7 @@ function normaliseLocation(loc: Location | LocationLink): NavTarget {
  */
 type TabLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
-function buildTabPropsForPou(name: string):
-  | Parameters<typeof CreateEditorObjectFromTab>[0]
-  | null {
+function buildTabPropsForPou(name: string): Parameters<typeof CreateEditorObjectFromTab>[0] | null {
   const state = openPLCStoreBase.getState()
   const pou = state.project.data.pous.find((p) => p.name === name)
   if (!pou) return null
@@ -77,10 +75,10 @@ function buildTabPropsForPou(name: string):
   const language = pou.body.language as TabLanguage
   const elementType =
     pou.pouType === 'program'
-      ? ({ type: 'program' as const, language })
+      ? { type: 'program' as const, language }
       : pou.pouType === 'function'
-        ? ({ type: 'function' as const, language })
-        : ({ type: 'function-block' as const, language })
+        ? { type: 'function' as const, language }
+        : { type: 'function-block' as const, language }
 
   return {
     name: pou.name,

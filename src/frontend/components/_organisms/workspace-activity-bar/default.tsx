@@ -21,7 +21,7 @@ import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
 import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
-import { type BuildOption,BuildOptionsPopover } from '../../_features/[workspace]/build-options'
+import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
@@ -134,88 +134,91 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build (Compile)
   // ---------------------------------------------------------------------------
 
-  const handleBuild = useCallback(async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
-    if (isCompiling) return
+  const handleBuild = useCallback(
+    async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
+      if (isCompiling) return
 
-    if (editingState === 'unsaved') {
-      const saved = await executeSave()
-      if (!saved) return
-    }
-
-    setIsCompiling(true)
-    addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
-
-    // Pre-compile alias sync: ensure every located variable's
-    // `location` reflects the latest address its alias points to,
-    // before we snapshot projectData for the compiler. The compile
-    // pipeline itself reads `variable.location` verbatim — same
-    // contract as before, just guaranteed-fresh now.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
-    const freshProjectData = useOpenPLCStore.getState().project.data
-
-    try {
-      const result = await compiler.compileProgram(
-        {
-          projectData: freshProjectData,
-          boardTarget: deviceDefinitions.configuration.deviceBoard,
-          projectPath: projectMeta.path,
-          compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
-          cleanBuild: overrides?.cleanBuild ?? false,
-          isSimulator: isSimulatorBoard,
-          runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
-          runtimeJwtToken: jwtToken || null,
-        },
-        (event) => {
-          if (event.plcStatus) {
-            useOpenPLCStore
-              .getState()
-              .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
-          }
-          logCompilerEvent(event, addLog)
-          if (event.firmwarePath && isSimulatorBoard) {
-            void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
-              if (loadResult.success) {
-                setSimulatorRunning(true)
-                addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
-                if (pendingSimulatorDebugRef.current) {
-                  pendingSimulatorDebugRef.current = false
-                  void debugSession.connectAndStart()
-                }
-              } else {
-                pendingSimulatorDebugRef.current = false
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'error',
-                  message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
-                })
-              }
-            })
-          }
-        },
-      )
-
-      if (!result.success) {
-        addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+      if (editingState === 'unsaved') {
+        const saved = await executeSave()
+        if (!saved) return
       }
-    } catch (err: unknown) {
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
-    } finally {
-      setIsCompiling(false)
-    }
-  }, [
-    compiler,
-    projectData,
-    projectMeta,
-    deviceDefinitions,
-    isSimulatorBoard,
-    simulator,
-    debugSession,
-    addLog,
-    isCompiling,
-    editingState,
-    executeSave,
-    jwtToken,
-  ])
+
+      setIsCompiling(true)
+      addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
+
+      // Pre-compile alias sync: ensure every located variable's
+      // `location` reflects the latest address its alias points to,
+      // before we snapshot projectData for the compiler. The compile
+      // pipeline itself reads `variable.location` verbatim — same
+      // contract as before, just guaranteed-fresh now.
+      useOpenPLCStore.getState().projectActions.syncVariableAliases()
+      const freshProjectData = useOpenPLCStore.getState().project.data
+
+      try {
+        const result = await compiler.compileProgram(
+          {
+            projectData: freshProjectData,
+            boardTarget: deviceDefinitions.configuration.deviceBoard,
+            projectPath: projectMeta.path,
+            compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
+            cleanBuild: overrides?.cleanBuild ?? false,
+            isSimulator: isSimulatorBoard,
+            runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
+            runtimeJwtToken: jwtToken || null,
+          },
+          (event) => {
+            if (event.plcStatus) {
+              useOpenPLCStore
+                .getState()
+                .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
+            }
+            logCompilerEvent(event, addLog)
+            if (event.firmwarePath && isSimulatorBoard) {
+              void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
+                if (loadResult.success) {
+                  setSimulatorRunning(true)
+                  addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+                  if (pendingSimulatorDebugRef.current) {
+                    pendingSimulatorDebugRef.current = false
+                    void debugSession.connectAndStart()
+                  }
+                } else {
+                  pendingSimulatorDebugRef.current = false
+                  addLog({
+                    id: crypto.randomUUID(),
+                    level: 'error',
+                    message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
+                  })
+                }
+              })
+            }
+          },
+        )
+
+        if (!result.success) {
+          addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+        }
+      } catch (err: unknown) {
+        addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+      } finally {
+        setIsCompiling(false)
+      }
+    },
+    [
+      compiler,
+      projectData,
+      projectMeta,
+      deviceDefinitions,
+      isSimulatorBoard,
+      simulator,
+      debugSession,
+      addLog,
+      isCompiling,
+      editingState,
+      executeSave,
+      jwtToken,
+    ],
+  )
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
@@ -224,73 +227,76 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build Library (.stlib)
   // ---------------------------------------------------------------------------
 
-  const handleBuildLibrary = useCallback(async (overrides?: { cleanBuild?: boolean }) => {
-    if (isCompiling) return
+  const handleBuildLibrary = useCallback(
+    async (overrides?: { cleanBuild?: boolean }) => {
+      if (isCompiling) return
 
-    // Always save before building.  The manifest tab and any POU
-    // bodies may have edits the workspace-level `editingState`
-    // doesn't track (each editor manages its own dirty flag against
-    // its file-slice entry), and the build pipeline reads everything
-    // off disk — `library.json`, `pous/**`, and the rest — so a
-    // stale on-disk copy would compile from the previous session's
-    // content.  `executeSaveProject` is the same full-project save
-    // the PLC build invokes; it walks every file the project owns
-    // and flushes the in-memory buffer to disk before the build
-    // starts.
-    const saved = await executeSave()
-    if (!saved) return
+      // Always save before building.  The manifest tab and any POU
+      // bodies may have edits the workspace-level `editingState`
+      // doesn't track (each editor manages its own dirty flag against
+      // its file-slice entry), and the build pipeline reads everything
+      // off disk — `library.json`, `pous/**`, and the rest — so a
+      // stale on-disk copy would compile from the previous session's
+      // content.  `executeSaveProject` is the same full-project save
+      // the PLC build invokes; it walks every file the project owns
+      // and flushes the in-memory buffer to disk before the build
+      // starts.
+      const saved = await executeSave()
+      if (!saved) return
 
-    if (!compiler.compileLibrary) {
-      addLog({
-        id: crypto.randomUUID(),
-        level: 'error',
-        message: 'Current platform does not implement library builds.',
-      })
-      return
-    }
-
-    setIsCompiling(true)
-    addLog({
-      id: crypto.randomUUID(),
-      level: 'info',
-      message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
-    })
-
-    try {
-      const result = await compiler.compileLibrary(
-        { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
-        (event) => {
-          if (!event.message) return
-          addLog({
-            id: crypto.randomUUID(),
-            level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
-            message: event.message,
-          })
-        },
-      )
-      if (!result.success) {
+      if (!compiler.compileLibrary) {
         addLog({
           id: crypto.randomUUID(),
           level: 'error',
-          message: result.error ?? 'Library build failed.',
+          message: 'Current platform does not implement library builds.',
         })
-      } else if (result.verification && !result.verification.success) {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
-        })
+        return
       }
-    } catch (err) {
+
+      setIsCompiling(true)
       addLog({
         id: crypto.randomUUID(),
-        level: 'error',
-        message: `Library build error: ${getErrorMessage(err)}`,
+        level: 'info',
+        message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
       })
-    } finally {
-      setIsCompiling(false)
-    }
-  }, [compiler, projectData, projectMeta, addLog, isCompiling, executeSave])
+
+      try {
+        const result = await compiler.compileLibrary(
+          { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
+          (event) => {
+            if (!event.message) return
+            addLog({
+              id: crypto.randomUUID(),
+              level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
+              message: event.message,
+            })
+          },
+        )
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: result.error ?? 'Library build failed.',
+          })
+        } else if (result.verification && !result.verification.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'warning',
+            message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
+          })
+        }
+      } catch (err) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Library build error: ${getErrorMessage(err)}`,
+        })
+      } finally {
+        setIsCompiling(false)
+      }
+    },
+    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave],
+  )
 
   // ---------------------------------------------------------------------------
   // PLC control (Start/Stop for runtime targets)
@@ -446,9 +452,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // read / write boundaries flips on BE targets.  Default to
         // `'le'` when the trailer was missing or malformed (older
         // runtimes); detectTargetEndian already logged a warning.
-        useOpenPLCStore
-          .getState()
-          .workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
+        useOpenPLCStore.getState().workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
         await debugSession.connectAndStart(debugConfig)
         setIsDebuggerProcessing(false)
       } else {
@@ -584,7 +588,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         await showDebuggerMessage(
           'warning',
           'Debugging Not Available',
-          'Debugging for this target is not supported in the core editor. The selected board\'s VPP package must provide a debug adapter.',
+          "Debugging for this target is not supported in the core editor. The selected board's VPP package must provide a debug adapter.",
           ['OK'],
         )
         setIsDebuggerProcessing(false)

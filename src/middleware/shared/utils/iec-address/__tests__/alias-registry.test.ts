@@ -185,14 +185,10 @@ describe('isAliasNameAvailable', () => {
   })
 
   it('returns true when the existing entry belongs to the source we are ignoring (rename within self)', () => {
-    expect(
-      isAliasNameAvailable(reg, 'tank', { kind: 'vpp-io', ref: 'slot-1:AI1' }),
-    ).toBe(true)
+    expect(isAliasNameAvailable(reg, 'tank', { kind: 'vpp-io', ref: 'slot-1:AI1' })).toBe(true)
   })
 
   it('returns false when ignoring a different source', () => {
-    expect(
-      isAliasNameAvailable(reg, 'tank', { kind: 'modbus-tcp-remote', ref: 'd:p' }),
-    ).toBe(false)
+    expect(isAliasNameAvailable(reg, 'tank', { kind: 'modbus-tcp-remote', ref: 'd:p' })).toBe(false)
   })
 })

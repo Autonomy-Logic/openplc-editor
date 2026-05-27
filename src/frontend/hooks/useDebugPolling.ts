@@ -309,8 +309,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
           // Translate enum integers to member names so every consumer
           // (watch panel, ladder, FBD, hover) reads the same display value.
           // Out-of-range falls back to the raw integer.
-          const stored =
-            meta.enumValues !== undefined ? (meta.enumValues[Number(value)] ?? value) : value
+          const stored = meta.enumValues !== undefined ? (meta.enumValues[Number(value)] ?? value) : value
           const current = isBool ? currentBool : currentNonBool
           if (current.get(meta.compositeKey) !== stored) {
             ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, stored)
@@ -343,8 +342,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // (var_size == 0, e.g. STRING stubs) still advance us.  Otherwise
       // honor positionsConsumed so unread positions get retried.
       if (loopReachedEnd) {
-        itemsProcessed =
-          result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
+        itemsProcessed = result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
       } else {
         itemsProcessed = positionsConsumed
       }
@@ -382,8 +380,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
       // RTU framing also covers the simulator's virtual serial port —
       // both need the tighter cadence to keep up with toggling state.
-      const usesRtuFraming =
-        debugConnectionType === 'rtu' || debugConnectionType === 'simulator'
+      const usesRtuFraming = debugConnectionType === 'rtu' || debugConnectionType === 'simulator'
       const pollIntervalMs = usesRtuFraming ? RTU_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
 
       // Fire first poll immediately, then schedule at fixed rate

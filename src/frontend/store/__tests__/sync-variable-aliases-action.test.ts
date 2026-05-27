@@ -133,9 +133,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     seedBoard(store, 'SLM-RP4', VPP_V4)
     seedVendorScreenData(
       store,
-      withVppEntries([
-        { slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'conveyor_motor' },
-      ]),
+      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'conveyor_motor' }]),
     )
     seedProject(store, [pou('main', [variable('motor', '%QX0.0')])])
 
@@ -165,7 +163,6 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     expect(vars[0].alias).toBe('conveyor_motor')
   })
 
-
   it('reports orphans when the producer no longer exposes the alias', () => {
     const store = makeStore()
     seedBoard(store, 'SLM-RP4', VPP_V4)
@@ -190,10 +187,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
       ]),
     })
     store.getState().deviceActions.setDeviceBoard('SLM-RP4')
-    seedVendorScreenData(
-      store,
-      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
-    )
+    seedVendorScreenData(store, withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]))
     seedProject(store, [pou('main', [variable('motor', '%QX0.0', 'motor')])])
 
     // On VPP-capable target the alias resolves.
@@ -217,11 +211,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
         { slot: 1, channelName: 'DO2', iecAddress: '%QX0.1', alias: 'valve' },
       ]),
     )
-    seedProject(
-      store,
-      [pou('main', [variable('motor_var', '%QX0.0')])],
-      [variable('valve_var', '%QX0.1')],
-    )
+    seedProject(store, [pou('main', [variable('motor_var', '%QX0.0')])], [variable('valve_var', '%QX0.1')])
 
     const report = store.getState().projectActions.syncVariableAliases()
     expect(report.adopted).toBe(2)
@@ -233,12 +223,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
   it('surfaces pool conflicts via the console slice', () => {
     const store = makeStore()
     seedBoard(store, 'SLM-RP4', VPP_V4)
-    seedVendorScreenData(
-      store,
-      withVppEntries([
-        { slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'a' },
-      ]),
-    )
+    seedVendorScreenData(store, withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'a' }]))
 
     // Inject a second producer claiming the same address — would only
     // happen if a project file was hand-edited. Both pin-mapping AND
@@ -278,10 +263,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     // Seed project + VPP data BEFORE the boards land, mimicking the
     // real load order: handleOpenProjectResponse populates the project,
     // workspace-screen then resolves availableBoards.
-    seedVendorScreenData(
-      store,
-      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
-    )
+    seedVendorScreenData(store, withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]))
     seedProject(store, [pou('main', [variable('motor_var', '%QX0.0')])])
     store.getState().deviceActions.setDeviceBoard('SLM-RP4')
 
@@ -302,10 +284,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
   it('setAvailableOptions skips sync when only ports change (no caps churn)', () => {
     const store = makeStore()
     seedBoard(store, 'SLM-RP4', VPP_V4) // initial sync runs (no project data — no-op)
-    seedVendorScreenData(
-      store,
-      withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]),
-    )
+    seedVendorScreenData(store, withVppEntries([{ slot: 1, channelName: 'DO1', iecAddress: '%QX0.0', alias: 'motor' }]))
     seedProject(store, [pou('main', [variable('motor_var', '%QX0.0')])])
 
     // Ports-only update — must NOT trigger a sync (would adopt the

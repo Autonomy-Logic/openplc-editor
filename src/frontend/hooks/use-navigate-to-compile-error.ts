@@ -134,6 +134,15 @@ export function useNavigateToCompileError(): (err: StructuredCompileError) => vo
 
       // section === 'interface' or unset — opening the tab is enough.
     },
-    [pous, updateTabs, setSelectedTab, addModel, setEditor, getEditorFromEditors, setEditorCursor, updateModelVariablesForName],
+    [
+      pous,
+      updateTabs,
+      setSelectedTab,
+      addModel,
+      setEditor,
+      getEditorFromEditors,
+      setEditorCursor,
+      updateModelVariablesForName,
+    ],
   )
 }

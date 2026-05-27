@@ -7,7 +7,10 @@ import type { FBDRungState } from '../../../../../store/slices/fbd'
 import { pasteNodesAtFBD } from '../../../../../store/slices/fbd/utils'
 import { EdgeType, NodeType } from '../../../../../store/slices/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
-import { useBoundPou, useIsGraphicalEditorActive } from '../../../../_features/[workspace]/editor/graphical/active-context'
+import {
+  useBoundPou,
+  useIsGraphicalEditorActive,
+} from '../../../../_features/[workspace]/editor/graphical/active-context'
 
 export const useFBDClipboard = ({
   mousePosition,

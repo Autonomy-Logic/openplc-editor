@@ -7,8 +7,8 @@ export * from './create-project'
 // the Electron IPC types namespace along with it.  Re-export here
 // for back-compat with Electron-only callers that still resolve the
 // schema through this IPC index.
-export * from '@root/backend/shared/project/project-files-schema'
 export * from './project-recent-history'
+export * from '@root/backend/shared/project/project-files-schema'
 
 export type IProjectServiceResponse = {
   success: boolean

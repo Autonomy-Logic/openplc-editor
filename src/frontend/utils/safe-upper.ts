@@ -50,9 +50,7 @@ export function safeUpper(value: unknown): string {
  * record is visible in the devtools console — useful for spotting
  * legacy / corrupted project data without crashing the renderer.
  */
-export function hasStringName<T extends { name?: unknown }>(
-  entry: T,
-): entry is T & { name: string } {
+export function hasStringName<T extends { name?: unknown }>(entry: T): entry is T & { name: string } {
   if (typeof entry.name === 'string' && entry.name.length > 0) return true
   console.warn('[hasStringName] dropping entry without a usable name', entry)
   return false

@@ -17,11 +17,13 @@ import type {
 } from '@root/middleware/shared/ports/ethercat-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
+import dgram from 'dgram'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
+import { networkInterfaces } from 'os'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
@@ -562,6 +564,144 @@ class MainProcessBridge implements MainIpcModule {
     return { success: true }
   }
 
+  // ===================== RUNTIME LAN DISCOVERY =====================
+  private readonly DISCOVERY_PORT = 33333
+  private readonly DISCOVERY_MAGIC = 'OPENPLC_DISCOVER_V1'
+  private readonly DISCOVERY_DEFAULT_DURATION_MS = 3000
+
+  /**
+   * Compute the directed broadcast address for an IPv4 interface
+   * given its address and netmask in dotted-quad form.  Returns
+   * `255.255.255.255` for /32 or otherwise-degenerate masks where a
+   * meaningful broadcast cannot be derived.
+   */
+  private computeBroadcastAddress(address: string, netmask: string): string {
+    const toOctets = (s: string): number[] | null => {
+      const parts = s.split('.').map((p) => Number(p))
+      if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+        return null
+      }
+      return parts
+    }
+    const addr = toOctets(address)
+    const mask = toOctets(netmask)
+    if (!addr || !mask) {
+      return '255.255.255.255'
+    }
+    const broadcast = addr.map((octet, i) => (octet & mask[i]) | (~mask[i] & 0xff))
+    return broadcast.join('.')
+  }
+
+  handleRuntimeDiscoverDevices = (
+    event: IpcMainInvokeEvent,
+    opts?: { durationMs?: number },
+  ): Promise<{
+    success: boolean
+    devices?: Array<{ ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }>
+    error?: string
+  }> => {
+    const duration = Math.max(500, Math.min(10000, opts?.durationMs ?? this.DISCOVERY_DEFAULT_DURATION_MS))
+    const senderWebContents = event.sender
+
+    return new Promise((resolveOuter) => {
+      const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true })
+      // Dedup by source IP; last reply wins so a runtime updating its
+      // hostname mid-scan still settles on fresh data.
+      const discovered = new Map<
+        string,
+        { ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }
+      >()
+      let settled = false
+      let timer: NodeJS.Timeout | null = null
+
+      const finish = (err?: Error) => {
+        if (settled) return
+        settled = true
+        if (timer) clearTimeout(timer)
+        try {
+          sock.close()
+        } catch {
+          /* socket already closed */
+        }
+        if (err) {
+          resolveOuter({ success: false, error: err.message })
+        } else {
+          resolveOuter({ success: true, devices: Array.from(discovered.values()) })
+        }
+      }
+
+      sock.on('error', (err) => finish(err))
+
+      sock.on('message', (msg, rinfo) => {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(msg.toString('utf-8'))
+        } catch {
+          return
+        }
+        if (
+          typeof parsed !== 'object' ||
+          parsed === null ||
+          (parsed as { service?: unknown }).service !== 'openplc-runtime'
+        ) {
+          return
+        }
+        const p = parsed as {
+          runtime_version?: unknown
+          hostname?: unknown
+          api_port?: unknown
+        }
+        const device = {
+          ipAddress: rinfo.address,
+          hostname: typeof p.hostname === 'string' ? p.hostname : '',
+          runtimeVersion: typeof p.runtime_version === 'string' ? p.runtime_version : '',
+          apiPort: typeof p.api_port === 'number' ? p.api_port : 8443,
+        }
+        discovered.set(device.ipAddress, device)
+        // Stream the live update to the renderer so the modal can
+        // append rows as devices come in, instead of waiting for the
+        // full timeout.
+        if (!senderWebContents.isDestroyed()) {
+          senderWebContents.send('runtime:device-discovered', device)
+        }
+      })
+
+      sock.bind(0, () => {
+        try {
+          sock.setBroadcast(true)
+        } catch (err) {
+          finish(err as Error)
+          return
+        }
+
+        const magic = new Uint8Array(Buffer.from(this.DISCOVERY_MAGIC, 'utf-8'))
+        const targets = new Set<string>(['255.255.255.255'])
+        const ifaces = networkInterfaces()
+        for (const list of Object.values(ifaces)) {
+          if (!list) continue
+          for (const ifaceInfo of list) {
+            if (ifaceInfo.family !== 'IPv4' || ifaceInfo.internal) continue
+            const broadcast = this.computeBroadcastAddress(ifaceInfo.address, ifaceInfo.netmask)
+            targets.add(broadcast)
+          }
+        }
+
+        for (const target of targets) {
+          sock.send(magic, this.DISCOVERY_PORT, target, (sendErr) => {
+            // Per-target send errors are logged but don't abort the
+            // scan; some interfaces (e.g. VPN tun adapters) reject
+            // broadcast and that's fine.
+            if (sendErr) {
+              logger.debug(`Discovery send to ${target} failed: ${sendErr.message}`)
+            }
+          })
+        }
+
+        timer = setTimeout(() => finish(), duration)
+      })
+    })
+  }
+
   handleRuntimeGetSerialPorts = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -708,6 +848,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+    this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
@@ -948,8 +1089,7 @@ class MainProcessBridge implements MainIpcModule {
   // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
   // Library identity is the strucpp manifest `name` shared with the
   // project's `libraries[]` field.
-  handleLibrariesLoadAll = async (): Promise<unknown[]> =>
-    this.libraryManagerModule.loadAll()
+  handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
     if (!this.mainWindow) return { success: false, error: 'No main window' }

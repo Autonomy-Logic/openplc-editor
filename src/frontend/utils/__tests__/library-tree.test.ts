@@ -22,9 +22,7 @@ function makePou(overrides: Partial<SystemLibraryPou> & { name: string }): Syste
   }
 }
 
-function makeLibrary(
-  overrides: Partial<SystemLibrary> & { name: string; pous: SystemLibraryPou[] },
-): SystemLibrary {
+function makeLibrary(overrides: Partial<SystemLibrary> & { name: string; pous: SystemLibraryPou[] }): SystemLibrary {
   return {
     author: '',
     version: '1.0.0',
@@ -109,10 +107,7 @@ describe('buildLibraryTree', () => {
     expect(math.kind).toBe('folder')
     if (math.kind !== 'folder') return
     // Two children: Array and Complex (both folders), no duplicate "Mathematical"
-    expect(math.children.map((c) => (c.kind === 'folder' ? c.label : c.pou.name))).toEqual([
-      'Array',
-      'Complex',
-    ])
+    expect(math.children.map((c) => (c.kind === 'folder' ? c.label : c.pou.name))).toEqual(['Array', 'Complex'])
   })
 
   it('sorts folders before POUs and alphabetizes within each kind', () => {
@@ -134,25 +129,17 @@ describe('buildLibraryTree', () => {
     const cat = tree.children[0]
     expect(cat.kind).toBe('folder')
     if (cat.kind !== 'folder') return
-    expect(cat.children.map((c) => (c.kind === 'pou' ? c.pou.name : '[folder]'))).toEqual([
-      'AARDVARK',
-      'BORG',
-    ])
+    expect(cat.children.map((c) => (c.kind === 'pou' ? c.pou.name : '[folder]'))).toEqual(['AARDVARK', 'BORG'])
   })
 
   it('prunes empty folders when the filter rejects every POU under them', () => {
     const lib = makeLibrary({
       name: 'L',
-      pous: [
-        makePou({ name: 'ADD', category: 'Arithmetic' }),
-        makePou({ name: 'SHL', category: 'BitShift' }),
-      ],
+      pous: [makePou({ name: 'ADD', category: 'Arithmetic' }), makePou({ name: 'SHL', category: 'BitShift' })],
     })
     const tree = buildLibraryTree(lib, (pou) => pou.name.startsWith('A'))
     // BitShift has no surviving children, so it must not appear.
-    expect(tree.children.map((c) => (c.kind === 'folder' ? c.label : c.pou.name))).toEqual([
-      'Arithmetic',
-    ])
+    expect(tree.children.map((c) => (c.kind === 'folder' ? c.label : c.pou.name))).toEqual(['Arithmetic'])
   })
 })
 

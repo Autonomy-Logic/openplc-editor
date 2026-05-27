@@ -46,9 +46,8 @@ export function resolveModuleChannels(
 
   if (fid && byFormat) {
     const slotValue = slotConfig?.[fid]
-    const key = slotValue !== undefined && slotValue !== null && slotValue !== ''
-      ? String(slotValue)
-      : mapping.formatDefault
+    const key =
+      slotValue !== undefined && slotValue !== null && slotValue !== '' ? String(slotValue) : mapping.formatDefault
     if (key && byFormat[key]) return byFormat[key]
   }
 

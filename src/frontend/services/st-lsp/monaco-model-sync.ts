@@ -44,9 +44,7 @@ export interface MonacoModelSyncHandle {
  * at the URI the LSP service uses.  Idempotent on initial mount;
  * dispose tears down every model the sync created.
  */
-export function attachMonacoModelSync(
-  monacoApi: typeof monaco,
-): MonacoModelSyncHandle {
+export function attachMonacoModelSync(monacoApi: typeof monaco): MonacoModelSyncHandle {
   let disposed = false
   // URIs we minted ourselves; we only dispose models from this set on
   // teardown so we don't yank a model some other consumer registered.

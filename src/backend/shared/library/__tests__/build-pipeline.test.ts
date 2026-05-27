@@ -32,9 +32,7 @@ import {
 const STUB = __TESTING__
 const { parseLibraryManifest, stubProgramFor } = __TESTING__
 
-function makeStrucppStub(
-  overrides: Partial<Pick<StrucppRuntime, 'compileStlib'>> = {},
-): StrucppRuntime {
+function makeStrucppStub(overrides: Partial<Pick<StrucppRuntime, 'compileStlib'>> = {}): StrucppRuntime {
   return {
     compile: jest.fn(),
     formatDiagnostic: jest.fn(),
@@ -185,25 +183,19 @@ describe('parseLibraryManifest', () => {
   })
 
   it('accepts safe names: letters, digits, dot, hyphen, underscore', () => {
-    const res = parseLibraryManifest(
-      JSON.stringify({ name: 'demo-lib_1.0', version: '0.1.0', namespace: 'demo_lib' }),
-    )
+    const res = parseLibraryManifest(JSON.stringify({ name: 'demo-lib_1.0', version: '0.1.0', namespace: 'demo_lib' }))
     expect(res.ok).toBe(true)
   })
 
   it('rejects a namespace that is not a valid C++ identifier', () => {
-    const res = parseLibraryManifest(
-      JSON.stringify({ name: 'x', version: '1.0', namespace: '1bad-namespace' }),
-    )
+    const res = parseLibraryManifest(JSON.stringify({ name: 'x', version: '1.0', namespace: '1bad-namespace' }))
     expect(res.ok).toBe(false)
     if (res.ok) return
     expect(res.errors[0]).toMatch(/manifest\.namespace must be a valid C\+\+ identifier/)
   })
 
   it('accepts namespaces starting with underscore', () => {
-    const res = parseLibraryManifest(
-      JSON.stringify({ name: 'x', version: '1.0', namespace: '_underscore_first' }),
-    )
+    const res = parseLibraryManifest(JSON.stringify({ name: 'x', version: '1.0', namespace: '_underscore_first' }))
     expect(res.ok).toBe(true)
   })
 })
@@ -404,11 +396,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     const strucpp = makeStrucppStub()
     __setStrucppRuntimeForTests(strucpp)
     const programSt = 'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
-    const res = libraryBuildFromTranspiledSt(
-      programSt,
-      [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }],
-      manifest,
-    )
+    const res = libraryBuildFromTranspiledSt(programSt, [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }], manifest)
     expect(res.success).toBe(false)
     expect(res.errors[0]?.message).toMatch(/no functions, function blocks, or data types/)
     expect(strucpp.compileStlib).not.toHaveBeenCalled()
@@ -421,11 +409,7 @@ describe('libraryBuildFromTranspiledSt', () => {
       'VAR_GLOBAL\n  G : INT;\nEND_VAR\n' +
       '\n' +
       'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
-    const res = libraryBuildFromTranspiledSt(
-      programSt,
-      [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }],
-      manifest,
-    )
+    const res = libraryBuildFromTranspiledSt(programSt, [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }], manifest)
     expect(res.success).toBe(false)
     expect(res.errors[0]?.message).toMatch(/no functions, function blocks, or data types/)
   })
@@ -670,9 +654,7 @@ describe('libraryBuildFromTranspiledSt', () => {
       ],
       { ...manifest, name: 'cpp_only_lib', namespace: 'cpp_only_lib' },
       {
-        cppBlocks: [
-          { name: 'CppOnly', code: 'void setup() {}\nvoid loop() {}', variables: [] },
-        ],
+        cppBlocks: [{ name: 'CppOnly', code: 'void setup() {}\nvoid loop() {}', variables: [] }],
       },
     )
 
@@ -734,7 +716,9 @@ describe('libraryBuildFromTranspiledSt', () => {
     const errors = [{ message: 'something exploded', line: 4, file: 'Tank.st' }]
     __setStrucppRuntimeForTests(
       makeStrucppStub({
-        compileStlib: jest.fn().mockReturnValue({ success: false, errors }) as unknown as StrucppRuntime['compileStlib'],
+        compileStlib: jest
+          .fn()
+          .mockReturnValue({ success: false, errors }) as unknown as StrucppRuntime['compileStlib'],
       }),
     )
 
@@ -758,7 +742,9 @@ describe('libraryBuildFromTranspiledSt', () => {
   it('coerces a missing strucpp errors field to an empty array', () => {
     __setStrucppRuntimeForTests(
       makeStrucppStub({
-        compileStlib: jest.fn().mockReturnValue({ success: true, archive: {} }) as unknown as StrucppRuntime['compileStlib'],
+        compileStlib: jest
+          .fn()
+          .mockReturnValue({ success: true, archive: {} }) as unknown as StrucppRuntime['compileStlib'],
       }),
     )
 

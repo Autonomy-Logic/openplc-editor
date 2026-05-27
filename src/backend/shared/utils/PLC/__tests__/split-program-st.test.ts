@@ -4,12 +4,7 @@ describe('splitProgramSt', () => {
   describe('happy paths', () => {
     it('splits a single PROGRAM POU', () => {
       const source =
-        'PROGRAM Main\n' +
-        '  VAR\n' +
-        '    flag : BOOL;\n' +
-        '  END_VAR\n' +
-        '  flag := TRUE;\n' +
-        'END_PROGRAM\n'
+        'PROGRAM Main\n' + '  VAR\n' + '    flag : BOOL;\n' + '  END_VAR\n' + '  flag := TRUE;\n' + 'END_PROGRAM\n'
       const result = splitProgramSt(source, [{ name: 'Main', kind: 'PROGRAM' }])
       expect(result).not.toBeNull()
       expect([...result!.files.keys()]).toEqual(['Main.st'])
@@ -170,10 +165,7 @@ describe('splitProgramSt', () => {
   describe('special characters in POU names', () => {
     it('handles names with underscores and digits', () => {
       const source =
-        'FUNCTION_BLOCK Tank_Controller_v2\n' +
-        '  VAR sp : INT; END_VAR\n' +
-        '  sp := 100;\n' +
-        'END_FUNCTION_BLOCK\n'
+        'FUNCTION_BLOCK Tank_Controller_v2\n' + '  VAR sp : INT; END_VAR\n' + '  sp := 100;\n' + 'END_FUNCTION_BLOCK\n'
       const result = splitProgramSt(source, [{ name: 'Tank_Controller_v2', kind: 'FUNCTION_BLOCK' }])
       expect(result).not.toBeNull()
       expect(result!.files.has('Tank_Controller_v2.st')).toBe(true)
@@ -188,9 +180,7 @@ describe('splitProgramSt', () => {
         '  LD State\n' +
         '  ST Out\n' +
         'END_FUNCTION_BLOCK\n'
-      const result = splitProgramSt(source, [
-        { name: 'State_Display', kind: 'FUNCTION_BLOCK', language: 'il' },
-      ])
+      const result = splitProgramSt(source, [{ name: 'State_Display', kind: 'FUNCTION_BLOCK', language: 'il' }])
       expect(result).not.toBeNull()
       expect(result!.files.has('State_Display.il')).toBe(true)
       expect(result!.files.has('State_Display.st')).toBe(false)
@@ -219,10 +209,7 @@ describe('splitProgramSt', () => {
   describe('FUNCTION POUs (with return type)', () => {
     it('splits FUNCTION declarations correctly', () => {
       const source =
-        'FUNCTION Add : INT\n' +
-        '  VAR_INPUT a, b : INT; END_VAR\n' +
-        '  Add := a + b;\n' +
-        'END_FUNCTION\n'
+        'FUNCTION Add : INT\n' + '  VAR_INPUT a, b : INT; END_VAR\n' + '  Add := a + b;\n' + 'END_FUNCTION\n'
       const result = splitProgramSt(source, [{ name: 'Add', kind: 'FUNCTION' }])
       expect(result).not.toBeNull()
       expect(result!.files.get('Add.st')).toContain('FUNCTION Add : INT')

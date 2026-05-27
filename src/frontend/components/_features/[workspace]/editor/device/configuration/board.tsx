@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
@@ -217,8 +218,7 @@ const Board = memo(function () {
       // I/O the project currently has configured.
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
-      const targetCantHostServers =
-        !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
+      const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
       const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
 
       const losingServers = hasServers && targetCantHostServers
@@ -362,10 +362,7 @@ const Board = memo(function () {
 
   return (
     <DeviceEditorSlot>
-      <div
-        id='board-selection-container'
-        className='flex w-full flex-wrap items-start gap-8 lg:gap-16'
-      >
+      <div id='board-selection-container' className='flex w-full flex-wrap items-start gap-8 lg:gap-16'>
         <div
           id='board-preferences-container'
           className='flex w-[360px] flex-shrink-0 flex-col items-start justify-start gap-3'
@@ -464,8 +461,18 @@ const Board = memo(function () {
                   value={runtimeIpAddress}
                   onChange={(e) => setRuntimeIpAddress(e.target.value)}
                   placeholder='127.0.0.1 or localhost'
-                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  className='flex h-[30px] min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                 />
+                <button
+                  type='button'
+                  aria-label='Search for devices'
+                  title='Search for devices on the local network'
+                  onClick={() => openModal('runtime-discover-devices', null)}
+                  className='flex h-[30px] items-center gap-1 rounded-md bg-neutral-100 px-3 font-caption text-cp-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+                >
+                  <MagnifierIcon size='sm' className='h-4 w-4 stroke-neutral-1000 dark:stroke-neutral-100' />
+                  Search
+                </button>
               </div>
               <div id='runtime-connect-button-container' className='flex w-full items-center justify-start'>
                 <button
@@ -585,9 +592,7 @@ const Board = memo(function () {
         const isSim = isSimulatorTarget(currentBoardInfo)
         const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
         const showDivider = !isSim && (isRuntime ? connectionStatus === 'connected' : true)
-        return showDivider ? (
-          <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-        ) : null
+        return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
       {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
         connectionStatus === 'connected' && (

@@ -11,9 +11,7 @@ type VariableType = PLCVariable['type']
 export const convertTypeToXml = (type: VariableType): Record<string, unknown> => {
   if (type.definition === 'array') {
     const baseTypeKey =
-      type.data!.baseType.definition === 'user-data-type'
-        ? 'derived'
-        : baseTypeTag(type.data!.baseType.value)
+      type.data!.baseType.definition === 'user-data-type' ? 'derived' : baseTypeTag(type.data!.baseType.value)
     return {
       array: {
         dimension: type.data!.dimensions.map((dimension) => {

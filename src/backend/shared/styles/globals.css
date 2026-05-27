@@ -72,6 +72,16 @@
   }
 }
 
+/* Tailwind's animate-spin utility emits `animation: spin 1s linear infinite`
+   but our tailwind.config.ts overrides `theme.keyframes` (instead of
+   extending it), wiping out the default `spin` keyframe. Redefine it here
+   so animate-spin works app-wide. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .ai-chat-typing-dot {
   display: inline-block;
   width: 5px;

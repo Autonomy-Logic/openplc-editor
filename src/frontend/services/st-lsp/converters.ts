@@ -136,9 +136,7 @@ export function lspCompletionToMonaco(
       : lspRangeToMonaco(item.textEdit.insert, lineOffset)
     : defaultRange
 
-  const insertText = item.textEdit
-    ? item.textEdit.newText
-    : item.insertText ?? item.label
+  const insertText = item.textEdit ? item.textEdit.newText : (item.insertText ?? item.label)
 
   // LSP `InsertTextFormat`: 1 = PlainText, 2 = Snippet.
   const insertTextRules =
@@ -155,10 +153,7 @@ export function lspCompletionToMonaco(
     ...(item.detail !== undefined ? { detail: item.detail } : {}),
     ...(item.documentation !== undefined
       ? {
-          documentation:
-            typeof item.documentation === 'string'
-              ? item.documentation
-              : item.documentation.value,
+          documentation: typeof item.documentation === 'string' ? item.documentation : item.documentation.value,
         }
       : {}),
     ...(item.sortText !== undefined ? { sortText: item.sortText } : {}),
@@ -186,10 +181,7 @@ export function lspCompletionListToMonaco(
 // Hover
 // ---------------------------------------------------------------------------
 
-export function lspHoverToMonaco(
-  hover: LspHover | null,
-  lineOffset = 0,
-): monaco.languages.Hover | null {
+export function lspHoverToMonaco(hover: LspHover | null, lineOffset = 0): monaco.languages.Hover | null {
   if (!hover) return null
   const contents = Array.isArray(hover.contents) ? hover.contents : [hover.contents]
   const monacoContents = contents.map((c) => {
@@ -234,9 +226,7 @@ export function lspLocationsToMonaco(
 // Symbols
 // ---------------------------------------------------------------------------
 
-export function lspSymbolKindToMonaco(
-  kind: number,
-): monaco.languages.SymbolKind {
+export function lspSymbolKindToMonaco(kind: number): monaco.languages.SymbolKind {
   // LSP and Monaco both use numeric SymbolKind enums that line up
   // for the IEC subset (Function, Variable, Property, Field, …).
   return (kind - 1) as monaco.languages.SymbolKind
@@ -280,23 +270,15 @@ export function lspTextEditToMonaco(edit: LspTextEdit, lineOffset = 0): monaco.l
 // Signature help
 // ---------------------------------------------------------------------------
 
-export function lspSignatureHelpToMonaco(
-  help: LspSignatureHelp | null,
-): monaco.languages.SignatureHelp | null {
+export function lspSignatureHelpToMonaco(help: LspSignatureHelp | null): monaco.languages.SignatureHelp | null {
   if (!help) return null
   return {
     signatures: help.signatures.map((sig) => ({
       label: sig.label,
-      documentation:
-        typeof sig.documentation === 'string'
-          ? sig.documentation
-          : sig.documentation?.value,
+      documentation: typeof sig.documentation === 'string' ? sig.documentation : sig.documentation?.value,
       parameters: (sig.parameters ?? []).map((p) => ({
         label: p.label,
-        documentation:
-          typeof p.documentation === 'string'
-            ? p.documentation
-            : p.documentation?.value,
+        documentation: typeof p.documentation === 'string' ? p.documentation : p.documentation?.value,
       })),
     })),
     activeSignature: help.activeSignature ?? 0,

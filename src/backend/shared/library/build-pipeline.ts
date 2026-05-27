@@ -51,9 +51,7 @@ import { compileStlib, type CompileStlibError, type CompileStlibSource } from '.
  * manifest the build can consume, or a list of validation errors
  * suitable for surfacing in the editor console.
  */
-export type ManifestParseResult =
-  | { ok: true; manifest: LibraryBuildManifest }
-  | { ok: false; errors: string[] }
+export type ManifestParseResult = { ok: true; manifest: LibraryBuildManifest } | { ok: false; errors: string[] }
 
 /**
  * Narrow surface of the strucpp library manifest that the build
@@ -86,7 +84,10 @@ function parseLibraryManifest(json: string): ManifestParseResult {
   try {
     raw = JSON.parse(json)
   } catch (err) {
-    return { ok: false, errors: [`library.json is not valid JSON: ${err instanceof Error ? err.message : String(err)}`] }
+    return {
+      ok: false,
+      errors: [`library.json is not valid JSON: ${err instanceof Error ? err.message : String(err)}`],
+    }
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return { ok: false, errors: ['library.json must be a JSON object'] }
@@ -253,8 +254,7 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
 
   const knownPous: KnownPou[] = stubbed.data.pous.map((p) => ({
     name: p.data.name,
-    kind:
-      p.type === 'program' ? 'PROGRAM' : p.type === 'function' ? 'FUNCTION' : 'FUNCTION_BLOCK',
+    kind: p.type === 'program' ? 'PROGRAM' : p.type === 'function' ? 'FUNCTION' : 'FUNCTION_BLOCK',
     language: p.data.language,
   }))
 
@@ -392,9 +392,7 @@ export function libraryBuildFromTranspiledSt(
   //
   // Keep `_types.st` and `_globals.st`: they may carry user-defined
   // types and library-internal globals the POUs reference.
-  const cppBlockFilenames = new Set(
-    (aux?.cppBlocks ?? []).map((b) => `${b.name}.st`),
-  )
+  const cppBlockFilenames = new Set((aux?.cppBlocks ?? []).map((b) => `${b.name}.st`))
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue

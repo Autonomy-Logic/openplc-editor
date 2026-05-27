@@ -35,10 +35,7 @@ export interface StartPlcAfterBuildOptions {
    *  parsed `status` field of the response body (e.g. `START:OK`,
    *  `ALREADY_RUNNING`, `COMMAND:BUSY`).  The Result envelope lets
    *  the caller surface a network error without crashing the loop. */
-  fetchStart(): Promise<
-    | { success: true; status: string }
-    | { success: false; error: string }
-  >
+  fetchStart(): Promise<{ success: true; status: string } | { success: false; error: string }>
   /** Emits one log entry: the terminal outcome message.  Same shape
    *  the editor's `_mainProcessPort.postMessage({ logLevel, message })`
    *  takes; web routes it through `onProgress`. */
@@ -59,9 +56,7 @@ const DEFAULT_POLL_INTERVAL_MS = 150
  * as the runtime returns a terminal reply (or the loop trips the
  * deadline / a network error).
  */
-export async function startPlcAfterBuild(
-  opts: StartPlcAfterBuildOptions,
-): Promise<StartPlcAfterBuildOutcome> {
+export async function startPlcAfterBuild(opts: StartPlcAfterBuildOptions): Promise<StartPlcAfterBuildOutcome> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
   const deadline = Date.now() + timeoutMs
@@ -89,9 +84,6 @@ export async function startPlcAfterBuild(
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
   }
 
-  opts.onLog(
-    'warning',
-    `PLC did not start within ${timeoutMs}ms — runtime remained busy. Press Play to retry.`,
-  )
+  opts.onLog('warning', `PLC did not start within ${timeoutMs}ms — runtime remained busy. Press Play to retry.`)
   return 'TIMEOUT'
 }

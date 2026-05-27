@@ -71,9 +71,7 @@ const MissingLibrariesModal = () => {
               className='flex items-center justify-between border-b border-neutral-100 px-3 py-2 last:border-b-0 dark:border-neutral-800'
             >
               <span className='font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>{m.name}</span>
-              {m.version && (
-                <span className='text-[11px] text-neutral-500 dark:text-neutral-400'>v{m.version}</span>
-              )}
+              {m.version && <span className='text-[11px] text-neutral-500 dark:text-neutral-400'>v{m.version}</span>}
             </div>
           ))}
         </div>

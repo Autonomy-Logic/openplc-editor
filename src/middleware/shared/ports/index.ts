@@ -132,7 +132,13 @@ export type {
 export { isV4Logs } from './types'
 
 // --- PLC type system Zod schemas ---
-export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeEnum, baseTypeSchema, genericTypeSchema } from './plc-schemas'
+export {
+  BaseLibraryPouSchema,
+  BaseLibraryVariableSchema,
+  baseTypeEnum,
+  baseTypeSchema,
+  genericTypeSchema,
+} from './plc-schemas'
 
 // --- Port parameter/result types ---
 export type { CompileProgramArgs, DebugCompileArgs, ExportXmlArgs } from './compiler-port'
@@ -147,6 +153,9 @@ export type {
 export type {
   CompilationStatusResult,
   CreateUserParams,
+  DiscoverDevicesOptions,
+  DiscoverDevicesResult,
+  DiscoveredRuntimeDevice,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,

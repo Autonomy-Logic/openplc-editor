@@ -41,10 +41,7 @@ export const LibraryIcon = (props: ILibraryIconProps) => {
         fill='#023C97'
       />
       {/* Bookmark glyph (white inset) */}
-      <path
-        d='M11 2.5H16V11L13.5 9L11 11V2.5Z'
-        fill='white'
-      />
+      <path d='M11 2.5H16V11L13.5 9L11 11V2.5Z' fill='white' />
       {/* Inner shelf accent */}
       <path
         opacity='0.55'

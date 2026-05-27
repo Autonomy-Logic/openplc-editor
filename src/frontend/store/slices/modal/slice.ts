@@ -16,6 +16,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'confirm-device-switch',
   'quit-application',
   'runtime-create-user',
+  'runtime-discover-devices',
   'runtime-login',
   'server-ip-mismatch',
   'runtime-connection-lost',

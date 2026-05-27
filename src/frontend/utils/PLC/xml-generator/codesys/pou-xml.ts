@@ -80,10 +80,8 @@ export const codeSysParseInterface = (pou: PLCPou) => {
       /* istanbul ignore next -- guard: returnType object is unconditionally reassigned below */
       if (!xml.returnType) xml.returnType = {}
 
-      const isBaseType = baseTypes.includes(returnType as (typeof baseTypes)[number])
-      xml.returnType = isBaseType
-        ? { [baseTypeTag(returnType)]: '' }
-        : { ['derived']: { '@name': returnType } }
+      const isBaseType = baseTypes.includes(returnType)
+      xml.returnType = isBaseType ? { [baseTypeTag(returnType)]: '' } : { ['derived']: { '@name': returnType } }
     }
 
     switch (variable.class) {

@@ -71,8 +71,7 @@ export const ModalBlockLibrary = ({
         <div className='h-full w-full overflow-auto'>
           <LibraryRoot>
             {systemLibraries.map((library) => {
-              const isFunctionEditor =
-                pous.find((p) => p.name === pouName)?.pouType === 'function'
+              const isFunctionEditor = pous.find((p) => p.name === pouName)?.pouType === 'function'
               const tree = buildLibraryTree(library, (pou) => {
                 if (!pou.name.toLowerCase().includes(filterText)) return false
                 if (isFunctionEditor && pou.type !== 'function') return false

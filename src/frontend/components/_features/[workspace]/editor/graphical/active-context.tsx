@@ -49,9 +49,7 @@ export function GraphicalEditorActiveProvider({
   isActive: boolean
   children: ReactNode
 }) {
-  return (
-    <GraphicalEditorContext.Provider value={{ pouName, isActive }}>{children}</GraphicalEditorContext.Provider>
-  )
+  return <GraphicalEditorContext.Provider value={{ pouName, isActive }}>{children}</GraphicalEditorContext.Provider>
 }
 
 /**

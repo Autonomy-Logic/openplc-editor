@@ -138,9 +138,7 @@ describe('encodeConfigBytes', () => {
       { id: 'big', encoding: { byteOffset: 6, size: 2 as const } },
       { id: 'small', encoding: { byteOffset: 0, size: 2 as const } },
     ]
-    expect(encodeConfigBytes(fields, { big: '0xAABB', small: '0x1234' })).toEqual([
-      0x12, 0x34, 0, 0, 0, 0, 0xaa, 0xbb,
-    ])
+    expect(encodeConfigBytes(fields, { big: '0xAABB', small: '0x1234' })).toEqual([0x12, 0x34, 0, 0, 0, 0, 0xaa, 0xbb])
   })
 
   it('skips malformed-encoding fields while still encoding valid ones in the same call', () => {

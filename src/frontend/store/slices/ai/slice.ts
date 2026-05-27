@@ -3,7 +3,6 @@ import { StateCreator } from 'zustand'
 
 import type { AIFeatureConfig } from '../../../../middleware/shared/ports/types'
 import type { AISlice } from './types'
-import { MAX_CONVERSATION_MESSAGES } from './types'
 
 const DEFAULT_AI_STATE: AISlice['ai'] = {
   isEnabled: false,
@@ -152,9 +151,6 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.messages.push(message)
-            if (ai.messages.length > MAX_CONVERSATION_MESSAGES) {
-              ai.messages = ai.messages.slice(-MAX_CONVERSATION_MESSAGES)
-            }
           }),
         )
       },
@@ -292,8 +288,7 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
       replaceMessages: (messages) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.messages =
-              messages.length > MAX_CONVERSATION_MESSAGES ? messages.slice(-MAX_CONVERSATION_MESSAGES) : messages
+            ai.messages = messages
             ai.error = null
           }),
         )

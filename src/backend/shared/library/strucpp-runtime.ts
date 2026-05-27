@@ -48,13 +48,13 @@
  * error here, not as a silent runtime drift.
  */
 export interface StrucppRuntime {
-  compile: typeof import('strucpp')['compile']
-  formatDiagnostic: typeof import('strucpp')['formatDiagnostic']
-  buildSourceMap: typeof import('strucpp')['buildSourceMap']
-  getVersion: typeof import('strucpp')['getVersion']
-  compileStlib: typeof import('strucpp')['compileStlib']
-  importCodesysLibraryFromBytes: typeof import('strucpp')['importCodesysLibraryFromBytes']
-  loadStlibFromString: typeof import('strucpp')['loadStlibFromString']
+  compile: (typeof import('strucpp'))['compile']
+  formatDiagnostic: (typeof import('strucpp'))['formatDiagnostic']
+  buildSourceMap: (typeof import('strucpp'))['buildSourceMap']
+  getVersion: (typeof import('strucpp'))['getVersion']
+  compileStlib: (typeof import('strucpp'))['compileStlib']
+  importCodesysLibraryFromBytes: (typeof import('strucpp'))['importCodesysLibraryFromBytes']
+  loadStlibFromString: (typeof import('strucpp'))['loadStlibFromString']
 }
 
 let cached: StrucppRuntime | null = null

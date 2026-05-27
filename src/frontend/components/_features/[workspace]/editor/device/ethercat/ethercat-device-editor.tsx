@@ -1,6 +1,4 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -14,6 +12,8 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -112,8 +112,11 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
       state.deviceDefinitions.configuration.deviceBoard,
     )
     const ioMapping =
-      (vendorScreenData?.['io-mapping'] as { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] } | undefined)
-        ?.entries ?? []
+      (
+        vendorScreenData?.['io-mapping'] as
+          | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
+          | undefined
+      )?.entries ?? []
     const pool = buildAddressPool(
       {
         pinMapping: { pins: state.deviceDefinitions.pinMapping.pins },

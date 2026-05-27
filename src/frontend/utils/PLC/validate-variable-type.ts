@@ -77,9 +77,7 @@ export const validateVariableType = (
     const validTypes = flattenGenericToBaseTypes(upperExpectedType)
     return {
       isValid: validTypes.includes(upperSelectedType),
-      error: validTypes.includes(upperSelectedType)
-        ? undefined
-        : `Expected one of: ${validTypes.join(', ')}`,
+      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
     }
   }
 

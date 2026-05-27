@@ -215,11 +215,7 @@ export function buildAddressPool(
   // 2. VPP module I/O.
   if (caps.vppIo && inputs.vendorIoMapping?.entries && ignore !== 'vpp-io') {
     for (const entry of inputs.vendorIoMapping.entries) {
-      claim(
-        entry.iecAddress,
-        { kind: 'vpp-io', ref: `slot-${entry.slot}:${entry.channelName}` },
-        entry.alias,
-      )
+      claim(entry.iecAddress, { kind: 'vpp-io', ref: `slot-${entry.slot}:${entry.channelName}` }, entry.alias)
     }
   }
 
@@ -229,11 +225,7 @@ export function buildAddressPool(
       const devRef = dev.deviceName || dev.name || 'unknown-device'
       for (const group of dev.modbusTcpConfig?.ioGroups ?? []) {
         for (const point of group.ioPoints ?? []) {
-          claim(
-            point.iecLocation,
-            { kind: 'modbus-tcp-remote', ref: `${devRef}:${point.id}` },
-            point.alias,
-          )
+          claim(point.iecLocation, { kind: 'modbus-tcp-remote', ref: `${devRef}:${point.id}` }, point.alias)
         }
       }
     }

@@ -46,15 +46,10 @@ export interface StatsTableProps<R> {
 export function StatsTable<R>({ context, title, description, columns, rows, rowKey }: StatsTableProps<R>) {
   return (
     <div id={`${context}-section`} className='flex w-full flex-col gap-3'>
-      <h2
-        id={`${context}-title`}
-        className='select-none text-lg font-medium text-neutral-950 dark:text-white'
-      >
+      <h2 id={`${context}-title`} className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
         {title}
       </h2>
-      {description && (
-        <span className='select-none text-xs text-neutral-500 dark:text-neutral-400'>{description}</span>
-      )}
+      {description && <span className='select-none text-xs text-neutral-500 dark:text-neutral-400'>{description}</span>}
       <Table context={context} className='w-full'>
         <TableHeader>
           <TableRow>
@@ -81,5 +76,5 @@ export function StatsTable<R>({ context, title, description, columns, rows, rowK
   )
 }
 
-export { RangeCell } from './range-cell'
 export { formatNumber, formatRange } from './format-helpers'
+export { RangeCell } from './range-cell'

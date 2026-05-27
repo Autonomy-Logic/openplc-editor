@@ -89,8 +89,21 @@ const VariablesCodeEditor = ({
       return
     }
     const model = ed.getModel()
-    const lineLength = model ? model.getLineMaxColumn(cursorPosition.lineNumber) : cursorPosition.column
-    const range = new monaco.Range(cursorPosition.lineNumber, 1, cursorPosition.lineNumber, lineLength)
+    // Clamp to the model's valid line range so an out-of-bounds cursor
+    // (e.g. a compile-error click whose remapped line points past the
+    // generated vars-text content) lands on the closest valid line
+    // instead of crashing the editor with `BugIndicatingError: Illegal
+    // value for lineNumber` from `getLineMaxColumn` / `Range`.
+    const safeLine = model
+      ? Math.max(1, Math.min(model.getLineCount(), cursorPosition.lineNumber))
+      : cursorPosition.lineNumber
+    if (model && safeLine !== cursorPosition.lineNumber) {
+      console.warn(
+        `[variables-code-editor] cursor target line ${cursorPosition.lineNumber} out of range (model has ${model.getLineCount()} lines); clamped to ${safeLine}`,
+      )
+    }
+    const lineLength = model ? model.getLineMaxColumn(safeLine) : cursorPosition.column
+    const range = new monaco.Range(safeLine, 1, safeLine, lineLength)
     ed.setSelection(range)
     ed.revealRangeInCenter(range)
     ed.focus()

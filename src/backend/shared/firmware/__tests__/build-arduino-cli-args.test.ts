@@ -1,7 +1,4 @@
-import {
-  buildArduinoCliCompileArgs,
-  type BoardHalsCompileEntry,
-} from '../build-arduino-cli-args'
+import { buildArduinoCliCompileArgs, type BoardHalsCompileEntry } from '../build-arduino-cli-args'
 
 const simulatorEntry: BoardHalsCompileEntry = {
   platform: 'arduino:avr:mega',
@@ -82,8 +79,9 @@ describe('buildArduinoCliCompileArgs', () => {
       libraryPath: 'src',
       parallel: false,
     })
-    expect(noInclude.find((a) => a.startsWith('compiler.cpp.extra_flags=')))
-      .toBe('compiler.cpp.extra_flags=-std=gnu++17')
+    expect(noInclude.find((a) => a.startsWith('compiler.cpp.extra_flags='))).toBe(
+      'compiler.cpp.extra_flags=-std=gnu++17',
+    )
 
     const nonAvrEntry: BoardHalsCompileEntry = {
       platform: 'arduino:samd:mkrzero',
@@ -96,8 +94,7 @@ describe('buildArduinoCliCompileArgs', () => {
       avrLibStdCppInclude: '/opt/avr-libstdcpp/include',
       parallel: false,
     })
-    expect(nonAvr.find((a) => a.startsWith('compiler.cpp.extra_flags=')))
-      .toBe('compiler.cpp.extra_flags=-std=gnu++17')
+    expect(nonAvr.find((a) => a.startsWith('compiler.cpp.extra_flags='))).toBe('compiler.cpp.extra_flags=-std=gnu++17')
   })
 
   it('skips compiler.cpp.extra_flags entirely when cxx_flags is missing or empty', () => {

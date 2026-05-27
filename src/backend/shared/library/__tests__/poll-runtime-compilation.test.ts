@@ -3,9 +3,10 @@ import { pollRuntimeCompilation } from '../poll-runtime-compilation'
 
 /** Scripted fetchStatus — returns the i-th canned response on the
  *  i-th call.  Use `null` to simulate a comm failure. */
-function scriptedFetch(
-  responses: ReadonlyArray<RuntimeCompilationStatus | { error: string }>,
-): { fetch: () => Promise<{ success: true; data: RuntimeCompilationStatus } | { success: false; error: string }>; calls: () => number } {
+function scriptedFetch(responses: ReadonlyArray<RuntimeCompilationStatus | { error: string }>): {
+  fetch: () => Promise<{ success: true; data: RuntimeCompilationStatus } | { success: false; error: string }>
+  calls: () => number
+} {
   let i = 0
   return {
     fetch: async () => {

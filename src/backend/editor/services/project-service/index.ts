@@ -1,3 +1,4 @@
+import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import {
@@ -5,7 +6,6 @@ import {
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
-import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
@@ -434,9 +434,7 @@ class ProjectService {
       // types that don't own it, so the renderer sends `undefined`
       // and we leave the on-disk copies untouched rather than
       // overwriting them with an empty string.
-      const writes: Promise<void>[] = [
-        promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
-      ]
+      const writes: Promise<void>[] = [promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8')]
       if (deviceConfig !== undefined) {
         writes.push(promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'))
       }

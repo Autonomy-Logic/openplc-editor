@@ -23,13 +23,12 @@
  * Libraries tab.
  */
 
-import { useMemo, useState } from 'react'
-
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
+import { useMemo, useState } from 'react'
 
 interface ProjectLibrariesTabProps {
   installed: InstalledLibrary[]
@@ -126,9 +125,7 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
         )}
         <ListBody>
           {bundled.length === 0 && enabled.length === 0 ? (
-            <EmptyState>
-              Pick a library from the left to add it to this project.
-            </EmptyState>
+            <EmptyState>Pick a library from the left to add it to this project.</EmptyState>
           ) : (
             <>
               {bundled.map((lib) => (
@@ -155,22 +152,12 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
 // Subcomponents
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Card({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}) {
+function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className='flex min-h-0 w-1/2 min-w-[280px] flex-1 flex-col overflow-hidden rounded-md border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950'>
       <div className='shrink-0 border-b border-neutral-200 px-3 py-2 dark:border-neutral-700'>
         <h3 className='select-none font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
-        {subtitle && (
-          <p className='mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</p>
-        )}
+        {subtitle && <p className='mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</p>}
       </div>
       <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3'>{children}</div>
     </div>
@@ -251,7 +238,7 @@ function LibraryRow({
       {action === 'locked' && (
         <span
           title={actionTitle ?? 'Bundled — always available'}
-          className='shrink-0 select-none rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'
+          className='bg-brand/15 shrink-0 select-none rounded-full px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'
         >
           always on
         </span>

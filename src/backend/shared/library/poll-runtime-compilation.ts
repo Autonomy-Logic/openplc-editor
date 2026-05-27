@@ -41,10 +41,7 @@ export interface PollRuntimeCompilationOptions {
    *  web).  Returns a Result-shaped object so a comm failure can be
    *  counted toward the consecutive-error guard without crashing the
    *  whole poll loop. */
-  fetchStatus(): Promise<
-    | { success: true; data: RuntimeCompilationStatus }
-    | { success: false; error: string }
-  >
+  fetchStatus(): Promise<{ success: true; data: RuntimeCompilationStatus } | { success: false; error: string }>
   /** Receives every newly-emitted log line as the build progresses,
    *  plus the final outcome summary.  Each call is one log entry —
    *  the caller decides how to surface it (console, toast, log panel). */

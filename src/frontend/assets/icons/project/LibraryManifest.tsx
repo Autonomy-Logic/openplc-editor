@@ -36,18 +36,11 @@ export const LibraryManifestIcon = (props: ILibraryManifestIconProps) => {
         fill='#023C97'
       />
       {/* Folded corner highlight (lighter tone) */}
-      <path
-        opacity='0.5'
-        d='M17 2.5V6.5C17 7.05228 17.4477 7.5 18 7.5H22L17 2.5Z'
-        fill='white'
-      />
+      <path opacity='0.5' d='M17 2.5V6.5C17 7.05228 17.4477 7.5 18 7.5H22L17 2.5Z' fill='white' />
       {/* Library bookmark glyph — same triangular bookmark
           the Library icon uses, anchored at the top of the page so
           the manifest reads as "a library's identity card". */}
-      <path
-        d='M10 2.5H15V11L12.5 9L10 11V2.5Z'
-        fill='white'
-      />
+      <path d='M10 2.5H15V11L12.5 9L10 11V2.5Z' fill='white' />
       {/* Manifest text lines — two short rules near the bottom of
           the page, matching the depth/opacity of the Library icon's
           shelf accents so the family stays visually coherent. */}

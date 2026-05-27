@@ -22,7 +22,7 @@ import {
   useIsDebuggerVisible,
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -678,7 +678,12 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
-    [rung, reactFlowInstance],
+    // `libraries.user` and `pous` aren't read here, but
+    // `handleAddElementByDropping` captures both — omit them and a
+    // freshly created user FB stays invisible to the memoized closure
+    // until something else forces a re-bind (full project save resets
+    // `rung`, which is why "Save Project" used to mask this).
+    [rung, reactFlowInstance, libraries.user, pous],
   )
 
   /**

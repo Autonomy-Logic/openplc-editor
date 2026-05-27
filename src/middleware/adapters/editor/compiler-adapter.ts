@@ -246,9 +246,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
               // path emits a per-error log entry.  Forward it as-is
               // so the console can drive click-to-open from the
               // structured fields rather than parsing text.
-              const compileError = data.compileError as
-                | CompileProgressEvent['compileError']
-                | undefined
+              const compileError = data.compileError as CompileProgressEvent['compileError'] | undefined
 
               if (data.logLevel === 'error') {
                 hasError = true

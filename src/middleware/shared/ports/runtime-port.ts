@@ -95,6 +95,31 @@ export interface RuntimeLogsResult {
   error?: string
 }
 
+/**
+ * A runtime device discovered on the LAN via UDP broadcast.
+ *
+ * `ipAddress` is the reachable address learned from the response
+ * packet's source IP — that's authoritative even when the runtime
+ * has multiple interfaces and doesn't know its outward-facing one.
+ */
+export interface DiscoveredRuntimeDevice {
+  ipAddress: string
+  hostname: string
+  runtimeVersion: string
+  apiPort: number
+}
+
+export interface DiscoverDevicesOptions {
+  /** How long to listen for replies after sending the probe. */
+  durationMs?: number
+}
+
+export interface DiscoverDevicesResult {
+  success: boolean
+  devices?: DiscoveredRuntimeDevice[]
+  error?: string
+}
+
 export interface RuntimePort {
   /** Set the target device for subsequent API calls. */
   setDeviceContext?(context: { agentId: string; deviceId: string } | null): void
@@ -154,6 +179,21 @@ export interface RuntimePort {
    * Returns unsubscribe function.
    */
   onTokenRefreshed?(callback: (newToken: string) => void): Unsubscribe
+
+  // --- LAN discovery (UDP broadcast) ---
+
+  /**
+   * Probe the local network for OpenPLC runtime devices.  Resolves
+   * with the full set after the listen window closes.  Use
+   * `onDeviceDiscovered` for live updates while the scan is in flight.
+   */
+  discoverDevices?(opts?: DiscoverDevicesOptions): Promise<DiscoverDevicesResult>
+
+  /**
+   * Subscribe to live device-discovered notifications.  Fires once
+   * per unique source IP during a `discoverDevices` call.
+   */
+  onDeviceDiscovered?(callback: (device: DiscoveredRuntimeDevice) => void): Unsubscribe
 
   // --- EtherCAT Discovery (runtime device commands) ---
 

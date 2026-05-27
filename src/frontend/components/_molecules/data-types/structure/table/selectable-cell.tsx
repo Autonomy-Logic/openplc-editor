@@ -89,9 +89,7 @@ const SelectableTypeCell = ({
 
   const filteredVariableValues = VariableTypes.map((scope) => ({
     definition: scope.definition,
-    values: scope.values.filter((v) =>
-      safeUpper(v).includes(safeUpper(variableFilters[scope.definition] || '')),
-    ),
+    values: scope.values.filter((v) => safeUpper(v).includes(safeUpper(variableFilters[scope.definition] || ''))),
   }))
 
   const filteredLibraryValues = LibraryTypes.map((scope) => ({

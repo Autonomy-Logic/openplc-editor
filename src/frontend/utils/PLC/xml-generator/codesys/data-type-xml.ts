@@ -28,9 +28,7 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
             array: {
               dimension: parseDimensions(dataType.dimensions),
               baseType: {
-                [dataType.baseType.definition === 'user-data-type'
-                  ? 'derived'
-                  : baseTypeTag(dataType.baseType.value)]:
+                [dataType.baseType.definition === 'user-data-type' ? 'derived' : baseTypeTag(dataType.baseType.value)]:
                   dataType.baseType.definition === 'user-data-type' ? { '@name': dataType.baseType.value } : '',
               },
             },

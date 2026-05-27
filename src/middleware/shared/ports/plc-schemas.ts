@@ -29,10 +29,7 @@ import z from 'zod'
  * names — and don't need to round-trip mixed-case input.
  */
 const baseTypeEnum = z.enum(BASE_TYPE_NAMES as unknown as [string, ...string[]])
-const baseTypeSchema = z.preprocess(
-  (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v),
-  baseTypeEnum,
-)
+const baseTypeSchema = z.preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), baseTypeEnum)
 
 const genericTypeSchema = z.object({
   ANY: z.union([

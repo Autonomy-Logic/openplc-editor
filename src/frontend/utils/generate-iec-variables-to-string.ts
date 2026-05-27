@@ -10,9 +10,22 @@ const classToVarBlock: Record<string, string> = {
   temp: 'VAR_TEMP',
 }
 
+// Indentation mirrors xml2st's `PLCGenerator.PouProgramGenerator.GenerateProgram`
+// output (see `~/Documents/Code/xml2st/PLCGenerator.py:2414-2478`): two
+// spaces before the var-block keywords, four spaces before each
+// declaration line.  Matching that format keeps the editor's
+// variables-text view byte-identical to the per-POU `.st` file the
+// strucpp pipeline actually compiles — otherwise the user sees one
+// thing in the UI and the compiler sees another, and round-trips
+// through "view text → compile → click error" surface as cosmetic
+// noise and as the off-by-one body-line crash that motivated this
+// fix.
+const VAR_BLOCK_INDENT = '  '
+const VAR_DECL_INDENT = '    '
+
 export const generateIecVariablesToString = (variables: PLCVariable[]): string => {
   if (!variables || variables.length === 0) {
-    return 'VAR\nEND_VAR'
+    return `${VAR_BLOCK_INDENT}VAR\n${VAR_BLOCK_INDENT}END_VAR`
   }
 
   const groupedVariables = variables.reduce(
@@ -34,10 +47,10 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
   orderedGroups.forEach((groupName) => {
     if (groupedVariables[groupName]) {
       const blockHeader = classToVarBlock[groupName]
-      textualDeclaration += `${blockHeader}\n`
+      textualDeclaration += `${VAR_BLOCK_INDENT}${blockHeader}\n`
 
       groupedVariables[groupName].forEach((v) => {
-        let line = `\t${v.name} : ${v.type.value}`
+        let line = `${VAR_DECL_INDENT}${v.name} : ${v.type.value}`
 
         if (v.location) {
           line += ` AT ${v.location}`
@@ -59,9 +72,12 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
         textualDeclaration += line + '\n'
       })
 
-      textualDeclaration += `END_VAR\n\n`
+      // xml2st emits consecutive var-class blocks back-to-back with no
+      // blank line between them — `  END_VAR\n  VAR_INPUT\n...`.  Drop
+      // the prior `END_VAR\n\n` that left a separator behind.
+      textualDeclaration += `${VAR_BLOCK_INDENT}END_VAR\n`
     }
   })
 
-  return textualDeclaration.trim()
+  return textualDeclaration.trimEnd()
 }

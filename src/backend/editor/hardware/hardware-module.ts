@@ -7,9 +7,9 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
-import { assertPathContained } from '../utils/path-containment'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
+import { assertPathContained } from '../utils/path-containment'
 import { type BoardBuildInfo, BoardInfoResolver } from './board-info-resolver'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
@@ -321,9 +321,7 @@ class HardwareModule {
     // For VPP boards: contain under the package's own directory, since
     // package authors expect to ship their preview alongside other
     // package assets.
-    const baseDir = packagePath
-      ? packagePath
-      : join(this.sourcesDirectoryPath, 'boards', 'previews')
+    const baseDir = packagePath ? packagePath : join(this.sourcesDirectoryPath, 'boards', 'previews')
     const imagePath = join(baseDir, image)
     assertPathContained(baseDir, imagePath, 'preview image path')
 

@@ -41,8 +41,8 @@
  */
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
-import type { DebugSetResult, DebugTransportResult, Md5ProbeResult } from './types'
 import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
+import type { DebugSetResult, DebugTransportResult, Md5ProbeResult } from './types'
 
 // ---------------------------------------------------------------------------
 // Uint8Array helpers — host-endian-agnostic, no typed-array views on wire data.

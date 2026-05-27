@@ -30,7 +30,7 @@ import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
 import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
 import { deleteBodyLineOffset, setBodyLineOffset } from './body-offsets'
-import { DATA_TYPES_URI, pouUri, type StLspService,stubUri } from './types'
+import { DATA_TYPES_URI, pouUri, type StLspService, stubUri } from './types'
 
 /**
  * Determines whether a POU's source goes through the live-body
@@ -227,10 +227,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
  * the worker re-runs analysis against the new stlib cache; without
  * it, open documents would keep stale `analysisResult`s.
  */
-export function attachLibrarySync(
-  service: StLspService,
-  onAfterRefresh?: () => void,
-): () => void {
+export function attachLibrarySync(service: StLspService, onAfterRefresh?: () => void): () => void {
   return openPLCStoreBase.subscribe(
     (state) => state.libraries.user.map((l) => l.name).join('|'),
     () => {
@@ -256,12 +253,33 @@ export function attachLibrarySync(
  * it to `forceResync` so open documents are re-analysed against the
  * new library cache.
  */
-export function attachEnabledLibrariesSync(
-  service: StLspService,
-  onAfterRefresh?: () => void,
-): () => void {
+export function attachEnabledLibrariesSync(service: StLspService, onAfterRefresh?: () => void): () => void {
   return openPLCStoreBase.subscribe(
     (state) => state.enabledLibraries.slice().sort().join('|'),
+    () => {
+      void service.refreshStlibs().then(() => {
+        onAfterRefresh?.()
+      })
+    },
+  )
+}
+
+/**
+ * Wires the always-on bundled-library list to `refreshStlibs()`.
+ *
+ * `bundledLibraryNames` is populated asynchronously at app boot by
+ * `hydrateLibraries()` in `App.tsx`, in parallel with `bootStLsp`.
+ * If the LSP finishes initialising before the bundled list lands,
+ * the initial `pushAllStlibs` filters with an empty bundled set and
+ * standard archives (IEC FBs like `TON`, `CTU`, …) never reach the
+ * worker — surfacing as "Undefined type 'TON'" diagnostics.  This
+ * subscription closes that race: as soon as bundled names arrive
+ * (or later toggle), the cache is repushed and open documents are
+ * re-analysed.
+ */
+export function attachBundledLibrariesSync(service: StLspService, onAfterRefresh?: () => void): () => void {
+  return openPLCStoreBase.subscribe(
+    (state) => state.bundledLibraryNames.slice().sort().join('|'),
     () => {
       void service.refreshStlibs().then(() => {
         onAfterRefresh?.()

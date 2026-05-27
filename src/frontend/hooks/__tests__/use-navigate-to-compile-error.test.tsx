@@ -23,7 +23,11 @@ const getEditorFromEditors = jest.fn(() => null)
 const setEditorCursor = jest.fn()
 const updateModelVariablesForName = jest.fn()
 
-const samplePou = (overrides?: { name?: string; pouType?: 'program' | 'function-block' | 'function'; language?: string }) => ({
+const samplePou = (overrides?: {
+  name?: string
+  pouType?: 'program' | 'function-block' | 'function'
+  language?: string
+}) => ({
   name: overrides?.name ?? 'MANUAL_OVERRIDE',
   pouType: overrides?.pouType ?? 'function-block',
   body: { language: overrides?.language ?? 'st', value: '' },
