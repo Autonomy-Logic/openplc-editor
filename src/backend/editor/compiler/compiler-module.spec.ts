@@ -31,17 +31,25 @@ jest.mock('node:fs/promises', () => {
   return { ...actual, cp: jest.fn().mockResolvedValue(undefined) }
 })
 
-// Mock node:child_process so individual tests can swap the exec impl. The
-// real `exec` carries a promisify.custom symbol that makes `promisify(exec)`
-// resolve with `{ stdout, stderr }` instead of a single value — we replicate
-// that here so the production code path through promisify behaves identically.
+// Mock node:child_process so individual tests can swap the exec impl. Both
+// `exec` (legacy callsites still going through promisify(exec) in this
+// module's call graph) AND `execFile` (the new path used by recipe-exec.ts)
+// route through the same `execImpl.current` dispatcher so tests inspect
+// invocations uniformly. For execFile we synthesize a printable cmd string
+// from (command, args) so existing `expect(cmd).toContain('pou_MAIN.cpp')`
+// assertions still work — bare argv entries get rendered with surrounding
+// quotes only if they contain whitespace, matching the eye-grep shape the
+// tests were written against.
 const execImpl: {
   current: (cmd: string) => Promise<{ stdout: string; stderr: string }>
 } = {
   current: async () => ({ stdout: '', stderr: '' }),
 }
+const renderArgvAsCmd = (command: string, args: ReadonlyArray<string>): string =>
+  [command, ...args].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')
 jest.mock('node:child_process', () => {
   const { promisify } = jest.requireActual('node:util') as typeof import('node:util')
+
   const exec = (
     cmd: string,
     _opts: unknown,
@@ -54,7 +62,23 @@ jest.mock('node:child_process', () => {
     return { kill: () => undefined }
   }
   ;(exec as unknown as { [k: symbol]: unknown })[promisify.custom] = (cmd: string) => execImpl.current(cmd)
-  return { exec, spawn: jest.fn() }
+
+  const execFile = (
+    command: string,
+    args: ReadonlyArray<string>,
+    _opts: unknown,
+    cb: (err: Error | null, val?: { stdout: string; stderr: string }) => void,
+  ) => {
+    execImpl
+      .current(renderArgvAsCmd(command, args))
+      .then((val) => cb(null, val))
+      .catch((err: Error) => cb(err))
+    return { kill: () => undefined }
+  }
+  ;(execFile as unknown as { [k: symbol]: unknown })[promisify.custom] = (command: string, args: ReadonlyArray<string>) =>
+    execImpl.current(renderArgvAsCmd(command, args))
+
+  return { exec, execFile, spawn: jest.fn() }
 })
 
 // CompilerModule uses process.resourcesPath (Electron-specific) when not in dev mode.
@@ -290,10 +314,12 @@ describe('CompilerModule', () => {
   describe('ensureResponseFileStubs (ESP32/STM32duino response-file workaround)', () => {
     // Method is `private static` — exposed for direct testing via a typed
     // façade so the regex and EEXIST handling can be exercised in isolation
-    // without going through the full pre-compile path.
+    // without going through the full pre-compile path. Takes already-tokenized
+    // argv (post-`tokenizeRecipe`) — response-file tokens arrive without
+    // surrounding quote chars.
     const ensureStubs = (
       CompilerModule as unknown as {
-        ensureResponseFileStubs(cmd: string, log: (s: string) => void): Promise<void>
+        ensureResponseFileStubs(argv: ReadonlyArray<string>, log: (s: string) => void): Promise<void>
       }
     ).ensureResponseFileStubs.bind(CompilerModule)
     const fs = jest.requireActual('node:fs') as typeof import('node:fs')
@@ -309,49 +335,46 @@ describe('CompilerModule', () => {
       fs.rmSync(workDir, { recursive: true, force: true })
     })
 
-    it('creates an empty stub for a quoted POSIX @-file the recipe references but does not exist', async () => {
+    it('creates an empty stub for a POSIX @-file the recipe references but does not exist', async () => {
       const missing = join(workDir, 'sub', 'build_opt.h')
-      const cmd = `arm-none-eabi-g++ -c "@${missing}" -DARDUINO=10607 -o foo.o`
-      await ensureStubs(cmd, noopLog)
+      const argv = ['arm-none-eabi-g++', '-c', `@${missing}`, '-DARDUINO=10607', '-o', 'foo.o']
+      await ensureStubs(argv, noopLog)
       expect(fs.existsSync(missing)).toBe(true)
       expect(fs.statSync(missing).size).toBe(0)
       expect(noopLog).toHaveBeenCalledWith(expect.stringContaining(`Stubbed empty response file: ${missing}`), 'info')
     })
 
-    it('matches Windows-style @C:\\... and @C:/... absolute paths from the recipe', async () => {
-      // Windows paths can't actually be created on POSIX hosts, so we assert
-      // via the side-effect: the regex must extract them so the mkdir/writeFile
-      // attempt happens (and would surface a mkdir error).
+    it('matches Windows-style @C:\\... and @C:/... absolute paths in argv tokens', () => {
+      // Pure regex assertion against the public extractor — observing
+      // extraction via filesystem side-effects (mkdir/writeFile) is
+      // platform-fragile (POSIX accepts "C:" as a literal directory
+      // name; Windows actually writes under C:\). The extractor is the
+      // authoritative subject, so we test it directly.
       const winBackslash = 'C:\\Users\\dev\\AppData\\arduino\\sketches\\hash\\file_opts'
       const winSlash = 'C:/Users/dev/AppData/arduino/sketches/hash/build_opt.h'
-      const cmd = `arm-zephyr-eabi-g++ -c "@${winBackslash}" "@${winSlash}" -o foo.o`
-      const originalCwd = process.cwd()
-      process.chdir(workDir)
-      try {
-        await ensureStubs(cmd, noopLog).catch(() => {
-          /* mkdir of "C:" on POSIX can fail — regex match still asserted via the log */
-        })
-      } finally {
-        process.chdir(originalCwd)
-      }
-      const logCalls = noopLog.mock.calls.flat().join('\n')
-      expect(logCalls).toContain(winBackslash)
-      expect(logCalls).toContain(winSlash)
+      const argv = ['arm-zephyr-eabi-g++', '-c', `@${winBackslash}`, `@${winSlash}`, '-o', 'foo.o']
+
+      const extracted = (CompilerModule as unknown as {
+        extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[]
+      }).extractResponseFilesFromArgv(argv)
+
+      expect(extracted).toContain(winBackslash)
+      expect(extracted).toContain(winSlash)
     })
 
     it('does not overwrite existing response files', async () => {
       const existing = join(workDir, 'preexisting.txt')
       fs.writeFileSync(existing, 'real flags here', 'utf-8')
-      const cmd = `g++ -c "@${existing}" foo.cpp`
-      await ensureStubs(cmd, noopLog)
+      const argv = ['g++', '-c', `@${existing}`, 'foo.cpp']
+      await ensureStubs(argv, noopLog)
       expect(fs.readFileSync(existing, 'utf-8')).toBe('real flags here')
       expect(noopLog).not.toHaveBeenCalled()
     })
 
     it('deduplicates repeated @-references so a path is stubbed at most once', async () => {
       const target = join(workDir, 'shared.opt')
-      const cmd = `g++ -c "@${target}" "@${target}" "@${target}"`
-      await ensureStubs(cmd, noopLog)
+      const argv = ['g++', '-c', `@${target}`, `@${target}`, `@${target}`]
+      await ensureStubs(argv, noopLog)
       expect(fs.existsSync(target)).toBe(true)
       expect(noopLog).toHaveBeenCalledTimes(1)
     })
@@ -360,9 +383,8 @@ describe('CompilerModule', () => {
       // Relative-path @-args either reference workspace-local files (which
       // we shouldn't touch) or are non-path arguments — the regex deliberately
       // only matches absolute paths.
-      const relative = 'subdir/file.txt'
-      const cmd = `g++ -c "@${relative}" foo.cpp`
-      await ensureStubs(cmd, noopLog)
+      const argv = ['g++', '-c', '@subdir/file.txt', 'foo.cpp']
+      await ensureStubs(argv, noopLog)
       expect(noopLog).not.toHaveBeenCalled()
     })
   })

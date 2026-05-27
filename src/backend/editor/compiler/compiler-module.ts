@@ -1,4 +1,4 @@
-import { exec, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
 import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
@@ -7,7 +7,8 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
+
+import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
 
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
 // incompatible with Jest's CJS transform — see `backend/shared/library/strucpp-runtime`.
@@ -467,7 +468,6 @@ class CompilerModule {
   async checkArduinoCliAvailability(): Promise<MethodsResult<string>> {
     let binaryPath = this.arduinoCliBinaryPath
     const [flag, configFilePath] = this.arduinoCliBaseParameters
-    const executeCommand = promisify(exec)
 
     if (CompilerModule.HOST_PLATFORM === 'win32') {
       // INFO: On Windows, we need to add the .exe extension to the binary path.
@@ -475,7 +475,7 @@ class CompilerModule {
     }
     // INFO: We use the version command to check if the arduino-cli is available.
     // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(`"${binaryPath}" version ${flag} "${configFilePath}" --json`)
+    const { stdout, stderr } = await execRecipeArgv([binaryPath, 'version', flag, configFilePath, '--json'])
     if (stderr) {
       throw new Error(`Arduino CLI not available: ${stderr}`)
     }
@@ -550,16 +550,28 @@ class CompilerModule {
     if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
 
     const dummySketchPath = this.#constructShowPropertiesDummyPath()
-    const baseArgs = this.arduinoCliBaseParameters.map((p) => `"${p}"`).join(' ')
-    const execAsync = promisify(exec)
 
     // `--show-properties=expanded` tells arduino-cli to evaluate every
     // `{var}` interpolation in `platform.txt` / `boards.txt` before printing
     // — without `=expanded`, recipes come back with raw `{compiler.path}`
     // placeholders that would be useless for direct toolchain invocation.
-    const cmd = `"${binaryPath}" compile --fqbn "${fqbn}" --show-properties=expanded "${dummySketchPath}" ${baseArgs}`
+    //
+    // Spawned via execFile (no shell) so paths containing spaces or shell
+    // metacharacters (`Program Files (x86)`, `Arduino IDE` etc.) reach
+    // arduino-cli intact on every host. Going through cmd.exe on Windows
+    // would corrupt the argv exactly the way the recipe-driven compile
+    // path used to break for the Leonardo USB descriptors.
+    const argv = [
+      binaryPath,
+      'compile',
+      '--fqbn',
+      fqbn,
+      '--show-properties=expanded',
+      dummySketchPath,
+      ...this.arduinoCliBaseParameters,
+    ]
 
-    const { stdout } = await execAsync(cmd, { maxBuffer: 8 * 1024 * 1024 })
+    const { stdout } = await execRecipeArgv(argv, { maxBuffer: 8 * 1024 * 1024 })
 
     const properties = CompilerModule.parseShowPropertiesOutput(stdout)
     const recipeCpp = properties['recipe.cpp.o.pattern']
@@ -1379,25 +1391,37 @@ class CompilerModule {
     })
   }
 
+  // Extract every absolute `@<path>` response-file reference from a
+  // tokenized recipe (post-`tokenizeRecipe`). Only POSIX `/...` and
+  // Windows `C:\...`/`C:/...` qualify — relative `@-` tokens are
+  // workspace-local files the editor must not touch. Pure function so
+  // the regex can be unit-tested without filesystem side effects.
+  static extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[] {
+    const responseFileRe = /^@([A-Za-z]:[\\/].+|\/.+)$/
+    const seen = new Set<string>()
+    for (const token of argv) {
+      const match = responseFileRe.exec(token)
+      if (match) seen.add(match[1])
+    }
+    return Array.from(seen)
+  }
+
   // Stub empty files for `@response_file` paths a recipe references but
   // that arduino-cli would only generate during a real compile (ESP32 +
   // STM32duino). GCC treats missing `@file` as a literal positional
   // argument → "cannot specify '-o' with '-c' ... with multiple files".
   // Empty is the canonical default arduino-cli itself writes when no
   // per-project build_opt customization exists.
+  //
+  // Takes the already-tokenized argv (post-`tokenizeRecipe`) so the
+  // surrounding-quote concern from the legacy regex form goes away —
+  // quotes are stripped by tokenization and the response-file token
+  // arrives as `@<absolute-path>` cleanly.
   private static async ensureResponseFileStubs(
-    cmd: string,
+    argv: ReadonlyArray<string>,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
-    // Match `@<absolute-path>` (POSIX `/...` or Windows `C:\...` / `C:/...`),
-    // with optional surrounding quote from the recipe substitution.
-    const responseFileRe = /["']?@([A-Za-z]:[\\/][^"'\s]+|\/[^"'\s]+)/g
-    const paths = new Set<string>()
-    let match: RegExpExecArray | null
-    while ((match = responseFileRe.exec(cmd)) !== null) {
-      paths.add(match[1])
-    }
-    for (const responsePath of paths) {
+    for (const responsePath of CompilerModule.extractResponseFilesFromArgv(argv)) {
       if (existsSync(responsePath)) continue
       await mkdir(path.dirname(responsePath), { recursive: true })
       try {
@@ -1445,14 +1469,22 @@ class CompilerModule {
     const objDir = join(compilationPath, 'precompile', 'obj')
     await mkdir(objDir, { recursive: true })
 
-    const includes = [`"-I${srcDir}"`, `"-I${baremetalDir}"`].join(' ')
+    // -I arguments are passed as bare argv entries (no extra quoting) —
+    // execFile delivers them literally to the toolchain on every host.
+    const includeArgs = [`-I${srcDir}`, `-I${baremetalDir}`]
 
     // Appended after the recipe so the last `-std=` wins over the core's
     // implicit gnu++14. extraCxxFlags carries VPP per-board cxx_flags.
-    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraCxxFlags].join(' ')
+    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraCxxFlags]
 
-    const execAsync = promisify(exec)
     const execMaxBuffer = 16 * 1024 * 1024
+
+    // Tokenize the raw recipe once — placeholders stay intact and are
+    // substituted per-TU below. Going through tokenizeRecipe up-front
+    // means POSIX-quoted segments like `'-DUSB_PRODUCT="Arduino Leonardo"'`
+    // collapse to a single argv entry with the literal `"…"` preserved,
+    // regardless of host shell.
+    const recipeTokens = tokenizeRecipe(tcProps.recipeCpp)
 
     handleOutputData(
       `[precompile] Compiling ${sources.length} TU(s) with toolchain for ${fqbn}...`,
@@ -1468,18 +1500,19 @@ class CompilerModule {
     const compilePromises = sources.map(async (sourcePath, idx) => {
       const objectPath = objectFiles[idx]
 
-      const cmd =
-        tcProps.recipeCpp
-          .replaceAll('{source_file}', sourcePath)
-          .replaceAll('{object_file}', objectPath)
-          .replaceAll('{includes}', includes) +
-        ' ' +
-        trailingFlags
+      const argv = [
+        ...substitutePlaceholders(recipeTokens, {
+          '{source_file}': sourcePath,
+          '{object_file}': objectPath,
+          '{includes}': includeArgs,
+        }),
+        ...trailingFlags,
+      ]
 
-      await CompilerModule.ensureResponseFileStubs(cmd, handleOutputData)
+      await CompilerModule.ensureResponseFileStubs(argv, handleOutputData)
 
       try {
-        const { stdout, stderr } = await execAsync(cmd, { maxBuffer: execMaxBuffer })
+        const { stdout, stderr } = await execRecipeArgv(argv, { maxBuffer: execMaxBuffer })
         // gcc emits warnings on stderr even on success — both streams logged as info.
         if (stdout) handleOutputData(stdout, 'info')
         if (stderr) handleOutputData(stderr, 'info')
@@ -1498,7 +1531,6 @@ class CompilerModule {
     // (full path, usable) while AVR uses `{archive_file}` (bare filename with
     // build cache dir baked into the recipe, which would write to the wrong place).
     const archivePath = join(compilationPath, 'precompile', 'libOpenPLCUserLib.a')
-    const quotedObjects = objectFiles.map((p) => `"${p}"`).join(' ')
     const compilerPath = tcProps.properties['compiler.path']
     const arName = tcProps.properties['compiler.ar.cmd']
     if (!compilerPath || !arName) {
@@ -1509,16 +1541,24 @@ class CompilerModule {
           `The board's core is likely not installed.`,
       )
     }
-    const arFlags = tcProps.properties['compiler.ar.flags'] ?? 'rcs'
-    const arExtraFlags = tcProps.properties['compiler.ar.extra_flags'] ?? ''
-    const archiverBin = `"${compilerPath}${arName}"`
-    const archiveCmd = `${archiverBin} ${arFlags} ${arExtraFlags} "${archivePath}" ${quotedObjects}`
+    const arFlags = (tcProps.properties['compiler.ar.flags'] ?? 'rcs').split(/\s+/).filter(Boolean)
+    const arExtraFlags = (tcProps.properties['compiler.ar.extra_flags'] ?? '').split(/\s+/).filter(Boolean)
+    // ar argv: <bin> <flags> <extra_flags> <archive> <objects…>. All paths
+    // land as plain argv entries so spaces, parentheses, or other shell
+    // metacharacters in the build path can't break the invocation.
+    const archiveArgv = [
+      `${compilerPath}${arName}`,
+      ...arFlags,
+      ...arExtraFlags,
+      archivePath,
+      ...objectFiles,
+    ]
 
     handleOutputData(
       `[precompile] Archiving ${objectFiles.length} object(s) into libOpenPLCUserLib.a...`,
       'info',
     )
-    await execAsync(archiveCmd, { maxBuffer: execMaxBuffer })
+    await execRecipeArgv(archiveArgv, { maxBuffer: execMaxBuffer })
 
     // Move pre-compiled sources out of src/ so arduino-cli library discovery
     // doesn't recompile them; preserved under precompile/sources/ for debug.
