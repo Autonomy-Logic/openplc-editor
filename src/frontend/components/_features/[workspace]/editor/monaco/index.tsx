@@ -28,7 +28,7 @@ import {
   tableVariablesCompletion,
 } from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
-import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor, updatePythonLspContext } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
 
 type monacoEditorProps = {
@@ -329,6 +329,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       injectCppTemplateIfNeeded(editorRef.current, pou, name)
     }
   }, [pou])
+
+  // Keep the Python LSP's per-POU preamble (IEC variables → Pyright
+  // globals) in sync with the variables table.  Re-pushes the
+  // augmented document to Pyright whenever a variable is added /
+  // renamed / type-changed / deleted so the LSP stops complaining
+  // about names it just learned (or starts complaining about names
+  // the user just removed).  Gated on hasPythonLSP because the web
+  // build before its Pyright wire-up shouldn't pay the cost.
+  useEffect(() => {
+    if (!capabilities.hasPythonLSP) return
+    if (language !== 'python') return
+    updatePythonLspContext(name, pouVariables)
+  }, [capabilities.hasPythonLSP, language, name, pouVariables])
 
   useEffect(() => {
     return () => {
@@ -962,8 +975,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // Python LSP (gated)
     if (capabilities.hasPythonLSP && language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
+      // Hand the LSP the POU's variables-table state so it can build
+      // the preamble of module-level globals the compiler injects at
+      // build time.  Without this, Pyright flags every IEC input/
+      // output reference as "undefined" (see `python-lsp/index.ts`).
       initPythonLSP(monacoInstance)
-        .then(() => setupPythonLSPForEditor(editorInstance))
+        .then(() =>
+          setupPythonLSPForEditor(editorInstance, {
+            pouName: name,
+            variables: pou.interface?.variables ?? [],
+          }),
+        )
         .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
     } else if (language === 'python' && pou) {
       // Web: no LSP but still inject template
@@ -1239,6 +1261,18 @@ void loop()
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
+    // Lock indentation to 4 spaces across every language Monaco
+    // hosts (ST / IL / Python / C++).  Without this Monaco's
+    // `detectIndentation` heuristic kicks in on the existing model
+    // content and can settle on 2 spaces for Python POUs whose
+    // bodies happen to mix indent widths — surprising users who
+    // expect consistent 4-space behaviour across all editor
+    // surfaces.  `detectIndentation: false` disables that
+    // heuristic; `tabSize` + `insertSpaces` set the canonical
+    // width and ban literal tab characters.
+    tabSize: 4,
+    insertSpaces: true,
+    detectIndentation: false,
     quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
     // Pinned for cross-platform consistency with the variables-code-editor.
     // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
