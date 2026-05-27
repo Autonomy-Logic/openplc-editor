@@ -192,15 +192,20 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
   async function pushAllStlibs(): Promise<void> {
     const sources = await stlibSource.listStlibs()
-    // Honor the project's enabled-library set.  The adapter returns
-    // every system-installed archive; the project policy lives in the
-    // store, so the service applies it here.  An archive that isn't
-    // enabled for the current project must not contribute symbols to
-    // the LSP — otherwise the user can reference types from libraries
-    // they never opted in to.
-    const enabled = new Set(openPLCStoreBase.getState().enabledLibraries)
+    // Honor the project's enabled-library set, plus the always-on
+    // bundled archives.  The adapter returns every system-installed
+    // archive; the project policy lives in the store, so the service
+    // applies it here.  Bundled libs (e.g. the IEC standard FBs like
+    // `TON`) are tracked separately in `bundledLibraryNames` and are
+    // intentionally absent from `enabledLibraries`, so filtering on
+    // the latter alone would starve the LSP of every standard symbol
+    // and surface as "Undefined type 'TON'" diagnostics.  Anything
+    // outside the union must still be excluded — otherwise the user
+    // can reference types from libraries they never opted in to.
+    const state = openPLCStoreBase.getState()
+    const allowed = new Set([...state.enabledLibraries, ...state.bundledLibraryNames])
     for (const source of sources) {
-      if (!enabled.has(source.name)) continue
+      if (!allowed.has(source.name)) continue
       try {
         const payload = await stlibSource.readStlib(source.sourceLabel)
         await connection.sendRequest(LOAD_STLIB_BUFFER, {

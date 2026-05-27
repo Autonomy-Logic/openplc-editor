@@ -461,8 +461,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // doesn't carry an end-column we'd rather show "this whole line
     // is the problem" than land an invisible caret somewhere mid-line.
     const model = ed.getModel()
-    const lineLength = model ? model.getLineMaxColumn(target.lineNumber) : target.column
-    const range = new monacoInst.Range(target.lineNumber, 1, target.lineNumber, lineLength)
+    // Clamp to the model's valid line range.  `getLineMaxColumn` and
+    // `Range` both throw `BugIndicatingError: Illegal value for
+    // lineNumber` when lineNumber < 1 or > getLineCount(), and a
+    // compile-error click for a POU whose Monaco model is empty
+    // (freshly opened tab) or whose body line count is smaller than
+    // strucpp's reported line would otherwise propagate that throw
+    // through React's commit phase and unmount the editor.
+    const safeLine = model ? Math.max(1, Math.min(model.getLineCount(), target.lineNumber)) : target.lineNumber
+    if (model && safeLine !== target.lineNumber) {
+      console.warn(
+        `[monaco] cursor target line ${target.lineNumber} out of range (model has ${model.getLineCount()} lines); clamped to ${safeLine}`,
+      )
+    }
+    const lineLength = model ? model.getLineMaxColumn(safeLine) : target.column
+    const range = new monacoInst.Range(safeLine, 1, safeLine, lineLength)
     ed.setSelection(range)
     ed.revealRangeInCenter(range)
     ed.focus()
@@ -827,6 +840,45 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
 
+    // ST POU body editors silently lose plain-Space keystrokes after
+    // the STruC++ LSP completion provider became active in the v4.2.0
+    // RC line.  Symptom: with the suggest widget mounted (visible OR
+    // just tracking — the "active suggest model" state), `onKeyDown`
+    // for Space fires, `defaultPrevented` is false, no built-in
+    // Space binding exists in the editor surface (only Ctrl+Space /
+    // Cmd+Space for trigger-suggest), yet `onDidType(" ")` never
+    // fires and the model stays unchanged.  The break only shows up
+    // when the LSP provider is registered; every other Monaco editor
+    // surface in the app (IL, Python, C++) types space fine because
+    // no LSP provider attaches.  Reproduced cleanly with `if<Space>`
+    // (widget filtering on the keyword list) and inside snippet
+    // placeholders after Tab-accepting a suggestion.
+    //
+    // The fix is byte-equivalent to what Monaco's default Space
+    // dispatch *should* do: invoke the `type` core command with a
+    // single space, and dismiss the suggest widget so it doesn't
+    // dangle.  Binding via `addCommand(KeyCode.Space, …)` registers
+    // an editor-scoped keybinding at the highest user-priority slot;
+    // it never collides with built-in shortcuts because Monaco
+    // reserves Space only with modifiers (Ctrl/Cmd) and only for
+    // trigger-suggest, which still works because that binding lives
+    // at a different chord.  See `node_modules/monaco-editor/esm/vs/
+    // editor/contrib/suggest/browser/suggestController.js:676` for
+    // the only Space-key registration in editor scope.
+    //
+    // Root cause of the upstream interference between the LSP
+    // semantic-tokens / completion-model flow and Monaco's default
+    // type pipeline is still open — left for an upstream Monaco /
+    // strucpp-LSP investigation since the regression sits below the
+    // surface our converters touch (items carry no commitCharacters
+    // and no itemDefaults; the suggestModel just stops dispatching
+    // type for Space).  This binding restores the expected typing
+    // behaviour with zero side effects on other editors.
+    editorInstance.addCommand(monacoInstance.KeyCode.Space, () => {
+      editorInstance.trigger('keyboard', 'type', { text: ' ' })
+      editorInstance.trigger('keyboard', 'hideSuggestWidget', {})
+    })
+
     focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
       openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
     })
@@ -891,15 +943,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       // Definition or compile-error click that fired before this
       // editor's mount completed).  The reactive useEffect above
       // handles subsequent jumps on the already-mounted editor.
+      // Same clamp as the reactive path — see the comment there.
       const monacoInst = monacoInstance
       const model = editorInstance.getModel()
-      const lineLength = model ? model.getLineMaxColumn(editor.cursorPosition.lineNumber) : editor.cursorPosition.column
-      const range = new monacoInst.Range(
-        editor.cursorPosition.lineNumber,
-        1,
-        editor.cursorPosition.lineNumber,
-        lineLength,
-      )
+      const targetLine = editor.cursorPosition.lineNumber
+      const safeLine = model ? Math.max(1, Math.min(model.getLineCount(), targetLine)) : targetLine
+      if (model && safeLine !== targetLine) {
+        console.warn(
+          `[monaco-mount] cursor target line ${targetLine} out of range (model has ${model.getLineCount()} lines); clamped to ${safeLine}`,
+        )
+      }
+      const lineLength = model ? model.getLineMaxColumn(safeLine) : editor.cursorPosition.column
+      const range = new monacoInst.Range(safeLine, 1, safeLine, lineLength)
       editorInstance.setSelection(range)
       editorInstance.revealRangeInCenter(range)
     }

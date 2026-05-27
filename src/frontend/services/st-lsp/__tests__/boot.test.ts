@@ -10,6 +10,7 @@ const startStLsp = jest.fn()
 const attachProjectSync = jest.fn()
 const attachLibrarySync = jest.fn()
 const attachEnabledLibrariesSync = jest.fn()
+const attachBundledLibrariesSync = jest.fn()
 
 jest.mock('../index', () => ({
   startStLsp: (...args: unknown[]) => startStLsp(...args),
@@ -18,6 +19,7 @@ jest.mock('../project-sync', () => ({
   attachProjectSync: (...args: unknown[]) => attachProjectSync(...args),
   attachLibrarySync: (...args: unknown[]) => attachLibrarySync(...args),
   attachEnabledLibrariesSync: (...args: unknown[]) => attachEnabledLibrariesSync(...args),
+  attachBundledLibrariesSync: (...args: unknown[]) => attachBundledLibrariesSync(...args),
 }))
 
 import { bootStLsp } from '../boot'
@@ -42,6 +44,7 @@ beforeEach(() => {
   attachProjectSync.mockReset()
   attachLibrarySync.mockReset()
   attachEnabledLibrariesSync.mockReset()
+  attachBundledLibrariesSync.mockReset()
 
   startStLsp.mockReturnValue({
     ready: Promise.resolve(),
@@ -58,6 +61,7 @@ beforeEach(() => {
   })
   attachLibrarySync.mockReturnValue(jest.fn())
   attachEnabledLibrariesSync.mockReturnValue(jest.fn())
+  attachBundledLibrariesSync.mockReturnValue(jest.fn())
 })
 
 describe('bootStLsp', () => {
@@ -85,6 +89,7 @@ describe('bootStLsp', () => {
     expect(attachProjectSync).toHaveBeenCalledTimes(1)
     expect(attachLibrarySync).toHaveBeenCalledTimes(1)
     expect(attachEnabledLibrariesSync).toHaveBeenCalledTimes(1)
+    expect(attachBundledLibrariesSync).toHaveBeenCalledTimes(1)
   })
 
   it('dispose() tears down every subscription and the service', () => {
@@ -95,22 +100,26 @@ describe('bootStLsp', () => {
     expect(attachProjectSync.mock.results[0].value.dispose).toHaveBeenCalledTimes(1)
     expect(attachLibrarySync.mock.results[0].value).toHaveBeenCalledTimes(1)
     expect(attachEnabledLibrariesSync.mock.results[0].value).toHaveBeenCalledTimes(1)
+    expect(attachBundledLibrariesSync.mock.results[0].value).toHaveBeenCalledTimes(1)
   })
 
-  it('passes an onAfterRefresh callback to both library subscriptions that calls forceResync', () => {
+  it('passes an onAfterRefresh callback to every library subscription that calls forceResync', () => {
     bootStLsp(makePorts(), monacoStub)
     const projectSyncHandle = attachProjectSync.mock.results[0].value as {
       forceResync: jest.Mock
     }
     const librarySyncCallback = attachLibrarySync.mock.calls[0][1] as () => void
     const enabledSyncCallback = attachEnabledLibrariesSync.mock.calls[0][1] as () => void
+    const bundledSyncCallback = attachBundledLibrariesSync.mock.calls[0][1] as () => void
 
     expect(typeof librarySyncCallback).toBe('function')
     expect(typeof enabledSyncCallback).toBe('function')
+    expect(typeof bundledSyncCallback).toBe('function')
 
     librarySyncCallback()
     enabledSyncCallback()
+    bundledSyncCallback()
 
-    expect(projectSyncHandle.forceResync).toHaveBeenCalledTimes(2)
+    expect(projectSyncHandle.forceResync).toHaveBeenCalledTimes(3)
   })
 })

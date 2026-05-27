@@ -1,6 +1,6 @@
 import { ComponentProps, useEffect, useRef, useState } from 'react'
 
-import { useProject, useSystem } from '../../../../middleware/shared/providers'
+import { useProject } from '../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../store'
 import { File } from '../../_atoms/file'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -16,7 +16,6 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     sharedWorkspaceActions: { handleOpenProjectResponse },
   } = useOpenPLCStore()
 
-  const system = useSystem()
   const project = useProject()
 
   const [recentProjects, setRecentProjects] = useState(recent)
@@ -85,11 +84,12 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     }
   }, [])
 
+  // Refetch from projects.json (the same source as the initial hydration).
+  // The project service evicts the dead entry on ENOENT before returning,
+  // so this read shows the post-eviction list.
   const updateUserRecentProjects = async () => {
-    const recentList = await system.getStoreValue('recentProjects')
-    if (Array.isArray(recentList)) {
-      setRecent(recentList as typeof recent)
-    }
+    const recentList = await project.getRecentProjects()
+    setRecent(recentList)
   }
 
   const handleOpenProjectByPath = async (projectPath: string) => {
