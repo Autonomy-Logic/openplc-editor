@@ -9,6 +9,7 @@ import path from 'node:path'
 import { join } from 'node:path'
 
 import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
+import { runWithConcurrencyLimit } from './run-with-concurrency'
 
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
 // incompatible with Jest's CJS transform — see `backend/shared/library/strucpp-runtime`.
@@ -1524,7 +1525,16 @@ class CompilerModule {
       join(objDir, path.basename(sourcePath).replace(/\.cpp$/, '.o')),
     )
 
-    const compilePromises = sources.map(async (sourcePath, idx) => {
+    // Cap concurrent toolchain spawns at the host's logical core count.
+    // An unbounded `sources.map(async …)` was dispatching one g++ per TU
+    // simultaneously — on Windows each one drags a cmd.exe shim along
+    // and a 30-TU project would launch 30 parallel processes regardless
+    // of how many cores the host actually has. `os.cpus().length` is the
+    // standard ceiling; the floor of 1 inside `runWithConcurrencyLimit`
+    // covers environments where `os.cpus()` reports zero.
+    const compileConcurrency = os.cpus().length
+
+    await runWithConcurrencyLimit(sources, compileConcurrency, async (sourcePath, idx) => {
       const objectPath = objectFiles[idx]
 
       const argv = [
@@ -1550,8 +1560,6 @@ class CompilerModule {
         throw new Error(`Pre-compile failed for ${path.basename(sourcePath)}: ${reason}`)
       }
     })
-
-    await Promise.all(compilePromises)
 
     // Build the ar command manually instead of using recipe.ar.pattern —
     // cores disagree on placeholder semantics: mbed uses `{archive_file_path}`

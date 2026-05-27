@@ -564,6 +564,46 @@ describe('CompilerModule', () => {
       ).rejects.toThrow(/compiler\.path \+ compiler\.ar\.cmd.*core is likely not installed/s)
     })
 
+    it('caps concurrent toolchain spawns at the host CPU count (no unbounded parallel exec)', async () => {
+      // Reproduces the unbounded-parallelism failure mode the cap was
+      // added to prevent: ~30 TUs on a 4-core box used to dispatch 30
+      // simultaneous g++ + cmd.exe pairs. Instrument the exec mock with
+      // an in-flight counter to assert the peak respects the cap.
+      const os = jest.requireActual('node:os') as typeof import('node:os')
+      const cpuCount = os.cpus().length
+      const tuCount = cpuCount + 4
+
+      for (let i = 0; i < tuCount; i++) {
+        fs.writeFileSync(join(srcDir, `tu_${String(i).padStart(2, '0')}.cpp`), '// tu\n', 'utf-8')
+      }
+
+      let inFlight = 0
+      let peakInFlight = 0
+      execImpl.current = async (cmd) => {
+        // Archive (avr-ar) is sequential by design — skip it from the count.
+        if (cmd.includes('avr-ar')) return { stdout: '', stderr: '' }
+        inFlight += 1
+        if (inFlight > peakInFlight) peakInFlight = inFlight
+        // Yield so workers actually overlap rather than each synchronously
+        // resolving and pulling the next item before we observe the peak.
+        await new Promise((r) => setTimeout(r, 10))
+        inFlight -= 1
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      expect(peakInFlight).toBeLessThanOrEqual(cpuCount)
+      // Sanity: the cap kicked in only because we actually parallelised.
+      // On a single-core host the assertion would degenerate; skip the
+      // sanity check there.
+      if (cpuCount > 1) expect(peakInFlight).toBeGreaterThan(1)
+    })
+
     it('stashes sources before compile so a failed archive leaves a recoverable state for retry', async () => {
       // Two strucpp-side TUs and the board HAL. After a failed first run
       // we expect src/ to retain only arduino.cpp and the stash to hold
