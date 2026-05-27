@@ -656,5 +656,35 @@ describe('CompilerModule', () => {
         'pou_MAIN.o',
       ])
     })
+
+    it('hard-fails with an actionable error when no arch property is exposed by --show-properties', async () => {
+      // Reproduce a custom/legacy core whose platform.txt exposes none
+      // of build.mcu / build.architecture / build.arch. The legacy
+      // fallback to a literal "unknown" subdir silently placed the
+      // archive somewhere arduino-cli would never look, producing an
+      // opaque undefined-symbols link error far downstream. The
+      // refactored path surfaces a loud, FQBN-tagged error instead.
+      extractSpy.mockResolvedValue({
+        ...cannedProps,
+        properties: {
+          'compiler.path': '/fake/avr/bin/',
+          'compiler.ar.cmd': 'avr-ar',
+          'compiler.ar.flags': 'rcs',
+          // build.mcu / build.architecture / build.arch intentionally absent
+        },
+      } as unknown as ToolchainProperties)
+
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      execImpl.current = async () => ({ stdout: '', stderr: '' })
+
+      await expect(
+        compilerModule.handlePrecompileUserLib({
+          compilationPath: buildDir,
+          fqbn: 'unknown:vendor:weird-board',
+          handleOutputData: noopLog,
+        }),
+      ).rejects.toThrow(/Toolchain arch subdir resolution failed for "unknown:vendor:weird-board".*build\.mcu.*build\.architecture.*build\.arch.*file an issue/s)
+    })
   })
 })

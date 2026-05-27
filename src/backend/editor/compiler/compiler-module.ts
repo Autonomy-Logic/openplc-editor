@@ -1606,6 +1606,14 @@ class CompilerModule {
     // archive under all of them — duplicating a few-hundred-KB file in the
     // /tmp staging is cheaper than maintaining a per-core mapping. The
     // first entry doubles as the canonical `archDir` used for -L injection.
+    //
+    // Hard-fail when none of the three properties is present. The legacy
+    // fallback to a literal "unknown" subdir put the archive somewhere
+    // arduino-cli's resolver would never look, producing an opaque
+    // undefined-symbols link error far downstream from the real cause.
+    // A loud error here names the FQBN and the missing properties so the
+    // user has the exact info to file an issue against the editor or the
+    // core's platform.txt.
     const archCandidates = Array.from(
       new Set(
         [
@@ -1617,7 +1625,17 @@ class CompilerModule {
           .map((s) => s.toLowerCase()),
       ),
     )
-    if (archCandidates.length === 0) archCandidates.push('unknown')
+    if (archCandidates.length === 0) {
+      throw new Error(
+        `Toolchain arch subdir resolution failed for "${fqbn}": arduino-cli ` +
+          `--show-properties=expanded did not expose any of ` +
+          `build.mcu, build.architecture, or build.arch. Without one of ` +
+          `these, arduino-cli's precompiled-library resolver cannot locate ` +
+          `libOpenPLCUserLib.a and the link step would fail with an opaque ` +
+          `undefined-symbols error. Please file an issue including the FQBN ` +
+          `and the core's platform.txt so this can be mapped.`,
+      )
+    }
 
     handleOutputData(
       `[precompile] Pre-compile complete (${objectFiles.length} TUs → libOpenPLCUserLib.a, archs=${archCandidates.join(',')})`,
