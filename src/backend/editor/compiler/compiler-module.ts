@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join } from 'node:path'
 
+import { generateModbusDefines, type VppModbusScreenState } from './modbus-defines'
 import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
 import { runWithConcurrencyLimit } from './run-with-concurrency'
 
@@ -1152,17 +1153,27 @@ class CompilerModule {
     DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
     DEFINES_CONTENT += `\n\n`
 
-    // 3.2. Simulator communication defines
+    // 3.2. Communication defines
     //
-    // Baremetal/Arduino-family targets used to emit a full //Comms
-    // Configuration block here, read from deviceConfigurationSchema's
-    // communicationConfiguration field. That schema is gone — Arduino
-    // targets will return as VPP packages and each package owns its
-    // own defines emission. The only target still emitting communication
-    // defines from the core compiler is the built-in simulator.
+    // Two sources of `defines.h` Modbus macros:
+    //
+    //   - Simulator: fixed RTU settings over emulated USART0 (ATmega2560,
+    //     Serial = USART0, avr8js bridges usart0). Hardcoded because the
+    //     user never reconfigures the simulator's Modbus — it's a
+    //     test harness, not a deployment target.
+    //
+    //   - Arduino-family baremetal (any boardRuntime other than
+    //     'simulator'/'openplc-compiler'): read the VPP Modbus screen
+    //     state from `vendorScreenData['modbus_rtu' | 'modbus_tcp']`
+    //     and emit the historical MBSERIAL_* / MBTCP_* macros that
+    //     `resources/sources/Baremetal/ModbusSlave.cpp` still consumes.
+    //     `generateModbusDefines` lives in `./modbus-defines.ts` —
+    //     pure function, full test matrix there.
+    //
+    // The third runtime ('openplc-compiler' for Runtime v3/v4) routes
+    // its Modbus configuration through `conf/modbus_slave.json` in the
+    // upload bundle and consumes none of these macros.
     if (boardRuntime === 'simulator') {
-      // Simulator forces fixed Modbus RTU settings over emulated USART0.
-      // On ATmega2560, Serial = USART0. avr8js bridges usart0.
       DEFINES_CONTENT += '//Comms Configuration\n'
       DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
       DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
@@ -1171,6 +1182,20 @@ class CompilerModule {
       DEFINES_CONTENT += '#define MBSERIAL\n'
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
       DEFINES_CONTENT += `\n\n`
+    } else if (boardRuntime !== 'openplc-compiler') {
+      const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
+      const deviceConfig =
+        await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+      const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+      const modbusState: VppModbusScreenState = {
+        modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
+        modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+      }
+      const modbusBlock = generateModbusDefines(modbusState)
+      if (modbusBlock.length > 0) {
+        DEFINES_CONTENT += modbusBlock
+        DEFINES_CONTENT += '\n\n'
+      }
     }
 
     // INFO: If null, only the define value
