@@ -469,7 +469,7 @@ const WorkspaceScreen = () => {
             <ResizablePanel
               id='workspacePanel'
               order={2}
-              defaultSize={68}
+              defaultSize={100 - leftPanelSize}
               minSize={50}
               className='flex h-full min-h-0 overflow-hidden'
             >

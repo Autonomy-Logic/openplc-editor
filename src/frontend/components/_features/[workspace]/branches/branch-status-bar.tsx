@@ -9,7 +9,7 @@ import { UnsavedChangesWarningModal } from './unsaved-changes-warning-modal'
 
 type BranchStatusBarProps = {
   projectId: string
-  onBranchSwitch?: (branchName: string) => void
+  onBranchSwitch?: (branchName: string) => void | Promise<void>
 }
 
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
@@ -30,7 +30,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       try {
         await versionControl.switchBranch(projectId, branch.name)
         setActiveBranch(branch.name)
-        onBranchSwitch?.(branch.name)
+        void onBranchSwitch?.(branch.name)
       } catch (error) {
         console.error('Failed to switch branch:', error)
       }
@@ -56,7 +56,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         // If we can't check, proceed with switch
       }
 
-      doSwitch(branch)
+      void doSwitch(branch)
     },
     [activeBranchName, projectId, versionControl, doSwitch],
   )
@@ -103,7 +103,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         .then(({ branches }) => {
           const defaultBranch = branches.find((b) => b.isDefault)
           if (defaultBranch) {
-            doSwitch(defaultBranch)
+            void doSwitch(defaultBranch)
           }
         })
         .catch(() => {})
@@ -133,7 +133,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         currentBranchName={activeBranchName}
         anchorRef={branchButtonRef}
         onClose={() => setShowSwitcher(false)}
-        onSelect={handleSelect}
+        onSelect={(branch) => void handleSelect(branch)}
         onDelete={handleDelete}
         onMerge={handleMerge}
       />
@@ -152,7 +152,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       <UnsavedChangesWarningModal
         isOpen={showUnsavedWarning}
         targetBranchName={pendingBranchSwitch?.name ?? ''}
-        onDiscard={handleDiscardAndSwitch}
+        onDiscard={() => void handleDiscardAndSwitch()}
         onCancel={handleCancelSwitch}
       />
     </>

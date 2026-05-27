@@ -2035,9 +2035,21 @@ class CompilerModule {
       boolean | undefined,
     ]
 
-    const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
-
-    const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    let boardRuntime: string
+    let halsContent: HalsFile
+    try {
+      _mainProcessPort.postMessage({ logLevel: 'info', message: `Resolving board target: ${boardTarget}` })
+      boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
+      halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error resolving board target "${boardTarget}": ${getErrorMessage(error)}\nStopping compilation process.`,
+      })
+      _mainProcessPort.postMessage({ closePort: true })
+      _mainProcessPort.close()
+      return
+    }
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
