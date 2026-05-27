@@ -27,7 +27,7 @@ import {
   prepareXmlForLibraryBuild,
 } from '@root/backend/shared/library/build-pipeline'
 import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
-import { buildKnownPous } from '@root/backend/shared/library/program-build-helpers'
+import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
@@ -745,19 +745,16 @@ class CompilerModule {
     }
 
     if (!result.success) {
-      // Emit one structured log entry per error so the renderer's
-      // console can attach a click-to-open handler to each one.  The
-      // formatted text is what the user sees; the third argument
-      // carries the raw `CompileError` (pouName / section / bodyLine
-      // / variableName / …) for navigation.  We then throw a short
-      // marker so the outer catch posts only the high-level
-      // "STruC++ compilation failed" line — without re-dumping every
-      // error blob a second time through the catch's plain-message
-      // path.
-      handleOutputData('STruC++ compilation failed:', 'error')
-      for (const err of result.errors) {
-        handleOutputData(err.formatted, 'error', err.raw)
-      }
+      // Hand the structured diagnostics to the shared
+      // `emitCompileErrorEvents` helper so the editor and the web
+      // build emit the exact same per-error log shape — the
+      // bracketed `[POU / body line N]` first line that the
+      // renderer's `useNavigateToCompileError` hook uses as a click
+      // target.  `handleOutputData` already has the right signature
+      // (`message, level, compileError?`) — no adapter needed.
+      // Throw afterwards so the outer catch posts only the
+      // high-level marker line without re-dumping every error blob.
+      emitCompileErrorEvents(result.errors, handleOutputData)
       throw new Error('STruC++ compilation failed')
     }
 

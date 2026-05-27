@@ -169,3 +169,48 @@ export function formatErrorWithPouContext(
   }
   return `${prefix}\n${base}`
 }
+
+/**
+ * Platform-agnostic log sink the compile orchestrator hands to
+ * `emitCompileErrorEvents`.  Editor and web wire this to their
+ * respective channels — Electron's `handleOutputData(text, level,
+ * compileError?)` IPC callback, and web's `onProgress({ stage:
+ * 'error', message, compileError? })` event bus — by adapting their
+ * own signature to this minimal shape inside a one-line closure.
+ *
+ * Keeping the adapter trivial is the whole point: the iteration
+ * pattern + bracketed header + per-error attachment of
+ * `compileError` lives in one shared place, while platforms keep
+ * full control of how the emission actually reaches the renderer.
+ */
+export type CompileLogEmit = (message: string, level: 'info' | 'error', compileError?: StrucppCompileError) => void
+
+/**
+ * Emit one log entry per error in a failed strucpp pipeline result,
+ * with the structured `CompileError` attached to each line.
+ *
+ * The renderer's console (see `console/log.tsx`) keys click-to-open
+ * navigation off `compileError.pouName`.  Joining errors into a
+ * single string discards that structured data and breaks the
+ * bracketed-prefix click target — every consumer must funnel through
+ * here so the shape stays uniform across platforms.
+ *
+ * Emits a plain "STruC++ compilation failed:" header first (no
+ * `compileError` — it's a section break, not navigable), then one
+ * event per error carrying `err.raw`.  Callers should pass through
+ * the diagnostics exactly as returned by `runProgramBuildPipeline`;
+ * no preprocessing is required.
+ */
+export function emitCompileErrorEvents(
+  errors: { formatted: string; raw: StrucppCompileError }[],
+  emit: CompileLogEmit,
+): void {
+  emit('STruC++ compilation failed:', 'error')
+  for (const err of errors) {
+    // Falsy fallback (`||`) rather than nullish (`??`) so an
+    // accidentally-empty `formatted` (defensive, the pipeline never
+    // produces one in practice) still surfaces something readable
+    // from the raw strucpp message instead of an empty log row.
+    emit(err.formatted || err.raw?.message || 'unknown error', 'error', err.raw)
+  }
+}
