@@ -50,6 +50,17 @@ describe('generateModbusDefines', () => {
     expect(out).not.toContain('MBTCP_WIFI')
   })
 
+  it('always emits MBTCP_MAC/IP/DNS/GATEWAY/SUBNET when MBTCP is on (Baremetal.ino references them unconditionally)', () => {
+    // Unset values land as `0` (single-byte arrays) so the sizeof()<4 cascade in
+    // Baremetal.ino falls through to mbconfig_ethernet_iface(mac, NULL, ...).
+    const out = generateModbusDefines({ modbus_tcp: { enabled: true, enable_dhcp: true } })
+    expect(out).toContain('#define MBTCP_MAC 0')
+    expect(out).toContain('#define MBTCP_IP 0')
+    expect(out).toContain('#define MBTCP_DNS 0')
+    expect(out).toContain('#define MBTCP_GATEWAY 0')
+    expect(out).toContain('#define MBTCP_SUBNET 0')
+  })
+
   it('honors custom RTU values (non-default baud, slave_id, interface)', () => {
     const out = generateModbusDefines({
       modbus_rtu: {
@@ -107,25 +118,27 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MODBUS_ENABLED')
   })
 
-  it('skips static IP defines when DHCP is enabled (MAC + transport selector still emit)', () => {
+  it('emits MBTCP_IP/DNS/GATEWAY/SUBNET as `0` placeholders when DHCP is enabled (sizeof<4 → DHCP path in Baremetal.ino)', () => {
     const out = generateModbusDefines({
       modbus_tcp: {
         enabled: true,
         tcp_interface: 'Ethernet',
         tcp_mac_address: 'de:ad:be:ef:fe:ed',
         enable_dhcp: true,
+        // The user filled the static-host fields but then flipped DHCP on; the
+        // static values are intentionally not used.
         ip_address: '192.168.1.100',
         gateway: '192.168.1.1',
         subnet: '255.255.255.0',
         dns: '8.8.8.8',
       },
     })
-    expect(out).toContain('#define MBTCP_MAC')
+    expect(out).toContain('#define MBTCP_MAC 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed')
+    expect(out).toContain('#define MBTCP_IP 0')
+    expect(out).toContain('#define MBTCP_DNS 0')
+    expect(out).toContain('#define MBTCP_GATEWAY 0')
+    expect(out).toContain('#define MBTCP_SUBNET 0')
     expect(out).toContain('#define MBTCP_ETHERNET')
-    expect(out).not.toContain('MBTCP_IP')
-    expect(out).not.toContain('MBTCP_DNS')
-    expect(out).not.toContain('MBTCP_GATEWAY')
-    expect(out).not.toContain('MBTCP_SUBNET')
   })
 
   it('emits Wi-Fi specifics (SSID, PWD, MBTCP_WIFI) and omits MBTCP_ETHERNET when interface is Wi-Fi', () => {
@@ -144,11 +157,14 @@ describe('generateModbusDefines', () => {
     expect(out).not.toContain('MBTCP_ETHERNET')
   })
 
-  it('omits MBTCP_MAC when the field is empty (boards with built-in MAC)', () => {
+  it('emits MBTCP_MAC as `0` placeholder when the field is empty (boards with built-in MAC ignore it)', () => {
     const out = generateModbusDefines({
       modbus_tcp: { enabled: true, tcp_interface: 'Ethernet', enable_dhcp: true },
     })
-    expect(out).not.toContain('MBTCP_MAC')
+    // Empty MAC → placeholder `0` so the .ino's `uint8_t mac[] = { MBTCP_MAC };`
+    // compiles. Wi-Fi-equipped boards (ESP8266, ESP32, etc.) ignore the MAC
+    // inside mbconfig_ethernet_iface, so the placeholder is harmless.
+    expect(out).toContain('#define MBTCP_MAC 0')
     expect(out).toContain('#define MBTCP_ETHERNET')
   })
 

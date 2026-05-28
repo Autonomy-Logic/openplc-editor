@@ -1113,31 +1113,36 @@ class CompilerModule {
     const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
     // === Files contents that we need ===
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
-    // We extract the board entry from the hals file content to validate if it has the define property.
-    const boardEntry = halsFileContent[boardTarget]
+    // Source the board's `define` (the per-target macro like BOARD_ESP8266 /
+    // BOARD_ESP32 / BOARD_WIFININA) from BoardInfoResolver so VPP-installed
+    // packages contribute the same way legacy hals.json entries used to.
+    // Without this, `ModbusSlave.h`'s board-detection chain
+    // (`#if defined(BOARD_ESP8266) … #elif defined(BOARD_ESP32) …`) falls
+    // through to the WiFiNINA fallback for every ESP8266/ESP32 board the
+    // editor only knows about through a VPP.
+    const resolver = new BoardInfoResolver(this.halsFilePath, this.sourceDirectoryPath, new PackageManagerModule())
+    const boardInfo = await resolver.resolve(boardTarget)
+    const boardDefines = boardInfo.define
+      ? Array.isArray(boardInfo.define)
+        ? boardInfo.define
+        : [boardInfo.define]
+      : []
 
     // ===== Defines.h content generation =====
 
-    // 1. We need to verify if the board entry in the hals.json file has the define property.
-    if (boardEntry && boardEntry.define) {
-      // 1.2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
+    // 1. Emit per-board defines (BOARD_*, vendor flags, etc.). Both VPP and
+    // legacy hals.json entries route through `boardInfo.define`.
+    if (boardDefines.length > 0) {
       DEFINES_CONTENT = '// Board defines\n'
-      if (Array.isArray(boardEntry.define)) {
-        // 1.3. If the defines property is an array, we will iterate over it and add each define to the content.
-        boardEntry.define.forEach((define) => {
-          DEFINES_CONTENT += `#define ${define}\n`
-        })
-      } else if (typeof boardEntry.define === 'string') {
-        // 1.4. If the defines property is a string, we will add it directly to the content.
-        DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+      for (const define of boardDefines) {
+        DEFINES_CONTENT += `#define ${define}\n`
       }
     }
 
-    // 2. If the board entry does not have the define property, we will just write a double line break to the file.
+    // 2. Separator between the board defines block and the rest.
     DEFINES_CONTENT += '\n\n'
 
     // 3. Now we write the information for the defines.h file based on the device configuration and other preferences.

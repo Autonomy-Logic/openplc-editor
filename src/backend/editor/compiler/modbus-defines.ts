@@ -135,17 +135,30 @@ export function generateModbusDefines(state: VppModbusScreenState): string {
   }
 
   if (tcpOn) {
-    if (tcp.tcp_mac_address) lines.push(`#define MBTCP_MAC ${formatMacForDefine(tcp.tcp_mac_address)}`)
-    if (tcp.enable_dhcp !== true) {
-      // Static-host block: only emit the macros when actually configured.
-      // ModbusSlave.cpp guards each with #ifdef, so omission is the canonical
-      // "fall back to DHCP" signal even though `enable_dhcp=true` is the
-      // explicit selector in the UI.
-      if (tcp.ip_address) lines.push(`#define MBTCP_IP ${formatIpForDefine(tcp.ip_address)}`)
-      if (tcp.dns) lines.push(`#define MBTCP_DNS ${formatIpForDefine(tcp.dns)}`)
-      if (tcp.gateway) lines.push(`#define MBTCP_GATEWAY ${formatIpForDefine(tcp.gateway)}`)
-      if (tcp.subnet) lines.push(`#define MBTCP_SUBNET ${formatIpForDefine(tcp.subnet)}`)
-    }
+    // MBTCP_MAC / MBTCP_IP / MBTCP_DNS / MBTCP_GATEWAY / MBTCP_SUBNET
+    // are referenced unconditionally inside the `#ifdef MBTCP` block in
+    // `resources/sources/Baremetal/Baremetal.ino` (it builds five byte
+    // arrays and uses `sizeof(arr) < 4` as a compile-time DHCP-vs-static
+    // selector that cascades through to `mbconfig_ethernet_iface(mac,
+    // …, NULL, NULL, …)`). Missing a single macro fails compilation; an
+    // unset macro is signalled by emitting a single-byte `0` so the
+    // array has `sizeof == 1`, the `< 4` check fires, and the runtime
+    // falls back to the DHCP/NULL path. Wi-Fi mode ignores these args
+    // inside `mbconfig_ethernet_iface` (see `ModbusSlave.cpp:199-225`),
+    // so the placeholder values are harmless there too.
+    const macLiteral = tcp.tcp_mac_address ? formatMacForDefine(tcp.tcp_mac_address) : '0'
+    lines.push(`#define MBTCP_MAC ${macLiteral}`)
+
+    const dhcpOn = tcp.enable_dhcp === true
+    const ipLiteral = !dhcpOn && tcp.ip_address ? formatIpForDefine(tcp.ip_address) : '0'
+    const dnsLiteral = !dhcpOn && tcp.dns ? formatIpForDefine(tcp.dns) : '0'
+    const gatewayLiteral = !dhcpOn && tcp.gateway ? formatIpForDefine(tcp.gateway) : '0'
+    const subnetLiteral = !dhcpOn && tcp.subnet ? formatIpForDefine(tcp.subnet) : '0'
+    lines.push(`#define MBTCP_IP ${ipLiteral}`)
+    lines.push(`#define MBTCP_DNS ${dnsLiteral}`)
+    lines.push(`#define MBTCP_GATEWAY ${gatewayLiteral}`)
+    lines.push(`#define MBTCP_SUBNET ${subnetLiteral}`)
+
     const iface = tcp.tcp_interface ?? TCP_DEFAULTS.tcp_interface
     if (iface === 'Wi-Fi') {
       if (tcp.tcp_wifi_ssid) lines.push(`#define MBTCP_SSID "${tcp.tcp_wifi_ssid}"`)
