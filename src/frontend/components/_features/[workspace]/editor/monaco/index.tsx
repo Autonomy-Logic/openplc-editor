@@ -1257,6 +1257,19 @@ void loop()
   // Editor options
   // -----------------------------------------------------------------------
 
+  // Inline AI completions take over the suggest widget only while they are
+  // actually active (same gate as the provider registration above). When the
+  // user turns inline completions off, fall back to Monaco's normal quick
+  // suggestions (the auto-dropdown). Ctrl+Space still triggers the suggest
+  // widget manually in both modes — `quickSuggestions` only governs the
+  // automatic popup, and `suppressSuggestions` only suppresses the auto popup
+  // while an inline suggestion is showing.
+  const inlineCompletionsActive =
+    capabilities.hasAIAssistant &&
+    aiState.isEnabled &&
+    aiState.hasConsented &&
+    aiState.preferences.inlineCompletionsEnabled
+
   const monacoEditorUserOptions: monacoEditorOptionsType = {
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
@@ -1273,7 +1286,7 @@ void loop()
     tabSize: 4,
     insertSpaces: true,
     detectIndentation: false,
-    quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
+    quickSuggestions: inlineCompletionsActive ? false : undefined,
     // Pinned for cross-platform consistency with the variables-code-editor.
     // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
     // without this both surfaces would mismatch on Linux/Windows even
@@ -1295,7 +1308,7 @@ void loop()
     // `document.body` with `position: fixed`, so they escape both
     // the editor container and the variables table above it.
     fixedOverflowWidgets: true,
-    ...(capabilities.hasAIAssistant && {
+    ...(inlineCompletionsActive && {
       inlineSuggest: {
         enabled: true,
         suppressSuggestions: true,
