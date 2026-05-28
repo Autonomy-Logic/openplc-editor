@@ -72,6 +72,7 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
     checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0' }),
+    packageVppPlugin: jest.fn().mockResolvedValue({ files: {} }),
     ...overrides,
   } as jest.Mocked<CompilerPlatformPort>
 }
@@ -312,6 +313,92 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(result.success).toBe(true)
     expect(result.uploaded).toBe(false)
     expect(events.some((e) => e.level === 'warning' && /not configured/i.test(e.message))).toBe(true)
+  })
+
+  it('invokes packageVppPlugin on v4 after composeRuntimeV4Bundle, before uploadRuntimeV4', async () => {
+    // The pre-refactor compileProgram called handleVendorPluginPackaging
+    // unconditionally on the v4 path between bundle compose and upload;
+    // the handler self-gated on whether the board is from a VPP package.
+    // Mirror that ordering through the port.
+    const callOrder: string[] = []
+    const port = makePort({
+      packageVppPlugin: jest.fn().mockImplementation(async () => {
+        callOrder.push('vpp')
+        return { files: {} }
+      }),
+      uploadRuntimeV4: jest.fn().mockImplementation(async () => {
+        callOrder.push('upload')
+        return { ok: true }
+      }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'SLM-RP4',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    expect(port.packageVppPlugin).toHaveBeenCalledWith({ boardTarget: 'SLM-RP4' }, expect.any(Function))
+    expect(callOrder).toEqual(['vpp', 'upload'])
+  })
+
+  it('merges packageVppPlugin files into the bundle passed to uploadRuntimeV4', async () => {
+    const port = makePort({
+      packageVppPlugin: jest.fn().mockResolvedValue({
+        files: {
+          'vpp_plugins.conf': 'slm_rp4_plugin,./build/vpp/libslm_rp4_plugin.so,1,1,./build/vpp/slm_rp4_plugin.json,\n',
+          'conf/slm_rp4_plugin.json': '{"vendor":"slm","modules":[]}',
+          'vpp_plugin/Makefile': 'all:\n\tgcc -c plugin.c\n',
+          'vpp_plugin/checksum.sha256': 'cafef00d\n',
+        },
+      }),
+    })
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'SLM-RP4',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    const uploadedBundle = (port.uploadRuntimeV4 as jest.Mock).mock.calls[0][0].bundle as Record<string, string>
+    expect(uploadedBundle['vpp_plugins.conf']).toMatch(/^slm_rp4_plugin,/)
+    expect(uploadedBundle['conf/slm_rp4_plugin.json']).toContain('"vendor":"slm"')
+    expect(uploadedBundle['vpp_plugin/Makefile']).toContain('gcc -c plugin.c')
+    expect(uploadedBundle['vpp_plugin/checksum.sha256']).toBe('cafef00d\n')
+  })
+
+  it('aborts the v4 upload when packageVppPlugin reports errors', async () => {
+    const port = makePort({
+      packageVppPlugin: jest.fn().mockResolvedValue({
+        files: {},
+        errors: [{ message: 'VPP packaging exploded', line: 0, column: 0, severity: 'error' }],
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => /VPP plugin packaging failed/i.test(e.message))).toBe(true)
   })
 })
 

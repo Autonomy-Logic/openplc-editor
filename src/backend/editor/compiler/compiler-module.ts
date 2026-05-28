@@ -1973,6 +1973,7 @@ class CompilerModule {
         handleUploadProgram: this.handleUploadProgram.bind(this),
         handleCoreInstallation: this.handleCoreInstallation.bind(this),
         handleLibraryInstallation: this.handleLibraryInstallation.bind(this),
+        handleVendorPluginPackaging: this.handleVendorPluginPackaging.bind(this),
       },
       {
         normalizedProjectPath,

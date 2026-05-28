@@ -265,6 +265,7 @@ async function runCompilePipelineInner(
 ): Promise<RunCompilePipelineResult> {
   const {
     projectData,
+    boardTarget,
     boardRuntime,
     boardEntry,
     devicePinMapping,
@@ -432,6 +433,32 @@ async function runCompilePipelineInner(
       message: `Runtime v4 bundle composed: ${Object.keys(bundle).length} files`,
       level: 'info',
     })
+
+    // VPP boards (those from an installed `.vpp` package) ship a
+    // vendor I/O driver alongside the program.  The platform port's
+    // `packageVppPlugin` returns the extra files to merge in
+    // (driver source under `vpp_plugin/`, the generated plugin
+    // config under `conf/`, and `vpp_plugins.conf` which enables
+    // the driver on the device).  Non-VPP boards return an empty
+    // map and the bundle is unchanged.  Without this, programs
+    // upload but the runtime runs as a generic v4 with no physical
+    // I/O — the diagnostic surface for that failure is silence.
+    const vppResult = await port.packageVppPlugin(
+      { boardTarget },
+      makePlatformLog(emit, 'runtime-v4-bundle'),
+    )
+    if (vppResult.errors && vppResult.errors.length > 0) {
+      return bailError(emit, 'runtime-v4-bundle', 'VPP plugin packaging failed.', vppResult.errors)
+    }
+    const vppFileCount = Object.keys(vppResult.files).length
+    if (vppFileCount > 0) {
+      Object.assign(bundle, vppResult.files)
+      emit({
+        stage: 'runtime-v4-bundle',
+        message: `Merged ${vppFileCount} VPP plugin file(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
+        level: 'info',
+      })
+    }
 
     if (compileOnly) {
       emit({ stage: 'done', message: 'Compile only mode — skipping upload to runtime.', level: 'info' })

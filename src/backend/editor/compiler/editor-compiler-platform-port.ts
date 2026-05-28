@@ -35,6 +35,8 @@ import type {
   CompilerPlatformPort,
   InstallArduinoCoreArgs,
   InstallArduinoLibArgs,
+  PackageVppPluginArgs,
+  PackageVppPluginResult,
   PlatformDeviceContext,
   PlatformLog,
   TranspileXmlToStArgs,
@@ -62,6 +64,7 @@ export interface EditorCompilerHandlers {
   handleUploadProgram: CompilerModule['handleUploadProgram']
   handleCoreInstallation: CompilerModule['handleCoreInstallation']
   handleLibraryInstallation: CompilerModule['handleLibraryInstallation']
+  handleVendorPluginPackaging: CompilerModule['handleVendorPluginPackaging']
 }
 
 /**
@@ -453,6 +456,56 @@ export function createEditorCompilerPlatformPort(
         const message = error instanceof Error ? error.message : String(error)
         log(`Runtime version probe failed: ${message}`, 'warning')
         return { ok: true, version: null }
+      }
+    },
+
+    /**
+     * VPP runtime-v4 packaging.  Delegates to the existing
+     * `handleVendorPluginPackaging` handler, which:
+     *   - Self-gates: emits `Board "<name>" is not from a VPP package,
+     *     skipping VPP packaging` and returns early for plain
+     *     runtime-v4 boards (Runtime v4, SLM-RP4 was the original
+     *     test target).  This matches the pre-refactor invariant
+     *     that the orchestrator calls the handler unconditionally
+     *     for runtime-v4 and the handler decides whether to act.
+     *   - For VPP boards: generates `conf/<plugin>.json` + emits
+     *     `vpp_plugins.conf` to enable the driver + copies the
+     *     plugin source under `vpp_plugin/` with a SHA-256 checksum
+     *     so the runtime's `compile.sh` can skip a rebuild when the
+     *     driver source hasn't changed.
+     *
+     * All writes go directly to `sourceTargetFolderPath` on disk —
+     * the editor's `uploadRuntimeV4` zips that directory in full, so
+     * VPP files end up in the upload alongside the in-memory bundle's
+     * materialised entries.  We return `{ files: {} }` because the
+     * disk layer is already the source of truth for the editor; web's
+     * adapter will need to surface them in the returned map instead.
+     */
+    async packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult> {
+      try {
+        await handlers.handleVendorPluginPackaging(
+          args.boardTarget,
+          context.normalizedProjectPath,
+          context.sourceTargetFolderPath,
+          // The handler's callback signature accepts `Buffer | string`
+          // for the chunk and `'info' | 'error' | undefined` for the
+          // log level; PlatformLog wants `string` + `'info' | 'warning'
+          // | 'error'`.  Coerce both — the handler never emits
+          // Buffers for VPP packaging (only string log lines), and an
+          // undefined level falls back to 'info' to match the
+          // pre-refactor postMessage default.
+          (data, logLevel) => {
+            const message = typeof data === 'string' ? data : data.toString('utf-8')
+            log(message, logLevel ?? 'info')
+          },
+        )
+        return { files: {} }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+          files: {},
+          errors: [{ message, line: 0, column: 0, severity: 'error' }],
+        }
       }
     },
   }

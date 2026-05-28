@@ -208,6 +208,33 @@ export interface CheckRuntimeVersionResult {
   version: string | null
 }
 
+/** VPP (Vendor Plugin Package) runtime-v4 packaging.  Boards that
+ *  come from an installed `.vpp` package ship a vendor I/O driver
+ *  alongside the program — the driver's source files, a generated
+ *  plugin config JSON, and `vpp_plugins.conf` (which enables the
+ *  driver) must land in the v4 upload bundle so the runtime's
+ *  `compile.sh` builds the driver and `apply_vpp_plugin_conf()`
+ *  loads it.  Without this step the program uploads but the device
+ *  runs as a generic runtime with no physical I/O. */
+export interface PackageVppPluginArgs {
+  /** Selected board name, looked up against installed VPP packages. */
+  boardTarget: string
+}
+
+export interface PackageVppPluginResult {
+  /** Extra files to merge into the runtime-v4 upload bundle.  Keys
+   *  are paths relative to the bundle root (matching
+   *  `composeRuntimeV4Bundle`'s convention).  Empty record means
+   *  the board isn't a VPP board, the package lacks the necessary
+   *  HAL metadata, or VPP integration is skipped on this platform —
+   *  in any of those cases the pipeline proceeds with the unchanged
+   *  bundle.  Errors that should abort the upload are reported via
+   *  `errors[]`; soft skips emit log lines via the `log` callback
+   *  and return an empty record without errors. */
+  files: Record<string, string>
+  errors?: StructuredCompileError[]
+}
+
 // ---------------------------------------------------------------------------
 // The port itself
 // ---------------------------------------------------------------------------
@@ -267,4 +294,14 @@ export interface CompilerPlatformPort {
   /** Pre-upload gate for runtime v4.  Used to short-circuit
    *  uploads to incompatible (pre-4.1.0) runtimes. */
   checkRuntimeVersion(args: CheckRuntimeVersionArgs, log: PlatformLog): Promise<CheckRuntimeVersionResult>
+
+  /** Runtime-v4 VPP plugin packaging.  Returns the extra files to
+   *  merge into the v4 upload bundle when the selected board comes
+   *  from an installed VPP package (driver source, plugin config,
+   *  `vpp_plugins.conf`, checksum).  Returns `{ files: {} }` for
+   *  non-VPP boards or when VPP integration is unavailable on this
+   *  platform (web defaults to this until its adapter wires up
+   *  remote VPP packages).  The pipeline calls this between
+   *  `composeRuntimeV4Bundle` and `uploadRuntimeV4`. */
+  packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
 }
