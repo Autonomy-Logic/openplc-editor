@@ -30,6 +30,15 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 
 #ifdef ARDUINO
 #include <Arduino.h>
+// Arduino.h defines \`min\` and \`max\` as preprocessor macros, which
+// collide with the \`std::min\` / \`std::max\` function templates and
+// the \`numeric_limits<T>::min()\` / \`max()\` static members that
+// \`<algorithm>\` / \`<limits>\` declare (both pulled in transitively
+// via \`iec_string.hpp\` below). Undef'ing them here keeps the user's
+// c_blocks code free to call \`std::min\` / \`std::max\` and lets the
+// strucpp runtime headers compile cleanly on AVR.
+#undef min
+#undef max
 #endif
 
 // STruC++ runtime types — IECVar<T> wrappers under namespace strucpp.
