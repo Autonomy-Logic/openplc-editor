@@ -228,6 +228,16 @@ export interface CheckRuntimeVersionResult {
  * implementation has to wait on a subprocess or HTTP round-trip.
  */
 export interface CompilerPlatformPort {
+  /** Compute the MD5 hex digest of an arbitrary string.  Editor:
+   *  Node's `crypto.createHash('md5')`.  Web: `spark-md5` (already
+   *  a web dep).  Both produce byte-identical output.  The pipeline
+   *  uses this to compute `program.st`'s MD5 — embedded in
+   *  `defines.h` as `PROGRAM_MD5` for the v4 runtime's stale-program
+   *  detection.  Kept in the port (rather than hardcoding either
+   *  library in shared code) so the shared module ships without a
+   *  hash-impl dependency. */
+  computeMd5(input: string): Promise<string>
+
   /** Step 3 of the editor pipeline.  Transpile IEC XML to ST. */
   transpileXmlToSt(args: TranspileXmlToStArgs, log: PlatformLog): Promise<TranspileXmlToStResult>
 
