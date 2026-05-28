@@ -80,6 +80,8 @@ import { assertPathContained } from '@root/backend/editor/utils/path-containment
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
+import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
+import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -1275,17 +1277,35 @@ class CompilerModule {
     projectPath,
     arduinoPlatform,
     compilationPath,
+    communicationPort,
     handleOutputData,
   }: {
     projectPath: string
     arduinoPlatform: string
     compilationPath: string
+    /**
+     * Serial port arduino-cli should target with `--port`.  Preferred
+     * over the disk-persisted value when both are present — captures
+     * the picker's current selection even when the user hasn't saved
+     * the project yet.  When omitted, the handler falls back to the
+     * legacy disk read so older invocation paths still work.
+     */
+    communicationPort?: string
     handleOutputData: HandleOutputDataCallback
   }) {
-    const devicesDirectoryPath = join(projectPath, 'devices')
-    const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
-    const { communicationPort: port } =
-      await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+    let port = communicationPort
+    if (!port) {
+      const devicesDirectoryPath = join(projectPath, 'devices')
+      const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
+      try {
+        const { communicationPort: persistedPort } =
+          await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        port = persistedPort
+      } catch {
+        // No devices/configuration.json yet — drop into the
+        // "no port specified" branch below for a clear user message.
+      }
+    }
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
@@ -1804,6 +1824,7 @@ class CompilerModule {
       runtimeIpAddress,
       runtimeJwtToken,
       cleanBuild,
+      communicationPort,
     ] = args as [
       string,
       string,
@@ -1813,18 +1834,24 @@ class CompilerModule {
       string | null,
       string | null,
       boolean | undefined,
+      string | null | undefined,
     ]
 
-    const boardRuntime = await this.#getBoardRuntime(boardTarget)
     const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-    const boardEntry = halsContent[boardTarget]
+    const selection = resolveBoardSelection(
+      halsContent as Record<string, Parameters<typeof resolveBoardSelection>[0][string]>,
+      boardTarget,
+    )
+    if (!selection.ok) {
+      _mainProcessPort.postMessage({ logLevel: 'error', message: selection.error })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+      _mainProcessPort.close()
+      return
+    }
+    const { boardEntry, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = selection
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
-
-    const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-    const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
-    const isSimulator = boardRuntime === 'simulator'
 
     // --- Editor-specific preamble: project header, host info, VPP warnings, tool check ---
     _mainProcessPort.postMessage({
@@ -1910,26 +1937,21 @@ class CompilerModule {
       strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
       if (!isRuntimeV4) {
         const v4Layout = await this.loadStrucppRuntimeHeaders()
-        for (const [v4Key, content] of Object.entries(v4Layout)) {
-          const filename = v4Key.split('/').pop()!
-          firmwareSkeleton[`src/${filename}`] = content
-        }
-
         // Board-specific HAL adapter — defines `hardwareInit`,
         // `updateInputBuffers`, `updateOutputBuffers` that the
         // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
         // call into.  Editor's pre-refactor `handleGenerateArduinoCppFile`
         // copied `resources/sources/hal/<boardEntry.source>` to
-        // `src/arduino.cpp`; we mirror that here so the firmware
-        // skeleton has the right HAL for the selected board.  Without
-        // this, the link fails with `undefined reference to
-        // hardwareInit` etc.
+        // `src/arduino.cpp`.  Read it here so the shared merge step
+        // can drop it into the firmware skeleton at the canonical
+        // path; without it, the link fails with `undefined reference
+        // to hardwareInit` etc.
+        let boardHalContent: string | undefined
         const boardSource = (boardEntry as { source?: string } | undefined)?.source
         if (typeof boardSource === 'string' && boardSource.length > 0) {
           const halPath = join(this.sourceDirectoryPath, 'hal', boardSource)
           try {
-            const halContent = await readFile(halPath, 'utf-8')
-            firmwareSkeleton['src/arduino.cpp'] = halContent
+            boardHalContent = await readFile(halPath, 'utf-8')
           } catch (halErr) {
             _mainProcessPort.postMessage({
               logLevel: 'warning',
@@ -1937,6 +1959,17 @@ class CompilerModule {
             })
           }
         }
+        // Re-key strucpp runtime headers from
+        // `strucpp_runtime/include/X` into `src/X` so arduino-cli's
+        // `--library src` pass finds them; also drop the board HAL
+        // (if loaded) at `src/arduino.cpp`.  Both repos call the
+        // same shared helper so a future header-set tweak lands on
+        // both platforms in lockstep.
+        firmwareSkeleton = mergeStrucppRuntimeIntoSkeleton({
+          firmwareSkeleton,
+          strucppRuntimeHeaders: v4Layout,
+          boardHalContent,
+        })
       }
       try {
         devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
@@ -2007,7 +2040,7 @@ class CompilerModule {
         projectData,
         boardTarget,
         boardRuntime,
-        boardEntry: boardEntry as Parameters<typeof runCompilePipeline>[0]['boardEntry'],
+        boardEntry: boardEntry as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry'],
         devicePinMapping,
         isSimulator,
         isRuntimeV4,
@@ -2024,6 +2057,7 @@ class CompilerModule {
         // clients in a sandbox.
         arduinoCliParallel: true,
         deviceContext,
+        communicationPort: communicationPort ?? undefined,
       },
       platformPort,
       (event) => {

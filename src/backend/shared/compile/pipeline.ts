@@ -160,6 +160,15 @@ export interface RunCompilePipelineArgs {
    *  is compile-only or the runtime upload step won't run.  The
    *  pipeline never inspects this — it just forwards through. */
   deviceContext?: PlatformDeviceContext
+  /** Serial port to hand to `arduino-cli upload --port` when the
+   *  build targets a physical Arduino board.  Captured from the
+   *  user's device-board UI picker — the renderer reads it from the
+   *  store at compile time and passes it through unchanged.  When
+   *  absent (older callers, runtime v4 / simulator paths), the
+   *  pipeline still threads `''` through so the editor adapter can
+   *  fall back to its legacy `devices/configuration.json` disk
+   *  read.  Ignored entirely on simulator + runtime-v3/v4 branches. */
+  communicationPort?: string
   /** Optional cache hook for the strucpp debug-map.json bytes — the
    *  debugger reads these out of memory to map debug variable
    *  addresses without re-reading the file.  Called once per
@@ -280,6 +289,7 @@ async function runCompilePipelineInner(
     avrLibStdCppInclude,
     arduinoCliParallel,
     deviceContext,
+    communicationPort,
     cacheDebugData,
   } = args
 
@@ -626,7 +636,11 @@ async function runCompilePipelineInner(
     {
       compilationPath: '',
       fqbn: typeof boardEntry.platform === 'string' ? boardEntry.platform : '',
-      port: '',
+      // User-selected serial port from the device-board UI picker.
+      // Forwarded verbatim; the adapter decides what to do if the
+      // caller didn't supply one (editor: fall back to the disk-
+      // persisted value in `devices/configuration.json`).
+      port: communicationPort ?? '',
     },
     makePlatformLog(emit, 'upload'),
   )

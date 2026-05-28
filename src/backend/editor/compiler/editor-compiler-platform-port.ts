@@ -256,7 +256,18 @@ export function createEditorCompilerPlatformPort(
           },
         })
 
-        const hexPath = await findHexInCompilationPath(context.compilationPath)
+        // Derive the FQBN from the board's hals.json entry — the
+        // simulator branch in compileProgram uses the exact same
+        // derivation (`platform.replaceAll(':', '.')`), so the two
+        // paths agree on which `.hex` belongs to the current build.
+        const boardPlatform =
+          context.boardHalsContent !== null &&
+          typeof context.boardHalsContent === 'object' &&
+          'platform' in (context.boardHalsContent as Record<string, unknown>) &&
+          typeof (context.boardHalsContent as { platform?: unknown }).platform === 'string'
+            ? ((context.boardHalsContent as { platform: string }).platform)
+            : ''
+        const hexPath = await findHexInCompilationPath(context.compilationPath, boardPlatform)
         if (!hexPath) {
           throw new Error('Compiled .hex not found after arduino-cli compile.')
         }
@@ -348,13 +359,24 @@ export function createEditorCompilerPlatformPort(
     /**
      * arduino-cli upload to a physical Arduino board.  Delegates to
      * the existing `handleUploadProgram` handler.
+     *
+     * The serial port comes from the renderer's device-board picker
+     * via the pipeline's `communicationPort` arg → `args.port`.  We
+     * forward it explicitly so a port change made in the UI takes
+     * effect on this build without waiting for a project save —
+     * `handleUploadProgram` historically read the value from
+     * `devices/configuration.json` on disk, which lags the live store
+     * by a save round-trip.  When `args.port` is empty (callers that
+     * predate the explicit-port plumbing), the handler still falls
+     * back to its disk read.
      */
-    async uploadArduinoBoard(_args: UploadArduinoBoardArgs, log: PlatformLog): Promise<UploadResult> {
+    async uploadArduinoBoard(args: UploadArduinoBoardArgs, log: PlatformLog): Promise<UploadResult> {
       try {
         await handlers.handleUploadProgram({
           projectPath: context.normalizedProjectPath,
-          arduinoPlatform: _args.fqbn,
+          arduinoPlatform: args.fqbn,
           compilationPath: context.compilationPath,
+          communicationPort: args.port || undefined,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')
@@ -520,7 +542,7 @@ export function createEditorCompilerPlatformPort(
  * `editor-https` contexts.  Throws on `web-orchestrator` (which
  * should never be passed to the editor port).
  */
-function assertEditorHttpsContext(
+export function assertEditorHttpsContext(
   context: PlatformDeviceContext,
 ): Extract<PlatformDeviceContext, { kind: 'editor-https' }> {
   if (context.kind !== 'editor-https') {
@@ -531,13 +553,48 @@ function assertEditorHttpsContext(
 
 /**
  * Find the arduino-cli-produced `Baremetal.ino.hex` under the build
- * directory.  arduino-cli writes it to a board-FQBN-specific sub-
- * directory (e.g. `examples/Baremetal/build/arduino.avr.mega/`); the
- * exact sub-path depends on the board, so we walk the tree to find
- * it rather than reconstructing the path from hals.json.
+ * directory.  arduino-cli writes it to a board-FQBN-specific
+ * sub-directory (e.g. `examples/Baremetal/build/arduino.avr.mega/`)
+ * derived from the hals.json `platform` field with `:` replaced by
+ * `.` — same derivation `compileProgram`'s simulator branch uses to
+ * locate the `.hex` it hands to avr8js.
+ *
+ * `fqbn` MUST be the canonical platform string (e.g.
+ * `arduino:avr:mega`); the helper does the `:`→`.` translation
+ * itself.  When the canonical path doesn't exist (a stale build with
+ * a different FQBN layout, manual fiddling with the build dir), the
+ * helper falls back to walking the build directory and returning
+ * the first match — preserves the pre-fix behaviour as a safety
+ * net rather than failing outright.
+ *
+ * Without the deterministic path, a stale FQBN sub-directory left
+ * over from a prior board target (e.g. user compiled for Mega, then
+ * switched to Uno without cleaning) would cause the walk to return
+ * the wrong binary alphabetically.  Real scenario: compile for Mega,
+ * then Uno, then upload → arduino-cli ends up flashing the Mega hex
+ * to the Uno because `arduino.avr.mega` comes before `arduino.avr.uno`
+ * in `readdir`.
  */
-async function findHexInCompilationPath(compilationPath: string): Promise<string | null> {
+export async function findHexInCompilationPath(compilationPath: string, fqbn: string): Promise<string | null> {
   const buildDir = join(compilationPath, 'examples', 'Baremetal', 'build')
+
+  // Deterministic path first — the canonical layout for the
+  // current build's FQBN.
+  if (fqbn.length > 0) {
+    const fqbnSubDir = fqbn.replaceAll(':', '.')
+    const canonicalPath = join(buildDir, fqbnSubDir, 'Baremetal.ino.hex')
+    try {
+      await fs.access(canonicalPath)
+      return canonicalPath
+    } catch {
+      // Fall through to the walk-fallback below.
+    }
+  }
+
+  // Safety net: walk the build dir for the first matching .hex.
+  // Reached when the canonical path is absent (FQBN string differs
+  // from the directory arduino-cli produced — observed historically
+  // with cores that mangle the FQBN through aliases).
   try {
     const fqbnDirs = await fs.readdir(buildDir)
     for (const fqbnDir of fqbnDirs) {

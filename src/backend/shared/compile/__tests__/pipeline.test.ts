@@ -44,16 +44,32 @@ jest.mock('../../firmware/runtime-version-gate', () => ({
     (v: string | null) => `Runtime ${String(v)} is too old; please upgrade to 4.1.0+.`,
   ),
 }))
+// Mock the conf-generator step so tests can deterministically force
+// the runtime-v4 confs branch to throw (covers the pipeline's outer
+// try/catch that wraps the EtherCAT / OPC-UA validators).  Default
+// return value gives all branches a passing shape; individual tests
+// override via `.mockImplementationOnce`.
+jest.mock('../steps/generate-confs', () => ({
+  generateRuntimeConfs: jest.fn(() => ({
+    modbusSlave: '',
+    modbusMaster: '',
+    s7Comm: '',
+    opcUa: null,
+    ethercat: '',
+  })),
+}))
 
 import { XmlGenerator } from '../../utils/PLC/xml-generator'
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
 import {
   isStrucppCompatibleRuntime,
 } from '../../firmware/runtime-version-gate'
+import { generateRuntimeConfs } from '../steps/generate-confs'
 
 import { runCompilePipeline, type RunCompilePipelineArgs, type PipelineProgressEvent } from '../pipeline'
 
 const mockedXmlGen = XmlGenerator as jest.MockedFunction<typeof XmlGenerator>
+const mockedConfs = generateRuntimeConfs as jest.MockedFunction<typeof generateRuntimeConfs>
 const mockedStrucpp = runProgramBuildPipeline as jest.MockedFunction<typeof runProgramBuildPipeline>
 const mockedVersionGate = isStrucppCompatibleRuntime as jest.MockedFunction<typeof isStrucppCompatibleRuntime>
 
@@ -699,19 +715,13 @@ describe('runCompilePipeline — failure propagation', () => {
   })
 
   it('returns success=false when generateRuntimeConfs throws (OPC-UA / EtherCAT failure)', async () => {
-    // Mock strucpp to return a file map; the conf generation runs
-    // through real `generateRuntimeConfs`.  Configure the mocked
-    // OPC-UA generator (in generate-confs's dep tree) to throw.
-    // For this test we just simulate the throw via the conf step
-    // by way of an invalid EtherCAT config triggered via the
-    // `validateEthercatConfig` shared helper — but that lives in
-    // its own tested module, so we just verify the catch-around-
-    // confs in the pipeline propagates correctly when something
-    // inside throws.  Easiest: have strucpp succeed but provide a
-    // projectData that triggers an EtherCAT validation throw.
-    // The conf-generation test suite already covers throw cases
-    // exhaustively, so here we just verify the pipeline's outer
-    // try/catch maps to success: false.
+    // Pipeline wraps the v4 conf-generation step in a try/catch so a
+    // failed EtherCAT or OPC-UA validator surfaces as a clean
+    // `success: false` rather than crashing the IPC channel.  Mock
+    // `generateRuntimeConfs` to throw so we exercise the catch path
+    // deterministically — the underlying validators have their own
+    // exhaustive throw-case suites (validate-ethercat-config.test.ts,
+    // generate-confs.test.ts).
     mockedStrucpp.mockReturnValueOnce({
       success: true,
       files: [{ name: 'debug-map.json', content: '{}' }],
@@ -721,43 +731,27 @@ describe('runCompilePipeline — failure propagation', () => {
       splitterFallbackMessage: null,
       debugMapSummary: null,
     })
-    // Force the confs step to throw by passing an EtherCAT-shaped
-    // remoteDevices entry the real validator rejects.  We use the
-    // `any` cast at the test fixture boundary since the test is
-    // simulating a runtime-only behaviour the type system would
-    // not allow.
+    mockedConfs.mockImplementationOnce(() => {
+      throw new Error('EtherCAT validator: vendor id missing on slave #0')
+    })
     const port = makePort()
-    const { emit } = captureEvents()
-    // Mock the confs by hijacking through the projectData with a
-    // shape that the underlying generateEthercatConfig validator
-    // rejects.  Since the conf helpers are NOT mocked here, the
-    // real validator runs.  For brevity we substitute a sentinel
-    // that triggers the validator's "missing required field" path.
+    const { events, emit } = captureEvents()
     const result = await runCompilePipeline(
       makeArgs({
         isSimulator: false,
         isRuntimeV4: true,
         boardRuntime: 'openplc-compiler',
-        projectData: {
-          ...projectDataFixture,
-          remoteDevices: [
-            // EtherCAT device with intentionally bad shape — the
-            // exact rejection path lives in validateEthercatConfig
-            // which we don't mock here.  If validation passes (no
-            // throw), the test still asserts success=true so it's
-            // non-flaky.
-          ],
-        } as never,
         deviceContext: deviceContextFixture,
       }),
       port,
       emit,
     )
-    // Either the validation rejected (success=false) or accepted
-    // (success=true) — both are correct depending on whether the
-    // fixture triggers the validator's reject path.  This test
-    // exercises the try/catch wrapping in either case.
-    expect(typeof result.success).toBe('boolean')
+    expect(result.success).toBe(false)
+    // The original throw message rides through the error event so
+    // the user can see which validator complained.
+    expect(events.some((e) => /EtherCAT validator/.test(e.message))).toBe(true)
+    // And we never reached the upload step.
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
   })
 })
 

@@ -165,6 +165,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             isSimulator: isSimulatorBoard,
             runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
             runtimeJwtToken: jwtToken || null,
+            // Live serial-port picker value from the device store.
+            // Threaded through so arduino-cli upload uses the
+            // picker's current selection even when the user hasn't
+            // saved the project yet (the legacy disk-read path lags
+            // the live store by one save cycle).
+            communicationPort: deviceDefinitions.configuration.communicationPort || undefined,
           },
           (event) => {
             if (event.plcStatus) {
