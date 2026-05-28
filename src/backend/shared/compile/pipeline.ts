@@ -245,6 +245,25 @@ export async function runCompilePipeline(
   port: CompilerPlatformPort,
   emit: (event: PipelineProgressEvent) => void,
 ): Promise<RunCompilePipelineResult> {
+  try {
+    return await runCompilePipelineInner(args, port, emit)
+  } catch (error) {
+    // Any unhandled throw (data shape mismatch, port impl crash,
+    // strucpp module load failure) surfaces here as a single error
+    // event so the renderer's IPC channel doesn't hang waiting on a
+    // success/failure that never arrives.
+    const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
+    emit({ stage: 'error', message: `Unhandled pipeline error: ${message}`, level: 'error' })
+    emit({ stage: 'error', message: 'Stopping compilation process.', level: 'error' })
+    return { success: false }
+  }
+}
+
+async function runCompilePipelineInner(
+  args: RunCompilePipelineArgs,
+  port: CompilerPlatformPort,
+  emit: (event: PipelineProgressEvent) => void,
+): Promise<RunCompilePipelineResult> {
   const {
     projectData,
     boardRuntime,

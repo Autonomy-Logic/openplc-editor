@@ -80,6 +80,10 @@ export interface EditorCompilerPlatformPortContext {
   boardTarget: string
   /** Resolved `boardCore` from hals.json (e.g. `'arduino:avr'`). */
   boardCore: string | null
+  /** Per-board entry from `hals.json` for the current target.  Passed
+   *  through to `handleCompileArduinoProgram` so the existing handler
+   *  can pull out `platform` / `c_flags` / `max_data_size` / etc. */
+  boardHalsContent: unknown
   /** Whether the user requested a clean rebuild (drives arduino-cli's
    *  `--clean` flag). */
   cleanBuild: boolean
@@ -156,7 +160,7 @@ export function createEditorCompilerPlatformPort(
         await fs.mkdir(dirname(xmlPath), { recursive: true })
         await fs.writeFile(xmlPath, args.xml, 'utf-8')
 
-        await handlers.handleTranspileXMLtoST.call(undefined as never, xmlPath, (chunk, level) => {
+        await handlers.handleTranspileXMLtoST(xmlPath, (chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
         })
@@ -179,7 +183,7 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleCoreInstallation.call(undefined as never, args.coreId, (chunk, level) => {
+        await handlers.handleCoreInstallation(args.coreId, (chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
         })
@@ -199,7 +203,7 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoLib(_args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation.call(undefined as never, (chunk, level) => {
+        await handlers.handleLibraryInstallation((chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
         })
@@ -232,13 +236,23 @@ export function createEditorCompilerPlatformPort(
           }),
         )
 
-        // The existing handler reads hals.json for compile flags;
-        // we pass the canonical argv through and discard it for now.
-        // The board-specific compile call still goes through the
-        // legacy `handleCompileArduinoProgram` because it spawns
-        // arduino-cli with the right environment.  A future cleanup
-        // will inline the spawn here and consume `args.argv` directly.
-        // Read the produced `.hex` once the handler returns.
+        // Invoke the existing handler — it spawns arduino-cli compile
+        // with the per-board hals entry's flags.  The canonical
+        // `args.argv` from the shared `buildArduinoCliCompileArgs` is
+        // available for a future cleanup that inlines the spawn here
+        // and consumes it directly; for now the legacy handler builds
+        // its own argv from `boardHalsContent`.
+        await handlers.handleCompileArduinoProgram({
+          boardTarget: context.boardTarget,
+          boardHalsContent: context.boardHalsContent as never,
+          compilationPath: context.compilationPath,
+          cleanBuild: context.cleanBuild,
+          handleOutputData: (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+        })
+
         const hexPath = await findHexInCompilationPath(context.compilationPath)
         if (!hexPath) {
           throw new Error('Compiled .hex not found after arduino-cli compile.')
@@ -334,7 +348,7 @@ export function createEditorCompilerPlatformPort(
      */
     async uploadArduinoBoard(_args: UploadArduinoBoardArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleUploadProgram.call(undefined as never, {
+        await handlers.handleUploadProgram({
           projectPath: context.normalizedProjectPath,
           arduinoPlatform: _args.fqbn,
           compilationPath: context.compilationPath,

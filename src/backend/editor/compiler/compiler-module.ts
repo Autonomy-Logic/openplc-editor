@@ -1939,6 +1939,7 @@ class CompilerModule {
         sourceTargetFolderPath,
         boardTarget,
         boardCore,
+        boardHalsContent: halsContent[boardTarget],
         cleanBuild: cleanBuild ?? false,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
