@@ -249,6 +249,32 @@ describe('runCompilePipeline — arduino direct path', () => {
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
     expect(events.some((e) => e.level === 'warning' && /not configured/.test(e.message))).toBe(true)
   })
+
+  it('returns success=false when uploadArduinoBoard reports failure', async () => {
+    // arduino-direct upload path: deviceContext present, board picked,
+    // but the port's upload fails (e.g. serial port busy).  The
+    // pipeline must surface the failure with structured errors rather
+    // than reporting a successful compile.
+    const port = makePort({
+      uploadArduinoBoard: jest.fn().mockResolvedValue({
+        ok: false,
+        errors: [{ message: 'avrdude: serial port busy', line: 0, column: 0, severity: 'error' }],
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(port.uploadArduinoBoard).toHaveBeenCalledTimes(1)
+    expect(events.some((e) => /Failed to upload to Arduino board/.test(e.message))).toBe(true)
+  })
 })
 
 describe('runCompilePipeline — runtime v4 path', () => {
@@ -392,6 +418,66 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(uploadedBundle['conf/slm_rp4_plugin.json']).toContain('"vendor":"slm"')
     expect(uploadedBundle['vpp_plugin/Makefile']).toContain('gcc -c plugin.c')
     expect(uploadedBundle['vpp_plugin/checksum.sha256']).toBe('cafef00d\n')
+  })
+
+  it('emits a log entry reporting the number of VPP plugin files merged into the bundle', async () => {
+    // Pins the log line at pipeline.ts:466 that runs when VPP
+    // packaging returns a non-empty file map.  Acts as a regression
+    // guard for the "Merged N VPP plugin file(s) into bundle" UX —
+    // without this assertion the count never gets exercised.
+    const port = makePort({
+      packageVppPlugin: jest.fn().mockResolvedValue({
+        files: {
+          'vpp_plugins.conf': 'slm,./build/vpp/libslm.so,1,1,./build/vpp/slm.json,\n',
+          'conf/slm.json': '{}',
+        },
+      }),
+    })
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(events.some((e) => /Merged 2 VPP plugin file\(s\) into bundle/.test(e.message))).toBe(true)
+  })
+
+  it('passes the project task instances through to generateRuntimeConfs in the expected shape', async () => {
+    // Covers the `instances.map(inst => ({name, task, program}))`
+    // lambda at pipeline.ts:410-417 — the v4 path's instance
+    // remapping that feeds `generateRuntimeConfs`.  An empty default
+    // fixture leaves the lambda body uncovered; this test populates
+    // a real instance and asserts the remapped shape on the way out.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+        projectData: {
+          ...projectDataFixture,
+          configuration: {
+            resource: {
+              tasks: [],
+              instances: [{ name: 'main0', task: 'MainTask', program: 'main' }],
+              globalVariables: [],
+            },
+          },
+        } as never,
+      }),
+      port,
+      emit,
+    )
+    expect(mockedConfs).toHaveBeenCalledTimes(1)
+    const passedInstances = mockedConfs.mock.calls[0][0].instances
+    expect(passedInstances).toEqual([{ name: 'main0', task: 'MainTask', program: 'main' }])
   })
 
   it('aborts the v4 upload when packageVppPlugin reports errors', async () => {
@@ -791,5 +877,97 @@ describe('runCompilePipeline — side effects', () => {
     await runCompilePipeline(makeArgs(), port, emit)
     const errorEvents = events.filter((e) => e.compileError !== undefined)
     expect(errorEvents).toHaveLength(2)
+  })
+
+  it("forwards generateRuntimeConfs's log callback to emit at the 'confs' stage", async () => {
+    // Covers the `log: (message, level) => emit({...})` lambda at
+    // pipeline.ts:417.  Atomic conf generators surface validation
+    // diagnostics through this callback (warnings about dropped
+    // OPC-UA refs, info about EtherCAT vendor lookups, etc.); we
+    // need to verify the pipeline wires the callback into the emit
+    // channel so those diagnostics reach the console panel.
+    mockedConfs.mockImplementationOnce((input) => {
+      input.log('dropped variable foo because bar', 'error')
+      input.log('opcua found 5 nodes', 'info')
+      return { modbusSlave: '', modbusMaster: '', s7Comm: '', opcUa: null, ethercat: '' }
+    })
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    const confsEvents = events.filter((e) => e.stage === 'confs')
+    expect(confsEvents.some((e) => e.message === 'dropped variable foo because bar' && e.level === 'error')).toBe(true)
+    expect(confsEvents.some((e) => e.message === 'opcua found 5 nodes' && e.level === 'info')).toBe(true)
+  })
+
+  it('outer try/catch wraps unhandled exceptions in an error event (Error instance)', async () => {
+    // Covers the runCompilePipeline (outer) catch at pipeline.ts:258-267
+    // — the bail path for any throw the inner orchestrator didn't
+    // already convert to a structured failure.  Force a port method to
+    // throw and assert we get the canonical "Unhandled pipeline error"
+    // event + a clean `success: false` rather than an unhandled
+    // rejection that hangs the IPC channel.
+    const port = makePort({
+      computeMd5: jest.fn().mockImplementation(() => {
+        throw new Error('crypto subsystem unavailable')
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ isSimulator: false, isRuntimeV4: true, boardRuntime: 'openplc-compiler', deviceContext: deviceContextFixture }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(events.some((e) => /Unhandled pipeline error: crypto subsystem unavailable/.test(e.message))).toBe(true)
+    expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
+  })
+
+  it('outer try/catch wraps unhandled non-Error throws by stringifying them', async () => {
+    // Same catch as above, but the thrown value is NOT an Error
+    // instance — exercises the `String(error)` branch in the catch.
+    const port = makePort({
+      computeMd5: jest.fn().mockImplementation(() => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
+        throw 'plain string throw'
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ isSimulator: false, isRuntimeV4: true, boardRuntime: 'openplc-compiler', deviceContext: deviceContextFixture }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(events.some((e) => /Unhandled pipeline error: plain string throw/.test(e.message))).toBe(true)
+  })
+
+  it("port methods can stream log lines through the PlatformLog callback they receive", async () => {
+    // Covers the `(message, level) => emit({stage, message, level})`
+    // lambda makePlatformLog returns (pipeline.ts:209).  Port methods
+    // receive that callback as their second arg and call it whenever
+    // they want a log line on the console panel.  Tests that mock
+    // ports with `vi.fn()` never invoke the callback, leaving the
+    // lambda body uncovered — this test pins the wiring explicitly.
+    const port = makePort({
+      transpileXmlToSt: jest.fn().mockImplementation(async (_args, log) => {
+        log('xml2st spawned subprocess', 'info')
+        log('xml2st: parsed 5 POUs', 'info')
+        return { ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }
+      }),
+    })
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(makeArgs(), port, emit)
+    const stEvents = events.filter((e) => e.stage === 'st')
+    expect(stEvents.some((e) => e.message === 'xml2st spawned subprocess' && e.level === 'info')).toBe(true)
+    expect(stEvents.some((e) => e.message === 'xml2st: parsed 5 POUs' && e.level === 'info')).toBe(true)
   })
 })
