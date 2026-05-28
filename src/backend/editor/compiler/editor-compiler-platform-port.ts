@@ -27,6 +27,7 @@
  */
 
 import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
+import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -459,26 +460,28 @@ export function createEditorCompilerPlatformPort(
     /**
      * Probe the device's `/api/version` (unauthenticated) so the
      * pipeline can short-circuit uploads to pre-4.1.0 runtimes.
+     *
+     * Transport: Electron's HTTPS bridge → device IP.
+     * Response parsing + null-fallback live in the shared
+     * `probeRuntimeVersion` helper so editor and web give the gate
+     * an equivalent answer against the same runtime container.
      */
     async checkRuntimeVersion(args: CheckRuntimeVersionArgs, log: PlatformLog): Promise<CheckRuntimeVersionResult> {
       const deviceContext = assertEditorHttpsContext(args.context)
-      try {
-        const result = await context.mainProcessBridge.makeRuntimeApiRequest<{ version: string }>(
-          deviceContext.ip,
-          '', // unauthenticated probe
-          '/api/version',
-          (data: string) => JSON.parse(data) as { version: string },
-        )
-        if (!result.success) {
-          log(`Could not reach runtime: ${result.error}`, 'warning')
-          return { ok: true, version: null }
-        }
-        return { ok: true, version: result.data?.version ?? null }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Runtime version probe failed: ${message}`, 'warning')
-        return { ok: true, version: null }
-      }
+      const { version } = await probeRuntimeVersion({
+        fetchVersion: async () => {
+          const result = await context.mainProcessBridge.makeRuntimeApiRequest<{ version: string }>(
+            deviceContext.ip,
+            '', // unauthenticated probe
+            '/api/version',
+            (data: string) => JSON.parse(data) as { version: string },
+          )
+          if (!result.success) return { success: false, error: result.error }
+          return { success: true, body: result.data }
+        },
+        log,
+      })
+      return { ok: true, version }
     },
 
     /**

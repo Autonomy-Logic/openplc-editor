@@ -82,6 +82,7 @@ import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
+import { readHalsFile } from '@root/backend/shared/firmware/hals'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -152,7 +153,6 @@ type CompileArduinoProgramArgs = {
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
-  halsFilePath: string
 
   arduinoCliBinaryPath: string
   arduinoCliConfigurationFilePath: string
@@ -203,7 +203,6 @@ class CompilerModule {
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
-    this.halsFilePath = this.#constructHalsFilePath()
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
@@ -265,16 +264,6 @@ class CompilerModule {
     )
   }
 
-  #constructHalsFilePath(): string {
-    return join(
-      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
-      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
-      'sources',
-      'boards',
-      'hals.json',
-    )
-  }
-
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
@@ -313,21 +302,22 @@ class CompilerModule {
    * Resolve a board target to the arduino-cli core ID
    * (`arduino-cli core install` target — e.g. `arduino:avr`).
    *
-   * Single source of truth: reads from `resources/sources/boards/
-   * hals.json`, the same file the renderer's
-   * `bridge.getAvailableBoards()` exposes via `boardInfo.core`.
+   * Single source of truth: reads from the shared
+   * `backend/shared/firmware/hals.json` bundle, the same file the
+   * renderer's `bridge.getAvailableBoards()` exposes via
+   * `boardInfo.core`.
    * Used internally by the library-project verification path so a
    * future hals.json edit (rename, new board, version bump)
    * propagates to verification automatically — without any code
    * change here.
    */
   async #getBoardCore(board: string): Promise<string | null> {
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     return halsFileContent[board]?.['core'] ?? null
   }
 
   async #getBoardRuntime(board: string) {
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     if (halsFileContent[board]) {
       return halsFileContent[board]['compiler']
     }
@@ -1060,7 +1050,7 @@ class CompilerModule {
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
     const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
@@ -1087,7 +1077,7 @@ class CompilerModule {
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
 
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
 
     const boardSourceFile = halsFileContent[boardTarget]['source']
 
@@ -1837,7 +1827,7 @@ class CompilerModule {
       string | null | undefined,
     ]
 
-    const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsContent = await readHalsFile<HalsFile>()
     const selection = resolveBoardSelection(
       halsContent as Record<string, Parameters<typeof resolveBoardSelection>[0][string]>,
       boardTarget,
