@@ -29,9 +29,19 @@ import type {
   Result,
   Unsubscribe,
 } from '../../shared/ports/types'
+import { mockInstallFromRemote, mockListRemoteCatalog } from './remote-catalog-mock'
 
 const REMOTE_BACKEND_NOT_WIRED =
   'OpenPLC CDN catalog backend is not yet available. Use "Add from file..." with a downloaded .vpp for now.'
+
+/**
+ * Local-dev toggle: when `true`, the catalog port methods are served from
+ * the static fixture in `remote-catalog-mock.ts` so the Browse Catalog UI
+ * can be exercised end-to-end without a real CDN. Committed value MUST stay
+ * `false` — flipping is a working-tree-only edit while EDGE-482 (real CDN)
+ * is still pending.
+ */
+const USE_LOCAL_MOCK = false
 
 export function createEditorPackageAdapter(): PackagePort {
   return {
@@ -62,9 +72,10 @@ export function createEditorPackageAdapter(): PackagePort {
 
     listRemoteCatalog(): Promise<RemoteCatalog> {
       // TODO(EDGE-482): replace with HTTP fetch against the OpenPLC CDN
-      // catalog URL once the backend lands. Until then we throw so the
+      // catalog URL once the backend lands. Until then we reject so the
       // CatalogBrowser surfaces its error state with a Try Again button
       // instead of rendering an empty catalog.
+      if (USE_LOCAL_MOCK) return mockListRemoteCatalog()
       return Promise.reject(new Error(REMOTE_BACKEND_NOT_WIRED))
     },
 
@@ -72,6 +83,7 @@ export function createEditorPackageAdapter(): PackagePort {
       // TODO(EDGE-482): replace with `fetch(downloadUrl) -> tmp file ->
       // local install pipeline` once the CDN backend lands. The shape of
       // the error keeps the UI's "Backend not connected" modal honest.
+      if (USE_LOCAL_MOCK) return mockInstallFromRemote(packageId, version)
       const versionSuffix = version ? `@${version}` : ''
       return Promise.resolve({
         success: false,
