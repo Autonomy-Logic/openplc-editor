@@ -1914,6 +1914,29 @@ class CompilerModule {
           const filename = v4Key.split('/').pop()!
           firmwareSkeleton[`src/${filename}`] = content
         }
+
+        // Board-specific HAL adapter — defines `hardwareInit`,
+        // `updateInputBuffers`, `updateOutputBuffers` that the
+        // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
+        // call into.  Editor's pre-refactor `handleGenerateArduinoCppFile`
+        // copied `resources/sources/hal/<boardEntry.source>` to
+        // `src/arduino.cpp`; we mirror that here so the firmware
+        // skeleton has the right HAL for the selected board.  Without
+        // this, the link fails with `undefined reference to
+        // hardwareInit` etc.
+        const boardSource = (boardEntry as { source?: string } | undefined)?.source
+        if (typeof boardSource === 'string' && boardSource.length > 0) {
+          const halPath = join(this.sourceDirectoryPath, 'hal', boardSource)
+          try {
+            const halContent = await readFile(halPath, 'utf-8')
+            firmwareSkeleton['src/arduino.cpp'] = halContent
+          } catch (halErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message: `Could not read board HAL file at ${halPath}: ${getErrorMessage(halErr)}`,
+            })
+          }
+        }
       }
       try {
         devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
