@@ -1842,13 +1842,66 @@ class CompilerModule {
       halsContent as Record<string, Parameters<typeof resolveBoardSelection>[0][string]>,
       boardTarget,
     )
-    if (!selection.ok) {
-      _mainProcessPort.postMessage({ logLevel: 'error', message: selection.error })
-      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
-      _mainProcessPort.close()
-      return
+    // Resolved fields the rest of compileProgram consumes.  Default
+    // to the shared resolver's output when the board lives in
+    // hals.json; otherwise (VPP boards installed via `.vpp` packages)
+    // fall back to the package-manager lookup so the runtime kind +
+    // flags still reflect the user's selection.
+    let boardEntry: Parameters<typeof runCompilePipeline>[0]['boardEntry']
+    let boardRuntime: string
+    let isSimulator: boolean
+    let isRuntimeV3: boolean
+    let isRuntimeV4: boolean
+    if (selection.ok) {
+      boardEntry = selection.boardEntry as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+      boardRuntime = selection.boardRuntime
+      isSimulator = selection.isSimulator
+      isRuntimeV3 = selection.isRuntimeV3
+      isRuntimeV4 = selection.isRuntimeV4
+    } else {
+      // VPP fallback — board lives in an installed `.vpp` package
+      // rather than hals.json.  Derive the runtime from the manifest's
+      // `target.type` (matches the pre-refactor `#getBoardRuntime`
+      // behaviour that fed all subsequent branching).  Web doesn't
+      // need this fallback — its installed-package surface is empty
+      // by design — so it stays in the editor-specific branch here.
+      let vppRuntime: 'openplc-compiler' | 'arduino-cli' | null = null
+      try {
+        const packageManager = new PackageManagerModule()
+        for (const pkg of packageManager.listInstalled()) {
+          const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+          if (!manifest) continue
+          const device = manifest.devices.find((d) => d.name === boardTarget)
+          if (device) {
+            vppRuntime = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+            break
+          }
+        }
+      } catch {
+        // Package manager errors fall through to the no-match path
+        // below — same behaviour as `#getBoardRuntime`.
+      }
+      if (!vppRuntime) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
+        })
+        _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+        _mainProcessPort.close()
+        return
+      }
+      // VPP boards don't ship a hals.json entry — feed the pipeline
+      // an empty placeholder.  The runtime-v4 / Arduino branches the
+      // pipeline picks based on the flags below don't dereference
+      // `boardEntry.platform` until the arduino-cli compile step,
+      // which doesn't run for runtime-v4 (VPP boards' canonical
+      // target).
+      boardEntry = {} as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+      boardRuntime = vppRuntime
+      isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
+      isRuntimeV4 = vppRuntime === 'openplc-compiler' && !isRuntimeV3
+      isSimulator = false
     }
-    const { boardEntry, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = selection
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
@@ -2040,7 +2093,7 @@ class CompilerModule {
         projectData,
         boardTarget,
         boardRuntime,
-        boardEntry: boardEntry as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry'],
+        boardEntry,
         devicePinMapping,
         isSimulator,
         isRuntimeV4,
