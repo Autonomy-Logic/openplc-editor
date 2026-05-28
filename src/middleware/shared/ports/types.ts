@@ -777,6 +777,44 @@ export interface ImportResult {
   error?: string
 }
 
+export interface RemoteVersionEntry {
+  version: string
+  downloadUrl: string
+  publishedAt?: string
+  /**
+   * Minimum editor semver required to run this package version. The UI
+   * compares this against `APP_VERSION` and flags incompatible entries in
+   * the dropdown so users don't try to install something the editor can't
+   * load.
+   */
+  minEditorVersion?: string
+  deviceCount: number
+  releaseNotes?: string
+}
+
+export interface RemoteCatalogEntry {
+  packageId: string
+  name: string
+  vendor: {
+    name: string
+    url?: string
+    logoUrl?: string
+  }
+  description: string
+  license?: string
+  tags?: string[]
+  /**
+   * Available versions, ordered newest-first. The adapter/CDN owns the
+   * ordering contract — UI code treats `versions[0]` as the latest.
+   */
+  versions: RemoteVersionEntry[]
+}
+
+export interface RemoteCatalog {
+  entries: RemoteCatalogEntry[]
+  fetchedAt: string
+}
+
 export interface IoMappingEntry {
   slot: number
   moduleId: string

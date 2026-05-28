@@ -11,11 +11,27 @@
  *   packages:get-manifest         (invoke)
  *   packages:open-manager         (on)
  *   packages:boards-updated       (on)
+ *
+ * `listRemoteCatalog` and `installFromRemote` are still stubs until the
+ * CDN backend ships (see EDGE-482 + subtasks for the wire contract). The
+ * UI surface exists and consumes these methods through `PackagePort`; both
+ * surface a clean "backend not connected" error today so the Browse Catalog
+ * tab degrades gracefully instead of crashing.
  */
 
 import { parsePackageManifest } from '../../shared/ports/package-manifest-schema'
 import type { PackagePort } from '../../shared/ports/package-port'
-import type { ImportResult, InstalledPackage, PackageManifest, Result, Unsubscribe } from '../../shared/ports/types'
+import type {
+  ImportResult,
+  InstalledPackage,
+  PackageManifest,
+  RemoteCatalog,
+  Result,
+  Unsubscribe,
+} from '../../shared/ports/types'
+
+const REMOTE_BACKEND_NOT_WIRED =
+  'OpenPLC CDN catalog backend is not yet available. Use "Add from file..." with a downloaded .vpp for now.'
 
 export function createEditorPackageAdapter(): PackagePort {
   return {
@@ -42,6 +58,25 @@ export function createEditorPackageAdapter(): PackagePort {
       const raw = await window.bridge.getPackageManifest(packageId)
       if (raw === null || raw === undefined) return null
       return parsePackageManifest(raw)
+    },
+
+    listRemoteCatalog(): Promise<RemoteCatalog> {
+      // TODO(EDGE-482): replace with HTTP fetch against the OpenPLC CDN
+      // catalog URL once the backend lands. Until then we throw so the
+      // CatalogBrowser surfaces its error state with a Try Again button
+      // instead of rendering an empty catalog.
+      return Promise.reject(new Error(REMOTE_BACKEND_NOT_WIRED))
+    },
+
+    installFromRemote(packageId: string, version?: string): Promise<ImportResult> {
+      // TODO(EDGE-482): replace with `fetch(downloadUrl) -> tmp file ->
+      // local install pipeline` once the CDN backend lands. The shape of
+      // the error keeps the UI's "Backend not connected" modal honest.
+      const versionSuffix = version ? `@${version}` : ''
+      return Promise.resolve({
+        success: false,
+        error: `Remote install for "${packageId}${versionSuffix}" is not available — ${REMOTE_BACKEND_NOT_WIRED}`,
+      })
     },
 
     onOpenManager(callback: () => void): Unsubscribe {

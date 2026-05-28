@@ -12,7 +12,14 @@
  *   - window.bridge.getPackageManifest()
  */
 
-import type { ImportResult, InstalledPackage, PackageManifest, Result, Unsubscribe } from './types'
+import type {
+  ImportResult,
+  InstalledPackage,
+  PackageManifest,
+  RemoteCatalog,
+  Result,
+  Unsubscribe,
+} from './types'
 
 export interface PackagePort {
   /**
@@ -36,6 +43,19 @@ export interface PackagePort {
    * Get the full manifest of an installed package.
    */
   getManifest(packageId: string): Promise<PackageManifest | null>
+
+  /**
+   * Fetch the remote VPP catalog from the OpenPLC CDN.
+   * Currently mocked in both adapters until the backend ships.
+   */
+  listRemoteCatalog(): Promise<RemoteCatalog>
+
+  /**
+   * Download and install a VPP from the remote catalog by package id (and
+   * optional explicit version — defaults to the catalog's advertised one).
+   * Currently a no-op stub in both adapters until the backend ships.
+   */
+  installFromRemote(packageId: string, version?: string): Promise<ImportResult>
 
   /**
    * Subscribe to the "open package manager" event (triggered from menu).

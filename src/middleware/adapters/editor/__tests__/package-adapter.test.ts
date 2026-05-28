@@ -130,6 +130,30 @@ describe('createEditorPackageAdapter', () => {
     })
   })
 
+  describe('listRemoteCatalog', () => {
+    // Until the CDN backend (EDGE-482) lands, the catalog method rejects.
+    // The CatalogBrowser surfaces this through its error banner with a Try
+    // Again button — no UI crash, no empty-catalog confusion.
+    it('rejects with a "backend not yet available" error so the UI surfaces its error state', async () => {
+      await expect(adapter.listRemoteCatalog()).rejects.toThrow(/not yet available/i)
+    })
+  })
+
+  describe('installFromRemote', () => {
+    it('resolves with success:false and an error that names the requested package + version', async () => {
+      const result = await adapter.installFromRemote('com.openplc.arduino', '0.2.0')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('com.openplc.arduino')
+      expect(result.error).toContain('0.2.0')
+    })
+
+    it('still surfaces the packageId when version is omitted', async () => {
+      const result = await adapter.installFromRemote('com.openplc.espressif')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('com.openplc.espressif')
+    })
+  })
+
   describe('event subscriptions', () => {
     it('forwards onOpenManager registration to the bridge and returns its unsubscribe', () => {
       const unsubscribe = jest.fn()
