@@ -580,6 +580,90 @@ class CompilerModule {
    * Flat directory (no subfolders) per the strucpp release layout —
    * `readdir(runtimeDir)` is enough; no recursive walk.
    */
+  /**
+   * Load the firmware skeleton files (`resources/sources/arduino/*`
+   * + `resources/sources/Baremetal/**`) into an in-memory file map
+   * keyed by the canonical project-root-relative paths the shared
+   * `composeFirmwareBundle` expects.
+   *
+   * Editor's existing `copyStaticFiles` materialises these to disk
+   * between pipeline steps; the shared pipeline routes them through
+   * `composeFirmwareBundle` as a `Record<string, string>` instead so
+   * the same composition logic works on web (where there's no
+   * filesystem).  This helper bridges the gap: it walks the on-disk
+   * skeleton once and returns it in the canonical shape.
+   *
+   * Path mapping (matches `copyStaticFiles`'s on-disk layout):
+   *   - `resources/sources/arduino/<file>` → `src/<file>`
+   *   - `resources/sources/Baremetal/<file>` → `examples/Baremetal/<file>`
+   *   - `resources/sources/Baremetal/modules/<file>` → `examples/Baremetal/modules/<file>`
+   *
+   * Strucpp runtime headers (`src/<filename>.hpp`) come from
+   * `loadStrucppRuntimeHeaders` separately — they have a different
+   * source path (`node_modules/strucpp/...`) and the shared
+   * `composeRuntimeV4Bundle` puts them under
+   * `strucpp_runtime/include/<filename>` instead of `src/`.  Callers
+   * pick the right one for their target.
+   *
+   * `boardRuntime === 'openplc-compiler'` (runtime v4) returns an
+   * empty map — the v4 bundle is composed by `composeRuntimeV4Bundle`
+   * which sources strucpp runtime headers from
+   * `loadStrucppRuntimeHeaders` directly, no Arduino skeleton
+   * needed.
+   */
+  async loadFirmwareSkeletonInMemory(boardRuntime: string): Promise<Record<string, string>> {
+    if (boardRuntime === 'openplc-compiler') {
+      return {}
+    }
+    const arduinoDir = join(this.sourceDirectoryPath, 'arduino')
+    const baremetalDir = join(this.sourceDirectoryPath, 'Baremetal')
+    const files: Record<string, string> = {}
+
+    // arduino/* → src/*
+    try {
+      const arduinoEntries = await readdir(arduinoDir, { withFileTypes: true })
+      await Promise.all(
+        arduinoEntries
+          .filter((e) => e.isFile())
+          .map(async (e) => {
+            const content = await readFile(join(arduinoDir, e.name), 'utf-8')
+            files[`src/${e.name}`] = content
+          }),
+      )
+    } catch {
+      // arduino/ may be absent in odd setups — leave the skeleton
+      // empty so the pipeline / composer surfaces a clear error
+      // downstream instead of crashing here.
+    }
+
+    // Baremetal/* → examples/Baremetal/* (plus modules subdir).
+    try {
+      const baremetalEntries = await readdir(baremetalDir, { withFileTypes: true })
+      await Promise.all(
+        baremetalEntries.map(async (e) => {
+          if (e.isFile()) {
+            const content = await readFile(join(baremetalDir, e.name), 'utf-8')
+            files[`examples/Baremetal/${e.name}`] = content
+          } else if (e.isDirectory() && e.name === 'modules') {
+            const moduleEntries = await readdir(join(baremetalDir, 'modules'), { withFileTypes: true })
+            await Promise.all(
+              moduleEntries
+                .filter((m) => m.isFile())
+                .map(async (m) => {
+                  const content = await readFile(join(baremetalDir, 'modules', m.name), 'utf-8')
+                  files[`examples/Baremetal/modules/${m.name}`] = content
+                }),
+            )
+          }
+        }),
+      )
+    } catch {
+      // Same defensive posture as the arduino/ block above.
+    }
+
+    return files
+  }
+
   private async loadStrucppRuntimeHeaders(): Promise<Record<string, string>> {
     const runtimeDir = this.strucppRuntimeDir
     try {
