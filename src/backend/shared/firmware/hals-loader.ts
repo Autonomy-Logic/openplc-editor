@@ -15,6 +15,14 @@
  * `await readHalsFile()` with no further restructure.  The promise
  * resolves synchronously off the bundled module — there is no
  * actual I/O.
+ *
+ * Module is intentionally named `hals-loader.ts` (not `hals.ts`):
+ * editor's webpack `resolve.extensions` lists `.json` before `.ts`,
+ * so an extensionless import of `'.../firmware/hals'` was resolving
+ * to `hals.json` and `readHalsFile` ended up `undefined` at
+ * runtime — empty board list, board-settings screen blank.  Keeping
+ * the loader's basename distinct from the data file's basename
+ * sidesteps that resolution clash for both webpack and Vite.
  */
 
 import halsContent from './hals.json'

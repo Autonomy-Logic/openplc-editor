@@ -82,7 +82,7 @@ import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
-import { readHalsFile } from '@root/backend/shared/firmware/hals'
+import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {

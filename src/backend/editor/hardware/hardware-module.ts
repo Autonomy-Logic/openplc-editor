@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
-import { readHalsFile } from '../../shared/firmware/hals'
+import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
