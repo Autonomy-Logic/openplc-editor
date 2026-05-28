@@ -62,14 +62,25 @@ const DEFAULT_MAX_CONSECUTIVE_ERRORS = 10
 
 /** Strip `[LEVEL]` prefix from a runtime log line and route the
  *  remainder at the matching level.  Same convention editor's
- *  `parseLogLevel` follows. */
+ *  `parseLogLevel` follows.
+ *
+ *  The runtime appends a trailing newline to every entry it pushes
+ *  into `build_state.logs` (e.g. `build_state.log(f"[INFO] ...\\n")`
+ *  in openplc-runtime's `plcapp_management.py`).  We can't anchor
+ *  the body match with `$` because JS without the `m` flag treats
+ *  the trailing `\\n` as still inside the string and the anchor
+ *  fails — historically that dropped every classified line back to
+ *  `level: 'info'` with the prefix preserved, which is why error
+ *  output rendered blue in the console.  Anchor only the prefix
+ *  and capture the rest by slicing, so trailing whitespace (or any
+ *  control characters) doesn't break classification. */
 function classifyLogLine(line: string): { level: RuntimeCompilationLogLevel; message: string } {
-  const m = line.match(/^\[(ERROR|WARN|WARNING|INFO|DEBUG)\]\s*(.*)$/i)
-  if (!m) return { level: 'info', message: line }
+  const m = line.match(/^\[(ERROR|WARN|WARNING|INFO|DEBUG)\]\s*/i)
+  if (!m) return { level: 'info', message: line.replace(/\r?\n$/, '') }
   const tag = m[1].toUpperCase()
   const level: RuntimeCompilationLogLevel =
     tag === 'ERROR' ? 'error' : tag === 'WARN' || tag === 'WARNING' ? 'warning' : tag === 'DEBUG' ? 'debug' : 'info'
-  return { level, message: m[2] }
+  return { level, message: line.slice(m[0].length).replace(/\r?\n$/, '') }
 }
 
 /**
