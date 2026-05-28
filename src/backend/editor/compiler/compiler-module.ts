@@ -83,9 +83,8 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { generateRuntimeConfs } from '@root/backend/shared/compile/steps/generate-confs'
 import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
-import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
-import { validateEthercatConfig } from '@root/backend/shared/ethercat/validate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -96,15 +95,11 @@ import {
   type CppPouData as CppPouDataHeader,
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
-import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
 import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
-import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
-import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
 import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '@root/middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
@@ -1400,171 +1395,6 @@ class CompilerModule {
     }
   }
 
-  async handleGenerateModbusSlaveConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const modbusSlaveConfig: string | null = generateModbusSlaveConfig(
-      projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
-    )
-
-    if (modbusSlaveConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'modbus_slave.json')
-      await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
-      handleOutputData('Generated conf/modbus_slave.json', 'info')
-    } else {
-      handleOutputData('No Modbus TCP server configured, skipping modbus_slave.json generation', 'info')
-    }
-  }
-
-  async handleGenerateModbusMasterConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const modbusMasterConfig: string | null = generateModbusMasterConfig(
-      projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-    )
-
-    if (modbusMasterConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'modbus_master.json')
-      await writeFile(configFilePath, modbusMasterConfig, 'utf-8')
-      handleOutputData('Generated conf/modbus_master.json', 'info')
-    } else {
-      handleOutputData('No Modbus TCP remote devices configured, skipping modbus_master.json generation', 'info')
-    }
-  }
-
-  async handleGenerateS7CommConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    try {
-      const s7commConfig: string | null = generateS7CommConfig(projectData.servers)
-
-      if (s7commConfig) {
-        const confFolderPath = join(sourceTargetFolderPath, 'conf')
-        await mkdir(confFolderPath, { recursive: true })
-        const configFilePath = join(confFolderPath, 's7comm.json')
-        await writeFile(configFilePath, s7commConfig, 'utf-8')
-        handleOutputData('Generated conf/s7comm.json', 'info')
-      } else {
-        handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
-      }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error)
-      handleOutputData(`Failed to generate S7Comm config: ${errorMessage}`, 'error')
-      throw error
-    }
-  }
-
-  /**
-   * Generate OPC-UA server configuration for Runtime v4.
-   * Reads debug.c to resolve variable indices and generates opcua.json.
-   */
-  async handleGenerateOpcUaConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    try {
-      // Check if there's an enabled OPC-UA server
-      const opcuaServer = projectData.servers?.find(
-        (s) => s.protocol === 'opcua' && s.opcuaServerConfig?.server.enabled,
-      )
-
-      if (!opcuaServer || !opcuaServer.opcuaServerConfig) {
-        handleOutputData('No OPC-UA server configured, skipping opcua.json generation', 'info')
-        return
-      }
-
-      // Read STruC++'s debug-map.json (replaces MatIEC's debug.c).
-      // Generated by the codegen pipeline at compile time alongside
-      // generated.cpp / generated.hpp.
-      const debugMapPath = join(sourceTargetFolderPath, 'debug-map.json')
-      let debugMapContent: string
-
-      try {
-        debugMapContent = await readFile(debugMapPath, 'utf-8')
-      } catch {
-        handleOutputData(
-          'Warning: Could not read debug-map.json. OPC-UA variable addresses may not be resolved.',
-          'error',
-        )
-        debugMapContent = ''
-      }
-
-      // Get instances from Resources configuration for address resolution
-      const instances = projectData.configuration.resource.instances.map((inst) => ({
-        name: inst.name,
-        task: inst.task,
-        program: inst.program,
-      }))
-
-      // Generate the OPC-UA configuration. Field-level resolution
-      // failures (stale library-FB internals, renamed/deleted vars)
-      // surface as build warnings instead of aborting; the generator
-      // drops them and we forward each to the compile log.
-      const opcuaJson: string | null = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
-        handleOutputData(msg, 'info'),
-      )
-
-      if (opcuaJson) {
-        // Ensure conf directory exists
-        const confFolderPath = join(sourceTargetFolderPath, 'conf')
-        await mkdir(confFolderPath, { recursive: true })
-
-        // Write the configuration file
-        const configFilePath = join(confFolderPath, 'opcua.json')
-        await writeFile(configFilePath, opcuaJson, 'utf-8')
-        handleOutputData('Generated conf/opcua.json', 'info')
-
-        // Log the number of configured nodes
-        const nodeCount = opcuaServer.opcuaServerConfig.addressSpace.nodes.length
-        handleOutputData(`OPC-UA Address Space: ${nodeCount} node(s) configured`, 'info')
-      } else {
-        handleOutputData('OPC-UA server enabled but no configuration generated', 'info')
-      }
-    } catch (error) {
-      if (error instanceof OpcUaConfigError) {
-        handleOutputData(`OPC-UA Configuration Error:\n${error.message}`, 'error')
-      } else {
-        const errorMessage = getErrorMessage(error)
-        handleOutputData(`Failed to generate OPC-UA config: ${errorMessage}`, 'error')
-      }
-      throw error
-    }
-  }
-
-  async handleGenerateEthercatConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
-
-    const ethercatErrors = validateEthercatConfig(ethercatConfig)
-    if (ethercatErrors.length > 0) {
-      throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
-    }
-
-    if (ethercatConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'ethercat.json')
-      await writeFile(configFilePath, ethercatConfig, 'utf-8')
-      handleOutputData('Generated conf/ethercat.json', 'info')
-    } else {
-      handleOutputData('No EtherCAT devices configured, skipping ethercat.json generation', 'info')
-    }
-  }
-
   async embedCBlocksInProgramSt(
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
@@ -2189,57 +2019,28 @@ class CompilerModule {
             variables: pou.variables,
           })) as CppPouDataHeader[]
 
-          // Modbus slave / master / S7Comm: pure helpers, no I/O —
-          // call them directly here and hand the strings to the
-          // composer.  `null` from any of them means the project has
-          // no config of that type, which the composer skips.
-          const modbusSlaveJson = generateModbusSlaveConfig(
-            projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
-          )
-          const modbusMasterJson = generateModbusMasterConfig(
-            projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-          )
-          const s7CommJson = generateS7CommConfig(projectData.servers)
-
+          // Conf generation: Modbus slave/master, S7Comm, OPC-UA,
+          // EtherCAT.  Orchestration lives in
+          // `backend/shared/compile/steps/generate-confs.ts` so the
+          // web's pipeline runs the same error-handling (OPC-UA
+          // diagnostic prefix, EtherCAT validate-then-abort) and
+          // emits the same byte-identical JSON.
+          //
           // OPC-UA needs strucpp's `debug-map.json` (NOT
-          // `generated_debug.cpp`) to resolve `%I/%Q/%M` addresses —
-          // `parseDebugMap` in `frontend/utils/opcua/` expects the
-          // JSON shape strucpp emits at that filename.  Pull it from
-          // the in-memory strucpp file map so the composer doesn't
-          // have to re-read every artefact off disk.
-          const debugMapContent = strucppEmittedFiles['debug-map.json'] ?? ''
-          const instances = projectData.configuration.resource.instances.map((inst) => ({
-            name: inst.name,
-            task: inst.task,
-            program: inst.program,
-          }))
-          let opcUaJson: string | null = null
-          try {
-            opcUaJson = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
-              _mainProcessPort.postMessage({ logLevel: 'info', message: msg }),
-            )
-          } catch (error) {
-            if (error instanceof OpcUaConfigError) {
-              _mainProcessPort.postMessage({
-                logLevel: 'error',
-                message: `OPC-UA Configuration Error:\n${error.message}`,
-              })
-            } else {
-              _mainProcessPort.postMessage({
-                logLevel: 'error',
-                message: `Failed to generate OPC-UA config: ${getErrorMessage(error)}`,
-              })
-            }
-            throw error
-          }
-
-          // EtherCAT: validate up-front so a bad config aborts the
-          // compile before the composer runs — same gate web has.
-          const ethercatJson = generateEthercatConfig(projectData.remoteDevices)
-          const ethercatErrors = validateEthercatConfig(ethercatJson)
-          if (ethercatErrors.length > 0) {
-            throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
-          }
+          // `generated_debug.cpp`) to resolve `%I/%Q/%M` addresses.
+          // Pull it from the in-memory strucpp file map so the
+          // composer doesn't have to re-read every artefact off disk.
+          const confs = generateRuntimeConfs({
+            servers: projectData.servers,
+            remoteDevices: projectData.remoteDevices,
+            instances: projectData.configuration.resource.instances.map((inst) => ({
+              name: inst.name,
+              task: inst.task,
+              program: inst.program,
+            })),
+            debugMapContent: strucppEmittedFiles['debug-map.json'] ?? '',
+            log: (message, level) => _mainProcessPort.postMessage({ logLevel: level, message }),
+          })
 
           // ST source — read from disk since handleGenerateXMLfromJSON
           // + xml2st wrote it earlier in the pipeline.
@@ -2255,14 +2056,15 @@ class CompilerModule {
             },
             strucppRuntimeHeaders: await this.loadStrucppRuntimeHeaders(),
             confs: {
-              modbusSlave: modbusSlaveJson,
-              modbusMaster: modbusMasterJson,
-              s7Comm: s7CommJson,
-              opcUa: opcUaJson,
-              // `validateEthercatConfig` above guarantees a non-null
-              // payload by here; coerce for the composer's required
-              // `string` shape.
-              ethercat: ethercatJson ?? '',
+              modbusSlave: confs.modbusSlave,
+              modbusMaster: confs.modbusMaster,
+              s7Comm: confs.s7Comm,
+              opcUa: confs.opcUa,
+              // `generateRuntimeConfs` validates EtherCAT before
+              // returning, so a non-null `ethercat` here is
+              // guaranteed valid.  Coerce null → '' for the
+              // composer's required `string` shape.
+              ethercat: confs.ethercat ?? '',
             },
           })
 
