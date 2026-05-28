@@ -44,7 +44,6 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
-import { preprocessPous } from '../utils/PLC/preprocess-pous'
 import { XmlGenerator } from '../utils/PLC/xml-generator'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
@@ -284,30 +283,20 @@ async function runCompilePipelineInner(
   } = args
 
   // ---------------------------------------------------------------------
-  // Step 0: Preprocess POUs.  Converts Python POUs to ST stubs and
-  // attaches `originalCppPous` sidecar for C/C++ POUs that the
-  // downstream steps read (c_blocks header/code generation).
+  // Step 0: Use the already-preprocessed project data.
   //
-  // Type note: `preprocessPous` is typed against the port-shape
-  // `PLCProjectData` (`configurations` plural); the pipeline takes
-  // the schema-shape (`configuration` singular) because that's what
-  // the editor's runtime values carry.  At runtime both shapes are
-  // structurally compatible (the field names that get accessed are
-  // the same — pous, dataTypes, etc.).  The `as never` cast bypasses
-  // the type mismatch; C1 in the architectural plan tracks the
-  // proper unification.
+  // Preprocessing (Python POU → ST stub conversion + C/C++ POU
+  // sidecar extraction) runs on each platform's renderer side
+  // BEFORE the pipeline is called — editor does it in the
+  // compile-action that posts the IPC message, web does it in its
+  // compile-adapter before invoking the pipeline.  Doing it again
+  // here would double-process the data (and on editor the IPC
+  // shape-conversion makes preprocessPous's port-shape assumptions
+  // fail at runtime).  The pipeline trusts that `projectData.pous`
+  // are already in ST form and that `originalCppPous` is attached
+  // when the project has C/C++ POUs.
   // ---------------------------------------------------------------------
-  emit({ stage: 'preprocess', message: 'Preprocessing POUs...', level: 'info' })
-  const preprocessLogger = makePlatformLog(emit, 'preprocess')
-  const preprocessResult = preprocessPous(
-    projectData as never,
-    isSimulator,
-    (level, message) => preprocessLogger(message, level === 'error' ? 'error' : 'info'),
-  )
-  if (preprocessResult.validationFailed) {
-    return bailError(emit, 'preprocess', 'POU validation failed.  Check C/C++ code for missing setup()/loop() functions.')
-  }
-  const processedData = preprocessResult.projectData as unknown as PLCProjectData & {
+  const processedData = projectData as PLCProjectData & {
     originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
   }
   const originalCppPous = processedData.originalCppPous ?? []

@@ -5,7 +5,7 @@
  * methods.  Each branch (simulator / runtime v4 / runtime v3 /
  * arduino-direct, with `compileOnly` variants for each) is exercised
  * here by mocking the port + the heavy shared dependencies
- * (`runProgramBuildPipeline`, `preprocessPous`, `XmlGenerator`).
+ * (`runProgramBuildPipeline`, `XmlGenerator`).
  * The actual content-authoring steps (defines, confs, composers) are
  * covered by their own unit tests; this suite focuses on the
  * orchestration — call ordering, branch dispatch, error propagation,
@@ -21,9 +21,6 @@ import type {
 
 // Mocks for heavy shared deps.  Use `jest.fn()` so individual tests
 // can override `.mockReturnValueOnce` / `.mockResolvedValueOnce`.
-jest.mock('../../utils/PLC/preprocess-pous', () => ({
-  preprocessPous: jest.fn(),
-}))
 jest.mock('../../utils/PLC/xml-generator', () => ({
   XmlGenerator: jest.fn(),
 }))
@@ -48,7 +45,6 @@ jest.mock('../../firmware/runtime-version-gate', () => ({
   ),
 }))
 
-import { preprocessPous } from '../../utils/PLC/preprocess-pous'
 import { XmlGenerator } from '../../utils/PLC/xml-generator'
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
 import {
@@ -57,7 +53,6 @@ import {
 
 import { runCompilePipeline, type RunCompilePipelineArgs, type PipelineProgressEvent } from '../pipeline'
 
-const mockedPreprocess = preprocessPous as jest.MockedFunction<typeof preprocessPous>
 const mockedXmlGen = XmlGenerator as jest.MockedFunction<typeof XmlGenerator>
 const mockedStrucpp = runProgramBuildPipeline as jest.MockedFunction<typeof runProgramBuildPipeline>
 const mockedVersionGate = isStrucppCompatibleRuntime as jest.MockedFunction<typeof isStrucppCompatibleRuntime>
@@ -126,11 +121,6 @@ function captureEvents() {
 
 beforeEach(() => {
   jest.clearAllMocks()
-  // Default-mock: preprocess succeeds with the input data unchanged.
-  mockedPreprocess.mockImplementation((projectData) => ({
-    validationFailed: false,
-    projectData: { ...projectData, originalCppPous: [] } as never,
-  }))
   // Default-mock: XML generation succeeds.
   mockedXmlGen.mockReturnValue({ ok: true, data: '<plc/>', message: 'ok' } as never)
   // Default-mock: strucpp succeeds with empty file map.
@@ -527,16 +517,6 @@ describe('runCompilePipeline — boardEntry shape variants', () => {
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — failure propagation', () => {
-  it('returns success=false when preprocess validation fails', async () => {
-    mockedPreprocess.mockReturnValueOnce({ validationFailed: true, projectData: projectDataFixture as never })
-    const port = makePort()
-    const { events, emit } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
-    expect(result.success).toBe(false)
-    expect(events.some((e) => e.stage === 'preprocess' && e.level === 'error')).toBe(true)
-    expect(port.transpileXmlToSt).not.toHaveBeenCalled()
-  })
-
   it('returns success=false when XmlGenerator reports failure', async () => {
     mockedXmlGen.mockReturnValueOnce({ ok: false, data: undefined, message: 'malformed pou' } as never)
     const port = makePort()
