@@ -720,15 +720,19 @@ class CompilerModule {
   async handleTranspileXMLtoST(
     generatedXMLFilePath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    extraXml2stArgs: readonly string[],
   ) {
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      // `--keep-structs` tells xml2st to emit user-defined STRUCT data
-      // types as native `TYPE name : STRUCT … END_STRUCT;` declarations
-      // instead of rewriting them as FUNCTION_BLOCKs (matiec's legacy
-      // workaround).  Strucpp parses STRUCT natively and rejects the FB
-      // rewrite as a type-vs-instance mismatch — every program build in
-      // the editor targets strucpp now, so we always set the flag.
-      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath, '--keep-structs'])
+      // `extraXml2stArgs` comes from the shared pipeline's
+      // `TranspileXmlToStArgs.xml2stArgs` — the single source of truth
+      // for xml2st flag semantics across editor and web.  Editor passes
+      // them through verbatim (trusted local binary); web's adapter
+      // filters against its known-args allowlist before sending to the
+      // compile-service.  Strucpp targets currently pass
+      // `['--keep-structs']` (native STRUCT declarations vs matiec's
+      // legacy struct→FB rewrite); future flags appear here as the
+      // pipeline opts into them.
+      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath, ...extraXml2stArgs])
 
       let stderrData = ''
 
@@ -2225,9 +2229,13 @@ class CompilerModule {
 
     const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
     try {
-      await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleTranspileXMLtoST(
+        generatedXMLFilePath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        ['--keep-structs'],
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -2471,13 +2479,17 @@ class CompilerModule {
 
     // Stage 2: xml2st spawn (shared with the program-build path).
     try {
-      await this.handleTranspileXMLtoST(xmlPath, (data, logLevel) => {
-        // xml2st's stdout doubles as progress + error stream; surface
-        // it verbatim so the user sees the same diagnostics the
-        // program-build path produces.
-        const message = typeof data === 'string' ? data : data.toString()
-        post(message, logLevel ?? 'info')
-      })
+      await this.handleTranspileXMLtoST(
+        xmlPath,
+        (data, logLevel) => {
+          // xml2st's stdout doubles as progress + error stream; surface
+          // it verbatim so the user sees the same diagnostics the
+          // program-build path produces.
+          const message = typeof data === 'string' ? data : data.toString()
+          post(message, logLevel ?? 'info')
+        },
+        ['--keep-structs'],
+      )
     } catch (error) {
       bail(`xml2st failed: ${getErrorMessage(error)}`)
       return

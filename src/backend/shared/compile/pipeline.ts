@@ -326,7 +326,19 @@ async function runCompilePipelineInner(
   // on editor, HTTP /generate-st on web).
   // ---------------------------------------------------------------------
   emit({ stage: 'st', message: 'Generating Structured Text...', level: 'info' })
-  const stResult = await port.transpileXmlToSt({ xml: plcXml }, makePlatformLog(emit, 'st'))
+  // `['--keep-structs']` — strucpp parses native `STRUCT` declarations
+  // and rejects matiec's legacy struct→FB rewrite as a type-vs-instance
+  // mismatch.  Editor's local xml2st always passed `--keep-structs`;
+  // pre-pipeline this was hardcoded inside its compiler-module while
+  // the web's compile-service `/generate-st` endpoint ran without it,
+  // causing structs to compile on the desktop and fail on the web.
+  // The flag set is now part of the port contract so both adapters
+  // observe the same tokens — future xml2st flags get appended here
+  // at this single call site.
+  const stResult = await port.transpileXmlToSt(
+    { xml: plcXml, xml2stArgs: ['--keep-structs'] },
+    makePlatformLog(emit, 'st'),
+  )
   if (!stResult.ok || !stResult.programSt) {
     if (stResult.errors && stResult.errors.length > 0) {
       emitCompileErrorEvents(

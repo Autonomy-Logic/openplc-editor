@@ -167,6 +167,15 @@ describe('runCompilePipeline — simulator path', () => {
     expect(result.binary).toBeInstanceOf(Uint8Array)
     expect(result.uploaded).toBe(false)
     expect(port.transpileXmlToSt).toHaveBeenCalledTimes(1)
+    // The pipeline owns xml2st flag semantics: every strucpp target
+    // gets `xml2stArgs: ['--keep-structs']`.  Regression guard for
+    // the editor/web STRUCT drift bug — see compiler-platform-port.ts
+    // comment.  Future flags get added to this array, not to a
+    // typed boolean on the port (the port stays format-agnostic).
+    expect(port.transpileXmlToSt).toHaveBeenCalledWith(
+      expect.objectContaining({ xml2stArgs: ['--keep-structs'] }),
+      expect.any(Function),
+    )
     expect(port.compileArduino).toHaveBeenCalledTimes(1)
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
