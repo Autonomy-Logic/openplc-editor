@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
+import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
@@ -137,11 +138,11 @@ class HardwareModule {
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {
-    // Construct the path to the hals.json file
-    const halsFilePath = join(this.sourcesDirectoryPath, 'boards', 'hals.json')
-
-    // Read the content of the necessary files - hals.json and arduino-core-control.json
-    const halsFileContent = await HardwareModule.readJSONFile<HalsFile>(halsFilePath)
+    // hals.json is now bundled at `src/backend/shared/firmware/hals.json`
+    // (the canonical shared board catalogue editor and web both consume).
+    // `readHalsFile` resolves synchronously off the bundled JSON — keeps
+    // the async shape so this call site stays unchanged.
+    const halsFileContent = await readHalsFile<HalsFile>()
     const arduinoCoreFileContent = await HardwareModule.readJSONFile<{ [core: string]: string }[]>(
       this.arduinoCoreFilePath,
     )

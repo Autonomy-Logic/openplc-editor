@@ -215,6 +215,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
             args.runtimeIpAddress ?? null,
             args.runtimeJwtToken ?? null,
             args.cleanBuild ?? false,
+            args.communicationPort ?? null,
           ],
           (data: Record<string, unknown>) => {
             // Extract simulator firmware path BEFORE the closePort early return,

@@ -209,7 +209,15 @@ describe('createEditorCompilerAdapter', () => {
 
       expect(window.bridge.getAvailableBoards).toHaveBeenCalled()
       expect(window.bridge.runCompileProgram).toHaveBeenCalledWith(
-        ['/path/to/project', 'Arduino Mega', 'arduino:avr:mega', true, expect.any(Object), null, null, false],
+        // Args layout (verbatim, in order):
+        //   projectPath, boardTarget, boardCore, compileOnly,
+        //   projectData, runtimeIpAddress, runtimeJwtToken,
+        //   cleanBuild, communicationPort.
+        // `communicationPort` is the 9th slot — added so the
+        // arduino-cli upload step receives the user's serial-port
+        // picker selection without waiting on a project save round-
+        // trip.  `null` when the caller didn't supply one.
+        ['/path/to/project', 'Arduino Mega', 'arduino:avr:mega', true, expect.any(Object), null, null, false, null],
         expect.any(Function),
       )
       expect(result).toEqual({ success: true, message: 'Compilation complete', hexPath: undefined })

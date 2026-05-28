@@ -18,15 +18,10 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import {
-  describeIncompatibleRuntime,
-  isStrucppCompatibleRuntime,
-} from '@root/backend/shared/firmware/runtime-version-gate'
-import {
   composeVerificationProject,
   libraryBuildFromTranspiledSt,
   prepareXmlForLibraryBuild,
 } from '@root/backend/shared/library/build-pipeline'
-import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -83,8 +78,11 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
-import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
-import { validateEthercatConfig } from '@root/backend/shared/ethercat/validate-ethercat-config'
+import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
+import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
+import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
+import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
+import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
@@ -95,17 +93,11 @@ import {
   type CppPouData as CppPouDataHeader,
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
-import { generateModbusMasterConfig } from '@root/backend/shared/utils/modbus/generate-modbus-master-config'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
-import { parsePlcStatus } from '@root/backend/shared/utils/plc-status'
 import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { generateModbusSlaveConfig } from '@root/frontend/utils/modbus/generate-modbus-slave-config'
-import { generateOpcUaConfig, OpcUaConfigError } from '@root/frontend/utils/opcua'
-import { generateS7CommConfig } from '@root/frontend/utils/s7comm'
 import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
-import { composeRuntimeV4Bundle } from '@root/middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -113,6 +105,7 @@ import JSZip from 'jszip'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
+import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { ArduinoCoreControl, HalsFile } from './types'
 
 interface MethodsResult<T> {
@@ -160,7 +153,6 @@ type CompileArduinoProgramArgs = {
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
-  halsFilePath: string
 
   arduinoCliBinaryPath: string
   arduinoCliConfigurationFilePath: string
@@ -211,7 +203,6 @@ class CompilerModule {
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
-    this.halsFilePath = this.#constructHalsFilePath()
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
@@ -273,16 +264,6 @@ class CompilerModule {
     )
   }
 
-  #constructHalsFilePath(): string {
-    return join(
-      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
-      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
-      'sources',
-      'boards',
-      'hals.json',
-    )
-  }
-
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
@@ -321,21 +302,22 @@ class CompilerModule {
    * Resolve a board target to the arduino-cli core ID
    * (`arduino-cli core install` target — e.g. `arduino:avr`).
    *
-   * Single source of truth: reads from `resources/sources/boards/
-   * hals.json`, the same file the renderer's
-   * `bridge.getAvailableBoards()` exposes via `boardInfo.core`.
+   * Single source of truth: reads from the shared
+   * `backend/shared/firmware/hals.json` bundle, the same file the
+   * renderer's `bridge.getAvailableBoards()` exposes via
+   * `boardInfo.core`.
    * Used internally by the library-project verification path so a
    * future hals.json edit (rename, new board, version bump)
    * propagates to verification automatically — without any code
    * change here.
    */
   async #getBoardCore(board: string): Promise<string | null> {
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     return halsFileContent[board]?.['core'] ?? null
   }
 
   async #getBoardRuntime(board: string) {
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     if (halsFileContent[board]) {
       return halsFileContent[board]['compiler']
     }
@@ -584,6 +566,90 @@ class CompilerModule {
    * Flat directory (no subfolders) per the strucpp release layout —
    * `readdir(runtimeDir)` is enough; no recursive walk.
    */
+  /**
+   * Load the firmware skeleton files (`resources/sources/arduino/*`
+   * + `resources/sources/Baremetal/**`) into an in-memory file map
+   * keyed by the canonical project-root-relative paths the shared
+   * `composeFirmwareBundle` expects.
+   *
+   * Editor's existing `copyStaticFiles` materialises these to disk
+   * between pipeline steps; the shared pipeline routes them through
+   * `composeFirmwareBundle` as a `Record<string, string>` instead so
+   * the same composition logic works on web (where there's no
+   * filesystem).  This helper bridges the gap: it walks the on-disk
+   * skeleton once and returns it in the canonical shape.
+   *
+   * Path mapping (matches `copyStaticFiles`'s on-disk layout):
+   *   - `resources/sources/arduino/<file>` → `src/<file>`
+   *   - `resources/sources/Baremetal/<file>` → `examples/Baremetal/<file>`
+   *   - `resources/sources/Baremetal/modules/<file>` → `examples/Baremetal/modules/<file>`
+   *
+   * Strucpp runtime headers (`src/<filename>.hpp`) come from
+   * `loadStrucppRuntimeHeaders` separately — they have a different
+   * source path (`node_modules/strucpp/...`) and the shared
+   * `composeRuntimeV4Bundle` puts them under
+   * `strucpp_runtime/include/<filename>` instead of `src/`.  Callers
+   * pick the right one for their target.
+   *
+   * `boardRuntime === 'openplc-compiler'` (runtime v4) returns an
+   * empty map — the v4 bundle is composed by `composeRuntimeV4Bundle`
+   * which sources strucpp runtime headers from
+   * `loadStrucppRuntimeHeaders` directly, no Arduino skeleton
+   * needed.
+   */
+  async loadFirmwareSkeletonInMemory(boardRuntime: string): Promise<Record<string, string>> {
+    if (boardRuntime === 'openplc-compiler') {
+      return {}
+    }
+    const arduinoDir = join(this.sourceDirectoryPath, 'arduino')
+    const baremetalDir = join(this.sourceDirectoryPath, 'Baremetal')
+    const files: Record<string, string> = {}
+
+    // arduino/* → src/*
+    try {
+      const arduinoEntries = await readdir(arduinoDir, { withFileTypes: true })
+      await Promise.all(
+        arduinoEntries
+          .filter((e) => e.isFile())
+          .map(async (e) => {
+            const content = await readFile(join(arduinoDir, e.name), 'utf-8')
+            files[`src/${e.name}`] = content
+          }),
+      )
+    } catch {
+      // arduino/ may be absent in odd setups — leave the skeleton
+      // empty so the pipeline / composer surfaces a clear error
+      // downstream instead of crashing here.
+    }
+
+    // Baremetal/* → examples/Baremetal/* (plus modules subdir).
+    try {
+      const baremetalEntries = await readdir(baremetalDir, { withFileTypes: true })
+      await Promise.all(
+        baremetalEntries.map(async (e) => {
+          if (e.isFile()) {
+            const content = await readFile(join(baremetalDir, e.name), 'utf-8')
+            files[`examples/Baremetal/${e.name}`] = content
+          } else if (e.isDirectory() && e.name === 'modules') {
+            const moduleEntries = await readdir(join(baremetalDir, 'modules'), { withFileTypes: true })
+            await Promise.all(
+              moduleEntries
+                .filter((m) => m.isFile())
+                .map(async (m) => {
+                  const content = await readFile(join(baremetalDir, 'modules', m.name), 'utf-8')
+                  files[`examples/Baremetal/modules/${m.name}`] = content
+                }),
+            )
+          }
+        }),
+      )
+    } catch {
+      // Same defensive posture as the arduino/ block above.
+    }
+
+    return files
+  }
+
   private async loadStrucppRuntimeHeaders(): Promise<Record<string, string>> {
     const runtimeDir = this.strucppRuntimeDir
     try {
@@ -948,6 +1014,24 @@ class CompilerModule {
     })
   }
 
+  /**
+   * Read the disk inputs `generateDefinesContent` needs (hals.json,
+   * pin-mapping.json, program.st) and write the authored `defines.h`
+   * to `build/<target>/src/defines.h`.
+   *
+   * The content-authoring logic lives in the shared
+   * `backend/shared/compile/steps/generate-defines.ts` so the web's
+   * pipeline can produce the same byte-for-byte `defines.h` from
+   * the same inputs.  This method is thin glue around the shared
+   * function — filesystem reads in, write call out.
+   *
+   * `defines.h` lives alongside `arduino.cpp` in `src/`.  The HAL
+   * templates include it as plain `"defines.h"` so the file is found
+   * whether arduino-cli compiles the source in place or moves it
+   * into its sketch sandbox first — avoids the directory-relative
+   * include that broke on paths with spaces and on VM shared-folder
+   * mounts.
+   */
   async handleGenerateDefinitionsFile({
     projectPath,
     buildMD5Hash,
@@ -961,159 +1045,25 @@ class CompilerModule {
     boardRuntime: string
     _handleOutputData: HandleOutputDataCallback
   }) {
-    let DEFINES_CONTENT: string = ''
-
-    // === Directories and files paths ===
-    const devicesDirectoryPath = join(projectPath, 'devices')
-    const devicesPinMappingFilePath = join(devicesDirectoryPath, 'pin-mapping.json')
-
+    const devicesPinMappingFilePath = join(projectPath, 'devices', 'pin-mapping.json')
     const buildTargetDirectoryPath = join(projectPath, 'build', boardTarget)
-
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
-
-    // defines.h lives alongside arduino.cpp in src/. The HAL templates
-    // include it as plain "defines.h" so the file is found whether
-    // arduino-cli compiles the source in place or moves it into its
-    // sketch sandbox first. Avoids the directory-relative include
-    // that broke on paths with spaces and on VM shared-folder mounts.
     const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
-    // === Files contents that we need ===
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
-    // We extract the board entry from the hals file content to validate if it has the define property.
-    const boardEntry = halsFileContent[boardTarget]
+    const definesContent = generateDefinesContent({
+      boardEntry: halsFileContent[boardTarget],
+      devicePinMapping,
+      stProgramFileContent,
+      buildMD5Hash,
+      boardRuntime,
+    })
 
-    // ===== Defines.h content generation =====
-
-    // 1. We need to verify if the board entry in the hals.json file has the define property.
-    if (boardEntry && boardEntry.define) {
-      // 1.2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
-      DEFINES_CONTENT = '// Board defines\n'
-      if (Array.isArray(boardEntry.define)) {
-        // 1.3. If the defines property is an array, we will iterate over it and add each define to the content.
-        boardEntry.define.forEach((define) => {
-          DEFINES_CONTENT += `#define ${define}\n`
-        })
-      } else if (typeof boardEntry.define === 'string') {
-        // 1.4. If the defines property is a string, we will add it directly to the content.
-        DEFINES_CONTENT += `#define ${boardEntry.define}\n`
-      }
-    }
-
-    // 2. If the board entry does not have the define property, we will just write a double line break to the file.
-    DEFINES_CONTENT += '\n\n'
-
-    // 3. Now we write the information for the defines.h file based on the device configuration and other preferences.
-
-    /**
-     * TODOS
-     * 3. In the device configuration we need to verify why the values that should be null are being set to empty strings.
-     * 4. We need to ensure that the pins are correctly sorted according to their address.
-     */
-
-    // 3.1. Program MD5
-    DEFINES_CONTENT += '//Program MD5\n'
-    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
-    DEFINES_CONTENT += `\n\n`
-
-    // 3.2. Simulator communication defines
-    //
-    // Baremetal/Arduino-family targets used to emit a full //Comms
-    // Configuration block here, read from deviceConfigurationSchema's
-    // communicationConfiguration field. That schema is gone — Arduino
-    // targets will return as VPP packages and each package owns its
-    // own defines emission. The only target still emitting communication
-    // defines from the core compiler is the built-in simulator.
-    if (boardRuntime === 'simulator') {
-      // Simulator forces fixed Modbus RTU settings over emulated USART0.
-      // On ATmega2560, Serial = USART0. avr8js bridges usart0.
-      DEFINES_CONTENT += '//Comms Configuration\n'
-      DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
-      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
-      DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
-      DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
-      DEFINES_CONTENT += '#define MBSERIAL\n'
-      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
-      DEFINES_CONTENT += `\n\n`
-    }
-
-    // INFO: If null, only the define value
-    // 3.3. IO Config defines
-    DEFINES_CONTENT += '//IO Config\n'
-    // INFO: This approach assumes that the pins are sorted.
-    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
-    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
-    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
-    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
-
-    DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_DOUT ${digitalOutputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_AOUT ${analogOutputPins.map(({ pin }) => pin).join(', ')}\n`
-
-    DEFINES_CONTENT += `#define NUM_DISCRETE_INPUT ${digitalInputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_ANALOG_INPUT ${analogInputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_DISCRETE_OUTPUT ${digitalOutputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
-    DEFINES_CONTENT += `\n\n`
-
-    // 3.4. Arduino libraries defines
-    DEFINES_CONTENT += '//Arduino libraries\n'
-    if (
-      stProgramFileContent.includes('DS18B20;') ||
-      stProgramFileContent.includes('DS18B20_2_OUT;') ||
-      stProgramFileContent.includes('DS18B20_3_OUT;') ||
-      stProgramFileContent.includes('DS18B20_4_OUT;') ||
-      stProgramFileContent.includes('DS18B20_5_OUT;')
-    ) {
-      DEFINES_CONTENT += '#define USE_DS18B20_BLOCK\n'
-    }
-
-    if (stProgramFileContent.includes('P1AM_INIT;')) DEFINES_CONTENT += '#define USE_P1AM_BLOCKS\n'
-
-    if (stProgramFileContent.includes('CLOUD_BEGIN;')) DEFINES_CONTENT += '#define USE_CLOUD_BLOCKS\n'
-
-    if (stProgramFileContent.includes('MQTT_CONNECT;') || stProgramFileContent.includes('MQTT_CONNECT_AUTH;'))
-      DEFINES_CONTENT += '#define USE_MQTT_BLOCKS\n'
-
-    if (
-      stProgramFileContent.includes('ARDUINOCAN_CONF;') ||
-      stProgramFileContent.includes('ARDUINOCAN_WRITE;') ||
-      stProgramFileContent.includes('ARDUINOCAN_WRITE_WORD;') ||
-      stProgramFileContent.includes('ARDUINOCAN_READ;')
-    ) {
-      DEFINES_CONTENT += '#define USE_ARDUINOCAN_BLOCK\n'
-    }
-
-    if (
-      stProgramFileContent.includes('STM32CAN_CONF;') ||
-      stProgramFileContent.includes('STM32CAN_WRITE;') ||
-      stProgramFileContent.includes('STM32CAN_READ;')
-    ) {
-      DEFINES_CONTENT += '#define USE_STM32CAN_BLOCK\n'
-    }
-
-    if (
-      stProgramFileContent.includes('SM_8RELAY;') ||
-      stProgramFileContent.includes('SM_16RELAY;') ||
-      stProgramFileContent.includes('SM_8DIN;') ||
-      stProgramFileContent.includes('SM_16DIN;') ||
-      stProgramFileContent.includes('SM_4REL4IN;') ||
-      stProgramFileContent.includes('SM_INDUSTRIAL;') ||
-      stProgramFileContent.includes('SM_RTD;') ||
-      stProgramFileContent.includes('SM_BAS;') ||
-      stProgramFileContent.includes('SM_HOME;') ||
-      stProgramFileContent.includes('SM_8MOSFET;')
-    ) {
-      DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
-    }
-
-    // 4. Finally, we attempt to write the content to the defines.h file.
     try {
-      await writeFile(definitionsFilePath, DEFINES_CONTENT, { encoding: 'utf8' })
+      await writeFile(definitionsFilePath, definesContent, { encoding: 'utf8' })
       _handleOutputData(`Defines file created at: ${definitionsFilePath}`, 'info')
     } catch (_error) {
       _handleOutputData('Error writing defines.h file', 'error')
@@ -1127,7 +1077,7 @@ class CompilerModule {
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
 
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const halsFileContent = await readHalsFile<HalsFile>()
 
     const boardSourceFile = halsFileContent[boardTarget]['source']
 
@@ -1317,17 +1267,35 @@ class CompilerModule {
     projectPath,
     arduinoPlatform,
     compilationPath,
+    communicationPort,
     handleOutputData,
   }: {
     projectPath: string
     arduinoPlatform: string
     compilationPath: string
+    /**
+     * Serial port arduino-cli should target with `--port`.  Preferred
+     * over the disk-persisted value when both are present — captures
+     * the picker's current selection even when the user hasn't saved
+     * the project yet.  When omitted, the handler falls back to the
+     * legacy disk read so older invocation paths still work.
+     */
+    communicationPort?: string
     handleOutputData: HandleOutputDataCallback
   }) {
-    const devicesDirectoryPath = join(projectPath, 'devices')
-    const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
-    const { communicationPort: port } =
-      await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+    let port = communicationPort
+    if (!port) {
+      const devicesDirectoryPath = join(projectPath, 'devices')
+      const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
+      try {
+        const { communicationPort: persistedPort } =
+          await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        port = persistedPort
+      } catch {
+        // No devices/configuration.json yet — drop into the
+        // "no port specified" branch below for a clear user message.
+      }
+    }
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
@@ -1512,171 +1480,6 @@ class CompilerModule {
       handleOutputData('Cleaned conf folder from previous compilation', 'info')
     } catch {
       handleOutputData('No conf folder to clean', 'info')
-    }
-  }
-
-  async handleGenerateModbusSlaveConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const modbusSlaveConfig: string | null = generateModbusSlaveConfig(
-      projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
-    )
-
-    if (modbusSlaveConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'modbus_slave.json')
-      await writeFile(configFilePath, modbusSlaveConfig, 'utf-8')
-      handleOutputData('Generated conf/modbus_slave.json', 'info')
-    } else {
-      handleOutputData('No Modbus TCP server configured, skipping modbus_slave.json generation', 'info')
-    }
-  }
-
-  async handleGenerateModbusMasterConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const modbusMasterConfig: string | null = generateModbusMasterConfig(
-      projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-    )
-
-    if (modbusMasterConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'modbus_master.json')
-      await writeFile(configFilePath, modbusMasterConfig, 'utf-8')
-      handleOutputData('Generated conf/modbus_master.json', 'info')
-    } else {
-      handleOutputData('No Modbus TCP remote devices configured, skipping modbus_master.json generation', 'info')
-    }
-  }
-
-  async handleGenerateS7CommConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    try {
-      const s7commConfig: string | null = generateS7CommConfig(projectData.servers)
-
-      if (s7commConfig) {
-        const confFolderPath = join(sourceTargetFolderPath, 'conf')
-        await mkdir(confFolderPath, { recursive: true })
-        const configFilePath = join(confFolderPath, 's7comm.json')
-        await writeFile(configFilePath, s7commConfig, 'utf-8')
-        handleOutputData('Generated conf/s7comm.json', 'info')
-      } else {
-        handleOutputData('No S7Comm server configured, skipping s7comm.json generation', 'info')
-      }
-    } catch (error) {
-      const errorMessage = getErrorMessage(error)
-      handleOutputData(`Failed to generate S7Comm config: ${errorMessage}`, 'error')
-      throw error
-    }
-  }
-
-  /**
-   * Generate OPC-UA server configuration for Runtime v4.
-   * Reads debug.c to resolve variable indices and generates opcua.json.
-   */
-  async handleGenerateOpcUaConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    try {
-      // Check if there's an enabled OPC-UA server
-      const opcuaServer = projectData.servers?.find(
-        (s) => s.protocol === 'opcua' && s.opcuaServerConfig?.server.enabled,
-      )
-
-      if (!opcuaServer || !opcuaServer.opcuaServerConfig) {
-        handleOutputData('No OPC-UA server configured, skipping opcua.json generation', 'info')
-        return
-      }
-
-      // Read STruC++'s debug-map.json (replaces MatIEC's debug.c).
-      // Generated by the codegen pipeline at compile time alongside
-      // generated.cpp / generated.hpp.
-      const debugMapPath = join(sourceTargetFolderPath, 'debug-map.json')
-      let debugMapContent: string
-
-      try {
-        debugMapContent = await readFile(debugMapPath, 'utf-8')
-      } catch {
-        handleOutputData(
-          'Warning: Could not read debug-map.json. OPC-UA variable addresses may not be resolved.',
-          'error',
-        )
-        debugMapContent = ''
-      }
-
-      // Get instances from Resources configuration for address resolution
-      const instances = projectData.configuration.resource.instances.map((inst) => ({
-        name: inst.name,
-        task: inst.task,
-        program: inst.program,
-      }))
-
-      // Generate the OPC-UA configuration. Field-level resolution
-      // failures (stale library-FB internals, renamed/deleted vars)
-      // surface as build warnings instead of aborting; the generator
-      // drops them and we forward each to the compile log.
-      const opcuaJson: string | null = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
-        handleOutputData(msg, 'info'),
-      )
-
-      if (opcuaJson) {
-        // Ensure conf directory exists
-        const confFolderPath = join(sourceTargetFolderPath, 'conf')
-        await mkdir(confFolderPath, { recursive: true })
-
-        // Write the configuration file
-        const configFilePath = join(confFolderPath, 'opcua.json')
-        await writeFile(configFilePath, opcuaJson, 'utf-8')
-        handleOutputData('Generated conf/opcua.json', 'info')
-
-        // Log the number of configured nodes
-        const nodeCount = opcuaServer.opcuaServerConfig.addressSpace.nodes.length
-        handleOutputData(`OPC-UA Address Space: ${nodeCount} node(s) configured`, 'info')
-      } else {
-        handleOutputData('OPC-UA server enabled but no configuration generated', 'info')
-      }
-    } catch (error) {
-      if (error instanceof OpcUaConfigError) {
-        handleOutputData(`OPC-UA Configuration Error:\n${error.message}`, 'error')
-      } else {
-        const errorMessage = getErrorMessage(error)
-        handleOutputData(`Failed to generate OPC-UA config: ${errorMessage}`, 'error')
-      }
-      throw error
-    }
-  }
-
-  async handleGenerateEthercatConfig(
-    sourceTargetFolderPath: string,
-    projectData: PLCProjectData,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    const ethercatConfig = generateEthercatConfig(projectData.remoteDevices)
-
-    const ethercatErrors = validateEthercatConfig(ethercatConfig)
-    if (ethercatErrors.length > 0) {
-      throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
-    }
-
-    if (ethercatConfig) {
-      const confFolderPath = join(sourceTargetFolderPath, 'conf')
-      await mkdir(confFolderPath, { recursive: true })
-      const configFilePath = join(confFolderPath, 'ethercat.json')
-      await writeFile(configFilePath, ethercatConfig, 'utf-8')
-      handleOutputData('Generated conf/ethercat.json', 'info')
-    } else {
-      handleOutputData('No EtherCAT devices configured, skipping ethercat.json generation', 'info')
     }
   }
 
@@ -1972,10 +1775,13 @@ class CompilerModule {
   }
 
   /**
-   * This will be the main entry point for the compiler module.
-   * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
+   * Main compile entry point.  Drives the full Step 0-13 flow
+   * through the shared `runCompilePipeline` orchestrator
+   * (`backend/shared/compile/pipeline.ts`); platform-specific bits
+   * (xml2st spawn, arduino-cli spawn, runtime upload) are abstracted
+   * behind `EditorCompilerPlatformPort`.  Single source of truth
+   * for compile behaviour shared with openplc-web.
    */
-  // Work in progress - we should specify the arguments and the return type correctly.
   async compileProgram(
     args: Array<string | null | PLCProjectData>,
     _mainProcessPort: MessagePortMain,
@@ -1996,13 +1802,9 @@ class CompilerModule {
       loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
     },
   ): Promise<void> {
-    // Start the main process port to communicate with the renderer process.
-    // INFO: This is necessary to send messages back to the renderer process.
     _mainProcessPort.start()
-
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
-    // INFO: We assume the first argument is the project path,
-    // INFO: the second argument is the board target, and the third argument is the project data.
+
     const [
       projectPath,
       boardTarget,
@@ -2012,6 +1814,7 @@ class CompilerModule {
       runtimeIpAddress,
       runtimeJwtToken,
       cleanBuild,
+      communicationPort,
     ] = args as [
       string,
       string,
@@ -2021,53 +1824,94 @@ class CompilerModule {
       string | null,
       string | null,
       boolean | undefined,
+      string | null | undefined,
     ]
 
-    const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
-
-    const halsContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
-
+    const halsContent = await readHalsFile<HalsFile>()
+    const selection = resolveBoardSelection(
+      halsContent as Record<string, Parameters<typeof resolveBoardSelection>[0][string]>,
+      boardTarget,
+    )
+    // Resolved fields the rest of compileProgram consumes.  Default
+    // to the shared resolver's output when the board lives in
+    // hals.json; otherwise (VPP boards installed via `.vpp` packages)
+    // fall back to the package-manager lookup so the runtime kind +
+    // flags still reflect the user's selection.
+    let boardEntry: Parameters<typeof runCompilePipeline>[0]['boardEntry']
+    let boardRuntime: string
+    let isSimulator: boolean
+    let isRuntimeV3: boolean
+    let isRuntimeV4: boolean
+    if (selection.ok) {
+      boardEntry = selection.boardEntry as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+      boardRuntime = selection.boardRuntime
+      isSimulator = selection.isSimulator
+      isRuntimeV3 = selection.isRuntimeV3
+      isRuntimeV4 = selection.isRuntimeV4
+    } else {
+      // VPP fallback — board lives in an installed `.vpp` package
+      // rather than hals.json.  Derive the runtime from the manifest's
+      // `target.type` (matches the pre-refactor `#getBoardRuntime`
+      // behaviour that fed all subsequent branching).  Web doesn't
+      // need this fallback — its installed-package surface is empty
+      // by design — so it stays in the editor-specific branch here.
+      let vppRuntime: 'openplc-compiler' | 'arduino-cli' | null = null
+      try {
+        const packageManager = new PackageManagerModule()
+        for (const pkg of packageManager.listInstalled()) {
+          const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+          if (!manifest) continue
+          const device = manifest.devices.find((d) => d.name === boardTarget)
+          if (device) {
+            vppRuntime = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
+            break
+          }
+        }
+      } catch {
+        // Package manager errors fall through to the no-match path
+        // below — same behaviour as `#getBoardRuntime`.
+      }
+      if (!vppRuntime) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
+        })
+        _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+        _mainProcessPort.close()
+        return
+      }
+      // VPP boards don't ship a hals.json entry — feed the pipeline
+      // an empty placeholder.  The runtime-v4 / Arduino branches the
+      // pipeline picks based on the flags below don't dereference
+      // `boardEntry.platform` until the arduino-cli compile step,
+      // which doesn't run for runtime-v4 (VPP boards' canonical
+      // target).
+      boardEntry = {} as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+      boardRuntime = vppRuntime
+      isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
+      isRuntimeV4 = vppRuntime === 'openplc-compiler' && !isRuntimeV3
+      isSimulator = false
+    }
     const normalizedProjectPath = projectPath.replace('project.json', '')
+    const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
+    const sourceTargetFolderPath = join(compilationPath, 'src')
 
-    const compilationPath = join(normalizedProjectPath, 'build', boardTarget) // Assuming the build folder is named 'build'
-
-    const sourceTargetFolderPath = join(compilationPath, 'src') // Assuming the source folder is named 'src'
-
-    let buildMD5Hash: string | null = null
-    // Strucpp emit's in-memory file map.  Populated by `handleCompileSTtoCpp`
-    // and threaded into the runtime v4 block so we can compose the upload
-    // bundle without re-reading every artefact off disk.  Stays empty for
-    // any compile path that doesn't reach the strucpp step.
-    let strucppEmittedFiles: Record<string, string> = {}
-
-    // --- Print basic information ---
+    // --- Editor-specific preamble: project header, host info, VPP warnings, tool check ---
     _mainProcessPort.postMessage({
       logLevel: 'info',
       message: `Compiling program for project: ${projectPath} and board target: ${boardTarget}`,
     })
-    _mainProcessPort.postMessage({
-      logLevel: 'warning',
-      message: 'Host Hardware Info:',
-    })
-    _mainProcessPort.postMessage({
-      message: this.getHostHardwareInfo(),
-    })
-
-    // --- Check for unsupported features on non-v4 targets ---
-    // VPP boards with runtime-v4 target type use openplc-compiler and are also v4-capable
-    const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-    const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
+    _mainProcessPort.postMessage({ logLevel: 'warning', message: 'Host Hardware Info:' })
+    _mainProcessPort.postMessage({ message: this.getHostHardwareInfo() })
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-
     if (!isRuntimeV4 && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
         message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
       })
     }
-
     if (!isRuntimeV4 && hasRemoteDevices) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
@@ -2075,9 +1919,7 @@ class CompilerModule {
       })
     }
 
-    // --- Check tools availability ---
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Checking tools availability...' })
-
     try {
       const [arduinoCliCheckResult, strucppCheckResult] = await Promise.all([
         this.checkArduinoCliAvailability(),
@@ -2096,7 +1938,9 @@ class CompilerModule {
       return
     }
 
-    // Step 1: Create basic directories
+    // Create the build/<target>/{src,examples/Baremetal,...} directory tree
+    // up front so the platform port methods that write to disk (transpile,
+    // compile) have somewhere to land.
     try {
       await this.createBasicDirectories(normalizedProjectPath, boardTarget)
       _mainProcessPort.postMessage({
@@ -2113,691 +1957,200 @@ class CompilerModule {
       return
     }
 
-    // Step 2: Generate XML from JSON
-    let generateXMLResult: MethodsResult<{ xmlPath: string; xmlContent: string }> = { success: false }
+    // --- Resolve pipeline inputs ---
+    let firmwareSkeleton: Record<string, string>
+    let strucppRuntimeHeaders: Record<string, string>
+    let devicePinMapping: DevicePin[]
+    let libraryArchives: unknown[]
+    let missingLibraries: string[]
+    let avrLibStdCppInclude = ''
     try {
-      generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
-      _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error generating XML from JSON: ${error as string}\nStopping compilation process.`,
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 3: Transpile XML to ST
-    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
-    try {
-      await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error transpiling XML to ST: ${error as string}\nStopping compilation process.`,
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // -- Copy static files --
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
-    try {
-      await this.copyStaticFiles(compilationPath, boardRuntime, isRuntimeV4)
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error copying static files: ${error as string}\nStopping compilation process.`,
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 4: Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
-    try {
-      const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
-      // Hand the POU list to handleCompileSTtoCpp so the splitter can
-      // segment program.st into per-POU files and surface errors with
-      // POU-relative location data.
-      const knownPous = buildKnownPous(projectData.pous)
-      // Resolve project-enabled libraries to parsed `.stlib` archives.
-      // Bundled libs are always-on; missing names (enabled but not
-      // installed) abort the compile early in handleCompileSTtoCpp
-      // with a clear "open the Library Manager" message.
+      firmwareSkeleton = await this.loadFirmwareSkeletonInMemory(boardRuntime)
+      // Strucpp runtime headers (`debug_dispatch.hpp`,
+      // `iec_std_lib.hpp`, etc.) live in two different layouts on
+      // disk depending on the target.  For runtime v4 they go under
+      // `strucpp_runtime/include/<filename>` (the canonical key
+      // `composeRuntimeV4Bundle` expects); for Arduino / simulator
+      // builds they go flat at `src/<filename>` next to the
+      // strucpp-generated artefacts — matching what editor's old
+      // `copyStrucppRuntimeHeaders(sourceTargetFolderPath)` did.
+      // For Arduino targets we merge them into the firmware skeleton
+      // so arduino-cli's `--library src` pass resolves
+      // `#include "debug_dispatch.hpp"` from `ModbusSlave.cpp`.
+      strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
+      if (!isRuntimeV4) {
+        const v4Layout = await this.loadStrucppRuntimeHeaders()
+        // Board-specific HAL adapter — defines `hardwareInit`,
+        // `updateInputBuffers`, `updateOutputBuffers` that the
+        // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
+        // call into.  Editor's pre-refactor `handleGenerateArduinoCppFile`
+        // copied `resources/sources/hal/<boardEntry.source>` to
+        // `src/arduino.cpp`.  Read it here so the shared merge step
+        // can drop it into the firmware skeleton at the canonical
+        // path; without it, the link fails with `undefined reference
+        // to hardwareInit` etc.
+        let boardHalContent: string | undefined
+        const boardSource = (boardEntry as { source?: string } | undefined)?.source
+        if (typeof boardSource === 'string' && boardSource.length > 0) {
+          const halPath = join(this.sourceDirectoryPath, 'hal', boardSource)
+          try {
+            boardHalContent = await readFile(halPath, 'utf-8')
+          } catch (halErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message: `Could not read board HAL file at ${halPath}: ${getErrorMessage(halErr)}`,
+            })
+          }
+        }
+        // Re-key strucpp runtime headers from
+        // `strucpp_runtime/include/X` into `src/X` so arduino-cli's
+        // `--library src` pass finds them; also drop the board HAL
+        // (if loaded) at `src/arduino.cpp`.  Both repos call the
+        // same shared helper so a future header-set tweak lands on
+        // both platforms in lockstep.
+        firmwareSkeleton = mergeStrucppRuntimeIntoSkeleton({
+          firmwareSkeleton,
+          strucppRuntimeHeaders: v4Layout,
+          boardHalContent,
+        })
+      }
+      try {
+        devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
+          join(normalizedProjectPath, 'devices', 'pin-mapping.json'),
+        )
+      } catch {
+        // Projects with no devices/pin-mapping.json (libraries, fresh
+        // projects) get an empty array — generateDefinesContent emits
+        // empty PINMASK_* entries in that case.
+        devicePinMapping = []
+      }
       const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-      const { archives: libraries, missing: missingLibraries } =
-        mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
-      const { md5Hash, strucppFiles } = await this.handleCompileSTtoCpp(
-        sourceTargetFolderPath,
-        (data, logLevel, compileError) => {
-          _mainProcessPort.postMessage({
-            logLevel,
-            message: data,
-            ...(compileError ? { compileError } : {}),
-          })
-        },
-        { hasCBlocks, pous: knownPous, libraries, missingLibraries },
-      )
-      buildMD5Hash = md5Hash
-      strucppEmittedFiles = strucppFiles
+      const archives = mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
+      libraryArchives = archives.archives
+      missingLibraries = archives.missing
+      const coreId = typeof boardEntry?.core === 'string' ? boardEntry.core : ''
+      if (coreId.startsWith('arduino:avr')) {
+        avrLibStdCppInclude = await this.ensureAvrLibStdCppCache()
+      }
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
+        message: `Error resolving build inputs: ${getErrorMessage(error)}\nStopping compilation process.`,
       })
       _mainProcessPort.close()
       return
     }
 
-    // Step 7 / 8: Generate C/C++ blocks header + code.  Skipped for
-    // runtime v4 — the runtime v4 block below routes c_blocks.h /
-    // c_blocks_code.cpp through `composeRuntimeV4Bundle` so the upload
-    // bundle has a single canonical producer.  Arduino and v3 still
-    // need the disk writes here (Arduino: arduino-cli consumes them;
-    // v3: `embedCBlocksInProgramSt` reads c_blocks.h off disk).
-    if (!isRuntimeV4) {
-      try {
-        await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-        })
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: 'Stopping compilation process.',
-        })
-        _mainProcessPort.close()
-        return
-      }
-
-      try {
-        await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-        })
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: 'Stopping compilation process.',
-        })
-        _mainProcessPort.close()
-        return
-      }
-    }
-
-    // Step 9: Embed C/C++ blocks in program.st for Runtime v3
-    if (boardRuntime === 'openplc-compiler' && boardTarget === 'OpenPLC Runtime v3') {
-      try {
-        await this.embedCBlocksInProgramSt(sourceTargetFolderPath, (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-        })
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: 'Stopping compilation process.',
-        })
-        _mainProcessPort.close()
-        return
-      }
-    }
-
-    // -- Verify if the runtime target is Arduino or OpenPLC --
-    // INFO: If the runtime target is Arduino, we will continue the compilation process.
-    // INFO: If the runtime target is OpenPLC we will finish the process here.
-    if (boardRuntime === 'openplc-compiler') {
-      _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: 'OpenPLC runtime detected.',
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: 'Source files generated successfully at: ' + sourceTargetFolderPath,
-      })
-
-      // Build the runtime v4 upload bundle through the shared composer
-      // (`composeRuntimeV4Bundle`).  Web routes through the same code
-      // path — single source of truth for the upload zip contract.  All
-      // pre-v4 scatter writes (c_blocks.h, c_blocks_code.cpp,
-      // strucpp_runtime/include/*, defines.h, conf/*) are skipped for v4
-      // boards above and emitted here in one go so the file list is
-      // structurally identical to web's.
-      //
-      // Idempotent for compile-only: the composer's output is written
-      // to disk under `sourceTargetFolderPath`, exactly where the
-      // pre-refactor scatter writes used to land — diffing build/<target>/src
-      // pre- vs post-refactor should produce no changes for any test
-      // project.
-      if (isRuntimeV4) {
-        try {
-          await this.cleanConfFolder(sourceTargetFolderPath, (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          })
-
-          // Two POU shapes: the header generator wants
-          // `{ name, variables }`, the code generator needs the full
-          // `{ name, code, variables }`.  Build both views once so
-          // the composer inputs read cleanly.
-          const originalCppPous = (projectData as ProjectDataWithCppPous).originalCppPous ?? []
-          const hasCppCode = originalCppPous.length > 0
-          const cppPousHeader = originalCppPous.map((pou) => ({
-            name: pou.name,
-            variables: pou.variables,
-          })) as CppPouDataHeader[]
-
-          // Modbus slave / master / S7Comm: pure helpers, no I/O —
-          // call them directly here and hand the strings to the
-          // composer.  `null` from any of them means the project has
-          // no config of that type, which the composer skips.
-          const modbusSlaveJson = generateModbusSlaveConfig(
-            projectData.servers as Parameters<typeof generateModbusSlaveConfig>[0],
-          )
-          const modbusMasterJson = generateModbusMasterConfig(
-            projectData.remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-          )
-          const s7CommJson = generateS7CommConfig(projectData.servers)
-
-          // OPC-UA needs strucpp's `debug-map.json` (NOT
-          // `generated_debug.cpp`) to resolve `%I/%Q/%M` addresses —
-          // `parseDebugMap` in `frontend/utils/opcua/` expects the
-          // JSON shape strucpp emits at that filename.  Pull it from
-          // the in-memory strucpp file map so the composer doesn't
-          // have to re-read every artefact off disk.
-          const debugMapContent = strucppEmittedFiles['debug-map.json'] ?? ''
-          const instances = projectData.configuration.resource.instances.map((inst) => ({
-            name: inst.name,
-            task: inst.task,
-            program: inst.program,
-          }))
-          let opcUaJson: string | null = null
-          try {
-            opcUaJson = generateOpcUaConfig(projectData.servers, debugMapContent, instances, (msg) =>
-              _mainProcessPort.postMessage({ logLevel: 'info', message: msg }),
-            )
-          } catch (error) {
-            if (error instanceof OpcUaConfigError) {
-              _mainProcessPort.postMessage({
-                logLevel: 'error',
-                message: `OPC-UA Configuration Error:\n${error.message}`,
-              })
-            } else {
-              _mainProcessPort.postMessage({
-                logLevel: 'error',
-                message: `Failed to generate OPC-UA config: ${getErrorMessage(error)}`,
-              })
-            }
-            throw error
-          }
-
-          // EtherCAT: validate up-front so a bad config aborts the
-          // compile before the composer runs — same gate web has.
-          const ethercatJson = generateEthercatConfig(projectData.remoteDevices)
-          const ethercatErrors = validateEthercatConfig(ethercatJson)
-          if (ethercatErrors.length > 0) {
-            throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
-          }
-
-          // ST source — read from disk since handleGenerateXMLfromJSON
-          // + xml2st wrote it earlier in the pipeline.
-          const programStContent = await readFile(join(sourceTargetFolderPath, 'program.st'), 'utf-8')
-
-          const bundleFiles = composeRuntimeV4Bundle({
-            programSt: programStContent,
-            md5: buildMD5Hash ?? '',
-            strucppFiles: strucppEmittedFiles,
-            cBlocks: {
-              header: hasCppCode ? generateCBlocksHeader(cppPousHeader) : '// Empty file\n',
-              code: hasCppCode ? generateCBlocksCode(originalCppPous) : null,
-            },
-            strucppRuntimeHeaders: await this.loadStrucppRuntimeHeaders(),
-            confs: {
-              modbusSlave: modbusSlaveJson,
-              modbusMaster: modbusMasterJson,
-              s7Comm: s7CommJson,
-              opcUa: opcUaJson,
-              // `validateEthercatConfig` above guarantees a non-null
-              // payload by here; coerce for the composer's required
-              // `string` shape.
-              ethercat: ethercatJson ?? '',
-            },
-          })
-
-          // Write each composer-emitted file to disk under
-          // `sourceTargetFolderPath`.  Nested paths (e.g.
-          // `strucpp_runtime/include/iec_std_lib.hpp`,
-          // `conf/modbus_slave.json`) need their parent directories
-          // created first — mkdir recursive is idempotent.
-          await Promise.all(
-            Object.entries(bundleFiles).map(async ([relativePath, content]) => {
-              const absolutePath = join(sourceTargetFolderPath, relativePath)
-              await mkdir(path.dirname(absolutePath), { recursive: true })
-              await writeFile(absolutePath, content, { encoding: 'utf8' })
-            }),
-          )
-          _mainProcessPort.postMessage({
-            logLevel: 'info',
-            message: `Runtime v4 bundle composed: ${Object.keys(bundleFiles).length} files written under ${sourceTargetFolderPath}`,
-          })
-
-          // VPP plugin config + source copy for boards whose target is runtime-v4.
-          // Runs after the composer so VPP-provided files land on top of
-          // the composer's writes (today no overlap; if VPP ever ships a
-          // file the composer also emits, ordering preserves VPP).
-          await this.handleVendorPluginPackaging(
-            boardTarget,
-            normalizedProjectPath,
-            sourceTargetFolderPath,
-            (data, logLevel) => {
-              _mainProcessPort.postMessage({ logLevel, message: data })
-            },
-          )
-        } catch (error) {
-          _mainProcessPort.postMessage({
-            logLevel: 'error',
-            message: `Error generating Runtime v4 configs: ${error instanceof Error ? error.message : String(error)}`,
-          })
-          _mainProcessPort.postMessage({
-            logLevel: 'error',
-            message: 'Stopping compilation process.',
-          })
-          _mainProcessPort.close()
-          return
-        }
-      }
-
-      if (compileOnly) {
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: 'Compile only mode - skipping upload to runtime.',
-        })
-        _mainProcessPort.postMessage({
-          message:
-            '-------------------------------------------------------------------------------------------------------------\n',
-        })
-        _mainProcessPort.close()
-        return
-      }
-
-      if (!runtimeIpAddress || !runtimeJwtToken) {
-        _mainProcessPort.postMessage({
-          logLevel: 'warning',
-          message: 'Runtime not configured or not logged in. Skipping upload to runtime.',
-        })
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: 'To upload the program, configure the runtime IP address and login in the device configuration.',
-        })
-        _mainProcessPort.postMessage({
-          message:
-            '-------------------------------------------------------------------------------------------------------------\n',
-        })
-        _mainProcessPort.close()
-        return
-      }
-
-      // Runtime v4 ships the STruC++ pipeline starting at v4.1.0;
-      // 4.0.x runtimes still speak the MatIEC wire format and can't
-      // load the strucpp artefacts we'd upload here.  Probe
-      // /api/version (unauthenticated) before sending the zip so the
-      // user gets a clear "upgrade your runtime" message instead of
-      // a cryptic 500 on the device side.
-      //
-      // Runtime v3 is on a separate upload path (raw program.st), so
-      // the gate is v4-only.
-      if (!isRuntimeV3) {
-        const versionResult = await this.fetchRuntimeVersion(runtimeIpAddress)
-        if (!isStrucppCompatibleRuntime(versionResult.version)) {
-          _mainProcessPort.postMessage({
-            logLevel: 'error',
-            message: describeIncompatibleRuntime(versionResult.version),
-          })
-          _mainProcessPort.postMessage({
-            message:
-              '-------------------------------------------------------------------------------------------------------------\n',
-          })
-          _mainProcessPort.close()
-          return
-        }
-      }
-
-      try {
-        let fileBuffer: Buffer
-        let filename: string
-        let contentType: string
-
-        if (isRuntimeV3) {
-          _mainProcessPort.postMessage({
-            logLevel: 'info',
-            message: 'Preparing program.st file for OpenPLC Runtime v3...',
-          })
-          const programStPath = join(sourceTargetFolderPath, 'program.st')
-
-          try {
-            await fs.access(programStPath)
-          } catch {
-            throw new Error(`Required file not found: ${programStPath}. Cannot upload to OpenPLC Runtime v3.`)
-          }
-
-          fileBuffer = await fs.readFile(programStPath)
-          filename = 'program.st'
-          contentType = 'text/plain'
-        } else {
-          // Runtime v4 conf/* files were already generated above, before the
-          // compile-only early return, so compile-only flows also get them.
-          _mainProcessPort.postMessage({
-            logLevel: 'info',
-            message: 'Compressing source files for OpenPLC Runtime v4...',
-          })
-          fileBuffer = await this.compressSourceFolder(sourceTargetFolderPath)
-          filename = 'program.zip'
-          contentType = 'application/zip'
-        }
-
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Uploading program to runtime at ${runtimeIpAddress}...`,
-        })
-
-        // The full deploy sequence (upload → poll runtime build →
-        // start PLC with BUSY retry) lives in the shared
-        // `deployRuntimeProgram` so openplc-web's `compileProgram`
-        // can drive the exact same flow.  Only the three
-        // round-trips are platform-specific — the orchestration,
-        // log fan-out, deadlines, and retry policy are not.
-        const deployOutcome = await deployRuntimeProgram({
-          uploadProgram: () =>
-            this.sendRuntimeUpload({
-              hostname: runtimeIpAddress,
-              jwtToken: runtimeJwtToken,
-              filename,
-              contentType,
-              fileBuffer,
-              cleanBuild: cleanBuild ?? false,
-              onUploadAccepted: (responseBody) => {
-                // Runtime returns the initial `CompilationStatus`
-                // field in the upload response (typically
-                // "COMPILING").  Surface it so the user sees the
-                // build kick off before the poller's first tick.
-                try {
-                  const response = JSON.parse(responseBody) as { CompilationStatus?: string }
-                  _mainProcessPort.postMessage({
-                    logLevel: 'info',
-                    message: `Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`,
-                  })
-                } catch {
-                  _mainProcessPort.postMessage({
-                    logLevel: 'warning',
-                    message: 'Could not parse runtime response',
-                  })
-                }
-              },
-            }),
-          fetchCompilationStatus: async () => {
-            try {
-              const result = await mainProcessBridge.makeRuntimeApiRequest<{
-                status: string
-                logs: string[]
-                exit_code: number | null
-              }>(runtimeIpAddress, runtimeJwtToken, '/api/compilation-status', (data: string) => {
-                return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
-              })
-              if (!result.success) return { success: false, error: result.error }
-              return { success: true, data: result.data! }
-            } catch (pollError) {
-              return {
-                success: false,
-                error: pollError instanceof Error ? pollError.message : String(pollError),
-              }
-            }
-          },
-          fetchStartResponse: async () => {
-            const result = await mainProcessBridge.makeRuntimeApiRequest<string>(
-              runtimeIpAddress,
-              runtimeJwtToken,
-              '/api/start-plc',
-              (data: string) => {
-                const parsed = JSON.parse(data) as { status?: string }
-                return (parsed.status ?? '').trim()
-              },
-            )
-            if (!result.success) return { success: false, error: result.error }
-            return { success: true, status: result.data ?? '' }
-          },
-          onLog: (level, message) => {
-            _mainProcessPort.postMessage({ logLevel: level, message })
-          },
-          pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
-          pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
-          startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
-          startIntervalMs: POST_BUILD_START_POLL_INTERVAL_MS,
-        })
-
-        // Editor-only follow-up: fetch the current PLC status and
-        // forward it through the IPC channel so the UI can update
-        // its run/stop indicator.  Best-effort — silently skipped
-        // when the deploy succeeded but the device drops the
-        // status request, or when the deploy itself fell short of
-        // STARTED.
-        if (deployOutcome === 'STARTED' && runtimeIpAddress && runtimeJwtToken) {
-          try {
-            const statusResult = await mainProcessBridge.makeRuntimeApiRequest<string>(
-              runtimeIpAddress,
-              runtimeJwtToken,
-              '/api/status',
-              (data: string) => {
-                const response = JSON.parse(data) as { status: string }
-                return response.status
-              },
-            )
-            if (statusResult.success && statusResult.data) {
-              const status = parsePlcStatus(statusResult.data)
-              if (status) {
-                _mainProcessPort.postMessage({ plcStatus: status })
-              }
-            }
-          } catch (_statusError) {
-            // Best-effort — silently ignore.
-          }
-        }
-
-        _mainProcessPort.postMessage({
-          message:
-            '-------------------------------------------------------------------------------------------------------------\n',
-        })
-        _mainProcessPort.close()
-        return
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Failed to upload to runtime: ${getErrorMessage(error)}`,
-        })
-        _mainProcessPort.postMessage({
-          message:
-            '-------------------------------------------------------------------------------------------------------------\n',
-        })
-        _mainProcessPort.close()
-      }
-      return
-    }
-
-    // Step 5: Handle core installation
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
-    try {
-      await this.handleCoreInstallation(boardCore, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-    // Step 9: Handle library installation
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling library installation...' })
-    try {
-      await this.handleLibraryInstallation((data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: 'Stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 10: Handle defines.h file generation
-    try {
-      if (buildMD5Hash === null) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: 'Build MD5 hash is null, cannot generate defines.h file.',
-        })
-        _mainProcessPort.close()
-        return
-      }
-      await this.handleGenerateDefinitionsFile({
-        projectPath: normalizedProjectPath,
-        boardTarget,
-        buildMD5Hash,
-        boardRuntime,
-        _handleOutputData: (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        },
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-    }
-
-    // Step 11: Generate Arduino CPP file
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Generating Arduino CPP file...' })
-    try {
-      await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino CPP file generated successfully.' })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // Step 12: Compile Arduino Program
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compiling Arduino program...' })
-    try {
-      await this.handleCompileArduinoProgram({
-        boardTarget,
-        boardHalsContent: halsContent[boardTarget],
+    // --- Build the editor's CompilerPlatformPort implementation ---
+    const platformPort = createEditorCompilerPlatformPort(
+      {
+        handleTranspileXMLtoST: this.handleTranspileXMLtoST.bind(this),
+        handleCompileArduinoProgram: this.handleCompileArduinoProgram.bind(this),
+        handleUploadProgram: this.handleUploadProgram.bind(this),
+        handleCoreInstallation: this.handleCoreInstallation.bind(this),
+        handleLibraryInstallation: this.handleLibraryInstallation.bind(this),
+        handleVendorPluginPackaging: this.handleVendorPluginPackaging.bind(this),
+      },
+      {
+        normalizedProjectPath,
         compilationPath,
+        sourceTargetFolderPath,
+        boardTarget,
+        boardCore,
+        boardHalsContent: halsContent[boardTarget],
         cleanBuild: cleanBuild ?? false,
-        handleOutputData: (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        },
-      })
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino program compiled successfully.' })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-      })
-      _mainProcessPort.close()
-      return
-    }
+        mainProcessBridge,
+        compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
+        sendRuntimeUpload: (opts) => this.sendRuntimeUpload(opts),
+        pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
+        pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
+        startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
+        startIntervalMs: POST_BUILD_START_POLL_INTERVAL_MS,
+      },
+    )
 
-    // Step 13: Upload program to board or load into simulator
-    if (boardRuntime === 'simulator') {
-      // `compileOnly: true` callers (the library-project verification
-      // step today; a future "Build only" on simulator) want to
-      // confirm the compile succeeded without any side effect on the
-      // simulator process.  Emitting the firmware path makes the
-      // renderer load the .hex into the running simulator; emitting
-      // "Loading firmware into simulator..." advertises an action
-      // that isn't happening.  Skip both for compile-only callers.
+    // Device context for the runtime-upload step.  Absent when the
+    // user hasn't logged in to a runtime — pipeline will skip the
+    // upload phase and emit a warning instead.
+    const deviceContext =
+      runtimeIpAddress && runtimeJwtToken
+        ? { kind: 'editor-https' as const, ip: runtimeIpAddress, jwt: runtimeJwtToken }
+        : undefined
+
+    // --- Run the shared pipeline ---
+    const result = await runCompilePipeline(
+      {
+        projectData,
+        boardTarget,
+        boardRuntime,
+        boardEntry,
+        devicePinMapping,
+        isSimulator,
+        isRuntimeV4,
+        isRuntimeV3,
+        compileOnly: compileOnly ?? false,
+        libraryArchives,
+        missingLibraries,
+        firmwareSkeleton,
+        strucppRuntimeHeaders,
+        avrLibStdCppInclude,
+        // Editor saturates every core on local arduino-cli (matches
+        // pre-refactor behaviour); web's adapter sets this to false
+        // because the centralised compile-service backend runs many
+        // clients in a sandbox.
+        arduinoCliParallel: true,
+        deviceContext,
+        communicationPort: communicationPort ?? undefined,
+      },
+      platformPort,
+      (event) => {
+        _mainProcessPort.postMessage({
+          logLevel: event.level,
+          message: event.message,
+          ...(event.compileError ? { compileError: event.compileError } : {}),
+        })
+      },
+    )
+
+    // --- Editor-specific epilogue: simulator firmware path + closePort ---
+    if (isSimulator) {
       if (compileOnly) {
         _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
         _mainProcessPort.postMessage({ closePort: true })
         _mainProcessPort.close()
         return
       }
-      // For simulator targets, send the HEX firmware path back to the renderer.
-      // Derive the build sub-directory from the platform FQBN (e.g. "arduino:avr:mega" → "arduino.avr.mega")
-      // so it stays in sync with the hals.json entry.
-      const fqbnSubDir = halsContent[boardTarget]['platform'].replaceAll(':', '.')
-      const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
+      if (result.success) {
+        // Resolve the per-FQBN sub-directory arduino-cli wrote the
+        // .hex into.  Matches the layout the renderer's simulator
+        // loader expects.
+        const platform = typeof boardEntry?.platform === 'string' ? boardEntry.platform : ''
+        const fqbnSubDir = platform.replaceAll(':', '.')
+        const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: 'Compilation successful. Loading firmware into simulator...',
+        })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true })
+        _mainProcessPort.close()
+        return
+      }
+      // Failure path on simulator — separator + close.
       _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: 'Compilation successful. Loading firmware into simulator...',
-      })
-      _mainProcessPort.postMessage({
-        simulatorFirmwarePath: hexPath,
-        closePort: true,
+        message:
+          '-------------------------------------------------------------------------------------------------------------\n',
       })
       _mainProcessPort.close()
       return
     }
 
-    if (!compileOnly) {
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Uploading program to board...' })
-      try {
-        await this.handleUploadProgram({
-          projectPath: normalizedProjectPath,
-          arduinoPlatform: halsContent[boardTarget]['platform'],
-          compilationPath,
-          handleOutputData: (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          },
-        })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
-        })
-        _mainProcessPort.close()
-        return
-      }
-    }
-
-    // -- Final message --
+    // Runtime v4 / v3 / Arduino-direct paths all converge here.  If
+    // an upload happened (or was skipped on purpose), trail the
+    // separator and let the renderer pulse-check the deferred close.
     _mainProcessPort.postMessage({
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
     })
-
-    // INFO: This step is under development.
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)
