@@ -11,6 +11,7 @@ import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import { type BoardBuildInfo, BoardInfoResolver } from './board-info-resolver'
+import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
@@ -205,9 +206,11 @@ class HardwareModule {
     const mutableBoards: AvailableBoards = new Map(availableBoards)
     await this.#mergeVppBoards(mutableBoards)
 
-    // Sort boards alphabetically by name
-    const sortedBoards: AvailableBoards = new Map([...mutableBoards.entries()].sort(([a], [b]) => a.localeCompare(b)))
-    return sortedBoards
+    // Group by source VPP package so devices from the same package land
+    // contiguously in the device dropdown, with the three built-in targets
+    // (OpenPLC Runtime v3, v4, Simulator) pinned to the top. See
+    // `order-boards-by-vpp-group.ts` for the full ordering contract.
+    return orderBoardsByVppGroup(mutableBoards)
   }
 
   async #mergeVppBoards(boards: AvailableBoards): Promise<void> {
