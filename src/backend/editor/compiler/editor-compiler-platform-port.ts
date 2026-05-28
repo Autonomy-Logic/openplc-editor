@@ -266,7 +266,7 @@ export function createEditorCompilerPlatformPort(
           typeof context.boardHalsContent === 'object' &&
           'platform' in (context.boardHalsContent as Record<string, unknown>) &&
           typeof (context.boardHalsContent as { platform?: unknown }).platform === 'string'
-            ? ((context.boardHalsContent as { platform: string }).platform)
+            ? (context.boardHalsContent as { platform: string }).platform
             : ''
         const hexPath = await findHexInCompilationPath(context.compilationPath, boardPlatform)
         if (!hexPath) {
@@ -342,7 +342,8 @@ export function createEditorCompilerPlatformPort(
             if (!result.success) return { success: false, error: result.error }
             return { success: true, status: result.data ?? '' }
           },
-          onLog: (level, message) => log(message, level === 'error' ? 'error' : level === 'warning' ? 'warning' : 'info'),
+          onLog: (level, message) =>
+            log(message, level === 'error' ? 'error' : level === 'warning' ? 'warning' : 'info'),
           pollTimeoutMs: context.pollTimeoutMs,
           pollIntervalMs: context.pollIntervalMs,
           startTimeoutMs: context.startTimeoutMs,
@@ -443,7 +444,8 @@ export function createEditorCompilerPlatformPort(
             if (!result.success) return { success: false, error: result.error }
             return { success: true, status: result.data ?? '' }
           },
-          onLog: (level, message) => log(message, level === 'error' ? 'error' : level === 'warning' ? 'warning' : 'info'),
+          onLog: (level, message) =>
+            log(message, level === 'error' ? 'error' : level === 'warning' ? 'warning' : 'info'),
           pollTimeoutMs: context.pollTimeoutMs,
           pollIntervalMs: context.pollIntervalMs,
           startTimeoutMs: context.startTimeoutMs,

@@ -48,7 +48,10 @@ describe('probeRuntimeVersion', () => {
       log,
     })
     expect(result).toEqual({ version: null })
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('Runtime version probe failed: orchestrator HTTP down'), 'warning')
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('Runtime version probe failed: orchestrator HTTP down'),
+      'warning',
+    )
   })
 
   it('returns version=null + warns when the transport throws a non-Error value', async () => {

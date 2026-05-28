@@ -85,9 +85,7 @@ export type CBlocksCodePou = CppPouDataCode
  * `cBlocks` input shape" case.  Caller can either use this or hand
  * the composer the pre-rendered strings directly.
  */
-export function buildCBlocksFromPous(
-  originalCppPous: CppPouDataCode[],
-): ComposeFirmwareBundleInput['cBlocks'] {
+export function buildCBlocksFromPous(originalCppPous: CppPouDataCode[]): ComposeFirmwareBundleInput['cBlocks'] {
   if (originalCppPous.length === 0) {
     // Editor's behaviour: leave the static `c_blocks.h` baseline
     // in place (`null` here means the composer skips the write).

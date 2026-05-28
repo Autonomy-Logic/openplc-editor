@@ -2074,7 +2074,7 @@ class CompilerModule {
     // upload phase and emit a warning instead.
     const deviceContext =
       runtimeIpAddress && runtimeJwtToken
-        ? ({ kind: 'editor-https' as const, ip: runtimeIpAddress, jwt: runtimeJwtToken })
+        ? { kind: 'editor-https' as const, ip: runtimeIpAddress, jwt: runtimeJwtToken }
         : undefined
 
     // --- Run the shared pipeline ---

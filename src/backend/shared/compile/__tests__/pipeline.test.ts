@@ -61,9 +61,7 @@ jest.mock('../steps/generate-confs', () => ({
 
 import { XmlGenerator } from '../../utils/PLC/xml-generator'
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
-import {
-  isStrucppCompatibleRuntime,
-} from '../../firmware/runtime-version-gate'
+import { isStrucppCompatibleRuntime } from '../../firmware/runtime-version-gate'
 import { generateRuntimeConfs } from '../steps/generate-confs'
 
 import { runCompilePipeline, type RunCompilePipelineArgs, type PipelineProgressEvent } from '../pipeline'
@@ -208,11 +206,7 @@ describe('runCompilePipeline — simulator path', () => {
   it('compileOnly returns success without invoking uploadArduinoBoard', async () => {
     const port = makePort()
     const { emit } = captureEvents()
-    const result = await runCompilePipeline(
-      makeArgs({ isSimulator: false, compileOnly: true }),
-      port,
-      emit,
-    )
+    const result = await runCompilePipeline(makeArgs({ isSimulator: false, compileOnly: true }), port, emit)
     expect(result.success).toBe(true)
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
   })
@@ -239,11 +233,7 @@ describe('runCompilePipeline — arduino direct path', () => {
   it('skips the upload step (success with warning) when deviceContext is absent', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
-    const result = await runCompilePipeline(
-      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }),
-      port,
-      emit,
-    )
+    const result = await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
     expect(result.success).toBe(true)
     expect(result.uploaded).toBe(false)
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
@@ -599,9 +589,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
     const { events, emit } = captureEvents()
     await runCompilePipeline(makeArgs(), port, emit)
     expect(
-      events.some(
-        (e) => e.stage === 'st' && /Falling back to monolithic/.test(e.message) && e.level === 'info',
-      ),
+      events.some((e) => e.stage === 'st' && /Falling back to monolithic/.test(e.message) && e.level === 'info'),
     ).toBe(true)
   })
 
@@ -678,10 +666,7 @@ describe('runCompilePipeline — boardEntry shape variants', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.installArduinoCore).toHaveBeenCalledWith(
-      expect.objectContaining({ coreId: '' }),
-      expect.any(Function),
-    )
+    expect(port.installArduinoCore).toHaveBeenCalledWith(expect.objectContaining({ coreId: '' }), expect.any(Function))
   })
 
   it('derives the core id from `platform` (e.g. arduino:avr:mega → arduino:avr)', async () => {
@@ -922,7 +907,12 @@ describe('runCompilePipeline — side effects', () => {
     })
     const { events, emit } = captureEvents()
     const result = await runCompilePipeline(
-      makeArgs({ isSimulator: false, isRuntimeV4: true, boardRuntime: 'openplc-compiler', deviceContext: deviceContextFixture }),
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
       port,
       emit,
     )
@@ -942,7 +932,12 @@ describe('runCompilePipeline — side effects', () => {
     })
     const { events, emit } = captureEvents()
     const result = await runCompilePipeline(
-      makeArgs({ isSimulator: false, isRuntimeV4: true, boardRuntime: 'openplc-compiler', deviceContext: deviceContextFixture }),
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
       port,
       emit,
     )
@@ -950,7 +945,7 @@ describe('runCompilePipeline — side effects', () => {
     expect(events.some((e) => /Unhandled pipeline error: plain string throw/.test(e.message))).toBe(true)
   })
 
-  it("port methods can stream log lines through the PlatformLog callback they receive", async () => {
+  it('port methods can stream log lines through the PlatformLog callback they receive', async () => {
     // Covers the `(message, level) => emit({stage, message, level})`
     // lambda makePlatformLog returns (pipeline.ts:209).  Port methods
     // receive that callback as their second arg and call it whenever

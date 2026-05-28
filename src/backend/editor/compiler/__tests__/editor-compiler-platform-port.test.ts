@@ -235,9 +235,7 @@ describe('createEditorCompilerPlatformPort', () => {
     const handleUploadProgram = jest.fn(async () => undefined)
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleUploadProgram }), makeContext())
     await port.uploadArduinoBoard({ compilationPath: '', fqbn: 'arduino:avr:mega', port: '' }, () => undefined)
-    expect(handleUploadProgram).toHaveBeenCalledWith(
-      expect.objectContaining({ communicationPort: undefined }),
-    )
+    expect(handleUploadProgram).toHaveBeenCalledWith(expect.objectContaining({ communicationPort: undefined }))
   })
 
   it('uploadArduinoBoard returns ok:false when the upload handler throws', async () => {

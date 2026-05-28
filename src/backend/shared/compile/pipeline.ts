@@ -27,14 +27,9 @@ import type {
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
-import type {
-  BoardHalsCompileEntry,
-} from '../firmware/build-arduino-cli-args'
+import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
-import {
-  describeIncompatibleRuntime,
-  isStrucppCompatibleRuntime,
-} from '../firmware/runtime-version-gate'
+import { describeIncompatibleRuntime, isStrucppCompatibleRuntime } from '../firmware/runtime-version-gate'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import type { DevicePin } from '../types/PLC/devices'
@@ -417,7 +412,11 @@ async function runCompilePipelineInner(
         log: (message, level) => emit({ stage: 'confs', message, level }),
       })
     } catch (error) {
-      return bailError(emit, 'confs', `Error generating Runtime v4 configs: ${error instanceof Error ? error.message : String(error)}`)
+      return bailError(
+        emit,
+        'confs',
+        `Error generating Runtime v4 configs: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
@@ -453,10 +452,7 @@ async function runCompilePipelineInner(
     // map and the bundle is unchanged.  Without this, programs
     // upload but the runtime runs as a generic v4 with no physical
     // I/O — the diagnostic surface for that failure is silence.
-    const vppResult = await port.packageVppPlugin(
-      { boardTarget },
-      makePlatformLog(emit, 'runtime-v4-bundle'),
-    )
+    const vppResult = await port.packageVppPlugin({ boardTarget }, makePlatformLog(emit, 'runtime-v4-bundle'))
     if (vppResult.errors && vppResult.errors.length > 0) {
       return bailError(emit, 'runtime-v4-bundle', 'VPP plugin packaging failed.', vppResult.errors)
     }
@@ -497,10 +493,7 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'upload', message: 'Uploading Runtime v4 bundle...', level: 'info' })
-    const uploadResult = await port.uploadRuntimeV4(
-      { bundle, context: deviceContext },
-      makePlatformLog(emit, 'upload'),
-    )
+    const uploadResult = await port.uploadRuntimeV4({ bundle, context: deviceContext }, makePlatformLog(emit, 'upload'))
     if (!uploadResult.ok) {
       return bailError(emit, 'upload', 'Failed to upload to runtime.', uploadResult.errors)
     }
@@ -671,4 +664,3 @@ function deriveArduinoCoreFromPlatform(platform: string): string {
   if (parts.length < 2) return ''
   return `${parts[0]}:${parts[1]}`
 }
-

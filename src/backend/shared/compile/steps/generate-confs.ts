@@ -117,12 +117,8 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // Type assertions match the editor's call sites — the generators
   // accept a narrower shape than `PLCServer[]` / `PLCRemoteDevice[]`
   // but the runtime values are compatible.
-  const modbusSlave = generateModbusSlaveConfig(
-    servers as Parameters<typeof generateModbusSlaveConfig>[0],
-  )
-  const modbusMaster = generateModbusMasterConfig(
-    remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-  )
+  const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0])
+  const modbusMaster = generateModbusMasterConfig(remoteDevices as Parameters<typeof generateModbusMasterConfig>[0])
   const s7Comm = generateS7CommConfig(servers)
 
   // OPC-UA: throws `OpcUaConfigError` on invalid project state.

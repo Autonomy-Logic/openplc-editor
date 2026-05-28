@@ -48,7 +48,7 @@ describe('generateCBlocksCode', () => {
     expect(result).toMatch(/typedef\s+struct\s+\{[\s\S]*?__strlen_t len;[\s\S]*?\}\s+IEC_STRING;/)
   })
 
-  it('undefines Arduino.h\'s min/max macros before pulling in strucpp/std headers', () => {
+  it("undefines Arduino.h's min/max macros before pulling in strucpp/std headers", () => {
     // Regression guard: Arduino.h defines `min` / `max` as preprocessor
     // macros that wreck `<algorithm>` / `<limits>` (both transitively
     // included via iec_string.hpp). Order must be:
