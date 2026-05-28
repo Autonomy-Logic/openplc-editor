@@ -81,9 +81,31 @@ export type PlatformDeviceContext =
 // ---------------------------------------------------------------------------
 
 /** `xml2st` input: a single XML string (the IEC 61131-3 PLC XML the
- *  shared `XmlGenerator` produces).  Same input on both platforms. */
+ *  shared `XmlGenerator` produces) plus an array of extra CLI tokens
+ *  to append to the xml2st invocation.  Defined here (not on either
+ *  adapter) because xml2st flag drift was the root cause of the
+ *  initial cross-platform STRUCT bug — editor's local xml2st passed
+ *  `--keep-structs` but the web's compile-service `/generate-st`
+ *  endpoint hardcoded an unflagged invocation, so structs declared
+ *  in the project compiled fine on the desktop and blew up on the
+ *  web with `Undefined type 'MY_STRUCT'` errors out of strucpp.
+ *  Pushing the flag set into a single shared field means any future
+ *  xml2st option is a one-line pipeline change with no per-platform
+ *  drift possible.
+ *
+ *  Editor's adapter passes `xml2stArgs` verbatim to the local
+ *  binary (trusted).  Web's adapter filters against its own
+ *  known-args allowlist before forwarding to the compile-service
+ *  `/generate-st` endpoint, logging a warning for anything it
+ *  doesn't recognise (defence in depth — service has its own
+ *  allowlist too). */
 export interface TranspileXmlToStArgs {
   xml: string
+  /** Extra CLI tokens to append after `--generate-st <file>` in the
+   *  xml2st invocation.  For strucpp targets the shared pipeline
+   *  sets `['--keep-structs']`; future flags get added here at the
+   *  single call site in `runCompilePipeline`. */
+  xml2stArgs: readonly string[]
 }
 
 export interface TranspileXmlToStResult {

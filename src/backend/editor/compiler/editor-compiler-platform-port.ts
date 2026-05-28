@@ -164,10 +164,14 @@ export function createEditorCompilerPlatformPort(
         await fs.mkdir(dirname(xmlPath), { recursive: true })
         await fs.writeFile(xmlPath, args.xml, 'utf-8')
 
-        await handlers.handleTranspileXMLtoST(xmlPath, (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        })
+        await handlers.handleTranspileXMLtoST(
+          xmlPath,
+          (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+          args.xml2stArgs,
+        )
 
         const programStPath = join(context.sourceTargetFolderPath, 'program.st')
         const programSt = await fs.readFile(programStPath, 'utf-8')
