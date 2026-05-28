@@ -83,6 +83,7 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
 import { generateEthercatConfig } from '@root/backend/shared/ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '@root/backend/shared/ethercat/validate-ethercat-config'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
@@ -948,6 +949,24 @@ class CompilerModule {
     })
   }
 
+  /**
+   * Read the disk inputs `generateDefinesContent` needs (hals.json,
+   * pin-mapping.json, program.st) and write the authored `defines.h`
+   * to `build/<target>/src/defines.h`.
+   *
+   * The content-authoring logic lives in the shared
+   * `backend/shared/compile/steps/generate-defines.ts` so the web's
+   * pipeline can produce the same byte-for-byte `defines.h` from
+   * the same inputs.  This method is thin glue around the shared
+   * function — filesystem reads in, write call out.
+   *
+   * `defines.h` lives alongside `arduino.cpp` in `src/`.  The HAL
+   * templates include it as plain `"defines.h"` so the file is found
+   * whether arduino-cli compiles the source in place or moves it
+   * into its sketch sandbox first — avoids the directory-relative
+   * include that broke on paths with spaces and on VM shared-folder
+   * mounts.
+   */
   async handleGenerateDefinitionsFile({
     projectPath,
     buildMD5Hash,
@@ -961,159 +980,25 @@ class CompilerModule {
     boardRuntime: string
     _handleOutputData: HandleOutputDataCallback
   }) {
-    let DEFINES_CONTENT: string = ''
-
-    // === Directories and files paths ===
-    const devicesDirectoryPath = join(projectPath, 'devices')
-    const devicesPinMappingFilePath = join(devicesDirectoryPath, 'pin-mapping.json')
-
+    const devicesPinMappingFilePath = join(projectPath, 'devices', 'pin-mapping.json')
     const buildTargetDirectoryPath = join(projectPath, 'build', boardTarget)
-
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
-
-    // defines.h lives alongside arduino.cpp in src/. The HAL templates
-    // include it as plain "defines.h" so the file is found whether
-    // arduino-cli compiles the source in place or moves it into its
-    // sketch sandbox first. Avoids the directory-relative include
-    // that broke on paths with spaces and on VM shared-folder mounts.
     const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
-    // === Files contents that we need ===
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
-    // We extract the board entry from the hals file content to validate if it has the define property.
-    const boardEntry = halsFileContent[boardTarget]
+    const definesContent = generateDefinesContent({
+      boardEntry: halsFileContent[boardTarget],
+      devicePinMapping,
+      stProgramFileContent,
+      buildMD5Hash,
+      boardRuntime,
+    })
 
-    // ===== Defines.h content generation =====
-
-    // 1. We need to verify if the board entry in the hals.json file has the define property.
-    if (boardEntry && boardEntry.define) {
-      // 1.2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
-      DEFINES_CONTENT = '// Board defines\n'
-      if (Array.isArray(boardEntry.define)) {
-        // 1.3. If the defines property is an array, we will iterate over it and add each define to the content.
-        boardEntry.define.forEach((define) => {
-          DEFINES_CONTENT += `#define ${define}\n`
-        })
-      } else if (typeof boardEntry.define === 'string') {
-        // 1.4. If the defines property is a string, we will add it directly to the content.
-        DEFINES_CONTENT += `#define ${boardEntry.define}\n`
-      }
-    }
-
-    // 2. If the board entry does not have the define property, we will just write a double line break to the file.
-    DEFINES_CONTENT += '\n\n'
-
-    // 3. Now we write the information for the defines.h file based on the device configuration and other preferences.
-
-    /**
-     * TODOS
-     * 3. In the device configuration we need to verify why the values that should be null are being set to empty strings.
-     * 4. We need to ensure that the pins are correctly sorted according to their address.
-     */
-
-    // 3.1. Program MD5
-    DEFINES_CONTENT += '//Program MD5\n'
-    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
-    DEFINES_CONTENT += `\n\n`
-
-    // 3.2. Simulator communication defines
-    //
-    // Baremetal/Arduino-family targets used to emit a full //Comms
-    // Configuration block here, read from deviceConfigurationSchema's
-    // communicationConfiguration field. That schema is gone — Arduino
-    // targets will return as VPP packages and each package owns its
-    // own defines emission. The only target still emitting communication
-    // defines from the core compiler is the built-in simulator.
-    if (boardRuntime === 'simulator') {
-      // Simulator forces fixed Modbus RTU settings over emulated USART0.
-      // On ATmega2560, Serial = USART0. avr8js bridges usart0.
-      DEFINES_CONTENT += '//Comms Configuration\n'
-      DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
-      DEFINES_CONTENT += '#define MBSERIAL_IFACE Serial\n'
-      DEFINES_CONTENT += '#define MBSERIAL_BAUD 115200\n'
-      DEFINES_CONTENT += '#define MBSERIAL_SLAVE 1\n'
-      DEFINES_CONTENT += '#define MBSERIAL\n'
-      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
-      DEFINES_CONTENT += `\n\n`
-    }
-
-    // INFO: If null, only the define value
-    // 3.3. IO Config defines
-    DEFINES_CONTENT += '//IO Config\n'
-    // INFO: This approach assumes that the pins are sorted.
-    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
-    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
-    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
-    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
-
-    DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_DOUT ${digitalOutputPins.map(({ pin }) => pin).join(', ')}\n`
-    DEFINES_CONTENT += `#define PINMASK_AOUT ${analogOutputPins.map(({ pin }) => pin).join(', ')}\n`
-
-    DEFINES_CONTENT += `#define NUM_DISCRETE_INPUT ${digitalInputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_ANALOG_INPUT ${analogInputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_DISCRETE_OUTPUT ${digitalOutputPins.length}\n`
-    DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
-    DEFINES_CONTENT += `\n\n`
-
-    // 3.4. Arduino libraries defines
-    DEFINES_CONTENT += '//Arduino libraries\n'
-    if (
-      stProgramFileContent.includes('DS18B20;') ||
-      stProgramFileContent.includes('DS18B20_2_OUT;') ||
-      stProgramFileContent.includes('DS18B20_3_OUT;') ||
-      stProgramFileContent.includes('DS18B20_4_OUT;') ||
-      stProgramFileContent.includes('DS18B20_5_OUT;')
-    ) {
-      DEFINES_CONTENT += '#define USE_DS18B20_BLOCK\n'
-    }
-
-    if (stProgramFileContent.includes('P1AM_INIT;')) DEFINES_CONTENT += '#define USE_P1AM_BLOCKS\n'
-
-    if (stProgramFileContent.includes('CLOUD_BEGIN;')) DEFINES_CONTENT += '#define USE_CLOUD_BLOCKS\n'
-
-    if (stProgramFileContent.includes('MQTT_CONNECT;') || stProgramFileContent.includes('MQTT_CONNECT_AUTH;'))
-      DEFINES_CONTENT += '#define USE_MQTT_BLOCKS\n'
-
-    if (
-      stProgramFileContent.includes('ARDUINOCAN_CONF;') ||
-      stProgramFileContent.includes('ARDUINOCAN_WRITE;') ||
-      stProgramFileContent.includes('ARDUINOCAN_WRITE_WORD;') ||
-      stProgramFileContent.includes('ARDUINOCAN_READ;')
-    ) {
-      DEFINES_CONTENT += '#define USE_ARDUINOCAN_BLOCK\n'
-    }
-
-    if (
-      stProgramFileContent.includes('STM32CAN_CONF;') ||
-      stProgramFileContent.includes('STM32CAN_WRITE;') ||
-      stProgramFileContent.includes('STM32CAN_READ;')
-    ) {
-      DEFINES_CONTENT += '#define USE_STM32CAN_BLOCK\n'
-    }
-
-    if (
-      stProgramFileContent.includes('SM_8RELAY;') ||
-      stProgramFileContent.includes('SM_16RELAY;') ||
-      stProgramFileContent.includes('SM_8DIN;') ||
-      stProgramFileContent.includes('SM_16DIN;') ||
-      stProgramFileContent.includes('SM_4REL4IN;') ||
-      stProgramFileContent.includes('SM_INDUSTRIAL;') ||
-      stProgramFileContent.includes('SM_RTD;') ||
-      stProgramFileContent.includes('SM_BAS;') ||
-      stProgramFileContent.includes('SM_HOME;') ||
-      stProgramFileContent.includes('SM_8MOSFET;')
-    ) {
-      DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
-    }
-
-    // 4. Finally, we attempt to write the content to the defines.h file.
     try {
-      await writeFile(definitionsFilePath, DEFINES_CONTENT, { encoding: 'utf8' })
+      await writeFile(definitionsFilePath, definesContent, { encoding: 'utf8' })
       _handleOutputData(`Defines file created at: ${definitionsFilePath}`, 'info')
     } catch (_error) {
       _handleOutputData('Error writing defines.h file', 'error')
