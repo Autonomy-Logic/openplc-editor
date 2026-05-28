@@ -1896,7 +1896,25 @@ class CompilerModule {
     let avrLibStdCppInclude = ''
     try {
       firmwareSkeleton = await this.loadFirmwareSkeletonInMemory(boardRuntime)
+      // Strucpp runtime headers (`debug_dispatch.hpp`,
+      // `iec_std_lib.hpp`, etc.) live in two different layouts on
+      // disk depending on the target.  For runtime v4 they go under
+      // `strucpp_runtime/include/<filename>` (the canonical key
+      // `composeRuntimeV4Bundle` expects); for Arduino / simulator
+      // builds they go flat at `src/<filename>` next to the
+      // strucpp-generated artefacts — matching what editor's old
+      // `copyStrucppRuntimeHeaders(sourceTargetFolderPath)` did.
+      // For Arduino targets we merge them into the firmware skeleton
+      // so arduino-cli's `--library src` pass resolves
+      // `#include "debug_dispatch.hpp"` from `ModbusSlave.cpp`.
       strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
+      if (!isRuntimeV4) {
+        const v4Layout = await this.loadStrucppRuntimeHeaders()
+        for (const [v4Key, content] of Object.entries(v4Layout)) {
+          const filename = v4Key.split('/').pop()!
+          firmwareSkeleton[`src/${filename}`] = content
+        }
+      }
       try {
         devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
           join(normalizedProjectPath, 'devices', 'pin-mapping.json'),
