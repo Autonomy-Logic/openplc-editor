@@ -58,6 +58,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     // Project loading state
     isProjectLoading: false,
     projectLoadingMessage: '',
+    // Read-only mode (no edit permission on the open project)
+    isReadOnly: false,
   },
 
   workspaceActions: {
@@ -183,6 +185,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           }
           workspace.isProjectLoading = false
           workspace.projectLoadingMessage = ''
+          workspace.isReadOnly = false
         }),
       )
     },
@@ -439,6 +442,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.isProjectLoading = isLoading
           workspace.projectLoadingMessage = message ?? ''
+        }),
+      )
+    },
+    setReadOnly: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isReadOnly = value
         }),
       )
     },

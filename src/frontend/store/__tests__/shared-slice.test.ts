@@ -1921,6 +1921,30 @@ describe('createSharedSlice', () => {
           expect(flow.updated).toBe(false)
         })
       })
+
+      // -----------------------------------------------------------------------
+      // canEdit → workspace.isReadOnly
+      // -----------------------------------------------------------------------
+      it('sets workspace.isReadOnly=true when canEdit is false', () => {
+        const data = { ...makeMinimalProjectResponse(), canEdit: false }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.isReadOnly).toBe(true)
+      })
+
+      it('keeps workspace.isReadOnly=false when canEdit is true', () => {
+        // Pre-seed read-only so we observe the reset path, not just the default.
+        store.getState().workspaceActions.setReadOnly(true)
+        const data = { ...makeMinimalProjectResponse(), canEdit: true }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.isReadOnly).toBe(false)
+      })
+
+      it('treats absent canEdit as editable (desktop / dev-local default)', () => {
+        store.getState().workspaceActions.setReadOnly(true)
+        const data = makeMinimalProjectResponse()
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.isReadOnly).toBe(false)
+      })
     })
   })
 

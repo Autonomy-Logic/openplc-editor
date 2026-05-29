@@ -511,6 +511,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
+      // Apply the edit-permission flag from the backend.  `canEdit ===
+      // false` ⇒ read-only mode; `true` or `undefined` ⇒ editable.
+      // clearStatesOnCloseProject above already reset to `false`, so an
+      // editable project just stays in that default.
+      getState().workspaceActions.setReadOnly(data.canEdit === false)
 
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {

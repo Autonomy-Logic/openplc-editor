@@ -14,6 +14,7 @@ import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-moda
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
+import { ReadOnlyProjectModal } from '../_organisms/modals/read-only-project-modal'
 import { RuntimeConnectionLostModal } from '../_organisms/modals/runtime-connection-lost-modal'
 import type { SaveChangesFileModalData } from '../_organisms/modals/save-changes-file-modal'
 import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-modal'
@@ -119,6 +120,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['runtime-connection-lost']?.open === true && <RuntimeConnectionLostModal />}
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
+          {modals?.['read-only-project']?.open === true && <ReadOnlyProjectModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}

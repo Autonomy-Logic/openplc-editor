@@ -114,6 +114,16 @@ export type WorkspaceState = {
     // Project loading state
     isProjectLoading: boolean
     projectLoadingMessage: string
+    /**
+     * True when the currently open project is read-only for the viewer
+     * (no edit permission).  Drives every write-action gate in the UI
+     * — Monaco/graphical readOnly, Save/Commit/Branch dialog, project-
+     * tree menu items, etc.  Set by `handleOpenProjectResponse` from
+     * the `canEdit` flag returned by the backend; reset to `false` on
+     * project close so a subsequent open of an editable project comes
+     * up unrestricted.
+     */
+    isReadOnly: boolean
   }
 }
 
@@ -179,6 +189,8 @@ export type WorkspaceActions = {
   removeDebugVariable: (compositeKey: string) => void
   // Project loading
   setProjectLoading: (isLoading: boolean, message?: string) => void
+  // Read-only mode (no edit permission on the open project)
+  setReadOnly: (value: boolean) => void
 }
 
 export type WorkspaceSlice = WorkspaceState & {

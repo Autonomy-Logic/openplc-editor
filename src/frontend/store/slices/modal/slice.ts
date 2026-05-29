@@ -23,6 +23,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'debugger-message',
   'debugger-ip-input',
   'missing-libraries',
+  'read-only-project',
 ]
 
 function createDefaultModals() {
