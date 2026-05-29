@@ -313,6 +313,14 @@ export async function executeSaveProject(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
+  // Read-only gate.  The Monaco / graphical editors are already in
+  // read-only mode, but explicit Save shortcuts (Ctrl+S, menu File →
+  // Save) still funnel through here.  Surface the modal so the user
+  // gets the "fork me" affordance instead of a silent no-op.
+  if (state.workspace.isReadOnly) {
+    state.modalActions.openModal('read-only-project')
+    return { success: false }
+  }
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved } = state.fileActions
@@ -473,6 +481,11 @@ export async function executeSaveFile(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
+  // See executeSaveProject for rationale — same read-only gate.
+  if (state.workspace.isReadOnly) {
+    state.modalActions.openModal('read-only-project')
+    return { success: false }
+  }
   const { project, files } = state
   const { setEditingState } = state.workspaceActions
   const { updateFile, checkIfAllFilesAreSaved } = state.fileActions

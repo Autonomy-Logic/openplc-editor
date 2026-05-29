@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useOpenPLCStore } from '../../../../store'
 
 type CreateBranchModalProps = {
   isOpen: boolean
@@ -11,6 +12,8 @@ type CreateBranchModalProps = {
 
 export function CreateBranchModal({ isOpen, projectId, onClose, onCreated }: CreateBranchModalProps) {
   const versionControl = useVersionControl()
+  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
+  const openReadOnlyModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [isPending, setIsPending] = useState(false)
@@ -30,6 +33,16 @@ export function CreateBranchModal({ isOpen, projectId, onClose, onCreated }: Cre
       setError('')
     }
   }, [isOpen])
+
+  // Read-only ⇒ close this modal and surface the read-only/fork modal
+  // instead.  A useEffect (not an early-return rewrite) avoids breaking
+  // hook ordering for the rest of the component when isOpen flips.
+  useEffect(() => {
+    if (isOpen && isReadOnly) {
+      onClose()
+      openReadOnlyModal('read-only-project')
+    }
+  }, [isOpen, isReadOnly, onClose, openReadOnlyModal])
 
   if (!isOpen) return null
 

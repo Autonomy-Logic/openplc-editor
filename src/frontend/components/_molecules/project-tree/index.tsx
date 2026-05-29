@@ -260,8 +260,9 @@ const ProjectTreeExpandableLeaf = ({
     editor: {
       meta: { name },
     },
-    workspace: { selectedProjectTreeLeaf, isDebuggerVisible },
+    workspace: { selectedProjectTreeLeaf, isDebuggerVisible, isReadOnly },
     workspaceActions: { setSelectedProjectTreeLeaf },
+    modalActions: { openModal },
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -318,20 +319,29 @@ const ProjectTreeExpandableLeaf = ({
   }, [inputNameRef, isEditing])
 
   const popoverOptions = useMemo(
-    () => [
-      {
-        name: 'Rename',
-        onClick: () => setIsEditing(true),
-        icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
-      },
-      {
-        name: 'Delete',
-        onClick: () => handleDeleteFile(),
-        icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
-      },
-    ],
+    () => {
+      const guard = (real: () => void) => () => {
+        if (isReadOnly) {
+          openModal('read-only-project')
+          return
+        }
+        real()
+      }
+      return [
+        {
+          name: 'Rename',
+          onClick: guard(() => setIsEditing(true)),
+          icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+        },
+        {
+          name: 'Delete',
+          onClick: guard(() => handleDeleteFile()),
+          icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+        },
+      ]
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [label],
+    [label, isReadOnly, openModal],
   )
 
   return (
@@ -505,8 +515,9 @@ const ProjectTreeLeaf = ({
     editor: {
       meta: { name },
     },
-    workspace: { selectedProjectTreeLeaf, isDebuggerVisible },
+    workspace: { selectedProjectTreeLeaf, isDebuggerVisible, isReadOnly },
     workspaceActions: { setSelectedProjectTreeLeaf },
+    modalActions: { openModal },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
     serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
@@ -731,30 +742,35 @@ const ProjectTreeLeaf = ({
 
   const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
   const popoverOptions = useMemo(() => {
+    // Read-only ⇒ every write action funnels into the fork modal.  We
+    // still surface the menu items so the affordance is discoverable
+    // (the user can read what's there), but each click routes through
+    // the modal instead of the underlying handler.
+    const guard = (real: () => void) => () => {
+      if (isReadOnly) {
+        openModal('read-only-project')
+        return
+      }
+      real()
+    }
     return [
       {
         name: 'Rename',
-        onClick: () => {
-          setIsEditing(true)
-        },
+        onClick: guard(() => setIsEditing(true)),
         icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
       {
         name: 'Duplicate',
-        onClick: () => {
-          void handleDuplicateFile()
-        },
+        onClick: guard(() => void handleDuplicateFile()),
         icon: <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
       {
         name: 'Delete',
-        onClick: () => {
-          handleDeleteFile()
-        },
+        onClick: guard(() => handleDeleteFile()),
         icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
     ]
-  }, [handleDeleteFile, handleDuplicateFile, setIsEditing])
+  }, [handleDeleteFile, handleDuplicateFile, setIsEditing, isReadOnly, openModal])
 
   useEffect(() => {
     if (isEditing && inputNameRef.current) {

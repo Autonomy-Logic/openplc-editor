@@ -129,6 +129,13 @@ export type OpenProjectResponseData = {
   devicePinMapping?: DevicePin[]
   /** Warnings from parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
+  /**
+   * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
+   * `false` puts the workspace in read-only mode; `true` / `undefined`
+   * keep it fully editable.  Absent ⇒ desktop editor or dev-local; both
+   * have no remote permission concept so the editor stays unrestricted.
+   */
+  canEdit?: boolean
 }
 
 export type SharedWorkspaceActions = {

@@ -22,6 +22,11 @@ export type ModalTypes =
   | 'debugger-message'
   | 'debugger-ip-input'
   | 'missing-libraries'
+  /** Surfaced whenever the user tries a write action (save, commit,
+   *  create/delete branch, create/rename/delete POU) on a project they
+   *  don't have edit permission on.  Shows the "this project belongs to
+   *  someone else" message and the inline Fork flow. */
+  | 'read-only-project'
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

@@ -88,6 +88,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const editingState = useOpenPLCStore((state) => state.workspace.editingState)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+  const isReadOnly = useOpenPLCStore((state) => state.workspace.isReadOnly)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
@@ -138,7 +139,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
       if (isCompiling) return
 
-      if (editingState === 'unsaved') {
+      // Read-only projects can't save — but Run/Build must still work since
+      // we want the viewer to be able to compile and run the project on
+      // their own device.  The Monaco/graphical gates prevent the user from
+      // actually modifying anything, so `editingState` should stay 'saved'
+      // here; the explicit isReadOnly check is belt-and-suspenders so a
+      // stray dirty flag doesn't trip the save and 403 the build.
+      if (editingState === 'unsaved' && !isReadOnly) {
         const saved = await executeSave()
         if (!saved) return
       }
@@ -222,6 +229,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       isCompiling,
       editingState,
       executeSave,
+      isReadOnly,
       jwtToken,
     ],
   )
