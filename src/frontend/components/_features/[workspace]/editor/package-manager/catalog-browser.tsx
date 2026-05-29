@@ -88,19 +88,19 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
   }, [entries, searchTerm])
 
   const handleInstall = useCallback(
-    async (packageId: string, version: string) => {
+    async (packageId: string, version: string, downloadUrl: string) => {
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.installFromRemote(packageId, version)
+        const result = await packages.installFromRemote(packageId, version, downloadUrl)
         if (result.success) {
           onInstalled()
         } else {
           openModal('debugger-message', {
-            type: 'info',
-            title: 'Backend not connected',
+            type: 'error',
+            title: 'Install failed',
             message:
-              result.error ?? 'Remote install is not yet available. Use "Add from file..." with a downloaded .vpp.',
+              result.error ?? 'Remote install failed. Try again, or use "Add from file..." with a downloaded .vpp.',
             buttons: ['OK'],
             onResponse: () => {},
           })
@@ -205,7 +205,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
                 installedVersion={installedVersions.get(entry.packageId) ?? null}
                 isBusy={busyId === entry.packageId}
                 onToggleExpand={() => setExpandedId((cur) => (cur === entry.packageId ? null : entry.packageId))}
-                onInstall={(version) => void handleInstall(entry.packageId, version)}
+                onInstall={(version, downloadUrl) => void handleInstall(entry.packageId, version, downloadUrl)}
                 onUninstall={() => void handleUninstall(entry.packageId)}
               />
             ))}
@@ -230,7 +230,7 @@ interface CatalogCardProps {
   installedVersion: string | null
   isBusy: boolean
   onToggleExpand: () => void
-  onInstall: (version: string) => void
+  onInstall: (version: string, downloadUrl: string) => void
   onUninstall: () => void
 }
 
@@ -352,7 +352,7 @@ interface ActionMenuButtonProps {
   installedVersion: string | null
   triggerState: TriggerState
   isBusy: boolean
-  onInstall: (version: string) => void
+  onInstall: (version: string, downloadUrl: string) => void
   onUninstall: () => void
 }
 
@@ -406,7 +406,7 @@ const ActionMenuButton = ({
                   disabled={!compatible || isInstalledHere}
                   onSelect={() => {
                     if (!compatible || isInstalledHere) return
-                    onInstall(v.version)
+                    onInstall(v.version, v.downloadUrl)
                   }}
                   className='flex cursor-pointer flex-col items-start gap-0.5 rounded-md px-2 py-1.5 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-850'
                 >

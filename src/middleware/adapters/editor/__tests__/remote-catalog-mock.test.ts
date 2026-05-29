@@ -54,16 +54,22 @@ describe('mockListRemoteCatalog', () => {
 })
 
 describe('mockInstallFromRemote', () => {
-  it('resolves with success:false and an error that names the requested package + version', async () => {
-    const result = await mockInstallFromRemote('com.openplc.arduino', '0.2.0')
+  it('resolves with success:false and an error that names the requested package + version + downloadUrl', async () => {
+    const result = await mockInstallFromRemote(
+      'com.openplc.arduino',
+      '0.2.0',
+      'http://localhost:3333/vpp-catalog/v1/packages/com.openplc.arduino-0.2.0.vpp',
+    )
     expect(result.success).toBe(false)
     expect(result.error).toContain('com.openplc.arduino')
     expect(result.error).toContain('0.2.0')
+    expect(result.error).toContain('localhost:3333')
   })
 
-  it('still surfaces the packageId when version is omitted', async () => {
-    const result = await mockInstallFromRemote('com.openplc.espressif')
+  it('echoes the packageId across different requests so the modal renders the right context', async () => {
+    const result = await mockInstallFromRemote('com.openplc.espressif', '0.1.0', 'http://example/foo.vpp')
     expect(result.success).toBe(false)
     expect(result.error).toContain('com.openplc.espressif')
+    expect(result.error).toContain('0.1.0')
   })
 })

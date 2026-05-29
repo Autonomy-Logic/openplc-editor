@@ -252,14 +252,17 @@ export async function mockListRemoteCatalog(): Promise<RemoteCatalog> {
  * Mock implementation of `PackagePort.installFromRemote` — never actually
  * installs anything (the local install pipeline is intentionally out of
  * scope for the mock), but resolves with a "backend not wired" error that
- * names the requested `packageId@version` so the UI's modal renders the
- * full request the way it would in production.
+ * names the requested `packageId@version` plus the `downloadUrl` so the
+ * UI's modal renders the full request the way it would in production.
  */
-export async function mockInstallFromRemote(packageId: string, version?: string): Promise<ImportResult> {
+export async function mockInstallFromRemote(
+  packageId: string,
+  version: string,
+  downloadUrl: string,
+): Promise<ImportResult> {
   await new Promise((resolve) => setTimeout(resolve, 150))
-  const versionSuffix = version ? `@${version}` : ''
   return {
     success: false,
-    error: `[mock] Remote install for "${packageId}${versionSuffix}" is not wired — flip USE_LOCAL_MOCK off and pull a real CDN once EDGE-482 ships.`,
+    error: `[mock] Remote install for "${packageId}@${version}" (${downloadUrl}) is not wired — flip USE_LOCAL_MOCK off to hit the real backend.`,
   }
 }

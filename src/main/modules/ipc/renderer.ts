@@ -317,6 +317,18 @@ const rendererProcessBridge = {
     devices?: string[]
     error?: string
   }> => ipcRenderer.invoke('packages:import-from-file'),
+  installPackageFromUrl: (args: {
+    packageId: string
+    version: string
+    downloadUrl: string
+  }): Promise<{
+    success: boolean
+    canceled?: boolean
+    packageId?: string
+    packageName?: string
+    devices?: string[]
+    error?: string
+  }> => ipcRenderer.invoke('packages:install-from-url', args),
   listInstalledPackages: (): Promise<
     Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
   > => ipcRenderer.invoke('packages:list-installed'),

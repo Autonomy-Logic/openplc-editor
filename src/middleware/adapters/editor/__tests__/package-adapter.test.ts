@@ -44,6 +44,7 @@ let adapter: PackagePort
 beforeEach(() => {
   window.bridge = {
     importPackageFromFile: jest.fn().mockResolvedValue(importOk),
+    installPackageFromUrl: jest.fn().mockResolvedValue(importOk),
     listInstalledPackages: jest.fn().mockResolvedValue(installedPackages),
     uninstallPackage: jest.fn().mockResolvedValue({ success: true }),
     getPackageManifest: jest.fn().mockResolvedValue(validManifest),
@@ -51,7 +52,12 @@ beforeEach(() => {
     onBoardsUpdated: jest.fn().mockImplementation(() => jest.fn()),
   } as unknown as typeof window.bridge
 
+  global.fetch = jest.fn() as unknown as typeof fetch
   adapter = createEditorPackageAdapter()
+})
+
+afterEach(() => {
+  ;(global.fetch as unknown as jest.Mock).mockReset()
 })
 
 describe('createEditorPackageAdapter', () => {
@@ -131,26 +137,56 @@ describe('createEditorPackageAdapter', () => {
   })
 
   describe('listRemoteCatalog', () => {
-    // Until the CDN backend (EDGE-482) lands, the catalog method rejects.
-    // The CatalogBrowser surfaces this through its error banner with a Try
-    // Again button — no UI crash, no empty-catalog confusion.
-    it('rejects with a "backend not yet available" error so the UI surfaces its error state', async () => {
-      await expect(adapter.listRemoteCatalog()).rejects.toThrow(/not yet available/i)
+    it('fetches the catalog from the backend and returns the parsed JSON', async () => {
+      const catalog = { entries: [], fetchedAt: '2026-05-29T10:00:00Z' }
+      ;(global.fetch as unknown as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => catalog,
+      })
+      const result = await adapter.listRemoteCatalog()
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/vpp-catalog\/v1\/catalog\.json$/))
+      expect(result).toEqual(catalog)
+    })
+
+    it('rejects with a contextual error when the backend returns a non-ok status', async () => {
+      ;(global.fetch as unknown as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: async () => ({}),
+      })
+      await expect(adapter.listRemoteCatalog()).rejects.toThrow(/503/)
+    })
+
+    it('propagates fetch failures (offline, DNS) up to the caller', async () => {
+      ;(global.fetch as unknown as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'))
+      await expect(adapter.listRemoteCatalog()).rejects.toThrow(/ECONNREFUSED/)
     })
   })
 
   describe('installFromRemote', () => {
-    it('resolves with success:false and an error that names the requested package + version', async () => {
-      const result = await adapter.installFromRemote('com.openplc.arduino', '0.2.0')
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('com.openplc.arduino')
-      expect(result.error).toContain('0.2.0')
+    it('delegates to window.bridge.installPackageFromUrl with the full request payload', async () => {
+      const result = await adapter.installFromRemote(
+        'com.openplc.arduino',
+        '0.2.0',
+        'http://localhost:3333/vpp-catalog/v1/packages/com.openplc.arduino-0.2.0.vpp',
+      )
+      expect(window.bridge.installPackageFromUrl).toHaveBeenCalledWith({
+        packageId: 'com.openplc.arduino',
+        version: '0.2.0',
+        downloadUrl: 'http://localhost:3333/vpp-catalog/v1/packages/com.openplc.arduino-0.2.0.vpp',
+      })
+      expect(result).toEqual(importOk)
     })
 
-    it('still surfaces the packageId when version is omitted', async () => {
-      const result = await adapter.installFromRemote('com.openplc.espressif')
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('com.openplc.espressif')
+    it('forwards bridge-side failures verbatim so the UI modal stays honest', async () => {
+      ;(window.bridge.installPackageFromUrl as jest.Mock).mockResolvedValue({
+        success: false,
+        error: 'Download failed: 404 Not Found',
+      })
+      const result = await adapter.installFromRemote('com.openplc.espressif', '0.1.0', 'http://example/missing.vpp')
+      expect(result).toEqual({ success: false, error: 'Download failed: 404 Not Found' })
     })
   })
 

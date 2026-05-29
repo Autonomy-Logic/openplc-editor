@@ -46,16 +46,16 @@ export interface PackagePort {
 
   /**
    * Fetch the remote VPP catalog from the OpenPLC CDN.
-   * Currently mocked in both adapters until the backend ships.
    */
   listRemoteCatalog(): Promise<RemoteCatalog>
 
   /**
-   * Download and install a VPP from the remote catalog by package id (and
-   * optional explicit version — defaults to the catalog's advertised one).
-   * Currently a no-op stub in both adapters until the backend ships.
+   * Download and install a VPP from the remote catalog. The caller passes
+   * the `downloadUrl` it read from the catalog entry's selected version —
+   * the editor never constructs download URLs itself (the catalog is the
+   * source of truth, per the backend contract documented in EDGE-482).
    */
-  installFromRemote(packageId: string, version?: string): Promise<ImportResult>
+  installFromRemote(packageId: string, version: string, downloadUrl: string): Promise<ImportResult>
 
   /**
    * Subscribe to the "open package manager" event (triggered from menu).
