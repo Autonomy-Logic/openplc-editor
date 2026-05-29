@@ -43,6 +43,7 @@ import { XmlGenerator } from '../utils/PLC/xml-generator'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -57,6 +58,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 export interface PipelineProgressEvent {
   stage:
     | 'preprocess'
+    | 'validate'
     | 'xml'
     | 'st'
     | 'strucpp'
@@ -306,6 +308,28 @@ async function runCompilePipelineInner(
     originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
   }
   const originalCppPous = processedData.originalCppPous ?? []
+
+  // ---------------------------------------------------------------------
+  // Step 0b: Reject blank FBD variable blocks before XML generation.
+  //
+  // An unnamed FBD in/out variable serialises to an empty
+  // `<expression/>`, which makes xml2st crash with the opaque
+  // `'NoneType' object has no attribute 'split'`.  Catch it here and
+  // tell the user exactly which POU to fix.
+  // ---------------------------------------------------------------------
+  const emptyVariables = findEmptyFbdVariables(processedData)
+  if (emptyVariables.length > 0) {
+    for (const variable of emptyVariables) {
+      const where =
+        variable.connectedTo !== null ? `connected to ${variable.connectedTo}` : `at x=${variable.x}, y=${variable.y}`
+      emit({
+        stage: 'validate',
+        message: `POU "${variable.pouName}": an FBD ${variable.kind} variable block has no name (${where}). Name it before compiling.`,
+        level: 'error',
+      })
+    }
+    return bailError(emit, 'validate', 'Compilation aborted: name all variable blocks and try again.')
+  }
 
   // ---------------------------------------------------------------------
   // Step 1: Generate IEC 61131-3 XML from the project JSON.
