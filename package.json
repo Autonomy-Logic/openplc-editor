@@ -59,6 +59,7 @@
     "auto-zustand-selectors-hook": "^2.0.0",
     "avr8js": "0.20.0",
     "axios": "^1.13.6",
+    "browser-basedpyright": "^1.39.6",
     "clsx": "^2.1.1",
     "cva": "npm:class-variance-authority@^0.7.0",
     "diff": "^9.0.0",
