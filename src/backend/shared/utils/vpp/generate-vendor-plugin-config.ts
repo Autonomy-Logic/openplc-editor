@@ -70,6 +70,25 @@ type IoMapping = {
 
 type VendorScreenData = Record<string, unknown>
 
+/** A single row of the editor's GPIO pin-mapping table. Only the fields
+ *  this serializer needs are modelled. */
+type DevicePinInput = {
+  pin: string
+  pinType: string
+  address: string
+}
+
+/** One entry of the plugin config's `pins` array, as consumed by a
+ *  pin-based runtime-v4 plugin (e.g. the Raspberry Pi GPIO HAL). `pin` is
+ *  the board's native pin identifier as typed in the pin-mapping table — for
+ *  the Raspberry Pi that's the physical 40-pin header position.
+ *
+ *  Digital lines carry byte/bit (the %IX/%QX image-table location); PWM
+ *  (analog) outputs carry word (the %QW index). */
+type PluginPin =
+  | { pin: number; direction: 'input' | 'output'; byte: number; bit: number }
+  | { pin: number; direction: 'pwm'; word: number }
+
 type BitRangeMapping = {
   base_byte: number
   base_bit: number
@@ -275,6 +294,41 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
   return slots
 }
 
+/**
+ * Build the `pins` array for a pin-based plugin from the editor's GPIO
+ * pin-mapping table.
+ *
+ * Each digital pin becomes `{ pin, direction, byte, bit }`, where the
+ * byte/bit come straight from the IEC address the editor's allocator
+ * assigned (%IX<byte>.<bit> for inputs, %QX<byte>.<bit> for outputs) — the
+ * same image-table location the compiled PLC program reads/writes, which is
+ * what binds a physical pin to a program variable. `pin` is the board's pin
+ * identifier as entered by the user (the physical header position on a Pi).
+ *
+ * Analog OUTPUTS (%QW) map to hardware PWM (direction 'pwm', word index).
+ * Analog INPUTS are skipped: the Raspberry Pi SBC has no on-board ADC.
+ */
+function buildPins(devicePins: DevicePinInput[]): PluginPin[] {
+  const pins: PluginPin[] = []
+  for (const dp of devicePins) {
+    const pinNumber = Number.parseInt(dp.pin, 10)
+    if (!Number.isInteger(pinNumber) || pinNumber < 0) continue
+
+    if (dp.pinType === 'digitalInput' || dp.pinType === 'digitalOutput') {
+      const parsed = parseBitAddress(dp.address)
+      if (!parsed) continue
+      const direction = dp.pinType === 'digitalInput' ? 'input' : 'output'
+      pins.push({ pin: pinNumber, direction, byte: parsed.byte, bit: parsed.bit })
+    } else if (dp.pinType === 'analogOutput') {
+      const word = parseWordAddress(dp.address)
+      if (word === null) continue
+      pins.push({ pin: pinNumber, direction: 'pwm', word })
+    }
+    // analogInput: no on-board ADC on the Pi — nothing to map.
+  }
+  return pins
+}
+
 /* ------------------------------------------------------------------ */
 /* Module configuration encoding                                      */
 /* ------------------------------------------------------------------ */
@@ -354,12 +408,15 @@ function encodeModuleConfig(
  * All fields from the config template are preserved. Form-based vendor screen
  * data (keyed by persistence keys other than 'module-configuration' and
  * 'io-mapping') is merged at the root level. The `slots` array is always set
- * from the backplane configuration + I/O mapping.
+ * from the backplane configuration + I/O mapping. When `devicePins` is
+ * non-empty (pin-based GPIO boards), a `pins` array is emitted from the
+ * editor's pin-mapping table.
  */
 export function generateVendorPluginConfig(
   configTemplate: Record<string, unknown>,
   vendorScreenData: VendorScreenData,
   modules: VppModuleDefinition[],
+  devicePins: DevicePinInput[] = [],
 ): Record<string, unknown> {
   const result: Record<string, unknown> = { ...configTemplate }
 
@@ -375,6 +432,13 @@ export function generateVendorPluginConfig(
 
   // Always write the slots array from module configuration + IO mapping
   result.slots = buildSlots(vendorScreenData, modules)
+
+  // Pin-based GPIO boards (capabilities.pinMapping) serialize their
+  // pin-mapping table into a pins[] array. Module-based boards pass no
+  // pins, so the key stays absent for them.
+  if (devicePins.length > 0) {
+    result.pins = buildPins(devicePins)
+  }
 
   return result
 }

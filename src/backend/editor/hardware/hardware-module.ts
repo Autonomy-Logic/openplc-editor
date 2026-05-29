@@ -291,6 +291,10 @@ class HardwareModule {
               device.target.platformOptions && device.target.platformOptions.length > 0
                 ? device.target.platformOptions
                 : undefined,
+            // Forward any capability overrides the manifest declares (e.g. a
+            // runtime-v4 GPIO board setting `pinMapping: true`).
+            // `resolveTargetCapabilities` merges these over the preset.
+            capabilities: device.capabilities,
             vpp: {
               packageId: manifest.package.id,
               deviceId: device.id,

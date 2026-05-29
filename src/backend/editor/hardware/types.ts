@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 
-import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import type { PlatformOption, TargetCapabilities } from '../../../middleware/shared/ports/types'
 
 const SerialPortSchema = z.object({
   name: z.string(),
@@ -130,6 +130,10 @@ type AvailableBoards = Map<
     /** VPP-declared FQBN sub-options (e.g. Nano cpu=atmega328old). Absent
      *  when the manifest doesn't expose variants — see ports/types.ts. */
     platformOptions?: PlatformOption[]
+    /** Manifest-declared capability overrides (e.g. a runtime-v4 GPIO board
+     *  setting `pinMapping: true`). Merged over the preset by
+     *  `resolveTargetCapabilities`. */
+    capabilities?: Partial<TargetCapabilities>
   }
 >
 

@@ -747,6 +747,12 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Optional target capability overrides for this device, merged over
+     *  the preset the editor derives from the target type. A runtime-v4
+     *  board exposing physical GPIO (e.g. the Raspberry Pi) sets
+     *  `{ pinMapping: true }` to surface the pin-mapping table and feed a
+     *  pins[] array into its plugin config. */
+    capabilities?: Partial<TargetCapabilities>
     moduleSystem?: {
       enabled: boolean
       maxSlots: number

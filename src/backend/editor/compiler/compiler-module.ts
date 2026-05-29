@@ -2063,7 +2063,11 @@ class CompilerModule {
 
       for (const entry of entries) {
         const fullPath = path.join(currentPath, entry.name)
-        const zipPath = relativePath ? path.join(relativePath, entry.name) : entry.name
+        // ZIP entry names must use forward slashes (the ZIP spec separator).
+        // path.join would emit backslashes on Windows, which a POSIX runtime
+        // then treats as literal filename characters rather than directory
+        // separators — breaking extraction of every nested file.
+        const zipPath = relativePath ? `${relativePath}/${entry.name}` : entry.name
 
         if (entry.isDirectory()) {
           await addFilesToZip(fullPath, zipFolder, zipPath)
@@ -2382,6 +2386,20 @@ class CompilerModule {
             // Device configuration may not exist yet — use empty vendor data
           }
 
+          // Read the GPIO pin-mapping for pin-based boards (capabilities.
+          // pinMapping). The generator turns these into the plugin config's
+          // pins[] array. Module-based boards have no pins, so this stays
+          // empty and no pins[] key is emitted.
+          let devicePins: DevicePin[] = []
+          try {
+            const pinMappingPath = join(normalizedProjectPath, 'devices', 'pin-mapping.json')
+            const pinMappingRaw = await readFile(pinMappingPath, 'utf-8')
+            const parsedPins: unknown = JSON.parse(pinMappingRaw)
+            if (Array.isArray(parsedPins)) devicePins = parsedPins as DevicePin[]
+          } catch {
+            // No pin-mapping file — leave empty.
+          }
+
           // Pre-load each module's configScreen JSON so the (pure)
           // generator can encode per-slot configuration bytes without
           // touching the filesystem.
@@ -2405,7 +2423,7 @@ class CompilerModule {
               return { ...m, configScreenDefinition }
             }),
           )
-          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules, devicePins)
 
           // configTemplate is supplied by the package author through
           // their .vpp manifest. Without validation, plugin_name like
