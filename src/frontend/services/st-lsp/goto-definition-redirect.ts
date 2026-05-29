@@ -32,7 +32,7 @@ import type { PLCDataType } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
-import { getBodyLineOffset } from './body-offsets'
+import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import { DATA_TYPES_URI, parsePouUri } from './types'
 
 interface NavTarget {

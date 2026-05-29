@@ -29,7 +29,7 @@ import type { PLCDataType, PLCPou } from '../../../middleware/shared/ports/types
 import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
 import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
-import { deleteBodyLineOffset, setBodyLineOffset } from './body-offsets'
+import { deleteBodyLineOffset, setBodyLineOffset } from '../lsp-shared/body-offsets'
 import { DATA_TYPES_URI, pouUri, type StLspService, stubUri } from './types'
 
 /**
