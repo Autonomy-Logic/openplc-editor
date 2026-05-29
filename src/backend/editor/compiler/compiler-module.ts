@@ -1529,7 +1529,32 @@ class CompilerModule {
 
     // -I arguments are passed as bare argv entries (no extra quoting) —
     // execFile delivers them literally to the toolchain on every host.
-    const includeArgs = [`-I${srcDir}`, `-I${baremetalDir}`]
+    //
+    // arduino-cli normally injects `-I{build.core.path}` and
+    // `-I{build.variant.path}` into the `{includes}` substitution at
+    // compile time — those are where `Arduino.h` and `pins_arduino.h`
+    // live. The platform.txt recipe expands `-I{build.core.path}/tinyusb`
+    // etc. literally, but the *base* core path comes from `{includes}`.
+    // Renesas's recipe in particular leaves the base out, so a TU like
+    // `c_blocks_code.cpp` that does `#include <Arduino.h>` fails the
+    // precompile with "Arduino.h: No such file or directory". Mirroring
+    // arduino-cli's injection here keeps every TU finding the core/
+    // variant headers regardless of how the core author chose to wire
+    // its recipe template.
+    const corePath = tcProps.properties['build.core.path']
+    const variantPath = tcProps.properties['build.variant.path']
+    if (!corePath) {
+      throw new Error(
+        `Toolchain pre-compile requires build.core.path from arduino-cli --show-properties for "${fqbn}". ` +
+          `The board's core is likely not installed.`,
+      )
+    }
+    const includeArgs = [
+      `-I${corePath}`,
+      ...(variantPath ? [`-I${variantPath}`] : []),
+      `-I${srcDir}`,
+      `-I${baremetalDir}`,
+    ]
 
     // Appended after the recipe so the last `-std=` wins over the core's
     // implicit gnu++14. extraCxxFlags carries VPP per-board cxx_flags.

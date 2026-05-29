@@ -438,6 +438,8 @@ describe('CompilerModule', () => {
         'compiler.ar.cmd': 'avr-ar',
         'compiler.ar.flags': 'rcs',
         'build.arch': 'AVR',
+        'build.core.path': '/fake/avr/cores/arduino',
+        'build.variant.path': '/fake/avr/variants/standard',
       },
       recipeCpp: 'avr-g++ -c {source_file} {includes} {includes} -o {object_file}',
       recipeC: 'avr-gcc -c {source_file} {includes} -o {object_file}',
@@ -547,6 +549,8 @@ describe('CompilerModule', () => {
       extractSpy.mockResolvedValue({
         ...cannedProps,
         properties: {
+          // build.core.path present so we reach the compiler/ar check
+          'build.core.path': '/fake/avr/cores/arduino',
           /* compiler.path & compiler.ar.cmd intentionally absent */
         },
       } as unknown as ToolchainProperties)
@@ -657,6 +661,84 @@ describe('CompilerModule', () => {
       ])
     })
 
+    it('injects -I{build.core.path} and -I{build.variant.path} into every TU compile (so Arduino.h resolves)', async () => {
+      // Reproduces the failure mode where Renesas-style cores leave the
+      // bare core/variant -I out of recipe.cpp.o.pattern and rely on
+      // arduino-cli to inject them at compile time via the `{includes}`
+      // substitution. The precompile mirrors that injection here.
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
+      expect(compileCmd).toContain('-I/fake/avr/cores/arduino')
+      expect(compileCmd).toContain('-I/fake/avr/variants/standard')
+    })
+
+    it('omits the variant -I when build.variant.path is unset (runtime-only / minimalist cores)', async () => {
+      extractSpy.mockResolvedValue({
+        ...cannedProps,
+        properties: {
+          ...cannedProps.properties,
+          'build.variant.path': '',
+        },
+      } as unknown as ToolchainProperties)
+
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
+      expect(compileCmd).toContain('-I/fake/avr/cores/arduino')
+      // No `-I` followed by empty path — the variant flag is dropped entirely.
+      expect(compileCmd).not.toMatch(/-I(\s|$)/)
+    })
+
+    it('hard-fails with an actionable error when build.core.path is missing from --show-properties', async () => {
+      extractSpy.mockResolvedValue({
+        ...cannedProps,
+        properties: {
+          'compiler.path': '/fake/avr/bin/',
+          'compiler.ar.cmd': 'avr-ar',
+          'compiler.ar.flags': 'rcs',
+          // build.core.path intentionally absent — TUs that include
+          // <Arduino.h> would silently fail to find the header.
+        },
+      } as unknown as ToolchainProperties)
+
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      execImpl.current = async () => ({ stdout: '', stderr: '' })
+
+      await expect(
+        compilerModule.handlePrecompileUserLib({
+          compilationPath: buildDir,
+          fqbn: 'arduino:avr:uno',
+          handleOutputData: noopLog,
+        }),
+      ).rejects.toThrow(/build\.core\.path.*core is likely not installed/s)
+    })
+
     it('hard-fails with an actionable error when no arch property is exposed by --show-properties', async () => {
       // Reproduce a custom/legacy core whose platform.txt exposes none
       // of build.mcu / build.architecture / build.arch. The legacy
@@ -670,6 +752,7 @@ describe('CompilerModule', () => {
           'compiler.path': '/fake/avr/bin/',
           'compiler.ar.cmd': 'avr-ar',
           'compiler.ar.flags': 'rcs',
+          'build.core.path': '/fake/avr/cores/arduino',
           // build.mcu / build.architecture / build.arch intentionally absent
         },
       } as unknown as ToolchainProperties)
