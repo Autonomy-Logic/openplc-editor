@@ -221,6 +221,70 @@ describe('runCompilePipeline — simulator path', () => {
   })
 })
 
+describe('runCompilePipeline — blank FBD variable guard', () => {
+  const fbdPouWithEmptyVar = {
+    type: 'program',
+    data: {
+      name: 'main',
+      language: 'fbd',
+      variables: [],
+      documentation: '',
+      body: {
+        language: 'fbd',
+        value: {
+          name: 'main',
+          rung: {
+            comment: '',
+            nodes: [
+              {
+                id: 'blk',
+                type: 'block',
+                position: { x: 0, y: 0 },
+                draggable: true,
+                selectable: true,
+                data: { variant: { name: 'blink_py' }, variable: { name: 'BLINK_PY0' } },
+              },
+              {
+                id: 'n1',
+                type: 'output-variable',
+                position: { x: 16, y: 32 },
+                draggable: true,
+                selectable: true,
+                data: { variable: { name: '' } },
+              },
+            ],
+            edges: [{ id: 'e1', source: 'blk', sourceHandle: 'blink_out', target: 'n1', targetHandle: 'in' }],
+          },
+        },
+      },
+    },
+  }
+
+  it('bails at the validate stage before XML generation when an FBD variable is unnamed', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const projectData = {
+      ...projectDataFixture,
+      pous: [fbdPouWithEmptyVar],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(makeArgs({ projectData }), port, emit)
+
+    expect(result.success).toBe(false)
+    // Validation runs before XML generation / xml2st.
+    expect(mockedXmlGen).not.toHaveBeenCalled()
+    expect(port.transpileXmlToSt).not.toHaveBeenCalled()
+    // The user-facing error names the POU and the kind of block.
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('POU "main"')
+    expect(validateError?.message).toContain('output variable block has no name')
+    // Identifies what the block is wired to rather than raw coordinates.
+    expect(validateError?.message).toContain('connected to "blink_out" of "BLINK_PY0"')
+    expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
+  })
+})
+
 describe('runCompilePipeline — arduino direct path', () => {
   it('uploads to the physical board when isSimulator=false and not compileOnly', async () => {
     const port = makePort()
