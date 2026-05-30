@@ -28,7 +28,6 @@
  * the exact pattern.
  */
 
-import type { PLCProjectData } from '../../../backend/shared/types/PLC/open-plc'
 import type { TranspileXmlToStArgs, TranspileXmlToStResult } from './compiler-platform-port'
 
 /**
@@ -66,11 +65,20 @@ export interface VerifyCompileArgs {
   /** Project root path on the host platform.  Same value the build
    *  orchestrator received; the port impl knows how to interpret it. */
   projectPath: string
-  /** Verification-pass project data — Python POUs already lowered to
-   *  no-op stubs (the AVR simulator has no Python interpreter).  The
-   *  orchestrator preprocesses this separately from the build pass
-   *  and hands the result through. */
-  verifyProjectData: PLCProjectData
+  /**
+   * Verification-pass project data — Python POUs already lowered to
+   * no-op stubs (the AVR simulator has no Python interpreter).  The
+   * orchestrator preprocesses this separately from the build pass
+   * and hands the result through.
+   *
+   * Typed as `unknown` on purpose: the architecture rule forbids the
+   * port from importing `backend/shared` types.  The orchestrator
+   * lives in `backend/shared` and produces shape-correct data; the
+   * port impl casts to its platform's expected shape (port-shape on
+   * web before invoking `runCompilePipeline`, schema-shape on editor
+   * before threading into the IPC envelope).
+   */
+  verifyProjectData: unknown
   /** Caller log callback.  Every line the inner compile emits is
    *  forwarded here; the orchestrator prefixes them with `[verify]`
    *  before forwarding to its own caller. */

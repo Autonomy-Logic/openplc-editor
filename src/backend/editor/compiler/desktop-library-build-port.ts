@@ -76,11 +76,11 @@ export interface DesktopLibraryBuildPortDeps {
 
 export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps): LibraryBuildPort {
   return {
-    async computeMd5(input: string): Promise<string> {
+    computeMd5(input: string): Promise<string> {
       // Web's port impl computes the same digest via `spark-md5`.
       // The orchestrator's verification cache keys off this value,
       // so both platforms MUST agree byte-for-byte.
-      return createHash('md5').update(input).digest('hex')
+      return Promise.resolve(createHash('md5').update(input).digest('hex'))
     },
 
     async transpileXmlToSt(
@@ -146,11 +146,11 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       await fs.rm(fullPath, { recursive: true, force: true })
     },
 
-    async loadLibraryArchives({ projectLibraryRefs }) {
+    loadLibraryArchives({ projectLibraryRefs }) {
       // Bridge resolves bundled (always-included) + user-installed
       // archives in one call; names that don't resolve come back
       // under `missing` for the orchestrator to fail the build on.
-      return deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name))
+      return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name)))
     },
 
     async verifyCompile({ projectPath, verifyProjectData, emit }) {

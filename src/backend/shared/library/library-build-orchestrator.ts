@@ -40,8 +40,8 @@ import type { CompileLibraryResult } from '../../../middleware/shared/ports/type
 import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
 import {
   composeVerificationProject,
-  type LibraryCppBlock,
   libraryBuildFromTranspiledSt,
+  type LibraryCppBlock,
   prepareXmlForLibraryBuild,
 } from './build-pipeline'
 

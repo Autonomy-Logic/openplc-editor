@@ -80,7 +80,7 @@ import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/st
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
-import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import {
   type CppPouData as CppPouDataCode,
   generateCBlocksCode,
@@ -93,7 +93,6 @@ import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import type { CompileLibraryResult } from '@root/middleware/shared/ports/types'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
@@ -2403,8 +2402,8 @@ class CompilerModule {
     const result = await runLibraryBuildPipeline(
       {
         projectPath,
-        projectData: projectData as PLCProjectData,
-        verifyProjectData: verifyProjectData as PLCProjectData,
+        projectData,
+        verifyProjectData,
         cleanBuild,
       },
       libraryPort,
