@@ -17,11 +17,7 @@ import { promisify } from 'node:util'
 type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
-import {
-  composeVerificationProject,
-  libraryBuildFromTranspiledSt,
-  prepareXmlForLibraryBuild,
-} from '@root/backend/shared/library/build-pipeline'
+import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -105,6 +101,7 @@ import JSZip from 'jszip'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
+import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { ArduinoCoreControl, HalsFile } from './types'
 
@@ -2379,327 +2376,45 @@ class CompilerModule {
   ): Promise<void> {
     _mainProcessPort.start()
 
-    const post = (message: string, logLevel: 'info' | 'warning' | 'error' = 'info') =>
-      _mainProcessPort.postMessage({ logLevel, message })
-
-    // Sends the structured result and closes the port.  No
-    // `closePort: true` flag is needed on the payload: the
-    // renderer-side bridge already synthesises one callback for the
-    // MessagePort `'close'` event the `setTimeout` triggers, and
-    // posting an explicit flag in the same message just made the
-    // adapter fire its closePort branch twice (once via onmessage,
-    // once via the close listener).  Keep the 25 ms delay so the
-    // result payload is delivered before the port closes.
-    const finish = (result: CompileLibraryResult) => {
-      _mainProcessPort.postMessage({ libraryBuildResult: result })
-      setTimeout(() => _mainProcessPort.close(), 25)
-    }
-
-    // Single-shot error path used by every "fail-fast" stage below.
-    // Every stage that aborts the build with one error message posts
-    // it to the console then forwards the same string as `error` on
-    // the structured result; this helper collapses both calls so the
-    // 8 fail-fast sites read as one line each.  Extra fields (e.g.
-    // `libraryName` once the manifest is known) can be threaded via
-    // the second arg.
-    const bail = (msg: string, extra: Partial<CompileLibraryResult> = {}) => {
-      post(msg, 'error')
-      finish({ success: false, error: msg, ...extra })
-    }
-
-    // The renderer adapter sends two preprocessed datasets:
-    //   - `projectData` (formerly the only one) is preprocessed with
-    //     `isSimulator: false` — Python POUs carry the full
-    //     Python-as-ST conversion, C++ POUs carry the ST stub +
-    //     `originalCppPous` sidecar.  Used for the library build
-    //     itself (Stages 1–6).
-    //   - `verifyProjectData` is preprocessed with `isSimulator:
-    //     true` — Python POUs are no-op stubs the AVR simulator
-    //     can compile cleanly; C++ POUs are unchanged.  Used as
-    //     input to `composeVerificationProject` so the verify
-    //     compile (Stage 3) doesn't try to link Python loader
-    //     externs the simulator runtime doesn't ship.
-    //
-    // Both datasets share the same source POU list, just with
-    // different Python treatment.  C++ POUs and ST/IL/data-types
-    // are identical between them.
+    // The IPC args contract is preserved verbatim from the pre-
+    // refactor signature so the renderer-side adapter is unchanged:
+    //   [projectPath, projectData (build-pass), verifyProjectData,
+    //    cleanBuild?]
     const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
       string,
       PLCProjectData,
       PLCProjectData,
       boolean | undefined,
     ]
-    const normalizedProjectPath = projectPath.replace('project.json', '')
 
-    post('Starting library build...')
-
-    // Stage 0: read manifest from disk.
-    const manifestPath = join(normalizedProjectPath, 'library.json')
-    let manifestJson: string
-    try {
-      manifestJson = await readFile(manifestPath, { encoding: 'utf8' })
-    } catch (error) {
-      bail(`Could not read library.json: ${getErrorMessage(error)}`)
-      return
-    }
-
-    // Stage 1: manifest validation + XML generation.
-    const project: PLCProject = {
-      meta: { name: '', type: 'plc-library' as const },
-      data: projectData as unknown as PLCProjectData,
-    }
-    const stage1 = prepareXmlForLibraryBuild(project, manifestJson)
-    if ('error' in stage1) {
-      bail(stage1.error)
-      return
-    }
-    const { xml, knownPous, manifest } = stage1
-    post(`Manifest OK — building "${manifest.name}" v${manifest.version}.`)
-
-    // Persist plc.xml in an isolated `library` build sub-directory so
-    // it doesn't collide with the program-build artefacts when both
-    // modes coexist on the same project tree.
-    const libraryBuildDir = join(normalizedProjectPath, 'build', 'library')
-    const libraryBuildSrcDir = join(libraryBuildDir, 'src')
-    try {
-      await fs.rm(libraryBuildDir, { recursive: true, force: true })
-      await mkdir(libraryBuildSrcDir, { recursive: true })
-    } catch (error) {
-      bail(`Could not prepare build directory: ${getErrorMessage(error)}`)
-      return
-    }
-
-    const xmlPath = join(libraryBuildSrcDir, 'plc.xml')
-    try {
-      await writeFile(xmlPath, xml, 'utf-8')
-    } catch (error) {
-      bail(`Could not write plc.xml: ${getErrorMessage(error)}`)
-      return
-    }
-
-    // Stage 2: xml2st spawn (shared with the program-build path).
-    try {
-      await this.handleTranspileXMLtoST(
-        xmlPath,
-        (data, logLevel) => {
-          // xml2st's stdout doubles as progress + error stream; surface
-          // it verbatim so the user sees the same diagnostics the
-          // program-build path produces.
-          const message = typeof data === 'string' ? data : data.toString()
-          post(message, logLevel ?? 'info')
-        },
-        ['--keep-structs'],
-      )
-    } catch (error) {
-      bail(`xml2st failed: ${getErrorMessage(error)}`)
-      return
-    }
-
-    // Stage 3: read program.st + run library compile.
-    const programStPath = join(libraryBuildSrcDir, 'program.st')
-    let programSt: string
-    try {
-      programSt = await readFile(programStPath, { encoding: 'utf8' })
-    } catch (error) {
-      bail(`Could not read program.st from xml2st output: ${getErrorMessage(error)}`)
-      return
-    }
-
-    // Resolve project-enabled libraries up front — these archives feed
-    // both verification (so the simulator compile sees the same symbols
-    // a real user would) and `compileStlib` below.  Missing names fail
-    // the build with the same "open the Library Manager" message
-    // `compileProgram` uses, before either heavy step runs.
-    const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
-      name: ref.name,
-      version: ref.version,
-    }))
-    const { archives: depArchives, missing: missingDeps } = mainProcessBridge.loadEnabledArchives(
-      enabledLibraryRefs.map((r) => r.name),
-    )
-    if (missingDeps.length > 0) {
-      bail(
-        `Library build aborted: enabled libraries are not installed (${missingDeps.join(', ')}). ` +
-          `Open the Library Manager to install or remove them.`,
-        { libraryName: manifest.name },
-      )
-      return
-    }
-
-    // Stage 3: end-to-end C++ verification against the OpenPLC
-    // Simulator target — same strucpp → arduino-cli → bundled avr-gcc
-    // pipeline the program build uses, so the editor never depends on
-    // a host compiler.  Runs BEFORE the `.stlib` write so the artefact
-    // generation is unconditionally the last step: whatever the
-    // verification outcome, the user always sees a fresh `.stlib` on
-    // disk when "Library built successfully" lands.
-    //
-    // Verification is advisory: a failure surfaces as a warning, not
-    // a build error.  A legitimate user target may have more memory
-    // than the AVR simulator, and the tight AVR memory budget the
-    // simulator imposes is exactly the constraint many real
-    // industrial targets don't share.
-    //
-    // The MD5 cache short-circuits the slow compile when the
-    // already-verified program.st hasn't changed.  `cleanBuild`
-    // skips the cache and forces a re-verification.
-    const programStMd5 = crypto.createHash('md5').update(programSt).digest('hex')
-    // Keep the cache OUTSIDE `libraryBuildDir` — that directory is
-    // wiped at the start of every build (line ~3119 above), so a
-    // cache file living inside it would never survive between
-    // runs.  Sitting one level up in `build/` keeps it adjacent to
-    // the build outputs without being clobbered.
-    const verifyCachePath = join(normalizedProjectPath, 'build', '.verify-cache-library.json')
-    let cachedVerification: CompileLibraryResult['verification']
-    if (!cleanBuild) {
-      try {
-        const raw = await readFile(verifyCachePath, { encoding: 'utf8' })
-        const parsed = JSON.parse(raw) as { md5?: string; success?: boolean; message?: string }
-        if (parsed && parsed.md5 === programStMd5 && typeof parsed.success === 'boolean') {
-          cachedVerification = { success: parsed.success, message: parsed.message }
-        }
-      } catch {
-        // Missing or malformed cache — fall through to fresh
-        // verification.  Never fail the build over the cache.
-      }
-    }
-
-    let verification: CompileLibraryResult['verification']
-    if (cachedVerification) {
-      verification = cachedVerification
-      post(
-        `Skipping verification (cached: ${cachedVerification.success ? 'pass' : 'fail'}). ` +
-          'Use "Clean build" to force re-verification.',
-      )
-    } else {
-      // Feed `composeVerificationProject` the verify-preprocessed
-      // dataset (Python POUs as no-op stubs) — the AVR simulator's
-      // compile path can't link the Python loader externs the
-      // full Python-as-ST shape produces.  The build dataset
-      // (Python as full ST) is intentionally NOT used here.
-      const verifyProject = composeVerificationProject({
-        meta: { name: manifest.name, type: 'plc-library' },
-        data: verifyProjectData as unknown as PLCProjectData,
-      })
-      post('Verifying with OpenPLC Simulator (avr-gcc)...')
-      try {
-        // Stream the inner pipeline's output through the renderer
-        // port with a `[verify]` prefix so the user sees the same
-        // strucpp + arduino-cli progress they'd see on a normal
-        // simulator build.  Critical for two reasons:
-        //   - avr-gcc compile can take 10+ seconds on a library
-        //     with a lot of C++; a silent console looks frozen.
-        //   - When verification fails, the user needs the actual
-        //     compile diagnostic, not just the summary line.
-        // The success line at the bottom of compileLibrary still
-        // comes after this stream — `.stlib` generation is the
-        // last step regardless of verification outcome.
-        verification = await this.runVerificationCompile(
-          normalizedProjectPath,
-          verifyProject.data,
-          mainProcessBridge,
-          (message, logLevel) =>
-            // Demote inner errors to warnings on the way out.
-            // The library's own `.stlib` will still be produced,
-            // so an `[verify]` line being level=error in the
-            // console would falsely suggest the build failed.
-            _mainProcessPort.postMessage({
-              logLevel: logLevel === 'error' ? 'warning' : (logLevel ?? 'info'),
-              message: `[verify] ${message}`,
-            }),
-        )
-        try {
-          await writeFile(verifyCachePath, JSON.stringify({ md5: programStMd5, ...verification }, null, 2), 'utf-8')
-        } catch (cacheErr) {
-          post(`Could not write verification cache: ${getErrorMessage(cacheErr)}`, 'warning')
-        }
-      } catch (err) {
-        verification = { success: false, message: getErrorMessage(err) }
-      }
-      if (verification.success) {
-        post('Verification passed.')
-      } else {
-        post(
-          `Verification reported issues (warning only — .stlib will still be generated): ${verification.message ?? 'see log'}`,
-          'warning',
-        )
-      }
-    }
-
-    // Stage 4: gather per-symbol documentation from the editor view
-    // so `decorateArchive` can stamp it onto the manifest entries.
-    // POUs contribute their "Description" field; data types
-    // contribute their own optional `documentation` field.
-    const pouDocs: Record<string, string> = {}
-    for (const pou of projectData.pous) {
-      if (pou.data.documentation && pou.data.documentation.length > 0) {
-        pouDocs[pou.data.name] = pou.data.documentation
-      }
-    }
-    for (const dt of projectData.dataTypes ?? []) {
-      const doc = (dt as { documentation?: string }).documentation
-      if (typeof doc === 'string' && doc.length > 0) {
-        pouDocs[(dt as { name: string }).name] = doc
-      }
-    }
-
-    // Stage 5: strucpp `compileStlib` — splits program.st per-POU,
-    // drops the synthetic main, builds the archive.  Hard failures
-    // here (xml2st-malformed output, strucpp internal errors) stop
-    // the build because we have no archive to ship.  These are NOT
-    // advisory like verification — strucpp owns the artefact format.
-    // Pull the C/C++ FBs out of the preprocessed data — they live
-    // on `originalCppPous` (placed there by `preprocessPous`'s C++
-    // branch).  These ride through the archive verbatim; strucpp
-    // never sees them.  The consumer-side compile reads them back
-    // and routes them through the existing user-C++-block path
-    // with a `<library_name>__<block_name>` rename for collision
-    // avoidance.
-    const cppBlocks = (
-      (projectData as { originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }> })
-        .originalCppPous ?? []
-    ).map((b) => ({
-      name: b.name,
-      code: b.code,
-      variables: b.variables,
-    }))
-
-    const stage2 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
-      pouDocs,
-      dependencyArchives: depArchives,
-      dependencyRefs: enabledLibraryRefs,
-      cppBlocks,
+    // Bridge the orchestrator's structured port API onto the desktop
+    // platform's existing helpers.  This is the only desktop-specific
+    // glue the library build needs — every stage decision lives in
+    // the shared orchestrator from here on.
+    const libraryPort = createDesktopLibraryBuildPort({
+      transpileXmlToSt: (xmlPath, log, extraArgs) => this.handleTranspileXMLtoST(xmlPath, log, extraArgs),
+      loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
+      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
+        this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>
+          emit(message, logLevel),
+        ),
     })
-    if (!stage2.success) {
-      for (const err of stage2.errors) {
-        const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
-        post(`${where}${err.message}`, 'error')
-      }
-      finish({
-        success: false,
-        error: stage2.errors[0]?.message ?? 'Library compilation failed.',
-        libraryName: manifest.name,
-      })
-      return
-    }
 
-    // Stage 6 (final): serialise the archive to disk.  Same JSON
-    // shape `library-manager-module` persists user-installed archives
-    // with, so a future "build then install" round-trip uses the
-    // identical on-disk format.  This is unconditionally the last
-    // step so the user's "Library built successfully" line refers
-    // to a fresh artefact, never a stale one.
-    const stlibPath = join(normalizedProjectPath, 'build', `${manifest.name}.stlib`)
-    try {
-      await mkdir(join(normalizedProjectPath, 'build'), { recursive: true })
-      await writeFile(stlibPath, JSON.stringify(stage2.archive, null, 2) + '\n', 'utf-8')
-    } catch (error) {
-      bail(`Could not write ${manifest.name}.stlib: ${getErrorMessage(error)}`)
-      return
-    }
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath,
+        projectData: projectData as PLCProjectData,
+        verifyProjectData: verifyProjectData as PLCProjectData,
+        cleanBuild,
+      },
+      libraryPort,
+      (event) => _mainProcessPort.postMessage({ logLevel: event.level, message: event.message }),
+    )
 
-    post(`Library built successfully: ${stlibPath}`)
-    finish({ success: true, stlibPath, libraryName: manifest.name, verification })
+    _mainProcessPort.postMessage({ libraryBuildResult: result })
+    // Same 25ms delay the pre-refactor code used so the result
+    // message is delivered before the port closes.
+    setTimeout(() => _mainProcessPort.close(), 25)
   }
 
   /**
