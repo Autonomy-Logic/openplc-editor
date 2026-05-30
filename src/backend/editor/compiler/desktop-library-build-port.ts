@@ -26,10 +26,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
-import type {
-  TranspileXmlToStArgs,
-  TranspileXmlToStResult,
-} from '@root/middleware/shared/ports/compiler-platform-port'
+import type { TranspileXmlToStArgs, TranspileXmlToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
 import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-build-port'
 
 /**

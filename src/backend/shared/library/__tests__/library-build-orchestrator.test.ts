@@ -30,7 +30,8 @@ const mockComposeVerify = jest.fn((project: { meta: unknown; data: unknown }) =>
 jest.mock('../build-pipeline', () => ({
   prepareXmlForLibraryBuild: (...args: unknown[]) => mockPrepareXml(...args),
   libraryBuildFromTranspiledSt: (...args: unknown[]) => mockLibraryBuild(...args),
-  composeVerificationProject: (...args: unknown[]) => mockComposeVerify(...(args as [{ meta: unknown; data: unknown }])),
+  composeVerificationProject: (...args: unknown[]) =>
+    mockComposeVerify(...(args as [{ meta: unknown; data: unknown }])),
 }))
 
 import { runLibraryBuildPipeline } from '../library-build-orchestrator'
@@ -279,10 +280,7 @@ describe('runLibraryBuildPipeline', () => {
     // will match this when the same xml2st output replays.
     const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
     const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
-    harness.files.set(
-      'build/.verify-cache-library.json',
-      JSON.stringify({ md5: expectedMd5, success: true }),
-    )
+    harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { events, emit } = captureEvents()
 
     await runLibraryBuildPipeline(
@@ -304,10 +302,7 @@ describe('runLibraryBuildPipeline', () => {
     const harness = makePort()
     const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
     const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
-    harness.files.set(
-      'build/.verify-cache-library.json',
-      JSON.stringify({ md5: expectedMd5, success: true }),
-    )
+    harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { emit } = captureEvents()
 
     await runLibraryBuildPipeline(
@@ -381,9 +376,7 @@ describe('runLibraryBuildPipeline', () => {
 
     const projectData = {
       ...projectDataEmpty(),
-      pous: [
-        { type: 'function-block', data: { name: 'MyFb', documentation: 'A docstring' } },
-      ],
+      pous: [{ type: 'function-block', data: { name: 'MyFb', documentation: 'A docstring' } }],
       dataTypes: [{ name: 'MyType', documentation: 'A type description' }],
       originalCppPous: [{ name: 'MyCppFb', code: 'void setup() {}', variables: [] }],
     } as unknown as PLCProjectData
