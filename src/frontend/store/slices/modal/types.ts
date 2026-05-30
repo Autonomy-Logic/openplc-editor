@@ -22,6 +22,13 @@ export type ModalTypes =
   | 'debugger-message'
   | 'debugger-ip-input'
   | 'missing-libraries'
+  /** Browse the autonomy-edge public library catalog.  Replaces the
+   *  "Coming Soon" placeholder in the Library Manager's System tab.
+   *  Multi-select; the install confirmation pops up on top. */
+  | 'public-catalog-browser'
+  /** Confirmation step chained off `public-catalog-browser` — lists
+   *  the user's selection and runs the install on confirm. */
+  | 'confirm-install-libraries'
   /** Surfaced whenever the user tries a write action (save, commit,
    *  create/delete branch, create/rename/delete POU) on a project they
    *  don't have edit permission on.  Shows the "this project belongs to

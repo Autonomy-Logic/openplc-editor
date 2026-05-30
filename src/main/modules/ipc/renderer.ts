@@ -1,3 +1,7 @@
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '@root/backend/shared/library/public-catalog-client'
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
@@ -138,6 +142,22 @@ const rendererProcessBridge = {
   > => ipcRenderer.invoke('libraries:install-from-file'),
   uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('libraries:uninstall', name),
+  // ----- Public-library catalog (autonomy-edge) -----
+  queryPublicCatalog: (
+    args: ListPublicLibrariesArgs,
+  ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> =>
+    ipcRenderer.invoke('catalog:list', args),
+  installLibrariesFromCatalog: (
+    publishedLibraryIds: string[],
+  ): Promise<{
+    results: Array<{
+      publishedLibraryId: string
+      success: boolean
+      name?: string
+      version?: string
+      error?: string
+    }>
+  }> => ipcRenderer.invoke('catalog:install-many', publishedLibraryIds),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

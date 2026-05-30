@@ -16,8 +16,34 @@
  *   backend API following the same shape.
  */
 
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '../../../backend/shared/library/public-catalog-client'
 import type { InstalledLibrary, LibraryInstallResult } from './library-types'
 import type { Result, Unsubscribe } from './types'
+
+/**
+ * Per-library outcome of a batch catalog install.  Mirrors the
+ * main-process `CatalogInstallItemResult` shape — kept in the port
+ * layer so renderer + adapter don't pull from `backend/editor/*`
+ * directly (a boundary the architecture lint check enforces).
+ */
+export interface CatalogInstallItem {
+  publishedLibraryId: string
+  success: boolean
+  name?: string
+  version?: string
+  error?: string
+}
+
+export interface CatalogInstallBatch {
+  results: CatalogInstallItem[]
+}
+
+export type CatalogQueryResult =
+  | { success: true; data: ListPublicLibrariesResponse }
+  | { success: false; error: string }
 
 /**
  * Minimal subset of `strucpp.StlibArchive` the editor consumes.
@@ -119,4 +145,23 @@ export interface LibraryPort {
    * additions/removals without a manual refresh.
    */
   onLibrariesChanged(callback: () => void): Unsubscribe
+
+  /**
+   * Page through the public library catalog hosted on autonomy-edge.
+   * Optional — platforms that don't reach the catalog endpoint
+   * (offline builds, unconfigured environments) leave it undefined
+   * and the UI hides the "Add from the internet" entry point.
+   */
+  queryPublicCatalog?(args: ListPublicLibrariesArgs): Promise<CatalogQueryResult>
+
+  /**
+   * Install a batch of libraries selected from the public catalog.
+   * The platform fetches each `.stlib` and routes it through the
+   * same persistence path the file-picker install uses, returning a
+   * per-item pass/fail summary so the UI can render a "5 succeeded,
+   * 1 failed" toast.
+   *
+   * Optional alongside `queryPublicCatalog` — present iff that one is.
+   */
+  installFromCatalog?(publishedLibraryIds: string[]): Promise<CatalogInstallBatch>
 }
