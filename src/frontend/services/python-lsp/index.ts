@@ -55,18 +55,16 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
   // this map lets `notifyBodyChange` (which doesn't carry the
   // variables list) reuse the preamble that `attachPou` /
   // `notifyVariablesChange` last installed.
+  //
+  // Document versions are owned by the shared service — calling
+  // `changeDocument` without an explicit version lets it advance
+  // the same counter `openDocument` started, so LSP versions are
+  // monotonically increasing across the whole attach → change →
+  // change → close lifecycle.  Pyright silently drops didChange
+  // notifications whose version isn't strictly greater than the
+  // last one seen for that URI, so it's important that our first
+  // didChange does not collide with the version=1 didOpen used.
   const preambleByUri = new Map<string, PythonLspPreamble>()
-
-  // Per-URI version counter.  LSP requires monotonically-increasing
-  // versions on didChange; we control the doc lifecycle entirely on
-  // this side, so a simple per-URI counter is sufficient.
-  const versionByUri = new Map<string, number>()
-
-  function nextVersion(uri: string): number {
-    const v = (versionByUri.get(uri) ?? 0) + 1
-    versionByUri.set(uri, v)
-    return v
-  }
 
   function augmentedDocument(uri: string, body: string): string {
     const preamble = preambleByUri.get(uri) ?? EMPTY_PREAMBLE
@@ -113,7 +111,7 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     },
 
     notifyBodyChange(uri, bodyText) {
-      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText), nextVersion(uri))
+      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
 
     notifyVariablesChange(uri, variables, bodyText) {
@@ -124,20 +122,18 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       const preamble = generatePythonLspPreamble(variables)
       preambleByUri.set(uri, preamble)
       setBodyLineOffset(uri, preamble.lineCount)
-      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText), nextVersion(uri))
+      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
 
     detachPou(uri) {
       sharedService.closeDocument(uri)
       preambleByUri.delete(uri)
-      versionByUri.delete(uri)
       deleteBodyLineOffset(uri)
     },
 
     dispose() {
       sharedService.dispose()
       preambleByUri.clear()
-      versionByUri.clear()
     },
   }
 }

@@ -180,11 +180,13 @@ describe('notifyBodyChange', () => {
     const [, changedText, version] = mockService.changeDocument.mock.calls[0]
     expect(changedText.endsWith('red_light = False\n')).toBe(true)
     expect(changedText).toContain('red_light')
-    expect(typeof version).toBe('number')
-    expect(version).toBeGreaterThanOrEqual(1)
+    // Version is owned by the shared service — python-lsp doesn't
+    // supply one, so the shared service advances its own internal
+    // counter starting from the version `openDocument` used.
+    expect(version).toBeUndefined()
   })
 
-  it('bumps the version monotonically across successive calls', () => {
+  it('leaves version assignment to the shared service across successive calls', () => {
     const mockService = makeMockLanguageService()
     startLanguageService.mockReturnValue(mockService)
 
@@ -193,8 +195,13 @@ describe('notifyBodyChange', () => {
     service.notifyBodyChange(POU_URI, 'x = 2\n')
     service.notifyBodyChange(POU_URI, 'x = 3\n')
 
+    // python-lsp never passes a version to the shared service —
+    // doing so would risk overlapping the version `openDocument`
+    // used (LSP requires strictly-increasing versions; a
+    // collision makes Pyright silently drop the change).  The
+    // shared service's internal counter handles it.
     const versions = mockService.changeDocument.mock.calls.map(([, , v]) => v)
-    expect(versions).toEqual([1, 2])
+    expect(versions).toEqual([undefined, undefined])
   })
 
   it('uses an empty preamble for URIs that were never attached', () => {

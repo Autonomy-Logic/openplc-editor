@@ -21,6 +21,7 @@ import type * as monaco from 'monaco-editor'
 import type { TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
 import {
   type ClientCapabilities,
+  ConfigurationRequest,
   DidChangeTextDocumentNotification,
   DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
@@ -29,7 +30,10 @@ import {
   InitializeRequest,
   type InitializeResult,
   type MessageConnection,
+  RegistrationRequest,
   SemanticTokensRefreshRequest,
+  UnregistrationRequest,
+  WorkDoneProgressCreateRequest,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge, type DiagnosticsMirror } from './diagnostics'
@@ -81,7 +85,7 @@ export interface LanguageService {
   /** Send `textDocument/didOpen`. */
   openDocument(uri: string, content: string): void
   /** Send `textDocument/didChange` (full-text sync). */
-  changeDocument(uri: string, content: string, version: number): void
+  changeDocument(uri: string, content: string, version?: number): void
   /** Send `textDocument/didClose`. */
   closeDocument(uri: string): void
   /** Tear down providers + transport. */
@@ -230,6 +234,34 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     return null
   })
 
+  // Default `workspace/configuration` handler — Pyright (and most
+  // language servers) sends this request to ask the client for
+  // workspace settings (typecheck mode, python paths, …).  If we
+  // leave it unhandled, vscode-jsonrpc auto-replies with a
+  // `MethodNotFound` error; basedpyright blocks `hover` (and a few
+  // other analysis-dependent requests) waiting for the settings
+  // even though `initialize` already resolved.  Respond with an
+  // array of `null`s — same length as the configuration items
+  // requested — so the server uses its defaults for every section
+  // and analysis can proceed.  Services that want non-default
+  // settings should override this handler in `beforeListen`.
+  connection.onRequest(ConfigurationRequest.type, (params) => params.items.map(() => null))
+
+  // Pyright dynamically registers some capabilities after
+  // `initialized` (file watchers, semantic-tokens refresh, …) via
+  // `client/registerCapability`.  We don't act on them — Monaco
+  // owns the file system, and we already poll semantic tokens on
+  // didChange — but we still need to acknowledge them, otherwise
+  // the server blocks waiting for the registration to complete.
+  connection.onRequest(RegistrationRequest.type, () => null)
+  connection.onRequest(UnregistrationRequest.type, () => null)
+
+  // `window/workDoneProgress/create` is sent by Pyright before it
+  // emits progress notifications for long-running analysis.  We
+  // don't render a progress UI today, but acknowledging the
+  // request unblocks the server's downstream notifications.
+  connection.onRequest(WorkDoneProgressCreateRequest.type, () => null)
+
   beforeListen?.(connection)
 
   // ---------------------------------------------------------------------------
@@ -295,9 +327,21 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
 
     changeDocument(uri, content, externalVersion) {
       if (disposed) return
-      documents.set(uri, { uri, version: externalVersion })
+      // LSP requires document versions to be monotonically
+      // increasing.  If the caller supplies one we honour it (ST's
+      // project-sync ties its versions to the project store's
+      // change counter); otherwise we advance the shared per-URI
+      // counter started by `openDocument`.  Callers that mix the
+      // two — e.g. `openDocument(uri, …)` then
+      // `changeDocument(uri, …, /* external */ 1)` — would collide
+      // on version 1 and Pyright would silently drop every
+      // change; auto-incrementing here prevents that whole class
+      // of bug.
+      const existing = documents.get(uri)
+      const version = externalVersion ?? (existing?.version ?? 0) + 1
+      documents.set(uri, { uri, version })
       void connection.sendNotification(DidChangeTextDocumentNotification.type, {
-        textDocument: { uri, version: externalVersion },
+        textDocument: { uri, version },
         contentChanges: [{ text: content }],
       })
     },
