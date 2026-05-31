@@ -2,14 +2,14 @@ import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
-import {
-  listPublicLibraries,
-  type ListPublicLibrariesArgs,
-  type ListPublicLibrariesResponse,
-} from '@root/backend/shared/library/public-catalog-client'
+import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,

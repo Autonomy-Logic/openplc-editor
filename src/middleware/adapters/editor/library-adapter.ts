@@ -17,13 +17,13 @@
  *   catalog:install-many        (invoke) — public-library batch install
  */
 
-import type { ListPublicLibrariesArgs } from '../../../backend/shared/library/public-catalog-client'
 import type {
   CatalogInstallBatch,
   CatalogQueryResult,
   LibraryPort,
   StlibArchiveDTO,
 } from '../../shared/ports/library-port'
+import type { ListPublicLibrariesArgs } from '../../shared/ports/public-catalog-types'
 import type { InstalledLibrary, LibraryInstallResult } from '../../shared/ports/library-types'
 import type { Result, Unsubscribe } from '../../shared/ports/types'
 

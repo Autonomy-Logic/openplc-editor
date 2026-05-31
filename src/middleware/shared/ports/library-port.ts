@@ -16,11 +16,8 @@
  *   backend API following the same shape.
  */
 
-import type {
-  ListPublicLibrariesArgs,
-  ListPublicLibrariesResponse,
-} from '../../../backend/shared/library/public-catalog-client'
 import type { InstalledLibrary, LibraryInstallResult } from './library-types'
+import type { ListPublicLibrariesArgs, ListPublicLibrariesResponse } from './public-catalog-types'
 import type { Result, Unsubscribe } from './types'
 
 /**

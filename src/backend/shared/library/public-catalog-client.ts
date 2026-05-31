@@ -19,6 +19,12 @@
 import { z } from 'zod'
 
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
+import type {
+  GetPublicLibraryByNameResponse,
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+  PublicLibraryDetail,
+} from '../../../middleware/shared/ports/public-catalog-types'
 
 // ---------------------------------------------------------------------------
 // Response schemas — mirror apps/backend/src/presentation/dtos/public-libraries/
@@ -66,25 +72,15 @@ const GetPublicLibraryByNameSchema = z.object({
   versions: z.array(PublicLibrarySchema),
 })
 
-// ---------------------------------------------------------------------------
-// Exported types — the discriminated union surface the UI consumes.
-// ---------------------------------------------------------------------------
-
-export type PublicLibrary = z.infer<typeof PublicLibrarySchema>
-export type ListPublicLibrariesResponse = z.infer<typeof ListPublicLibrariesResponseSchema>
-export type PublicLibraryDetail = z.infer<typeof PublicLibraryDetailSchema>
-export type GetPublicLibraryByNameResponse = z.infer<typeof GetPublicLibraryByNameSchema>
-
-export type PublicLibrarySort = 'popular' | 'recent'
-
-export interface ListPublicLibrariesArgs {
-  q?: string
-  page?: number
-  /** Server caps at 50; client requests at most that. */
-  limit?: number
-  sort?: PublicLibrarySort
-  signal?: AbortSignal
-}
+// The schemas above guard the wire shape at runtime.  Static types
+// for everything that crosses the port boundary live in
+// `middleware/shared/ports/public-catalog-types.ts` — keeping types
+// there (not next to the schemas) lets the renderer import them
+// without crossing the architecture's `components → backend/shared`
+// boundary.  If the two ever drift, each client function's declared
+// return type forces TypeScript to reconcile its `z.infer<...>`
+// against the port-layer interface; a missing/renamed field surfaces
+// as a compile error at the `return ...Schema.parse(...)` call below.
 
 // ---------------------------------------------------------------------------
 // Client functions

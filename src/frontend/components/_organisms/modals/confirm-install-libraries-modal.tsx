@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 
-import type { PublicLibrary } from '../../../../backend/shared/library/public-catalog-client'
+import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import type { CatalogInstallItem } from '../../../../middleware/shared/ports/library-port'
 import { useLibrary } from '../../../../middleware/shared/providers/platform-context'
 import { useOpenPLCStore } from '../../../store'

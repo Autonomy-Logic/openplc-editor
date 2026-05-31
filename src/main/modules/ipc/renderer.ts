@@ -1,8 +1,8 @@
+import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
-} from '@root/backend/shared/library/public-catalog-client'
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+} from '@root/middleware/shared/ports/public-catalog-types'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,

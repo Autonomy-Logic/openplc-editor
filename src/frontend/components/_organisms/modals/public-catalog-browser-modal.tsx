@@ -16,7 +16,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import type { PublicLibrary } from '../../../../backend/shared/library/public-catalog-client'
+import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import { useLibrary } from '../../../../middleware/shared/providers/platform-context'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
