@@ -678,12 +678,16 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
-    // `libraries.user` and `pous` aren't read here, but
-    // `handleAddElementByDropping` captures both — omit them and a
-    // freshly created user FB stays invisible to the memoized closure
-    // until something else forces a re-bind (full project save resets
-    // `rung`, which is why "Save Project" used to mask this).
-    [rung, reactFlowInstance, libraries.user, pous],
+    // `libraries.system`, `libraries.user`, and `pous` aren't read
+    // directly in onDrop's body — `handleAddElementByDropping` closes
+    // over all three.  Omitting any one means the memoized callback
+    // keeps a reference to the pre-update handler, so a freshly
+    // installed system library / freshly created user FB / freshly
+    // saved POU stays invisible until something else forces a re-bind
+    // (full project save resets `rung`, which is why "Save Project"
+    // used to mask this — and why catalog-installed libs threw
+    // "block type ... does not exist" on first drop).
+    [rung, reactFlowInstance, libraries.system, libraries.user, pous],
   )
 
   /**

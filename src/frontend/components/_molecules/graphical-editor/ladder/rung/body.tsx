@@ -859,7 +859,24 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       // Then add the node to the rung
       handleAddNode(blockType, library)
     },
-    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, isDebuggerActive],
+    // `libraries.system`, `libraries.user`, and `pous` aren't read
+    // directly here — `handleAddNode` closes over all three.  Omitting
+    // any of them means the memoized callback keeps a reference to the
+    // pre-update handler, so a freshly installed system library /
+    // freshly created user FB / freshly saved POU stays invisible
+    // until something else forces a re-bind (matches the FBD onDrop
+    // dep set; same failure mode: catalog-installed libs threw
+    // "block type ... does not exist" on first drop).
+    [
+      rung,
+      rungLocal,
+      setReactFlowPanelExtent,
+      reactFlowPanelExtent,
+      isDebuggerActive,
+      libraries.system,
+      libraries.user,
+      pous,
+    ],
   )
 
   return (
