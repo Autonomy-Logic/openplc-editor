@@ -29,9 +29,11 @@ import {
   type InitializeParams,
   InitializeRequest,
   type InitializeResult,
+  LogMessageNotification,
   type MessageConnection,
   RegistrationRequest,
   SemanticTokensRefreshRequest,
+  ShowMessageNotification,
   UnregistrationRequest,
   WorkDoneProgressCreateRequest,
 } from 'vscode-languageserver-protocol'
@@ -284,6 +286,21 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
   // don't render a progress UI today, but acknowledging the
   // request unblocks the server's downstream notifications.
   connection.onRequest(WorkDoneProgressCreateRequest.type, () => null)
+
+  // DEBUG: surface every `window/logMessage` payload.  Pyright's
+  // background analyser writes import-resolution failures,
+  // typeshed-path complaints, and analysis stage transitions here
+  // — reading them is the fastest way to see why hover types come
+  // back as `Unknown`.  Remove with the rest of the debug logs
+  // once the Python LSP is healthy.
+  connection.onNotification(LogMessageNotification.type, (params) => {
+    const types = ['error', 'warn', 'info', 'log'] as const
+    const tag = types[Math.max(0, Math.min(params.type - 1, types.length - 1))] ?? 'log'
+    console.log(`[${workerName}][server:${tag}]`, params.message)
+  })
+  connection.onNotification(ShowMessageNotification.type, (params) => {
+    console.log(`[${workerName}][server:show:${params.type}]`, params.message)
+  })
 
   beforeListen?.(connection)
 
