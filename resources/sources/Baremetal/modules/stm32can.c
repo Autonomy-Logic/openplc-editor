@@ -1,4 +1,5 @@
 #include "STM32_CAN.h"
+#include "stm32f1xx_hal.h"
 
 extern "C" uint8_t init_stm32can(int);
 extern "C" uint8_t write_stm32can(uint8_t,uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
