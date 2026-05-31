@@ -135,6 +135,21 @@ export interface StartLanguageServiceOptions {
   /** Override the default LSP client capabilities. */
   clientCapabilities?: ClientCapabilities
   /**
+   * Workspace root URI advertised on `initialize`.  Defaults to
+   * `null` (no workspace).  Pyright requires a workspace folder
+   * to load `pyrightconfig.json`, which is in turn how we
+   * override its typeshed search path.
+   */
+  rootUri?: string
+  /**
+   * Workspace folders advertised on `initialize`.  Defaults to
+   * `null`.  Mirrors `rootUri` in semantics; LSP servers
+   * generally treat the workspaceFolders array as the source of
+   * truth and use `rootUri` only as a fallback for single-folder
+   * workspaces.
+   */
+  workspaceFolders?: { name: string; uri: string }[]
+  /**
    * Free-form `initializationOptions` payload to send with the LSP
    * `initialize` request.  Pyright derivatives crash their
    * initialize handler if this is missing (they destructure it
@@ -173,6 +188,8 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     beforeListen,
     postInitialize,
     clientCapabilities = DEFAULT_CLIENT_CAPABILITIES,
+    rootUri,
+    workspaceFolders,
     initializationOptions,
     onCrash,
     setupWorker,
@@ -315,9 +332,9 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
 
     const initParams: InitializeParams = {
       processId: null,
-      rootUri: null,
+      rootUri: rootUri ?? null,
       capabilities: clientCapabilities,
-      workspaceFolders: null,
+      workspaceFolders: workspaceFolders ?? null,
       ...(initializationOptions !== undefined ? { initializationOptions } : {}),
     }
     console.log(`[${workerName}][debug] sending initialize`)

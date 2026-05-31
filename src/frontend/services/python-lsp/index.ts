@@ -97,17 +97,51 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
 
-    // `browser-basedpyright`'s initialize handler unconditionally
-    // destructures `params.initializationOptions.files` — passing
-    // no `initializationOptions` (or no `files` field) crashes the
-    // server with `Cannot destructure property 'files' of
-    // 'e.initializationOptions' as it is undefined.`.  An empty
-    // object is enough to keep the server happy; basedpyright then
-    // merges its bundled `typeshed-json` into its in-memory file
-    // system so `os`, `sys`, `struct`, the builtins, …, all
-    // resolve.  Reference:
-    // https://github.com/DetachHead/basedpyright/blob/main/packages/browser-pyright/src/browser-server.ts
-    initializationOptions: { files: {} },
+    // Pyright needs a workspace folder to load `pyrightconfig.json`;
+    // without one, every project setting falls back to defaults that
+    // break our setup.  The actual filesystem is the in-memory FS the
+    // worker maintains, so the URI is virtual — we anchor at
+    // `file:///` because that's where the typeshed files end up too
+    // (basedpyright applies `typeshed-json` paths starting with
+    // `/typeshed/…`, which is under root `/`).
+    rootUri: 'file:///',
+    workspaceFolders: [{ name: 'openplc', uri: 'file:///' }],
+
+    // basedpyright's `initialize` handler does
+    //   `const { files } = params.initializationOptions`
+    // and crashes if `initializationOptions` is undefined.  Beyond
+    // that, the `files` map is the gateway by which our typeshed
+    // override reaches Pyright's in-memory FS:
+    //
+    //   - `browser-pyright`'s rspack config builds a virtual
+    //     `typeshed-json` module by reading the `docstubs/`
+    //     directory and rewriting every path to `/typeshed/…`.
+    //     `basedpyright`'s `browser-server.ts` then spreads that
+    //     map plus our `files` into the FS via
+    //     `TestFileSystem.apply(initialFiles)`.
+    //
+    //   - But `pyright-internal/src/common/pathConsts.ts` exports
+    //     `typeshedFallback = 'typeshed-fallback'`, which is what
+    //     `ImportResolver` joins to its root when nothing better
+    //     is configured.  So Pyright looks under
+    //     `/typeshed-fallback/stdlib/builtins.pyi` while the actual
+    //     stubs live at `/typeshed/stdlib/builtins.pyi`.  Path
+    //     mismatch → every builtin resolves to `Unknown` → every
+    //     annotation that references one (including our
+    //     `: bool` IEC preamble) hovers as `Unknown`.
+    //
+    // The workaround is a `pyrightconfig.json` in the workspace
+    // root that sets `typeshedPath` explicitly.  Pyright loads it,
+    // overrides the constant, and looks up stubs at the right
+    // path.  We include the file in the initial `files` map so
+    // it lands in the FS alongside the typeshed.
+    initializationOptions: {
+      files: {
+        '/pyrightconfig.json': JSON.stringify({
+          typeshedPath: '/typeshed',
+        }),
+      },
+    },
 
     // `browser-basedpyright` (microbit-foundation pyright fork) has
     // a foreground/background two-worker architecture.  The bundle
