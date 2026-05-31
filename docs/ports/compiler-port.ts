@@ -85,4 +85,10 @@ export interface CompilerPort {
    * Returns unsubscribe function.
    */
   onCompileOutput?(callback: (line: string) => void): Unsubscribe
+
+  /**
+   * Abort any ongoing compilation process.
+   * Cleans up resources and resets compiler state.
+   */
+  abort(): void
 }
