@@ -27,6 +27,7 @@
 
 #ifdef MODBUS_ENABLED
 #include "ModbusSlave.h"
+#include "ModbusMaster.h"
 #endif
 
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
@@ -138,6 +139,13 @@ void setup()
                 MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
+            
+            // Initialize Modbus master if enabled
+            #ifdef MODBUS_MASTER
+                modbus_master.begin(MBSERIAL_BAUD);
+                modbus_master.setTransmissionMode(MODBUS_RTU);
+            #endif
+            
             modbus.slaveid = MBSERIAL_SLAVE;
         #endif
 
@@ -147,6 +155,12 @@ void setup()
             uint8_t dns[] = { MBTCP_DNS };
             uint8_t gateway[] = { MBTCP_GATEWAY };
             uint8_t subnet[] = { MBTCP_SUBNET };
+
+            // Initialize Modbus master for TCP if enabled
+            #ifdef MODBUS_MASTER
+                modbus_master.begin(MBTCP_PORT);
+                modbus_master.setTransmissionMode(MODBUS_TCP);
+            #endif
 
             if (sizeof(ip)/sizeof(uint8_t) < 4)
                 mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
