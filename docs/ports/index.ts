@@ -118,6 +118,10 @@ export type {
   RuntimeStatusResult,
   CompilationStatusResult,
   RuntimeLogsResult,
+  // v4 auth additions
+  AuthToken,
+  RefreshTokenParams,
+  RefreshTokenResult,
 } from './runtime-port'
 export type {
   CreateProjectParams,
