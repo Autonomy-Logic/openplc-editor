@@ -133,4 +133,22 @@ export interface RuntimePort {
    * Returns unsubscribe function.
    */
   onTokenRefreshed?(callback: (newToken: string) => void): Unsubscribe
+
+  /**
+   * Enumerate variables available for external access.
+   * Used by OPC UA server to discover and publish variables.
+   */
+  enumerateVariables?(): Promise<{ success: boolean; variables?: Array<{name: string, type: string, isArray: boolean, dimensions?: number[]}>; error?: string }>
+
+  /**
+   * Read the value of a variable by name.
+   * Supports scalar and array variables, including UDT arrays.
+   */
+  readVariable?(variableName: string): Promise<{ success: boolean; value?: any; error?: string }>
+
+  /**
+   * Write a value to a variable by name.
+   * Supports scalar and array variables, including UDT arrays.
+   */
+  writeVariable?(variableName: string, value: any): Promise<{ success: boolean; error?: string }>
 }
