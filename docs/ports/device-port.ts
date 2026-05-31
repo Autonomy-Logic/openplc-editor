@@ -58,4 +58,11 @@ export interface DevicePort {
    * Web: returns URL to bundled image asset.
    */
   getPreviewImage(imageName: string): Promise<string>
+
+  /**
+   * Program STM32 Blue Pill board using ST-LINK V2 debugger.
+   * Editor: uses STM32_Programmer_CLI or similar tool.
+   * Web: delegates to backend service for programming.
+   */
+  programSTM32BluePillWithSTLink?(hexFilePath: string): Promise<void>
 }
