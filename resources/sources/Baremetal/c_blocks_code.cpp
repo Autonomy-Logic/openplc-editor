@@ -25,6 +25,14 @@
 #include "iec_var.hpp"
 #include "iec_string.hpp"
 
+// Modbus master function declarations
+extern "C" {
+    void modbus_master_read_coils(IEC_UINT slave_id, IEC_UINT start_address, IEC_UINT quantity, IEC_BOOL* result_array);
+    void modbus_master_read_registers(IEC_UINT slave_id, IEC_UINT start_address, IEC_UINT quantity, IEC_UINT* result_array);
+    void modbus_master_write_single_coil(IEC_UINT slave_id, IEC_UINT address, IEC_BOOL value);
+    void modbus_master_write_single_register(IEC_UINT slave_id, IEC_UINT address, IEC_UINT value);
+}
+
 /*********************/
 /*  IEC Types defs   */
 /*********************/
