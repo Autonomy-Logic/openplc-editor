@@ -45,11 +45,21 @@ export interface DebuggerPort {
 
   /** Disconnect from the current debug target. */
   disconnect(): Promise<{ success: boolean }>
+  /**
+   * Connect to a debug target.
+   * The adapter resolves the actual transport (TCP, RTU, WebSocket, WebRTC, simulator)
+   * based on the current device configuration and platform capabilities.
+   */
+  connect(): Promise<{ success: boolean; error?: string }>
+
+  /** Disconnect from the current debug target. */
+  disconnect(): Promise<{ success: boolean }>
 
   /**
    * Read variable values by their debug indexes (batched).
    * Returns tick count, last index processed, and raw data array.
    * `needsReconnect` signals the UI to re-establish the connection.
+   * Supports UDT array data structures with proper type information.
    */
   getVariablesList(indexes: number[]): Promise<DebugVariableResult>
 
@@ -58,6 +68,7 @@ export interface DebuggerPort {
    * @param index — Variable debug index
    * @param force — If true, the value is forced (overrides PLC logic)
    * @param valueBuffer — Raw value bytes (Uint8Array)
+   * Supports UDT array data structures with proper type information.
    */
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult>
 
