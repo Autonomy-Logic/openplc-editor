@@ -292,6 +292,11 @@ int relay16Set(uint8_t stack, uint16_t val)
 extern "C" int digIn8Get(uint8_t, uint8_t*);
 extern "C" int digIn8Init(int );
 
+// Modbus Master support
+extern "C" int modbusMasterInit(int);
+extern "C" int modbusMasterRead(int, uint16_t*, int);
+extern "C" int modbusMasterWrite(int, uint16_t*, int);
+
 #define DIG_IN8_CHANNELS 8
 #define DIG_IN8_HW_I2C_BASE_ADD	0x20
 #define DIG_IN8_INPORT_REG_ADD	0x00
@@ -312,6 +317,28 @@ int digIn8CardCheck(uint8_t stack)
 	}
 	add = (stack + DIG_IN8_HW_I2C_BASE_ADD) ^ 0x07;
 	return add;
+}
+
+// Modbus Master functions
+int modbusMasterInit(int stack)
+{
+	// Initialize Modbus master communication
+	// Stack parameter could be used for multiple Modbus masters
+	return OK;
+}
+
+int modbusMasterRead(int slaveId, uint16_t* data, int count)
+{
+	// Read data from Modbus slave
+	// Implementation would depend on specific hardware
+	return OK;
+}
+
+int modbusMasterWrite(int slaveId, uint16_t* data, int count)
+{
+	// Write data to Modbus slave
+	// Implementation would depend on specific hardware
+	return OK;
 }
 
 int digIn8Init(int stack)
