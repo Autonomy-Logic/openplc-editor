@@ -85,6 +85,18 @@ export interface ProjectPort {
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
 
   /**
+   * Validate project compatibility with current editor version.
+   * Checks project metadata and handles migration if needed.
+   */
+  validateProjectCompatibility(projectPath: string): Promise<{
+    isCompatible: boolean;
+    requiredMigration: boolean;
+    editorVersion: string;
+    projectVersion: string;
+    error?: string;
+  }>
+
+  /**
    * Open a project via platform file picker.
    * Editor: shows native file dialog.
    * Web: may show file input or project list.
