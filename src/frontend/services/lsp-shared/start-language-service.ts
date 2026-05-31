@@ -134,6 +134,15 @@ export interface StartLanguageServiceOptions {
   clientCapabilities?: ClientCapabilities
   /** Post-`initialize` worker crash. */
   onCrash?: (err: Error) => void
+  /**
+   * Service-specific worker bootstrap.  Forwarded to
+   * `createLspTransport`; see its docs.  Use for non-LSP boot
+   * messages (e.g., browser-basedpyright's `browser/boot`
+   * handshake) and for `message` listeners that handle
+   * worker-specific commands (e.g., basedpyright's
+   * `browser/newWorker` requests).
+   */
+  setupWorker?: (worker: Worker, workerUrl: string) => void
 }
 
 export function startLanguageService(opts: StartLanguageServiceOptions): LanguageService {
@@ -155,6 +164,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     postInitialize,
     clientCapabilities = DEFAULT_CLIENT_CAPABILITIES,
     onCrash,
+    setupWorker,
   } = opts
 
   let disposed = false
@@ -177,7 +187,11 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
 
   let transport: LspTransport
   try {
-    transport = createLspTransport(workerUrl, { workerName, onError: handleWorkerCrash })
+    transport = createLspTransport(workerUrl, {
+      workerName,
+      onError: handleWorkerCrash,
+      ...(setupWorker ? { setupWorker } : {}),
+    })
   } catch (err) {
     // No worker support (jsdom, missing URL, etc.) — return a
     // service that never resolves `ready` so callers gate on it.

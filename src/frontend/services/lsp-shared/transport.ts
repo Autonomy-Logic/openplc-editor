@@ -45,6 +45,18 @@ export interface CreateLspTransportOptions {
   workerName: string
   /** Post-`initialize` crash callback. */
   onError?: (err: Error) => void
+  /**
+   * Run right after the worker is created but before the JSON-RPC
+   * reader / writer / connection are built.  Use for non-LSP
+   * bootstrap messages the worker expects before it starts
+   * speaking JSON-RPC (e.g., browser-basedpyright's `browser/boot`
+   * handshake) and for service-specific `message` listeners that
+   * handle commands the JSON-RPC reader doesn't recognise (e.g.,
+   * basedpyright's `browser/newWorker` requests to spawn
+   * background workers).  `workerUrl` is forwarded so the hook can
+   * spawn additional workers with the same bundle.
+   */
+  setupWorker?: (worker: Worker, workerUrl: string) => void
 }
 
 /**
@@ -68,13 +80,24 @@ export interface CreateLspTransportOptions {
  * error to whoever owns the user-facing UI.
  */
 export function createLspTransport(workerUrl: string, options: CreateLspTransportOptions): LspTransport {
-  const { workerName, onError } = options
+  const { workerName, onError, setupWorker } = options
   const logPrefix = `[${workerName}]`
 
   // DEBUG: log worker spawn so we can see whether the URL even
   // resolved.  Remove once the Pyright "Loading…" bug is rooted out.
   console.log(`${logPrefix}[debug] spawning worker at`, workerUrl)
   const worker = new Worker(workerUrl, { name: workerName })
+
+  // Service-specific bootstrap, *before* the JSON-RPC reader binds
+  // its own `message` listener.  Used by browser-basedpyright to
+  // send its `browser/boot` handshake and wire up the
+  // foreground→background worker spawn protocol — neither is
+  // JSON-RPC, so the reader would otherwise log them as parse
+  // errors.
+  if (setupWorker) {
+    console.log(`${logPrefix}[debug] running setupWorker hook`)
+    setupWorker(worker, workerUrl)
+  }
 
   // Surface worker-level errors as connection errors.  The browser
   // emits `error` for uncaught exceptions inside the worker and

@@ -97,6 +97,48 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
 
+    // `browser-basedpyright` (microbit-foundation pyright fork) has
+    // a foreground/background two-worker architecture.  The bundle
+    // we spawn is the foreground; before it speaks JSON-RPC it
+    // needs `{type: 'browser/boot', mode: 'foreground'}`, and once
+    // it boots it will ask us to spawn matching background workers
+    // by posting `{type: 'browser/newWorker', initialData, port}`.
+    // We handle that by `new Worker(workerUrl)` on the same bundle
+    // and transferring the port over via another `browser/boot`,
+    // mode `'background'`.  Without this dance the foreground
+    // worker silently hangs on `initialize` waiting for its
+    // background twin and nothing the user does ever resolves.
+    // Reference: https://github.com/microbit-foundation/pyright/blob/microbit/THIS_FORK.md
+    setupWorker: (worker, url) => {
+      const backgroundWorkers: Worker[] = []
+      worker.postMessage({ type: 'browser/boot', mode: 'foreground' })
+      worker.addEventListener('message', (event: MessageEvent) => {
+        const data = event.data as { type?: string; initialData?: unknown; port?: MessagePort } | null
+        if (!data || data.type !== 'browser/newWorker' || !data.port) return
+        const background = new Worker(url, { name: `${PYTHON_WORKER_NAME}-bg-${backgroundWorkers.length + 1}` })
+        backgroundWorkers.push(background)
+        background.postMessage(
+          {
+            type: 'browser/boot',
+            mode: 'background',
+            initialData: data.initialData,
+            port: data.port,
+          },
+          [data.port],
+        )
+      })
+      // Best-effort cleanup of the background fleet when the
+      // foreground is torn down.  The transport's `dispose()`
+      // terminates the foreground; we hook the `terminate` event
+      // by piggybacking on the `error` event the connection emits
+      // during dispose-induced reads.  If a background outlives
+      // the foreground it'll exit shortly anyway when its message
+      // channel drops.
+      worker.addEventListener('error', () => {
+        for (const bg of backgroundWorkers) bg.terminate()
+      })
+    },
+
     ...(onCrash ? { onCrash } : {}),
   })
 
