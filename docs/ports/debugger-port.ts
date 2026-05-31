@@ -37,6 +37,14 @@ import type {
 
 export interface DebuggerPort {
   /**
+   * Get list of available debug ports/devices.
+   * Includes standard COM ports and special devices like ST-LINK V2.
+   * Used by the port selection UI to show available debug targets.
+   */
+  getAvailablePorts?(): Promise<Array<{ path: string; manufacturer?: string; productId?: string; vendorId?: string }>>
+
+  /**
+  /**
    * Connect to a debug target.
    * The adapter resolves the actual transport (TCP, RTU, WebSocket, WebRTC, simulator)
    * based on the current device configuration and platform capabilities.
