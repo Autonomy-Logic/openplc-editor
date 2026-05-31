@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the plan to refactor the OpenPLC Editor codebase to eliminate code duplication between the **debugger** and **OPC-UA** subsystems. Both systems need to resolve debug variable indices from the `debug.c` file generated during compilation, but currently they use separate implementations with duplicated logic.
+This document outlines the plan to refactor the OpenPLC Editor codebase to eliminate code duplication between the **debugger** and **OPC-UA** subsystems. Both systems need to resolve debug variable indices from the `debug.c` file generated during compilation, but currently they use separate implementations with duplicated logic. Additionally, the shared utilities require updates to properly handle array serialization for UDT arrays.
 
 ## Problem Statement
 
