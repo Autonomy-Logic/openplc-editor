@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <project xmlns:ns1="http://www.plcopen.org/xml/tc6.xsd" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.plcopen.org/xml/tc6_0201">
-  <fileHeader companyName="Desconhecido" productName="Mock Product" productVersion="1" creationDateTime="2023-10-30T11:57:23"/>
+  <fileHeader companyName="Desconhecido" productName="Mock Product" productVersion="4" creationDateTime="2023-10-30T11:57:23"/>
   <contentHeader name="Mock Project For Development" modificationDateTime="2023-10-30T12:02:14">
     <coordinateInfo>
       <fbd>
