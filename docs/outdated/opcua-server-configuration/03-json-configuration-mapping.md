@@ -105,6 +105,9 @@ interface OpcUaNodeConfig {
   // For arrays: element count (derived from type)
   arrayLength?: number
   elementType?: string
+
+  // For UDT arrays: track if this is a user-defined datatype array
+  isUdtArray?: boolean
 }
 
 interface OpcUaFieldConfig {
