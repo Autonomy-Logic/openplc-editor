@@ -36,4 +36,8 @@ extern uint8_t pinMask_AOUT[];
     #ifdef USE_STM32CAN_BLOCK
         #include "modules/stm32can.c"
     #endif
+
+    #ifdef USE_MODBUS_MASTER_BLOCK
+        #include <ModbusMaster.h>
+    #endif
 #endif
