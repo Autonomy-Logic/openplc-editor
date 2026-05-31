@@ -13,8 +13,8 @@
 
 import { useState } from 'react'
 
-import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import type { CatalogInstallItem } from '../../../../middleware/shared/ports/library-port'
+import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import { useLibrary } from '../../../../middleware/shared/providers/platform-context'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
