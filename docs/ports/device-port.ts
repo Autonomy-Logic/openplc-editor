@@ -36,6 +36,11 @@ export interface DevicePort {
    * Editor: queries local system serial ports.
    * Web: may not be applicable locally (ports come from remote device).
    */
+  /**
+   * Get available serial/communication ports.
+   * Editor: queries local system serial ports and USB devices (e.g., ST-LINK V2).
+   * Web: may not be applicable locally (ports come from remote device).
+   */
   getCommunicationPorts(): Promise<CommunicationPort[]>
 
   /**
@@ -48,6 +53,11 @@ export interface DevicePort {
   /**
    * Refresh communication ports list.
    * Editor: re-scans local system serial ports.
+   * Web: re-queries orchestrator for available ports.
+   */
+  /**
+   * Refresh communication ports list.
+   * Editor: re-scans local system serial ports and USB devices.
    * Web: re-queries orchestrator for available ports.
    */
   refreshCommunicationPorts(): Promise<CommunicationPort[]>
