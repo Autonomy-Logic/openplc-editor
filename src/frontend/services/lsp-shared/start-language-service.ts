@@ -268,6 +268,9 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
   // LSP handshake — initialize, initialized, post-init hook
   // ---------------------------------------------------------------------------
   const ready = (async () => {
+    // DEBUG: trace LSP boot sequence so we can correlate later
+    // request stalls with handshake state.
+    console.log(`[${workerName}][debug] connection.listen()`)
     connection.listen()
 
     const initParams: InitializeParams = {
@@ -276,8 +279,11 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
       capabilities: clientCapabilities,
       workspaceFolders: null,
     }
+    console.log(`[${workerName}][debug] sending initialize`)
     const initResult = await connection.sendRequest(InitializeRequest.type, initParams)
+    console.log(`[${workerName}][debug] initialize resolved`, initResult)
     await connection.sendNotification(InitializedNotification.type, {})
+    console.log(`[${workerName}][debug] initialized notification sent`)
 
     // Wire semantic tokens once we know the worker's legend.  If
     // the server didn't advertise the capability, we silently skip
@@ -299,7 +305,9 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     }
 
     if (postInitialize) {
+      console.log(`[${workerName}][debug] running postInitialize`)
       await postInitialize({ connection, initResult })
+      console.log(`[${workerName}][debug] postInitialize done`)
     }
     // Mark the service initialised AFTER the post-init hook — any
     // failure up to this point counts as crash-during-init and goes
@@ -307,6 +315,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     // callback.  This is the exact boundary where the rest of the
     // app starts trusting the service is alive.
     initialised = true
+    console.log(`[${workerName}][debug] service marked initialised`)
   })().catch((err) => {
     console.error(`[${workerName}] initialize failed:`, err)
     throw err

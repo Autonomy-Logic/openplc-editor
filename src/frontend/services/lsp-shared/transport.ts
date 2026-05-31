@@ -26,6 +26,8 @@ import {
   BrowserMessageWriter,
   createMessageConnection,
   type MessageConnection,
+  Trace,
+  type Tracer,
 } from 'vscode-jsonrpc/browser'
 
 export interface LspTransport {
@@ -67,6 +69,11 @@ export interface CreateLspTransportOptions {
  */
 export function createLspTransport(workerUrl: string, options: CreateLspTransportOptions): LspTransport {
   const { workerName, onError } = options
+  const logPrefix = `[${workerName}]`
+
+  // DEBUG: log worker spawn so we can see whether the URL even
+  // resolved.  Remove once the Pyright "Loading…" bug is rooted out.
+  console.log(`${logPrefix}[debug] spawning worker at`, workerUrl)
   const worker = new Worker(workerUrl, { name: workerName })
 
   // Surface worker-level errors as connection errors.  The browser
@@ -77,10 +84,32 @@ export function createLspTransport(workerUrl: string, options: CreateLspTranspor
   const writer = new BrowserMessageWriter(worker)
   const connection = createMessageConnection(reader, writer)
 
-  const logPrefix = `[${workerName}]`
+  // DEBUG: enable verbose JSON-RPC tracing on every connection so
+  // we can see every request/response/notification flowing both
+  // directions.  Pair with the provider-side logs in
+  // `lsp-shared/providers.ts` to triangulate where a hover hang is
+  // happening (provider entry → outbound request → inbound
+  // response → provider exit).
+  const tracer: Tracer = {
+    log(message: string, data?: string) {
+      if (data) console.log(`${logPrefix}[rpc] ${message}`, data)
+      else console.log(`${logPrefix}[rpc] ${message}`)
+    },
+  }
+  void connection.trace(Trace.Verbose, tracer)
+
+  // DEBUG: also surface generic worker-level message events so we
+  // can see if the worker sends anything that isn't getting parsed
+  // by vscode-jsonrpc.
+  worker.addEventListener('message', (ev) => {
+    console.log(`${logPrefix}[worker→host raw]`, ev.data)
+  })
 
   let crashed = false
   const handleError = (ev: Event | ErrorEvent) => {
+    // DEBUG: always log the raw event so we can tell `error` from
+    // `messageerror` and inspect the payload.
+    console.error(`${logPrefix}[debug] worker error event`, ev)
     if (crashed) return
     crashed = true
     const message = ev instanceof ErrorEvent ? ev.message : `${logPrefix} worker reported a non-Error event`

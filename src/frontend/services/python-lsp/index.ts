@@ -107,10 +107,19 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       const preamble = generatePythonLspPreamble(variables)
       preambleByUri.set(uri, preamble)
       setBodyLineOffset(uri, preamble.lineCount)
+      // DEBUG: surface the augmented document we're about to push.
+      console.log('[python-lsp][debug] attachPou', {
+        uri,
+        preambleLineCount: preamble.lineCount,
+        preambleHead: preamble.text.slice(0, 200),
+        bodyLength: bodyText.length,
+      })
       sharedService.openDocument(uri, augmentedDocument(uri, bodyText))
     },
 
     notifyBodyChange(uri, bodyText) {
+      // DEBUG: confirm Monaco onDidChangeContent → service hop.
+      console.log('[python-lsp][debug] notifyBodyChange', { uri, bodyLength: bodyText.length })
       sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
 

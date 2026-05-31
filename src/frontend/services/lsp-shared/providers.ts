@@ -169,12 +169,32 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerHoverProvider(languageId, {
       provideHover: async (model, position) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
-        const result = await connection.sendRequest(HoverRequest.type, {
-          textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+        const modelUri = model.uri.toString()
+        const { lspUri, lineOffset } = resolveLspContext(modelUri)
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        // DEBUG: provider invocation + outbound request log.
+        console.log(`[lsp:${languageId}] provideHover ENTER`, {
+          modelUri,
+          lspUri,
+          monacoLine: position.lineNumber,
+          monacoCol: position.column,
+          lineOffset,
+          lspPosition,
         })
-        return lspHoverToMonaco(result, lineOffset) ?? undefined
+        let result
+        try {
+          result = await connection.sendRequest(HoverRequest.type, {
+            textDocument: { uri: lspUri },
+            position: lspPosition,
+          })
+        } catch (err) {
+          console.error(`[lsp:${languageId}] provideHover REJECTED`, err)
+          throw err
+        }
+        console.log(`[lsp:${languageId}] provideHover RESPONSE`, result)
+        const converted = lspHoverToMonaco(result, lineOffset) ?? undefined
+        console.log(`[lsp:${languageId}] provideHover EXIT`, converted)
+        return converted
       },
     }),
   )
