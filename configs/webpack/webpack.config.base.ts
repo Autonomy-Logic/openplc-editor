@@ -30,6 +30,11 @@ const configuration: webpack.Configuration = {
 					},
 				},
 			},
+			{
+				test: /\.(bin|hex|elf)$/,
+				use: 'file-loader',
+				type: 'asset/resource',
+			},
 		],
 	},
 
