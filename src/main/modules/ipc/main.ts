@@ -7,10 +7,6 @@ import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type {
-  ListPublicLibrariesArgs,
-  ListPublicLibrariesResponse,
-} from '@root/middleware/shared/ports/public-catalog-types'
-import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
@@ -21,6 +17,10 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '@root/middleware/shared/ports/public-catalog-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import dgram from 'dgram'
