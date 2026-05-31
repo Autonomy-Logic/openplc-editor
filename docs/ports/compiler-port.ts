@@ -58,6 +58,7 @@ export interface CompilerPort {
   /**
    * Run the full compilation pipeline (XML -> ST -> C -> binary).
    * Emits progress events for UI feedback.
+   * Ensures ST files are processed with proper trailing newlines.
    */
   compileProgram(
     args: CompileProgramArgs,
