@@ -1,5 +1,25 @@
 # OPC-UA Server Configuration - Design Overview
 
+## Review Required: UDT Array Handling
+
+The current design needs review for proper handling of User-Defined Datatype (UDT) arrays. This section should document how PLC arrays of UDTs are mapped to OPC UA nodes and address any gaps in the array handling logic.
+
+### Current Gaps Identified
+
+- Missing specification for UDT array node structure in OPC UA address space
+- No defined approach for indexing UDT array elements
+- Unclear mapping between PLC array declarations and OPC UA array nodes
+
+### Required Updates
+
+This design document must be updated to specify:
+- How UDT arrays are represented in the OPC UA address space
+- The node structure for UDT array elements
+- Indexing mechanism for UDT array members
+- Mapping rules from PLC array syntax to OPC UA array nodes
+
+
+
 ## 1. Architecture Overview
 
 ### 1.1 System Context
