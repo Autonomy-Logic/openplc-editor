@@ -58,4 +58,10 @@ export interface DevicePort {
    * Web: returns URL to bundled image asset.
    */
   getPreviewImage(imageName: string): Promise<string>
+
+  /**
+   * Abort ongoing upload operations.
+   * Cleans up device connections and temporary files.
+   */
+  abortUpload(): Promise<void>
 }
