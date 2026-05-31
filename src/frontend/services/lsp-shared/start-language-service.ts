@@ -132,6 +132,14 @@ export interface StartLanguageServiceOptions {
   postInitialize?: (ctx: { connection: MessageConnection; initResult: InitializeResult }) => Promise<void>
   /** Override the default LSP client capabilities. */
   clientCapabilities?: ClientCapabilities
+  /**
+   * Free-form `initializationOptions` payload to send with the LSP
+   * `initialize` request.  Pyright derivatives crash their
+   * initialize handler if this is missing (they destructure it
+   * unconditionally); strucpp ignores it.  Shape is server-
+   * specific — see the consumer's docs.
+   */
+  initializationOptions?: unknown
   /** Post-`initialize` worker crash. */
   onCrash?: (err: Error) => void
   /**
@@ -163,6 +171,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     beforeListen,
     postInitialize,
     clientCapabilities = DEFAULT_CLIENT_CAPABILITIES,
+    initializationOptions,
     onCrash,
     setupWorker,
   } = opts
@@ -292,6 +301,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
       rootUri: null,
       capabilities: clientCapabilities,
       workspaceFolders: null,
+      ...(initializationOptions !== undefined ? { initializationOptions } : {}),
     }
     console.log(`[${workerName}][debug] sending initialize`)
     const initResult = await connection.sendRequest(InitializeRequest.type, initParams)

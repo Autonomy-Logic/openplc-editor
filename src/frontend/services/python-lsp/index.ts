@@ -97,6 +97,18 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
 
+    // `browser-basedpyright`'s initialize handler unconditionally
+    // destructures `params.initializationOptions.files` — passing
+    // no `initializationOptions` (or no `files` field) crashes the
+    // server with `Cannot destructure property 'files' of
+    // 'e.initializationOptions' as it is undefined.`.  An empty
+    // object is enough to keep the server happy; basedpyright then
+    // merges its bundled `typeshed-json` into its in-memory file
+    // system so `os`, `sys`, `struct`, the builtins, …, all
+    // resolve.  Reference:
+    // https://github.com/DetachHead/basedpyright/blob/main/packages/browser-pyright/src/browser-server.ts
+    initializationOptions: { files: {} },
+
     // `browser-basedpyright` (microbit-foundation pyright fork) has
     // a foreground/background two-worker architecture.  The bundle
     // we spawn is the foreground; before it speaks JSON-RPC it
