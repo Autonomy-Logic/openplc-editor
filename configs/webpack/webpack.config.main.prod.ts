@@ -17,6 +17,43 @@ import webpackPaths from './webpack.paths'
 checkNodeEnv('production')
 deleteSourceMaps()
 
+// Version compatibility check and cleanup
+const fs = require('fs')
+const path = require('path')
+
+const packageJson = require('../../package.json')
+const currentVersion = packageJson.version
+const configDir = webpackPaths.distMainPath
+
+// Check for incompatible artifacts from newer versions
+const checkAndCleanIncompatibleArtifacts = () => {
+  try {
+    const versionFile = path.join(configDir, '.version')
+    if (fs.existsSync(versionFile)) {
+      const installedVersion = fs.readFileSync(versionFile, 'utf8').trim()
+      if (installedVersion > currentVersion) {
+        console.warn(`Warning: Installed version (${installedVersion}) is newer than current version (${currentVersion}). Cleaning up incompatible artifacts.`)
+        // Remove incompatible configuration files
+        const filesToRemove = [
+          'main.js',
+          'preload.js',
+          '.version'
+        ]
+        filesToRemove.forEach(file => {
+          const filePath = path.join(configDir, file)
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+          }
+        })
+      }
+    }
+  } catch (error) {
+    console.warn('Could not perform version compatibility check:', error.message)
+  }
+}
+
+checkAndCleanIncompatibleArtifacts()
+
 const configuration: webpack.Configuration = {
   devtool: 'source-map',
 
