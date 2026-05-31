@@ -98,6 +98,11 @@ export interface RuntimePort {
   createUser(params: CreateUserParams): Promise<{ success: boolean; error?: string }>
 
   /** Check if the runtime has users and get its version. */
+  /**
+   * Check if the runtime has users and get its version.
+   * Note: In runtime v4, this endpoint may require updated authentication
+   * or has been relocated. Ensure compatibility with v4 API structure.
+   */
   getUsersInfo(): Promise<UsersInfoResult>
 
   /** Get current PLC runtime status with optional timing statistics. */
