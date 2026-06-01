@@ -5,9 +5,9 @@ import { join } from 'path'
 
 import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { assertPathContained } from '../utils/path-containment'
-import { TRUSTED_PACKAGE_KEYS } from './trusted-keys'
 import type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
 
 /**

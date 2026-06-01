@@ -10,6 +10,10 @@
  *
  * The private counterparts live ONLY in the openplc-packages signing
  * pipeline (CI secret) and are never present in this repo.
+ *
+ * This lives in the shared surface so the editor and openplc-web trust the
+ * exact same keys — the cross-repo sync check keeps them byte-identical, so
+ * the trust anchor can't silently diverge between platforms.
  */
 
 export const TRUSTED_PACKAGE_KEYS: Record<string, string> = {
