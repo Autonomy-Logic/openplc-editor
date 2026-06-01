@@ -25,7 +25,7 @@
  * cheaper.
  */
 
-import { type PythonLspService,startPythonLsp } from '@root/frontend/services/python-lsp'
+import { type PythonLspService, startPythonLsp } from '@root/frontend/services/python-lsp'
 import type { PLCVariable } from '@root/middleware/shared/ports/types'
 import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
 import type * as monaco from 'monaco-editor'
