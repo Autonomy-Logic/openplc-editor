@@ -183,6 +183,22 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
 
+    // DEBUG: confirm whether basedpyright publishes diagnostics at
+    // all.  The mirror runs after the shared bridge has already
+    // set Monaco markers, so this log fires on EVERY
+    // publishDiagnostics notification regardless of whether the
+    // URI matched a Monaco model.  If we see entries here but no
+    // red squiggles in the editor, the bridge or offset math is
+    // wrong.  If we DON'T see entries, pyright never publishes
+    // (config issue).  Remove once root cause is found.
+    diagnosticsMirror: (params) => {
+      console.log('[python-lsp][diag-debug]', {
+        uri: params.uri,
+        count: params.diagnostics.length,
+        diagnostics: params.diagnostics,
+      })
+    },
+
     // Pyright needs a workspace folder to load `pyrightconfig.json`;
     // without one, every project setting falls back to defaults that
     // break our setup.  The actual filesystem is the in-memory FS the
@@ -268,6 +284,24 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       // channel drops.
       worker.addEventListener('error', () => {
         for (const bg of backgroundWorkers) bg.terminate()
+      })
+    },
+
+    // DEBUG: surface pyright's `window/logMessage` payloads scoped
+    // to this service so we can read "No source files found" /
+    // "Analysis paused" / typeshed-path complaints while we work
+    // out why Pyright stopped publishing diagnostics for our open
+    // POU.  Use the LSP method name as a string instead of importing
+    // `LogMessageNotification` from `vscode-languageserver-protocol`
+    // — the runtime export from that module trips Jest's ESM
+    // transformer and breaks the python-lsp test suite.  ST stays
+    // clean — only python-lsp wires this.  Remove along with
+    // `diagnosticsMirror` once the root cause is found.
+    beforeListen: (connection) => {
+      connection.onNotification('window/logMessage', (params: { type: number; message: string }) => {
+        const types = ['error', 'warn', 'info', 'log'] as const
+        const tag = types[Math.max(0, Math.min(params.type - 1, types.length - 1))] ?? 'log'
+        console.log(`[python-lsp][server:${tag}]`, params.message)
       })
     },
 
