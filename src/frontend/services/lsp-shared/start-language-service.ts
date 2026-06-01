@@ -21,7 +21,6 @@ import type * as monaco from 'monaco-editor'
 import type { TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
 import {
   type ClientCapabilities,
-  ConfigurationRequest,
   DidChangeTextDocumentNotification,
   DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
@@ -29,13 +28,8 @@ import {
   type InitializeParams,
   InitializeRequest,
   type InitializeResult,
-  LogMessageNotification,
   type MessageConnection,
-  RegistrationRequest,
   SemanticTokensRefreshRequest,
-  ShowMessageNotification,
-  UnregistrationRequest,
-  WorkDoneProgressCreateRequest,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge, type DiagnosticsMirror } from './diagnostics'
@@ -276,58 +270,12 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     return null
   })
 
-  // Default `workspace/configuration` handler — Pyright (and most
-  // language servers) sends this request to ask the client for
-  // workspace settings (typecheck mode, python paths, …).  If we
-  // leave it unhandled, vscode-jsonrpc auto-replies with a
-  // `MethodNotFound` error; basedpyright blocks `hover` (and a few
-  // other analysis-dependent requests) waiting for the settings
-  // even though `initialize` already resolved.  Respond with an
-  // array of `null`s — same length as the configuration items
-  // requested — so the server uses its defaults for every section
-  // and analysis can proceed.  Services that want non-default
-  // settings should override this handler in `beforeListen`.
-  connection.onRequest(ConfigurationRequest.type, (params) => params.items.map(() => null))
-
-  // Pyright dynamically registers some capabilities after
-  // `initialized` (file watchers, semantic-tokens refresh, …) via
-  // `client/registerCapability`.  We don't act on them — Monaco
-  // owns the file system, and we already poll semantic tokens on
-  // didChange — but we still need to acknowledge them, otherwise
-  // the server blocks waiting for the registration to complete.
-  connection.onRequest(RegistrationRequest.type, () => null)
-  connection.onRequest(UnregistrationRequest.type, () => null)
-
-  // `window/workDoneProgress/create` is sent by Pyright before it
-  // emits progress notifications for long-running analysis.  We
-  // don't render a progress UI today, but acknowledging the
-  // request unblocks the server's downstream notifications.
-  connection.onRequest(WorkDoneProgressCreateRequest.type, () => null)
-
-  // DEBUG: surface every `window/logMessage` payload.  Pyright's
-  // background analyser writes import-resolution failures,
-  // typeshed-path complaints, and analysis stage transitions here
-  // — reading them is the fastest way to see why hover types come
-  // back as `Unknown`.  Remove with the rest of the debug logs
-  // once the Python LSP is healthy.
-  connection.onNotification(LogMessageNotification.type, (params) => {
-    const types = ['error', 'warn', 'info', 'log'] as const
-    const tag = types[Math.max(0, Math.min(params.type - 1, types.length - 1))] ?? 'log'
-    console.log(`[${workerName}][server:${tag}]`, params.message)
-  })
-  connection.onNotification(ShowMessageNotification.type, (params) => {
-    console.log(`[${workerName}][server:show:${params.type}]`, params.message)
-  })
-
   beforeListen?.(connection)
 
   // ---------------------------------------------------------------------------
   // LSP handshake — initialize, initialized, post-init hook
   // ---------------------------------------------------------------------------
   const ready = (async () => {
-    // DEBUG: trace LSP boot sequence so we can correlate later
-    // request stalls with handshake state.
-    console.log(`[${workerName}][debug] connection.listen()`)
     connection.listen()
 
     const initParams: InitializeParams = {
@@ -337,11 +285,8 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
       workspaceFolders: workspaceFolders ?? null,
       ...(initializationOptions !== undefined ? { initializationOptions } : {}),
     }
-    console.log(`[${workerName}][debug] sending initialize`)
     const initResult = await connection.sendRequest(InitializeRequest.type, initParams)
-    console.log(`[${workerName}][debug] initialize resolved`, initResult)
     await connection.sendNotification(InitializedNotification.type, {})
-    console.log(`[${workerName}][debug] initialized notification sent`)
 
     // Wire semantic tokens once we know the worker's legend.  If
     // the server didn't advertise the capability, we silently skip
@@ -363,9 +308,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     }
 
     if (postInitialize) {
-      console.log(`[${workerName}][debug] running postInitialize`)
       await postInitialize({ connection, initResult })
-      console.log(`[${workerName}][debug] postInitialize done`)
     }
     // Mark the service initialised AFTER the post-init hook — any
     // failure up to this point counts as crash-during-init and goes
@@ -373,7 +316,6 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     // callback.  This is the exact boundary where the rest of the
     // app starts trusting the service is alive.
     initialised = true
-    console.log(`[${workerName}][debug] service marked initialised`)
   })().catch((err) => {
     console.error(`[${workerName}] initialize failed:`, err)
     throw err
