@@ -43,6 +43,24 @@ function makeMockLanguageService(): MockLanguageService {
   }
 }
 
+/**
+ * Wire the shared-service mock so `beforeListen` fires with a stub
+ * MessageConnection.  python-lsp captures that connection to send
+ * `pyright/createFile` / `pyright/deleteFile` from attachPou /
+ * detachPou — without invoking `beforeListen`, those notifications
+ * never have a connection to ride on and the tests assert against
+ * a never-called jest.fn.
+ */
+function installMockSharedService(): { service: MockLanguageService; sendNotification: jest.Mock } {
+  const service = makeMockLanguageService()
+  const sendNotification = jest.fn()
+  startLanguageService.mockImplementation((opts: { beforeListen?: (connection: unknown) => void }) => {
+    opts.beforeListen?.({ sendNotification })
+    return service
+  })
+  return { service, sendNotification }
+}
+
 function makeBoolVar(name: string, varClass: 'input' | 'output' | 'local' = 'input'): PLCVariable {
   return {
     id: name,
@@ -77,8 +95,7 @@ beforeEach(() => {
 
 describe('startPythonLsp configuration', () => {
   it('passes Python-specific config to startLanguageService', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     startPythonLsp({ workerUrlOverride: 'about:blank' })
 
@@ -94,16 +111,14 @@ describe('startPythonLsp configuration', () => {
   })
 
   it('exposes the shared service ready promise', async () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     await expect(service.ready).resolves.toBeUndefined()
   })
 
   it('forwards onCrash to the shared layer', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
     const onCrash = jest.fn()
 
     startPythonLsp({ workerUrlOverride: 'about:blank', onCrash })
@@ -113,8 +128,7 @@ describe('startPythonLsp configuration', () => {
   })
 
   it('omits the monaco option when no Monaco namespace is provided', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     startPythonLsp({ workerUrlOverride: 'about:blank' })
 
@@ -125,8 +139,7 @@ describe('startPythonLsp configuration', () => {
 
 describe('attachPou', () => {
   it('records the body-line offset before opening the document', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input'), makeIntVar('counter', 'output')]
@@ -143,8 +156,7 @@ describe('attachPou', () => {
   })
 
   it('opens the document at the .py-suffixed LSP URI with preamble + body', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input')]
@@ -166,8 +178,7 @@ describe('attachPou', () => {
   })
 
   it('records a zero offset when no IEC variables map to Python globals', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     // `local` vars don't get hoisted into module scope; preamble is empty.
@@ -175,12 +186,29 @@ describe('attachPou', () => {
 
     expect(setBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI, 0)
   })
+
+  it('sends pyright/createFile before opening the document', () => {
+    const { service: mockService, sendNotification } = installMockSharedService()
+
+    const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'input')], 'x = True\n')
+
+    // basedpyright only treats files that exist in its in-memory
+    // TestFileSystem as workspace members, and only workspace
+    // members get `publishDiagnostics`.  The `pyright/createFile`
+    // notification adds the LSP URI to the FS; without it,
+    // `didOpen` populates the document buffer but the file never
+    // enters the analysis queue.  It must arrive before `didOpen`.
+    expect(sendNotification).toHaveBeenCalledWith('pyright/createFile', { kind: 'create', uri: POU_LSP_URI })
+    const createCallIndex = sendNotification.mock.invocationCallOrder[0]
+    const openCallIndex = mockService.openDocument.mock.invocationCallOrder[0]
+    expect(createCallIndex).toBeLessThan(openCallIndex)
+  })
 })
 
 describe('notifyBodyChange', () => {
   it('forwards an augmented document with the previously-installed preamble', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input')]
@@ -198,8 +226,7 @@ describe('notifyBodyChange', () => {
   })
 
   it('leaves version assignment to the shared service across successive calls', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     service.attachPou(POU_URI, POU_NAME, [], 'x = 1\n')
@@ -216,8 +243,7 @@ describe('notifyBodyChange', () => {
   })
 
   it('uses an empty preamble for URIs that were never attached', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     service.notifyBodyChange(POU_URI, 'x = 1\n')
@@ -229,8 +255,7 @@ describe('notifyBodyChange', () => {
 
 describe('notifyVariablesChange', () => {
   it('regenerates the preamble and re-records the offset', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     service.attachPou(POU_URI, POU_NAME, [makeBoolVar('a', 'input')], 'a = True\n')
@@ -250,8 +275,7 @@ describe('notifyVariablesChange', () => {
 
 describe('detachPou', () => {
   it('closes the document and clears registry entries', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'input')], 'x = True\n')
@@ -261,9 +285,26 @@ describe('detachPou', () => {
     expect(deleteBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI)
   })
 
+  it('sends pyright/deleteFile after closing the document', () => {
+    const { service: mockService, sendNotification } = installMockSharedService()
+
+    const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'input')], 'x = True\n')
+    sendNotification.mockClear()
+    service.detachPou(POU_URI)
+
+    // Mirror of `pyright/createFile` — remove the FS entry once the
+    // document is closed so workspace membership returns to zero
+    // when no Python POU is open.  Order matches the createFile
+    // path: didClose precedes deleteFile.
+    expect(sendNotification).toHaveBeenCalledWith('pyright/deleteFile', { kind: 'delete', uri: POU_LSP_URI })
+    const closeCallIndex = mockService.closeDocument.mock.invocationCallOrder.at(-1) ?? 0
+    const deleteCallIndex = sendNotification.mock.invocationCallOrder[0]
+    expect(deleteCallIndex).toBeGreaterThan(closeCallIndex)
+  })
+
   it('does not throw when called on a never-attached URI', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     expect(() => service.detachPou(POU_URI)).not.toThrow()
@@ -272,8 +313,7 @@ describe('detachPou', () => {
 
 describe('dispose', () => {
   it('disposes the underlying shared service', () => {
-    const mockService = makeMockLanguageService()
-    startLanguageService.mockReturnValue(mockService)
+    const { service: mockService } = installMockSharedService()
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     service.dispose()

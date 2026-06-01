@@ -65,57 +65,28 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
-  // Captured from `beforeListen` so the attach / detach paths can
-  // send `pyright/createFile` / `pyright/deleteFile` notifications
-  // alongside the standard didOpen / didClose flow.  basedpyright
-  // requires the LSP URI to exist in its in-memory `TestFileSystem`
-  // before it'll consider the file a workspace member; without that
-  // membership it never publishes diagnostics for the opened doc.
-  // See `browser-pyright/src/browser-server.ts`'s handler:
-  //   onNotification('pyright/createFile', params => fs.apply({[path]: ''}))
+  // Captured from `beforeListen` so attachPou / detachPou can send
+  // `pyright/createFile` / `pyright/deleteFile` alongside didOpen /
+  // didClose.  basedpyright only treats files that exist in its
+  // in-memory `TestFileSystem` as workspace members, and only
+  // workspace members get `publishDiagnostics` — without these
+  // notifications the document buffer is populated but never
+  // enters the analysis queue.
   let pyrightConnection: import('vscode-jsonrpc/browser').MessageConnection | null = null
 
-  // Per-URI registry.  `preamble` is what Pyright sees concatenated
-  // with the user body; `pouName` is what the Go to Definition
-  // redirect hands to `routeToPouPreamble` / `routeToPouBody` so
-  // those helpers can open the right tab.  Both arrive together
-  // via `attachPou` and stay in sync until `detachPou`.
-  //
-  // Document versions are owned by the shared service — calling
-  // `changeDocument` without an explicit version lets it advance
-  // the same counter `openDocument` started, so LSP versions are
-  // monotonically increasing across the whole attach → change →
-  // change → close lifecycle.  Pyright silently drops didChange
-  // notifications whose version isn't strictly greater than the
-  // last one seen for that URI, so it's important that our first
-  // didChange does not collide with the version=1 didOpen used.
-  // `iecVariableLineMap` is the variable-name → Monaco-line map for
-  // the IEC VAR-block text the variables-code-editor renders.  The
-  // Go to Definition redirect uses it to translate a Pyright
-  // preamble target (which references a variable by NAME via the
-  // preamble's `variableNameByPreambleLine` map) into a cursor
-  // position in the user-facing IEC editor.  Recomputed alongside
-  // the preamble on every `attachPou` / `notifyVariablesChange`.
+  // Per-URI registry, keyed by Monaco model URI.  Holds the
+  // preamble Pyright sees concatenated with the user body, the LSP
+  // URI (model URI + `.py` — basedpyright runs full analysis only
+  // on `.py`-suffixed documents), the POU name the Go to Definition
+  // redirect uses to open the right tab, and the variable-name →
+  // Monaco-line map the redirect uses to cross from a preamble
+  // target into the IEC variables-code editor.
   interface UriEntry {
     pouName: string
-    /**
-     * The URI we hand basedpyright in `didOpen` / `didChange` /
-     * `didClose` and that comes back on every `publishDiagnostics`
-     * notification, hover response, etc.  Always equals the Monaco
-     * model URI + `.py` so basedpyright recognises the document as
-     * a Python source file and runs full analysis (publishing
-     * diagnostics) instead of just answering on-demand queries.
-     * Without the extension, basedpyright parses for hover /
-     * completion / semantic-tokens but never publishes
-     * `textDocument/publishDiagnostics` — and the editor's red
-     * squiggles + quick-fix actions all hang off that one
-     * notification.
-     */
     lspUri: string
     preamble: PythonLspPreamble
     iecVariableLineMap: Map<string, { line: number; column: number }>
   }
-  /** Keyed by Monaco model URI. */
   const entryByUri = new Map<string, UriEntry>()
 
   function lspUriFor(modelUri: string): string {
@@ -157,10 +128,6 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // suffix.  Body-line offsets stay keyed by the LSP URI — the
     // shared converters read them through `getBodyLineOffset(lspUri)`
     // when handling pyright responses.
-    // No formatting filter — Pyright doesn't emit edits in the
-    // preamble region, but the default still drops anything that
-    // would, which is the safe behaviour.
-    // Default semantic-tokens viewport: `[lineOffset, +∞)`.
     resolveLspContext: (modelUri) => {
       const lspUri = lspUriFor(modelUri)
       return { lspUri, lineOffset: getBodyLineOffset(lspUri) }
@@ -232,22 +199,6 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
 
-    // DEBUG: confirm whether basedpyright publishes diagnostics at
-    // all.  The mirror runs after the shared bridge has already
-    // set Monaco markers, so this log fires on EVERY
-    // publishDiagnostics notification regardless of whether the
-    // URI matched a Monaco model.  If we see entries here but no
-    // red squiggles in the editor, the bridge or offset math is
-    // wrong.  If we DON'T see entries, pyright never publishes
-    // (config issue).  Remove once root cause is found.
-    diagnosticsMirror: (params) => {
-      console.log('[python-lsp][diag-debug]', {
-        uri: params.uri,
-        count: params.diagnostics.length,
-        diagnostics: params.diagnostics,
-      })
-    },
-
     // Pyright needs a workspace folder to load `pyrightconfig.json`;
     // without one, every project setting falls back to defaults that
     // break our setup.  The actual filesystem is the in-memory FS the
@@ -286,26 +237,18 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // overrides the constant, and looks up stubs at the right
     // path.  We include the file in the initial `files` map so
     // it lands in the FS alongside the typeshed.
+    //
+    // `include: ['**/*.py']` scopes workspace analysis to user
+    // sources.  Without it basedpyright walks the entire FS root
+    // including the 3799-file typeshed, queues every one for
+    // analysis, and `publishDiagnostics` for the file the user
+    // actually opened never gets a turn.  The typeshed itself is
+    // `.pyi`, so a `.py`-only glob filters it out cleanly.
     initializationOptions: {
       files: {
         '/pyrightconfig.json': JSON.stringify({
-          // See block-comment above for why this points at /typeshed.
           typeshedPath: '/typeshed',
-          // Without an explicit `include`, basedpyright defaults to
-          // "the entire workspace root" and walks every file under
-          // `file:///`.  That includes the 3799-file typeshed plus
-          // anything else the in-memory FS picks up — last trace
-          // reported `Found 5073 source files`.  Background
-          // analysis then has to chew through all of them before
-          // it gets to the file the user actually opened, which is
-          // why `textDocument/publishDiagnostics` never fires
-          // (analysis is queued but never reaches our document).
-          // `**/*.py` matches user-supplied Python source only —
-          // the typeshed is `.pyi`, so it falls out automatically
-          // — and `exclude` belt-and-braces the typeshed tree in
-          // case future stubs ever carry a `.py` filename.
           include: ['**/*.py'],
-          exclude: ['/typeshed/**'],
         }),
       },
     },
@@ -352,23 +295,12 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       })
     },
 
-    // DEBUG: surface pyright's `window/logMessage` payloads scoped
-    // to this service so we can read "No source files found" /
-    // "Analysis paused" / typeshed-path complaints while we work
-    // out why Pyright stopped publishing diagnostics for our open
-    // POU.  Use the LSP method name as a string instead of importing
-    // `LogMessageNotification` from `vscode-languageserver-protocol`
-    // — the runtime export from that module trips Jest's ESM
-    // transformer and breaks the python-lsp test suite.  ST stays
-    // clean — only python-lsp wires this.  Remove along with
-    // `diagnosticsMirror` once the root cause is found.
+    // Capture the connection so attachPou / detachPou can send
+    // `pyright/createFile` / `pyright/deleteFile` notifications.
+    // These manage basedpyright's in-memory FS workspace membership;
+    // see `pyrightConnection` above for the rationale.
     beforeListen: (connection) => {
       pyrightConnection = connection
-      connection.onNotification('window/logMessage', (params: { type: number; message: string }) => {
-        const types = ['error', 'warn', 'info', 'log'] as const
-        const tag = types[Math.max(0, Math.min(params.type - 1, types.length - 1))] ?? 'log'
-        console.log(`[python-lsp][server:${tag}]`, params.message)
-      })
     },
 
     ...(onCrash ? { onCrash } : {}),
