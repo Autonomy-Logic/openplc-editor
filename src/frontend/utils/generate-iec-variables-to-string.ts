@@ -81,3 +81,57 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
 
   return textualDeclaration.trimEnd()
 }
+
+/**
+ * Map every variable name to its 1-indexed Monaco line / column in
+ * the IEC VAR-block text `generateIecVariablesToString` would emit
+ * for the same input.  Walks the variables in the same grouped +
+ * ordered shape the string generator uses, so the line numbers
+ * stay in lockstep without re-parsing the emitted text.
+ *
+ * Why it lives here.  The Python LSP's Go-to-Definition redirect
+ * needs to translate "Pyright says the declaration is at preamble
+ * line N" into "Monaco line M in the IEC variables-code-editor".
+ * The preamble→variable-name half lives in
+ * `generatePythonLspPreamble`; this is the variable-name→IEC-line
+ * half.
+ *
+ * Returns an empty map when `variables` is empty.
+ */
+export function getIecVariableLineMap(variables: PLCVariable[]): Map<string, { line: number; column: number }> {
+  const map = new Map<string, { line: number; column: number }>()
+  if (!variables || variables.length === 0) return map
+
+  const groupedVariables = variables.reduce(
+    (acc, variable) => {
+      const key = (variable.class ?? 'global').toLowerCase()
+      if (!acc[key]) acc[key] = []
+      acc[key].push(variable)
+      return acc
+    },
+    {} as Record<string, PLCVariable[]>,
+  )
+
+  const orderedGroups = ['global', 'external', 'input', 'output', 'inout', 'local', 'temp']
+
+  // Variable names start at column `VAR_DECL_INDENT.length + 1`
+  // (4 spaces + Monaco's 1-indexed column).
+  const varNameColumn = VAR_DECL_INDENT.length + 1
+
+  // `currentLine` tracks the 1-indexed Monaco line where the NEXT
+  // text fragment lands.  VAR_xxx header counts as a line, each
+  // declaration counts as a line, END_VAR counts as a line.
+  let currentLine = 1
+  for (const groupName of orderedGroups) {
+    const group = groupedVariables[groupName]
+    if (!group) continue
+    currentLine++ // skip the VAR_xxx header line
+    for (const v of group) {
+      map.set(v.name, { line: currentLine, column: varNameColumn })
+      currentLine++ // advance past the declaration
+    }
+    currentLine++ // skip the END_VAR line
+  }
+
+  return map
+}

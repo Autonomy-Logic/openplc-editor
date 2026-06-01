@@ -353,7 +353,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
 
       if (capabilities.hasPythonLSP && language === 'python') {
-        cleanupPythonLSP()
+        cleanupPythonLSP(name)
       }
     }
   }, [name, language])

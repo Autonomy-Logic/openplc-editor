@@ -90,8 +90,13 @@ describe('lspDiagnosticToMonaco', () => {
     expect(marker.code).toBe('E1234')
   })
 
-  it('defaults source to "strucpp" when LSP omits it', () => {
+  it('defaults source to "lsp" when LSP omits it and no override is given', () => {
     const marker = lspDiagnosticToMonaco({ range: baseRange, message: 'x', severity: 1 }, monacoStub)
+    expect(marker.source).toBe('lsp')
+  })
+
+  it('honours the defaultSource override when LSP omits the field', () => {
+    const marker = lspDiagnosticToMonaco({ range: baseRange, message: 'x', severity: 1 }, monacoStub, 0, 'strucpp')
     expect(marker.source).toBe('strucpp')
   })
 })
