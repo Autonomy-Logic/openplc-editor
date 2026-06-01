@@ -36,6 +36,7 @@ import {
   startLanguageService,
   suppressNoDefinitionFound,
 } from '../lsp-shared'
+import { redirectPythonDefinitionToStore } from './goto-definition-redirect'
 import type { PythonLspService, PythonLspStartOptions } from './types'
 
 const PYTHON_LANGUAGE_ID = 'python'
@@ -58,10 +59,11 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
-  // Per-URI preamble registry.  Pyright sees `preamble.text + body`;
-  // this map lets `notifyBodyChange` (which doesn't carry the
-  // variables list) reuse the preamble that `attachPou` /
-  // `notifyVariablesChange` last installed.
+  // Per-URI registry.  `preamble` is what Pyright sees concatenated
+  // with the user body; `pouName` is what the Go to Definition
+  // redirect hands to `routeToPouPreamble` / `routeToPouBody` so
+  // those helpers can open the right tab.  Both arrive together
+  // via `attachPou` and stay in sync until `detachPou`.
   //
   // Document versions are owned by the shared service — calling
   // `changeDocument` without an explicit version lets it advance
@@ -71,10 +73,14 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
   // notifications whose version isn't strictly greater than the
   // last one seen for that URI, so it's important that our first
   // didChange does not collide with the version=1 didOpen used.
-  const preambleByUri = new Map<string, PythonLspPreamble>()
+  interface UriEntry {
+    pouName: string
+    preamble: PythonLspPreamble
+  }
+  const entryByUri = new Map<string, UriEntry>()
 
   function augmentedDocument(uri: string, body: string): string {
-    const preamble = preambleByUri.get(uri) ?? EMPTY_PREAMBLE
+    const preamble = entryByUri.get(uri)?.preamble ?? EMPTY_PREAMBLE
     return preamble.text + body
   }
 
@@ -99,58 +105,59 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // would, which is the safe behaviour.
     // Default semantic-tokens viewport: `[lineOffset, +∞)`.
 
-    // Go-to-definition needs two filters before Monaco sees the
-    // result.  Without them, two real failure modes:
+    // Go-to-definition routing.  Two layers, in order:
     //
-    //   1. Click on a stdlib name (`print`, `os.path`, …) → Pyright
-    //      returns a location targeting the bundled typeshed
-    //      (e.g. `file:///typeshed/stdlib/builtins.pyi`).  Monaco
-    //      has no model for that URI, so opening the peek widget
-    //      throws `StandaloneTextModelService.createModelReference:
-    //      Model not found` and crashes the renderer.
+    //   1. **Store redirect** (`redirectPythonDefinitionToStore`):
+    //      for targets in the source URI's preamble, open the POU
+    //      tab, switch the variables panel to code mode, and place
+    //      the variables-code-editor cursor at the declaration.
+    //      Mirrors the ST LSP's `redirectDefinitionToStore`.  Body
+    //      targets in the same URI route through `routeToPouBody`
+    //      so the navigation goes through the store and the tab
+    //      list stays consistent.
     //
-    //   2. Click on an IEC variable (`ValveState`, `DidPrint`) →
-    //      Pyright returns a location inside our synthetic
-    //      preamble (e.g. line 5, where we declare
-    //      `ValveState: bool = False`).  The shared converter
-    //      subtracts the body-line offset and produces a negative
-    //      Monaco line which Monaco clamps to line 1, so the
-    //      cursor flies to the top of the body — wrong target.
+    //   2. **URI-reachability filter** (fallback):
     //
-    // Both targets are filtered out below.  When the filter empties
-    // the list we return `suppressNoDefinitionFound`, which keeps
-    // Monaco quiet (no badge, no peek) instead of crashing.
+    //        - Click on a stdlib name (`print`, `os.path`, …) →
+    //          Pyright returns a Location targeting the bundled
+    //          typeshed (`file:///typeshed/stdlib/builtins.pyi`).
+    //          Monaco has no model for that URI, so opening the
+    //          peek widget throws `Model not found` and crashes
+    //          the renderer.  Drop those before they reach Monaco.
+    //        - Anything that survives the drop is a navigable
+    //          in-model target the redirect didn't claim — hand it
+    //          to Monaco unchanged.
     //
-    // FUTURE: route preamble targets to the variables-table panel
-    // (mirroring the ST LSP's `redirectDefinitionToStore` hook) so
-    // the user lands on the actual declaration.  That's a UX
-    // layer on top of this filter, not a substitute for it.
+    // Returning `suppressNoDefinitionFound` keeps Monaco quiet
+    // (no banner, no peek) when there's nowhere navigable to go.
     definitionInterceptors: [
       (locations, model, position, monacoApi) => {
         const sourceUri = model.uri.toString()
-        const preambleLineCount = preambleByUri.get(sourceUri)?.lineCount ?? 0
+        const entry = entryByUri.get(sourceUri)
 
-        const navigable = locations.filter((loc) => {
-          // Reject targets Monaco has no model for (typeshed,
-          // unknown URIs).  Monaco's references widget calls
-          // `createModelReference` on the URI and throws if no
-          // model exists — that's the "Model not found" crash.
-          const hasModel = monacoApi.editor.getModels().some((m) => m.uri.toString() === loc.uri)
-          if (!hasModel) return false
-          // Reject targets that fall inside our synthetic preamble
-          // — they'd land on negative lines after offset
-          // translation and Monaco would clamp them to body line 1.
-          if (loc.uri === sourceUri && loc.range.start.line < preambleLineCount) return false
-          return true
-        })
+        // Try the store redirect first.  If any location is in the
+        // source URI's preamble or body, route through the store —
+        // the redirect handles the variables-panel code-mode
+        // switch + cursor placement uniformly with ST.
+        if (entry) {
+          for (const loc of locations) {
+            const handled = redirectPythonDefinitionToStore(loc, {
+              sourceUri,
+              sourcePouName: entry.pouName,
+            })
+            if (handled) return suppressNoDefinitionFound(model, position, monacoApi)
+          }
+        }
+
+        // Nothing redirectable.  Fall back to filtering out targets
+        // Monaco can't open (typeshed stubs, external imports).
+        const navigable = locations.filter((loc) =>
+          monacoApi.editor.getModels().some((m) => m.uri.toString() === loc.uri),
+        )
 
         if (navigable.length === 0) {
           return suppressNoDefinitionFound(model, position, monacoApi)
         }
-        // Some targets survived — claim them with the narrowed
-        // list so the rejected ones never reach Monaco.  Returning
-        // `undefined` here would re-run the default converter on
-        // the FULL `locations` array, putting the bad targets back.
         return lspLocationsToMonaco(navigable, monacoApi) ?? null
       },
     ],
@@ -252,23 +259,14 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
   return {
     ready: sharedService.ready,
 
-    attachPou(uri, variables, bodyText) {
+    attachPou(uri, pouName, variables, bodyText) {
       const preamble = generatePythonLspPreamble(variables)
-      preambleByUri.set(uri, preamble)
+      entryByUri.set(uri, { pouName, preamble })
       setBodyLineOffset(uri, preamble.lineCount)
-      // DEBUG: surface the augmented document we're about to push.
-      console.log('[python-lsp][debug] attachPou', {
-        uri,
-        preambleLineCount: preamble.lineCount,
-        preambleHead: preamble.text.slice(0, 200),
-        bodyLength: bodyText.length,
-      })
       sharedService.openDocument(uri, augmentedDocument(uri, bodyText))
     },
 
     notifyBodyChange(uri, bodyText) {
-      // DEBUG: confirm Monaco onDidChangeContent → service hop.
-      console.log('[python-lsp][debug] notifyBodyChange', { uri, bodyLength: bodyText.length })
       sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
 
@@ -276,22 +274,25 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       // Variables changed: regenerate the preamble and update the
       // offset registry BEFORE pushing the new document so the
       // diagnostics callback (which fires on the next round-trip)
-      // reads the new offset rather than the stale one.
+      // reads the new offset rather than the stale one.  Preserve
+      // the recorded pouName — a pure variables edit doesn't
+      // change the POU's identity.
+      const existing = entryByUri.get(uri)
       const preamble = generatePythonLspPreamble(variables)
-      preambleByUri.set(uri, preamble)
+      entryByUri.set(uri, { pouName: existing?.pouName ?? '', preamble })
       setBodyLineOffset(uri, preamble.lineCount)
       sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
 
     detachPou(uri) {
       sharedService.closeDocument(uri)
-      preambleByUri.delete(uri)
+      entryByUri.delete(uri)
       deleteBodyLineOffset(uri)
     },
 
     dispose() {
       sharedService.dispose()
-      preambleByUri.clear()
+      entryByUri.clear()
     },
   }
 }

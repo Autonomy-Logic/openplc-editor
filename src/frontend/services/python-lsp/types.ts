@@ -39,8 +39,14 @@ export interface PythonLspService {
    * to Pyright.  Re-records the body-line offset in the shared
    * registry so every coordinate the providers see is already in
    * Monaco's body-only frame.
+   *
+   * `pouName` is recorded alongside the preamble so the
+   * definition-redirect interceptor can hand it to
+   * `routeToPouPreamble` / `routeToPouBody` when a Go to Definition
+   * target lands in this URI.  Without it, the redirect can't open
+   * the right POU tab.
    */
-  attachPou(uri: string, variables: PLCVariable[], bodyText: string): void
+  attachPou(uri: string, pouName: string, variables: PLCVariable[], bodyText: string): void
 
   /**
    * Push a new body version for an already-attached POU.  Preamble

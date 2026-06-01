@@ -10,6 +10,23 @@ interface VariablesCodeEditorProps {
   onCodeChange: (code: string) => void
   shouldUseDarkMode: boolean
   /**
+   * Monaco language ID for tokenisation.  Default `'st'` matches
+   * the historical IEC VAR-block use case shared by ST/IL/graphical
+   * POUs.  Python POUs pass `'python'` so the synthesised
+   * module-globals preamble highlights as Python and matches the
+   * body editor visually.
+   */
+  language?: string
+  /**
+   * When true, Monaco renders the buffer non-editable.  Used for
+   * Python POUs whose code-mode shows the same module-globals
+   * preamble Pyright analyses — `parseIecStringToVariables` can't
+   * round-trip Python syntax, so accepting edits would silently
+   * drop them on commit.  Variable editing for Python POUs
+   * happens in table mode only.
+   */
+  readOnly?: boolean
+  /**
    * POU name whose VAR blocks this editor surface displays.  When
    * provided, the Monaco model URI is derived from it
    * (`inmemory://pouvars/<name>.st`) so the LSP providers can
@@ -46,6 +63,8 @@ const VariablesCodeEditor = ({
   shouldUseDarkMode,
   cursorPosition,
   pouName,
+  language = 'st',
+  readOnly = false,
 }: VariablesCodeEditorProps) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -119,13 +138,14 @@ const VariablesCodeEditor = ({
       <Editor
         height='100%'
         width='100%'
-        language='st'
+        language={language}
         {...(pouName ? { path: pouVarsUri(pouName) } : {})}
         defaultValue={''}
         value={code}
         onMount={handleEditorDidMount}
         onChange={(value) => onCodeChange(value ?? '')}
         options={{
+          readOnly,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: 'on',

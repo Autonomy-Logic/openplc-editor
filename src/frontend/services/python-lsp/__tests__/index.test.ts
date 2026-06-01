@@ -68,6 +68,7 @@ function makeIntVar(name: string, varClass: 'input' | 'output' = 'output'): PLCV
 }
 
 const POU_URI = 'file:///MyPou.py'
+const POU_NAME = 'MyPou'
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -128,7 +129,7 @@ describe('attachPou', () => {
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input'), makeIntVar('counter', 'output')]
-    service.attachPou(POU_URI, vars, 'red_light = True\n')
+    service.attachPou(POU_URI, POU_NAME, vars, 'red_light = True\n')
 
     expect(setBodyLineOffset).toHaveBeenCalledTimes(1)
     expect(setBodyLineOffset).toHaveBeenCalledWith(POU_URI, expect.any(Number))
@@ -142,7 +143,7 @@ describe('attachPou', () => {
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input')]
-    service.attachPou(POU_URI, vars, 'red_light = True\n')
+    service.attachPou(POU_URI, POU_NAME, vars, 'red_light = True\n')
 
     expect(mockService.openDocument).toHaveBeenCalledTimes(1)
     const [openedUri, openedText] = mockService.openDocument.mock.calls[0]
@@ -160,7 +161,7 @@ describe('attachPou', () => {
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     // `local` vars don't get hoisted into module scope; preamble is empty.
-    service.attachPou(POU_URI, [makeBoolVar('x', 'local')], 'pass\n')
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'local')], 'pass\n')
 
     expect(setBodyLineOffset).toHaveBeenCalledWith(POU_URI, 0)
   })
@@ -173,7 +174,7 @@ describe('notifyBodyChange', () => {
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
     const vars = [makeBoolVar('red_light', 'input')]
-    service.attachPou(POU_URI, vars, 'red_light = True\n')
+    service.attachPou(POU_URI, POU_NAME, vars, 'red_light = True\n')
     service.notifyBodyChange(POU_URI, 'red_light = False\n')
 
     expect(mockService.changeDocument).toHaveBeenCalledTimes(1)
@@ -191,7 +192,7 @@ describe('notifyBodyChange', () => {
     startLanguageService.mockReturnValue(mockService)
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
-    service.attachPou(POU_URI, [], 'x = 1\n')
+    service.attachPou(POU_URI, POU_NAME, [], 'x = 1\n')
     service.notifyBodyChange(POU_URI, 'x = 2\n')
     service.notifyBodyChange(POU_URI, 'x = 3\n')
 
@@ -222,7 +223,7 @@ describe('notifyVariablesChange', () => {
     startLanguageService.mockReturnValue(mockService)
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
-    service.attachPou(POU_URI, [makeBoolVar('a', 'input')], 'a = True\n')
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('a', 'input')], 'a = True\n')
     const firstOffset = setBodyLineOffset.mock.calls[0][1]
 
     service.notifyVariablesChange(POU_URI, [makeBoolVar('a', 'input'), makeIntVar('b', 'output')], 'a = True\nb = 1\n')
@@ -243,7 +244,7 @@ describe('detachPou', () => {
     startLanguageService.mockReturnValue(mockService)
 
     const service = startPythonLsp({ workerUrlOverride: 'about:blank' })
-    service.attachPou(POU_URI, [makeBoolVar('x', 'input')], 'x = True\n')
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'input')], 'x = True\n')
     service.detachPou(POU_URI)
 
     expect(mockService.closeDocument).toHaveBeenCalledWith(POU_URI)

@@ -31,6 +31,13 @@ export {
   monacoRangeToLsp,
 } from './converters'
 export {
+  type NavTarget,
+  normaliseLocation,
+  routeToPou,
+  routeToPouBody,
+  routeToPouPreamble,
+} from './definition-redirect'
+export {
   attachDiagnosticsBridge,
   type AttachDiagnosticsBridgeOptions,
   type DiagnosticsBridge,

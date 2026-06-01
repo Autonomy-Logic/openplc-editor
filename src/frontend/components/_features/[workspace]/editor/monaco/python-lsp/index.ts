@@ -82,7 +82,7 @@ export function setupPythonLSPForEditor(
   // twice on every keystroke.
   wiringByUri.get(uri)?.contentSubscription.dispose()
 
-  service.attachPou(uri, ctx.variables, model.getValue())
+  service.attachPou(uri, ctx.pouName, ctx.variables, model.getValue())
 
   const contentSubscription = model.onDidChangeContent(() => {
     service?.notifyBodyChange(uri, model.getValue())
