@@ -34,7 +34,14 @@ const configuration: webpack.Configuration = {
   module: require('./webpack.config.renderer.dev').default.module,
 
   entry: {
-    renderer: Object.keys(dependencies || {}),
+    // Pre-bundle every runtime dependency into the dev DLL for faster
+    // renderer rebuilds.  Exclude packages that have no resolvable
+    // top-level entry (`main`/`module`/`exports`) — webpack errors
+    // out trying to bundle them as renderer entries even though our
+    // source code only consumes them via subpath imports (e.g.
+    // `browser-basedpyright` ships only the worker bundle under
+    // `dist/` and is loaded through `?url`).
+    renderer: Object.keys(dependencies || {}).filter((name) => name !== 'browser-basedpyright'),
   },
 
   output: {
