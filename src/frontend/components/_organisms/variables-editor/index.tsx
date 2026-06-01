@@ -15,12 +15,12 @@ import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/l
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
   syncNodesWithVariablesFBD as syncNodesWithVariablesFBDUtil,
 } from '../../../utils/graphical/sync-nodes-with-variables'
 import { baseTypes } from '../../../utils/plc-constants/types'
-import { synthesizeVariablesText } from '../../../utils/synthesize-variables-text'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -66,21 +66,6 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   // preference + hidden-snapshot fallback can't drift between the
   // textual and graphical multi-mount paths.
   const editor = useOpenPLCStore((s) => selectEditorForPou(s, propName))
-
-  // Active editor's body language.  Hoisted here so every
-  // synth-call site (initial state, table-data effect, POU-rename
-  // effect) and the `<VariablesCodeEditor>` render branch on the
-  // same value.  `plc-textual` keeps the language on `meta`;
-  // `plc-graphical` parks it on `graphical`.  Other editor types
-  // (data-type, instance, …) leave it undefined — the synthesizer
-  // falls through to the IEC path, matching prior behaviour for
-  // non-POU panels.
-  const pouLanguage: string | undefined =
-    editor.type === 'plc-textual'
-      ? editor.meta.language
-      : editor.type === 'plc-graphical'
-        ? editor.graphical.language
-        : undefined
   const {
     ladderFlows,
     ladderFlowActions: { updateNode },
@@ -145,7 +130,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     ) {
       return editor.variable.code
     }
-    return synthesizeVariablesText(tableData, pouLanguage).text
+    return generateIecVariablesToString(tableData)
   })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -218,9 +203,9 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
 
   useEffect(() => {
     if (editorVariables.display !== 'code') {
-      setEditorCode(synthesizeVariablesText(tableData, pouLanguage).text)
+      setEditorCode(generateIecVariablesToString(tableData))
     }
-  }, [tableData, editorVariables.display, pouLanguage])
+  }, [tableData, editorVariables.display])
 
   // Sync local view state from this instance's own model when the
   // POU is renamed or its display mode toggles (table ↔ code).  Each
@@ -241,15 +226,10 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       // Prefer the model's own stored code; fall back to a fresh
       // generation from the new POU's variables so the panel shows
       // *its* declarations, not whatever the previous POU last had.
-      // `targetPou` may differ from `editor` during a rename race —
-      // prefer its body language for the freshly-synthesised text
-      // so the right syntax shows up while the editor model is
-      // catching up.
-      const targetLanguage = targetPou?.body?.language ?? pouLanguage
       setEditorCode(
         typeof code === 'string' && code.length > 0
           ? code
-          : synthesizeVariablesText(targetPou?.interface?.variables ?? [], targetLanguage).text,
+          : generateIecVariablesToString(targetPou?.interface?.variables ?? []),
       )
     } else {
       setEditorVariables({
@@ -783,13 +763,6 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       }
 
       if (!language) return false
-
-      // Python POUs render code-mode as the Python module-globals
-      // preamble — there's no `parseIecStringToVariables` for that
-      // syntax, and the editor is read-only anyway.  Returning
-      // `true` lets the table-mode toggle complete without
-      // attempting a parse round-trip the user never invited.
-      if (language === 'python') return true
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
 
@@ -1358,13 +1331,6 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
               shouldUseDarkMode={shouldUseDarkMode}
               cursorPosition={codeEditorCursorPosition}
               pouName={editor.meta.name}
-              // Python POUs render the same module-globals preamble
-              // Pyright sees in `attachPou` — keeping the two byte-
-              // identical eliminates line-number drift on Go to
-              // Definition redirects.  Python syntax also gets
-              // Monaco's Python tokenizer for free.
-              language={pouLanguage === 'python' ? 'python' : 'st'}
-              readOnly={pouLanguage === 'python'}
             />
 
             {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}

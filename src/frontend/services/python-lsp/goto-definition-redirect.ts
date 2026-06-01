@@ -3,21 +3,36 @@
 /**
  * Go-to-definition redirect for the Python LSP.
  *
- * The synthesised preamble Pyright sees (the IEC variables hoisted
- * into Python module scope by `synthesizeVariablesText`) is
- * byte-identical to what the variables-code-editor renders for the
- * same POU.  That makes the coordinate translation trivial — line
- * N in Pyright's preamble IS line N in the variables-code-editor.
- * No `bodyOffset - 1` correction like ST needs, because Python
- * doesn't have an extra synthesised POU-declaration line in front
- * of its variables block.
+ * The user-facing variables panel renders IEC VAR-block syntax —
+ * the same `VAR_INPUT…END_VAR` text every other POU language shows.
+ * Pyright, meanwhile, only ever sees a synthetic Python preamble
+ * (one Python annotation per `input`/`output` variable, prefixed
+ * by a header comment) — that preamble never reaches the user's
+ * Monaco model, but it's where Pyright reports declarations.
+ *
+ * So a Pyright Go-to-Definition target at "preamble line N" needs
+ * a two-step translation to land where the user actually edits
+ * variables:
+ *
+ *   1. preamble line N → variable name
+ *      (`variableNameByPreambleLine` from
+ *      `generatePythonLspPreamble`)
+ *   2. variable name → IEC line / column
+ *      (`getIecVariableLineMap` from
+ *      `generate-iec-variables-to-string`)
+ *
+ * Both maps are computed once per `attachPou` and cached on the
+ * service's per-URI entry; this redirect just looks the values up
+ * and hands them to `routeToPouPreamble`.
+ *
+ * Body targets stay simple — Pyright line minus the body offset,
+ * 0→1-indexed shift, then `routeToPouBody`.
  *
  * Cross-file navigation isn't supported yet — Python POUs are
  * single-document affairs.  If Pyright ever returns a target with
- * a different URI than the source (e.g. clicking through to a
- * typeshed stub), we hand off to the caller (`return false`),
- * which falls back to the existing URI-not-reachable filter that
- * suppresses the navigation without crashing.
+ * a different URI (typeshed stubs, external imports), we hand off
+ * to the caller via `return false`, and the URI-reachability filter
+ * in the interceptor suppresses the navigation cleanly.
  */
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
@@ -30,6 +45,10 @@ export interface PythonRedirectContext {
   sourceUri: string
   /** The POU whose body that URI belongs to. */
   sourcePouName: string
+  /** Preamble-line (0-indexed in the Python preamble) → variable name. */
+  variableNameByPreambleLine: Map<number, string>
+  /** Variable name → 1-indexed Monaco line / column in the IEC VAR-block text. */
+  iecVariableLineMap: Map<string, { line: number; column: number }>
 }
 
 /**
@@ -37,8 +56,11 @@ export interface PythonRedirectContext {
  * Returns true iff navigation was handled here — caller suppresses
  * Monaco's default in that case.  Returns false when the URI is
  * something other than the source (typeshed stubs, external
- * imports, future cross-POU support) so the caller can fall back
- * to the URI-reachability filter.
+ * imports, future cross-POU support) or when a preamble target
+ * couldn't be translated to an IEC variable (defensive — covers a
+ * Pyright response pointing at a preamble line that has no
+ * corresponding variable, e.g. a header comment line) so the
+ * caller can fall back to the URI-reachability filter.
  */
 export function redirectPythonDefinitionToStore(loc: Location | LocationLink, ctx: PythonRedirectContext): boolean {
   const target = normaliseLocation(loc)
@@ -53,11 +75,17 @@ export function redirectPythonDefinitionToStore(loc: Location | LocationLink, ct
   const bodyOffset = getBodyLineOffset(target.uri)
 
   if (target.lineLsp < bodyOffset) {
-    // Preamble target.  The variables-code-editor (in Python mode)
-    // renders the exact text Pyright sees, so LSP line N → Monaco
-    // line N+1 (0-indexed → 1-indexed) with no preamble-style
-    // shift.  Column gets the same shift.
-    return routeToPouPreamble(ctx.sourcePouName, target.lineLsp + 1, target.characterLsp + 1)
+    // Preamble target.  Translate Pyright's preamble line → variable
+    // name → IEC variables-code-editor line.  Skip the
+    // `target.characterLsp` value entirely — Pyright reports
+    // columns in the Python preamble's coordinate space, which
+    // doesn't match the IEC VAR-block layout.  Land on the start
+    // of the variable name in the IEC text instead.
+    const variableName = ctx.variableNameByPreambleLine.get(target.lineLsp)
+    if (!variableName) return false
+    const iecPosition = ctx.iecVariableLineMap.get(variableName)
+    if (!iecPosition) return false
+    return routeToPouPreamble(ctx.sourcePouName, iecPosition.line, iecPosition.column)
   }
 
   // Body target — subtract the body offset to bring the LSP line

@@ -220,4 +220,42 @@ describe('generatePythonLspPreamble', () => {
       expect(result.text.endsWith('\n\n')).toBe(true)
     })
   })
+
+  describe('variableNameByPreambleLine', () => {
+    it('is empty when no variables produce declaration lines', () => {
+      expect(generatePythonLspPreamble([]).variableNameByPreambleLine.size).toBe(0)
+      expect(generatePythonLspPreamble([makeScalar('x', 'local', 'BOOL')]).variableNameByPreambleLine.size).toBe(0)
+    })
+
+    it('maps each declaration line to the corresponding variable name in order', () => {
+      const result = generatePythonLspPreamble([
+        makeScalar('ValveState', 'input', 'BOOL'),
+        makeScalar('DidPrint', 'output', 'BOOL'),
+      ])
+      // Header occupies lines 0-4; declarations start at line 5.
+      expect(result.variableNameByPreambleLine.get(5)).toBe('ValveState')
+      expect(result.variableNameByPreambleLine.get(6)).toBe('DidPrint')
+      expect(result.variableNameByPreambleLine.size).toBe(2)
+    })
+
+    it('skips variables whose type doesn’t map to a Python annotation (e.g. TIME)', () => {
+      const result = generatePythonLspPreamble([
+        makeScalar('CycleStart', 'input', 'TIME'), // unsupported → no preamble line
+        makeScalar('ValveState', 'input', 'BOOL'), // first emitted line
+      ])
+      expect(result.variableNameByPreambleLine.size).toBe(1)
+      expect(result.variableNameByPreambleLine.get(5)).toBe('ValveState')
+    })
+
+    it('locks the mapping to the actual declaration text in the same preamble', () => {
+      // Spot-check that the line number we record matches where the
+      // variable name actually appears in `text` — guards against the
+      // header line count drifting out of sync with the offset.
+      const result = generatePythonLspPreamble([makeScalar('Flag', 'input', 'BOOL')])
+      const lines = result.text.split('\n')
+      for (const [line, name] of result.variableNameByPreambleLine) {
+        expect(lines[line].startsWith(`${name}:`)).toBe(true)
+      }
+    })
+  })
 })

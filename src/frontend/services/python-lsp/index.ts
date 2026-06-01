@@ -27,6 +27,7 @@
  * boot, disposed only at shutdown.
  */
 
+import { getIecVariableLineMap } from '../../utils/generate-iec-variables-to-string'
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
 import {
   deleteBodyLineOffset,
@@ -44,7 +45,11 @@ const PYTHON_WORKER_NAME = 'python-lsp'
 const MARKER_OWNER = 'python-lsp'
 const DIAGNOSTIC_SOURCE = 'pyright'
 
-const EMPTY_PREAMBLE: PythonLspPreamble = { text: '', lineCount: 0 }
+const EMPTY_PREAMBLE: PythonLspPreamble = {
+  text: '',
+  lineCount: 0,
+  variableNameByPreambleLine: new Map(),
+}
 
 export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspService {
   const { monaco: monacoApi, workerUrlOverride, onCrash } = opts
@@ -73,9 +78,17 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
   // notifications whose version isn't strictly greater than the
   // last one seen for that URI, so it's important that our first
   // didChange does not collide with the version=1 didOpen used.
+  // `iecVariableLineMap` is the variable-name → Monaco-line map for
+  // the IEC VAR-block text the variables-code-editor renders.  The
+  // Go to Definition redirect uses it to translate a Pyright
+  // preamble target (which references a variable by NAME via the
+  // preamble's `variableNameByPreambleLine` map) into a cursor
+  // position in the user-facing IEC editor.  Recomputed alongside
+  // the preamble on every `attachPou` / `notifyVariablesChange`.
   interface UriEntry {
     pouName: string
     preamble: PythonLspPreamble
+    iecVariableLineMap: Map<string, { line: number; column: number }>
   }
   const entryByUri = new Map<string, UriEntry>()
 
@@ -138,12 +151,17 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
         // Try the store redirect first.  If any location is in the
         // source URI's preamble or body, route through the store —
         // the redirect handles the variables-panel code-mode
-        // switch + cursor placement uniformly with ST.
+        // switch + cursor placement uniformly with ST.  Preamble
+        // targets get the two-step preamble-line → variable name
+        // → IEC line/col translation via the cached maps the
+        // entry carries.
         if (entry) {
           for (const loc of locations) {
             const handled = redirectPythonDefinitionToStore(loc, {
               sourceUri,
               sourcePouName: entry.pouName,
+              variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
+              iecVariableLineMap: entry.iecVariableLineMap,
             })
             if (handled) return suppressNoDefinitionFound(model, position, monacoApi)
           }
@@ -261,7 +279,8 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
 
     attachPou(uri, pouName, variables, bodyText) {
       const preamble = generatePythonLspPreamble(variables)
-      entryByUri.set(uri, { pouName, preamble })
+      const iecVariableLineMap = getIecVariableLineMap(variables)
+      entryByUri.set(uri, { pouName, preamble, iecVariableLineMap })
       setBodyLineOffset(uri, preamble.lineCount)
       sharedService.openDocument(uri, augmentedDocument(uri, bodyText))
     },
@@ -271,15 +290,16 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     },
 
     notifyVariablesChange(uri, variables, bodyText) {
-      // Variables changed: regenerate the preamble and update the
-      // offset registry BEFORE pushing the new document so the
-      // diagnostics callback (which fires on the next round-trip)
-      // reads the new offset rather than the stale one.  Preserve
-      // the recorded pouName — a pure variables edit doesn't
-      // change the POU's identity.
+      // Variables changed: regenerate the preamble + IEC line map
+      // and update the offset registry BEFORE pushing the new
+      // document so the diagnostics callback (which fires on the
+      // next round-trip) reads the new offset rather than the
+      // stale one.  Preserve the recorded pouName — a pure
+      // variables edit doesn't change the POU's identity.
       const existing = entryByUri.get(uri)
       const preamble = generatePythonLspPreamble(variables)
-      entryByUri.set(uri, { pouName: existing?.pouName ?? '', preamble })
+      const iecVariableLineMap = getIecVariableLineMap(variables)
+      entryByUri.set(uri, { pouName: existing?.pouName ?? '', preamble, iecVariableLineMap })
       setBodyLineOffset(uri, preamble.lineCount)
       sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
     },
