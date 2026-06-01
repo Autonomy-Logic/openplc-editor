@@ -11,8 +11,6 @@ import './backend/shared/styles/globals.css'
 // without the body editor) saw Monaco's default vs-dark theme.
 import './frontend/components/_features/[workspace]/editor/monaco/configs'
 
-import { useEffect } from 'react'
-
 // Resolve basedpyright's worker bundle URL through the host
 // bundler.  Editor uses webpack with an `asset/resource` rule on
 // `?url`; web uses Vite's native `?url` query.  The shared
@@ -21,6 +19,7 @@ import { useEffect } from 'react'
 // `App.tsx` keeps the shared zone clean.  See
 // `setPythonLspWorkerUrl` in monaco/python-lsp/index.ts.
 import pyrightWorkerUrl from 'browser-basedpyright/dist/pyright.worker.js?url'
+import { useEffect } from 'react'
 
 import { setPythonLspWorkerUrl } from './frontend/components/_features/[workspace]/editor/monaco/python-lsp'
 import { AppLayout } from './frontend/components/_templates/app-layout'
