@@ -67,7 +67,8 @@ function makeIntVar(name: string, varClass: 'input' | 'output' = 'output'): PLCV
   } as PLCVariable
 }
 
-const POU_URI = 'file:///MyPou.py'
+const POU_URI = 'file:///MyPou'
+const POU_LSP_URI = `${POU_URI}.py`
 const POU_NAME = 'MyPou'
 
 beforeEach(() => {
@@ -131,13 +132,17 @@ describe('attachPou', () => {
     const vars = [makeBoolVar('red_light', 'input'), makeIntVar('counter', 'output')]
     service.attachPou(POU_URI, POU_NAME, vars, 'red_light = True\n')
 
+    // Body-line offset is keyed by the LSP URI (model URI + `.py`)
+    // — that's the URI basedpyright reports back on every
+    // `publishDiagnostics` and the URI the shared converters look
+    // up offsets by when translating pyright responses.
     expect(setBodyLineOffset).toHaveBeenCalledTimes(1)
-    expect(setBodyLineOffset).toHaveBeenCalledWith(POU_URI, expect.any(Number))
+    expect(setBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI, expect.any(Number))
     const recordedOffset = setBodyLineOffset.mock.calls[0][1]
     expect(recordedOffset).toBeGreaterThan(0)
   })
 
-  it('opens the document with preamble + body concatenated', () => {
+  it('opens the document at the .py-suffixed LSP URI with preamble + body', () => {
     const mockService = makeMockLanguageService()
     startLanguageService.mockReturnValue(mockService)
 
@@ -147,9 +152,14 @@ describe('attachPou', () => {
 
     expect(mockService.openDocument).toHaveBeenCalledTimes(1)
     const [openedUri, openedText] = mockService.openDocument.mock.calls[0]
-    expect(openedUri).toBe(POU_URI)
-    // The opened text should END with the user body and contain
-    // the preamble declaration of `red_light`.
+    // The URI handed to basedpyright is the model URI + `.py`.
+    // Without the extension, basedpyright treats the document as
+    // a non-Python source and never publishes diagnostics — only
+    // hover / completion / semantic-tokens still work via
+    // on-demand queries.
+    expect(openedUri).toBe(POU_LSP_URI)
+    // The opened text ends with the user body and contains the
+    // preamble declaration of `red_light`.
     expect(openedText.endsWith('red_light = True\n')).toBe(true)
     expect(openedText).toContain('red_light')
     expect(openedText.startsWith('red_light = True')).toBe(false)
@@ -163,7 +173,7 @@ describe('attachPou', () => {
     // `local` vars don't get hoisted into module scope; preamble is empty.
     service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'local')], 'pass\n')
 
-    expect(setBodyLineOffset).toHaveBeenCalledWith(POU_URI, 0)
+    expect(setBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI, 0)
   })
 })
 
@@ -247,8 +257,8 @@ describe('detachPou', () => {
     service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'input')], 'x = True\n')
     service.detachPou(POU_URI)
 
-    expect(mockService.closeDocument).toHaveBeenCalledWith(POU_URI)
-    expect(deleteBodyLineOffset).toHaveBeenCalledWith(POU_URI)
+    expect(mockService.closeDocument).toHaveBeenCalledWith(POU_LSP_URI)
+    expect(deleteBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI)
   })
 
   it('does not throw when called on a never-attached URI', () => {

@@ -110,6 +110,13 @@ export interface StartLanguageServiceOptions {
   markerOwner: string
   diagnosticSource?: string
   diagnosticsMirror?: DiagnosticsMirror
+  /**
+   * Translate the LSP URI on an incoming `publishDiagnostics`
+   * notification to the Monaco model URI the markers should apply
+   * to.  Forwarded to `attachDiagnosticsBridge`.  Used by Python
+   * LSP (LSP URI = model URI + `.py`); ST passes none.
+   */
+  resolveDiagnosticsModelUri?: (lspUri: string) => string
 
   // Lifecycle hooks ---------------------------------------------------------
   /**
@@ -179,6 +186,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     markerOwner,
     diagnosticSource,
     diagnosticsMirror,
+    resolveDiagnosticsModelUri,
     beforeListen,
     postInitialize,
     clientCapabilities = DEFAULT_CLIENT_CAPABILITIES,
@@ -251,6 +259,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
         markerOwner,
         ...(diagnosticSource ? { defaultSource: diagnosticSource } : {}),
         ...(diagnosticsMirror ? { mirror: diagnosticsMirror } : {}),
+        ...(resolveDiagnosticsModelUri ? { resolveModelUri: resolveDiagnosticsModelUri } : {}),
       })
     : null
 

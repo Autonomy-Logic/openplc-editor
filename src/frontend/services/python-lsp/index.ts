@@ -31,6 +31,7 @@ import { getIecVariableLineMap } from '../../utils/generate-iec-variables-to-str
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
 import {
   deleteBodyLineOffset,
+  getBodyLineOffset,
   type LanguageService,
   lspLocationsToMonaco,
   setBodyLineOffset,
@@ -87,13 +88,40 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
   // the preamble on every `attachPou` / `notifyVariablesChange`.
   interface UriEntry {
     pouName: string
+    /**
+     * The URI we hand basedpyright in `didOpen` / `didChange` /
+     * `didClose` and that comes back on every `publishDiagnostics`
+     * notification, hover response, etc.  Always equals the Monaco
+     * model URI + `.py` so basedpyright recognises the document as
+     * a Python source file and runs full analysis (publishing
+     * diagnostics) instead of just answering on-demand queries.
+     * Without the extension, basedpyright parses for hover /
+     * completion / semantic-tokens but never publishes
+     * `textDocument/publishDiagnostics` — and the editor's red
+     * squiggles + quick-fix actions all hang off that one
+     * notification.
+     */
+    lspUri: string
     preamble: PythonLspPreamble
     iecVariableLineMap: Map<string, { line: number; column: number }>
   }
+  /** Keyed by Monaco model URI. */
   const entryByUri = new Map<string, UriEntry>()
 
-  function augmentedDocument(uri: string, body: string): string {
-    const preamble = entryByUri.get(uri)?.preamble ?? EMPTY_PREAMBLE
+  function lspUriFor(modelUri: string): string {
+    return entryByUri.get(modelUri)?.lspUri ?? `${modelUri}.py`
+  }
+
+  function modelUriFor(lspUri: string): string {
+    // The forward mapping always appends `.py`; the reverse is a
+    // suffix strip.  Defensive: if a URI doesn't end in `.py` (a
+    // typeshed stub or a previously-known model URI sneaking
+    // through), pass it through unchanged.
+    return lspUri.endsWith('.py') ? lspUri.slice(0, -3) : lspUri
+  }
+
+  function augmentedDocument(modelUri: string, body: string): string {
+    const preamble = entryByUri.get(modelUri)?.preamble ?? EMPTY_PREAMBLE
     return preamble.text + body
   }
 
@@ -109,14 +137,25 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     completionTriggerCharacters: ['.', '[', '"', "'"],
     signatureHelpTriggerCharacters: ['(', ','],
 
-    // No URI rewriting needed — Python POUs have one body model
-    // each, and the model URI IS the LSP URI.  The default
-    // resolveLspContext reads the offset from the shared registry
-    // (populated by attachPou / notifyVariablesChange below).
+    // URI rewriting: Monaco's model URI is the user's real file
+    // path (`file:///…/python_something` with no extension),
+    // basedpyright needs a `.py` extension to run full analysis on
+    // the document (without it, hover + completion still work via
+    // on-demand queries but `publishDiagnostics` is never sent).
+    // Map model URI → LSP URI on the way out and back on the way
+    // in so the rest of the editor never sees the synthetic
+    // suffix.  Body-line offsets stay keyed by the LSP URI — the
+    // shared converters read them through `getBodyLineOffset(lspUri)`
+    // when handling pyright responses.
     // No formatting filter — Pyright doesn't emit edits in the
     // preamble region, but the default still drops anything that
     // would, which is the safe behaviour.
     // Default semantic-tokens viewport: `[lineOffset, +∞)`.
+    resolveLspContext: (modelUri) => {
+      const lspUri = lspUriFor(modelUri)
+      return { lspUri, lineOffset: getBodyLineOffset(lspUri) }
+    },
+    resolveDiagnosticsModelUri: modelUriFor,
 
     // Go-to-definition routing.  Two layers, in order:
     //
@@ -145,20 +184,18 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // (no banner, no peek) when there's nowhere navigable to go.
     definitionInterceptors: [
       (locations, model, position, monacoApi) => {
-        const sourceUri = model.uri.toString()
-        const entry = entryByUri.get(sourceUri)
+        const modelUri = model.uri.toString()
+        const entry = entryByUri.get(modelUri)
 
-        // Try the store redirect first.  If any location is in the
-        // source URI's preamble or body, route through the store —
-        // the redirect handles the variables-panel code-mode
-        // switch + cursor placement uniformly with ST.  Preamble
-        // targets get the two-step preamble-line → variable name
-        // → IEC line/col translation via the cached maps the
-        // entry carries.
+        // Pyright's Locations come back with the LSP URI (model URI
+        // + `.py`).  Compare against entry.lspUri inside the
+        // redirect so the "same document?" check matches; the
+        // routeTo* helpers only need the POU name + IEC line/col
+        // they get from the maps.
         if (entry) {
           for (const loc of locations) {
             const handled = redirectPythonDefinitionToStore(loc, {
-              sourceUri,
+              sourceUri: entry.lspUri,
               sourcePouName: entry.pouName,
               variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
               iecVariableLineMap: entry.iecVariableLineMap,
@@ -169,8 +206,10 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
 
         // Nothing redirectable.  Fall back to filtering out targets
         // Monaco can't open (typeshed stubs, external imports).
+        // Pyright reports targets in LSP-URI space (with `.py`); the
+        // model lookup needs the extension-less Monaco model URI.
         const navigable = locations.filter((loc) =>
-          monacoApi.editor.getModels().some((m) => m.uri.toString() === loc.uri),
+          monacoApi.editor.getModels().some((m) => m.uri.toString() === modelUriFor(loc.uri)),
         )
 
         if (navigable.length === 0) {
@@ -312,15 +351,24 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     ready: sharedService.ready,
 
     attachPou(uri, pouName, variables, bodyText) {
+      // `uri` is the Monaco model URI the rest of the editor uses.
+      // The LSP communication appends `.py` so basedpyright treats
+      // the document as Python source and runs full analysis (which
+      // is what makes `publishDiagnostics` fire).  Body-line offsets
+      // are keyed by the LSP URI so the shared converters that
+      // process pyright's responses look the offset up by the same
+      // URI pyright reports.
+      const lspUri = `${uri}.py`
       const preamble = generatePythonLspPreamble(variables)
       const iecVariableLineMap = getIecVariableLineMap(variables)
-      entryByUri.set(uri, { pouName, preamble, iecVariableLineMap })
-      setBodyLineOffset(uri, preamble.lineCount)
-      sharedService.openDocument(uri, augmentedDocument(uri, bodyText))
+      entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
+      setBodyLineOffset(lspUri, preamble.lineCount)
+      sharedService.openDocument(lspUri, augmentedDocument(uri, bodyText))
     },
 
     notifyBodyChange(uri, bodyText) {
-      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
+      const lspUri = lspUriFor(uri)
+      sharedService.changeDocument(lspUri, augmentedDocument(uri, bodyText))
     },
 
     notifyVariablesChange(uri, variables, bodyText) {
@@ -328,20 +376,23 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
       // and update the offset registry BEFORE pushing the new
       // document so the diagnostics callback (which fires on the
       // next round-trip) reads the new offset rather than the
-      // stale one.  Preserve the recorded pouName — a pure
-      // variables edit doesn't change the POU's identity.
+      // stale one.  Preserve the recorded pouName + lspUri — a
+      // pure variables edit doesn't change the POU's identity or
+      // the URI we already opened with pyright.
       const existing = entryByUri.get(uri)
+      const lspUri = existing?.lspUri ?? `${uri}.py`
       const preamble = generatePythonLspPreamble(variables)
       const iecVariableLineMap = getIecVariableLineMap(variables)
-      entryByUri.set(uri, { pouName: existing?.pouName ?? '', preamble, iecVariableLineMap })
-      setBodyLineOffset(uri, preamble.lineCount)
-      sharedService.changeDocument(uri, augmentedDocument(uri, bodyText))
+      entryByUri.set(uri, { pouName: existing?.pouName ?? '', lspUri, preamble, iecVariableLineMap })
+      setBodyLineOffset(lspUri, preamble.lineCount)
+      sharedService.changeDocument(lspUri, augmentedDocument(uri, bodyText))
     },
 
     detachPou(uri) {
-      sharedService.closeDocument(uri)
+      const lspUri = lspUriFor(uri)
+      sharedService.closeDocument(lspUri)
       entryByUri.delete(uri)
-      deleteBodyLineOffset(uri)
+      deleteBodyLineOffset(lspUri)
     },
 
     dispose() {

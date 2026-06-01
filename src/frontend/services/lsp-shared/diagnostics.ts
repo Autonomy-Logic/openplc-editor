@@ -57,6 +57,19 @@ export interface AttachDiagnosticsBridgeOptions {
   defaultSource?: string
   /** Optional auxiliary-model mirror.  See {@link DiagnosticsMirror}. */
   mirror?: DiagnosticsMirror
+  /**
+   * Translate the LSP URI on an incoming `publishDiagnostics`
+   * notification to the Monaco model URI the markers should apply
+   * to.  Default: identity — most services' Monaco model URI is
+   * the same string the worker sees.  Python LSP overrides this
+   * because it appends `.py` to the URI it hands basedpyright (so
+   * basedpyright treats the file as Python and publishes
+   * diagnostics) while Monaco's model URI is the extension-less
+   * path the rest of the editor uses.  Body-line offsets stay
+   * keyed by the LSP URI — the translation only affects the
+   * model-lookup step.
+   */
+  resolveModelUri?: (lspUri: string) => string
 }
 
 export function attachDiagnosticsBridge(
@@ -64,10 +77,11 @@ export function attachDiagnosticsBridge(
   monacoApi: typeof monaco,
   options: AttachDiagnosticsBridgeOptions,
 ): DiagnosticsBridge {
-  const { markerOwner, defaultSource = 'lsp', mirror } = options
+  const { markerOwner, defaultSource = 'lsp', mirror, resolveModelUri } = options
 
   const subscription = connection.onNotification(PublishDiagnosticsNotification.type, (params) => {
-    const bodyModel = monacoApi.editor.getModels().find((m) => m.uri.toString() === params.uri)
+    const modelUri = resolveModelUri ? resolveModelUri(params.uri) : params.uri
+    const bodyModel = monacoApi.editor.getModels().find((m) => m.uri.toString() === modelUri)
     const bodyOffset = getBodyLineOffset(params.uri)
 
     if (bodyModel) {
