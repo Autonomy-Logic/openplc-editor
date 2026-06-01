@@ -65,6 +65,16 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
+  // Captured from `beforeListen` so the attach / detach paths can
+  // send `pyright/createFile` / `pyright/deleteFile` notifications
+  // alongside the standard didOpen / didClose flow.  basedpyright
+  // requires the LSP URI to exist in its in-memory `TestFileSystem`
+  // before it'll consider the file a workspace member; without that
+  // membership it never publishes diagnostics for the opened doc.
+  // See `browser-pyright/src/browser-server.ts`'s handler:
+  //   onNotification('pyright/createFile', params => fs.apply({[path]: ''}))
+  let pyrightConnection: import('vscode-jsonrpc/browser').MessageConnection | null = null
+
   // Per-URI registry.  `preamble` is what Pyright sees concatenated
   // with the user body; `pouName` is what the Go to Definition
   // redirect hands to `routeToPouPreamble` / `routeToPouBody` so
@@ -296,13 +306,6 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
           // case future stubs ever carry a `.py` filename.
           include: ['**/*.py'],
           exclude: ['/typeshed/**'],
-          // `openFilesOnly` tells basedpyright to publish
-          // diagnostics for files the editor explicitly opened
-          // (via `textDocument/didOpen`).  Without this the
-          // default is `workspace`, which queues every matched
-          // file for analysis and only emits diagnostics once the
-          // whole queue drains.
-          diagnosticMode: 'openFilesOnly',
         }),
       },
     },
@@ -360,6 +363,7 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // clean — only python-lsp wires this.  Remove along with
     // `diagnosticsMirror` once the root cause is found.
     beforeListen: (connection) => {
+      pyrightConnection = connection
       connection.onNotification('window/logMessage', (params: { type: number; message: string }) => {
         const types = ['error', 'warn', 'info', 'log'] as const
         const tag = types[Math.max(0, Math.min(params.type - 1, types.length - 1))] ?? 'log'
@@ -376,16 +380,26 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     attachPou(uri, pouName, variables, bodyText) {
       // `uri` is the Monaco model URI the rest of the editor uses.
       // The LSP communication appends `.py` so basedpyright treats
-      // the document as Python source and runs full analysis (which
-      // is what makes `publishDiagnostics` fire).  Body-line offsets
-      // are keyed by the LSP URI so the shared converters that
-      // process pyright's responses look the offset up by the same
-      // URI pyright reports.
+      // the document as Python source.  Body-line offsets are
+      // keyed by the LSP URI so the shared converters that process
+      // pyright's responses look the offset up by the same URI
+      // pyright reports.
+      //
+      // Order matters: send `pyright/createFile` BEFORE `didOpen`.
+      // basedpyright's TestFileSystem-backed workspace only
+      // considers files that exist in the FS as workspace members,
+      // and only workspace members get diagnostic publication.
+      // `createFile` writes an empty entry at the LSP URI's path;
+      // the subsequent `didOpen` then populates the document
+      // buffer pyright actually analyses.  Without the createFile
+      // notification, opened files sit in pyright's document
+      // buffer but never enter the analysis queue.
       const lspUri = `${uri}.py`
       const preamble = generatePythonLspPreamble(variables)
       const iecVariableLineMap = getIecVariableLineMap(variables)
       entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
+      void pyrightConnection?.sendNotification('pyright/createFile', { kind: 'create', uri: lspUri })
       sharedService.openDocument(lspUri, augmentedDocument(uri, bodyText))
     },
 
@@ -412,8 +426,12 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     },
 
     detachPou(uri) {
+      // Mirror of attachPou: close the document, then remove the
+      // file from pyright's in-memory FS so the workspace member
+      // count returns to zero when no Python POU is open.
       const lspUri = lspUriFor(uri)
       sharedService.closeDocument(lspUri)
+      void pyrightConnection?.sendNotification('pyright/deleteFile', { kind: 'delete', uri: lspUri })
       entryByUri.delete(uri)
       deleteBodyLineOffset(lspUri)
     },
