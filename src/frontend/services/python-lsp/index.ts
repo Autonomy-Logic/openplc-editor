@@ -52,18 +52,8 @@ const EMPTY_PREAMBLE: PythonLspPreamble = {
   variableNameByPreambleLine: new Map(),
 }
 
-export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspService {
-  const { monaco: monacoApi, workerUrlOverride, onCrash } = opts
-
-  // Resolve the worker URL.  The require lives inside the function
-  // so the bundler probe never runs under test (jsdom test envs
-  // don't ship the worker asset).
-  let workerUrl = workerUrlOverride
-  if (!workerUrl) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const moduleExports = require('browser-basedpyright/dist/pyright.worker.js?url') as { default: string } | string
-    workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
-  }
+export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
+  const { workerUrl, monaco: monacoApi, onCrash } = opts
 
   // Captured from `beforeListen` so attachPou / detachPou can send
   // `pyright/createFile` / `pyright/deleteFile` alongside didOpen /

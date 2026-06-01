@@ -10,17 +10,24 @@ import type { PLCVariable } from '../../../middleware/shared/ports/types'
 
 export interface PythonLspStartOptions {
   /**
+   * URL of basedpyright's worker bundle.  Required — there is no
+   * in-module fallback: a bare `require('…/pyright.worker.js?url')`
+   * works under webpack's resource-loader rule but Vite emits the
+   * literal `require` call into the bundle, which crashes at
+   * runtime with `Can't find variable: require`.  Each host
+   * resolves the URL with its own bundler (`?url` import on Vite,
+   * the same on webpack 5 with `asset/resource`) and passes the
+   * resolved string in.  Tests pass `'about:blank'` (or any other
+   * placeholder) to bypass worker creation entirely.
+   */
+  workerUrl: string
+  /**
    * Monaco namespace.  Required for any provider registration to
    * happen.  Omit from the boot path that runs before Monaco loads
    * — the service still wires the protocol-level handlers, just
    * with no UI surface.
    */
   monaco?: typeof monaco
-  /**
-   * Override the worker URL.  Used by tests (Blob URL or
-   * `'about:blank'` stub) to bypass the default bundler probe.
-   */
-  workerUrlOverride?: string
   /**
    * Post-`initialize` worker crash callback.  Surfaces in the UI
    * as a one-shot toast.  Pre-init crashes don't go through this
