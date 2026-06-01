@@ -78,7 +78,9 @@ function listPackageFiles(dir: string): string[] {
 }
 
 function sha256File(path: string): string {
-  return createHash('sha256').update(Uint8Array.from(readFileSync(path))).digest('hex')
+  return createHash('sha256')
+    .update(Uint8Array.from(readFileSync(path)))
+    .digest('hex')
 }
 
 /** Narrow unknown JSON into a SignaturePayload + detached signature string. */

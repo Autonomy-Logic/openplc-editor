@@ -19,7 +19,9 @@ const PRIVATE_PEM = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString
 const TRUSTED: TrustedKeys = { [KEY_ID]: PUBLIC_PEM }
 
 const sha256 = (s: string): string =>
-  createHash('sha256').update(Uint8Array.from(Buffer.from(s, 'utf-8'))).digest('hex')
+  createHash('sha256')
+    .update(Uint8Array.from(Buffer.from(s, 'utf-8')))
+    .digest('hex')
 
 /** Files written into every fixture package (relative path -> contents). */
 const DEFAULT_FILES: Record<string, string> = {
@@ -213,7 +215,6 @@ describe('verifyPackageSignature', () => {
     }) as any)
     expect(verifyPackageSignature(dir, TRUSTED).error).toMatch(/Failed to hash package file/i)
   })
-
 })
 
 describe('canonicalize', () => {
