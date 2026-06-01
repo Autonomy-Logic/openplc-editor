@@ -28,7 +28,14 @@
  */
 
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
-import { deleteBodyLineOffset, type LanguageService, setBodyLineOffset, startLanguageService } from '../lsp-shared'
+import {
+  deleteBodyLineOffset,
+  type LanguageService,
+  lspLocationsToMonaco,
+  setBodyLineOffset,
+  startLanguageService,
+  suppressNoDefinitionFound,
+} from '../lsp-shared'
 import type { PythonLspService, PythonLspStartOptions } from './types'
 
 const PYTHON_LANGUAGE_ID = 'python'
@@ -87,12 +94,66 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     // each, and the model URI IS the LSP URI.  The default
     // resolveLspContext reads the offset from the shared registry
     // (populated by attachPou / notifyVariablesChange below).
-    // No definition interceptors — Python LSP doesn't (yet) route
-    // through the project store the way ST does.
     // No formatting filter — Pyright doesn't emit edits in the
     // preamble region, but the default still drops anything that
     // would, which is the safe behaviour.
     // Default semantic-tokens viewport: `[lineOffset, +∞)`.
+
+    // Go-to-definition needs two filters before Monaco sees the
+    // result.  Without them, two real failure modes:
+    //
+    //   1. Click on a stdlib name (`print`, `os.path`, …) → Pyright
+    //      returns a location targeting the bundled typeshed
+    //      (e.g. `file:///typeshed/stdlib/builtins.pyi`).  Monaco
+    //      has no model for that URI, so opening the peek widget
+    //      throws `StandaloneTextModelService.createModelReference:
+    //      Model not found` and crashes the renderer.
+    //
+    //   2. Click on an IEC variable (`ValveState`, `DidPrint`) →
+    //      Pyright returns a location inside our synthetic
+    //      preamble (e.g. line 5, where we declare
+    //      `ValveState: bool = False`).  The shared converter
+    //      subtracts the body-line offset and produces a negative
+    //      Monaco line which Monaco clamps to line 1, so the
+    //      cursor flies to the top of the body — wrong target.
+    //
+    // Both targets are filtered out below.  When the filter empties
+    // the list we return `suppressNoDefinitionFound`, which keeps
+    // Monaco quiet (no badge, no peek) instead of crashing.
+    //
+    // FUTURE: route preamble targets to the variables-table panel
+    // (mirroring the ST LSP's `redirectDefinitionToStore` hook) so
+    // the user lands on the actual declaration.  That's a UX
+    // layer on top of this filter, not a substitute for it.
+    definitionInterceptors: [
+      (locations, model, position, monacoApi) => {
+        const sourceUri = model.uri.toString()
+        const preambleLineCount = preambleByUri.get(sourceUri)?.lineCount ?? 0
+
+        const navigable = locations.filter((loc) => {
+          // Reject targets Monaco has no model for (typeshed,
+          // unknown URIs).  Monaco's references widget calls
+          // `createModelReference` on the URI and throws if no
+          // model exists — that's the "Model not found" crash.
+          const hasModel = monacoApi.editor.getModels().some((m) => m.uri.toString() === loc.uri)
+          if (!hasModel) return false
+          // Reject targets that fall inside our synthetic preamble
+          // — they'd land on negative lines after offset
+          // translation and Monaco would clamp them to body line 1.
+          if (loc.uri === sourceUri && loc.range.start.line < preambleLineCount) return false
+          return true
+        })
+
+        if (navigable.length === 0) {
+          return suppressNoDefinitionFound(model, position, monacoApi)
+        }
+        // Some targets survived — claim them with the narrowed
+        // list so the rejected ones never reach Monaco.  Returning
+        // `undefined` here would re-run the default converter on
+        // the FULL `locations` array, putting the bad targets back.
+        return lspLocationsToMonaco(navigable, monacoApi) ?? null
+      },
+    ],
 
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
