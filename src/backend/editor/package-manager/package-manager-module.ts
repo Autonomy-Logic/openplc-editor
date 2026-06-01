@@ -5,8 +5,18 @@ import { join } from 'path'
 
 import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
 import { validatePathId } from '../../shared/utils/path-safety'
+import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { assertPathContained } from '../utils/path-containment'
+import { TRUSTED_PACKAGE_KEYS } from './trusted-keys'
 import type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
+
+/**
+ * Enforce cryptographic signature verification on every import. Strict by
+ * design. Flip to `false` ONLY for local/offline development with unsigned
+ * packages — the committed value MUST stay `true`, mirroring the
+ * `USE_LOCAL_MOCK` convention in the package adapter.
+ */
+const REQUIRE_SIGNATURE = true
 
 class PackageManagerModule {
   private packagesDir: string
@@ -54,6 +64,19 @@ class PackageManagerModule {
         }
       }
       const manifest: PackageManifest = parsed.data as unknown as PackageManifest
+
+      // Cryptographically verify the package BEFORE trusting any of its
+      // contents. This is the single trust boundary both flows converge on
+      // (local "Add from file…" and remote install both extract here), so
+      // one check covers both. It runs after the manifest is structurally
+      // valid but before any field is used as a path or any HAL/plugin code
+      // is ever compiled. Fails closed.
+      if (REQUIRE_SIGNATURE) {
+        const verification = verifyPackageSignature(tempDir, TRUSTED_PACKAGE_KEYS)
+        if (!verification.valid) {
+          return { success: false, error: `Package signature verification failed: ${verification.error}` }
+        }
+      }
 
       // Validate package.id BEFORE using it as a path component. Without
       // this, a malicious .vpp with `"id": "../../something"` would have
