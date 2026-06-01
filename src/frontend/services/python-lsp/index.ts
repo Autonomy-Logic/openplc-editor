@@ -279,7 +279,30 @@ export function startPythonLsp(opts: PythonLspStartOptions = {}): PythonLspServi
     initializationOptions: {
       files: {
         '/pyrightconfig.json': JSON.stringify({
+          // See block-comment above for why this points at /typeshed.
           typeshedPath: '/typeshed',
+          // Without an explicit `include`, basedpyright defaults to
+          // "the entire workspace root" and walks every file under
+          // `file:///`.  That includes the 3799-file typeshed plus
+          // anything else the in-memory FS picks up — last trace
+          // reported `Found 5073 source files`.  Background
+          // analysis then has to chew through all of them before
+          // it gets to the file the user actually opened, which is
+          // why `textDocument/publishDiagnostics` never fires
+          // (analysis is queued but never reaches our document).
+          // `**/*.py` matches user-supplied Python source only —
+          // the typeshed is `.pyi`, so it falls out automatically
+          // — and `exclude` belt-and-braces the typeshed tree in
+          // case future stubs ever carry a `.py` filename.
+          include: ['**/*.py'],
+          exclude: ['/typeshed/**'],
+          // `openFilesOnly` tells basedpyright to publish
+          // diagnostics for files the editor explicitly opened
+          // (via `textDocument/didOpen`).  Without this the
+          // default is `workspace`, which queues every matched
+          // file for analysis and only emits diagnostics once the
+          // whole queue drains.
+          diagnosticMode: 'openFilesOnly',
         }),
       },
     },
