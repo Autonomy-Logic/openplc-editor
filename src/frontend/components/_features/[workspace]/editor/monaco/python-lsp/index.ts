@@ -32,6 +32,7 @@ import type * as monaco from 'monaco-editor'
 
 let service: PythonLspService | null = null
 let monacoApi: typeof monaco | null = null
+let configuredWorkerUrl: string | null = null
 
 interface EditorWiring {
   pouName: string
@@ -42,15 +43,37 @@ interface EditorWiring {
 const wiringByUri = new Map<string, EditorWiring>()
 
 /**
+ * Register the basedpyright worker bundle URL.  Each platform's
+ * `App.tsx` resolves the URL with its own bundler (`?url` import
+ * on Vite, the same on webpack 5 with `asset/resource`) and calls
+ * this at app startup — the shared service intentionally has no
+ * in-module fallback, see PythonLspStartOptions.workerUrl.
+ *
+ * `initPythonLSP` is a no-op until this has been called.  The
+ * setter races with module evaluation, not with user interaction:
+ * by the time the workspace mounts and Monaco fires its `onMount`
+ * (where `initPythonLSP` runs), App.tsx has already resolved the
+ * URL string and registered it here.
+ */
+export function setPythonLspWorkerUrl(url: string): void {
+  configuredWorkerUrl = url
+}
+
+/**
  * Lazy-initialise the Python LSP service.  Safe to call from every
  * Monaco mount; subsequent calls are no-ops.  Logs (but doesn't
- * throw) when the worker fails to start — the editor still renders,
- * just without language-server diagnostics or completions.
+ * throw) when the worker URL hasn't been registered or the worker
+ * fails to start — the editor still renders, just without
+ * language-server diagnostics or completions.
  */
 export async function initPythonLSP(monacoModule: typeof monaco): Promise<void> {
   if (service) return
+  if (!configuredWorkerUrl) {
+    console.warn('[python-lsp] worker URL not registered; LSP will not start. Call setPythonLspWorkerUrl from App.tsx.')
+    return
+  }
   monacoApi = monacoModule
-  service = startPythonLsp({ monaco: monacoModule })
+  service = startPythonLsp({ workerUrl: configuredWorkerUrl, monaco: monacoModule })
   try {
     await service.ready
   } catch (err) {

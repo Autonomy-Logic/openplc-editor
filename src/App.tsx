@@ -13,6 +13,16 @@ import './frontend/components/_features/[workspace]/editor/monaco/configs'
 
 import { useEffect } from 'react'
 
+// Resolve basedpyright's worker bundle URL through the host
+// bundler.  Editor uses webpack with an `asset/resource` rule on
+// `?url`; web uses Vite's native `?url` query.  The shared
+// `startPythonLsp` requires this URL as an option — keeping the
+// bundler-specific syntax pinned to the (non-byte-identical)
+// `App.tsx` keeps the shared zone clean.  See
+// `setPythonLspWorkerUrl` in monaco/python-lsp/index.ts.
+import pyrightWorkerUrl from 'browser-basedpyright/dist/pyright.worker.js?url'
+
+import { setPythonLspWorkerUrl } from './frontend/components/_features/[workspace]/editor/monaco/python-lsp'
 import { AppLayout } from './frontend/components/_templates/app-layout'
 import { StartScreen } from './frontend/screens/start-screen'
 import { WorkspaceScreen } from './frontend/screens/workspace-screen'
@@ -55,6 +65,12 @@ hydrateLibraries()
 // install/uninstall/CDN change.  Subscriber lives outside React to
 // catch events fired before any component mounts.
 editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
+
+// Register the basedpyright worker URL so the Monaco-side adapter
+// can spin up the Python LSP on first POU open.  No service
+// start yet — the LSP is lazy-initialised in
+// `monaco/python-lsp/initPythonLSP` when Monaco mounts.
+setPythonLspWorkerUrl(pyrightWorkerUrl)
 
 // Pre-warm the STruC++ LSP worker so the first ST POU opens with
 // completion + diagnostics already streaming.  `bootStLsp` returns
