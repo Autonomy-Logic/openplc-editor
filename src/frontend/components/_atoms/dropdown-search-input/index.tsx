@@ -13,12 +13,21 @@ import { InputWithRef } from '../input'
  * the dropdown's rounded border (which used to surface as a visual
  * notch in the corner).
  *
- * `onKeyDown` defaults to `e.stopPropagation()` so the parent
- * dropdown (Radix DropdownMenu / Select) doesn't intercept the
- * keystroke for its own typeahead.  Callers can pass their own
- * handler; we call it after stopping propagation.  Space gets
- * `preventDefault` to keep parents like Radix Select from toggling
- * closed on a literal space.
+ * `onKeyDown` stops the keystroke from reaching the parent
+ * dropdown's typeahead.  We call BOTH `stopPropagation` (React
+ * tree) AND `nativeEvent.stopImmediatePropagation()` (native DOM)
+ * because Radix Select attaches its typeahead listener via native
+ * `addEventListener`, so React's stopPropagation alone doesn't
+ * reach it — the keystroke bubbles up the native DOM tree even
+ * after React's synthetic-event bubbling halts.  Symptom of the
+ * native-bubble bug: typing the first character that doesn't
+ * match the currently-selected item causes Radix to move focus
+ * to the first matching SelectItem, kicking focus out of the
+ * search input and blanking the trigger's displayed value.
+ *
+ * Space gets `preventDefault` so the parent Select doesn't toggle
+ * closed on a literal space character.  Callers can pass their
+ * own handler; we call it after the propagation-stop pair.
  */
 type DropdownSearchInputProps = Omit<ComponentPropsWithoutRef<typeof InputWithRef>, 'type'> & {
   /** Optional extra classes for the outer sticky wrapper.  The input
@@ -41,6 +50,7 @@ export const DropdownSearchInput = forwardRef<HTMLInputElement, DropdownSearchIn
           )}
           onKeyDown={(event) => {
             event.stopPropagation()
+            event.nativeEvent.stopImmediatePropagation()
             if (event.key === ' ') event.preventDefault()
             onKeyDown?.(event)
           }}

@@ -137,7 +137,18 @@ const Board = memo(function () {
     if (!selectIsOpen) return
 
     const checkedElement = selectRef.current?.querySelector('[data-state="checked"]')
-    if (checkedElement) {
+    if (!checkedElement) return
+
+    // When the checked item lives inside a vendor group, scroll the
+    // whole group container into view so the heading above the item
+    // stays on screen.  Without this, `block: 'start'` aligns the
+    // item's top edge with the viewport's top, hiding the vendor
+    // heading the item sits under.  Non-grouped selects (e.g. the
+    // communication-port picker) keep the per-item scroll.
+    const groupContainer = checkedElement.closest('[data-board-group]')
+    if (groupContainer) {
+      groupContainer.scrollIntoView({ block: 'start' })
+    } else {
       checkedElement.scrollIntoView({ block: 'start' })
     }
   }
@@ -458,7 +469,7 @@ const Board = memo(function () {
                   </div>
                 ) : (
                   groupedBoards.map(({ vendor, boards }) => (
-                    <div key={vendor} className='py-1'>
+                    <div key={vendor} data-board-group className='py-1'>
                       <div className='select-none px-2 py-1 font-caption text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>
                         {vendor}
                       </div>
