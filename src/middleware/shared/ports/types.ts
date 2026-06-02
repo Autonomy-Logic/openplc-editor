@@ -1219,16 +1219,19 @@ export interface AIUsage {
 }
 
 /**
- * Structured 402 payload from `/ai/chat` and `/ai/complete`. The backend
- * `CreditGuard` (autonomy-edge `presentation/guards/credit.guard.ts`) throws
- * one of two variants depending on whether the user is out of ACU
- * (`insufficient_acu`) or has a non-active Paddle subscription
- * (`subscription_inactive`). Surfaced via `AIRequestError.billing` in the
- * web adapter and stored on `AISlice` as `billingError` for the exhaustion-
- * modal consumer (DOPE-285).
+ * Structured billing/limit payload from `/ai/chat` and `/ai/complete`. The
+ * backend `CreditGuard` (autonomy-edge `presentation/guards/credit.guard.ts`)
+ * throws one of these variants:
+ *  - `insufficient_acu` (HTTP 402) — user is out of monthly ACU.
+ *  - `subscription_inactive` (HTTP 402) — non-active Paddle subscription.
+ *  - `rate_limit_exceeded` (HTTP 429) — the rolling usage window (default 6h,
+ *    capped at a percentage of the monthly ACU) is spent. Carries `resetsAt`
+ *    so the UI can tell the user when the window frees up.
+ * Surfaced via `AIRequestError.billing` in the web adapter and stored on
+ * `AISlice` as `billingError` for the exhaustion-modal consumer (DOPE-285).
  */
 export type BillingErrorPayload = {
-  code: 'insufficient_acu' | 'subscription_inactive'
+  code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded'
   message: string
   /** Set when `code === 'insufficient_acu'`. ACU remaining in the period. */
   remaining?: number
@@ -1240,6 +1243,12 @@ export type BillingErrorPayload = {
   subscriptionStatus?: SubscriptionStatus
   /** Optional deep-link to the autonomy-edge billing portal. */
   reactivateUrl?: string
+  /**
+   * Set when `code === 'rate_limit_exceeded'`. ISO-8601 timestamp at which the
+   * rolling usage window resets and AI requests are allowed again. `null` when
+   * the backend couldn't compute it (no prior reservations in the window).
+   */
+  resetsAt?: string | null
 }
 
 // ---------------------------------------------------------------------------
