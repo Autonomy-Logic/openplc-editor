@@ -36,6 +36,17 @@ type DropdownSearchInputProps = Omit<ComponentPropsWithoutRef<typeof InputWithRe
   containerClassName?: string
 }
 
+/** Describe a DOM element compactly for console logging. */
+const describeEl = (el: Element | null): string => {
+  if (!el) return 'null'
+  const tag = el.tagName.toLowerCase()
+  const id = el.id ? `#${el.id}` : ''
+  const cls = typeof el.className === 'string' && el.className ? `.${el.className.split(' ')[0]}` : ''
+  const role = el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : ''
+  const dataState = el.getAttribute('data-state') ? `[data-state=${el.getAttribute('data-state')}]` : ''
+  return `${tag}${id}${cls}${role}${dataState}`
+}
+
 export const DropdownSearchInput = forwardRef<HTMLInputElement, DropdownSearchInputProps>(
   ({ containerClassName, className, onKeyDown, placeholder = 'Search...', ...rest }, ref) => {
     return (
@@ -49,10 +60,25 @@ export const DropdownSearchInput = forwardRef<HTMLInputElement, DropdownSearchIn
             className,
           )}
           onKeyDown={(event) => {
+            const inputEl = event.currentTarget
+            // eslint-disable-next-line no-console
+            console.log('[dropdown-search][keydown]', {
+              key: event.key,
+              inputValue: inputEl.value,
+              activeBefore: describeEl(document.activeElement),
+            })
             event.stopPropagation()
             event.nativeEvent.stopImmediatePropagation()
             if (event.key === ' ') event.preventDefault()
             onKeyDown?.(event)
+          }}
+          onFocus={(event) => {
+            // eslint-disable-next-line no-console
+            console.log('[dropdown-search][focus]', { from: describeEl(event.relatedTarget as Element | null) })
+          }}
+          onBlur={(event) => {
+            // eslint-disable-next-line no-console
+            console.log('[dropdown-search][blur]', { to: describeEl(event.relatedTarget as Element | null) })
           }}
           {...rest}
         />
