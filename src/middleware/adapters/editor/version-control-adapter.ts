@@ -19,6 +19,7 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
     createBranch: () => unsupported('createBranch'),
     deleteBranch: () => unsupported('deleteBranch'),
     switchBranch: () => unsupported('switchBranch'),
+    previewSwitchCarry: () => unsupported('previewSwitchCarry'),
     listCommits: () => unsupported('listCommits'),
     createCommit: () => unsupported('createCommit'),
     getCommitFiles: () => unsupported('getCommitFiles'),
