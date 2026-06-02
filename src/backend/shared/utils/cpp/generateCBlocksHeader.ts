@@ -10,6 +10,14 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
   let headerContent = `#ifndef C_BLOCKS_H
 #define C_BLOCKS_H
 
+// The user-visible struct fields are fully qualified as
+// \`strucpp::IEC_*\` (numeric, bit-string, STRING, WSTRING — every pin
+// is an \`IECVar<T>\` / \`IECStringVar<N>\` wrapper).  Pull the runtime
+// headers in here so any TU that includes this header gets the
+// wrappers in scope without depending on include order.
+#include "iec_var.hpp"
+#include "iec_string.hpp"
+
 `
 
   cppPous.forEach((pou) => {
