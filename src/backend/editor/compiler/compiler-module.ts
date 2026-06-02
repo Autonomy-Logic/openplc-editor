@@ -2541,22 +2541,22 @@ class CompilerModule {
         // Board-specific HAL adapter — defines `hardwareInit`,
         // `updateInputBuffers`, `updateOutputBuffers` that the
         // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
-        // call into.  Editor's pre-refactor `handleGenerateArduinoCppFile`
-        // copied `resources/sources/hal/<boardEntry.source>` to
-        // `src/arduino.cpp`.  Read it here so the shared merge step
-        // can drop it into the firmware skeleton at the canonical
-        // path; without it, the link fails with `undefined reference
-        // to hardwareInit` etc.
+        // call into.  `boardInfo.halSourceFile` is an absolute path
+        // resolved by `BoardInfoResolver` — works for both legacy
+        // hals.json entries (HAL lives under `resources/sources/hal/`)
+        // and VPP-installed boards (HAL lives inside the package
+        // directory).  Read it here so the shared merge step drops
+        // it into the firmware skeleton at the canonical path;
+        // without it, the link fails with `undefined reference to
+        // hardwareInit` etc.
         let boardHalContent: string | undefined
-        const boardSource = (boardEntry as { source?: string } | undefined)?.source
-        if (typeof boardSource === 'string' && boardSource.length > 0) {
-          const halPath = join(this.sourceDirectoryPath, 'hal', boardSource)
+        if (boardInfo.halSourceFile) {
           try {
-            boardHalContent = await readFile(halPath, 'utf-8')
+            boardHalContent = await readFile(boardInfo.halSourceFile, 'utf-8')
           } catch (halErr) {
             _mainProcessPort.postMessage({
               logLevel: 'warning',
-              message: `Could not read board HAL file at ${halPath}: ${getErrorMessage(halErr)}`,
+              message: `Could not read board HAL file at ${boardInfo.halSourceFile}: ${getErrorMessage(halErr)}`,
             })
           }
         }
