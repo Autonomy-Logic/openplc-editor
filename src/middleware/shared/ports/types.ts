@@ -676,6 +676,11 @@ export interface VppModuleDefinition {
 
 export interface VppMetadata {
   packageId: string
+  /** Human-readable vendor name from the package manifest's
+   *  `package.vendor.name` field.  Used by the device-dropdown to
+   *  group boards under their vendor heading (e.g. all boards from
+   *  `com.openplc.arduino` cluster under "Arduino"). */
+  vendor: string
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>

@@ -314,6 +314,7 @@ class HardwareModule {
             capabilities: device.capabilities,
             vpp: {
               packageId: manifest.package.id,
+              vendor: manifest.package.vendor.name,
               deviceId: device.id,
               packagePath: pkg.path,
               screens,
