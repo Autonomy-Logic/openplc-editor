@@ -2,7 +2,7 @@
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
@@ -84,6 +84,7 @@ const Board = memo(function () {
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
   const deviceSelectRef = useRef<HTMLDivElement>(null)
   const [deviceSearchTerm, setDeviceSearchTerm] = useState('')
+  const deviceSearchInputRef = useRef<HTMLInputElement>(null)
 
   /**
    * Boards grouped by vendor.  VPP-installed boards come from
@@ -181,28 +182,23 @@ const Board = memo(function () {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
   }, [deviceSelectIsOpen])
 
-  // DEBUG: log every focusin while the device dropdown is open so we
-  // can pinpoint what's stealing focus from the search field on the
-  // user's "second keystroke" symptom.  Remove once the root cause
-  // is found.
-  useEffect(() => {
-    if (!deviceSelectIsOpen) return
-    const handler = (event: FocusEvent) => {
-      const target = event.target as Element | null
-      // eslint-disable-next-line no-console
-      console.log('[document][focusin]', {
-        tag: target?.tagName,
-        id: target?.id,
-        className:
-          target && typeof target.className === 'string' ? target.className.split(' ').slice(0, 2).join(' ') : '',
-        role: target?.getAttribute('role'),
-        dataState: target?.getAttribute('data-state'),
-        text: target instanceof HTMLElement ? target.innerText?.slice(0, 40) : '',
-      })
+  // Keep focus on the search input as the user types.  Radix Select
+  // moves focus to the SelectContent listbox whenever the currently-
+  // focused SelectItem unmounts — which happens every time the
+  // user's typing filters the selected board out of the visible
+  // list.  Without this, the search input loses focus mid-typing
+  // and subsequent keystrokes hit the listbox instead.  Runs in
+  // `useLayoutEffect` so the restore happens after Radix's focus
+  // shift (children's effects fire first) but before the next paint
+  // (so the user never sees the focus blink to the listbox).  Gated
+  // on `deviceSearchTerm.length > 0` so the very first open of the
+  // dropdown still lets Radix focus the currently-selected item
+  // (which the scroll-to-selected effect keys off).
+  useLayoutEffect(() => {
+    if (deviceSelectIsOpen && deviceSearchTerm.length > 0) {
+      deviceSearchInputRef.current?.focus()
     }
-    document.addEventListener('focusin', handler)
-    return () => document.removeEventListener('focusin', handler)
-  }, [deviceSelectIsOpen])
+  }, [groupedBoards, deviceSelectIsOpen, deviceSearchTerm])
 
   useEffect(() => {
     scrollToSelectedOption(communicationSelectRef, communicationSelectIsOpen)
@@ -487,6 +483,7 @@ const Board = memo(function () {
                   keystrokes).
                 */}
                 <DropdownSearchInput
+                  ref={deviceSearchInputRef}
                   value={deviceSearchTerm}
                   onChange={(e) => setDeviceSearchTerm(e.target.value)}
                   aria-label='Search devices'
