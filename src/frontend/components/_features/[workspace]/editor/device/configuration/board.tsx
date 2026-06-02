@@ -181,6 +181,29 @@ const Board = memo(function () {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
   }, [deviceSelectIsOpen])
 
+  // DEBUG: log every focusin while the device dropdown is open so we
+  // can pinpoint what's stealing focus from the search field on the
+  // user's "second keystroke" symptom.  Remove once the root cause
+  // is found.
+  useEffect(() => {
+    if (!deviceSelectIsOpen) return
+    const handler = (event: FocusEvent) => {
+      const target = event.target as Element | null
+      // eslint-disable-next-line no-console
+      console.log('[document][focusin]', {
+        tag: target?.tagName,
+        id: target?.id,
+        className:
+          target && typeof target.className === 'string' ? target.className.split(' ').slice(0, 2).join(' ') : '',
+        role: target?.getAttribute('role'),
+        dataState: target?.getAttribute('data-state'),
+        text: target instanceof HTMLElement ? target.innerText?.slice(0, 40) : '',
+      })
+    }
+    document.addEventListener('focusin', handler)
+    return () => document.removeEventListener('focusin', handler)
+  }, [deviceSelectIsOpen])
+
   useEffect(() => {
     scrollToSelectedOption(communicationSelectRef, communicationSelectIsOpen)
   }, [communicationSelectIsOpen])

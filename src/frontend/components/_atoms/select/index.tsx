@@ -86,6 +86,15 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
         const isSingleChar = event.key.length === 1
         const isModifierCombo = event.ctrlKey || event.metaKey || event.altKey
         const isPassthrough = TYPEAHEAD_PASSTHROUGH_KEYS.has(event.key)
+        // eslint-disable-next-line no-console
+        console.log('[select-content][keydown-capture]', {
+          key: event.key,
+          target: (event.target as Element).tagName,
+          isSingleChar,
+          isModifierCombo,
+          isPassthrough,
+          willSwallow: isSingleChar && !isModifierCombo && !isPassthrough,
+        })
         if (isSingleChar && !isModifierCombo && !isPassthrough) {
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
