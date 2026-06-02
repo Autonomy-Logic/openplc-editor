@@ -14,6 +14,7 @@ import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-insta
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
+import { ProjectReadmeModal } from '../_organisms/modals/project-readme-modal'
 import { PublicCatalogBrowserModal } from '../_organisms/modals/public-catalog-browser-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
 import { ReadOnlyProjectModal } from '../_organisms/modals/read-only-project-modal'
@@ -125,6 +126,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['public-catalog-browser']?.open === true && <PublicCatalogBrowserModal />}
           {modals?.['confirm-install-libraries']?.open === true && <ConfirmInstallLibrariesModal />}
           {modals?.['read-only-project']?.open === true && <ReadOnlyProjectModal />}
+          {modals?.['project-readme']?.open === true && <ProjectReadmeModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}

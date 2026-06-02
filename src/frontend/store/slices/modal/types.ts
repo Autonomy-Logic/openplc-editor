@@ -34,6 +34,10 @@ export type ModalTypes =
    *  don't have edit permission on.  Shows the "this project belongs to
    *  someone else" message and the inline Fork flow. */
   | 'read-only-project'
+  /** Project README viewer/editor — GitHub-style edit/preview tabs +
+   *  commit-message override.  Available only when the project port
+   *  exposes the README slot (web adapter against the Edge API). */
+  | 'project-readme'
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

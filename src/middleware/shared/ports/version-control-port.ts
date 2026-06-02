@@ -10,7 +10,8 @@
  *   - GET    /projects/{id}/branches            — List branches
  *   - POST   /projects/{id}/branches            — Create branch
  *   - DELETE /projects/{id}/branches/{branchId}  — Delete branch
- *   - POST   /projects/{id}/branches/switch      — Switch active branch
+ *   - POST   /projects/{id}/branches/switch      — Switch active branch (discard or carry strategy)
+ *   - GET    /projects/{id}/branches/preview-switch-carry — Dry-run carry to detect conflicts
  *   - GET    /projects/{id}/commits              — List commits (paginated)
  *   - POST   /projects/{id}/commits              — Create commit
  *   - GET    /projects/{id}/commits/{hash}/files  — Get files at commit (with parent for diffing)
@@ -60,6 +61,24 @@ export interface PendingChange {
   status: 'added' | 'modified' | 'deleted'
 }
 
+export type SwitchBranchStrategy = 'discard' | 'carry'
+
+/**
+ * Thrown by `switchBranch` when called with `strategy: 'carry'` and the
+ * server detects conflicts that would block the carry. The project state on
+ * the server is unchanged — the user can pick discard, cancel, or resolve
+ * conflicts manually before retrying.
+ */
+export class SwitchBranchCarryConflictError extends Error {
+  readonly conflictedFiles: string[]
+
+  constructor(conflictedFiles: string[]) {
+    super(`Carry conflicts in ${conflictedFiles.length} file(s)`)
+    this.name = 'SwitchBranchCarryConflictError'
+    this.conflictedFiles = conflictedFiles
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Port interface
 // ---------------------------------------------------------------------------
@@ -80,8 +99,27 @@ export interface VersionControlPort {
   /** Delete a branch by ID. */
   deleteBranch(projectId: string, branchId: string): Promise<void>
 
-  /** Switch to a different branch (server-side checkout). */
-  switchBranch(projectId: string, branchName: string): Promise<{ message: string; branch: string }>
+  /**
+   * Switch to a different branch (server-side checkout). When the working
+   * tree has uncommitted edits, `strategy` controls what happens to them:
+   *   - 'discard' (default): the edits are wiped, matching the historical
+   *     behaviour of this endpoint.
+   *   - 'carry': the edits are transported to the target branch. If the
+   *     carry would conflict, the call rejects with a `SwitchBranchCarryConflictError`
+   *     and the project state is left untouched.
+   */
+  switchBranch(
+    projectId: string,
+    branchName: string,
+    strategy?: SwitchBranchStrategy,
+  ): Promise<{ message: string; branch: string }>
+
+  /**
+   * Predict whether carrying the current uncommitted edits to `targetBranch`
+   * would conflict. Returns the list of conflicted files (empty when carry
+   * is safe). Read-only — never mutates project state.
+   */
+  previewSwitchCarry(projectId: string, targetBranch: string): Promise<{ conflicts: string[] }>
 
   /** List commits with optional pagination. */
   listCommits(

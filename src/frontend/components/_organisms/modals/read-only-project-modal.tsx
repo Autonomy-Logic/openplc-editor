@@ -114,7 +114,7 @@ const ReadOnlyProjectModal = () => {
         onOpenChange('read-only-project', open)
       }}
     >
-      <ModalContent className='flex h-auto max-h-[80vh] w-[480px] select-none flex-col gap-4 p-6'>
+      <ModalContent className='flex !h-auto !max-h-[80vh] !w-[480px] select-none flex-col gap-4 p-6'>
         {step === 'intro' ? (
           <>
             <ModalTitle className='text-lg font-semibold'>This project is read-only</ModalTitle>
@@ -164,8 +164,10 @@ const ReadOnlyProjectModal = () => {
                     type='button'
                     onClick={() => setSelectedFolderId(row.id)}
                     style={{ paddingLeft: `${row.depth * 16 + 12}px` }}
-                    className={`flex w-full cursor-pointer items-center gap-2 border-b border-neutral-100 px-3 py-2 text-left text-sm last:border-b-0 dark:border-neutral-800 ${
-                      selected ? 'bg-brand/10 text-brand-medium-dark' : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
+                    className={`flex w-full cursor-pointer items-center gap-2 border-b border-neutral-100 px-3 py-2 text-left text-sm text-neutral-800 last:border-b-0 dark:border-neutral-800 dark:text-neutral-100 ${
+                      selected
+                        ? 'bg-brand/10 dark:bg-brand/20 text-brand-medium-dark dark:text-white'
+                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
                     }`}
                   >
                     <span className='text-neutral-500'>{'📁'}</span>
@@ -183,7 +185,7 @@ const ReadOnlyProjectModal = () => {
                 onChange={(e) => setForkName(e.target.value)}
                 placeholder={sourceProjectName}
                 maxLength={100}
-                className='rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900'
+                className='rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900 placeholder-neutral-400 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder-neutral-500'
               />
             </label>
 
