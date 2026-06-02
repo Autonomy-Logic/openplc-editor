@@ -7,6 +7,7 @@ import { cn } from '../../../../utils/cn'
 import { ResizablePanel } from '../../../_organisms/panel'
 import { ChangesSection } from './changes-section'
 import { HistorySection } from './history-section'
+import { StashSection } from './stash-section'
 
 type SourceControlPanelProps = {
   collapse: LegacyRef<ImperativePanelHandle> | undefined
@@ -14,7 +15,7 @@ type SourceControlPanelProps = {
   projectId: string
 }
 
-type ActiveView = 'changes' | 'history'
+type ActiveView = 'changes' | 'history' | 'stash'
 
 const SourceControlPanel = ({ collapse, defaultSize = 16, projectId }: SourceControlPanelProps) => {
   const [activeView, setActiveView] = useState<ActiveView>('changes')
@@ -57,6 +58,17 @@ const SourceControlPanel = ({ collapse, defaultSize = 16, projectId }: SourceCon
             {pendingChangesCount > 0 && <span className='ml-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500' />}
           </button>
           <button
+            onClick={() => setActiveView('stash')}
+            className={cn(
+              'h-7 flex-1 text-xs font-medium transition-colors duration-150',
+              activeView === 'stash'
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-neutral-500 hover:text-neutral-700 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200',
+            )}
+          >
+            Stash
+          </button>
+          <button
             onClick={() => setActiveView('history')}
             className={cn(
               'h-7 flex-1 rounded-e-md text-xs font-medium transition-colors duration-150',
@@ -71,11 +83,9 @@ const SourceControlPanel = ({ collapse, defaultSize = 16, projectId }: SourceCon
 
         {/* Content */}
         <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-          {activeView === 'changes' ? (
-            <ChangesSection projectId={projectId} />
-          ) : (
-            <HistorySection projectId={projectId} />
-          )}
+          {activeView === 'changes' && <ChangesSection projectId={projectId} />}
+          {activeView === 'stash' && <StashSection projectId={projectId} />}
+          {activeView === 'history' && <HistorySection projectId={projectId} />}
         </div>
       </div>
     </ResizablePanel>

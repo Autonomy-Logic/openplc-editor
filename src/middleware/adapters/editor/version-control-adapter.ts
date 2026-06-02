@@ -26,5 +26,10 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
     getChanges: () => unsupported('getChanges'),
     discardChanges: () => unsupported('discardChanges'),
     computeGraphicalDiff: () => unsupported('computeGraphicalDiff') as unknown as GraphicalDiffResult,
+    listStashes: () => unsupported('listStashes'),
+    createStash: () => unsupported('createStash'),
+    applyStash: () => unsupported('applyStash'),
+    popStash: () => unsupported('popStash'),
+    dropStash: () => unsupported('dropStash'),
   }
 }

@@ -13,6 +13,7 @@ import { cn } from '../../../../utils/cn'
 import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
+import { StashCreateModal } from './modals/stash-create-modal'
 
 type ChangesSectionProps = {
   projectId: string
@@ -304,6 +305,8 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCommitting, setIsCommitting] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
+  const [showStashModal, setShowStashModal] = useState(false)
+  const [isStashing, setIsStashing] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
 
@@ -568,6 +571,40 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     }
   }
 
+  const handleStash = async (stashMessage: string) => {
+    if (!versionControl) return
+
+    setIsStashing(true)
+    setErrorMessage(null)
+
+    try {
+      // Stash only the explicitly selected visible files — same rationale as
+      // discard: never sweep in system-file changes the user can't see.
+      const selectedPaths = [...selectedFiles]
+      await versionControl.createStash(projectId, stashMessage || undefined, selectedPaths)
+      setShowStashModal(false)
+
+      // Stashing reverts the working tree to HEAD — reload in place so the
+      // editor reflects the reverted files, then re-sync the changes badge.
+      try {
+        const result = await projectPort.openProjectByPath(projectId)
+        if (result.success && result.data) {
+          sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        }
+      } catch {
+        toast({ title: 'Failed to reload project after stash', variant: 'fail' })
+      }
+      await fetchChanges()
+      toast({ title: 'Changes stashed' })
+    } catch (error) {
+      setShowStashModal(false)
+      const msg = error instanceof Error ? error.message : 'Failed to stash changes'
+      setErrorMessage(msg)
+    } finally {
+      setIsStashing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className='space-y-2 p-3'>
@@ -694,6 +731,14 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {isCommitting ? 'Committing...' : 'Commit'}
           </button>
           <button
+            onClick={() => (isReadOnly ? openReadOnlyModal('read-only-project') : setShowStashModal(true))}
+            disabled={(selectedFiles.size === 0 && !isReadOnly) || isStashing}
+            title={isReadOnly ? 'Read-only project — fork to stash' : 'Stash selected changes for later'}
+            className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-400'
+          >
+            {isStashing ? 'Stashing...' : 'Stash'}
+          </button>
+          <button
             onClick={() => (isReadOnly ? openReadOnlyModal('read-only-project') : setShowDiscardModal(true))}
             disabled={(selectedFiles.size === 0 && !isReadOnly) || isDiscarding}
             title={isReadOnly ? 'Read-only project — fork to discard' : undefined}
@@ -711,6 +756,15 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         totalCount={visibleFiles.length}
         onConfirm={() => void handleDiscard()}
         onCancel={() => setShowDiscardModal(false)}
+      />
+
+      <StashCreateModal
+        isOpen={showStashModal}
+        isLoading={isStashing}
+        fileCount={selectedFiles.size}
+        totalCount={visibleFiles.length}
+        onConfirm={(stashMessage) => void handleStash(stashMessage)}
+        onCancel={() => setShowStashModal(false)}
       />
 
       {previewFile && (
