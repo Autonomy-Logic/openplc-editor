@@ -14,9 +14,15 @@ export const FileMenu = () => {
   const {
     editor: activeEditor,
     workspace: { editingState, isReadOnly },
+    readme: { savedContent: readmeSavedContent },
     sharedWorkspaceActions: { closeProject },
     modalActions: { openModal },
   } = useOpenPLCStore()
+  // The README item is only available when the active adapter exposes
+  // the README slot (currently: web adapter against the Edge API). The
+  // slice's `savedContent === undefined` means "not hydrated" — either
+  // dev:local mode or desktop editor, where the menu item would 404.
+  const isReadmeAvailable = readmeSavedContent !== undefined
 
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
 
@@ -81,6 +87,14 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
           </MenuPrimitive.Item>
+          {isReadmeAvailable && (
+            <>
+              <MenuPrimitive.Separator className={SEPARATOR} />
+              <MenuPrimitive.Item className={ITEM} onClick={() => openModal('project-readme')}>
+                <span>README</span>
+              </MenuPrimitive.Item>
+            </>
+          )}
           {capabilities.hasProjectExport && (
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />
