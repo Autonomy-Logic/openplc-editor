@@ -10,20 +10,30 @@ type CppPouData = {
 /**
  * Self-contained baseline for c_blocks_code.cpp. Carries:
  *
- *   - The strucpp runtime includes so the auto-generated struct fields
- *     (`strucpp::IEC_INT*` etc., emitted by `generateStructMember`)
- *     resolve to IECVar wrappers. Force semantics flow through
- *     `IECVar::operator=` on the user's writes.
+ *   - The strucpp runtime includes so the auto-generated POU struct
+ *     fields (`strucpp::IEC_INT*` / `strucpp::IEC_STRING*` etc.,
+ *     emitted by `generateStructMember`) resolve to IECVar /
+ *     IECStringVar wrappers.  Force semantics flow through
+ *     `IECVar::operator=` (and `IECStringVar::operator=`) on every
+ *     user write — uniform across numeric, bit-string, and string
+ *     pins.
  *
- *   - File-scope raw IEC_BOOL/INT/.../REAL typedefs preserved from the
- *     MatIEC era. These exist only for the user's *local* variables in
- *     setup() / loop() (e.g. `IEC_INT my_temp = 0;`). They never collide
- *     with the auto-generated struct because that uses `strucpp::IEC_*`.
+ *   - File-scope raw numeric typedefs (`IEC_BOOL` / `IEC_INT` /
+ *     `IEC_REAL` / etc.) preserved from the MatIEC era.  These exist
+ *     ONLY for the user's *local* variables inside `setup()` /
+ *     `loop()` (e.g. `IEC_INT my_temp = 0;`).  They never collide
+ *     with the auto-generated struct fields because the struct
+ *     fully qualifies as `strucpp::IEC_*`.
  *
- *   - Raw `IEC_STRING` / `IEC_WSTRING` structs (`{ len; body[]; }`)
- *     used by the auto-generated struct AND by the user's c_blocks
- *     code via `name.len` / `name.body[i]`. The C++ stub copies these
- *     in/out of strucpp's IECStringVar at scan boundaries.
+ *   - No raw `IEC_STRING` / `IEC_WSTRING` typedef.  STRING pins now
+ *     use the strucpp wrapper end-to-end (`strucpp::IEC_STRING =
+ *     IECStringVar<254>`), so user code interacts with them via
+ *     `name = "hello";` / `name.length()` / `name[i]` /
+ *     `name.c_str()` / `name == "stop"` — the same surface every
+ *     other pin already exposes.  Local STRING variables inside
+ *     setup() / loop() can also be declared as
+ *     `strucpp::IEC_STRING my_buf;` (or `using strucpp::IEC_STRING;`
+ *     at the top of the user's POU body, opt-in).
  */
 const C_BLOCKS_BASELINE = `#include <cstdint>
 #include <cstring>
@@ -41,15 +51,25 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 #undef max
 #endif
 
-// STruC++ runtime types — IECVar<T> wrappers under namespace strucpp.
-// The auto-generated POU struct refers to them as \`strucpp::IEC_*\`,
-// keeping force-aware semantics on the user's writes via operator=.
+// STruC++ runtime types — IECVar<T> / IECStringVar<N> wrappers under
+// namespace strucpp.  The auto-generated POU struct refers to them
+// as \`strucpp::IEC_*\` for every pin (numeric, bit-string, STRING,
+// WSTRING), keeping force-aware semantics on the user's writes via
+// the wrapper's operator=.
 #include "iec_var.hpp"
 #include "iec_string.hpp"
 
 /*********************/
 /*  IEC Types defs   */
 /*********************/
+//
+// File-scope raw typedefs for the user's LOCAL variables inside
+// setup() / loop() (e.g. \`IEC_INT my_temp = 0;\`).  The auto-
+// generated POU struct fields use the fully-qualified
+// \`strucpp::IEC_*\` wrappers and are unaffected by these aliases.
+// STRING / WSTRING are NOT defined as raw POD structs here — local
+// STRING variables should use \`strucpp::IEC_STRING\` directly
+// (\`IECStringVar<254>\`), matching the wrapper used on pin fields.
 
 typedef uint8_t  IEC_BOOL;
 
@@ -70,24 +90,6 @@ typedef uint64_t   IEC_LWORD;
 
 typedef float    IEC_REAL;
 typedef double   IEC_LREAL;
-
-#ifndef STR_MAX_LEN
-#define STR_MAX_LEN 126
-#endif
-
-#ifndef STR_LEN_TYPE
-#define STR_LEN_TYPE int8_t
-#endif
-
-typedef STR_LEN_TYPE __strlen_t;
-// Raw STRING/WSTRING layout used by both the auto-generated POU
-// struct and the user's c_blocks code. The C++ stub copies between
-// this raw struct and strucpp::IECStringVar at the scan boundary.
-typedef struct {
-    __strlen_t len;
-    uint8_t body[STR_MAX_LEN];
-} IEC_STRING;
-typedef IEC_STRING IEC_WSTRING;
 
 `
 

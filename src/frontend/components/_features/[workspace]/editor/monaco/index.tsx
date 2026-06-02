@@ -758,12 +758,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         const code = model.getValue()
         const variableSuggestions = parseCppVariables(code, range)
+        const tableVariableSuggestions = tableVariablesCompletion({ range, variables: pouVariables }).suggestions
 
         const suggestions: monaco.languages.CompletionItem[] = [
           ...stdLibSuggestions,
           ...snippetSuggestions,
           ...arduinoSuggestions,
           ...variableSuggestions,
+          ...tableVariableSuggestions,
         ]
 
         return { suggestions }
@@ -776,7 +778,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard])
+  }, [language, deviceBoard, pouVariables])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)
