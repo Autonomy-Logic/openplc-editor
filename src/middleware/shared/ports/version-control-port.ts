@@ -18,6 +18,11 @@
  *   - POST   /projects/{id}/commits/{hash}/restore — Restore to a previous commit
  *   - GET    /projects/{id}/changes              — Get pending (uncommitted) changes
  *   - POST   /projects/{id}/discard-changes      — Discard pending changes
+ *   - GET    /projects/{id}/stashes              — List stashes
+ *   - POST   /projects/{id}/stashes              — Stash pending changes
+ *   - POST   /projects/{id}/stashes/apply        — Apply a stash (keep it)
+ *   - POST   /projects/{id}/stashes/pop          — Apply a stash and drop it
+ *   - POST   /projects/{id}/stashes/drop         — Drop a stash
  */
 
 // ---------------------------------------------------------------------------
@@ -59,6 +64,29 @@ export interface CommitInfo {
 export interface PendingChange {
   path: string
   status: 'added' | 'modified' | 'deleted'
+}
+
+export interface Stash {
+  /** Stack position label at list time, e.g. `stash@{0}`. */
+  ref: string
+  /** Stack index at list time. */
+  index: number
+  /** Stash commit SHA — stable identifier used for apply/pop/drop. */
+  hash: string
+  /** User-facing message. */
+  message: string
+  /** Branch the stash was created on. */
+  branch: string
+  /** ISO-8601 creation timestamp. */
+  createdAt: string
+}
+
+/** Raised when apply/pop cannot complete cleanly (server returns 409). */
+export class StashConflictError extends Error {
+  constructor(message = 'Stash could not be applied cleanly') {
+    super(message)
+    this.name = 'StashConflictError'
+  }
 }
 
 export type SwitchBranchStrategy = 'discard' | 'carry'
@@ -145,6 +173,24 @@ export interface VersionControlPort {
 
   /** Discard pending changes. Optionally specify which files to discard. */
   discardChanges(projectId: string, files?: string[], branch?: string): Promise<void>
+
+  /** List the project's stashes (most recent first). */
+  listStashes(projectId: string): Promise<{ stashes: Stash[] }>
+
+  /**
+   * Stash pending changes, reverting the working tree to the last commit.
+   * Optionally restrict the stash to specific files.
+   */
+  createStash(projectId: string, message?: string, files?: string[]): Promise<{ stash: Stash }>
+
+  /** Re-apply a stash onto the working tree, keeping it on the stack. Throws {@link StashConflictError} on conflict. */
+  applyStash(projectId: string, ref: string): Promise<{ message: string }>
+
+  /** Re-apply a stash and drop it on success. Throws {@link StashConflictError} on conflict (stash kept). */
+  popStash(projectId: string, ref: string): Promise<{ message: string }>
+
+  /** Permanently remove a stash without applying it. */
+  dropStash(projectId: string, ref: string): Promise<void>
 
   /** Compute graphical diff between two file versions (LD/FBD). */
   computeGraphicalDiff(originalContent: string, currentContent: string, filePath: string): GraphicalDiffResult
