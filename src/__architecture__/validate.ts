@@ -349,6 +349,7 @@ function validate(): Violation[] {
 const violations = validate()
 
 if (violations.length === 0) {
+  //
   console.log('Architecture validation passed. No layer violations found.')
   process.exit(0)
 } else {

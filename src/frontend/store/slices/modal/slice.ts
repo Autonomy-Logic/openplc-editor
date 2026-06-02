@@ -26,6 +26,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'public-catalog-browser',
   'confirm-install-libraries',
   'read-only-project',
+  'project-readme',
 ]
 
 function createDefaultModals() {
