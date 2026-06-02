@@ -79,7 +79,6 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
-import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
@@ -1151,93 +1150,6 @@ class CompilerModule {
         }
       })
     })
-  }
-
-  /**
-   * Read the disk inputs `generateDefinesContent` needs (hals.json,
-   * pin-mapping.json, program.st) and write the authored `defines.h`
-   * to `build/<target>/src/defines.h`.
-   *
-   * The content-authoring logic lives in the shared
-   * `backend/shared/compile/steps/generate-defines.ts` so the web's
-   * pipeline can produce the same byte-for-byte `defines.h` from
-   * the same inputs.  This method is thin glue around the shared
-   * function — filesystem reads in, write call out.
-   *
-   * `defines.h` lives alongside `arduino.cpp` in `src/`.  The HAL
-   * templates include it as plain `"defines.h"` so the file is found
-   * whether arduino-cli compiles the source in place or moves it
-   * into its sketch sandbox first — avoids the directory-relative
-   * include that broke on paths with spaces and on VM shared-folder
-   * mounts.
-   */
-  async handleGenerateDefinitionsFile({
-    projectPath,
-    buildMD5Hash,
-    boardTarget,
-    boardRuntime,
-    _handleOutputData,
-  }: {
-    projectPath: string
-    boardTarget: string
-    buildMD5Hash: string
-    boardRuntime: string
-    _handleOutputData: HandleOutputDataCallback
-  }) {
-    const devicesPinMappingFilePath = join(projectPath, 'devices', 'pin-mapping.json')
-    const buildTargetDirectoryPath = join(projectPath, 'build', boardTarget)
-    const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
-    const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
-
-    // Resolve board info uniformly across hals.json + installed VPP
-    // packages so `boardInfo.define` covers BOARD_ESP8266 / BOARD_ESP32 /
-    // BOARD_WIFININA contributions from either source — ModbusSlave.h's
-    // board-detection chain relies on these macros being present
-    // regardless of catalog.
-    const resolver = await this.#createBoardInfoResolver()
-    const boardInfo = resolver.resolve(boardTarget)
-
-    const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
-    const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
-
-    // VPP Modbus screen state — only read for non-simulator Arduino
-    // targets.  Simulator emits a fixed RTU-over-USART0 block (handled
-    // inside `generateDefinesContent`); runtime-v3/v4 route Modbus
-    // through `conf/modbus_slave.json` in the upload bundle and emit
-    // no macros here.
-    let vppModbusState: VppModbusScreenState | undefined
-    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
-      const devicesConfigurationFilePath = join(projectPath, 'devices', 'configuration.json')
-      try {
-        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
-        const vendorScreenData = deviceConfig.vendorScreenData ?? {}
-        vppModbusState = {
-          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
-          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
-        }
-      } catch {
-        // Missing configuration.json leaves vppModbusState undefined —
-        // the shared `generateDefinesContent` then skips the Modbus
-        // block (no MODBUS_ENABLED), matching the pre-VPP behaviour
-        // for boards that never had a comms config persisted.
-      }
-    }
-
-    const definesContent = generateDefinesContent({
-      boardEntry: { define: boardInfo.define },
-      devicePinMapping,
-      stProgramFileContent,
-      buildMD5Hash,
-      boardRuntime,
-      ...(vppModbusState ? { vppModbusState } : {}),
-    })
-
-    try {
-      await writeFile(definitionsFilePath, definesContent, { encoding: 'utf8' })
-      _handleOutputData(`Defines file created at: ${definitionsFilePath}`, 'info')
-    } catch (_error) {
-      _handleOutputData('Error writing defines.h file', 'error')
-    }
   }
 
   // handlePatchGeneratedFiles is no longer needed.
@@ -2635,6 +2547,32 @@ class CompilerModule {
         ? { kind: 'editor-https' as const, ip: runtimeIpAddress, jwt: runtimeJwtToken }
         : undefined
 
+    // Pull the persisted VPP Modbus screen state from
+    // `devices/configuration.json` so non-runtime / non-simulator
+    // targets get the matching `MBSERIAL_*` / `MBTCP_*` defines
+    // baked into the firmware.  Without this, ModbusSlave.cpp's
+    // `#ifdef MBSERIAL` blocks compile to nothing and the board
+    // never enables Modbus — at which point the debugger can't
+    // talk to it (failing MD5 verification after retries).
+    let vppModbusState: VppModbusScreenState | undefined
+    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
+      const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      try {
+        const deviceConfig =
+          await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+        vppModbusState = {
+          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
+          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+        }
+      } catch {
+        // No configuration.json — leave undefined so the shared
+        // pipeline skips the Modbus block entirely (matches the
+        // pre-VPP behaviour for boards that never had a comms
+        // config persisted).
+      }
+    }
+
     // --- Run the shared pipeline ---
     const result = await runCompilePipeline(
       {
@@ -2659,6 +2597,7 @@ class CompilerModule {
         arduinoCliParallel: true,
         deviceContext,
         communicationPort: communicationPort ?? undefined,
+        ...(vppModbusState ? { vppModbusState } : {}),
       },
       platformPort,
       (event) => {
