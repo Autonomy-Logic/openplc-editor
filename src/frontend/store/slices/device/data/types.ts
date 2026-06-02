@@ -4,6 +4,5 @@ export const defaultDeviceConfiguration: DeviceConfiguration = {
   deviceBoard: 'OpenPLC Simulator',
   communicationPort: '',
   runtimeIpAddress: '',
-  compileOnly: false,
   selectedPlatformOptions: {},
 }

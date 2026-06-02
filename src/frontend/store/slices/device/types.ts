@@ -117,7 +117,6 @@ export type DeviceActions = {
    *  change, can also be invoked by UI to reset to manifest defaults. */
   clearSelectedPlatformOptions: () => void
   setCommunicationPort: (port: string) => void
-  setCompileOnly: (compileOnly: boolean) => void
   setRuntimeIpAddress: (ipAddress: string) => void
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void

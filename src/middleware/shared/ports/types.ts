@@ -861,7 +861,6 @@ export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
-  compileOnly: boolean
   vendorScreenData?: Record<string, unknown>
   /**
    * User's choices for the board's `target.platformOptions` (VPP-declared

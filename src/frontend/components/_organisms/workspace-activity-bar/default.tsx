@@ -167,7 +167,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             projectData: freshProjectData,
             boardTarget: deviceDefinitions.configuration.deviceBoard,
             projectPath: projectMeta.path,
-            compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
+            // `compileOnly` is dictated entirely by the sidebar build
+            // menu (Build / Build & Upload / Clean Build & Upload).
+            // Default to `false` so the few callers that invoke
+            // `handleBuild()` with no overrides also get an upload.
+            compileOnly: overrides?.compileOnly ?? false,
             cleanBuild: overrides?.cleanBuild ?? false,
             isSimulator: isSimulatorBoard,
             runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,

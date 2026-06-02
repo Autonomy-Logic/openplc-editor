@@ -49,11 +49,6 @@ const pinSelectors = {
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
-const compileOnlySelectors = {
-  useCompileOnly: () => useOpenPLCStore((state) => state.deviceDefinitions.configuration.compileOnly),
-  useSetCompileOnly: () => useOpenPLCStore((state) => state.deviceActions.setCompileOnly),
-}
-
 // ===================== Ladder selectors. =====================
 const ladderSelectors = {
   useGetIsRungOpen: () => useOpenPLCStore((state) => state.editorActions.getIsRungOpen),
@@ -133,6 +128,6 @@ const vendorIoSelectors = {
   },
 }
 
-export { boardSelectors, compileOnlySelectors, ladderSelectors, pinSelectors, remoteDeviceSelectors, vendorIoSelectors }
+export { boardSelectors, ladderSelectors, pinSelectors, remoteDeviceSelectors, vendorIoSelectors }
 
 export type { RemoteDeviceIOPoint }

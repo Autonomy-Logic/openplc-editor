@@ -371,14 +371,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
-    setCompileOnly: (compileOnly): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          deviceDefinitions.configuration.compileOnly = compileOnly
-        }),
-      )
-    },
     setRuntimeIpAddress: (ipAddress): void => {
       setState(
         produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
@@ -522,7 +514,6 @@ function mergeDeviceConfigWithDefaults(
     deviceBoard: provided.deviceBoard || defaults.deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
-    compileOnly: provided.compileOnly ?? defaults.compileOnly,
     vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
     // Must merge — otherwise loading a project whose configuration.json
     // predates platformOptions leaves the field undefined in the store, and

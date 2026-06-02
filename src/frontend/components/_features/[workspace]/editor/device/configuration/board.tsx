@@ -2,18 +2,17 @@
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
-import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
-import { Checkbox } from '../../../../../_atoms/checkbox'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
@@ -30,9 +29,6 @@ const Board = memo(function () {
   const runtime = useRuntime()
 
   const {
-    deviceDefinitions: {
-      configuration: { compileOnly },
-    },
     deviceAvailableOptions: { availableBoards },
     project: {
       data: { pous, servers, remoteDevices },
@@ -46,8 +42,6 @@ const Board = memo(function () {
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
   const currentSelectedPinTableRow = pinSelectors.useCurrentSelectedPinTableRow()
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
-
-  const setCompileOnly = compileOnlySelectors.useSetCompileOnly()
 
   const pins = pinSelectors.usePins()
   const createNewPin = pinSelectors.useCreateNewPin()
@@ -253,11 +247,6 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
-  const handleCompileOnly = () => {
-    setCompileOnly(!memoizedCompileOnly)
-  }
-  const memoizedCompileOnly = useMemo(() => compileOnly, [compileOnly])
-
   const handleConnectToRuntime = useCallback(async () => {
     if (connectionStatus === 'connected') {
       // Disconnect - global polling hook will handle resetting failure counter
@@ -375,19 +364,6 @@ const Board = memo(function () {
           <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
             Board Settings
           </h2>
-          {!isSimulatorTarget(currentBoardInfo) && (
-            <div id='compile-only-container' className='flex select-none items-center gap-2'>
-              <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-                Compile Only
-              </Label>
-              <Checkbox
-                id='compile-only-checkbox'
-                className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-                checked={compileOnly}
-                onCheckedChange={handleCompileOnly}
-              />
-            </div>
-          )}
           <div id='board-selector' className='flex w-full items-center justify-start gap-1 pr-5'>
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device

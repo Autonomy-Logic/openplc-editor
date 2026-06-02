@@ -660,16 +660,11 @@ async function runCompilePipelineInner(
     return { success: true, md5, binary: compileResult.binary, uploaded: false }
   }
 
-  // Physical Arduino direct upload.  Web no-ops (web doesn't target
-  // physical Arduinos directly).
-  if (!deviceContext) {
-    emit({
-      stage: 'upload',
-      message: 'Arduino board not configured (no device context). Skipping upload.',
-      level: 'warning',
-    })
-    return { success: true, md5, binary: compileResult.binary, uploaded: false }
-  }
+  // Physical Arduino direct upload.  Uses `communicationPort` (the
+  // user's serial-port pick) — no `deviceContext` involved; that
+  // shape is for the HTTPS/orchestrator runtime-v4 transports, which
+  // already returned above.  Web's `uploadArduinoBoard` adapter
+  // no-ops because web doesn't target physical Arduinos directly.
   emit({ stage: 'upload', message: 'Uploading firmware to Arduino board...', level: 'info' })
   const uploadResult = await port.uploadArduinoBoard(
     {

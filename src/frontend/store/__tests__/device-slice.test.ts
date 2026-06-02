@@ -196,13 +196,13 @@ describe('createDeviceSlice', () => {
     it('merges partial configuration with defaults', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({
-        configuration: { deviceBoard: 'Mega', compileOnly: true },
+        configuration: { deviceBoard: 'Mega', communicationPort: 'COM3' },
       })
       const cfg = store.getState().deviceDefinitions.configuration
       expect(cfg.deviceBoard).toBe('Mega')
-      expect(cfg.compileOnly).toBe(true)
+      expect(cfg.communicationPort).toBe('COM3')
       // defaults preserved
-      expect(cfg.communicationPort).toBe(defaultDeviceConfiguration.communicationPort)
+      expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
     })
 
     it('sets pinMapping', () => {
@@ -807,25 +807,6 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
       expect(store.getState().deviceDefinitions.configuration.communicationPort).toBe('/dev/ttyUSB0')
       expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setCompileOnly
-  // -----------------------------------------------------------------------
-  describe('setCompileOnly', () => {
-    it('sets compileOnly to true', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(true)
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets compileOnly to false', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      store.getState().deviceActions.setCompileOnly(false)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(false)
     })
   })
 
