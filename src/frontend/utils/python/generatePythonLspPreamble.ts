@@ -32,6 +32,16 @@ export interface PythonLspPreamble {
   /** Number of model lines the preamble occupies; used to offset
    *  Pyright diagnostics back to the user's editor line numbering. */
   lineCount: number
+  /**
+   * Map from 0-indexed preamble line number → variable name for
+   * every variable that survived to a declaration line in `text`.
+   * The Python LSP definition-redirect uses this to translate a
+   * Pyright Go-to-Definition target ("the declaration is at preamble
+   * line N") into a variable name, which the IEC variable-text line
+   * map then resolves to the matching VAR-block line in the user-
+   * facing variables panel.  Empty when `lineCount === 0`.
+   */
+  variableNameByPreambleLine: Map<number, string>
 }
 
 /**
@@ -146,17 +156,7 @@ function initialValueFor(variable: PLCVariable, annotation: string): string {
 export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPreamble {
   const declarable = variables.filter((v) => v.class === 'input' || v.class === 'output')
   if (declarable.length === 0) {
-    return { text: '', lineCount: 0 }
-  }
-
-  const declLines: string[] = []
-  for (const v of declarable) {
-    const annotation = annotationFor(v)
-    if (!annotation) continue
-    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation)}`)
-  }
-  if (declLines.length === 0) {
-    return { text: '', lineCount: 0 }
+    return { text: '', lineCount: 0, variableNameByPreambleLine: new Map() }
   }
 
   const header = [
@@ -166,6 +166,25 @@ export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPr
     '# names as module-level globals at runtime (see injectPythonRuntime).',
     '# ===================================================================',
   ]
+  const declLines: string[] = []
+  const variableNameByPreambleLine = new Map<number, string>()
+  // First declaration sits at line `header.length` (header occupies
+  // lines 0..header.length-1).  Each subsequent declaration advances
+  // by one line.  Variables whose type can't be mapped to Python
+  // (TIME / DATE / TOD / DT / user types) are skipped — they don't
+  // get a declaration line, so they don't take a slot in the map.
+  let preambleLine = header.length
+  for (const v of declarable) {
+    const annotation = annotationFor(v)
+    if (!annotation) continue
+    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation)}`)
+    variableNameByPreambleLine.set(preambleLine, v.name)
+    preambleLine++
+  }
+  if (declLines.length === 0) {
+    return { text: '', lineCount: 0, variableNameByPreambleLine: new Map() }
+  }
+
   const body = [...header, ...declLines, '', '']
   const text = body.join('\n')
   // `lineCount` is the 0-indexed augmented-document line where the
@@ -177,5 +196,5 @@ export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPr
   // not a line of its own.  Off-by-one here shifted hover positions
   // to the next line and would have surfaced as wrong-line markers
   // too once a diagnostic actually fired on the user's first line.
-  return { text, lineCount: body.length - 1 }
+  return { text, lineCount: body.length - 1, variableNameByPreambleLine }
 }

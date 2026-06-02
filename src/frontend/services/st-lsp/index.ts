@@ -3,35 +3,56 @@
 /**
  * STruC++ LSP service orchestrator.
  *
- * `startStLsp` spawns the worker, performs the LSP `initialize`
- * handshake, registers Monaco providers, pushes initial stlib
- * archives, and returns a service handle the document-sync layer
- * (Phase 5) feeds with didOpen / didChange / didClose.
+ * Thin adapter over `lsp-shared/startLanguageService`.  The shared
+ * layer owns the worker + jsonrpc transport, the LSP handshake,
+ * Monaco provider registration, the diagnostics-to-markers pipe,
+ * and the semantic-tokens registration.  This file supplies the
+ * ST-specific configuration:
  *
- * Lifetime is the application's lifetime; the service is started
- * once at app boot and disposed only when the app shuts down.  A
- * crash inside the worker is logged and the `ready` promise stays
- * unresolved — the rest of the app continues to function with no
- * ST tooling rather than tripping over an undefined service.
+ *   - Worker URL resolution (`strucpp/dist/browser-server.js?url`
+ *     under webpack; injected for tests).
+ *   - Provider hooks: the `pouvars://` URI rewrite (variables-text
+ *     view targets a different LSP doc than its Monaco model);
+ *     definition redirects to the Zustand store / graphical
+ *     editor.
+ *   - Diagnostics mirror onto the `pouvars://` model so var-block
+ *     errors surface in the variables editor too.
+ *   - Semantic-tokens viewport clip for the variables-text view.
+ *   - The `strucpp/loadStlibBuffer` custom RPC + post-initialize
+ *     stlib push, plus the public `refreshStlibs()` method.
+ *
+ * Lifetime is the application's lifetime; started once at boot,
+ * disposed only at shutdown.
  */
 
-import {
-  DidChangeTextDocumentNotification,
-  DidCloseTextDocumentNotification,
-  DidOpenTextDocumentNotification,
-  InitializedNotification,
-  type InitializeParams,
-  InitializeRequest,
-  SemanticTokensRefreshRequest,
-} from 'vscode-languageserver-protocol'
+import type { Diagnostic, Location as LspLocation, MessageConnection } from 'vscode-languageserver-protocol'
 
 import { openPLCStoreBase } from '../../store'
-import { attachDiagnosticsBridge } from './diagnostics'
-import { registerStLspProviders, registerStLspSemanticTokens, type SemanticTokensRegistration } from './providers'
-import { createLspTransport, type LspTransport } from './transport'
-import type { StLspService, StLspStartOptions } from './types'
+import {
+  getBodyLineOffset,
+  type LanguageService,
+  type LspContext,
+  lspDiagnosticToMonaco,
+  startLanguageService,
+  suppressNoDefinitionFound,
+} from '../lsp-shared'
+import { redirectDefinitionToStore } from './goto-definition-redirect'
+import { redirectToGraphicalPou } from './graphical-redirect'
+import {
+  parsePouUri,
+  parsePouVarsUri,
+  POU_DECLARATION_LINE_COUNT,
+  pouUri,
+  pouVarsUri,
+  type StLspService,
+  type StLspStartOptions,
+  stubUri,
+} from './types'
 
 const ST_LANGUAGE_ID = 'st'
+const ST_WORKER_NAME = 'strucpp-lsp'
+const MARKER_OWNER = 'strucpp-lsp'
+const DIAGNOSTIC_SOURCE = 'strucpp'
 
 /**
  * Custom RPC matching `LoadStlibBufferRequestType` in
@@ -44,164 +65,134 @@ interface LoadStlibBufferParams {
   payload: string | { type: 'buffer'; bytes: number[] }
 }
 
-interface DocumentState {
-  uri: string
-  version: number
+/**
+ * Resolve a Monaco model URI to the LSP URI + body-line offset:
+ *
+ *   - `pou://<name>.st` (body editor): URI passes through; offset
+ *     is whatever project-sync registered (preamble line count).
+ *   - `pouvars://<name>.st` (variables text view): the LSP doesn't
+ *     index this URI — remap to the live document.  For ST POUs
+ *     that's `pou://`; for graphical/hybrid POUs it's `stub://`.
+ *     Either way the declaration is a single line at LSP index 0,
+ *     so the offset is a constant 1.
+ *   - Anything else: pass through unchanged.
+ */
+function resolveStLspContext(modelUri: string): LspContext {
+  const varsPou = parsePouVarsUri(modelUri)
+  if (varsPou !== null) {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
+    const isStLanguage = pou?.body.language === 'st'
+    const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
+    return { lspUri, lineOffset: POU_DECLARATION_LINE_COUNT }
+  }
+  return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
-  const { stlibSource, monaco, workerUrlOverride, onCrash } = opts
+  const { stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
 
-  let disposed = false
-  let initialised = false
+  // Resolve the worker URL.  The require lives inside the function
+  // so the bundler probe never runs under test (jsdom test envs
+  // don't ship the asset).
   let workerUrl = workerUrlOverride
   if (!workerUrl) {
-    // Webpack rewrites this `?url` import to the emitted asset URL.
-    // The require lives inside the function so the bundler probe
-    // never runs under test (jsdom test envs don't ship the asset).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const moduleExports = require('strucpp/dist/browser-server.js?url') as { default: string } | string
     workerUrl = typeof moduleExports === 'string' ? moduleExports : moduleExports.default
   }
 
-  // Forward worker crashes to the renderer's callback ONLY after
-  // `initialize` has resolved.  Pre-init crashes reject `ready`
-  // through the natural in-flight-request rejection that
-  // `connection.dispose()` triggers, so calling `onCrash` then would
-  // surface a redundant toast on top of the already-rejected promise
-  // that the boot path already surfaces.
-  const handleWorkerCrash = (err: Error) => {
-    if (!initialised) return
-    if (disposed) return
-    try {
-      onCrash?.(err)
-    } catch (callbackErr) {
-      console.error('[strucpp-lsp] onCrash callback threw:', callbackErr)
-    }
-  }
+  let serviceConnection: MessageConnection | null = null
 
-  let transport: LspTransport
-  try {
-    transport = createLspTransport(workerUrl, { onError: handleWorkerCrash })
-  } catch (err) {
-    // No worker support (jsdom, missing URL, etc.) — return a
-    // service that never resolves `ready` so callers gate on it.
-    console.warn('[strucpp-lsp] worker failed to start:', err)
-    const stalled = new Promise<void>(() => undefined)
-    return {
-      ready: stalled,
-      refreshStlibs: () => Promise.resolve(),
-      openDocument: () => undefined,
-      changeDocument: () => undefined,
-      closeDocument: () => undefined,
-      dispose: () => undefined,
-    }
-  }
+  const sharedService: LanguageService = startLanguageService({
+    languageId: ST_LANGUAGE_ID,
+    workerName: ST_WORKER_NAME,
+    workerUrl,
+    ...(monacoApi ? { monaco: monacoApi } : {}),
 
-  const { connection } = transport
-  const documents = new Map<string, DocumentState>()
-
-  const providerDisposable = monaco ? registerStLspProviders({ connection, monacoApi: monaco }) : null
-  const diagnosticsDisposable = monaco ? attachDiagnosticsBridge(connection, monaco) : null
-  // Semantic-tokens provider needs the legend from the worker's
-  // `initialize` result, so it can't be registered synchronously
-  // alongside the others.  Filled in inside the ready promise below.
-  let semanticTokensRegistration: SemanticTokensRegistration | null = null
-
-  // Handler for `workspace/semanticTokens/refresh` — strucpp sends
-  // this when its background analysis catches up to docs that were
-  // didOpen'd before they were ready, and asks the client to
-  // re-query all semantic tokens.  Registered immediately (not
-  // inside the ready promise) so the request handler is in place
-  // even for refreshes the server sends mid-handshake.
-  connection.onRequest(SemanticTokensRefreshRequest.type, () => {
-    semanticTokensRegistration?.refresh()
-    return null
-  })
-
-  // ---------------------------------------------------------------------------
-  // LSP handshake — initialize, initialized, push stlibs
-  // ---------------------------------------------------------------------------
-  const ready = (async () => {
-    connection.listen()
-
-    const initParams: InitializeParams = {
-      processId: null,
-      rootUri: null,
-      capabilities: {
-        textDocument: {
-          publishDiagnostics: {},
-          completion: { completionItem: { snippetSupport: true } },
-          hover: {},
-          signatureHelp: {},
-          definition: {},
-          references: {},
-          documentSymbol: { hierarchicalDocumentSymbolSupport: true },
-          rename: { prepareSupport: true },
-          formatting: {},
-          semanticTokens: {
-            requests: { full: true },
-            tokenTypes: [],
-            tokenModifiers: [],
-            formats: ['relative'],
+    // Provider configuration
+    completionTriggerCharacters: ['.', ':'],
+    signatureHelpTriggerCharacters: ['(', ','],
+    resolveLspContext: resolveStLspContext,
+    definitionInterceptors: monacoApi
+      ? [
+          // Reroute graphical-POU stubs to the graphical editor.
+          (locations: LspLocation[], model, position) => {
+            const stubLocation = locations.find((l) => redirectToGraphicalPou(l.uri))
+            if (stubLocation) return suppressNoDefinitionFound(model, position, monacoApi)
+            return undefined
           },
-        },
-        workspace: {
-          // Advertise that we honour server-initiated requests to
-          // refresh semantic tokens.  Servers send this when their
-          // background analysis catches up to docs that were
-          // didOpen'd before analysis was ready — without
-          // refreshSupport, the client (us) keeps showing whatever
-          // empty result the first query returned.
-          semanticTokens: { refreshSupport: true },
-        },
-      },
-      workspaceFolders: null,
-    }
-    const initResult = await connection.sendRequest(InitializeRequest.type, initParams)
-    await connection.sendNotification(InitializedNotification.type, {})
+          // Route variable-declaration and cross-POU targets through
+          // the Zustand store.
+          (locations, model, position) => {
+            const primary = locations[0]
+            if (primary && redirectDefinitionToStore(primary)) {
+              return suppressNoDefinitionFound(model, position, monacoApi)
+            }
+            return undefined
+          },
+        ]
+      : [],
 
-    // Wire semantic tokens once we know the worker's legend.  The
-    // worker advertises `semanticTokensProvider: { legend, full: true }`;
-    // if it ever drops the capability, we silently skip registration
-    // so ST still renders (as plain text), with completion/hover/etc.
-    // unaffected.
-    const legend = initResult.capabilities.semanticTokensProvider
-    if (monaco && legend && 'legend' in legend && legend.legend) {
-      semanticTokensRegistration = registerStLspSemanticTokens({
-        connection,
-        monacoApi: monaco,
-        legend: {
-          tokenTypes: [...legend.legend.tokenTypes],
-          tokenModifiers: [...legend.legend.tokenModifiers],
-        },
-      })
-    }
+    // Rename intentionally not configured.  Default capabilities
+    // advertise prepareSupport, but no Monaco rename provider is
+    // registered — see comment in `lsp-shared/providers.ts`.
 
-    await pushAllStlibs()
-    // Mark the service initialised AFTER stlib push — any failure
-    // up to this point counts as crash-during-init and goes through
-    // the rejected `ready` promise, not the post-init crash
-    // callback.  This is the exact boundary where the rest of the
-    // app starts trusting the service is alive.
-    initialised = true
-  })().catch((err) => {
-    console.error('[strucpp-lsp] initialize failed:', err)
-    throw err
+    // Semantic-tokens viewport: variables-text view clips to the
+    // VAR-block region; body editors keep everything from the
+    // body line onwards.
+    resolveSemanticTokensViewport: (lspUri, modelUri, lineOffset) => {
+      const isVarsView = parsePouVarsUri(modelUri) !== null
+      return {
+        startLine: lineOffset,
+        endLineExclusive: isVarsView ? getBodyLineOffset(lspUri) : Number.POSITIVE_INFINITY,
+      }
+    },
+
+    // Diagnostics configuration
+    markerOwner: MARKER_OWNER,
+    diagnosticSource: DIAGNOSTIC_SOURCE,
+    diagnosticsMirror: (params, ctx) => {
+      // Mirror VAR-block diagnostics onto the variables-text editor
+      // for the same POU (if mounted).  The variables editor uses a
+      // separate Monaco model under `pouvars://<name>.st`; strucpp
+      // doesn't publish against that URI directly, so we filter the
+      // body-doc diagnostics down to the VAR region and re-emit
+      // them shifted to the declaration-line frame.
+      const parsed = parsePouUri(params.uri)
+      if (!parsed) return
+      const varsModel = ctx.monacoApi.editor.getModels().find((m) => m.uri.toString() === pouVarsUri(parsed.name))
+      if (!varsModel) return
+      const varDiagnostics: Diagnostic[] = params.diagnostics.filter(
+        (d) => d.range.start.line >= POU_DECLARATION_LINE_COUNT && d.range.start.line < ctx.bodyOffset,
+      )
+      ctx.monacoApi.editor.setModelMarkers(
+        varsModel,
+        ctx.markerOwner,
+        varDiagnostics.map((d) =>
+          lspDiagnosticToMonaco(d, ctx.monacoApi, POU_DECLARATION_LINE_COUNT, ctx.defaultSource),
+        ),
+      )
+    },
+
+    // Lifecycle hooks
+    beforeListen: (connection) => {
+      serviceConnection = connection
+    },
+    postInitialize: async ({ connection }) => {
+      await pushAllStlibs(connection)
+    },
+    ...(onCrash ? { onCrash } : {}),
   })
 
-  async function pushAllStlibs(): Promise<void> {
+  async function pushAllStlibs(connection: MessageConnection): Promise<void> {
     const sources = await stlibSource.listStlibs()
     // Honor the project's enabled-library set, plus the always-on
     // bundled archives.  The adapter returns every system-installed
-    // archive; the project policy lives in the store, so the service
-    // applies it here.  Bundled libs (e.g. the IEC standard FBs like
-    // `TON`) are tracked separately in `bundledLibraryNames` and are
-    // intentionally absent from `enabledLibraries`, so filtering on
-    // the latter alone would starve the LSP of every standard symbol
-    // and surface as "Undefined type 'TON'" diagnostics.  Anything
-    // outside the union must still be excluded — otherwise the user
-    // can reference types from libraries they never opted in to.
+    // archive; the project policy lives in the store.  Bundled libs
+    // (e.g. the IEC standard FBs like `TON`) are tracked separately
+    // in `bundledLibraryNames` and are intentionally absent from
+    // `enabledLibraries`, so filtering on the latter alone would
+    // starve the LSP of every standard symbol.
     const state = openPLCStoreBase.getState()
     const allowed = new Set([...state.enabledLibraries, ...state.bundledLibraryNames])
     for (const source of sources) {
@@ -222,15 +213,16 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   }
 
   return {
-    ready,
+    ready: sharedService.ready,
 
     refreshStlibs: async () => {
-      // Best-effort: if ready hasn't resolved, queue behind it.
       try {
-        await ready
+        await sharedService.ready
       } catch {
         return
       }
+      const connection = serviceConnection
+      if (!connection) return
       // Clear-then-repush so the worker's cache reflects the
       // current stlib set exactly.  Cheaper than diffing, and the
       // worker's per-archive parse is fast.
@@ -240,49 +232,23 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         // Older worker bundles may not have this RPC yet — silent
         // fallback to "additive" semantics is acceptable.
       }
-      await pushAllStlibs()
+      await pushAllStlibs(connection)
     },
 
     openDocument(uri, content) {
-      if (disposed) return
-      const existing = documents.get(uri)
-      const version = (existing?.version ?? 0) + 1
-      documents.set(uri, { uri, version })
-      void connection.sendNotification(DidOpenTextDocumentNotification.type, {
-        textDocument: {
-          uri,
-          languageId: ST_LANGUAGE_ID,
-          version,
-          text: content,
-        },
-      })
+      sharedService.openDocument(uri, content)
     },
 
     changeDocument(uri, content, externalVersion) {
-      if (disposed) return
-      const next = { uri, version: externalVersion }
-      documents.set(uri, next)
-      void connection.sendNotification(DidChangeTextDocumentNotification.type, {
-        textDocument: { uri, version: externalVersion },
-        contentChanges: [{ text: content }],
-      })
+      sharedService.changeDocument(uri, content, externalVersion)
     },
 
     closeDocument(uri) {
-      if (disposed) return
-      documents.delete(uri)
-      void connection.sendNotification(DidCloseTextDocumentNotification.type, {
-        textDocument: { uri },
-      })
+      sharedService.closeDocument(uri)
     },
 
     dispose() {
-      if (disposed) return
-      disposed = true
-      providerDisposable?.dispose()
-      diagnosticsDisposable?.dispose()
-      semanticTokensRegistration?.dispose()
-      transport.dispose()
+      sharedService.dispose()
     },
   }
 }

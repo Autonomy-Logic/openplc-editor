@@ -1,5 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { generateIecVariablesToString } from '../generate-iec-variables-to-string'
+import { generateIecVariablesToString, getIecVariableLineMap } from '../generate-iec-variables-to-string'
 
 const makeVariable = (overrides: Partial<PLCVariable> & Pick<PLCVariable, 'name'>): PLCVariable => ({
   name: overrides.name,
@@ -164,5 +164,52 @@ describe('generateIecVariablesToString', () => {
     expect(result).toBe(
       ['  VAR_INPUT', '    inA : INT;', '  END_VAR', '  VAR_OUTPUT', '    outA : INT;', '  END_VAR'].join('\n'),
     )
+  })
+})
+
+describe('getIecVariableLineMap', () => {
+  it('returns an empty map for empty / nullish input', () => {
+    expect(getIecVariableLineMap([]).size).toBe(0)
+    expect(getIecVariableLineMap(null as unknown as PLCVariable[]).size).toBe(0)
+  })
+
+  it('places each variable on the same Monaco line as the IEC text emits', () => {
+    const vars: PLCVariable[] = [
+      makeVariable({ name: 'ValveState', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }),
+      makeVariable({ name: 'DidPrint', class: 'output', type: { definition: 'base-type', value: 'BOOL' } }),
+    ]
+    const map = getIecVariableLineMap(vars)
+    expect(map.get('ValveState')).toEqual({ line: 2, column: 5 })
+    expect(map.get('DidPrint')).toEqual({ line: 5, column: 5 })
+
+    // Spot-check the line numbers against the emitted text — this is
+    // the regression guard: if the synthesizer ever inserts an extra
+    // blank line or drops a header, this test catches the drift.
+    const text = generateIecVariablesToString(vars)
+    const lines = text.split('\n')
+    for (const [name, pos] of map) {
+      // 1-indexed Monaco → 0-indexed array access.
+      expect(lines[pos.line - 1].trimStart().startsWith(`${name} :`)).toBe(true)
+    }
+  })
+
+  it('honours the global → external → input → output → inout → local → temp ordering', () => {
+    const vars: PLCVariable[] = [
+      makeVariable({ name: 'a', class: 'local' }),
+      makeVariable({ name: 'b', class: 'input' }),
+      makeVariable({ name: 'c', class: 'output' }),
+      makeVariable({ name: 'd', class: 'local' }),
+    ]
+    const map = getIecVariableLineMap(vars)
+    const text = generateIecVariablesToString(vars)
+    const lines = text.split('\n')
+    for (const [name, pos] of map) {
+      expect(lines[pos.line - 1].trimStart().startsWith(`${name} :`)).toBe(true)
+    }
+  })
+
+  it('uses column 5 (4-space indent + 1-indexed Monaco) for every variable name', () => {
+    const map = getIecVariableLineMap([makeVariable({ name: 'OnlyOne', class: 'input' })])
+    expect(map.get('OnlyOne')?.column).toBe(5)
   })
 })

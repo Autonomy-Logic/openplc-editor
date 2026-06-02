@@ -4,8 +4,8 @@
  * Type conversions between Monaco and LSP.
  *
  * Kept as pure functions in their own module so we can unit-test
- * them without touching the worker.  The conversions handle the
- * three coordinate quirks that show up everywhere:
+ * them without touching a worker.  The conversions handle the three
+ * coordinate quirks that show up everywhere:
  *
  *   - Monaco lines and columns are 1-indexed; LSP rows and columns
  *     are 0-indexed.
@@ -13,11 +13,21 @@
  *     LSP's `Range` uses `{start,end}.{line,character}`.
  *   - Monaco's `CompletionItemKind` is its own enum; LSP's is the
  *     standard `CompletionItemKind`.  Identical ordering for the
- *     IEC subset we care about, so a direct cast suffices.
+ *     subset language services typically surface, so a direct cast
+ *     suffices.
  *
  * All converters are total — invalid inputs surface as a defaulted
  * sentinel rather than a thrown error, so a single malformed LSP
  * response can't crash the renderer.
+ *
+ * Every converter accepts an optional `lineOffset` to account for a
+ * preamble the language service prepends before handing the doc to
+ * its worker (ST's declaration + VAR blocks; Python's synthetic
+ * `input`/`output` globals).  Monaco's body-only view starts at
+ * line 0; the worker sees the same body at line `lineOffset`.
+ * Outbound (Monaco → LSP) adds the offset; inbound (LSP → Monaco)
+ * subtracts it.  Defaults to 0 so non-translating callers keep
+ * working unchanged.
  */
 
 import type * as monaco from 'monaco-editor'
@@ -39,14 +49,6 @@ import { getBodyLineOffset } from './body-offsets'
 
 // ---------------------------------------------------------------------------
 // Position / Range
-//
-// All converters accept an optional `lineOffset` to account for the
-// preamble (declaration + VAR blocks) the project-sync layer prepends
-// to ST POUs before handing them to the worker.  Monaco's body-only
-// view starts at line 0; the worker sees the same body at line
-// `bodyLineOffset`.  Outbound (Monaco → LSP) adds the offset; inbound
-// (LSP → Monaco) subtracts it.  Defaults to 0 so non-translating
-// callers (tests, future read-only flows) keep working unchanged.
 // ---------------------------------------------------------------------------
 
 export function monacoPositionToLsp(pos: monaco.IPosition, lineOffset = 0): LspPosition {
@@ -81,17 +83,22 @@ export function monacoRangeToLsp(range: monaco.IRange, lineOffset = 0): LspRange
  * LSP severities are 1-indexed (1 = Error, 4 = Hint), Monaco's
  * `MarkerSeverity` is an enum (8 = Error, 4 = Warning, 2 = Info,
  * 1 = Hint).  Map explicitly rather than casting.
+ *
+ * `defaultSource` is the value used when the LSP diagnostic omits
+ * `source` — typically the service's short name (`'strucpp'`,
+ * `'pyright'`).  Surfaces in Monaco's hover as "from <source>".
  */
 export function lspDiagnosticToMonaco(
   diag: LspDiagnostic,
   monacoApi: typeof monaco,
   lineOffset = 0,
+  defaultSource = 'lsp',
 ): monaco.editor.IMarkerData {
   const severity = lspSeverityToMonaco(diag.severity, monacoApi)
   return {
     severity,
     message: diag.message,
-    source: diag.source ?? 'strucpp',
+    source: diag.source ?? defaultSource,
     ...lspRangeToMonaco(diag.range, lineOffset),
     ...(diag.code !== undefined ? { code: String(diag.code) } : {}),
   }
@@ -121,8 +128,9 @@ function lspSeverityToMonaco(
 
 /**
  * LSP and Monaco use parallel `CompletionItemKind` enums.  Identical
- * for the kinds we surface (keywords, variables, functions, FBs,
- * properties, fields).  Direct cast — the values map 1:1 by spec.
+ * for the kinds language services typically surface (keywords,
+ * variables, functions, properties, fields).  Direct cast — the
+ * values map 1:1 by spec.
  */
 export function lspCompletionToMonaco(
   item: LspCompletionItem,
@@ -202,7 +210,8 @@ export function lspHoverToMonaco(hover: LspHover | null, lineOffset = 0): monaco
 // Location URIs may refer to ANY open document, not just the current
 // one, so the body offset is looked up per-URI rather than passed in
 // from the call site.  That keeps go-to-definition correct when the
-// target POU has a different VAR-block size than the source POU.
+// target URI has a different preamble length than the source URI
+// (e.g. cross-POU navigation in ST, or cross-module in Python).
 export function lspLocationToMonaco(loc: LspLocation): monaco.languages.Location {
   return {
     uri: { toString: () => loc.uri } as monaco.Uri,
@@ -228,7 +237,7 @@ export function lspLocationsToMonaco(
 
 export function lspSymbolKindToMonaco(kind: number): monaco.languages.SymbolKind {
   // LSP and Monaco both use numeric SymbolKind enums that line up
-  // for the IEC subset (Function, Variable, Property, Field, …).
+  // for the subset language services typically surface.
   return (kind - 1) as monaco.languages.SymbolKind
 }
 
