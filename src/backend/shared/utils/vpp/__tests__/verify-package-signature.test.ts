@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign as cryptoSign, createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, type PathOrFileDescriptor, rmSync, type Stats, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -207,13 +207,22 @@ describe('verifyPackageSignature', () => {
     buildPackage(dir)
     const fs = jest.requireMock<typeof import('node:fs')>('node:fs')
     const realReadFileSync = jest.requireActual<typeof import('node:fs')>('node:fs').readFileSync
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    jest.spyOn(fs, 'readFileSync').mockImplementation(((path: any, ...rest: any[]) => {
+    // verifyPackageSignature only ever calls readFileSync(path) (single arg,
+    // string path → Buffer), so the mock matches that overload exactly.
+    jest.spyOn(fs, 'readFileSync').mockImplementation((path: PathOrFileDescriptor) => {
       if (String(path).includes('hal.cpp')) throw new Error('read boom')
-      return (realReadFileSync as (...a: any[]) => unknown)(path, ...rest)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any)
+      return realReadFileSync(path)
+    })
     expect(verifyPackageSignature(dir, TRUSTED).error).toMatch(/Failed to hash package file/i)
+  })
+
+  it('rejects a non-regular entry (symlink / special file)', () => {
+    buildPackage(dir)
+    const fs = jest.requireMock<typeof import('node:fs')>('node:fs')
+    // Simulate a symlink/special file: neither a directory nor a regular file.
+    const fakeStat = { isDirectory: () => false, isFile: () => false } as unknown as Stats
+    jest.spyOn(fs, 'lstatSync').mockReturnValue(fakeStat)
+    expect(verifyPackageSignature(dir, TRUSTED).error).toMatch(/Failed to read package contents/i)
   })
 })
 

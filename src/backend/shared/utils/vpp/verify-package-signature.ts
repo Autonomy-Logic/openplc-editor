@@ -18,7 +18,7 @@
  */
 
 import { createHash, verify as cryptoVerify } from 'node:crypto'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 
 export const SIGNATURE_FILENAME = 'signature.json'
@@ -66,10 +66,17 @@ function listPackageFiles(dir: string): string[] {
   const walk = (current: string): void => {
     for (const entry of readdirSync(current)) {
       const full = join(current, entry)
-      if (statSync(full).isDirectory()) {
+      // We're walking UNTRUSTED extracted content. lstatSync does NOT follow
+      // symlinks, so a symlink can't make the walk recurse outside `dir` (or
+      // loop forever) nor make `readFileSync` later hash its target. Reject
+      // anything that isn't a real directory or a regular file.
+      const stat = lstatSync(full)
+      if (stat.isDirectory()) {
         walk(full)
-      } else {
+      } else if (stat.isFile()) {
         out.push(relative(dir, full).split(sep).join('/'))
+      } else {
+        throw new Error(`Unsupported package entry (not a regular file): ${relative(dir, full).split(sep).join('/')}`)
       }
     }
   }
