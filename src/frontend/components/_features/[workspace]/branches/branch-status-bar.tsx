@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
+import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
 import { useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
 import { BranchSwitcherPopover } from './branch-switcher-popover'
 import { DeleteBranchModal } from './delete-branch-modal'
+import type { CarryCheckState } from './unsaved-changes-warning-modal'
 import { UnsavedChangesWarningModal } from './unsaved-changes-warning-modal'
 
 type BranchStatusBarProps = {
@@ -23,16 +25,23 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null)
   const [pendingBranchSwitch, setPendingBranchSwitch] = useState<Branch | null>(null)
+  const [carryCheckState, setCarryCheckState] = useState<CarryCheckState>('loading')
+  const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
 
   const doSwitch = useCallback(
-    async (branch: Branch) => {
+    async (branch: Branch, strategy: 'discard' | 'carry' = 'discard') => {
       if (!versionControl) return
       try {
-        await versionControl.switchBranch(projectId, branch.name)
+        await versionControl.switchBranch(projectId, branch.name, strategy)
         setActiveBranch(branch.name)
         onBranchSwitch?.(branch.name)
+        return { ok: true as const }
       } catch (error) {
+        if (error instanceof SwitchBranchCarryConflictError) {
+          return { ok: false as const, conflictedFiles: error.conflictedFiles }
+        }
         console.error('Failed to switch branch:', error)
+        return { ok: false as const, conflictedFiles: [] as string[] }
       }
     },
     [projectId, versionControl, setActiveBranch, onBranchSwitch],
@@ -49,7 +58,27 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         if (changes.length > 0) {
           setPendingBranchSwitch(branch)
           setShowSwitcher(false)
+          setCarryCheckState('loading')
+          setConflictedFiles([])
           setShowUnsavedWarning(true)
+
+          // Fire the pre-check in parallel so the modal opens immediately
+          // and updates as soon as the dry-run lands.
+          void versionControl
+            .previewSwitchCarry(projectId, branch.name)
+            .then((result) => {
+              if (result.conflicts.length > 0) {
+                setCarryCheckState('conflict')
+                setConflictedFiles(result.conflicts)
+              } else {
+                setCarryCheckState('available')
+                setConflictedFiles([])
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to preview carry:', err)
+              setCarryCheckState('error')
+            })
           return
         }
       } catch {
@@ -62,10 +91,30 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   )
 
   const handleDiscardAndSwitch = useCallback(async () => {
-    if (pendingBranchSwitch) {
+    if (!pendingBranchSwitch) return
+    setShowUnsavedWarning(false)
+    await doSwitch(pendingBranchSwitch, 'discard')
+    setPendingBranchSwitch(null)
+  }, [pendingBranchSwitch, doSwitch])
+
+  const handleCarryAndSwitch = useCallback(async () => {
+    if (!pendingBranchSwitch) return
+    // Snapshot the branch — `doSwitch` clears state on success.
+    const branch = pendingBranchSwitch
+    const result = await doSwitch(branch, 'carry')
+    if (!result) return
+    if (result.ok) {
       setShowUnsavedWarning(false)
-      await doSwitch(pendingBranchSwitch)
       setPendingBranchSwitch(null)
+      return
+    }
+    // Race: the preview said "ok" but the apply hit a conflict (or another
+    // error happened). Surface conflicts in the still-open modal.
+    if (result.conflictedFiles.length > 0) {
+      setCarryCheckState('conflict')
+      setConflictedFiles(result.conflictedFiles)
+    } else {
+      setCarryCheckState('error')
     }
   }, [pendingBranchSwitch, doSwitch])
 
@@ -152,7 +201,10 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       <UnsavedChangesWarningModal
         isOpen={showUnsavedWarning}
         targetBranchName={pendingBranchSwitch?.name ?? ''}
+        carryCheckState={carryCheckState}
+        conflictedFiles={conflictedFiles}
         onDiscard={handleDiscardAndSwitch}
+        onCarry={handleCarryAndSwitch}
         onCancel={handleCancelSwitch}
       />
     </>
