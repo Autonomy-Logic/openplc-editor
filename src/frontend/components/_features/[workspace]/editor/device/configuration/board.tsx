@@ -13,6 +13,7 @@ import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
@@ -430,7 +431,7 @@ const Board = memo(function () {
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent
-                className='flex max-h-[300px] w-[--radix-select-trigger-width] flex-col rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                className='max-h-[300px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 sideOffset={5}
                 alignOffset={5}
                 position='popper'
@@ -439,73 +440,62 @@ const Board = memo(function () {
                 viewportRef={deviceSelectRef}
               >
                 {/*
-                  Search field — pinned at the top so it never scrolls
-                  out with long device lists.  Stop key event propagation
-                  so Radix Select's typeahead doesn't intercept what the
-                  user types here.  `e.preventDefault` on Space keeps the
-                  Select from toggling closed on a space character.
+                  Search field — `sticky top-0` keeps it pinned while
+                  the list scrolls.  Shares the rounded text-field
+                  styling with the variable-type dropdown via the
+                  shared `DropdownSearchInput` atom (which also stops
+                  Radix Select's typeahead from intercepting
+                  keystrokes).
                 */}
-                <div className='sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-neutral-200 bg-white px-2 py-1.5 dark:border-neutral-700 dark:bg-neutral-950'>
-                  <MagnifierIcon className='h-4 w-4 shrink-0' />
-                  <input
-                    type='text'
-                    value={deviceSearchTerm}
-                    onChange={(e) => setDeviceSearchTerm(e.target.value)}
-                    onKeyDown={(e) => {
-                      e.stopPropagation()
-                      if (e.key === ' ') e.preventDefault()
-                    }}
-                    placeholder='Search devices…'
-                    aria-label='Search devices'
-                    className='w-full bg-transparent font-caption text-xs text-neutral-950 placeholder:text-neutral-400 focus:outline-none dark:text-white dark:placeholder:text-neutral-500'
-                  />
-                </div>
-                <div className='flex-1 overflow-y-auto'>
-                  {groupedBoards.length === 0 ? (
-                    <div className='px-3 py-6 text-center text-[11px] italic text-neutral-500 dark:text-neutral-400'>
-                      No devices match “{deviceSearchTerm}”.
-                    </div>
-                  ) : (
-                    groupedBoards.map(({ vendor, boards }) => (
-                      <div key={vendor} className='py-1'>
-                        <div className='select-none px-2 py-1 font-caption text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>
-                          {vendor}
-                        </div>
-                        {boards.map(({ board, data }) => {
-                          const showVersion = !isSimulatorTarget(data) && data.coreVersion
-                          const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
-                          return (
-                            <SelectItem
-                              key={board}
-                              className={cn(
-                                'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                                'flex w-full cursor-pointer items-center px-2 py-[7px] pl-5 outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                              )}
-                              value={formattedBoard}
-                            >
-                              <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                {formattedBoard}
-                              </span>
-                            </SelectItem>
-                          )
-                        })}
+                <DropdownSearchInput
+                  value={deviceSearchTerm}
+                  onChange={(e) => setDeviceSearchTerm(e.target.value)}
+                  aria-label='Search devices'
+                />
+                {groupedBoards.length === 0 ? (
+                  <div className='px-3 py-6 text-center text-[11px] italic text-neutral-500 dark:text-neutral-400'>
+                    No devices match “{deviceSearchTerm}”.
+                  </div>
+                ) : (
+                  groupedBoards.map(({ vendor, boards }) => (
+                    <div key={vendor} className='py-1'>
+                      <div className='select-none px-2 py-1 font-caption text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>
+                        {vendor}
                       </div>
-                    ))
-                  )}
-                  {capabilities.hasPackageManager && (
-                    <>
-                      <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />
-                      <SelectItem
-                        value='__install_additional_boards__'
-                        className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                      >
-                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
-                          + Install additional boards...
-                        </span>
-                      </SelectItem>
-                    </>
-                  )}
-                </div>
+                      {boards.map(({ board, data }) => {
+                        const showVersion = !isSimulatorTarget(data) && data.coreVersion
+                        const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
+                        return (
+                          <SelectItem
+                            key={board}
+                            className={cn(
+                              'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                              'flex w-full cursor-pointer items-center px-2 py-[7px] pl-5 outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                            )}
+                            value={formattedBoard}
+                          >
+                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                              {formattedBoard}
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </div>
+                  ))
+                )}
+                {capabilities.hasPackageManager && (
+                  <>
+                    <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />
+                    <SelectItem
+                      value='__install_additional_boards__'
+                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-brand'>
+                        + Install additional boards...
+                      </span>
+                    </SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

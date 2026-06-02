@@ -3,7 +3,7 @@ import _ from 'lodash'
 import { useState } from 'react'
 
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
-import { InputWithRef } from '../input'
+import { DropdownSearchInput } from '../dropdown-search-input'
 
 type TypeDropdownSelectorProps = {
   value: string
@@ -62,21 +62,15 @@ export const TypeDropdownSelector = ({
                     sideOffset={5}
                     className='box z-50 max-h-[300px] w-[200px] overflow-y-auto rounded-lg bg-white dark:bg-neutral-950'
                   >
-                    <div className='sticky top-0 z-10 bg-white p-2 dark:bg-neutral-950'>
-                      <InputWithRef
-                        type='text'
-                        placeholder='Search...'
-                        className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
-                        value={filterText}
-                        onChange={(e) =>
-                          setVariableFilters((prev) => ({
-                            ...prev,
-                            [scope.definition]: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
-                    </div>
+                    <DropdownSearchInput
+                      value={filterText}
+                      onChange={(e) =>
+                        setVariableFilters((prev) => ({
+                          ...prev,
+                          [scope.definition]: e.target.value,
+                        }))
+                      }
+                    />
                     {filteredValues.length > 0 ? (
                       filteredValues.map((value) => (
                         <PrimitiveDropdown.Item
