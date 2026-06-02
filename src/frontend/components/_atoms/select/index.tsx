@@ -30,22 +30,19 @@ type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Conte
   /**
    * Disable Radix Select's built-in typeahead.  Set this when the
    * dropdown renders its own search input — Radix's typeahead
-   * otherwise steals focus to the first SelectItem whose label
-   * starts with the typed character, fighting the search field for
-   * keystrokes.
+   * otherwise jumps focus to the first SelectItem whose label
+   * starts with the typed character, fighting the search field
+   * for keystrokes.
    *
-   * Implementation: a React `onKeyDownCapture` listener on the
-   * Content element calls `nativeEvent.stopImmediatePropagation()`
-   * for single-character keystrokes.  React's capture pass runs
-   * during the native event's capture phase BEFORE Radix's typeahead
-   * listener attached on the same element fires, and
-   * `stopImmediatePropagation` halts the native DOM bubble so
-   * Radix's handler is never reached.  Navigation keys (arrows,
-   * Enter, Escape, Tab, Home/End, Page Up/Down) and modifier
-   * combinations flow through untouched so keyboard navigation
-   * still works.  Character insertion into the focused input is a
-   * keydown default action and runs regardless of propagation
-   * control, so the user's typing still lands in the search field.
+   * Implementation: a React `onKeyDownCapture` on the Content
+   * element swallows printable-character keystrokes (both the
+   * React event and the native event) so Radix's typeahead never
+   * sees them.  Navigation keys (arrows, Enter, Escape, Tab,
+   * Home/End, Page Up/Down) and modifier combos pass through so
+   * keyboard navigation still works.  Character insertion into
+   * the focused search input is a keydown default action and
+   * runs regardless of propagation control, so the user's typing
+   * still lands in the input.
    */
   disableTypeahead?: boolean
 }

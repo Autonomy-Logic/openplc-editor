@@ -6,45 +6,22 @@ import { InputWithRef } from '../input'
 /**
  * Rounded text field rendered inside a sticky header strip — the
  * search-affordance used at the top of every filtered dropdown in
- * the editor (variable-type pickers, device-board dropdown, etc.).
+ * the editor (variable-type picker, device-board dropdown, etc.).
  *
- * The wrapper is `sticky top-0` so the field stays pinned while the
- * dropdown's content scrolls.  Padded so the field doesn't touch
- * the dropdown's rounded border (which used to surface as a visual
- * notch in the corner).
+ * The wrapper is `sticky top-0` so the field stays pinned while
+ * the dropdown's content scrolls.  Padded so the field doesn't
+ * touch the dropdown's rounded border.
  *
- * `onKeyDown` stops the keystroke from reaching the parent
- * dropdown's typeahead.  We call BOTH `stopPropagation` (React
- * tree) AND `nativeEvent.stopImmediatePropagation()` (native DOM)
- * because Radix Select attaches its typeahead listener via native
- * `addEventListener`, so React's stopPropagation alone doesn't
- * reach it — the keystroke bubbles up the native DOM tree even
- * after React's synthetic-event bubbling halts.  Symptom of the
- * native-bubble bug: typing the first character that doesn't
- * match the currently-selected item causes Radix to move focus
- * to the first matching SelectItem, kicking focus out of the
- * search input and blanking the trigger's displayed value.
- *
- * Space gets `preventDefault` so the parent Select doesn't toggle
- * closed on a literal space character.  Callers can pass their
- * own handler; we call it after the propagation-stop pair.
+ * `onKeyDown` stops React-tree propagation so parent dropdowns
+ * (Radix Select / DropdownMenu) don't see the keystroke and
+ * interpret it as typeahead.  Callers can pass their own
+ * `onKeyDown`; we call it after stopping propagation.
  */
 type DropdownSearchInputProps = Omit<ComponentPropsWithoutRef<typeof InputWithRef>, 'type'> & {
   /** Optional extra classes for the outer sticky wrapper.  The input
    *  itself takes shape from the component; layout context lives on
    *  this wrapper. */
   containerClassName?: string
-}
-
-/** Describe a DOM element compactly for console logging. */
-const describeEl = (el: Element | null): string => {
-  if (!el) return 'null'
-  const tag = el.tagName.toLowerCase()
-  const id = el.id ? `#${el.id}` : ''
-  const cls = typeof el.className === 'string' && el.className ? `.${el.className.split(' ')[0]}` : ''
-  const role = el.getAttribute('role') ? `[role=${el.getAttribute('role')}]` : ''
-  const dataState = el.getAttribute('data-state') ? `[data-state=${el.getAttribute('data-state')}]` : ''
-  return `${tag}${id}${cls}${role}${dataState}`
 }
 
 export const DropdownSearchInput = forwardRef<HTMLInputElement, DropdownSearchInputProps>(
@@ -60,25 +37,8 @@ export const DropdownSearchInput = forwardRef<HTMLInputElement, DropdownSearchIn
             className,
           )}
           onKeyDown={(event) => {
-            const inputEl = event.currentTarget
-            // eslint-disable-next-line no-console
-            console.log('[dropdown-search][keydown]', {
-              key: event.key,
-              inputValue: inputEl.value,
-              activeBefore: describeEl(document.activeElement),
-            })
             event.stopPropagation()
-            event.nativeEvent.stopImmediatePropagation()
-            if (event.key === ' ') event.preventDefault()
             onKeyDown?.(event)
-          }}
-          onFocus={(event) => {
-            // eslint-disable-next-line no-console
-            console.log('[dropdown-search][focus]', { from: describeEl(event.relatedTarget as Element | null) })
-          }}
-          onBlur={(event) => {
-            // eslint-disable-next-line no-console
-            console.log('[dropdown-search][blur]', { to: describeEl(event.relatedTarget as Element | null) })
           }}
           {...rest}
         />

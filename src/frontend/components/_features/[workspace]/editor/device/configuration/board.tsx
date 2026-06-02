@@ -183,65 +183,27 @@ const Board = memo(function () {
   }, [deviceSelectIsOpen])
 
   // Keep focus on the search input as the user types.  Radix Select
-  // moves focus to the SelectContent listbox whenever the currently-
-  // focused SelectItem unmounts — which happens every time the
-  // user's typing filters the selected board out of the visible
-  // list.  A focusout listener on the input lets us synchronously
-  // catch the blur (no matter what timing Radix uses to trigger
-  // it) and immediately put focus back.  Gated on
-  // `deviceSearchTerm.length > 0` so the initial open of the
-  // dropdown still lets Radix focus the currently-selected item.
+  // falls back to focusing the SelectContent listbox whenever the
+  // currently-focused SelectItem unmounts — which happens every
+  // time the user's typing filters the selected board out of the
+  // visible list, pulling focus off the search input.  Refocus
+  // through `queueMicrotask` (synchronously refocusing inside a
+  // focusout handler is disallowed in some browsers; microtasks
+  // run after the current task but before paint).  Gated on a
+  // non-empty search term so the initial open still lets Radix
+  // focus the currently-selected item — what the scroll-to-
+  // selected effect keys off.
   useEffect(() => {
     if (!deviceSelectIsOpen) return
     const input = deviceSearchInputRef.current
     if (!input) return
-    const handler = (event: FocusEvent) => {
-      // eslint-disable-next-line no-console
-      console.log('[input][focusout]', {
-        searchTerm: deviceSearchTerm,
-        relatedTarget:
-          event.relatedTarget instanceof Element
-            ? `${event.relatedTarget.tagName}${event.relatedTarget.id ? `#${event.relatedTarget.id}` : ''}[role=${event.relatedTarget.getAttribute('role')}]`
-            : 'null',
-      })
+    const handler = () => {
       if (deviceSearchTerm.length === 0) return
-      // Re-focus synchronously in the next microtask.  Doing it
-      // inside the focusout handler directly throws in some
-      // browsers; queueMicrotask defers to immediately after the
-      // current task without yielding to paint.
-      queueMicrotask(() => {
-        if (deviceSearchInputRef.current) {
-          // eslint-disable-next-line no-console
-          console.log('[input][refocus]', {
-            activeBefore:
-              document.activeElement instanceof Element
-                ? `${document.activeElement.tagName}[role=${document.activeElement.getAttribute('role')}]`
-                : 'null',
-          })
-          deviceSearchInputRef.current.focus()
-        }
-      })
+      queueMicrotask(() => deviceSearchInputRef.current?.focus())
     }
     input.addEventListener('focusout', handler)
     return () => input.removeEventListener('focusout', handler)
   }, [deviceSelectIsOpen, deviceSearchTerm])
-
-  // DEBUG: document-level focusin tracker.
-  useEffect(() => {
-    if (!deviceSelectIsOpen) return
-    const handler = (event: FocusEvent) => {
-      const target = event.target as Element | null
-      // eslint-disable-next-line no-console
-      console.log('[document][focusin]', {
-        tag: target?.tagName,
-        id: target?.id,
-        role: target?.getAttribute('role'),
-        dataState: target?.getAttribute('data-state'),
-      })
-    }
-    document.addEventListener('focusin', handler)
-    return () => document.removeEventListener('focusin', handler)
-  }, [deviceSelectIsOpen])
 
   useEffect(() => {
     scrollToSelectedOption(communicationSelectRef, communicationSelectIsOpen)
