@@ -644,3 +644,68 @@ describe('generateVendorPluginConfig', () => {
     expect(slot.module_config?.startsWith('40 03')).toBe(true)
   })
 })
+
+describe('generateVendorPluginConfig — pins[] (GPIO pin-mapping)', () => {
+  it('omits pins[] when no device pins are supplied', () => {
+    const result = generateVendorPluginConfig({ plugin_name: 'rpi_gpio' }, {}, [])
+    expect(result.pins).toBeUndefined()
+  })
+
+  it('maps digital input/output pins to pin + direction + byte/bit', () => {
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'rpi_gpio' },
+      {},
+      [],
+      [
+        { pin: '11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '13', pinType: 'digitalInput', address: '%IX1.3' },
+      ],
+    )
+    expect(result.pins).toEqual([
+      { pin: 11, direction: 'output', byte: 0, bit: 0 },
+      { pin: 13, direction: 'input', byte: 1, bit: 3 },
+    ])
+  })
+
+  it('maps analog outputs to PWM (word index) and skips analog inputs', () => {
+    const result = generateVendorPluginConfig(
+      {},
+      {},
+      [],
+      [
+        { pin: '11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '26', pinType: 'analogInput', address: '%IW0' },
+        { pin: '12', pinType: 'analogOutput', address: '%QW3' },
+      ],
+    )
+    expect(result.pins).toEqual([
+      { pin: 11, direction: 'output', byte: 0, bit: 0 },
+      { pin: 12, direction: 'pwm', word: 3 },
+    ])
+  })
+
+  it('skips rows with a non-numeric pin or an unparseable address', () => {
+    const result = generateVendorPluginConfig(
+      {},
+      {},
+      [],
+      [
+        { pin: 'P11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '18', pinType: 'digitalOutput', address: '' },
+        { pin: '22', pinType: 'digitalInput', address: '%IX2.1' },
+      ],
+    )
+    expect(result.pins).toEqual([{ pin: 22, direction: 'input', byte: 2, bit: 1 }])
+  })
+
+  it('emits pins[] alongside an empty slots[] for pin-only boards', () => {
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'rpi_gpio' },
+      {},
+      [],
+      [{ pin: '11', pinType: 'digitalOutput', address: '%QX0.0' }],
+    )
+    expect(result.slots).toEqual([])
+    expect(result.pins).toEqual([{ pin: 11, direction: 'output', byte: 0, bit: 0 }])
+  })
+})

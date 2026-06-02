@@ -18,7 +18,27 @@ type FieldDef = {
   unit?: string
   help?: string
   options?: string[] | Array<{ value: string; label: string }>
+  // Honored by text-like inputs (text, password, ip-address, mac-address).
+  // Mirrors the VPP screen schema's optional field props — empty strings
+  // are skipped so HTML5 placeholder/maxLength/pattern stay unset when
+  // the screen author didn't supply them.
+  placeholder?: string
+  maxLength?: number
+  validation?: string
 }
+
+// Shared input styling for every <input> branch (text, number, password,
+// ip-address, mac-address). Keeping it in one place avoids style drift
+// when new field types land.
+const TEXT_INPUT_CLASS =
+  'flex h-[30px] w-48 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+
+// Anchor-less HTML5 patterns for the formatted text types. The schema's
+// per-field `validation` (when present) is more specific and wins via the
+// runtime override below, but these defaults give a sensible UX hint when
+// the screen author didn't ship a regex.
+const IPV4_PATTERN = '^(\\d{1,3}\\.){3}\\d{1,3}$'
+const MAC_PATTERN = '^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$'
 
 type FormLayoutProps = {
   section: ScreenSection
@@ -143,12 +163,47 @@ function FormLayout({ section }: FormLayoutProps) {
                       })}
                     </SelectContent>
                   </Select>
+                ) : field.type === 'password' ? (
+                  <input
+                    type='password'
+                    value={String(values[field.id] ?? '')}
+                    onChange={(e) => updateField(field.id, e.target.value)}
+                    placeholder={field.placeholder}
+                    maxLength={field.maxLength}
+                    pattern={field.validation}
+                    autoComplete='new-password'
+                    className={TEXT_INPUT_CLASS}
+                  />
+                ) : field.type === 'ip-address' ? (
+                  <input
+                    type='text'
+                    inputMode='decimal'
+                    value={String(values[field.id] ?? '')}
+                    onChange={(e) => updateField(field.id, e.target.value)}
+                    placeholder={field.placeholder ?? '0.0.0.0'}
+                    maxLength={field.maxLength ?? 15}
+                    pattern={field.validation ?? IPV4_PATTERN}
+                    className={TEXT_INPUT_CLASS}
+                  />
+                ) : field.type === 'mac-address' ? (
+                  <input
+                    type='text'
+                    value={String(values[field.id] ?? '')}
+                    onChange={(e) => updateField(field.id, e.target.value)}
+                    placeholder={field.placeholder ?? 'AA:BB:CC:DD:EE:FF'}
+                    maxLength={field.maxLength ?? 17}
+                    pattern={field.validation ?? MAC_PATTERN}
+                    className={TEXT_INPUT_CLASS}
+                  />
                 ) : (
                   <input
                     type='text'
                     value={String(values[field.id] ?? '')}
                     onChange={(e) => updateField(field.id, e.target.value)}
-                    className='flex h-[30px] w-48 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                    placeholder={field.placeholder}
+                    maxLength={field.maxLength}
+                    pattern={field.validation}
+                    className={TEXT_INPUT_CLASS}
                   />
                 )}
                 {field.help && <FieldHelpIcon text={field.help} />}

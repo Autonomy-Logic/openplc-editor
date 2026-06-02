@@ -1,5 +1,7 @@
 import { z } from 'zod/v4'
 
+import type { PlatformOption, TargetCapabilities } from '../../../middleware/shared/ports/types'
+
 const SerialPortSchema = z.object({
   name: z.string(),
   address: z.string(),
@@ -8,22 +10,13 @@ const SerialPortSchema = z.object({
 type SerialPort = z.infer<typeof SerialPortSchema>
 
 const BoardInfoSchema = z.object({
-  board_manager_url: z.string().optional(),
-  compiler: z.string(),
+  // Toolchain selector. Enum is closed: VPP devices that need a different
+  // compiler should declare a new entry here rather than passing a free string.
+  compiler: z.enum(['arduino-cli', 'openplc-compiler', 'simulator']),
   core: z.string(),
-  c_flags: z.array(z.string()).optional(),
-  cxx_flags: z.array(z.string()).optional(),
-  ld_flags: z.array(z.string()).optional(),
-  max_data_size: z.number().optional(),
-  default_ain: z.string(),
-  default_aout: z.string(),
-  default_din: z.string(),
-  default_dout: z.string(),
-  define: z.string().or(z.array(z.string())).optional(),
-  extra_libraries: z.array(z.string()).optional(),
   platform: z.string(),
-  preview: z.string(),
   source: z.string(),
+  preview: z.string(),
   specs: z.object({
     CPU: z.string(),
     RAM: z.string(),
@@ -35,10 +28,29 @@ const BoardInfoSchema = z.object({
     Bluetooth: z.string(),
     Ethernet: z.string(),
   }),
+  default_ain: z.string(),
+  default_aout: z.string(),
+  default_din: z.string(),
+  default_dout: z.string(),
   user_ain: z.string().optional(),
   user_aout: z.string().optional(),
   user_din: z.string().optional(),
   user_dout: z.string().optional(),
+  board_manager_url: z.string().optional(),
+  extra_libraries: z.array(z.string()).optional(),
+  define: z.string().or(z.array(z.string())).optional(),
+  c_flags: z.array(z.string()).optional(),
+  cxx_flags: z.array(z.string()).optional(),
+  ld_flags: z.array(z.string()).optional(),
+  // Overrides arduino-cli's post-link `upload.maximum_data_size` check —
+  // required when `ld_flags` extend the linker memory map past canonical
+  // SoC RAM (e.g. emulated boards).
+  max_data_size: z.number().optional(),
+  arch: z.string().optional(),
+  // Tracking metadata — not present in shipped hals.json today; optional
+  // so downstream entries that do carry them still validate.
+  updatedAt: z.number().optional(),
+  version: z.string().optional(),
 })
 
 type BoardInfo = z.infer<typeof BoardInfoSchema>
@@ -115,6 +127,13 @@ type AvailableBoards = Map<
       defaultDout?: string[]
     }
     vpp?: VppMetadata
+    /** VPP-declared FQBN sub-options (e.g. Nano cpu=atmega328old). Absent
+     *  when the manifest doesn't expose variants — see ports/types.ts. */
+    platformOptions?: PlatformOption[]
+    /** Manifest-declared capability overrides (e.g. a runtime-v4 GPIO board
+     *  setting `pinMapping: true`). Merged over the preset by
+     *  `resolveTargetCapabilities`. */
+    capabilities?: Partial<TargetCapabilities>
   }
 >
 

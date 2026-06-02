@@ -23,10 +23,12 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
+import { randomUUID } from 'crypto'
 import dgram from 'dgram'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
+import { unlink, writeFile } from 'fs/promises'
 import type { IncomingHttpHeaders, IncomingMessage } from 'http'
 import https from 'https'
 import { networkInterfaces } from 'os'
@@ -833,6 +835,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== PACKAGE MANAGER =====================
     this.registerHandle('packages:import-from-file', this.handlePackagesImportFromFile)
+    this.registerHandle('packages:install-from-url', this.handlePackagesInstallFromUrl)
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
@@ -1290,6 +1293,42 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow.webContents.send('packages:boards-updated')
     }
     return importResult
+  }
+  handlePackagesInstallFromUrl = async (
+    _event: IpcMainInvokeEvent,
+    args: { packageId: string; version: string; downloadUrl: string },
+  ) => {
+    const { packageId, version, downloadUrl } = args
+    // Download in the main process — the renderer can't reach the install
+    // pipeline directly, and main has clean fs / temp-dir ergonomics. The
+    // VPP catalog backend serves a private S3 bucket through its own API,
+    // so `downloadUrl` always points at the backend (never S3 directly).
+    let tempPath: string | null = null
+    try {
+      const response = await fetch(downloadUrl)
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Download failed: ${response.status} ${response.statusText}`,
+        }
+      }
+      const buffer = new Uint8Array(await response.arrayBuffer())
+      tempPath = join(app.getPath('temp'), `openplc-vpp-${packageId}-${version}-${randomUUID()}.vpp`)
+      await writeFile(tempPath, buffer)
+      const importResult = await this.packageManagerModule.importFromFile(tempPath)
+      if (importResult.success) {
+        this.mainWindow?.webContents.send('packages:boards-updated')
+      }
+      return importResult
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    } finally {
+      if (tempPath) {
+        // Best-effort cleanup — never fail the install because the temp
+        // file lingered; OS will reap it on reboot anyway.
+        await unlink(tempPath).catch(() => {})
+      }
+    }
   }
   handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
   handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {

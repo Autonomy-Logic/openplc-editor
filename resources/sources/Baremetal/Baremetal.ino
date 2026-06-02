@@ -21,6 +21,11 @@
 #undef abs
 #undef round
 
+// Triggers arduino-cli's library discovery for the OpenPLCUserLib precompiled
+// archive. Without this include arduino-cli still finds the library on disk
+// but skips linking against the .a (no header match in the sketch).
+#include <OpenPLCUserLib.h>
+
 #include "openplc.h"
 #include "defines.h"
 #include "arduino_runtime_glue.h"
@@ -39,12 +44,16 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// AVR: provide sized operator delete (virtual destructors generate this)
+// AVR: provide sized operator delete (virtual destructors generate this).
+// Non-AVR libstdc++ already declares operator delete(void*, size_t) noexcept;
+// redeclaring here causes a signature mismatch on ARM/mbed cores.
 // ---------------------------------------------------------------------------
+#ifdef __AVR__
 void operator delete(void* ptr, unsigned int)
 {
     free(ptr);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // I/O Buffer definitions (declared extern in openplc.h, must be defined

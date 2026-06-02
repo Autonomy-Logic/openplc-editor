@@ -2,15 +2,8 @@
   "OpenPLC Simulator": {
     "compiler": "simulator",
     "core": "arduino:avr",
-    "c_flags": [
-      "-MMD",
-      "-c",
-      "-Wno-incompatible-pointer-types"
-    ],
-    "ld_flags": [
-      "-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00",
-      "-Wl,--defsym,__stack=0x80FFFF"
-    ],
+    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
+    "ld_flags": ["-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00", "-Wl,--defsym,__stack=0x80FFFF"],
     "max_data_size": 65024,
     "default_ain": "A0, A1, A2, A3, A4, A5, A6, A7",
     "default_aout": "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13",
@@ -31,9 +24,7 @@
       "Bluetooth": "No",
       "Ethernet": "No"
     },
-    "cxx_flags": [
-      "-std=gnu++17"
-    ],
+    "cxx_flags": ["-std=gnu++17"],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
@@ -53,9 +44,7 @@
   "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
-    "cxx_flags": [
-      "-std=gnu++17"
-    ],
+    "cxx_flags": ["-std=gnu++17"],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
@@ -75,9 +64,7 @@
   "OpenPLC Runtime v4": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
-    "cxx_flags": [
-      "-std=gnu++17"
-    ],
+    "cxx_flags": ["-std=gnu++17"],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,

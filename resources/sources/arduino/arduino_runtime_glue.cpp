@@ -17,6 +17,7 @@
 #include "arduino_runtime_glue.h"
 #include "openplc.h"
 #include "generated.hpp"
+#include "debug_dispatch.hpp"
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -170,4 +171,36 @@ void runtime_plc_cycle()
     updateOutputBuffers();
 
     strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
+}
+
+// ---------------------------------------------------------------------------
+// Debug dispatch shims — C-linkage wrappers around strucpp::debug::handle_*.
+// Declared in arduino_runtime_glue.h; ModbusSlave.cpp calls these by name so
+// it never has to include the strucpp template-heavy debug_dispatch.hpp.
+// ---------------------------------------------------------------------------
+
+extern "C" uint8_t openplc_debug_array_count()
+{
+    return strucpp::debug::handle_array_count();
+}
+
+extern "C" uint16_t openplc_debug_elem_count(uint8_t arr)
+{
+    return strucpp::debug::handle_elem_count(arr);
+}
+
+extern "C" uint16_t openplc_debug_size(uint8_t arr, uint16_t elem)
+{
+    return strucpp::debug::handle_size(arr, elem);
+}
+
+extern "C" uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t* dest)
+{
+    return strucpp::debug::handle_read(arr, elem, dest);
+}
+
+extern "C" uint8_t openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing,
+                                     const uint8_t* bytes, uint16_t len)
+{
+    return strucpp::debug::handle_set(arr, elem, forcing != 0, bytes, len);
 }

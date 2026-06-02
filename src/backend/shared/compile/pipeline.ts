@@ -171,6 +171,14 @@ export interface RunCompilePipelineArgs {
    *  addresses without re-reading the file.  Called once per
    *  successful strucpp compile. */
   cacheDebugData?: (md5: string, debugMapJson: string) => void
+  /** Persisted VPP Modbus screen state for the target device,
+   *  sourced from `DeviceConfiguration.vendorScreenData` under
+   *  the `modbus_rtu` / `modbus_tcp` keys.  Threaded straight
+   *  through to `generateDefinesContent`, which emits the
+   *  matching `MBSERIAL_*` / `MBTCP_*` macros for non-simulator
+   *  Arduino targets.  Web passes `undefined` until the VPP
+   *  Modbus screen lands on the web build. */
+  vppModbusState?: import('./steps/modbus-defines').VppModbusScreenState
 }
 
 export interface RunCompilePipelineResult {
@@ -288,6 +296,7 @@ async function runCompilePipelineInner(
     deviceContext,
     communicationPort,
     cacheDebugData,
+    vppModbusState,
   } = args
 
   // ---------------------------------------------------------------------
@@ -564,6 +573,7 @@ async function runCompilePipelineInner(
     stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
+    ...(vppModbusState !== undefined ? { vppModbusState } : {}),
   })
 
   // Compose firmware bundle (firmware skeleton + strucpp output +

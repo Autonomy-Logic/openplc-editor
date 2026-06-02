@@ -55,6 +55,11 @@ const Board = memo(function () {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
+  // Whether this target exposes the GPIO pin-mapping table. Arduino boards
+  // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
+  // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
+  const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
+
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
@@ -584,25 +589,20 @@ const Board = memo(function () {
         </div>
       </div>
       {(() => {
-        // Only draw the divider when there's actually content below it:
-        // Runtime targets render stats only when connected (the stats
-        // section always shows the EtherCAT panel when connected, even
-        // before the first scan completes); pin mapping (future
-        // Arduino-family VPP path) always renders.
+        // Only draw the divider when there's actually content below it.
+        // Pin mapping renders for any non-simulator target that declares
+        // the pinMapping capability (Arduino boards, and runtime-v4 GPIO
+        // VPP boards like the Raspberry Pi). Runtime targets also render
+        // stats once connected — the two can coexist (a Pi shows the pin
+        // table always and the stats panels when connected).
         const isSim = isSimulatorTarget(currentBoardInfo)
         const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
-        const showDivider = !isSim && (isRuntime ? connectionStatus === 'connected' : true)
+        const showStats = isRuntime && connectionStatus === 'connected'
+        const showPinMapping = !isSim && pinMappingEnabled
+        const showDivider = showStats || showPinMapping
         return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
-      {isSimulatorTarget(currentBoardInfo) ? null : isOpenPLCRuntimeTarget(currentBoardInfo) ? (
-        connectionStatus === 'connected' && (
-          <div className='flex w-full flex-col gap-6'>
-            {timingStats && <ScanCycleStats timingStats={timingStats} />}
-            <EtherCATStats />
-            <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
-          </div>
-        )
-      ) : (
+      {!isSimulatorTarget(currentBoardInfo) && pinMappingEnabled && (
         <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
           <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
             <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
@@ -628,6 +628,13 @@ const Board = memo(function () {
             />
           </div>
           <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
+        </div>
+      )}
+      {isOpenPLCRuntimeTarget(currentBoardInfo) && connectionStatus === 'connected' && (
+        <div className='flex w-full flex-col gap-6'>
+          {timingStats && <ScanCycleStats timingStats={timingStats} />}
+          <EtherCATStats />
+          <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
         </div>
       )}
 

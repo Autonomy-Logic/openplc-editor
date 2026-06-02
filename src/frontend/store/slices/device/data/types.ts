@@ -5,4 +5,5 @@ export const defaultDeviceConfiguration: DeviceConfiguration = {
   communicationPort: '',
   runtimeIpAddress: '',
   compileOnly: false,
+  selectedPlatformOptions: {},
 }

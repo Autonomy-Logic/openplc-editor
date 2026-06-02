@@ -731,6 +731,71 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('Arduino Mega')
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
+
+    it('clears selectedPlatformOptions when the board actually changes', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+
+      store.getState().deviceActions.setDeviceBoard('Arduino Mega')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({})
+    })
+
+    it('preserves selectedPlatformOptions when setDeviceBoard is called with the same board', () => {
+      // No-op board reassignment shouldn't trash user's option picks.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+    })
+  })
+
+  describe('setSelectedPlatformOption', () => {
+    it('stores a single key/value and marks updated', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+      expect(store.getState().deviceUpdated.updated).toBe(true)
+    })
+
+    it('merges multiple keys without clobbering siblings', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      store.getState().deviceActions.setSelectedPlatformOption('upload_speed', '57600')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+        upload_speed: '57600',
+      })
+    })
+
+    it('overwrites the value when called twice with the same key', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+    })
+  })
+
+  describe('clearSelectedPlatformOptions', () => {
+    it('wipes the record and marks updated', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      store.getState().deviceActions.setSelectedPlatformOption('upload_speed', '57600')
+      store.getState().deviceActions.clearSelectedPlatformOptions()
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({})
+      expect(store.getState().deviceUpdated.updated).toBe(true)
+    })
   })
 
   // -----------------------------------------------------------------------

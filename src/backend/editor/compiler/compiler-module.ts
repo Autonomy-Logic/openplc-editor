@@ -1,4 +1,4 @@
-import { exec, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
 import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
@@ -6,8 +6,12 @@ import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
-import { join } from 'node:path'
-import { promisify } from 'node:util'
+import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
+
+import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
+
+import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
+import { runWithConcurrencyLimit } from './run-with-concurrency'
 
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
 // incompatible with Jest's CJS transform — see `backend/shared/library/strucpp-runtime`.
@@ -77,7 +81,6 @@ import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { generateDefinesContent } from '@root/backend/shared/compile/steps/generate-defines'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
-import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import type { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
 import type { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
@@ -97,12 +100,14 @@ import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
+import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
-import type { ArduinoCoreControl, HalsFile } from './types'
+import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -158,6 +163,11 @@ class CompilerModule {
 
   strucppRuntimeDir: string
 
+  // Memoised arduino-cli `--show-properties=expanded` output keyed by FQBN.
+  // Resetting requires a fresh CompilerModule instance — adequate for the
+  // MVP where the editor recreates the module per compile session.
+  #toolchainPropsCache: Map<string, ToolchainProperties> = new Map()
+
   // ############################################################################
   // =========================== Static properties ==============================
   // ############################################################################
@@ -210,12 +220,81 @@ class CompilerModule {
     this.strucppRuntimeDir = this.#constructStrucppRuntimeDir()
   }
 
+  /**
+   * Build a `BoardInfoResolver` wired with the editor's filesystem-
+   * backed adapters.  Hals.json content is read off the bundled
+   * `src/backend/shared/firmware/hals.json` (the shared catalogue
+   * editor and web both consume), so this method is `async` — the
+   * resolver itself is synchronous.
+   *
+   * Web's matching adapter (when VPP-on-web lands) builds a resolver
+   * with the same `BoardInfoResolverConfig` interface but
+   * browser-friendly path strings + a real (or no-op) package
+   * manager; the shared `BoardInfoResolver` is byte-identical
+   * between repos.
+   */
+  async #createBoardInfoResolver(): Promise<BoardInfoResolver> {
+    const halsContent = await readHalsFile<HalsFile>()
+    return new BoardInfoResolver({
+      halsContent,
+      packageManager: new PackageManagerModule(),
+      resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
+      resolvePackageRelativePath: (pkgPath, relPath) => {
+        const root = pathResolve(pkgPath)
+        const candidate = pathResolve(root, relPath)
+        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+        }
+        return candidate
+      },
+    })
+  }
+
   // ############################################################################
   // =========================== Static methods =================================
   // ############################################################################
   static async readJSONFile<T>(filePath: string): Promise<T> {
     const data = await readFile(filePath, 'utf-8')
     return JSON.parse(data) as T
+  }
+
+  /**
+   * Append user-selected (or default) FQBN sub-options to the base platform
+   * string. Used by handleCompileArduinoProgram and the orchestrator's
+   * upload step to apply the VPP-declared `target.platformOptions` choices
+   * the user made on the device screen (e.g. Nano `cpu=atmega328old`).
+   *
+   * Pure / deterministic: every key in `platformOptions` becomes a segment
+   * `:<key>=<id>` appended in declaration order. Missing entries in
+   * `selected` fall back to each option's `default`. Returns the input
+   * `platform` verbatim when the manifest declares no platformOptions.
+   */
+  static applyPlatformOptions(
+    platform: string,
+    platformOptions: PlatformOption[] | undefined,
+    selected: Record<string, string> | undefined,
+  ): string {
+    if (!platformOptions || platformOptions.length === 0) return platform
+    const segments: string[] = []
+    for (const opt of platformOptions) {
+      const chosen = selected?.[opt.key] ?? opt.default
+      segments.push(`${opt.key}=${chosen}`)
+    }
+    return `${platform}:${segments.join(':')}`
+  }
+
+  // Pure parser for `arduino-cli compile --show-properties=expanded` stdout.
+  // Values can contain '=' (e.g. -DARDUINO=10607) so we split on the FIRST '='
+  // only. Empty lines and lines without '=' are silently skipped.
+  static parseShowPropertiesOutput(stdout: string): Record<string, string> {
+    const properties: Record<string, string> = {}
+    for (const line of stdout.split('\n')) {
+      if (!line) continue
+      const eqIdx = line.indexOf('=')
+      if (eqIdx < 0) continue
+      properties[line.slice(0, eqIdx)] = line.slice(eqIdx + 1)
+    }
+    return properties
   }
 
   // ############################################################################
@@ -294,6 +373,14 @@ class CompilerModule {
     return join(electronApp.getAppPath(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
   }
 
+  // Path to the empty sketch arduino-cli compiles against when extracting
+  // toolchain properties via `--show-properties=expanded`. The sketch itself
+  // is never linked — its only role is to give arduino-cli a valid sketch
+  // structure so the recipe templates resolve.
+  #constructShowPropertiesDummyPath(): string {
+    return join(this.sourceDirectoryPath, 'show_properties_dummy')
+  }
+
   /**
    * Resolve a board target to the arduino-cli core ID
    * (`arduino-cli core install` target — e.g. `arduino:avr`).
@@ -312,30 +399,22 @@ class CompilerModule {
     return halsFileContent[board]?.['core'] ?? null
   }
 
-  async #getBoardRuntime(board: string) {
-    const halsFileContent = await readHalsFile<HalsFile>()
-    if (halsFileContent[board]) {
-      return halsFileContent[board]['compiler']
-    }
-
-    // Fallback: check installed VPP packages for the board
+  /**
+   * Pull the user's platformOption selections out of a project's
+   * devices/configuration.json. Returns `{}` on any read/parse error —
+   * a missing file or stale config without the field means the user
+   * never touched the dropdown, so the compile path should fall back to
+   * each manifest option's `default`.
+   */
+  async #readSelectedPlatformOptions(projectPath: string): Promise<Record<string, string>> {
+    const configPath = join(projectPath, 'devices', 'configuration.json')
     try {
-      const packageManager = new PackageManagerModule()
-      const installed = packageManager.listInstalled()
-      for (const pkg of installed) {
-        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-        if (!manifest) continue
-        for (const device of manifest.devices) {
-          if (device.name === board) {
-            return device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
-          }
-        }
-      }
+      const raw = await readFile(configPath, 'utf-8')
+      const parsed = JSON.parse(raw) as { selectedPlatformOptions?: Record<string, string> }
+      return parsed.selectedPlatformOptions ?? {}
     } catch {
-      // ignore package manager errors
+      return {}
     }
-
-    throw new Error(`Board "${board}" not found in hals.json or installed VPP packages`)
   }
 
   #executeXml2st(args: string[]) {
@@ -374,7 +453,6 @@ class CompilerModule {
   async checkArduinoCliAvailability(): Promise<MethodsResult<string>> {
     let binaryPath = this.arduinoCliBinaryPath
     const [flag, configFilePath] = this.arduinoCliBaseParameters
-    const executeCommand = promisify(exec)
 
     if (CompilerModule.HOST_PLATFORM === 'win32') {
       // INFO: On Windows, we need to add the .exe extension to the binary path.
@@ -382,7 +460,7 @@ class CompilerModule {
     }
     // INFO: We use the version command to check if the arduino-cli is available.
     // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(`"${binaryPath}" version ${flag} "${configFilePath}" --json`)
+    const { stdout, stderr } = await execRecipeArgv([binaryPath, 'version', flag, configFilePath, '--json'])
     if (stderr) {
       throw new Error(`Arduino CLI not available: ${stderr}`)
     }
@@ -434,6 +512,67 @@ class CompilerModule {
     const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
 
     return installedLibraries
+  }
+
+  /**
+   * Ask arduino-cli to resolve every recipe property for a given FQBN and
+   * return it as a typed struct. Backbone of the pre-compile pipeline:
+   * because `recipe.cpp.o.pattern` / `recipe.c.o.pattern` / `recipe.ar.pattern`
+   * arrive fully expanded (every {build.*} / {compiler.*} / {runtime.*}
+   * already substituted), the editor can drive the toolchain directly with
+   * only the per-TU placeholders (`{source_file}`, `{object_file}`,
+   * `{includes}`, `{archive_file_path}`) left to fill in.
+   *
+   * Results are memoised in-process per FQBN — show-properties takes ~300 ms
+   * on a warm arduino-cli and the same FQBN is queried multiple times within
+   * a single compile session.
+   */
+  async extractToolchainProperties(fqbn: string): Promise<ToolchainProperties> {
+    const cached = this.#toolchainPropsCache.get(fqbn)
+    if (cached) return cached
+
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+    const dummySketchPath = this.#constructShowPropertiesDummyPath()
+
+    // `--show-properties=expanded` tells arduino-cli to evaluate every
+    // `{var}` interpolation in `platform.txt` / `boards.txt` before printing
+    // — without `=expanded`, recipes come back with raw `{compiler.path}`
+    // placeholders that would be useless for direct toolchain invocation.
+    //
+    // Spawned via execFile (no shell) so paths containing spaces or shell
+    // metacharacters (`Program Files (x86)`, `Arduino IDE` etc.) reach
+    // arduino-cli intact on every host. Going through cmd.exe on Windows
+    // would corrupt the argv exactly the way the recipe-driven compile
+    // path used to break for the Leonardo USB descriptors.
+    const argv = [
+      binaryPath,
+      'compile',
+      '--fqbn',
+      fqbn,
+      '--show-properties=expanded',
+      dummySketchPath,
+      ...this.arduinoCliBaseParameters,
+    ]
+
+    const { stdout } = await execRecipeArgv(argv, { maxBuffer: 8 * 1024 * 1024 })
+
+    const properties = CompilerModule.parseShowPropertiesOutput(stdout)
+    const recipeCpp = properties['recipe.cpp.o.pattern']
+    const recipeC = properties['recipe.c.o.pattern']
+    const recipeAr = properties['recipe.ar.pattern']
+    if (!recipeCpp || !recipeC || !recipeAr) {
+      throw new Error(
+        `arduino-cli --show-properties for "${fqbn}" returned an incomplete recipe set ` +
+          `(cpp=${Boolean(recipeCpp)}, c=${Boolean(recipeC)}, ar=${Boolean(recipeAr)}). ` +
+          `This usually means the core for this board is not installed.`,
+      )
+    }
+
+    const props: ToolchainProperties = { fqbn, properties, recipeCpp, recipeC, recipeAr }
+    this.#toolchainPropsCache.set(fqbn, props)
+    return props
   }
 
   // ++ =========================== Defines.h methods ==========================++
@@ -1050,16 +1189,47 @@ class CompilerModule {
     const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
     const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
 
-    const halsFileContent = await readHalsFile<HalsFile>()
+    // Resolve board info uniformly across hals.json + installed VPP
+    // packages so `boardInfo.define` covers BOARD_ESP8266 / BOARD_ESP32 /
+    // BOARD_WIFININA contributions from either source — ModbusSlave.h's
+    // board-detection chain relies on these macros being present
+    // regardless of catalog.
+    const resolver = await this.#createBoardInfoResolver()
+    const boardInfo = resolver.resolve(boardTarget)
+
     const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
     const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
 
+    // VPP Modbus screen state — only read for non-simulator Arduino
+    // targets.  Simulator emits a fixed RTU-over-USART0 block (handled
+    // inside `generateDefinesContent`); runtime-v3/v4 route Modbus
+    // through `conf/modbus_slave.json` in the upload bundle and emit
+    // no macros here.
+    let vppModbusState: VppModbusScreenState | undefined
+    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
+      const devicesConfigurationFilePath = join(projectPath, 'devices', 'configuration.json')
+      try {
+        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+        vppModbusState = {
+          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
+          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+        }
+      } catch {
+        // Missing configuration.json leaves vppModbusState undefined —
+        // the shared `generateDefinesContent` then skips the Modbus
+        // block (no MODBUS_ENABLED), matching the pre-VPP behaviour
+        // for boards that never had a comms config persisted.
+      }
+    }
+
     const definesContent = generateDefinesContent({
-      boardEntry: halsFileContent[boardTarget],
+      boardEntry: { define: boardInfo.define },
       devicePinMapping,
       stProgramFileContent,
       buildMD5Hash,
       boardRuntime,
+      ...(vppModbusState ? { vppModbusState } : {}),
     })
 
     try {
@@ -1077,15 +1247,20 @@ class CompilerModule {
   async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
     let result: MethodsResult<string> = { success: false }
 
-    const halsFileContent = await readHalsFile<HalsFile>()
+    // Source the HAL .cpp from BoardInfoResolver so the same code path works
+    // for legacy hals.json entries and installed VPP packages (where only
+    // Simulator / Runtime v3 / Runtime v4 remain in hals.json; every Arduino
+    // board lives in a VPP).
+    const resolver = await this.#createBoardInfoResolver()
+    const info = resolver.resolve(boardTarget)
+    if (!info.halSourceFile) {
+      throw new Error(`Board "${boardTarget}" does not declare a HAL source file`)
+    }
 
-    const boardSourceFile = halsFileContent[boardTarget]['source']
-
-    const boardSourceFilePath = join(this.sourceDirectoryPath, 'hal', boardSourceFile)
     const arduinoCppFilePath = join(projectPath, 'build', boardTarget, 'src', 'arduino.cpp')
 
     try {
-      await cp(boardSourceFilePath, arduinoCppFilePath, { recursive: true })
+      await cp(info.halSourceFile, arduinoCppFilePath, { recursive: true })
       result = { success: true, data: arduinoCppFilePath }
     } catch (error) {
       throw new Error(`Error copying Arduino source file: ${(error as Error).message}`)
@@ -1124,7 +1299,11 @@ class CompilerModule {
   async handleGenerateCBlocksCode(
     projectData: ProjectDataWithCppPous,
     compilationPath: string,
-    boardRuntime: string,
+    // Reserved on the signature so caller orchestrators (Arduino vs Runtime
+    // v4) keep a stable API surface; both runtimes share <build>/src/ today
+    // because both need gnu++17 for the strucpp IECVar<T> wrappers, but a
+    // future runtime might branch off this discriminator again.
+    _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
     const originalCppPous = projectData.originalCppPous || []
@@ -1135,17 +1314,12 @@ class CompilerModule {
     }
 
     const cppPous = originalCppPous
-    // generateCBlocksCode now emits the full file (baseline + per-POU
-    // wrappers + user code), so we overwrite rather than append. The
-    // static Baremetal/c_blocks_code.cpp baseline is now redundant for
-    // projects with C++ POUs but stays as a benign empty unit for
-    // Arduino projects without any.
+    // Written into <build>/src/ so the pre-compile loop picks it up with
+    // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
+    // strucpp-free and is compiled by arduino-cli in the core's native
+    // standard.
     const codeContent = generateCBlocksCode(cppPous)
-
-    const codeFilePath =
-      boardRuntime === 'openplc-compiler'
-        ? join(compilationPath, 'src', 'c_blocks_code.cpp')
-        : join(compilationPath, 'examples', 'Baremetal', 'c_blocks_code.cpp')
+    const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
       await writeFile(codeFilePath, codeContent, { encoding: 'utf8' })
@@ -1205,7 +1379,336 @@ class CompilerModule {
     })
   }
 
+  // Extract every absolute `@<path>` response-file reference from a
+  // tokenized recipe (post-`tokenizeRecipe`). Only POSIX `/...` and
+  // Windows `C:\...`/`C:/...` qualify — relative `@-` tokens are
+  // workspace-local files the editor must not touch. Pure function so
+  // the regex can be unit-tested without filesystem side effects.
+  static extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[] {
+    const responseFileRe = /^@([A-Za-z]:[\\/].+|\/.+)$/
+    const seen = new Set<string>()
+    for (const token of argv) {
+      const match = responseFileRe.exec(token)
+      if (match) seen.add(match[1])
+    }
+    return Array.from(seen)
+  }
+
+  // Stub empty files for `@response_file` paths a recipe references but
+  // that arduino-cli would only generate during a real compile (ESP32 +
+  // STM32duino). GCC treats missing `@file` as a literal positional
+  // argument → "cannot specify '-o' with '-c' ... with multiple files".
+  // Empty is the canonical default arduino-cli itself writes when no
+  // per-project build_opt customization exists.
+  //
+  // Takes the already-tokenized argv (post-`tokenizeRecipe`) so the
+  // surrounding-quote concern from the legacy regex form goes away —
+  // quotes are stripped by tokenization and the response-file token
+  // arrives as `@<absolute-path>` cleanly.
+  private static async ensureResponseFileStubs(
+    argv: ReadonlyArray<string>,
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    for (const responsePath of CompilerModule.extractResponseFilesFromArgv(argv)) {
+      if (existsSync(responsePath)) continue
+      await mkdir(path.dirname(responsePath), { recursive: true })
+      try {
+        await writeFile(responsePath, '', { flag: 'wx' })
+        handleOutputData(`[precompile] Stubbed empty response file: ${responsePath}`, 'info')
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+      }
+    }
+  }
+
+  // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
+  // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
+  // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
+  // surface contained — arduino-cli compiles the core and sketch in
+  // whatever standard the core ships with.
+  async handlePrecompileUserLib({
+    compilationPath,
+    fqbn,
+    extraCxxFlags = [],
+    handleOutputData,
+  }: {
+    compilationPath: string
+    fqbn: string
+    extraCxxFlags?: string[]
+    handleOutputData: HandleOutputDataCallback
+  }): Promise<{ archivePath: string; archCandidates: string[]; objectFiles: string[] }> {
+    const tcProps = await this.extractToolchainProperties(fqbn)
+
+    const srcDir = join(compilationPath, 'src')
+    const baremetalDir = join(compilationPath, 'examples', 'Baremetal')
+    const sourcesStash = join(compilationPath, 'precompile', 'sources')
+    const objDir = join(compilationPath, 'precompile', 'obj')
+
+    // Stash strucpp-emitted .cpp out of src/ BEFORE compile, then read the
+    // stash to discover the TU set. Two reasons:
+    //
+    //   1. arduino-cli's library discovery walks the sketch tree and will
+    //      recompile any .cpp it finds under src/ with the core's default
+    //      C++ standard. Moving the strucpp TUs out before arduino-cli runs
+    //      keeps the gnu++17 archive's symbols as the only definition.
+    //
+    //   2. Recovery from a partial previous run becomes trivial. If a prior
+    //      invocation crashed between compile and archive, the .cpp files
+    //      are already in the stash — a retry stashes the (now empty) src/,
+    //      reads the stash, and re-runs the whole pipeline from there. No
+    //      half-stashed split-brain state.
+    //
+    // arduino.cpp (the board HAL) is excluded — arduino-cli must compile
+    // that one alongside the sketch so it picks up the core's external
+    // libraries (Ethernet, SPI, …) discovered via sketch-tree includes.
+    await mkdir(sourcesStash, { recursive: true })
+    await mkdir(objDir, { recursive: true })
+
+    const srcEntries = await readdir(srcDir)
+    for (const name of srcEntries) {
+      if (!name.endsWith('.cpp') || name === 'arduino.cpp') continue
+      // rename overwrites the stash entry if a previous run left a stale
+      // copy — the src/ version is the latest strucpp output and wins.
+      await fs.rename(join(srcDir, name), join(sourcesStash, name))
+    }
+
+    // Discover the TU set from the stash so newly-moved files AND any
+    // leftovers from a previous failed run get picked up uniformly.
+    // Sorted for deterministic archive-member ordering downstream.
+    const stashEntries = (await readdir(sourcesStash)).filter((name) => name.endsWith('.cpp')).sort()
+    const sources = stashEntries.map((name) => join(sourcesStash, name))
+
+    if (sources.length === 0) {
+      throw new Error(`handlePrecompileUserLib: no .cpp sources found under ${srcDir} or ${sourcesStash}`)
+    }
+
+    // -I arguments are passed as bare argv entries (no extra quoting) —
+    // execFile delivers them literally to the toolchain on every host.
+    //
+    // arduino-cli normally injects `-I{build.core.path}` and
+    // `-I{build.variant.path}` into the `{includes}` substitution at
+    // compile time — those are where `Arduino.h` and `pins_arduino.h`
+    // live. The platform.txt recipe expands `-I{build.core.path}/tinyusb`
+    // etc. literally, but the *base* core path comes from `{includes}`.
+    // Renesas's recipe in particular leaves the base out, so a TU like
+    // `c_blocks_code.cpp` that does `#include <Arduino.h>` fails the
+    // precompile with "Arduino.h: No such file or directory". Mirroring
+    // arduino-cli's injection here keeps every TU finding the core/
+    // variant headers regardless of how the core author chose to wire
+    // its recipe template.
+    const corePath = tcProps.properties['build.core.path']
+    const variantPath = tcProps.properties['build.variant.path']
+    if (!corePath) {
+      throw new Error(
+        `Toolchain pre-compile requires build.core.path from arduino-cli --show-properties for "${fqbn}". ` +
+          `The board's core is likely not installed.`,
+      )
+    }
+    const includeArgs = [
+      `-I${corePath}`,
+      ...(variantPath ? [`-I${variantPath}`] : []),
+      `-I${srcDir}`,
+      `-I${baremetalDir}`,
+    ]
+
+    // Appended after the recipe so the last `-std=` wins over the core's
+    // implicit gnu++14. extraCxxFlags carries VPP per-board cxx_flags.
+    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraCxxFlags]
+
+    const execMaxBuffer = 16 * 1024 * 1024
+
+    // Tokenize the raw recipe once — placeholders stay intact and are
+    // substituted per-TU below. Going through tokenizeRecipe up-front
+    // means POSIX-quoted segments like `'-DUSB_PRODUCT="Arduino Leonardo"'`
+    // collapse to a single argv entry with the literal `"…"` preserved,
+    // regardless of host shell.
+    const recipeTokens = tokenizeRecipe(tcProps.recipeCpp)
+
+    handleOutputData(`[precompile] Compiling ${sources.length} TU(s) with toolchain for ${fqbn}...`, 'info')
+
+    // Build the .o path list synchronously up-front so the archive members
+    // land in source-file order regardless of the concurrent compile result.
+    const objectFiles = sources.map((sourcePath) => join(objDir, path.basename(sourcePath).replace(/\.cpp$/, '.o')))
+
+    // Cap concurrent toolchain spawns at the host's logical core count.
+    // An unbounded `sources.map(async …)` was dispatching one g++ per TU
+    // simultaneously — on Windows each one drags a cmd.exe shim along
+    // and a 30-TU project would launch 30 parallel processes regardless
+    // of how many cores the host actually has. `os.cpus().length` is the
+    // standard ceiling; the floor of 1 inside `runWithConcurrencyLimit`
+    // covers environments where `os.cpus()` reports zero.
+    const compileConcurrency = os.cpus().length
+
+    await runWithConcurrencyLimit(sources, compileConcurrency, async (sourcePath, idx) => {
+      const objectPath = objectFiles[idx]
+
+      const argv = [
+        ...substitutePlaceholders(recipeTokens, {
+          '{source_file}': sourcePath,
+          '{object_file}': objectPath,
+          '{includes}': includeArgs,
+        }),
+        ...trailingFlags,
+      ]
+
+      await CompilerModule.ensureResponseFileStubs(argv, handleOutputData)
+
+      try {
+        const { stdout, stderr } = await execRecipeArgv(argv, { maxBuffer: execMaxBuffer })
+        // gcc emits warnings on stderr even on success — both streams logged as info.
+        if (stdout) handleOutputData(stdout, 'info')
+        if (stderr) handleOutputData(stderr, 'info')
+        handleOutputData(`[precompile]   ✓ ${path.basename(sourcePath)}`, 'info')
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        handleOutputData(`[precompile]   ✗ ${path.basename(sourcePath)}: ${reason}`, 'error')
+        throw new Error(`Pre-compile failed for ${path.basename(sourcePath)}: ${reason}`)
+      }
+    })
+
+    // Build the ar command manually instead of using recipe.ar.pattern —
+    // cores disagree on placeholder semantics: mbed uses `{archive_file_path}`
+    // (full path, usable) while AVR uses `{archive_file}` (bare filename with
+    // build cache dir baked into the recipe, which would write to the wrong place).
+    const archivePath = join(compilationPath, 'precompile', 'libOpenPLCUserLib.a')
+    const compilerPath = tcProps.properties['compiler.path']
+    const arName = tcProps.properties['compiler.ar.cmd']
+    if (!compilerPath || !arName) {
+      throw new Error(
+        `Toolchain archive invocation requires compiler.path + compiler.ar.cmd ` +
+          `from arduino-cli --show-properties for "${fqbn}" ` +
+          `(got compiler.path="${compilerPath ?? ''}", compiler.ar.cmd="${arName ?? ''}"). ` +
+          `The board's core is likely not installed.`,
+      )
+    }
+    const arFlags = (tcProps.properties['compiler.ar.flags'] ?? 'rcs').split(/\s+/).filter(Boolean)
+    const arExtraFlags = (tcProps.properties['compiler.ar.extra_flags'] ?? '').split(/\s+/).filter(Boolean)
+    // ar argv: <bin> <flags> <extra_flags> <archive> <objects…>. All paths
+    // land as plain argv entries so spaces, parentheses, or other shell
+    // metacharacters in the build path can't break the invocation.
+    const archiveArgv = [`${compilerPath}${arName}`, ...arFlags, ...arExtraFlags, archivePath, ...objectFiles]
+
+    handleOutputData(`[precompile] Archiving ${objectFiles.length} object(s) into libOpenPLCUserLib.a...`, 'info')
+    await execRecipeArgv(archiveArgv, { maxBuffer: execMaxBuffer })
+
+    // Sources were stashed before compile (see `await fs.rename` block at
+    // the top of this method) so arduino-cli's library discovery doesn't
+    // see them in src/ at all. No post-archive move step needed.
+
+    // arduino-cli's precompiled-lib resolution picks ONE subdir per core,
+    // and the convention varies: AVR uses build.mcu ("atmega2560"), mbed
+    // uses build.architecture ("cortex-m7"), others fall back to build.arch.
+    // We collect every candidate so installAsArduinoLibrary can lay the
+    // archive under all of them — duplicating a few-hundred-KB file in the
+    // /tmp staging is cheaper than maintaining a per-core mapping. The
+    // first entry doubles as the canonical `archDir` used for -L injection.
+    //
+    // Hard-fail when none of the three properties is present. The legacy
+    // fallback to a literal "unknown" subdir put the archive somewhere
+    // arduino-cli's resolver would never look, producing an opaque
+    // undefined-symbols link error far downstream from the real cause.
+    // A loud error here names the FQBN and the missing properties so the
+    // user has the exact info to file an issue against the editor or the
+    // core's platform.txt.
+    const archCandidates = Array.from(
+      new Set(
+        [tcProps.properties['build.mcu'], tcProps.properties['build.architecture'], tcProps.properties['build.arch']]
+          .filter((s): s is string => Boolean(s))
+          .map((s) => s.toLowerCase()),
+      ),
+    )
+    if (archCandidates.length === 0) {
+      throw new Error(
+        `Toolchain arch subdir resolution failed for "${fqbn}": arduino-cli ` +
+          `--show-properties=expanded did not expose any of ` +
+          `build.mcu, build.architecture, or build.arch. Without one of ` +
+          `these, arduino-cli's precompiled-library resolver cannot locate ` +
+          `libOpenPLCUserLib.a and the link step would fail with an opaque ` +
+          `undefined-symbols error. Please file an issue including the FQBN ` +
+          `and the core's platform.txt so this can be mapped.`,
+      )
+    }
+
+    handleOutputData(
+      `[precompile] Pre-compile complete (${objectFiles.length} TUs → libOpenPLCUserLib.a, archs=${archCandidates.join(',')})`,
+      'info',
+    )
+
+    return { archivePath, archCandidates, objectFiles }
+  }
+
+  // Wrap the precompiled archive as an Arduino library so arduino-cli's
+  // library discovery picks it up via `#include <OpenPLCUserLib.h>` and
+  // links the archive without recompiling anything inside. Staged under
+  // os.tmpdir() because arduino-cli's --build-property tokenises on
+  // whitespace and ignores quotes, so a build path with spaces (e.g.
+  // "Arduino Mega") would break the -L flag and link input list.
+  async installAsArduinoLibrary({
+    compilationPath,
+    archivePath,
+    archCandidates,
+  }: {
+    compilationPath: string
+    archivePath: string
+    archCandidates: string[]
+  }): Promise<{ libraryDir: string; archDir: string }> {
+    if (archCandidates.length === 0) {
+      throw new Error('installAsArduinoLibrary: archCandidates must contain at least one entry')
+    }
+
+    // Hash isolates concurrent compiles of different boards; pid suffix
+    // isolates concurrent compiles of the SAME board across processes so
+    // the rm-then-mkdir reset below never deletes another process's stage.
+    const buildHash = createHash('md5').update(compilationPath).digest('hex').slice(0, 12)
+    const stagingRoot = join(os.tmpdir(), `openplc-precompile-${buildHash}-${process.pid}`)
+    const libraryDir = join(stagingRoot, 'OpenPLCUserLib')
+    const srcDir = join(libraryDir, 'src')
+
+    // Wipe leftover from a previous compile so a stale .a doesn't shadow a
+    // fresh one (e.g. when the board switches between toolchains).
+    await fs.rm(stagingRoot, { recursive: true, force: true })
+
+    // Lay the archive under every candidate subdir — arduino-cli's
+    // precompiled-lib resolver picks ONE based on a per-core convention
+    // (build.mcu for AVR, build.architecture for mbed, etc.). The first
+    // candidate is treated as canonical for the returned archDir, which is
+    // what -L points to via compiler.libraries.ldflags.
+    const archDir = join(srcDir, archCandidates[0])
+    for (const arch of archCandidates) {
+      const candidateDir = join(srcDir, arch)
+      await mkdir(candidateDir, { recursive: true })
+      await cp(archivePath, join(candidateDir, 'libOpenPLCUserLib.a'))
+    }
+
+    const propsContent = [
+      'name=OpenPLCUserLib',
+      'version=1.0.0',
+      'author=OpenPLC Editor',
+      'maintainer=OpenPLC Editor <noreply@autonomylogic.com>',
+      'sentence=Pre-compiled OpenPLC user code archive',
+      'paragraph=Pre-compiled gnu++17 archive of generated PLC code, isolated from arduino-cli core compilation.',
+      'category=Other',
+      'architectures=*',
+      'precompiled=full',
+      '',
+    ].join('\n')
+    await writeFile(join(libraryDir, 'library.properties'), propsContent, 'utf-8')
+
+    const headerContent = [
+      '// Auto-generated stub for OpenPLCUserLib.',
+      '// Real declarations come via arduino_runtime_glue.h in <sketch>/src/.',
+      '// This file exists solely to trigger arduino-cli library discovery for the',
+      '// precompiled archive in this directory.',
+      '#pragma once',
+      '',
+    ].join('\n')
+    await writeFile(join(srcDir, 'OpenPLCUserLib.h'), headerContent, 'utf-8')
+
+    return { libraryDir, archDir }
+  }
+
   async handleCompileArduinoProgram({
+    boardTarget,
     boardHalsContent,
     compilationPath,
     handleOutputData,
@@ -1217,30 +1720,92 @@ class CompilerModule {
       handleOutputData('Clean build requested — arduino-cli cache will be invalidated.', 'info')
     }
 
-    // The AVR toolchain doesn't ship a C++ stdlib; we bundle a
-    // freestanding port at resources/sources/avr-libstdcpp/include
-    // and pass it via -I.  Electron's user-data dir on macOS is
-    // `~/Library/Application Support/<App>/`, and arduino-cli's
-    // recipe substitution gets confused by quoted paths with embedded
-    // spaces — so mirror the headers into a no-space cache directory
-    // on first compile.  Versioned cache key self-invalidates on
-    // editor upgrades that ship new headers.
-    const avrLibStdCppInclude = boardHalsContent['core']?.startsWith('arduino:avr')
-      ? await this.ensureAvrLibStdCppCache()
-      : undefined
+    // Resolve unified board info (VPP-aware, falls back to hals.json) so the
+    // pre-compile + arduino-cli paths see the same compilerFlags/platformOptions.
+    const resolver = await this.#createBoardInfoResolver()
+    const info = resolver.resolve(boardTarget)
+    if (!info.platform) {
+      throw new Error(`Board "${boardTarget}" does not declare a platform (FQBN)`)
+    }
 
-    // Shared with openplc-web's compiler-adapter — single source of
-    // truth for arduino-cli compile argv composition.  Editor passes
-    // `-j 0` (parallel: default true) to saturate cores on developer
-    // machines; web passes parallel: false because compiler-service
-    // multiplexes many clients in nsjail sandboxes.
+    // Compose effective FQBN by appending platformOptions selected by the user
+    // (or each option's manifest default). projectPath is derived from
+    // compilationPath (always `<projectPath>/build/<boardTarget>`).
+    const projectPath = path.dirname(path.dirname(compilationPath))
+    const selectedPlatformOptions = await this.#readSelectedPlatformOptions(projectPath)
+    const effectiveFqbn = CompilerModule.applyPlatformOptions(
+      info.platform,
+      info.platformOptions,
+      selectedPlatformOptions,
+    )
+
+    // The AVR/megaavr toolchain ships <stdint.h> but no C++ wrappers; we
+    // bundle a freestanding port at resources/sources/avr-libstdcpp/.
+    // Electron's user-data dir on macOS has spaces, which break arduino-cli's
+    // compiler.cpp.extra_flags substitution — mirror to a no-space cache.
+    const avrLibStdCppInclude =
+      info.core?.startsWith('arduino:avr') || info.core?.startsWith('arduino:megaavr')
+        ? await this.ensureAvrLibStdCppCache()
+        : undefined
+
+    // Pre-compile strucpp-touching TUs at -std=gnu++17 into libOpenPLCUserLib.a.
+    // Flag policy: VPP cxx_flags + AVR libstdcpp -I flow into BOTH the pre-compile
+    // and the arduino-cli pass (ModbusSlave still rides arduino-cli); internal
+    // -std=gnu++17/-fno-rtti stays pre-compile-only.
+    const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
+    if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
+
+    const { archivePath, archCandidates } = await this.handlePrecompileUserLib({
+      compilationPath,
+      fqbn: effectiveFqbn,
+      extraCxxFlags: cxxFlags,
+      handleOutputData,
+    })
+    const { libraryDir: precompiledLibDir, archDir: precompiledArchDir } = await this.installAsArduinoLibrary({
+      compilationPath,
+      archivePath,
+      archCandidates,
+    })
+
+    // Shared with openplc-web's compiler-adapter — single source of truth for
+    // arduino-cli compile argv composition. The compile entry is synthesised
+    // from BoardInfoResolver's BoardBuildInfo (covers legacy hals.json AND
+    // VPP boards uniformly); the boardHalsContent argument stays on the
+    // signature for backward compat but is no longer the data source — for
+    // VPP-installed boards it would be undefined.
+    //
+    // After the shared helper composes its baseline args we append:
+    //   --fqbn (effective with platformOptions applied),
+    //   compiler.cpp.extra_flags (VPP cxx_flags),
+    //   --library <precompiledLibDir> (so arduino-cli's discovery finds the
+    //     header via Baremetal.ino's #include <OpenPLCUserLib.h>),
+    //   compiler.libraries.ldflags=-L<archDir> -lOpenPLCUserLib (arduino-cli
+    //     doesn't auto-emit -L/-l for libraries marked precompiled=full).
+    const compileEntry = {
+      platform: info.platform,
+      core: info.core,
+      c_flags: info.compilerFlags?.c_flags,
+      cxx_flags: info.compilerFlags?.cxx_flags,
+      ld_flags: info.compilerFlags?.ld_flags,
+      max_data_size: info.maxDataSize,
+    }
+    void boardHalsContent // accepted for signature compat; data comes from `info`
+    const cxxFlagsArg =
+      cxxFlags.length > 0 ? ['--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`] : []
     const buildProjectFlags = [
-      ...buildArduinoCliCompileArgs(boardHalsContent, {
+      ...buildArduinoCliCompileArgs(compileEntry, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
         libraryPath: join(compilationPath, 'src'),
         avrLibStdCppInclude,
         cleanBuild,
       }),
+      '--fqbn',
+      effectiveFqbn,
+      ...cxxFlagsArg,
+      '--library',
+      precompiledLibDir,
+      '--build-property',
+      `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
     ]
 
@@ -1454,7 +2019,11 @@ class CompilerModule {
 
       for (const entry of entries) {
         const fullPath = path.join(currentPath, entry.name)
-        const zipPath = relativePath ? path.join(relativePath, entry.name) : entry.name
+        // ZIP entry names must use forward slashes (the ZIP spec separator).
+        // path.join would emit backslashes on Windows, which a POSIX runtime
+        // then treats as literal filename characters rather than directory
+        // separators — breaking extraction of every nested file.
+        const zipPath = relativePath ? `${relativePath}/${entry.name}` : entry.name
 
         if (entry.isDirectory()) {
           await addFilesToZip(fullPath, zipFolder, zipPath)
@@ -1608,6 +2177,20 @@ class CompilerModule {
             // Device configuration may not exist yet — use empty vendor data
           }
 
+          // Read the GPIO pin-mapping for pin-based boards (capabilities.
+          // pinMapping). The generator turns these into the plugin config's
+          // pins[] array. Module-based boards have no pins, so this stays
+          // empty and no pins[] key is emitted.
+          let devicePins: DevicePin[] = []
+          try {
+            const pinMappingPath = join(normalizedProjectPath, 'devices', 'pin-mapping.json')
+            const pinMappingRaw = await readFile(pinMappingPath, 'utf-8')
+            const parsedPins: unknown = JSON.parse(pinMappingRaw)
+            if (Array.isArray(parsedPins)) devicePins = parsedPins as DevicePin[]
+          } catch {
+            // No pin-mapping file — leave empty.
+          }
+
           // Pre-load each module's configScreen JSON so the (pure)
           // generator can encode per-slot configuration bytes without
           // touching the filesystem.
@@ -1631,7 +2214,7 @@ class CompilerModule {
               return { ...m, configScreenDefinition }
             }),
           )
-          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules)
+          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules, devicePins)
 
           // configTemplate is supplied by the package author through
           // their .vpp manifest. Without validation, plugin_name like
@@ -1827,71 +2410,46 @@ class CompilerModule {
       string | null | undefined,
     ]
 
+    // Resolve board info uniformly across hals.json + installed VPP
+    // packages.  `BoardInfoResolver` is the canonical source of truth
+    // for the pipeline's `boardEntry`, the runtime-classification
+    // flags, and the FQBN-derivation downstream — same call works for
+    // legacy hals entries (Simulator / Runtime v3 / Runtime v4) and
+    // VPP-installed Arduino boards.  Web's adapter ships a no-op
+    // packageManager until the VPP catalog lands there; the same
+    // resolver then naturally degrades to hals-only behavior.
     const halsContent = await readHalsFile<HalsFile>()
-    const selection = resolveBoardSelection(
-      halsContent as Record<string, Parameters<typeof resolveBoardSelection>[0][string]>,
-      boardTarget,
-    )
-    // Resolved fields the rest of compileProgram consumes.  Default
-    // to the shared resolver's output when the board lives in
-    // hals.json; otherwise (VPP boards installed via `.vpp` packages)
-    // fall back to the package-manager lookup so the runtime kind +
-    // flags still reflect the user's selection.
-    let boardEntry: Parameters<typeof runCompilePipeline>[0]['boardEntry']
-    let boardRuntime: string
-    let isSimulator: boolean
-    let isRuntimeV3: boolean
-    let isRuntimeV4: boolean
-    if (selection.ok) {
-      boardEntry = selection.boardEntry as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
-      boardRuntime = selection.boardRuntime
-      isSimulator = selection.isSimulator
-      isRuntimeV3 = selection.isRuntimeV3
-      isRuntimeV4 = selection.isRuntimeV4
-    } else {
-      // VPP fallback — board lives in an installed `.vpp` package
-      // rather than hals.json.  Derive the runtime from the manifest's
-      // `target.type` (matches the pre-refactor `#getBoardRuntime`
-      // behaviour that fed all subsequent branching).  Web doesn't
-      // need this fallback — its installed-package surface is empty
-      // by design — so it stays in the editor-specific branch here.
-      let vppRuntime: 'openplc-compiler' | 'arduino-cli' | null = null
-      try {
-        const packageManager = new PackageManagerModule()
-        for (const pkg of packageManager.listInstalled()) {
-          const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-          if (!manifest) continue
-          const device = manifest.devices.find((d) => d.name === boardTarget)
-          if (device) {
-            vppRuntime = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
-            break
-          }
-        }
-      } catch {
-        // Package manager errors fall through to the no-match path
-        // below — same behaviour as `#getBoardRuntime`.
-      }
-      if (!vppRuntime) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
-        })
-        _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
-        _mainProcessPort.close()
-        return
-      }
-      // VPP boards don't ship a hals.json entry — feed the pipeline
-      // an empty placeholder.  The runtime-v4 / Arduino branches the
-      // pipeline picks based on the flags below don't dereference
-      // `boardEntry.platform` until the arduino-cli compile step,
-      // which doesn't run for runtime-v4 (VPP boards' canonical
-      // target).
-      boardEntry = {} as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
-      boardRuntime = vppRuntime
-      isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-      isRuntimeV4 = vppRuntime === 'openplc-compiler' && !isRuntimeV3
-      isSimulator = false
+    const resolver = await this.#createBoardInfoResolver()
+    let boardInfo: BoardBuildInfo
+    try {
+      boardInfo = resolver.resolve(boardTarget)
+    } catch {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
+      })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+      _mainProcessPort.close()
+      return
     }
+    const { boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = boardInfo
+
+    // Adapt BoardBuildInfo → pipeline's BoardHalsBuildEntry shape.
+    // Runtime-v3 / runtime-v4 / simulator targets carry an empty
+    // `platform` (intentionally — they don't go through arduino-cli)
+    // so the cast bypasses the shape's required-platform constraint;
+    // downstream code only dereferences `platform` on the arduino-cli
+    // compile + upload paths, which those runtimes skip.
+    const boardEntry: Parameters<typeof runCompilePipeline>[0]['boardEntry'] = {
+      ...(boardInfo.platform ? { platform: boardInfo.platform } : {}),
+      ...(boardInfo.core ? { core: boardInfo.core } : {}),
+      ...(boardInfo.define ? { define: boardInfo.define } : {}),
+      ...(boardInfo.compilerFlags?.c_flags ? { c_flags: boardInfo.compilerFlags.c_flags } : {}),
+      ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
+      ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
+      ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
+    } as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
@@ -2123,7 +2681,9 @@ class CompilerModule {
       if (result.success) {
         // Resolve the per-FQBN sub-directory arduino-cli wrote the
         // .hex into.  Matches the layout the renderer's simulator
-        // loader expects.
+        // loader expects.  `boardEntry.platform` is populated by the
+        // BoardInfoResolver above (hals.json OR VPP manifest), so
+        // this works uniformly for both catalogs.
         const platform = typeof boardEntry?.platform === 'string' ? boardEntry.platform : ''
         const fqbnSubDir = platform.replaceAll(':', '.')
         const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
@@ -2147,6 +2707,10 @@ class CompilerModule {
     // Runtime v4 / v3 / Arduino-direct paths all converge here.  If
     // an upload happened (or was skipped on purpose), trail the
     // separator and let the renderer pulse-check the deferred close.
+    // The upload step itself runs inside `runCompilePipeline` (via
+    // `platformPort.uploadArduinoBoard` for direct-Arduino targets,
+    // honoring the `compileOnly` flag), so no explicit upload block
+    // is needed here.
     _mainProcessPort.postMessage({
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
@@ -2169,7 +2733,8 @@ class CompilerModule {
 
     const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
 
-    const boardRuntime = await this.#getBoardRuntime(boardTarget)
+    const debugResolver = await this.#createBoardInfoResolver()
+    const { boardRuntime } = debugResolver.resolve(boardTarget)
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
