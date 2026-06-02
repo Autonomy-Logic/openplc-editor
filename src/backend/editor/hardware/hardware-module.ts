@@ -216,6 +216,7 @@ class HardwareModule {
                 .map((pin) => pin.trim())
                 .filter(Boolean) ?? [],
           },
+          ...(boardData.debug ? { debug: boardData.debug } : {}),
         })
       })
     }
@@ -326,6 +327,7 @@ class HardwareModule {
                   }
                 : null,
             },
+            ...(device.debug ? { debug: device.debug } : {}),
           })
         }
       }

@@ -39,6 +39,9 @@
       "hasRuntimeStats": false,
       "isInProcessSimulator": true,
       "directUsbUpload": true
+    },
+    "debug": {
+      "channels": [{ "label": "Simulator", "channel": "simulator", "enabledWhen": true, "params": {} }]
     }
   },
   "OpenPLC Runtime v3": {
@@ -59,6 +62,22 @@
       "hasRuntimeStats": false,
       "isInProcessSimulator": false,
       "directUsbUpload": false
+    },
+    "debug": {
+      "preconditions": ["runtimeConnected"],
+      "channels": [
+        {
+          "label": "Modbus TCP",
+          "channel": "tcp",
+          "enabledWhen": true,
+          "params": {
+            "ipAddress": {
+              "$ref": "configuration.runtimeIpAddress",
+              "required": "Runtime IP address is not configured."
+            }
+          }
+        }
+      ]
     }
   },
   "OpenPLC Runtime v4": {
@@ -79,6 +98,26 @@
       "hasRuntimeStats": true,
       "isInProcessSimulator": false,
       "directUsbUpload": false
+    },
+    "debug": {
+      "preconditions": ["runtimeConnected", "jwtToken"],
+      "channels": [
+        {
+          "label": "WebSocket",
+          "channel": "websocket",
+          "enabledWhen": true,
+          "params": {
+            "ipAddress": {
+              "$ref": "configuration.runtimeIpAddress",
+              "required": "Runtime IP address is not configured."
+            },
+            "jwtToken": {
+              "$ref": "runtimeConnection.jwtToken",
+              "required": "JWT token missing. Reconnect to the runtime."
+            }
+          }
+        }
+      ]
     }
   }
 }

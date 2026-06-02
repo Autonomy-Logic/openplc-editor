@@ -23,6 +23,7 @@
  * conflict surface disappears.
  */
 
+import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,10 @@ export interface HalsBoardEntry {
   define?: string | string[]
   extra_libraries?: string[]
   max_data_size?: number
+  /** Declarative debug-channel resolver spec.  See `debug-spec.ts`
+   *  for the schema.  Boards without a spec fall back to the
+   *  "Debugging Not Available" outcome on the renderer side. */
+  debug?: DebugSpec
 }
 
 /**
@@ -167,6 +172,13 @@ export interface BoardBuildInfo {
   vppPackageId?: string
   vppDeviceId?: string
   vppPackagePath?: string
+
+  // Debug-channel resolver spec --------------------------------------------
+  /** Declarative debug spec consumed by `resolveDebugConnection`.
+   *  Carries through from both `hals.json` entries and VPP manifest
+   *  device entries.  Undefined when the board didn't declare one;
+   *  callers can fall back to "Debugging Not Available". */
+  debug?: DebugSpec
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +231,7 @@ export class BoardInfoResolver {
     if (entry.define) info.define = entry.define
     if (entry.extra_libraries) info.extraArduinoLibraries = entry.extra_libraries
     if (entry.max_data_size !== undefined) info.maxDataSize = entry.max_data_size
+    if (entry.debug) info.debug = entry.debug
     return info
   }
 
@@ -273,6 +286,7 @@ export class BoardInfoResolver {
     if (device.hal.pluginType === 'python' || device.hal.pluginType === 'native') {
       info.pluginType = device.hal.pluginType
     }
+    if (device.debug) info.debug = device.debug
     return info
   }
 

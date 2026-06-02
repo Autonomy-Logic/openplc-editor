@@ -168,7 +168,6 @@ describe('Device slice types', () => {
           configuration: {
             deviceBoard: '',
             communicationPort: '',
-            compileOnly: false,
           },
           pinMapping: { pins: [], currentSelectedPinTableRow: -1 },
         },
@@ -249,7 +248,6 @@ describe('Device slice types', () => {
         'updatePin',
         'setDeviceBoard',
         'setCommunicationPort',
-        'setCompileOnly',
         'setRuntimeIpAddress',
         'setRuntimeJwtToken',
         'setRuntimeConnectionStatus',
@@ -260,7 +258,7 @@ describe('Device slice types', () => {
         'setIncludeTimingStatsInPolling',
         'clearRuntimeConnection',
       ]
-      expect(actionKeys).toHaveLength(20)
+      expect(actionKeys).toHaveLength(19)
     })
   })
 })

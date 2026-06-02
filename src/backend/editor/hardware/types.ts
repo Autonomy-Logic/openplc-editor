@@ -1,5 +1,6 @@
 import { z } from 'zod/v4'
 
+import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { PlatformOption, TargetCapabilities } from '../../../middleware/shared/ports/types'
 
 const SerialPortSchema = z.object({
@@ -47,6 +48,12 @@ const BoardInfoSchema = z.object({
   // SoC RAM (e.g. emulated boards).
   max_data_size: z.number().optional(),
   arch: z.string().optional(),
+  // Declarative debug-channel resolver spec.  Schema validation is
+  // intentionally loose (`z.any()`) — the canonical shape lives in
+  // `backend/shared/hardware/debug-spec.ts` as a TS interface, and
+  // the resolver does its own structural checks at runtime.  Zod here
+  // just guards against shape drift in `hals.json`.
+  debug: z.any().optional(),
   // Tracking metadata — not present in shipped hals.json today; optional
   // so downstream entries that do carry them still validate.
   updatedAt: z.number().optional(),
@@ -139,6 +146,11 @@ type AvailableBoards = Map<
      *  setting `pinMapping: true`). Merged over the preset by
      *  `resolveTargetCapabilities`. */
     capabilities?: Partial<TargetCapabilities>
+    /** Declarative debug-channel resolver spec carried through to the
+     *  renderer.  Same shape on both catalogs (`hals.json` builtins
+     *  and VPP manifest devices) — see
+     *  `backend/shared/hardware/debug-spec.ts`. */
+    debug?: DebugSpec
   }
 >
 

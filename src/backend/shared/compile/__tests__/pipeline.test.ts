@@ -303,14 +303,21 @@ describe('runCompilePipeline — arduino direct path', () => {
     expect(port.uploadArduinoBoard).toHaveBeenCalledTimes(1)
   })
 
-  it('skips the upload step (success with warning) when deviceContext is absent', async () => {
+  it('runs the upload step on the arduino-cli path without a deviceContext (serial port comes from communicationPort)', async () => {
+    // `deviceContext` is the editor-https / web-orchestrator
+    // discriminator used by the runtime-v3/v4 transports — by the
+    // time the pipeline reaches the Arduino-cli upload step, those
+    // runtime branches have already returned, so deviceContext is
+    // always undefined here.  Gating Arduino uploads on it was the
+    // bug that surfaced as "uploads silently skipped" after the
+    // VPP migration; the serial port for arduino-cli uploads comes
+    // from `communicationPort`, not deviceContext.
     const port = makePort()
-    const { events, emit } = captureEvents()
+    const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
     expect(result.success).toBe(true)
-    expect(result.uploaded).toBe(false)
-    expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
-    expect(events.some((e) => e.level === 'warning' && /not configured/.test(e.message))).toBe(true)
+    expect(result.uploaded).toBe(true)
+    expect(port.uploadArduinoBoard).toHaveBeenCalledTimes(1)
   })
 
   it('returns success=false when uploadArduinoBoard reports failure', async () => {
