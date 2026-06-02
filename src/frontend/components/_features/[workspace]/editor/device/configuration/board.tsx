@@ -449,6 +449,11 @@ const Board = memo(function () {
                 align='center'
                 side='bottom'
                 viewportRef={deviceSelectRef}
+                // Disable Radix's typeahead so it doesn't fight the
+                // search box below for keystrokes — that fight was
+                // surfacing as focus loss on the first character
+                // that didn't match the currently-selected device.
+                disableTypeahead
               >
                 {/*
                   Search field — `sticky top-0` keeps it pinned while

@@ -27,7 +27,43 @@ type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Conte
   'data-align'?: 'start' | 'end' | 'center'
   'data-side'?: 'left' | 'right' | 'bottom' | 'top'
   viewportRef?: React.Ref<HTMLDivElement>
+  /**
+   * Disable Radix Select's built-in typeahead.  Set this when the
+   * dropdown renders its own search input — Radix's typeahead
+   * otherwise steals focus to the first SelectItem whose label
+   * starts with the typed character, fighting the search field for
+   * keystrokes.
+   *
+   * Implementation: a React `onKeyDownCapture` listener on the
+   * Content element calls `nativeEvent.stopImmediatePropagation()`
+   * for single-character keystrokes.  React's capture pass runs
+   * during the native event's capture phase BEFORE Radix's typeahead
+   * listener attached on the same element fires, and
+   * `stopImmediatePropagation` halts the native DOM bubble so
+   * Radix's handler is never reached.  Navigation keys (arrows,
+   * Enter, Escape, Tab, Home/End, Page Up/Down) and modifier
+   * combinations flow through untouched so keyboard navigation
+   * still works.  Character insertion into the focused input is a
+   * keydown default action and runs regardless of propagation
+   * control, so the user's typing still lands in the search field.
+   */
+  disableTypeahead?: boolean
 }
+
+const TYPEAHEAD_PASSTHROUGH_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Enter',
+  'Escape',
+  'Tab',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+])
+
 const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISelectContentProps>(
   (
     {
@@ -39,10 +75,24 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
       side = 'bottom',
       className,
       viewportRef,
+      disableTypeahead = false,
+      onKeyDownCapture,
       ...res
     },
     forwardedRef,
   ) => {
+    const handleKeyDownCapture: React.KeyboardEventHandler<HTMLDivElement> = (event) => {
+      if (disableTypeahead) {
+        const isSingleChar = event.key.length === 1
+        const isModifierCombo = event.ctrlKey || event.metaKey || event.altKey
+        const isPassthrough = TYPEAHEAD_PASSTHROUGH_KEYS.has(event.key)
+        if (isSingleChar && !isModifierCombo && !isPassthrough) {
+          event.stopPropagation()
+          event.nativeEvent.stopImmediatePropagation()
+        }
+      }
+      onKeyDownCapture?.(event)
+    }
     return (
       <PrimitiveSelect.Portal>
         <PrimitiveSelect.Content
@@ -53,6 +103,7 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           position={position}
           align={align}
           side={side}
+          onKeyDownCapture={handleKeyDownCapture}
           {...res}
         >
           <PrimitiveSelect.Viewport ref={viewportRef} className='oplc-select-viewport h-full w-full'>
