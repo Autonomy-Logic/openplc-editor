@@ -149,16 +149,19 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
               projectPath={proj.path}
               lastModified={projectTimes[proj.path]}
             />
-            {/* 3-dot overflow menu — reveals on card hover. Positioned
-             *  on the SVG folder body's top-right corner; stops click
-             *  propagation so opening the menu doesn't also trigger the
-             *  card's onClick (open project). */}
+            {/* 3-dot overflow menu — always visible, positioned on
+             *  the SVG folder BODY's top-right (not the tab above
+             *  it). The folder shape's body starts at y≈33 inside a
+             *  160px-tall card, so `top-10` (40px) sits just inside
+             *  the blue body and leaves the tab clean. Stops click
+             *  propagation so opening the menu doesn't also fire
+             *  the card's onClick (open project). */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
                   aria-label='Project actions'
                   onClick={(e) => e.stopPropagation()}
-                  className='absolute right-2 top-2 rounded p-1 opacity-0 transition-opacity hover:bg-black/20 focus:opacity-100 focus:outline-none group-hover:opacity-100 dark:hover:bg-black/40'
+                  className='absolute right-2 top-10 rounded p-1 hover:bg-black/20 focus:outline-none dark:hover:bg-black/40'
                   title='More actions'
                 >
                   <svg className='h-4 w-4 text-white' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'>
