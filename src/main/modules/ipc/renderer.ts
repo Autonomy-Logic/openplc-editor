@@ -170,6 +170,15 @@ const rendererProcessBridge = {
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
+  /** Drop a recent-projects entry without touching disk — used by the
+   *  start screen's "Remove from list" action. */
+  removeProjectFromRecent: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:remove-from-recent', projectPath),
+  /** Recursively delete a project directory AND drop it from the recent
+   *  list. Gated by the main-process service's `project.json` safety
+   *  check — see `ProjectService.deleteProject`. */
+  deleteProject: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:delete', projectPath),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
 
   // ===================== WINDOW CONTROLS =====================

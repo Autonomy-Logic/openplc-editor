@@ -13,6 +13,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'save-changes-project',
   'save-changes-file',
   'confirm-delete-element',
+  'confirm-delete-project',
   'confirm-device-switch',
   'quit-application',
   'runtime-create-user',

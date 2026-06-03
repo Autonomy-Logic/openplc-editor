@@ -796,6 +796,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('catalog:list', this.handleCatalogList)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
+    this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
+    this.registerHandle('project:delete', this.handleDeleteProject)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -1178,6 +1180,39 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       logger.error('Error reading history file: ' + getErrorMessage(error))
       return []
+    }
+  }
+
+  /**
+   * Drop a project entry from `projects.json` (recent list).
+   * Disk is untouched — the project's files stay where they are. The
+   * renderer-side use case is the start-screen 3-dot menu's "Remove
+   * from list" action: a no-confirmation no-op as far as data goes,
+   * just hides the entry from the recents view.
+   */
+  handleRemoveProjectFromRecent = async (_event: unknown, projectPath: string) => {
+    try {
+      await this.projectService.removeProjectFromHistory(projectPath)
+      return { success: true }
+    } catch (error) {
+      logger.error('Error removing project from history: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * Recursively delete a project directory and drop it from the recent
+   * list. The destructive half (`fs.rm`) is gated by the project-
+   * service's `project.json` check — see `deleteProject` there for
+   * the safety rationale. Returns the service's response shape
+   * verbatim so the renderer can surface the failure message.
+   */
+  handleDeleteProject = async (_event: unknown, projectPath: string) => {
+    try {
+      return await this.projectService.deleteProject(projectPath)
+    } catch (error) {
+      logger.error('Error deleting project: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   }
   handleAppQuit = () => {

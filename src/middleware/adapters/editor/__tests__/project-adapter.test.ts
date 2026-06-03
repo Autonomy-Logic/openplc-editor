@@ -112,6 +112,8 @@ beforeEach(() => {
     pathPicker: jest.fn().mockResolvedValue({ success: true, path: '/picked/path' }),
     openPathPicker: jest.fn().mockResolvedValue({ success: true, path: '/picked/path' }),
     retrieveRecent: jest.fn().mockResolvedValue(mockRecentProjects),
+    removeProjectFromRecent: jest.fn().mockResolvedValue({ success: true }),
+    deleteProject: jest.fn().mockResolvedValue({ success: true }),
     fileReadContent: jest.fn().mockResolvedValue({ success: true, content: 'file content' }),
     fileWatchStart: jest.fn().mockResolvedValue({ success: true }),
     fileWatchStop: jest.fn().mockResolvedValue({ success: true }),
@@ -430,6 +432,41 @@ describe('createEditorProjectAdapter', () => {
       const result = await adapter.deletePou('/path/to/pou.st')
 
       expect(result).toEqual({ success: false, error: 'File already exists' })
+    })
+  })
+
+  describe('removeRecentProject', () => {
+    it('delegates to window.bridge.removeProjectFromRecent with the project path', async () => {
+      const result = await adapter.removeRecentProject('/p/some-project')
+      expect(window.bridge.removeProjectFromRecent).toHaveBeenCalledWith('/p/some-project')
+      expect(result).toEqual({ success: true })
+    })
+
+    it('passes the failure shape through unchanged', async () => {
+      ;(window.bridge.removeProjectFromRecent as jest.Mock).mockResolvedValue({ success: false, error: 'EBUSY' })
+      const result = await adapter.removeRecentProject('/p/some-project')
+      expect(result).toEqual({ success: false, error: 'EBUSY' })
+    })
+  })
+
+  describe('deleteProject', () => {
+    it('delegates to window.bridge.deleteProject with the project path', async () => {
+      const result = await adapter.deleteProject('/p/some-project')
+      expect(window.bridge.deleteProject).toHaveBeenCalledWith('/p/some-project')
+      expect(result).toEqual({ success: true })
+    })
+
+    it('passes the failure shape through unchanged (e.g. safety gate tripped)', async () => {
+      // The bridge surfaces the project-service's `project.json`-missing
+      // branch as { success: false, error: '...' } — the adapter is a
+      // thin pass-through so the renderer sees the same shape.
+      ;(window.bridge.deleteProject as jest.Mock).mockResolvedValue({
+        success: false,
+        error: 'Path "..." does not contain a project.json. Removed the entry from the recent list.',
+      })
+      const result = await adapter.deleteProject('/p/some-project')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('does not contain a project.json')
     })
   })
 

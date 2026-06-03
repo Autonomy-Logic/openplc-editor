@@ -12,6 +12,11 @@ export type ModalTypes =
   | 'save-changes-project'
   | 'save-changes-file'
   | 'confirm-delete-element'
+  /** Start-screen 3-dot menu confirmation for deleting a recent
+   *  project's directory from disk. Data shape: `{ projectName,
+   *  projectPath }`. The "Remove from list" sibling action runs
+   *  immediately without a modal — disk is untouched there. */
+  | 'confirm-delete-project'
   | 'confirm-device-switch'
   | 'quit-application'
   | 'runtime-create-user'

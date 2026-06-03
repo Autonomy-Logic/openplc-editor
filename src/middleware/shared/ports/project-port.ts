@@ -251,6 +251,24 @@ export interface ProjectPort {
   getRecentProjects(): Promise<RecentProject[]>
 
   /**
+   * Drop a project entry from the recent-projects list without
+   * touching disk. Used by the start-screen 3-dot menu's "Remove
+   * from list" action. Disk state is preserved — re-opening the
+   * project by path later re-adds it to the recent list.
+   */
+  removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Recursively delete a project directory and drop its entry from
+   * the recent list. Destructive — the editor surfaces a confirmation
+   * modal before invoking this. Implementations gate the recursive
+   * delete on the directory actually containing a top-level
+   * `project.json` to refuse arbitrary paths (stale history entries
+   * pointing at user-home directories etc.).
+   */
+  deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
    * Read a file's content by path.
    * Editor: reads from local filesystem via IPC.
    * Web: reads from in-memory project state or API.
