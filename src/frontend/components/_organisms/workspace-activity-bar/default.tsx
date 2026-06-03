@@ -103,7 +103,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
-  const editingState = useOpenPLCStore((state) => state.workspace.editingState)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const isReadOnly = useOpenPLCStore((state) => state.workspace.isReadOnly)
 
@@ -156,13 +155,27 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
       if (isCompiling) return
 
-      // Read-only projects can't save — but Run/Build must still work since
-      // we want the viewer to be able to compile and run the project on
-      // their own device.  The Monaco/graphical gates prevent the user from
-      // actually modifying anything, so `editingState` should stay 'saved'
-      // here; the explicit isReadOnly check is belt-and-suspenders so a
-      // stray dirty flag doesn't trip the save and 403 the build.
-      if (editingState === 'unsaved' && !isReadOnly) {
+      // Always save the full project before building. The compile
+      // pipeline reads source from disk (project.json, devices/*.json,
+      // pous/**, ...) so any in-memory edit that hasn't been flushed
+      // yet compiles from the previous session's bytes.
+      //
+      // We used to gate this on `editingState === 'unsaved'`, but that
+      // flag was effect-driven and lagged behind store mutations by a
+      // render (a quick "change a vendor-screen field → click Build"
+      // could miss the save). Each editor's dirty-tracking is also
+      // independent — Monaco buffers, vendor screens, the manifest,
+      // ladder/FBD nodes — so a workspace-level boolean was always a
+      // lossy summary. `executeSaveProject` is the same call the
+      // library-build path makes for the same reason: walks every
+      // project file and flushes the in-memory state to disk. Cost is
+      // a few JSON.stringify + file writes; save is idempotent when
+      // nothing changed.
+      //
+      // Read-only projects skip the save (Monaco/graphical editors
+      // are already locked, so there's nothing to flush; the explicit
+      // gate keeps a stray dirty flag from 403-ing the build).
+      if (!isReadOnly) {
         const saved = await executeSave()
         if (!saved) return
       }
@@ -254,7 +267,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       debugSession,
       addLog,
       isCompiling,
-      editingState,
       executeSave,
       isReadOnly,
       jwtToken,
@@ -688,7 +700,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     setIsDebuggerProcessing(true)
 
     try {
-      if (editingState === 'unsaved') {
+      // Mirror the build flow: always save before starting the
+      // debugger so the on-disk project matches what the user sees
+      // on screen. Avoids the race where an editor change hadn't
+      // bubbled up to `editingState === 'unsaved'` yet.
+      if (!isReadOnly) {
         const saved = await executeSave()
         if (!saved) {
           setIsDebuggerProcessing(false)
@@ -746,7 +762,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     availableBoards,
     isSimulatorBoard,
     isDebuggerProcessing,
-    editingState,
+    isReadOnly,
     executeSave,
     addLog,
     resolveDebugConfigWithUx,

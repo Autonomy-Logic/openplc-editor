@@ -522,28 +522,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
         }),
       )
-      // Mark the workspace dirty synchronously so the upload's
-      // `editingState === 'unsaved'` gate sees the change immediately.
-      // The DeviceEditor component watches `deviceUpdated.updated` via
-      // a useEffect and calls the same handler — but that path runs
-      // one render later and ONLY when the device editor is mounted,
-      // so a vendor-screen change followed by a quick Upload click
-      // (or a change while the user is on a non-device tab) would
-      // skip the save and leave the compile reading stale disk. Doing
-      // it here, on the action that actually mutated the data, makes
-      // the dirty-marking concurrent with the mutation.
-      //
-      // Optional-chained because slice tests compose a subset of the
-      // store (device + project + console + editor + library) without
-      // the shared slice. The dirty-flag side effect is supplementary —
-      // the store mutation above is the load-bearing part — so silently
-      // skipping when shared isn't in the root keeps those tests
-      // hermetic without forcing every slice consumer to compose
-      // shared just to call this action.
-      const root = getState() as DeviceSliceRoot & {
-        sharedWorkspaceActions?: { handleFileAndWorkspaceSavedState?: (name: string) => void }
-      }
-      root.sharedWorkspaceActions?.handleFileAndWorkspaceSavedState?.('Configuration')
     },
     /**
      * Restore a contiguous slice of `vendorScreenData` from a snapshot.

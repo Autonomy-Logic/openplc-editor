@@ -1415,28 +1415,6 @@ describe('createSharedSlice', () => {
         expect(warnSpy).toHaveBeenCalledWith('File with name NonExistent does not exist.')
         warnSpy.mockRestore()
       })
-
-      it('is invoked synchronously by `setVendorScreenData` so vendor-screen edits mark the workspace dirty without waiting for a DeviceEditor re-render', () => {
-        // User-visible bug this guards against: changing a vendor-screen
-        // field (e.g. the SLM-RP4 HAL Settings dropdown) and immediately
-        // clicking Upload would skip the save and leave the compile
-        // reading stale disk, because the dirty-flag was previously
-        // routed through `DeviceEditor`'s useEffect (one render later +
-        // gated on the device editor being mounted). The action now
-        // calls `handleFileAndWorkspaceSavedState('Configuration')`
-        // directly so the dirty state is concurrent with the mutation.
-        store.getState().fileActions.setFiles({
-          files: { Configuration: { type: 'device', filePath: 'Configuration', saved: true } },
-        })
-        store.getState().workspaceActions.setEditingState('saved')
-
-        store.getState().deviceActions.setVendorScreenData('hal-config', { fault_action: 'stop' })
-
-        // No await, no re-render — the dirty markers MUST be in place
-        // by the time setVendorScreenData returns.
-        expect(store.getState().fileActions.getSavedState({ name: 'Configuration' })).toBe(false)
-        expect(store.getState().workspace.editingState).toBe('unsaved')
-      })
     })
 
     // -----------------------------------------------------------------------
