@@ -11,17 +11,18 @@
  */
 
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { BoardInfo, DevicePin, PLCRemoteDevice } from '@root/middleware/shared/ports/types'
+import type { DevicePin, PLCRemoteDevice } from '@root/middleware/shared/ports/types'
 import type { AliasRegistry } from '@root/middleware/shared/utils/iec-address'
 import { buildAddressPool, buildAliasRegistry } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import type { TargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+
+import { useTargetCapabilities } from './use-target-capabilities'
 
 interface RegistryCache {
   pins: DevicePin[]
   vsd: Record<string, unknown> | undefined
   remoteDevices: PLCRemoteDevice[] | undefined
-  deviceBoard: string
-  availableBoards: Map<string, BoardInfo>
+  capabilities: TargetCapabilities
   registry: AliasRegistry
 }
 
@@ -34,24 +35,27 @@ interface RegistryCache {
 let cache: RegistryCache | null = null
 
 export function useAliasRegistry(): AliasRegistry {
-  const pins = useOpenPLCStore((s) => s.deviceDefinitions.pinMapping.pins)
+  // The pin-mapping dict is keyed by board id (see DevicePinMapping).
+  // The active board's bucket is what the alias registry should see —
+  // pins for any non-active board are persisted on disk but don't
+  // contribute claims to the address pool.
+  const pinsByBoard = useOpenPLCStore((s) => s.deviceDefinitions.pinMapping.pinsByBoard)
+  const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
+  const pins = pinsByBoard[deviceBoard] ?? []
   const vsd = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
-  const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
-  const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
+  const capabilities = useTargetCapabilities()
 
   if (
     cache &&
     cache.pins === pins &&
     cache.vsd === vsd &&
     cache.remoteDevices === remoteDevices &&
-    cache.deviceBoard === deviceBoard &&
-    cache.availableBoards === availableBoards
+    cache.capabilities === capabilities
   ) {
     return cache.registry
   }
 
-  const boardInfo = availableBoards.get(deviceBoard)
   const ioMapping =
     (
       vsd?.['io-mapping'] as
@@ -64,10 +68,10 @@ export function useAliasRegistry(): AliasRegistry {
       vendorIoMapping: { entries: ioMapping },
       remoteDevices,
     },
-    resolveTargetCapabilities(boardInfo),
+    capabilities,
   )
   const registry = buildAliasRegistry(pool)
 
-  cache = { pins, vsd, remoteDevices, deviceBoard, availableBoards, registry }
+  cache = { pins, vsd, remoteDevices, capabilities, registry }
   return registry
 }
