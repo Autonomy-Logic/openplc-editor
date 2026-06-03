@@ -92,22 +92,26 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * - Scalars: pointer to the single value
  * - Arrays: pointer to the first element of the table
  *
- * Type qualification:
- * - STRING / WSTRING resolve to the file-scope raw struct typedef in
- *   c_blocks_code.cpp (`{ len; body[]; }`). The C++ stub copies these
- *   in/out of strucpp's IECStringVar at the boundary, preserving the
- *   historical `name.len` / `name.body[i]` user syntax.
- * - Every other base type (BOOL/INT/REAL/TIME/...) resolves to the
- *   strucpp IECVar wrapper (e.g. `strucpp::IEC_INT = IECVar<INT_t>`).
- *   That gives the user's `*name = 5` write force-aware semantics
- *   via `IECVar::operator=` while keeping the raw-pointer feel.
+ * Every base type — including STRING / WSTRING — resolves to the
+ * strucpp IECVar / IECStringVar wrapper (e.g. `strucpp::IEC_INT =
+ * IECVar<INT_t>`, `strucpp::IEC_STRING = IECStringVar<254>`).  The
+ * single, uniform qualification keeps the c_blocks.h ↔ strucpp
+ * runtime ABI byte-identical for every elementary type — no parallel
+ * raw POD shape, no copy-in/copy-out stub at scan boundaries.
+ *
+ * User-syntax consequence for STRING / WSTRING: the historical
+ * `name.len` / `name.body[i]` pattern is replaced by `name.length()`
+ * / `name[i]` (read-only — returns by value) / `name.c_str()` /
+ * `name = "literal";` — exposed by `IECStringVar`.  Byte-level
+ * mutation goes through `auto raw = name.get(); raw[i] = '…';
+ * name.set(raw);`.  See `generateCBlocksCode.ts` for the file-scope
+ * numeric raw typedefs that still cover the user's local-variable
+ * declarations inside `setup()` / `loop()`.
  */
 const generateStructMember = (variable: PLCVariable): string => {
   const iecType = getVariableIECType(variable)
   const name = variable.name.toUpperCase()
-  const isStringType = iecType === 'IEC_STRING' || iecType === 'IEC_WSTRING'
-  const qualifiedType = isStringType ? iecType : `strucpp::${iecType}`
-  return `  ${qualifiedType} *${name};\n`
+  return `  strucpp::${iecType} *${name};\n`
 }
 
 export {

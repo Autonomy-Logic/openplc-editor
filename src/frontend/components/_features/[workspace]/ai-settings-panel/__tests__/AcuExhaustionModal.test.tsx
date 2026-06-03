@@ -141,6 +141,44 @@ describe('AcuExhaustionModal', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
+  it('renders the rate-limit variant with reset time + upgrade CTA', () => {
+    const rateLimited: BillingErrorPayload = {
+      code: 'rate_limit_exceeded',
+      message: 'Too many AI requests in the recent window. Try again shortly.',
+      resetsAt: '2026-06-01T18:30:00.000Z',
+    }
+    render(<AcuExhaustionModal billingError={rateLimited} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
+    expect(screen.getByText('AI usage limit reached')).toBeTruthy()
+    expect(screen.getByText(/reached the AI usage limit.*upgrade your plan for a higher limit/i)).toBeTruthy()
+    // The reset line renders a locale-formatted timestamp; assert the prefix
+    // (the exact date/time string is locale/timezone dependent).
+    expect(screen.getByText(/Your usage window resets on /)).toBeTruthy()
+    const cta = screen.getByTestId('acu-exhaustion-cta') as HTMLAnchorElement
+    expect(cta.textContent).toBe('Upgrade plan')
+    expect(cta.href).toBe(TEST_UPGRADE_URL)
+  })
+
+  it('omits the reset line for a rate-limit block with null resetsAt', () => {
+    const rateLimited: BillingErrorPayload = {
+      code: 'rate_limit_exceeded',
+      message: 'Too many AI requests in the recent window. Try again shortly.',
+      resetsAt: null,
+    }
+    render(<AcuExhaustionModal billingError={rateLimited} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
+    expect(screen.getByText('AI usage limit reached')).toBeTruthy()
+    expect(screen.queryByText(/Your usage window resets on/)).toBeNull()
+  })
+
+  it('omits the reset line when the rate-limit resetsAt is an unparseable string', () => {
+    const rateLimited: BillingErrorPayload = {
+      code: 'rate_limit_exceeded',
+      message: 'Too many AI requests in the recent window. Try again shortly.',
+      resetsAt: 'not-a-date',
+    }
+    render(<AcuExhaustionModal billingError={rateLimited} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
+    expect(screen.queryByText(/Your usage window resets on/)).toBeNull()
+  })
+
   it('uses dialog ARIA semantics (Radix Dialog)', () => {
     render(<AcuExhaustionModal billingError={insufficientAcu} onDismiss={vi.fn()} upgradeUrl={TEST_UPGRADE_URL} />)
     const dialog = screen.getByRole('dialog')

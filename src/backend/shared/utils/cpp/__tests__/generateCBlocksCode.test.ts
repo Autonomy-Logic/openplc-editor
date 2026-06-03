@@ -37,15 +37,22 @@ describe('generateCBlocksCode', () => {
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])
 
-    // Baseline: strucpp wrappers visible to the auto-generated struct.
+    // Baseline: strucpp wrappers visible to the auto-generated struct
+    // — covers numeric AND STRING pins now (every pin field qualifies
+    // as `strucpp::IEC_*`).
     expect(result).toContain('#include "iec_var.hpp"')
     expect(result).toContain('#include "iec_string.hpp"')
     // Baseline: raw file-scope typedefs for user-local variables.
     expect(result).toContain('typedef int16_t   IEC_INT;')
     expect(result).toContain('typedef float    IEC_REAL;')
-    // Baseline: raw STRING struct (`{ len; body[]; }`) shared with the
-    // auto-generated struct field type.
-    expect(result).toMatch(/typedef\s+struct\s+\{[\s\S]*?__strlen_t len;[\s\S]*?\}\s+IEC_STRING;/)
+    // STRING no longer has a raw POD typedef.  The historical
+    // `{ __strlen_t len; uint8_t body[]; }` struct is gone — STRING
+    // pins and locals both use `strucpp::IEC_STRING` (= IECStringVar
+    // <254>) from `iec_string.hpp`.  Pin the regression so a future
+    // edit can't quietly re-introduce the raw shape.
+    expect(result).not.toContain('__strlen_t')
+    expect(result).not.toContain('STR_MAX_LEN')
+    expect(result).not.toMatch(/typedef\s+struct\s+\{[\s\S]*?body\[[\s\S]*?\]\s*;[\s\S]*?\}\s+IEC_STRING;/)
   })
 
   it("undefines Arduino.h's min/max macros before pulling in strucpp/std headers", () => {
@@ -120,9 +127,8 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('typedef struct {')
     expect(result).toContain('} EMPTY_VARS;')
-    // No #define / #undef for variables (the baseline's STR_MAX_LEN /
-    // STR_LEN_TYPE defines and the Arduino min/max macro undefs are
-    // unrelated bookkeeping).
+    // No #define / #undef for variables (the only `#define`s in the
+    // baseline now are the Arduino min/max macro guards).
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
     // Strip the baseline's `#undef min` / `#undef max` (Arduino.h macro
     // scrubbing — see baseline) before asserting no per-variable undefs.
