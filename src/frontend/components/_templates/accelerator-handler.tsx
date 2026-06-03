@@ -41,7 +41,7 @@ const AcceleratorHandler = () => {
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
     workspaceActions: {
-      switchAppTheme,
+      setSystemConfigs,
       toggleMaximizedWindow,
       setCloseWindow,
       setCloseAppDarwin,
@@ -309,10 +309,12 @@ const AcceleratorHandler = () => {
       document.documentElement.classList.remove('dark', 'light')
       document.documentElement.classList.add(newTheme)
       localStorage.setItem('theme', newTheme)
-      switchAppTheme()
+      // Set the Monaco light/dark flag explicitly from the theme (toggling drifts
+      // when cycling through the 90's skin); the retro theme uses light Monaco.
+      setSystemConfigs({ shouldUseDarkMode: newTheme === 'dark' })
     })
     return unsub
-  }, [themePort, switchAppTheme])
+  }, [themePort, setSystemConfigs])
 
   /**
    * Window lifecycle events (editor-only, gated by capabilities)
