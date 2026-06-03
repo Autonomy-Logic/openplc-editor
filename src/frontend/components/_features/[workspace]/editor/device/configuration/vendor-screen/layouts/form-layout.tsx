@@ -115,7 +115,7 @@ function FormLayout({ section }: FormLayoutProps) {
                 <>
                   <Label
                     htmlFor={fieldDomId}
-                    className='w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
+                    className='min-w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
                   >
                     {field.label}
                   </Label>
@@ -129,7 +129,7 @@ function FormLayout({ section }: FormLayoutProps) {
                 </>
               ) : (
                 <>
-                  <Label className='w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                  <Label className='min-w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
                     {field.label}
                   </Label>
                   {field.type === 'number' ? (

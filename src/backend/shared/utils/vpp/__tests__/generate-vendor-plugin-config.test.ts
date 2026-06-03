@@ -105,6 +105,36 @@ describe('generateVendorPluginConfig', () => {
     expect(result.plugin_name).toBe('acme')
   })
 
+  it('preserves boolean `false` toggles from form data (SLM-RP4 fault-detection regression)', () => {
+    // User-reported scenario: the SLM-RP4 HAL Settings screen's
+    // "Enable Bus Fault Detection" toggle was suspected of not
+    // making it to the runtime when set to false. The generator's
+    // `Object.assign(result, value)` MUST forward `false` verbatim
+    // — a stricter falsy check would silently drop the toggle and
+    // leave the plugin keying off its bundled default of `1`.
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'synergy' },
+      {
+        'hal-config': {
+          fault_detection_enabled: false,
+          fault_threshold: 25,
+          fault_action: 'log_and_retry',
+          scan_cycle_ms: 10,
+        },
+      },
+      [],
+    )
+    expect(result.fault_detection_enabled).toBe(false)
+    expect(result.fault_threshold).toBe(25)
+    expect(result.fault_action).toBe('log_and_retry')
+    expect(result.scan_cycle_ms).toBe(10)
+    // JSON serialisation MUST emit `false` (not `0`, not absent) so the
+    // plugin's cJSON_IsBool branch takes — the only branch that
+    // honours boolean false. A `0`-numeric here would still parse, but
+    // the load-bearing path is the bool case.
+    expect(JSON.stringify(result)).toContain('"fault_detection_enabled":false')
+  })
+
   it('skips reserved keys (module-configuration, io-mapping) when merging at root', () => {
     const data: VendorScreenData = {
       'module-configuration': { slots: [] },
