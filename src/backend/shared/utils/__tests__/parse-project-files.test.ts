@@ -493,9 +493,7 @@ describe('parseProjectFiles — pin mapping error paths', () => {
     const legacy = JSON.stringify([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), legacy, [], [], [])
     expect(Array.isArray(result.devicePinMapping)).toBe(true)
-    expect(result.devicePinMapping).toEqual([
-      { pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' },
-    ])
+    expect(result.devicePinMapping).toEqual([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
   })
 
   it('accepts the canonical per-board dict shape (post-migration)', () => {

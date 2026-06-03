@@ -344,7 +344,8 @@ describe('createDeviceSlice', () => {
     it('creates a pin in empty table', () => {
       const store = makeStore()
       store.getState().deviceActions.createNewPin()
-      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(1)
       expect(pins[0].pinType).toBe('digitalInput')
       expect(pins[0].address).toBe('%IX0.0')
@@ -361,7 +362,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       expect(pins[1].address).toBe('%IX0.1')
       expect(pins[1].pinType).toBe('digitalInput')
@@ -381,7 +383,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(3)
       // New pin should be after the highest address (%IX0.1) -> %IX0.2
       expect(pins[2].address).toBe('%IX0.2')
@@ -429,7 +432,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.removePin()
 
-      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       // Addresses shifted down
       expect(pins[0].address).toBe('%IX0.0')
@@ -564,7 +568,8 @@ describe('createDeviceSlice', () => {
         expect(result.message).toContain('Pin type changed')
 
         // Verify sorting and current selection
-        const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+        const pins = activePins(store.getState())
+        const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
         const movedPin = pins.find((p) => p.pin === 'D0')
         expect(movedPin?.pinType).toBe('analogInput')
         expect(movedPin?.address).toBe('%IW1')

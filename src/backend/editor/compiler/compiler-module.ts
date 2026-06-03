@@ -2578,8 +2578,7 @@ class CompilerModule {
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
       try {
-        const deviceConfig =
-          await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         const vendorScreenData = deviceConfig.vendorScreenData ?? {}
         vppModbusState = {
           modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],

@@ -310,11 +310,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // modbus remote, EtherCAT) when active for the target.
     const activePins =
       state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? []
-    const pool = buildAddressPool(
-      { pinMapping: { pins: activePins }, remoteDevices },
-      capabilities,
-      { ignoreSource: 'vpp-io' },
-    )
+    const pool = buildAddressPool({ pinMapping: { pins: activePins }, remoteDevices }, capabilities, {
+      ignoreSource: 'vpp-io',
+    })
     const inFlight = new Set<string>()
     const newEntries: IoMappingEntry[] = []
 
