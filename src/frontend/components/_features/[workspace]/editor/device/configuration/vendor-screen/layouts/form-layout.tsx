@@ -1,6 +1,6 @@
-import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
+import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
@@ -107,30 +107,31 @@ function FormLayout({ section }: FormLayoutProps) {
           // DOM id must be unique across the whole screen — sections can
           // reuse a field id (e.g. both modbus_rtu and modbus_tcp own an
           // `enabled` field). Scope by section.id so a label's `htmlFor`
-          // can't target a same-named checkbox in another section.
+          // can't target a same-named control in another section.
           const fieldDomId = `vendor-field-${section.id}-${field.id}`
           return (
-            <div key={field.id} className='flex items-center gap-2'>
+            <div key={field.id} className='flex items-center gap-4'>
               {field.type === 'boolean' ? (
                 <>
-                  <Checkbox
-                    id={fieldDomId}
-                    checked={values[field.id] === true}
-                    onCheckedChange={(checked) => updateField(field.id, checked as boolean)}
-                    className={
-                      values[field.id] === true
-                        ? 'h-[14px] w-[14px] border-brand'
-                        : 'h-[14px] w-[14px] border-neutral-300'
-                    }
-                  />
-                  <Label htmlFor={fieldDomId} className='text-xs text-neutral-950 dark:text-white'>
+                  <Label
+                    htmlFor={fieldDomId}
+                    className='w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
+                  >
                     {field.label}
                   </Label>
+                  <ToggleSwitch
+                    id={fieldDomId}
+                    checked={values[field.id] === true}
+                    onCheckedChange={(checked) => updateField(field.id, checked)}
+                    aria-label={field.label}
+                  />
                   {field.help && <FieldHelpIcon text={field.help} />}
                 </>
               ) : (
                 <>
-                  <Label className='w-32 shrink-0 text-xs text-neutral-950 dark:text-white'>{field.label}</Label>
+                  <Label className='w-32 shrink-0 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                    {field.label}
+                  </Label>
                   {field.type === 'number' ? (
                     <div className='flex items-center gap-1'>
                       <input
