@@ -12,14 +12,7 @@
  *   - window.bridge.getPackageManifest()
  */
 
-import type {
-  ImportResult,
-  InstalledPackage,
-  PackageManifest,
-  RemoteCatalog,
-  Result,
-  Unsubscribe,
-} from './types'
+import type { ImportResult, InstalledPackage, PackageManifest, RemoteCatalog, Result, Unsubscribe } from './types'
 
 export interface PackagePort {
   /**

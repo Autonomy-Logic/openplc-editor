@@ -31,6 +31,18 @@ function makeStore() {
   }))
 }
 
+/**
+ * Returns the active board's pin array — the post-refactor shape
+ * keys pins by `configuration.deviceBoard`, so tests that used to
+ * read `pinMapping.pins` directly look up the active bucket here.
+ * Defaults the empty array so tests against a fresh store (where
+ * no actions have created the bucket yet) still get `[]`.
+ */
+function activePins(state: { deviceDefinitions: DeviceSlice['deviceDefinitions'] }): DevicePin[] {
+  const board = state.deviceDefinitions.configuration.deviceBoard
+  return state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
+}
+
 function makePin(overrides?: Partial<DevicePin>): DevicePin {
   return {
     pin: overrides?.pin ?? '',
@@ -114,7 +126,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       const s = store.getState()
       expect(s.deviceDefinitions.configuration).toEqual(defaultDeviceConfiguration)
-      expect(s.deviceDefinitions.pinMapping.pins).toEqual([])
+      expect(activePins(s)).toEqual([])
       expect(s.deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -196,20 +208,20 @@ describe('createDeviceSlice', () => {
     it('merges partial configuration with defaults', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({
-        configuration: { deviceBoard: 'Mega', compileOnly: true },
+        configuration: { deviceBoard: 'Mega', communicationPort: 'COM3' },
       })
       const cfg = store.getState().deviceDefinitions.configuration
       expect(cfg.deviceBoard).toBe('Mega')
-      expect(cfg.compileOnly).toBe(true)
+      expect(cfg.communicationPort).toBe('COM3')
       // defaults preserved
-      expect(cfg.communicationPort).toBe(defaultDeviceConfiguration.communicationPort)
+      expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
     })
 
     it('sets pinMapping', () => {
       const store = makeStore()
       const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' })]
       store.getState().deviceActions.setDeviceDefinitions({ pinMapping: pins })
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual(pins)
+      expect(activePins(store.getState())).toEqual(pins)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -232,11 +244,11 @@ describe('createDeviceSlice', () => {
 
     it('handles call with neither configuration nor pinMapping', () => {
       const store = makeStore()
-      const before = store.getState().deviceDefinitions
+      const beforePins = activePins(store.getState())
       store.getState().deviceActions.setDeviceDefinitions({})
-      const after = store.getState().deviceDefinitions
-      expect(after.configuration).toEqual(before.configuration)
-      expect(after.pinMapping.pins).toEqual(before.pinMapping.pins)
+      const afterPins = activePins(store.getState())
+      expect(store.getState().deviceDefinitions.configuration).toEqual(defaultDeviceConfiguration)
+      expect(afterPins).toEqual(beforePins)
     })
   })
 
@@ -257,7 +269,7 @@ describe('createDeviceSlice', () => {
         pinMapping: [makePin()],
       })
       store.getState().deviceActions.clearDeviceDefinitions()
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual([])
+      expect(activePins(store.getState())).toEqual([])
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -332,7 +344,7 @@ describe('createDeviceSlice', () => {
     it('creates a pin in empty table', () => {
       const store = makeStore()
       store.getState().deviceActions.createNewPin()
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(1)
       expect(pins[0].pinType).toBe('digitalInput')
       expect(pins[0].address).toBe('%IX0.0')
@@ -349,7 +361,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       expect(pins[1].address).toBe('%IX0.1')
       expect(pins[1].pinType).toBe('digitalInput')
@@ -369,7 +381,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(3)
       // New pin should be after the highest address (%IX0.1) -> %IX0.2
       expect(pins[2].address).toBe('%IX0.2')
@@ -384,7 +396,7 @@ describe('createDeviceSlice', () => {
       // Keep selection at -1
       store.getState().deviceActions.createNewPin()
 
-      const { pins } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
       // It should be pushed to end, using the highest existing + 1
       expect(pins[1].address).toBe('%IX0.1')
@@ -402,7 +414,7 @@ describe('createDeviceSlice', () => {
       })
       // row is -1 by default from setDeviceDefinitions
       store.getState().deviceActions.removePin()
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(1)
+      expect(activePins(store.getState())).toHaveLength(1)
     })
 
     it('removes the selected pin and decrements higher addresses', () => {
@@ -417,7 +429,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.removePin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       // Addresses shifted down
       expect(pins[0].address).toBe('%IX0.0')
@@ -434,7 +446,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.removePin()
 
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(0)
+      expect(activePins(store.getState())).toHaveLength(0)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -449,7 +461,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(1) // last row
       store.getState().deviceActions.removePin()
 
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(1)
+      expect(activePins(store.getState())).toHaveLength(1)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(0)
     })
 
@@ -465,7 +477,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0) // remove D0
       store.getState().deviceActions.removePin()
 
-      const pins = store.getState().deviceDefinitions.pinMapping.pins
+      const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
       // analog should be untouched
       const analog = pins.find((p) => p.pinType === 'analogInput')
@@ -497,7 +509,7 @@ describe('createDeviceSlice', () => {
         const result = store.getState().deviceActions.updatePin({ pin: 'D3' })
         expect(result.ok).toBe(true)
         expect(result.data?.pin).toBe('D3')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].pin).toBe('D3')
+        expect(activePins(store.getState())[0].pin).toBe('D3')
       })
 
       it('returns error for empty pin', () => {
@@ -552,7 +564,7 @@ describe('createDeviceSlice', () => {
         expect(result.message).toContain('Pin type changed')
 
         // Verify sorting and current selection
-        const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+        const pins = activePins(store.getState()); const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
         const movedPin = pins.find((p) => p.pin === 'D0')
         expect(movedPin?.pinType).toBe('analogInput')
         expect(movedPin?.address).toBe('%IW1')
@@ -571,7 +583,7 @@ describe('createDeviceSlice', () => {
         store.getState().deviceActions.selectPinTableRow(0) // move D0 to analog
         store.getState().deviceActions.updatePin({ pinType: 'analogInput' })
 
-        const pins = store.getState().deviceDefinitions.pinMapping.pins
+        const pins = activePins(store.getState())
         const digitalPins = pins.filter((p) => p.pinType === 'digitalInput')
         // After removing D0 (%IX0.0), D1 should be %IX0.0, D2 should be %IX0.1
         expect(digitalPins[0].address).toBe('%IX0.0')
@@ -614,7 +626,7 @@ describe('createDeviceSlice', () => {
         const result = store.getState().deviceActions.updatePin({ alias: 'Sensor1' })
         expect(result.ok).toBe(true)
         expect(result.data?.alias).toBe('Sensor1')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].alias).toBe('Sensor1')
+        expect(activePins(store.getState())[0].alias).toBe('Sensor1')
       })
 
       it('returns error for empty name', () => {
@@ -671,7 +683,7 @@ describe('createDeviceSlice', () => {
         const result = store.getState().deviceActions.updatePin({ pin: undefined })
         expect(result.ok).toBe(true)
         expect(result.data?.pin).toBe('')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].pin).toBe('')
+        expect(activePins(store.getState())[0].pin).toBe('')
         spy.mockRestore()
       })
     })
@@ -757,6 +769,141 @@ describe('createDeviceSlice', () => {
     })
   })
 
+  // -----------------------------------------------------------------------
+  // Per-target pin scoping — regression for the SLM-RP4 → Mega → MKR
+  // → Mega chain. Each target has its own pinout (a Mega's pin 13
+  // doesn't exist on a MKR), so pins must NEVER leak between boards.
+  // Per-board persistence is the chosen contract: a user's work on
+  // board A survives a switch to board B and reappears when they
+  // come back to A.
+  // -----------------------------------------------------------------------
+  describe('per-target pin-mapping scoping', () => {
+    it('isolates pin entries across boards: pin 13 defined on Mega does NOT appear on MKR', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+      expect(activePins(store.getState())).toHaveLength(1)
+      expect(activePins(store.getState())[0].pin).toBe('13')
+
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(activePins(store.getState())).toHaveLength(0)
+    })
+
+    it('preserves each board’s pins across a board switch: Mega → MKR → back to Mega restores pin 13', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led-13' })],
+      })
+
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(activePins(store.getState())).toHaveLength(0)
+      // Adding a pin on MKR mutates MKR's bucket only.
+      actions.createNewPin()
+      expect(activePins(store.getState())).toHaveLength(1)
+
+      // Back to Mega — pin 13 with its alias must be intact.
+      actions.setDeviceBoard('Arduino Mega')
+      const megaPins = activePins(store.getState())
+      expect(megaPins).toHaveLength(1)
+      expect(megaPins[0].pin).toBe('13')
+      expect(megaPins[0].alias).toBe('led-13')
+      // And MKR's bucket still carries its own pin (untouched by the
+      // Mega-side mutations).
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(1)
+    })
+
+    it('resets the selected-row pointer when the board changes so the new board’s table starts unselected', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+      actions.selectPinTableRow(0)
+      expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(0)
+
+      // Switching boards must clear the row pointer — the new board's
+      // bucket may be empty or have a different row count, and a
+      // dangling pointer would crash the table's "currently selected
+      // pin" rendering.
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
+    })
+
+    it('createNewPin / removePin / updatePin all mutate only the active board’s bucket', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      // Seed Mega with one pin so it's identifiable.
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led-13' })],
+      })
+
+      // Switch to MKR and drive a representative mutating action.
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      actions.createNewPin()
+      actions.selectPinTableRow(0)
+      actions.updatePin({ pin: 'A0' })
+
+      // Mega's bucket is unchanged by the MKR-side mutation.
+      const megaBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']
+      expect(megaBucket).toHaveLength(1)
+      expect(megaBucket[0].pin).toBe('13')
+      expect(megaBucket[0].alias).toBe('led-13')
+
+      // MKR's bucket has the new pin under its own key.
+      const mkrBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']
+      expect(mkrBucket).toHaveLength(1)
+      expect(mkrBucket[0].pin).toBe('A0')
+
+      // Removing the MKR pin doesn't touch Mega.
+      actions.removePin()
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(0)
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']).toHaveLength(1)
+    })
+
+    it('migrates a legacy flat-array `pinMapping` to the active board’s bucket on load', () => {
+      // Projects saved before per-board scoping wrote a flat array.
+      // The store-side action keys that array under whatever board
+      // the accompanying configuration names — so a legacy project
+      // continues to work without manual migration.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'Arduino Mega' },
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+
+      const byBoard = store.getState().deviceDefinitions.pinMapping.pinsByBoard
+      expect(Object.keys(byBoard)).toEqual(['Arduino Mega'])
+      expect(byBoard['Arduino Mega']).toHaveLength(1)
+      expect(byBoard['Arduino Mega'][0].pin).toBe('13')
+    })
+
+    it('accepts the canonical per-board dict shape verbatim', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'Arduino Mega' },
+        pinMapping: {
+          'Arduino Mega': [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+          'Arduino MKR WiFi 1010': [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0' })],
+        },
+      })
+
+      const byBoard = store.getState().deviceDefinitions.pinMapping.pinsByBoard
+      expect(byBoard['Arduino Mega']).toHaveLength(1)
+      expect(byBoard['Arduino MKR WiFi 1010']).toHaveLength(1)
+    })
+  })
+
   describe('setSelectedPlatformOption', () => {
     it('stores a single key/value and marks updated', () => {
       const store = makeStore()
@@ -807,25 +954,6 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
       expect(store.getState().deviceDefinitions.configuration.communicationPort).toBe('/dev/ttyUSB0')
       expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setCompileOnly
-  // -----------------------------------------------------------------------
-  describe('setCompileOnly', () => {
-    it('sets compileOnly to true', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(true)
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets compileOnly to false', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      store.getState().deviceActions.setCompileOnly(false)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(false)
     })
   })
 

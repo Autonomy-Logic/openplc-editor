@@ -101,6 +101,42 @@ describe('pollRuntimeCompilation', () => {
     expect(entries.find((e) => e.message === 'no prefix')?.level).toBe('info')
   })
 
+  it('classifies and strips the prefix even when the runtime appends a trailing newline', async () => {
+    // openplc-runtime appends "\n" to every entry it pushes into
+    // build_state.logs (see webserver/plcapp_management.py — every
+    // build_state.log(...) call passes a "\\n"-terminated f-string).
+    // Earlier we anchored the body match with `$`, which JS without
+    // the `m` flag refuses to match across a trailing newline; the
+    // classifier then bailed and routed everything as level='info'
+    // with the prefix preserved.  Console rendered errors blue.
+    const { fetch } = scriptedFetch([
+      {
+        status: 'SUCCESS',
+        logs: [
+          "[ERROR] core/generated/c_blocks_code.cpp:97:1: error: 'asd' does not name a type\n",
+          '[WARNING] PLC program has not been updated because the build failed\n',
+          '[INFO] Compiling core/generated/pou_MAIN.cpp...\n',
+          '[DEBUG] update_plugin_configurations called\n',
+        ],
+        exit_code: 0,
+      },
+    ])
+    const entries: Array<{ level: string; message: string }> = []
+    await pollRuntimeCompilation({
+      fetchStatus: fetch,
+      onLog: (level, message) => entries.push({ level, message }),
+      pollIntervalMs: 1,
+    })
+    const err = entries.find((e) => e.message.startsWith('core/generated/'))
+    expect(err?.level).toBe('error')
+    expect(err?.message).toBe("core/generated/c_blocks_code.cpp:97:1: error: 'asd' does not name a type")
+    expect(entries.find((e) => e.message.startsWith('PLC program'))?.level).toBe('warning')
+    expect(entries.find((e) => e.message.startsWith('Compiling'))?.level).toBe('info')
+    expect(entries.find((e) => e.message.startsWith('update_plugin'))?.level).toBe('debug')
+    // No stray "\n" at the end of any classified message.
+    expect(entries.every((e) => !/\n$/.test(e.message))).toBe(true)
+  })
+
   it('bails with ERROR after maxConsecutiveErrors failures', async () => {
     const { fetch, calls } = scriptedFetch([
       { error: 'first' },

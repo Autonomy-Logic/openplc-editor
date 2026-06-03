@@ -28,7 +28,7 @@ import {
   tableVariablesCompletion,
 } from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
-import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor, updatePythonLspContext } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
 
 type monacoEditorProps = {
@@ -143,6 +143,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
+      isReadOnly,
       fbSelectedInstance,
       fbDebugInstances,
     },
@@ -330,6 +331,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou])
 
+  // Keep the Python LSP's per-POU preamble (IEC variables → Pyright
+  // globals) in sync with the variables table.  Re-pushes the
+  // augmented document to Pyright whenever a variable is added /
+  // renamed / type-changed / deleted so the LSP stops complaining
+  // about names it just learned (or starts complaining about names
+  // the user just removed).  Gated on hasPythonLSP because the web
+  // build before its Pyright wire-up shouldn't pay the cost.
+  useEffect(() => {
+    if (!capabilities.hasPythonLSP) return
+    if (language !== 'python') return
+    updatePythonLspContext(name, pouVariables)
+  }, [capabilities.hasPythonLSP, language, name, pouVariables])
+
   useEffect(() => {
     return () => {
       setTemplatesInjected((prev) => {
@@ -339,7 +353,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
 
       if (capabilities.hasPythonLSP && language === 'python') {
-        cleanupPythonLSP()
+        cleanupPythonLSP(name)
       }
     }
   }, [name, language])
@@ -415,10 +429,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [editorMounted])
 
-  // Update readOnly when debugger visibility changes (editor-only)
+  // Update readOnly when debugger visibility or project read-only flag changes.
+  // Debugger visibility forces read-only for safety; the project's own
+  // read-only flag (no edit permission) does the same so users browsing
+  // someone else's project can't make local modifications they couldn't save.
   useEffect(() => {
-    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
-  }, [isDebuggerVisible])
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible || isReadOnly })
+  }, [isDebuggerVisible, isReadOnly])
 
   // Apply programmatic cursor jumps (e.g. clicking a compile error in
   // the console) to an already-mounted editor.  The onMount path
@@ -962,8 +979,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // Python LSP (gated)
     if (capabilities.hasPythonLSP && language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
+      // Hand the LSP the POU's variables-table state so it can build
+      // the preamble of module-level globals the compiler injects at
+      // build time.  Without this, Pyright flags every IEC input/
+      // output reference as "undefined" (see `python-lsp/index.ts`).
       initPythonLSP(monacoInstance)
-        .then(() => setupPythonLSPForEditor(editorInstance))
+        .then(() =>
+          setupPythonLSPForEditor(editorInstance, {
+            pouName: name,
+            variables: pou.interface?.variables ?? [],
+          }),
+        )
         .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
     } else if (language === 'python' && pou) {
       // Web: no LSP but still inject template
@@ -1235,11 +1261,36 @@ void loop()
   // Editor options
   // -----------------------------------------------------------------------
 
+  // Inline AI completions take over the suggest widget only while they are
+  // actually active (same gate as the provider registration above). When the
+  // user turns inline completions off, fall back to Monaco's normal quick
+  // suggestions (the auto-dropdown). Ctrl+Space still triggers the suggest
+  // widget manually in both modes — `quickSuggestions` only governs the
+  // automatic popup, and `suppressSuggestions` only suppresses the auto popup
+  // while an inline suggestion is showing.
+  const inlineCompletionsActive =
+    capabilities.hasAIAssistant &&
+    aiState.isEnabled &&
+    aiState.hasConsented &&
+    aiState.preferences.inlineCompletionsEnabled
+
   const monacoEditorUserOptions: monacoEditorOptionsType = {
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
-    readOnly: isDebuggerVisible,
-    quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
+    readOnly: isDebuggerVisible || isReadOnly,
+    // Lock indentation to 4 spaces across every language Monaco
+    // hosts (ST / IL / Python / C++).  Without this Monaco's
+    // `detectIndentation` heuristic kicks in on the existing model
+    // content and can settle on 2 spaces for Python POUs whose
+    // bodies happen to mix indent widths — surprising users who
+    // expect consistent 4-space behaviour across all editor
+    // surfaces.  `detectIndentation: false` disables that
+    // heuristic; `tabSize` + `insertSpaces` set the canonical
+    // width and ban literal tab characters.
+    tabSize: 4,
+    insertSpaces: true,
+    detectIndentation: false,
+    quickSuggestions: inlineCompletionsActive ? false : undefined,
     // Pinned for cross-platform consistency with the variables-code-editor.
     // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
     // without this both surfaces would mismatch on Linux/Windows even
@@ -1261,7 +1312,7 @@ void loop()
     // `document.body` with `position: fixed`, so they escape both
     // the editor container and the variables table above it.
     fixedOverflowWidgets: true,
-    ...(capabilities.hasAIAssistant && {
+    ...(inlineCompletionsActive && {
       inlineSuggest: {
         enabled: true,
         suppressSuggestions: true,

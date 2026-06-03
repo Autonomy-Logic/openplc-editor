@@ -94,13 +94,17 @@ describe('runWithConcurrencyLimit', () => {
   it('floors non-integer limits (e.g. 3.7 → 3)', async () => {
     let inFlight = 0
     let peak = 0
-    await runWithConcurrencyLimit(Array.from({ length: 10 }, (_, i) => i), 3.7, async (n) => {
-      inFlight += 1
-      if (inFlight > peak) peak = inFlight
-      await new Promise((r) => setTimeout(r, 2))
-      inFlight -= 1
-      return n
-    })
+    await runWithConcurrencyLimit(
+      Array.from({ length: 10 }, (_, i) => i),
+      3.7,
+      async (n) => {
+        inFlight += 1
+        if (inFlight > peak) peak = inFlight
+        await new Promise((r) => setTimeout(r, 2))
+        inFlight -= 1
+        return n
+      },
+    )
     expect(peak).toBe(3)
   })
 })

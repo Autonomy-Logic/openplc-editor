@@ -541,7 +541,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           )?.entries ?? []
         const pool = buildAddressPool(
           {
-            pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+            pinMapping: {
+              pins:
+                live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+            },
             vendorIoMapping: { entries: ioMapping },
             remoteDevices: live.project.data.remoteDevices,
           },
@@ -699,7 +702,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         )?.entries ?? []
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          pinMapping: {
+            pins:
+              live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+          },
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: live.project.data.remoteDevices,
         },
@@ -1334,7 +1340,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
 
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          pinMapping: {
+            pins:
+              live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+          },
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: live.project.data.remoteDevices,
         },

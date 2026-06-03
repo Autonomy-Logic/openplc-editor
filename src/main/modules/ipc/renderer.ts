@@ -11,6 +11,10 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '@root/middleware/shared/ports/public-catalog-types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
@@ -138,6 +142,22 @@ const rendererProcessBridge = {
   > => ipcRenderer.invoke('libraries:install-from-file'),
   uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('libraries:uninstall', name),
+  // ----- Public-library catalog (autonomy-edge) -----
+  queryPublicCatalog: (
+    args: ListPublicLibrariesArgs,
+  ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> =>
+    ipcRenderer.invoke('catalog:list', args),
+  installLibrariesFromCatalog: (
+    publishedLibraryIds: string[],
+  ): Promise<{
+    results: Array<{
+      publishedLibraryId: string
+      success: boolean
+      name?: string
+      version?: string
+      error?: string
+    }>
+  }> => ipcRenderer.invoke('catalog:install-many', publishedLibraryIds),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

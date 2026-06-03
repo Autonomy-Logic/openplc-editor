@@ -38,5 +38,30 @@ const devicePinSchema = z.preprocess(
 )
 type DevicePin = z.infer<typeof devicePinSchema>
 
-export { devicePinSchema, pinTypes }
+/**
+ * On-disk schema for `devices/pin-mapping.json`. Accepts both shapes
+ * the codebase has historically emitted so older projects keep
+ * loading without manual migration:
+ *
+ *  - **Per-board dict** (`Record<string, DevicePin[]>`) — the
+ *    canonical post-migration shape. Each entry's key is a
+ *    `BoardInfo.name` (the value of `configuration.deviceBoard`).
+ *    Pin configuration is preserved per target so switching
+ *    Mega ↔ MKR ↔ back doesn't lose work.
+ *  - **Legacy flat array** (`DevicePin[]`) — what the editor wrote
+ *    before per-board scoping landed. The store-side reload action
+ *    (`setDeviceDefinitions`) takes the array verbatim and keys it
+ *    under whatever `configuration.deviceBoard` names as the active
+ *    target on first load; once the user saves again the file is
+ *    rewritten in the dict shape.
+ *
+ * The legacy branch is kept as a union member rather than wrapped in
+ * preprocess so consumers can introspect which shape was on disk
+ * (the project-files parser doesn't need that today, but the
+ * cleaner contract avoids a "what did this just become?" footgun
+ * if a migration tool needs the distinction later).
+ */
+const pinMappingFileSchema = z.union([z.record(z.string(), devicePinSchema.array()), devicePinSchema.array()])
+
+export { devicePinSchema, pinMappingFileSchema, pinTypes }
 export type { DevicePin, PinTypes }

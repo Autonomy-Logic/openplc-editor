@@ -75,8 +75,10 @@ jest.mock('node:child_process', () => {
       .catch((err: Error) => cb(err))
     return { kill: () => undefined }
   }
-  ;(execFile as unknown as { [k: symbol]: unknown })[promisify.custom] = (command: string, args: ReadonlyArray<string>) =>
-    execImpl.current(renderArgvAsCmd(command, args))
+  ;(execFile as unknown as { [k: symbol]: unknown })[promisify.custom] = (
+    command: string,
+    args: ReadonlyArray<string>,
+  ) => execImpl.current(renderArgvAsCmd(command, args))
 
   return { exec, execFile, spawn: jest.fn() }
 })
@@ -354,9 +356,11 @@ describe('CompilerModule', () => {
       const winSlash = 'C:/Users/dev/AppData/arduino/sketches/hash/build_opt.h'
       const argv = ['arm-zephyr-eabi-g++', '-c', `@${winBackslash}`, `@${winSlash}`, '-o', 'foo.o']
 
-      const extracted = (CompilerModule as unknown as {
-        extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[]
-      }).extractResponseFilesFromArgv(argv)
+      const extracted = (
+        CompilerModule as unknown as {
+          extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[]
+        }
+      ).extractResponseFilesFromArgv(argv)
 
       expect(extracted).toContain(winBackslash)
       expect(extracted).toContain(winSlash)
@@ -655,10 +659,7 @@ describe('CompilerModule', () => {
 
       // The TU set discovered from the stash matches the original two
       // strucpp sources — order is deterministic (sorted basenames).
-      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual([
-        'configuration.o',
-        'pou_MAIN.o',
-      ])
+      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual(['configuration.o', 'pou_MAIN.o'])
     })
 
     it('injects -I{build.core.path} and -I{build.variant.path} into every TU compile (so Arduino.h resolves)', async () => {
@@ -714,6 +715,79 @@ describe('CompilerModule', () => {
       expect(compileCmd).not.toMatch(/-I(\s|$)/)
     })
 
+    it('places extraCxxFlags `-I` paths BEFORE the core/variant `-I`s (avr-libstdcpp <new> must shadow Arduino core <new>)', async () => {
+      // Load-bearing ordering: Arduino's `cores/arduino/new` declares
+      // `operator new[]` as `[[gnu::weak]]`, while modm-io/avr-libstdcpp's
+      // `<new>` declares it without the weak attribute. Whichever header
+      // the preprocessor finds first determines whether `_Znaj` references
+      // emitted from `new T[]` are strong or weak. Weak undefined refs do
+      // NOT pull the matching definition from `core.a/new.cpp.o` during
+      // link — the call resolves to address 0 (the AVR reset vector),
+      // resulting in an infinite reset the moment any precompiled TU
+      // executes a `new` expression.
+      //
+      // arduino-cli's stock recipe interpolates `{compiler.cpp.extra_flags}`
+      // (which carries the cxx_flags `-I .../avr-libstdcpp/include`)
+      // BEFORE `{includes}` (the core/variant paths), so the avr-libstdcpp
+      // `<new>` wins. The precompile must mirror that ordering — this
+      // test pins the contract.
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        extraCxxFlags: ['-std=gnu++17', '-I/fake/openplc-avr-libstdcpp/include'],
+        handleOutputData: noopLog,
+      })
+
+      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
+      const libStdCppPos = compileCmd.indexOf('-I/fake/openplc-avr-libstdcpp/include')
+      const corePos = compileCmd.indexOf('-I/fake/avr/cores/arduino')
+      const variantPos = compileCmd.indexOf('-I/fake/avr/variants/standard')
+
+      expect(libStdCppPos).toBeGreaterThan(-1)
+      expect(corePos).toBeGreaterThan(-1)
+      expect(variantPos).toBeGreaterThan(-1)
+      // avr-libstdcpp must come before BOTH core and variant -I paths.
+      expect(libStdCppPos).toBeLessThan(corePos)
+      expect(libStdCppPos).toBeLessThan(variantPos)
+    })
+
+    it('keeps non-`-I` flags from extraCxxFlags as trailing args so the last `-std=` wins over the recipe default', async () => {
+      // The precompile appends `-std=gnu++17 -fno-rtti` as trailing flags
+      // to override the AVR core's recipe-baked `-std=gnu++11`. Any
+      // additional `-std=` or `-f*` flags from VPP-package cxx_flags
+      // must end up trailing too, otherwise a `-std=` from cxx_flags
+      // gets shadowed by the recipe default and strucpp templates that
+      // require C++17 fail to compile.
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        extraCxxFlags: ['-std=gnu++17', '-I/fake/openplc-avr-libstdcpp/include'],
+        handleOutputData: noopLog,
+      })
+
+      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
+      // -I lands before the source-file end of the recipe; -std= lands after.
+      const stdPos = compileCmd.lastIndexOf('-std=gnu++17')
+      const sourcePos = compileCmd.indexOf('pou_MAIN.cpp')
+      expect(stdPos).toBeGreaterThan(sourcePos)
+    })
+
     it('hard-fails with an actionable error when build.core.path is missing from --show-properties', async () => {
       extractSpy.mockResolvedValue({
         ...cannedProps,
@@ -767,7 +841,9 @@ describe('CompilerModule', () => {
           fqbn: 'unknown:vendor:weird-board',
           handleOutputData: noopLog,
         }),
-      ).rejects.toThrow(/Toolchain arch subdir resolution failed for "unknown:vendor:weird-board".*build\.mcu.*build\.architecture.*build\.arch.*file an issue/s)
+      ).rejects.toThrow(
+        /Toolchain arch subdir resolution failed for "unknown:vendor:weird-board".*build\.mcu.*build\.architecture.*build\.arch.*file an issue/s,
+      )
     })
   })
 })

@@ -4,7 +4,6 @@ const deviceConfigurationSchema = z.object({
   deviceBoard: z.string(),
   communicationPort: z.string(),
   runtimeIpAddress: z.string().optional(),
-  compileOnly: z.boolean().default(false),
   vendorScreenData: z.record(z.string(), z.unknown()).optional(),
   // Mirror of backend/shared schema — keep both in sync. See sibling file
   // for the longer explainer; this duplicate exists because the IPC contract

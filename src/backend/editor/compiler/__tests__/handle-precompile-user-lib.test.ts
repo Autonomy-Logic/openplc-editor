@@ -34,7 +34,10 @@ jest.mock('node:child_process', () => {
     _opts: unknown,
     cb: (err: Error | null, val?: { stdout: string; stderr: string }) => void,
   ) => {
-    execImpl.current(cmd).then((v) => cb(null, v)).catch((e: Error) => cb(e))
+    execImpl
+      .current(cmd)
+      .then((v) => cb(null, v))
+      .catch((e: Error) => cb(e))
     return { kill: () => undefined }
   }
   ;(exec as unknown as { [k: symbol]: unknown })[promisify.custom] = (cmd: string) => execImpl.current(cmd)
@@ -44,7 +47,10 @@ jest.mock('node:child_process', () => {
     _opts: unknown,
     cb: (err: Error | null, val?: { stdout: string; stderr: string }) => void,
   ) => {
-    execImpl.current(renderArgvAsCmd(command, args)).then((v) => cb(null, v)).catch((e: Error) => cb(e))
+    execImpl
+      .current(renderArgvAsCmd(command, args))
+      .then((v) => cb(null, v))
+      .catch((e: Error) => cb(e))
     return { kill: () => undefined }
   }
   ;(execFile as unknown as { [k: symbol]: unknown })[promisify.custom] = (
@@ -53,7 +59,6 @@ jest.mock('node:child_process', () => {
   ) => execImpl.current(renderArgvAsCmd(command, args))
   return { exec, execFile, spawn: jest.fn() }
 })
-
 ;(process as unknown as { resourcesPath: string }).resourcesPath ??= process.cwd()
 
 describe('handlePrecompileUserLib include-path injection', () => {

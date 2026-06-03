@@ -1,6 +1,8 @@
 import { ESIService } from '@root/backend/editor/ethercat'
+import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
+import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
@@ -15,6 +17,10 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
+import type {
+  ListPublicLibrariesArgs,
+  ListPublicLibrariesResponse,
+} from '@root/middleware/shared/ports/public-catalog-types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -71,6 +77,11 @@ class MainProcessBridge implements MainIpcModule {
   private packageManagerModule = new PackageManagerModule()
   // System-wide IEC 61131-3 library pool (bundled + user-installed)
   private libraryManagerModule = new LibraryManagerModule()
+  // Shared transport for public-catalog HTTP — re-used by the
+  // `catalog:list` handler so the library-manager-module's batch
+  // install path and the modal's browse path hit the same env-
+  // configured base URL.
+  private catalogTransport = createDesktopCatalogTransport()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
 
@@ -782,6 +793,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
+    this.registerHandle('catalog:list', this.handleCatalogList)
+    this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -1120,6 +1133,40 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents.send('libraries:changed')
     }
     return result
+  }
+
+  /**
+   * Catalog browse — proxies to the shared `listPublicLibraries`
+   * client.  Renderer can't hit autonomy-edge directly (CSP /
+   * cross-origin); the main process is the canonical egress.
+   *
+   * Errors are returned in a `{ success: false, error }` envelope
+   * rather than thrown across the IPC boundary so the modal can
+   * surface the failure without trying to read a rejected promise.
+   */
+  handleCatalogList = async (
+    _event: IpcMainInvokeEvent,
+    args: ListPublicLibrariesArgs,
+  ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> => {
+    try {
+      const data = await listPublicLibraries(this.catalogTransport, args ?? {})
+      return { success: true, data }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, publishedLibraryIds: string[]) => {
+    if (!Array.isArray(publishedLibraryIds) || publishedLibraryIds.length === 0) {
+      return { results: [] }
+    }
+    const batch = await this.libraryManagerModule.installFromCatalog(publishedLibraryIds)
+    // Fire one change event for the whole batch — saves N renderer
+    // refreshes for an N-library install.
+    if (batch.results.some((r) => r.success)) {
+      this.mainWindow?.webContents.send('libraries:changed')
+    }
+    return batch
   }
   handleStoreRetrieveRecent = async () => {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')

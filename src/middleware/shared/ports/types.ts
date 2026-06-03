@@ -627,6 +627,13 @@ export interface BoardInfo {
    * declare it.
    */
   platformOptions?: PlatformOption[]
+  /**
+   * Declarative debug-channel resolver spec carried through from the
+   * source catalog (hals.json or VPP manifest).  Consumed by
+   * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
+   * Absent → the renderer surfaces "Debugging Not Available".
+   */
+  debug?: import('./debug-spec-types').DebugSpec
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +683,11 @@ export interface VppModuleDefinition {
 
 export interface VppMetadata {
   packageId: string
+  /** Human-readable vendor name from the package manifest's
+   *  `package.vendor.name` field.  Used by the device-dropdown to
+   *  group boards under their vendor heading (e.g. all boards from
+   *  `com.openplc.arduino` cluster under "Arduino"). */
+  vendor: string
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
@@ -747,6 +759,12 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Declarative debug-channel resolver spec, consumed by
+     *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
+     *  the `debug` field on built-in hals.json entries — the
+     *  editor's resolver doesn't care which catalog the device
+     *  came from.  Absence means no debug capability is declared. */
+    debug?: import('./debug-spec-types').DebugSpec
     /** Optional target capability overrides for this device, merged over
      *  the preset the editor derives from the target type. A runtime-v4
      *  board exposing physical GPIO (e.g. the Raspberry Pi) sets
@@ -861,7 +879,6 @@ export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
-  compileOnly: boolean
   vendorScreenData?: Record<string, unknown>
   /**
    * User's choices for the board's `target.platformOptions` (VPP-declared

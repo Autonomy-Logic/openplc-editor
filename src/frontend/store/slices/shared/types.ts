@@ -126,9 +126,19 @@ export type OpenProjectResponseData = {
   meta: ProjectMeta
   projectData: PLCProjectData
   deviceConfiguration?: DeviceConfiguration
-  devicePinMapping?: DevicePin[]
+  /** Pin mappings parsed from disk. The store accepts both shapes
+   *  (per-board dict and legacy flat array); see
+   *  `DeviceActions.setDeviceDefinitions` for the migration. */
+  devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings from parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
+  /**
+   * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
+   * `false` puts the workspace in read-only mode; `true` / `undefined`
+   * keep it fully editable.  Absent ⇒ desktop editor or dev-local; both
+   * have no remote permission concept so the editor stays unrestricted.
+   */
+  canEdit?: boolean
 }
 
 export type SharedWorkspaceActions = {

@@ -3,7 +3,7 @@
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../store'
-import { setBodyLineOffset } from '../body-offsets'
+import { setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import { redirectDefinitionToStore } from '../goto-definition-redirect'
 
 function makeStPou(name: string): PLCPou {

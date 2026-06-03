@@ -27,7 +27,7 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
-import { deviceConfigurationSchema, devicePinSchema } from '../types/PLC/devices'
+import { deviceConfigurationSchema, pinMappingFileSchema } from '../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 
@@ -70,7 +70,13 @@ export interface ParsedProjectData {
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
   deviceConfiguration?: DeviceConfiguration
-  devicePinMapping?: DevicePin[]
+  /** Pin mappings parsed from `devices/pin-mapping.json`. Forwarded
+   *  to the store's `setDeviceDefinitions`, which accepts BOTH:
+   *  - `DevicePin[]` (legacy flat array, pre-per-board-scoping) —
+   *    gets keyed under `deviceConfiguration.deviceBoard` on load.
+   *  - `Record<string, DevicePin[]>` (per-board dict, canonical) —
+   *    taken verbatim, one entry per target the user has touched. */
+  devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings collected during parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
 }
@@ -383,26 +389,30 @@ export function parseProjectFiles(
     deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
   }
 
-  // Parse and Zod-validate pin mapping
-  const pinMappingSchema = devicePinSchema.array()
-  let devicePinMapping: DevicePin[] | undefined
+  // Parse and Zod-validate pin mapping. The on-disk schema is a union
+  // of `Record<string, DevicePin[]>` (canonical per-board dict) and
+  // `DevicePin[]` (legacy flat array). The store-side
+  // `setDeviceDefinitions` accepts both shapes; the legacy branch is
+  // keyed under whatever `configuration.deviceBoard` resolves to on
+  // first load and rewritten in the dict shape on next save.
+  let devicePinMapping: DevicePin[] | Record<string, DevicePin[]> | undefined
   try {
     const raw = pinMapping ? (JSON.parse(pinMapping) as unknown) : null
     if (raw) {
-      const result = pinMappingSchema.safeParse(raw)
+      const result = pinMappingFileSchema.safeParse(raw)
       if (result.success) {
         devicePinMapping = result.data
       } else {
         console.error('[parseProjectFiles] devices/pin-mapping.json Zod errors:', result.error.issues)
         warnings.push('devices/pin-mapping.json has invalid structure and was loaded with defaults.')
-        devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+        devicePinMapping = {}
       }
     } else {
-      devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+      devicePinMapping = {}
     }
   } catch {
     warnings.push('devices/pin-mapping.json is malformed and could not be read. Using defaults.')
-    devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+    devicePinMapping = {}
   }
 
   // Deduplicate POU files (prefer text-based over JSON when both exist)

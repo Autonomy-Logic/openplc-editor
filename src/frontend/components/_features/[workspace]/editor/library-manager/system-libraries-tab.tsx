@@ -66,13 +66,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
 
   const handleImportFromInternet = useCallback(() => {
     setIsPopoverOpen(false)
-    openModal('debugger-message', {
-      type: 'info',
-      title: 'Coming Soon',
-      message: 'Online library browsing will be available in a future update.',
-      buttons: ['OK'],
-      onResponse: () => {},
-    })
+    openModal('public-catalog-browser')
   }, [openModal])
 
   const handleUninstall = useCallback(async () => {

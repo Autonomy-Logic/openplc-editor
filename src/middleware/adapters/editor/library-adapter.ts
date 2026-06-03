@@ -13,10 +13,18 @@
  *   libraries:install-from-file (invoke)
  *   libraries:uninstall         (invoke)
  *   libraries:changed           (on)
+ *   catalog:list                (invoke) — public-library browse
+ *   catalog:install-many        (invoke) — public-library batch install
  */
 
-import type { LibraryPort, StlibArchiveDTO } from '../../shared/ports/library-port'
+import type {
+  CatalogInstallBatch,
+  CatalogQueryResult,
+  LibraryPort,
+  StlibArchiveDTO,
+} from '../../shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../shared/ports/library-types'
+import type { ListPublicLibrariesArgs } from '../../shared/ports/public-catalog-types'
 import type { Result, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorLibraryAdapter(): LibraryPort {
@@ -48,6 +56,14 @@ export function createEditorLibraryAdapter(): LibraryPort {
 
     onLibrariesChanged(callback: () => void): Unsubscribe {
       return window.bridge.onLibrariesChanged(callback)
+    },
+
+    queryPublicCatalog(args: ListPublicLibrariesArgs): Promise<CatalogQueryResult> {
+      return window.bridge.queryPublicCatalog(args)
+    },
+
+    installFromCatalog(publishedLibraryIds: string[]): Promise<CatalogInstallBatch> {
+      return window.bridge.installLibrariesFromCatalog(publishedLibraryIds)
     },
   }
 }

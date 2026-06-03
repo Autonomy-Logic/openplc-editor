@@ -20,10 +20,7 @@ describe('tokenizeRecipe', () => {
   it('preserves embedded double quotes when wrapped in single quotes (Leonardo USB descriptor)', () => {
     // Real arduino-cli output for Leonardo: '-DUSB_MANUFACTURER="Unknown"' '-DUSB_PRODUCT="Arduino Leonardo"'
     const input = '\'-DUSB_MANUFACTURER="Unknown"\' \'-DUSB_PRODUCT="Arduino Leonardo"\''
-    expect(tokenizeRecipe(input)).toEqual([
-      '-DUSB_MANUFACTURER="Unknown"',
-      '-DUSB_PRODUCT="Arduino Leonardo"',
-    ])
+    expect(tokenizeRecipe(input)).toEqual(['-DUSB_MANUFACTURER="Unknown"', '-DUSB_PRODUCT="Arduino Leonardo"'])
   })
 
   it('concatenates quoted and unquoted segments inside the same token', () => {
@@ -40,11 +37,7 @@ describe('tokenizeRecipe', () => {
   })
 
   it('keeps `@responsefile` paths as single tokens (ESP32 cflags shape)', () => {
-    expect(tokenizeRecipe('-c @/build/.tmp/build_opt.h foo.cpp')).toEqual([
-      '-c',
-      '@/build/.tmp/build_opt.h',
-      'foo.cpp',
-    ])
+    expect(tokenizeRecipe('-c @/build/.tmp/build_opt.h foo.cpp')).toEqual(['-c', '@/build/.tmp/build_opt.h', 'foo.cpp'])
   })
 
   it('returns an empty array for an empty or whitespace-only recipe', () => {
@@ -114,9 +107,9 @@ describe('substitutePlaceholders', () => {
   })
 
   it('throws when an array placeholder appears as substring (would silently corrupt argv)', () => {
-    expect(() =>
-      substitutePlaceholders(['x{includes}y'], { '{includes}': ['-Ia', '-Ib'] }),
-    ).toThrow(/Array expansion is only safe for exact-match tokens/)
+    expect(() => substitutePlaceholders(['x{includes}y'], { '{includes}': ['-Ia', '-Ib'] })).toThrow(
+      /Array expansion is only safe for exact-match tokens/,
+    )
   })
 
   it('leaves tokens unchanged when no placeholder matches', () => {

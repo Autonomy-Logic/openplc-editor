@@ -8,12 +8,12 @@ import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifie
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
-import { boardSelectors, compileOnlySelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
-import { Checkbox } from '../../../../../_atoms/checkbox'
+import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
@@ -30,9 +30,6 @@ const Board = memo(function () {
   const runtime = useRuntime()
 
   const {
-    deviceDefinitions: {
-      configuration: { compileOnly },
-    },
     deviceAvailableOptions: { availableBoards },
     project: {
       data: { pous, servers, remoteDevices },
@@ -46,8 +43,6 @@ const Board = memo(function () {
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
   const currentSelectedPinTableRow = pinSelectors.useCurrentSelectedPinTableRow()
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
-
-  const setCompileOnly = compileOnlySelectors.useSetCompileOnly()
 
   const pins = pinSelectors.usePins()
   const createNewPin = pinSelectors.useCreateNewPin()
@@ -88,6 +83,51 @@ const Board = memo(function () {
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
   const deviceSelectRef = useRef<HTMLDivElement>(null)
+  const [deviceSearchTerm, setDeviceSearchTerm] = useState('')
+  const deviceSearchInputRef = useRef<HTMLInputElement>(null)
+
+  /**
+   * Boards grouped by vendor.  VPP-installed boards come from
+   * `info.vpp.vendor`; built-in OpenPLC targets (Simulator + Runtime
+   * v3/v4) have no `vpp` field and bucket under "OpenPLC".  The
+   * outer order keeps `OpenPLC` first (always-installed), followed
+   * by VPP vendors alphabetically; boards within a group keep the
+   * Map's insertion order (already sorted by `orderBoardsByVppGroup`
+   * on the main side).
+   *
+   * Search filter applies case-insensitively against the board's
+   * display name AND its vendor heading — typing "ardu" surfaces
+   * every Arduino board even when the group heading is what the
+   * user is targeting.  Empty groups are pruned so the dropdown
+   * doesn't render a header with no children below it.
+   */
+  const groupedBoards = useMemo(() => {
+    type BoardInfo = NonNullable<ReturnType<typeof availableBoards.get>>
+    const groups = new Map<string, Array<{ board: string; data: BoardInfo }>>()
+    const BUILT_IN_VENDOR = 'OpenPLC'
+    for (const [board, data] of availableBoards.entries()) {
+      const vendor = data.vpp?.vendor ?? BUILT_IN_VENDOR
+      const bucket = groups.get(vendor) ?? []
+      bucket.push({ board, data })
+      groups.set(vendor, bucket)
+    }
+    const builtIn = groups.get(BUILT_IN_VENDOR) ?? []
+    groups.delete(BUILT_IN_VENDOR)
+    const orderedVendors = [...groups.keys()].sort((a, b) => a.localeCompare(b))
+    const ordered: Array<{ vendor: string; boards: typeof builtIn }> = []
+    if (builtIn.length > 0) ordered.push({ vendor: BUILT_IN_VENDOR, boards: builtIn })
+    for (const vendor of orderedVendors) ordered.push({ vendor, boards: groups.get(vendor)! })
+
+    const needle = deviceSearchTerm.trim().toLowerCase()
+    if (!needle) return ordered
+    return ordered
+      .map(({ vendor, boards }) => {
+        const vendorMatches = vendor.toLowerCase().includes(needle)
+        const matching = vendorMatches ? boards : boards.filter(({ board }) => board.toLowerCase().includes(needle))
+        return { vendor, boards: matching }
+      })
+      .filter(({ boards }) => boards.length > 0)
+  }, [availableBoards, deviceSearchTerm])
 
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
@@ -98,7 +138,18 @@ const Board = memo(function () {
     if (!selectIsOpen) return
 
     const checkedElement = selectRef.current?.querySelector('[data-state="checked"]')
-    if (checkedElement) {
+    if (!checkedElement) return
+
+    // When the checked item lives inside a vendor group, scroll the
+    // whole group container into view so the heading above the item
+    // stays on screen.  Without this, `block: 'start'` aligns the
+    // item's top edge with the viewport's top, hiding the vendor
+    // heading the item sits under.  Non-grouped selects (e.g. the
+    // communication-port picker) keep the per-item scroll.
+    const groupContainer = checkedElement.closest('[data-board-group]')
+    if (groupContainer) {
+      groupContainer.scrollIntoView({ block: 'start' })
+    } else {
       checkedElement.scrollIntoView({ block: 'start' })
     }
   }
@@ -130,6 +181,29 @@ const Board = memo(function () {
   useEffect(() => {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
   }, [deviceSelectIsOpen])
+
+  // Keep focus on the search input as the user types.  Radix Select
+  // falls back to focusing the SelectContent listbox whenever the
+  // currently-focused SelectItem unmounts — which happens every
+  // time the user's typing filters the selected board out of the
+  // visible list, pulling focus off the search input.  Refocus
+  // through `queueMicrotask` (synchronously refocusing inside a
+  // focusout handler is disallowed in some browsers; microtasks
+  // run after the current task but before paint).  Gated on a
+  // non-empty search term so the initial open still lets Radix
+  // focus the currently-selected item — what the scroll-to-
+  // selected effect keys off.
+  useEffect(() => {
+    if (!deviceSelectIsOpen) return
+    const input = deviceSearchInputRef.current
+    if (!input) return
+    const handler = () => {
+      if (deviceSearchTerm.length === 0) return
+      queueMicrotask(() => deviceSearchInputRef.current?.focus())
+    }
+    input.addEventListener('focusout', handler)
+    return () => input.removeEventListener('focusout', handler)
+  }, [deviceSelectIsOpen, deviceSearchTerm])
 
   useEffect(() => {
     scrollToSelectedOption(communicationSelectRef, communicationSelectIsOpen)
@@ -253,11 +327,6 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
-  const handleCompileOnly = () => {
-    setCompileOnly(!memoizedCompileOnly)
-  }
-  const memoizedCompileOnly = useMemo(() => compileOnly, [compileOnly])
-
   const handleConnectToRuntime = useCallback(async () => {
     if (connectionStatus === 'connected') {
       // Disconnect - global polling hook will handle resetting failure counter
@@ -375,19 +444,6 @@ const Board = memo(function () {
           <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
             Board Settings
           </h2>
-          {!isSimulatorTarget(currentBoardInfo) && (
-            <div id='compile-only-container' className='flex select-none items-center gap-2'>
-              <Label htmlFor='compile-only-checkbox' className='w-fit text-xs text-neutral-950 dark:text-white'>
-                Compile Only
-              </Label>
-              <Checkbox
-                id='compile-only-checkbox'
-                className={compileOnly ? 'h-[14px] w-[14px] border-brand' : 'h-[14px] w-[14px] border-neutral-300'}
-                checked={compileOnly}
-                onCheckedChange={handleCompileOnly}
-              />
-            </div>
-          )}
           <div id='board-selector' className='flex w-full items-center justify-start gap-1 pr-5'>
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
@@ -395,7 +451,13 @@ const Board = memo(function () {
             <Select
               value={formattedBoardState}
               onValueChange={handleSetDeviceBoard}
-              onOpenChange={setDeviceSelectIsOpen}
+              onOpenChange={(open) => {
+                setDeviceSelectIsOpen(open)
+                // Reset the filter every time the dropdown closes so
+                // reopening starts with the full list (and the
+                // previously-selected item visible without scrolling).
+                if (!open) setDeviceSearchTerm('')
+              }}
             >
               <SelectTrigger
                 aria-label='Device selection'
@@ -404,32 +466,64 @@ const Board = memo(function () {
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent
-                className='h-[250px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                className='max-h-[300px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 sideOffset={5}
                 alignOffset={5}
                 position='popper'
                 align='center'
                 side='bottom'
                 viewportRef={deviceSelectRef}
+                // Disable Radix's typeahead so it doesn't fight the
+                // search box below for keystrokes — that fight was
+                // surfacing as focus loss on the first character
+                // that didn't match the currently-selected device.
+                disableTypeahead
               >
-                {Array.from(availableBoards.entries()).map(([board, data]) => {
-                  const showVersion = !isSimulatorTarget(data) && data.coreVersion
-                  const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
-                  return (
-                    <SelectItem
-                      key={board}
-                      className={cn(
-                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                      )}
-                      value={formattedBoard}
-                    >
-                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                        {formattedBoard}
-                      </span>
-                    </SelectItem>
-                  )
-                })}
+                {/*
+                  Search field — `sticky top-0` keeps it pinned while
+                  the list scrolls.  Shares the rounded text-field
+                  styling with the variable-type dropdown via the
+                  shared `DropdownSearchInput` atom (which also stops
+                  Radix Select's typeahead from intercepting
+                  keystrokes).
+                */}
+                <DropdownSearchInput
+                  ref={deviceSearchInputRef}
+                  value={deviceSearchTerm}
+                  onChange={(e) => setDeviceSearchTerm(e.target.value)}
+                  aria-label='Search devices'
+                />
+                {groupedBoards.length === 0 ? (
+                  <div className='px-3 py-6 text-center text-[11px] italic text-neutral-500 dark:text-neutral-400'>
+                    No devices match “{deviceSearchTerm}”.
+                  </div>
+                ) : (
+                  groupedBoards.map(({ vendor, boards }) => (
+                    <div key={vendor} data-board-group className='py-1'>
+                      <div className='select-none px-2 py-1 font-caption text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>
+                        {vendor}
+                      </div>
+                      {boards.map(({ board, data }) => {
+                        const showVersion = !isSimulatorTarget(data) && data.coreVersion
+                        const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
+                        return (
+                          <SelectItem
+                            key={board}
+                            className={cn(
+                              'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                              'flex w-full cursor-pointer items-center px-2 py-[7px] pl-5 outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                            )}
+                            value={formattedBoard}
+                          >
+                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                              {formattedBoard}
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </div>
+                  ))
+                )}
                 {capabilities.hasPackageManager && (
                   <>
                     <div className='my-1 border-t border-neutral-200 dark:border-neutral-700' />

@@ -158,7 +158,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder='Search packages by name, vendor, or tag...'
-            className='font-caption text-cp-sm w-full rounded-md border border-neutral-200 bg-white py-2 pl-10 pr-3 text-neutral-950 placeholder:text-neutral-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:placeholder:text-neutral-500'
+            className='w-full rounded-md border border-neutral-200 bg-white py-2 pl-10 pr-3 font-caption text-cp-sm text-neutral-950 placeholder:text-neutral-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:placeholder:text-neutral-500'
             aria-label='Search remote catalog'
           />
         </div>
@@ -186,7 +186,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
             <button
               type='button'
               onClick={() => void fetchCatalog()}
-              className='font-caption text-cp-sm rounded-md border border-neutral-200 px-3 py-1.5 text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
+              className='rounded-md border border-neutral-200 px-3 py-1.5 font-caption text-cp-sm text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
             >
               Try again
             </button>
@@ -267,7 +267,8 @@ const CatalogCard = ({
   onUninstall,
 }: CatalogCardProps) => {
   const latestVersion = entry.versions[0]
-  const latestCompatible = entry.versions.find((v) => isCompatibleEditorVersion(v.minEditorVersion, APP_VERSION)) ?? null
+  const latestCompatible =
+    entry.versions.find((v) => isCompatibleEditorVersion(v.minEditorVersion, APP_VERSION)) ?? null
 
   // Reference version surfaced in the static pill next to the name — what
   // the user "has" right now (or would get by default if they hit Install).
@@ -300,7 +301,7 @@ const CatalogCard = ({
             <span className='truncate font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>
               {entry.name}
             </span>
-            <span className='shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:bg-brand/20 dark:text-brand-light'>
+            <span className='bg-brand/10 dark:bg-brand/20 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium text-brand-medium dark:text-brand-light'>
               v{referenceVersion}
             </span>
           </div>
@@ -408,7 +409,7 @@ const ActionMenuButton = ({
                     if (!compatible || isInstalledHere) return
                     onInstall(v.version, v.downloadUrl)
                   }}
-                  className='flex cursor-pointer flex-col items-start gap-0.5 rounded-md px-2 py-1.5 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[highlighted]:bg-neutral-100 dark:data-[highlighted]:bg-neutral-850'
+                  className='flex cursor-pointer flex-col items-start gap-0.5 rounded-md px-2 py-1.5 outline-none data-[disabled]:cursor-not-allowed data-[highlighted]:bg-neutral-100 data-[disabled]:opacity-50 dark:data-[highlighted]:bg-neutral-850'
                 >
                   <span className='font-caption text-[11px] font-medium text-neutral-900 dark:text-neutral-200'>
                     {isInstalledHere && '✓ '}

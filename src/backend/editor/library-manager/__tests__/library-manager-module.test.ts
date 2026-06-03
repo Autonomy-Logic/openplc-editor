@@ -363,4 +363,98 @@ describe('LibraryManagerModule', () => {
       expect(mod.listInstalled()).toEqual([])
     })
   })
+
+  describe('installFromCatalog', () => {
+    function makeStubTransport(
+      archives: Record<string, ReturnType<typeof makeArchive>>,
+      errors: Record<string, string> = {},
+    ) {
+      return {
+        fetchJson: jest.fn(async () => {
+          throw new Error('unused in these tests')
+        }),
+        fetchText: jest.fn(async (path: string) => {
+          // /public/libraries/:id/download
+          const match = path.match(/\/public\/libraries\/([^/]+)\/download/)
+          const id = match ? decodeURIComponent(match[1]) : ''
+          if (errors[id]) throw new Error(errors[id])
+          const archive = archives[id]
+          if (!archive) throw new Error(`Catalog request failed: 404 Not Found`)
+          return JSON.stringify(archive)
+        }),
+      }
+    }
+
+    it('downloads each id, persists it, and returns a per-item summary', async () => {
+      const transport = makeStubTransport({
+        'pub-1': makeArchive('alpha-lib', '1.0.0'),
+        'pub-2': makeArchive('beta-lib', '2.0.0'),
+      })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      const batch = await mod.installFromCatalog(['pub-1', 'pub-2'])
+
+      expect(batch.results).toEqual([
+        { publishedLibraryId: 'pub-1', success: true, name: 'alpha-lib', version: '1.0.0' },
+        { publishedLibraryId: 'pub-2', success: true, name: 'beta-lib', version: '2.0.0' },
+      ])
+      // Both files actually land on disk in the user-installed
+      // shape so subsequent listInstalled() picks them up.
+      expect(existsSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'))).toBe(true)
+      expect(existsSync(join(librariesDir, 'beta-lib', 'beta-lib.stlib'))).toBe(true)
+      expect(mod.listInstalled().map((r) => r.name)).toEqual(['alpha-lib', 'beta-lib'])
+    })
+
+    it('reports per-item failures without aborting the batch', async () => {
+      const transport = makeStubTransport(
+        { 'pub-good': makeArchive('good-lib', '1.0.0') },
+        { 'pub-bad': 'Catalog request failed: 503 Service Unavailable' },
+      )
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      const batch = await mod.installFromCatalog(['pub-bad', 'pub-good'])
+
+      expect(batch.results).toHaveLength(2)
+      expect(batch.results[0]).toMatchObject({
+        publishedLibraryId: 'pub-bad',
+        success: false,
+        error: expect.stringContaining('503'),
+      })
+      expect(batch.results[1]).toMatchObject({
+        publishedLibraryId: 'pub-good',
+        success: true,
+        name: 'good-lib',
+      })
+      // The good one still made it to disk.
+      expect(existsSync(join(librariesDir, 'good-lib', 'good-lib.stlib'))).toBe(true)
+    })
+
+    it('returns an empty batch when called with no ids', async () => {
+      const transport = makeStubTransport({})
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      const batch = await mod.installFromCatalog([])
+
+      expect(batch.results).toEqual([])
+      expect(transport.fetchText).not.toHaveBeenCalled()
+    })
+
+    it('surfaces a conflict when a download matches a bundled library name', async () => {
+      writeBundled(makeArchive('iec-standard-fb'))
+      const transport = makeStubTransport({
+        'pub-x': makeArchive('iec-standard-fb', '9.9.9'),
+      })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      const batch = await mod.installFromCatalog(['pub-x'])
+
+      expect(batch.results).toHaveLength(1)
+      expect(batch.results[0]).toMatchObject({
+        publishedLibraryId: 'pub-x',
+        success: false,
+        name: 'iec-standard-fb',
+        error: expect.stringContaining('bundled library'),
+      })
+    })
+  })
 })

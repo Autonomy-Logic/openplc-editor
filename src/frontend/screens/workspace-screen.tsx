@@ -82,6 +82,7 @@ const WorkspaceScreen = () => {
   const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
   const projectType = useOpenPLCStore(useCallback((s) => s.project.meta.type, []))
+  const isReadOnly = useOpenPLCStore(useCallback((s) => s.workspace.isReadOnly, []))
   // Project-type capability matrix.  Combines with `capabilities`
   // (host platform features) below to decide what affordances render
   // in this workspace shell.
@@ -650,6 +651,7 @@ const WorkspaceScreen = () => {
                                             name={model.meta.name}
                                             language={model.meta.language}
                                             isActive={isActive}
+                                            readOnly={isReadOnly}
                                           />
                                         )}
                                       </div>

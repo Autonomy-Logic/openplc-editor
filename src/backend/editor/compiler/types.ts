@@ -35,8 +35,8 @@ type ToolchainProperties = {
 // Re-exported from hardware/types so existing import paths under
 // backend/editor/compiler keep working — the schema itself lives next to
 // the resolver that owns the hals.json contract.
-export { BoardInfoSchema, HalsFileSchema } from '../hardware/types'
 export type { BoardInfo, HalsFile } from '../hardware/types'
+export { BoardInfoSchema, HalsFileSchema } from '../hardware/types'
 
 export { ArduinoCliConfigSchema, ArduinoCoreControlSchema }
 

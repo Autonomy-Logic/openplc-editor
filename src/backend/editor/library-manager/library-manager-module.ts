@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { basename, extname, join } from 'path'
 
+import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
 import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../../shared/library/installed-library-rows'
@@ -10,9 +11,30 @@ import {
   type PreparedLibrary,
   prepareStlibUpload,
 } from '../../shared/library/prepare-library-upload'
+import { downloadPublicLibrary } from '../../shared/library/public-catalog-client'
 import { validatePathId } from '../../shared/utils/path-safety'
 import { assertPathContained } from '../utils/path-containment'
+import { createDesktopCatalogTransport } from './desktop-catalog-transport'
 import type { LibraryRegistry } from './types'
+
+/**
+ * Per-item result of a batch catalog install.  Errors are surfaced
+ * inline so a single bad archive doesn't abort the rest — the modal
+ * renders a per-row pass/fail summary.
+ */
+export interface CatalogInstallItemResult {
+  publishedLibraryId: string
+  success: boolean
+  /** Manifest name once we've parsed the archive — present on success
+   *  and on conflict-style failures ("already installed"). */
+  name?: string
+  version?: string
+  error?: string
+}
+
+export interface CatalogInstallBatchResult {
+  results: CatalogInstallItemResult[]
+}
 
 /**
  * System-wide library pool.
@@ -38,11 +60,16 @@ export class LibraryManagerModule {
   private librariesDir: string
   private registryPath: string
   private bundledDir: string
+  private catalogTransport: CatalogTransportPort
 
-  constructor(opts?: { librariesDir?: string; bundledDir?: string }) {
+  constructor(opts?: { librariesDir?: string; bundledDir?: string; catalogTransport?: CatalogTransportPort }) {
     this.librariesDir = opts?.librariesDir ?? join(app.getPath('userData'), 'libraries')
     this.registryPath = join(this.librariesDir, 'registry.json')
     this.bundledDir = opts?.bundledDir ?? this.resolveDefaultBundledDir()
+    // The catalog transport is injected so tests can stub HTTP — the
+    // default desktop impl reads `OPENPLC_EDGE_API_URL` lazily on
+    // every request, so it picks up env changes without restarting.
+    this.catalogTransport = opts?.catalogTransport ?? createDesktopCatalogTransport()
     mkdirSync(this.librariesDir, { recursive: true })
   }
 
@@ -181,6 +208,52 @@ export class LibraryManagerModule {
       if (archive) out.push(archive)
     }
     return out
+  }
+
+  /**
+   * Install one or more libraries from the public catalog hosted on
+   * autonomy-edge.  Each id is fetched, validated, and persisted via
+   * the same `.stlib` install path the file picker uses — only the
+   * source of the archive bytes differs.
+   *
+   * Failures are per-item: a 404 / parse error / name-collision on
+   * one library doesn't abort the rest, so the modal can show
+   * "5 succeeded, 1 failed" rather than throw away the whole batch.
+   * Emits a single `libraries:changed` after the loop (the IPC
+   * handler does this) so the renderer refreshes once, not N times.
+   */
+  async installFromCatalog(publishedLibraryIds: string[]): Promise<CatalogInstallBatchResult> {
+    const results: CatalogInstallItemResult[] = []
+    for (const id of publishedLibraryIds) {
+      try {
+        const archiveText = await downloadPublicLibrary(this.catalogTransport, { id })
+        const prepared = prepareStlibUpload(archiveText)
+        const persistResult = this.persistPrepared(prepared)
+        if (persistResult.success && !persistResult.canceled) {
+          results.push({
+            publishedLibraryId: id,
+            success: true,
+            name: persistResult.name,
+            version: persistResult.version,
+          })
+        } else if (!persistResult.success) {
+          results.push({
+            publishedLibraryId: id,
+            success: false,
+            name: prepared.name,
+            version: prepared.version,
+            error: persistResult.error,
+          })
+        }
+      } catch (err) {
+        results.push({
+          publishedLibraryId: id,
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    return { results }
   }
 
   /**

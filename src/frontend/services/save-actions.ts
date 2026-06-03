@@ -147,7 +147,13 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
 
     yield {
       path: 'devices/pin-mapping.json',
-      content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      // Serialise the full per-board dict — each board's pins are
+      // preserved on disk even when it's not the active target, so a
+      // user switching Mega → MKR → back to Mega gets their Mega
+      // pin-mapping work back. The parser accepts both this dict
+      // shape and the legacy flat array (which it auto-migrates by
+      // keying under the active board on load).
+      content: JSON.stringify(deviceDefinitions.pinMapping.pinsByBoard, null, 2),
       category: 'pin-mapping',
     }
   }
@@ -202,7 +208,9 @@ function serializeProjectFile(
       },
       {
         path: 'devices/pin-mapping.json',
-        content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+        // Per-board dict — see the matching comment in
+        // serializeAllProjectFiles for the rationale.
+        content: JSON.stringify(deviceDefinitions.pinMapping.pinsByBoard, null, 2),
         category: 'pin-mapping',
       },
     ]
@@ -313,6 +321,14 @@ export async function executeSaveProject(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
+  // Read-only gate.  The Monaco / graphical editors are already in
+  // read-only mode, but explicit Save shortcuts (Ctrl+S, menu File →
+  // Save) still funnel through here.  Surface the modal so the user
+  // gets the "fork me" affordance instead of a silent no-op.
+  if (state.workspace.isReadOnly) {
+    state.modalActions.openModal('read-only-project')
+    return { success: false }
+  }
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved } = state.fileActions
@@ -473,6 +489,11 @@ export async function executeSaveFile(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
+  // See executeSaveProject for rationale — same read-only gate.
+  if (state.workspace.isReadOnly) {
+    state.modalActions.openModal('read-only-project')
+    return { success: false }
+  }
   const { project, files } = state
   const { setEditingState } = state.workspaceActions
   const { updateFile, checkIfAllFilesAreSaved } = state.fileActions

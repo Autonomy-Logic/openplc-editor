@@ -6,8 +6,7 @@ import type { AvailableBoards } from '../types'
 // field, so we cast minimal objects through `unknown`.
 type AvailableBoardInfo = AvailableBoards extends Map<string, infer V> ? V : never
 const builtIn = (): AvailableBoardInfo => ({}) as unknown as AvailableBoardInfo
-const vppBoard = (packageId: string): AvailableBoardInfo =>
-  ({ vpp: { packageId } }) as unknown as AvailableBoardInfo
+const vppBoard = (packageId: string): AvailableBoardInfo => ({ vpp: { packageId } }) as unknown as AvailableBoardInfo
 
 describe('orderBoardsByVppGroup', () => {
   it('returns an empty Map untouched', () => {
@@ -67,11 +66,7 @@ describe('orderBoardsByVppGroup', () => {
       ['OpenPLC Runtime v3', builtIn()],
       ['OpenPLC Simulator', builtIn()],
     ])
-    expect([...orderBoardsByVppGroup(input).keys()]).toEqual([
-      'OpenPLC Runtime v3',
-      'OpenPLC Simulator',
-      'Arduino Uno',
-    ])
+    expect([...orderBoardsByVppGroup(input).keys()]).toEqual(['OpenPLC Runtime v3', 'OpenPLC Simulator', 'Arduino Uno'])
   })
 
   it('treats VPP entries with falsy packageId as built-ins (defensive against malformed manifests)', () => {

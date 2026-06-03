@@ -1,4 +1,4 @@
-import { generateModbusDefines } from '../modbus-defines'
+import { generateModbusDefines } from '../steps/modbus-defines'
 
 describe('generateModbusDefines', () => {
   it('returns an empty string when neither RTU nor TCP is enabled', () => {

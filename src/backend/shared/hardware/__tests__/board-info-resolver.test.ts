@@ -1,43 +1,37 @@
-import { join, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 
-import type { InstalledPackage, PackageManifest } from '../../package-manager/types'
-import { BoardInfoResolver, type PackageManagerLike } from '../board-info-resolver'
-import type { BoardInfo, HalsFile } from '../types'
+import type { InstalledPackage, PackageManifest } from '../../../../middleware/shared/ports/types'
+import {
+  BoardInfoResolver,
+  type BoardInfoResolverConfig,
+  type HalsBoardEntry,
+  type HalsFileContent,
+  type PackageManagerPort,
+} from '../board-info-resolver'
 
-const HALS_PATH = '/fake/resources/sources/boards/hals.json'
 const SOURCES_DIR = '/fake/resources/sources'
 const PKG_PATH = '/fake/user-data/packages/com.openplc.arduino'
 
-function makeHalsEntry(overrides: Partial<BoardInfo> = {}): BoardInfo {
+// Editor-style adapters used by these tests.  Real editor passes the
+// same shape (filesystem-backed path joins); web will pass its own
+// browser-friendly equivalents when VPP-on-web lands.
+const halsSourcePath = (rel: string): string => join(SOURCES_DIR, 'hal', rel)
+const packageRelative = (pkgPath: string, relPath: string): string => {
+  const root = resolve(pkgPath)
+  const candidate = resolve(root, relPath)
+  if (candidate !== root && !candidate.startsWith(root + sep)) {
+    throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+  }
+  return candidate
+}
+
+function makeHalsEntry(overrides: Partial<HalsBoardEntry> = {}): HalsBoardEntry {
   return {
     compiler: 'arduino-cli',
     core: 'arduino:avr',
     platform: 'arduino:avr:mega',
-    default_din: '2, 3',
-    default_dout: '4, 5',
-    default_ain: 'A0',
-    default_aout: '6',
-    preview: 'mega.png',
     source: 'mega_due.cpp',
-    specs: {
-      CPU: 'ATmega 2560',
-      RAM: '8 KB',
-      Flash: '256 KB',
-      DigitalPins: '70',
-      AnalogPins: '16',
-      PWMPins: '15',
-      WiFi: 'No',
-      Bluetooth: 'No',
-      Ethernet: 'No',
-    },
     ...overrides,
-  }
-}
-
-function makeHalsReader(content: HalsFile | Error): <T>(path: string) => Promise<T> {
-  return async <T>() => {
-    if (content instanceof Error) throw content
-    return content as unknown as T
   }
 }
 
@@ -78,19 +72,32 @@ function makeManifest(overrides: Partial<PackageManifest> = {}): PackageManifest
 function makePackageManager(
   installed: InstalledPackage[],
   manifests: Record<string, PackageManifest | null>,
-): PackageManagerLike {
+): PackageManagerPort {
   return {
     listInstalled: () => installed,
     getInstalledPackageManifest: (id) => manifests[id] ?? null,
   }
 }
 
+function makeResolver(
+  halsContent: HalsFileContent,
+  packageManager: PackageManagerPort,
+  overrides: Partial<BoardInfoResolverConfig> = {},
+): BoardInfoResolver {
+  return new BoardInfoResolver({
+    halsContent,
+    packageManager,
+    resolveHalSourcePath: halsSourcePath,
+    resolvePackageRelativePath: packageRelative,
+    ...overrides,
+  })
+}
+
 describe('BoardInfoResolver', () => {
   describe('hals.json lookup', () => {
-    it('resolves a board found in hals.json into a `source: hals` BoardBuildInfo', async () => {
-      const hals: HalsFile = { 'Arduino Mega': makeHalsEntry() }
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, makePackageManager([], {}), makeHalsReader(hals))
-      const info = await r.resolve('Arduino Mega')
+    it('resolves a board found in hals.json into a `source: hals` BoardBuildInfo', () => {
+      const r = makeResolver({ 'Arduino Mega': makeHalsEntry() }, makePackageManager([], {}))
+      const info = r.resolve('Arduino Mega')
       expect(info.source).toBe('hals')
       expect(info.compiler).toBe('arduino-cli')
       expect(info.platform).toBe('arduino:avr:mega')
@@ -98,19 +105,22 @@ describe('BoardInfoResolver', () => {
       expect(info.halSourceFile).toBe(join(SOURCES_DIR, 'hal', 'mega_due.cpp'))
     })
 
-    it('maps optional hals fields (board_manager_url, flags, define, extra_libraries)', async () => {
-      const hals: HalsFile = {
-        'Sequent ESP32': makeHalsEntry({
-          board_manager_url: 'https://example.com/index.json',
-          c_flags: ['-MMD'],
-          cxx_flags: ['-std=gnu++17'],
-          ld_flags: ['-Wl,foo'],
-          define: 'BOARD_ESP32',
-          extra_libraries: ['SomeLib'],
-        }),
-      }
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, makePackageManager([], {}), makeHalsReader(hals))
-      const info = await r.resolve('Sequent ESP32')
+    it('maps optional hals fields (board_manager_url, flags, define, extra_libraries, max_data_size)', () => {
+      const r = makeResolver(
+        {
+          'Sequent ESP32': makeHalsEntry({
+            board_manager_url: 'https://example.com/index.json',
+            c_flags: ['-MMD'],
+            cxx_flags: ['-std=gnu++17'],
+            ld_flags: ['-Wl,foo'],
+            define: 'BOARD_ESP32',
+            extra_libraries: ['SomeLib'],
+            max_data_size: 8192,
+          }),
+        },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('Sequent ESP32')
       expect(info.boardManagerUrl).toBe('https://example.com/index.json')
       expect(info.compilerFlags).toEqual({
         c_flags: ['-MMD'],
@@ -119,28 +129,28 @@ describe('BoardInfoResolver', () => {
       })
       expect(info.define).toBe('BOARD_ESP32')
       expect(info.extraArduinoLibraries).toEqual(['SomeLib'])
+      expect(info.maxDataSize).toBe(8192)
     })
 
-    it('omits compilerFlags entirely when no flag arrays exist', async () => {
-      const hals: HalsFile = { 'Arduino Uno': makeHalsEntry() }
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, makePackageManager([], {}), makeHalsReader(hals))
-      const info = await r.resolve('Arduino Uno')
+    it('omits compilerFlags entirely when no flag arrays exist', () => {
+      const r = makeResolver({ 'Arduino Uno': makeHalsEntry() }, makePackageManager([], {}))
+      const info = r.resolve('Arduino Uno')
       expect(info.compilerFlags).toBeUndefined()
     })
 
-    it('falls through to VPP when hals.json read fails (missing file)', async () => {
+    it('falls through to VPP when hals.json has no entry', () => {
       const pkg = makePkg()
       const manifest = makeManifest()
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader(new Error('ENOENT')))
-      const info = await r.resolve('Arduino Mega')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Mega')
       expect(info.source).toBe('vpp')
     })
   })
 
   describe('precedence', () => {
-    it('hals.json wins when the same board exists in both catalogs', async () => {
-      const hals: HalsFile = { 'Arduino Mega': makeHalsEntry({ platform: 'hals-platform' }) }
+    it('hals.json wins when the same board exists in both catalogs', () => {
+      const hals: HalsFileContent = { 'Arduino Mega': makeHalsEntry({ platform: 'hals-platform' }) }
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -154,15 +164,15 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader(hals))
-      const info = await r.resolve('Arduino Mega')
+      const r = makeResolver(hals, pm)
+      const info = r.resolve('Arduino Mega')
       expect(info.source).toBe('hals')
       expect(info.platform).toBe('hals-platform')
     })
   })
 
   describe('VPP lookup', () => {
-    it('resolves a VPP-only arduino-cli board with full field mapping', async () => {
+    it('resolves a VPP-only arduino-cli board with full field mapping', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -188,8 +198,8 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Arduino Giga')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Giga')
       expect(info).toMatchObject({
         source: 'vpp',
         compiler: 'arduino-cli',
@@ -207,7 +217,7 @@ describe('BoardInfoResolver', () => {
       })
     })
 
-    it('resolves a runtime-v4 plugin board (python) and maps target type to openplc-compiler', async () => {
+    it('resolves a runtime-v4 plugin board (python) and maps target type to openplc-compiler', () => {
       const pkg = makePkg({ packageId: 'com.openplc.raspberry-pi' })
       const manifest = makeManifest({
         package: {
@@ -234,8 +244,8 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Raspberry Pi')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Raspberry Pi')
       expect(info.compiler).toBe('openplc-compiler')
       expect(info.pluginType).toBe('python')
       expect(info.pluginEntry).toBe(join(pkg.path, 'hal', 'runtime-v4', 'plugin', 'rpi_hal.py'))
@@ -243,7 +253,7 @@ describe('BoardInfoResolver', () => {
       expect(info.requirements).toBe(join(pkg.path, 'hal', 'runtime-v4', 'plugin', 'requirements.txt'))
     })
 
-    it('forwards target.platformOptions verbatim from the manifest', async () => {
+    it('forwards target.platformOptions verbatim from the manifest', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -273,8 +283,8 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Arduino Nano')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Nano')
       expect(info.platformOptions).toEqual([
         {
           key: 'cpu',
@@ -289,7 +299,7 @@ describe('BoardInfoResolver', () => {
       ])
     })
 
-    it('omits platformOptions when the manifest does not declare any', async () => {
+    it('omits platformOptions when the manifest does not declare any', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -307,12 +317,12 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Arduino Mega')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Mega')
       expect(info.platformOptions).toBeUndefined()
     })
 
-    it('passes through unknown target types as compiler value', async () => {
+    it('passes through unknown target types as compiler value', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -326,25 +336,25 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Weird Board')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Weird Board')
       expect(info.compiler).toBe('my-future-toolchain')
     })
 
-    it('skips installed packages whose manifest fails to load', async () => {
+    it('skips installed packages whose manifest fails to load', () => {
       const broken = makePkg({ packageId: 'com.broken.pkg' })
       const good = makePkg({ packageId: 'com.openplc.arduino', devices: ['arduino-mega'] })
       const pm = makePackageManager([broken, good], {
         'com.broken.pkg': null,
         'com.openplc.arduino': makeManifest(),
       })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Arduino Mega')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Mega')
       expect(info.source).toBe('vpp')
       expect(info.vppPackageId).toBe('com.openplc.arduino')
     })
 
-    it('finds a board in the second installed package when the first does not have it', async () => {
+    it('finds a board in the second installed package when the first does not have it', () => {
       const a = makePkg({ packageId: 'com.openplc.arduino', devices: ['arduino-mega'] })
       const b = makePkg({ packageId: 'com.openplc.espressif', path: '/fake/user-data/packages/com.openplc.espressif' })
       const pm = makePackageManager([a, b], {
@@ -368,20 +378,88 @@ describe('BoardInfoResolver', () => {
           ],
         }),
       })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('ESP32 Generic')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('ESP32 Generic')
       expect(info.vppPackageId).toBe('com.openplc.espressif')
       expect(info.halSourceFile).toBe(join(b.path, 'hal', 'arduino', 'esp32.cpp'))
     })
   })
 
-  describe('errors', () => {
-    it('throws when board exists in neither catalog', async () => {
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, makePackageManager([], {}), makeHalsReader({}))
-      await expect(r.resolve('Phantom Board')).rejects.toThrow(/not found in hals\.json or any installed VPP package/)
+  describe('runtime classification flags', () => {
+    it('classifies an arduino-cli board correctly', () => {
+      const r = makeResolver({ 'Arduino Mega': makeHalsEntry() }, makePackageManager([], {}))
+      const info = r.resolve('Arduino Mega')
+      expect(info.boardRuntime).toBe('arduino-cli')
+      expect(info.isSimulator).toBe(false)
+      expect(info.isRuntimeV3).toBe(false)
+      expect(info.isRuntimeV4).toBe(false)
     })
 
-    it('rejects path-traversal in manifest paths', async () => {
+    it('classifies the simulator board correctly', () => {
+      const r = makeResolver(
+        { 'OpenPLC Simulator': makeHalsEntry({ compiler: 'simulator' }) },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('OpenPLC Simulator')
+      expect(info.boardRuntime).toBe('simulator')
+      expect(info.isSimulator).toBe(true)
+      expect(info.isRuntimeV3).toBe(false)
+      expect(info.isRuntimeV4).toBe(false)
+    })
+
+    it('classifies legacy Runtime v3 by board name', () => {
+      const r = makeResolver(
+        { 'OpenPLC Runtime v3': makeHalsEntry({ compiler: 'openplc-compiler' }) },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('OpenPLC Runtime v3')
+      expect(info.boardRuntime).toBe('openplc-compiler')
+      expect(info.isRuntimeV3).toBe(true)
+      expect(info.isRuntimeV4).toBe(false)
+      expect(info.isSimulator).toBe(false)
+    })
+
+    it('classifies Runtime v4 (openplc-compiler + non-v3 name)', () => {
+      const r = makeResolver(
+        { 'OpenPLC Runtime v4 (RPi)': makeHalsEntry({ compiler: 'openplc-compiler' }) },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('OpenPLC Runtime v4 (RPi)')
+      expect(info.boardRuntime).toBe('openplc-compiler')
+      expect(info.isRuntimeV4).toBe(true)
+      expect(info.isRuntimeV3).toBe(false)
+      expect(info.isSimulator).toBe(false)
+    })
+
+    it('classifies a VPP runtime-v4 plugin board as Runtime v4', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'rpi',
+            name: 'RPi Plugin',
+            preview: 'p.png',
+            target: { type: 'runtime-v4' },
+            hal: { type: 'runtime-v4-plugin', pluginType: 'python' },
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      const info = r.resolve('RPi Plugin')
+      expect(info.isRuntimeV4).toBe(true)
+      expect(info.isRuntimeV3).toBe(false)
+      expect(info.isSimulator).toBe(false)
+    })
+  })
+
+  describe('errors', () => {
+    it('throws when board exists in neither catalog', () => {
+      const r = makeResolver({}, makePackageManager([], {}))
+      expect(() => r.resolve('Phantom Board')).toThrow(/not found in hals\.json or any installed VPP package/)
+    })
+
+    it('rejects path-traversal in manifest paths via the platform-supplied resolver', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -395,11 +473,11 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      await expect(r.resolve('Evil Board')).rejects.toThrow(/escapes package directory/)
+      const r = makeResolver({}, pm)
+      expect(() => r.resolve('Evil Board')).toThrow(/escapes package directory/)
     })
 
-    it('accepts manifest paths that resolve exactly at the package root (no traversal)', async () => {
+    it('accepts manifest paths that resolve exactly at the package root (no traversal)', () => {
       const pkg = makePkg()
       const manifest = makeManifest({
         devices: [
@@ -413,10 +491,31 @@ describe('BoardInfoResolver', () => {
         ],
       })
       const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
-      const r = new BoardInfoResolver(HALS_PATH, SOURCES_DIR, pm, makeHalsReader({}))
-      const info = await r.resolve('Root HAL Board')
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Root HAL Board')
       expect(info.halSourceFile).toBe(join(pkg.path, 'hal', 'arduino', 'mega_due.cpp'))
       expect(info.halSourceFile?.startsWith(pkg.path + sep)).toBe(true)
+    })
+  })
+
+  describe('no-op (web-style) package manager stub', () => {
+    it('behaves as hals-only when packageManager returns no installed packages', () => {
+      const stub: PackageManagerPort = {
+        listInstalled: () => [],
+        getInstalledPackageManifest: () => null,
+      }
+      const r = makeResolver({ 'Arduino Mega': makeHalsEntry() }, stub)
+      const info = r.resolve('Arduino Mega')
+      expect(info.source).toBe('hals')
+    })
+
+    it('throws cleanly when a VPP-only board is queried against a no-op packageManager', () => {
+      const stub: PackageManagerPort = {
+        listInstalled: () => [],
+        getInstalledPackageManifest: () => null,
+      }
+      const r = makeResolver({}, stub)
+      expect(() => r.resolve('Arduino Giga')).toThrow(/not found/)
     })
   })
 })

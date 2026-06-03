@@ -20,11 +20,7 @@ function parseSemver(input: string): Triple {
   const major = Number.parseInt(parts[0] ?? '', 10)
   const minor = Number.parseInt(parts[1] ?? '', 10)
   const patch = Number.parseInt(parts[2] ?? '', 10)
-  return [
-    Number.isFinite(major) ? major : 0,
-    Number.isFinite(minor) ? minor : 0,
-    Number.isFinite(patch) ? patch : 0,
-  ]
+  return [Number.isFinite(major) ? major : 0, Number.isFinite(minor) ? minor : 0, Number.isFinite(patch) ? patch : 0]
 }
 
 export function compareSemver(a: string, b: string): -1 | 0 | 1 {
@@ -36,10 +32,7 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
   return 0
 }
 
-export function isCompatibleEditorVersion(
-  minRequired: string | undefined,
-  current: string,
-): boolean {
+export function isCompatibleEditorVersion(minRequired: string | undefined, current: string): boolean {
   if (!minRequired) return true
   return compareSemver(current, minRequired) >= 0
 }
