@@ -91,7 +91,7 @@ export function StashSection({ projectId }: StashSectionProps) {
       else await versionControl.applyStash(projectId, stash.hash)
       await reloadProject()
       await fetchStashes()
-      toast({ title: pop ? 'Stash popped' : 'Stash applied', variant: 'default' })
+      toast({ title: pop ? 'Stash applied & removed' : 'Stash applied', variant: 'default' })
     } catch (error) {
       if (error instanceof StashConflictError) {
         toast({
@@ -100,7 +100,7 @@ export function StashSection({ projectId }: StashSectionProps) {
           variant: 'fail',
         })
       } else {
-        toast({ title: pop ? 'Failed to pop stash' : 'Failed to apply stash', variant: 'fail' })
+        toast({ title: pop ? 'Failed to apply & remove stash' : 'Failed to apply stash', variant: 'fail' })
       }
     } finally {
       setBusyRef(null)
@@ -184,7 +184,7 @@ export function StashSection({ projectId }: StashSectionProps) {
                       className='flex cursor-pointer items-center gap-1 rounded-md bg-blue-500 px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50'
                     >
                       <ChevronDown className='h-3 w-3' />
-                      Pop
+                      Apply & remove
                     </button>
                     <button
                       onClick={() => setDropTarget(stash)}
