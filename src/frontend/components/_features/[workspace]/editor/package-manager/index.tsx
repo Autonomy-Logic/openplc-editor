@@ -12,6 +12,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledPackage, PackageManifest } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -22,6 +23,7 @@ type ViewMode = 'installed' | 'catalog'
 
 const PackageManagerEditor = () => {
   const packages = usePackages()
+  const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const [viewMode, setViewMode] = useState<ViewMode>('installed')
   const [installedPackages, setInstalledPackages] = useState<InstalledPackage[]>([])
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
