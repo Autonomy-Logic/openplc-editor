@@ -25,7 +25,12 @@ export function createEditorThemeAdapter(): ThemePort {
 
     setTheme(theme: ThemeVariant): void {
       currentTheme = theme
-      window.bridge.winHandleUpdateTheme()
+      // 'nineties' is a UI-only retro skin (handled by the shared app-layout /
+      // display menu via the `.nineties` class + localStorage); it has no
+      // OS-level counterpart, so don't drive nativeTheme for it.
+      if (theme === 'light' || theme === 'dark') {
+        window.bridge.winHandleUpdateTheme()
+      }
     },
 
     toggleTheme(): void {
@@ -38,6 +43,9 @@ export function createEditorThemeAdapter(): ThemePort {
 
       const handler = (_event: unknown) => {
         if (!active) return
+        // While the retro skin is active, an OS light/dark change must not
+        // flip us off it.
+        if (currentTheme === 'nineties') return
         currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
         callback(currentTheme)
       }

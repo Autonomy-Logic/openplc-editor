@@ -37,13 +37,20 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
-  // Theme initialization - applies dark class before DisplayMenu mounts
+  // Theme initialization - applies the theme class before DisplayMenu mounts.
+  // Supports the retro 'nineties' skin alongside light/dark; it is light-based,
+  // so shouldUseDarkMode (which drives Monaco) stays false for it.
   useEffect(() => {
     const stored = localStorage.getItem('theme')
-    const prefersDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
-    document.documentElement.classList.toggle('dark', prefersDark)
-    document.documentElement.classList.toggle('light', !prefersDark)
-    setSystemConfigs({ shouldUseDarkMode: prefersDark })
+    const theme =
+      stored === 'dark' || stored === 'light' || stored === 'nineties'
+        ? stored
+        : window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+    document.documentElement.classList.remove('dark', 'light', 'nineties')
+    document.documentElement.classList.add(theme)
+    setSystemConfigs({ shouldUseDarkMode: theme === 'dark' })
   }, [setSystemConfigs])
 
   // System initialization
