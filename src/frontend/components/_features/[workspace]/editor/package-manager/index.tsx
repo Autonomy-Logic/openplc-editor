@@ -64,6 +64,18 @@ const PackageManagerEditor = () => {
       if (result.packageId) {
         setSelectedPackageId(result.packageId)
       }
+    } else if (!result.canceled) {
+      // `canceled` means the user dismissed the file picker — not an error.
+      // Everything else (bad/missing manifest, failed signature verification,
+      // extraction failure) carries a message from the main process; surface
+      // it so a rejected package isn't a silent no-op.
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'Package import failed',
+        message: result.error ?? 'Unknown error',
+        buttons: ['OK'],
+        onResponse: () => {},
+      })
     }
   }
 
@@ -78,6 +90,14 @@ const PackageManagerEditor = () => {
     if (result.success) {
       setSelectedPackageId(null)
       await refreshPackages()
+    } else {
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'Package uninstall failed',
+        message: result.error ?? 'Unknown error',
+        buttons: ['OK'],
+        onResponse: () => {},
+      })
     }
   }
 

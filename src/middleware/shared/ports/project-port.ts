@@ -67,6 +67,14 @@ export interface ProjectResponse {
      * remote permission concept and must remain fully editable).
      */
     canEdit?: boolean
+    /**
+     * Resolved project README. Backend prefers the on-disk `README.md`
+     * over the legacy `project.readme` column, so this is the single
+     * source of truth — `null` means the project has no README (file
+     * absent and column empty). Absent (`undefined`) ⇒ adapter doesn't
+     * expose READMEs (desktop editor, dev:local).
+     */
+    readme?: string | null
   }
   error?: {
     title: string
@@ -157,6 +165,9 @@ export interface RawProjectFiles {
      *  raw layer so adapters that build `ProjectResponse` from a raw
      *  fetch don't have to round-trip the details endpoint twice. */
     canEdit?: boolean
+    /** See {@link ProjectResponse.data.readme}.  Carried through the
+     *  raw layer for the same reason as `canEdit`. */
+    readme?: string | null
   }
   error?: { title: string; description: string }
 }
@@ -273,6 +284,35 @@ export interface ProjectPort {
    * Web: not applicable (never fires).
    */
   onFileExternalChange?(callback: (filePath: string) => void): Unsubscribe
+
+  /**
+   * Fetch the current README for a project.  Returns `null` when the
+   * project has no README (file absent and legacy column empty).
+   * Optional — desktop editor returns `null` since there's no remote
+   * README concept in that mode.
+   */
+  getReadme?(projectId: string): Promise<string | null>
+
+  /**
+   * Save the project README.  `content === null` deletes the README
+   * (creates a `git rm` commit on the default branch); an empty string
+   * keeps the file present but empty.  `commitMessage` overrides the
+   * default `docs: create/update/remove README` subject.  Optional —
+   * desktop editor returns `{ success: false }` until file-level
+   * README editing is wired up there.
+   */
+  saveReadme?(
+    projectId: string,
+    content: string | null,
+    opts?: { commitMessage?: string },
+  ): Promise<{
+    success: boolean
+    /** Backend-reported action — useful for tailoring success toasts. */
+    action?: 'noop' | 'create' | 'update' | 'remove'
+    /** True when the same call migrated the legacy column into a commit. */
+    migrated?: boolean
+    error?: string
+  }>
 
   /**
    * Fork a project into the caller's namespace.  Optional — only the

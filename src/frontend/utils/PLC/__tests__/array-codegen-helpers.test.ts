@@ -285,12 +285,12 @@ describe('generateStructMember', () => {
     expect(result).toBe('  strucpp::IEC_REAL *SENSORS;\n')
   })
 
-  // STRING/WSTRING stay unqualified so they bind to the file-scope raw
-  // struct typedef in c_blocks_code.cpp (`{ len; body[]; }`). The C++
-  // stub copies between this raw struct and strucpp::IECStringVar at
-  // the scan boundary.
-  it('generates an unqualified pointer member for STRING (binds to raw c_blocks typedef)', () => {
+  // STRING / WSTRING use the same `strucpp::` qualification as every
+  // other elementary type — the field is a pointer to
+  // `IECStringVar<254>`, identical to the wrapper every numeric pin
+  // uses.  No raw POD shape, no scan-boundary stub.
+  it('generates a strucpp-qualified pointer member for STRING', () => {
     const result = generateStructMember(makeScalarVar('msg', 'string'))
-    expect(result).toBe('  IEC_STRING *MSG;\n')
+    expect(result).toBe('  strucpp::IEC_STRING *MSG;\n')
   })
 })

@@ -129,10 +129,17 @@ const VariablesCodeEditor = ({
   }, [cursorPosition, editorMounted])
 
   return (
+    // `nokey` opts keystrokes inside this Monaco instance out of
+    // @xyflow/react's global Space pan-modifier listener.  See the
+    // long comment on the body Monaco wrapper (`oplc-monaco-wrapper`
+    // in `editor/monaco/index.tsx`) for the full diagnosis.  Without
+    // this opt-out, switching the variables table to text mode
+    // silently drops every typed Space (xyflow `preventDefault`s the
+    // keystroke before Monaco's new EditContext can commit it).
     <div
       ref={containerRef}
       aria-label='Variable Code Editor Container'
-      className='h-full w-full'
+      className='nokey h-full w-full'
       style={{ overflow: 'hidden' }}
     >
       <Editor

@@ -92,31 +92,32 @@ describe('generateSTCode (cpp)', () => {
     expect(result).not.toContain('for (int __i')
   })
 
-  it('stages STRING variables through a flat raw struct and writes back via IECStringVar', () => {
+  it('passes STRING variables by direct IECStringVar pointer — no staging, no boundary copy', () => {
     const result = generateSTCode({
       pouName: 'StrBlock',
       allVariables: [makeScalarVar('inMsg', 'input', 'string'), makeScalarVar('outMsg', 'output', 'string')],
     })
 
-    // Stage both strings — user keeps name.len / name.body[] syntax.
-    expect(result).toContain('IEC_STRING __INMSG_stage;')
-    expect(result).toContain('IEC_STRING __OUTMSG_stage;')
+    // Strings are now `strucpp::IEC_STRING = IECStringVar<254>` on
+    // both sides — c_blocks.h struct field is `strucpp::IEC_STRING *`
+    // and the strucpp program member is `IECStringVar<254>`.  `&NAME`
+    // matches the field type exactly, so we point directly and let
+    // user writes (`name = "hi"`) route through `IECStringVar::
+    // operator=` for force-respecting semantics — identical to how
+    // numeric scalars are wired.
+    expect(result).toContain('vars.INMSG = &INMSG;')
+    expect(result).toContain('vars.OUTMSG = &OUTMSG;')
 
-    // Input copy: read through .get() to honour forcing.
-    expect(result).toContain('auto __s = INMSG.get();')
-    expect(result).toContain('__INMSG_stage.len = (__strlen_t)__s.length();')
-    expect(result).toContain('std::memcpy(__INMSG_stage.body, __s.c_str(), STR_MAX_LEN);')
-
-    // Pointer in struct points at the staging copy, NOT the IECStringVar.
-    expect(result).toContain('vars.INMSG = &__INMSG_stage;')
-    expect(result).toContain('vars.OUTMSG = &__OUTMSG_stage;')
-
-    // Writeback for outputs only — input strings are read-only from
-    // the IEC side after copy-in.
-    expect(result).toContain(
-      'OUTMSG = strucpp::IECString<254>(reinterpret_cast<const char*>(__OUTMSG_stage.body), __OUTMSG_stage.len);',
-    )
-    expect(result).not.toContain('INMSG = strucpp::IECString<254>')
+    // Regression guards: the historical flat-staging path is GONE.
+    // Re-introducing it would re-break user POU compilation against
+    // the strucpp wrapper (`.len` / `.body` / `__strlen_t` /
+    // `STR_MAX_LEN` do not exist on `IECStringVar`).
+    expect(result).not.toContain('__INMSG_stage')
+    expect(result).not.toContain('__OUTMSG_stage')
+    expect(result).not.toContain('__strlen_t')
+    expect(result).not.toContain('STR_MAX_LEN')
+    expect(result).not.toContain('std::memcpy')
+    expect(result).not.toContain('IECString<254>(reinterpret_cast')
   })
 
   it('handles no variables', () => {
@@ -144,7 +145,10 @@ describe('generateSTCode (cpp)', () => {
 
     expect(result).toContain('vars.A = &A;')
     expect(result).toContain('vars.B = &B[0] - 0;')
-    expect(result).toContain('vars.MSG = &__MSG_stage;')
+    // STRING uses the same direct-pointer path as every other scalar
+    // (no `&__MSG_stage` boundary copy).
+    expect(result).toContain('vars.MSG = &MSG;')
+    expect(result).not.toContain('__MSG_stage')
     expect(result).toContain('vars.C = &C;')
     expect(result).toContain('vars.D = &D[0] - 0;')
   })
