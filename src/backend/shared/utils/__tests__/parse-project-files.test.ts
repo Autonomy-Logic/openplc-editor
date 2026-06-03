@@ -482,6 +482,37 @@ describe('parseProjectFiles — pin mapping error paths', () => {
     expect(result.warnings).toBeDefined()
     expect(result.warnings!.some((w) => w.includes('pin-mapping.json') && w.includes('malformed'))).toBe(true)
   })
+
+  it('accepts the legacy flat-array shape and forwards it for store-side migration', () => {
+    // Pre-per-board-scoping projects wrote `DevicePin[]` to disk. The
+    // store's `setDeviceDefinitions` keys that array under the active
+    // board on load. Here we just verify the parser passes the flat
+    // array through verbatim — the migration responsibility is the
+    // store's, not the parser's (the parser doesn't know what the
+    // active board is from the schema alone).
+    const legacy = JSON.stringify([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), legacy, [], [], [])
+    expect(Array.isArray(result.devicePinMapping)).toBe(true)
+    expect(result.devicePinMapping).toEqual([
+      { pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' },
+    ])
+  })
+
+  it('accepts the canonical per-board dict shape (post-migration)', () => {
+    // Projects saved by post-migration editors write a per-board dict.
+    // Each key is a `BoardInfo.name`, each value is that board's pin
+    // array. The parser passes it through verbatim.
+    const dict = JSON.stringify({
+      'Arduino Mega': [{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }],
+      'Arduino MKR WiFi 1010': [{ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' }],
+    })
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), dict, [], [], [])
+    expect(Array.isArray(result.devicePinMapping)).toBe(false)
+    expect(result.devicePinMapping).toEqual({
+      'Arduino Mega': [{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }],
+      'Arduino MKR WiFi 1010': [{ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' }],
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

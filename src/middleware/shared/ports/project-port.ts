@@ -45,7 +45,12 @@ export interface ProjectResponse {
     meta: ProjectMeta
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
+    /** Pin mappings parsed from `devices/pin-mapping.json`. The
+     *  per-board dict (`Record<string, DevicePin[]>`) is the
+     *  canonical shape; the legacy flat array is still accepted
+     *  on load and auto-migrated by the store on the next save.
+     *  See `pinMappingFileSchema` for the on-disk contract. */
+    devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
     /**

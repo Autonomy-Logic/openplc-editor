@@ -334,8 +334,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // VPP slots are being regenerated, so the pool excludes the
     // current vpp-io claims and includes everything else (pin mapping,
     // modbus remote, EtherCAT) when active for the target.
+    const activePins =
+      state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? []
     const pool = buildAddressPool(
-      { pinMapping: { pins: state.deviceDefinitions.pinMapping.pins }, remoteDevices },
+      { pinMapping: { pins: activePins }, remoteDevices },
       capabilities,
       { ignoreSource: 'vpp-io' },
     )

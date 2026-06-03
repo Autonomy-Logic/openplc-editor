@@ -35,7 +35,8 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       slotsConfig: moduleConfig?.slotsConfig ?? {},
       storedMapping,
       remoteDevices: state.project.data.remoteDevices ?? [],
-      pinMappingPins: state.deviceDefinitions.pinMapping.pins,
+      pinMappingPins:
+        state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
       capabilities: resolveTargetCapabilities(boardInfo),
     }
   }, [persistenceKey])

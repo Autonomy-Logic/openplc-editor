@@ -37,12 +37,12 @@ describe('Device slice types', () => {
   // DevicePinMapping
   // -----------------------------------------------------------------------
   describe('DevicePinMapping', () => {
-    it('has pins array and selected row', () => {
+    it('has per-board pins dict and selected row', () => {
       const mapping: DevicePinMapping = {
-        pins: [],
+        pinsByBoard: {},
         currentSelectedPinTableRow: -1,
       }
-      expect(mapping.pins).toEqual([])
+      expect(mapping.pinsByBoard).toEqual({})
       expect(mapping.currentSelectedPinTableRow).toBe(-1)
     })
   })
@@ -169,7 +169,7 @@ describe('Device slice types', () => {
             deviceBoard: '',
             communicationPort: '',
           },
-          pinMapping: { pins: [], currentSelectedPinTableRow: -1 },
+          pinMapping: { pinsByBoard: {}, currentSelectedPinTableRow: -1 },
         },
         deviceUpdated: { updated: false },
         runtimeConnection: {
