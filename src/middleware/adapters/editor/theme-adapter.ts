@@ -41,10 +41,21 @@ export function createEditorThemeAdapter(): ThemePort {
     onThemeChanged(callback: (theme: ThemeVariant) => void): Unsubscribe {
       let active = true
 
-      const handler = (_event: unknown) => {
+      const handler = (_event: unknown, ...args: unknown[]) => {
         if (!active) return
-        // While the retro skin is active, an OS light/dark change must not
-        // flip us off it.
+
+        // Explicit theme from the native menu (light / dark / 90's). The shared
+        // applier only clears `dark`/`light`, so clear the retro class here to
+        // avoid it sticking when switching away from the 90's skin.
+        const theme = args[0]
+        if (theme === 'light' || theme === 'dark' || theme === 'nineties') {
+          document.documentElement.classList.remove('nineties')
+          currentTheme = theme
+          callback(theme)
+          return
+        }
+
+        // No payload = an OS-level light/dark change; don't flip off the retro skin.
         if (currentTheme === 'nineties') return
         currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
         callback(currentTheme)
