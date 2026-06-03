@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
@@ -71,10 +72,6 @@ type ConfigFieldDef = {
   encoding?: unknown
 }
 
-type VisibleCondition =
-  | { condition: string; operator: string; value?: unknown }
-  | { operator: 'and' | 'or'; conditions: VisibleCondition[] }
-
 type ConfigScreenDefinition = {
   sections?: Array<{ id: string; title?: string; layout?: string; fields?: ConfigFieldDef[] }>
 }
@@ -92,29 +89,6 @@ function collectConfigFields(def: ConfigScreenDefinition | undefined | null): Co
     }
   }
   return out
-}
-
-function evalVisible(visible: VisibleCondition | undefined, values: Record<string, FieldValue>): boolean {
-  if (!visible) return true
-  if ('conditions' in visible) {
-    const results = visible.conditions.map((c) => evalVisible(c, values))
-    return visible.operator === 'and' ? results.every(Boolean) : results.some(Boolean)
-  }
-  const v = values[visible.condition]
-  switch (visible.operator) {
-    case 'equals':
-      return v === visible.value
-    case 'not-equals':
-      return v !== visible.value
-    case 'in':
-      return Array.isArray(visible.value) && (visible.value as unknown[]).includes(v)
-    case 'exists':
-      return v !== undefined && v !== null && v !== ''
-    case 'not-exists':
-      return v === undefined || v === null || v === ''
-    default:
-      return true
-  }
 }
 
 type SortableSlotButtonProps = {
