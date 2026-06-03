@@ -1416,16 +1416,36 @@ class CompilerModule {
           `The board's core is likely not installed.`,
       )
     }
+    // `-I` flags from `extraCxxFlags` (canonically: `-I<avr-libstdcpp>`
+    // and any VPP-package -I directives) must be ordered BEFORE the
+    // core/variant `-I`s — mirroring arduino-cli's recipe, which
+    // interpolates `{compiler.cpp.extra_flags}` ahead of `{includes}`.
+    //
+    // Why this is load-bearing: modm-io/avr-libstdcpp's `<new>` declares
+    // `operator new` / `operator new[]` with `__externally_visible__`
+    // (strong linkage), whereas Arduino's `cores/arduino/new` declares
+    // the same operators with `[[gnu::weak]]`. Whichever header the
+    // preprocessor finds first determines the linkage of `_Znaj` /
+    // `_Znwj` references emitted from `new T[]` / `new T` in this TU.
+    // Weak undefined references DO NOT pull the matching definition
+    // from `core.a/new.cpp.o` during link (ld only scans archives for
+    // strong refs), so the call site resolves to address 0 (the AVR
+    // reset vector) — manifesting as an infinite reset loop the
+    // moment any precompiled TU executes a `new` expression.
+    //
+    // Non-include flags (`-std=`, `-fno-rtti`, anything else from VPP
+    // `cxx_flags`) stay trailing so the last `-std=` wins over the
+    // core's implicit gnu++11.
+    const extraIncludeFlags = extraCxxFlags.filter((flag) => flag.startsWith('-I'))
+    const extraNonIncludeFlags = extraCxxFlags.filter((flag) => !flag.startsWith('-I'))
     const includeArgs = [
+      ...extraIncludeFlags,
       `-I${corePath}`,
       ...(variantPath ? [`-I${variantPath}`] : []),
       `-I${srcDir}`,
       `-I${baremetalDir}`,
     ]
-
-    // Appended after the recipe so the last `-std=` wins over the core's
-    // implicit gnu++14. extraCxxFlags carries VPP per-board cxx_flags.
-    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraCxxFlags]
+    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 
     const execMaxBuffer = 16 * 1024 * 1024
 
