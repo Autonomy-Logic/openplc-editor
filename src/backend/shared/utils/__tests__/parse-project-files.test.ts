@@ -632,7 +632,10 @@ describe('parseProjectFiles — configuration fallback', () => {
   })
 
   it('fills missing resource entirely with defaults', () => {
-    // Use "configurations" (plural) with null resource to trigger line 452-453
+    // `data.configurations` is `{ resource: null }` — the `??` chain
+    // doesn't substitute the default object because `{ resource: null }`
+    // itself is not null/undefined, so we fall through to the explicit
+    // `if (!configuration.resource)` guard which fills in the default.
     const projectJson = JSON.stringify({
       meta: { name: 'Test', type: 'plc-project' },
       data: {
@@ -644,6 +647,8 @@ describe('parseProjectFiles — configuration fallback', () => {
     const result = parseProjectFiles('/p', projectJson, makeDeviceConfig(), makePinMapping(), [], [], [])
     expect(result.projectData.configurations.resource).toBeDefined()
     expect(result.projectData.configurations.resource.tasks).toEqual([])
+    expect(result.projectData.configurations.resource.instances).toEqual([])
+    expect(result.projectData.configurations.resource.globalVariables).toEqual([])
   })
 
   it('fills partially missing resource fields with empty arrays', () => {

@@ -395,6 +395,9 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
+          /* istanbul ignore if -- selectedPlatformOptions is always initialized to {} on
+             store creation (defaults + the merge in normalizeConfigurationForLoad), so this
+             defensive guard only fires if the store is ever migrated from an older shape */
           if (!deviceDefinitions.configuration.selectedPlatformOptions) {
             deviceDefinitions.configuration.selectedPlatformOptions = {}
           }

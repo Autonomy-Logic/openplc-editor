@@ -211,6 +211,9 @@ const reconcileVariablesText = (
   getState: ProjectGetState,
   setState: ProjectSetState,
 ): ProjectResponse => {
+  /* istanbul ignore if -- callers only invoke this in the `scope === 'local'` branch where
+     `associatedPou` is required; the `string | undefined` parameter type tracks the union
+     used in createVariable / updateVariable, where global-scope callers never reach here */
   if (!pouName) return ok()
   const state = getState()
   const editorModel =
@@ -221,6 +224,8 @@ const reconcileVariablesText = (
   if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return ok()
   if (editorModel.variable.display !== 'code') return ok()
   const code = editorModel.variable.code
+  /* istanbul ignore if -- TS guarantees `code` is a string when `display === 'code'`; this
+     runtime guard exists only as a belt-and-braces against the editor-model union drifting */
   if (typeof code !== 'string') return ok()
 
   const pou = state.project.data.pous.find((p) => p.name === pouName)
@@ -250,6 +255,7 @@ const reconcileVariablesText = (
 }
 
 const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
+  /* istanbul ignore if -- same callsite guarantees as reconcileVariablesText */
   if (!pouName) return
   const state = getState()
   const editorModel =
@@ -737,6 +743,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           for (const pou of slice.project.data.pous) {
+            /* istanbul ignore if -- PLCPouSchema requires `interface.variables` to be an
+               array (defaults to []), so every POU sourced from a Zod-validated project
+               carries the field; defensive against future schema relaxation */
             if (!pou.interface?.variables) continue
             const result = syncVariablesPure(pou.interface.variables, registry)
             adopted += result.report.adopted.length

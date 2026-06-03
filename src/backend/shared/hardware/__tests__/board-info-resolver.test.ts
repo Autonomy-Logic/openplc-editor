@@ -138,6 +138,67 @@ describe('BoardInfoResolver', () => {
       expect(info.compilerFlags).toBeUndefined()
     })
 
+    it('emits partial compilerFlags when only c_flags is set (cxx/ld omitted)', () => {
+      // Each flag array is independently optional in `#collectFlags`;
+      // a board may declare only one without forcing the others. The
+      // resolver must not synthesise empty arrays.
+      const r = makeResolver({ 'Some Board': makeHalsEntry({ c_flags: ['-MMD'] }) }, makePackageManager([], {}))
+      const info = r.resolve('Some Board')
+      expect(info.compilerFlags).toEqual({ c_flags: ['-MMD'] })
+    })
+
+    it('emits partial compilerFlags when only cxx_flags is set', () => {
+      const r = makeResolver(
+        { 'Some Board': makeHalsEntry({ cxx_flags: ['-std=gnu++17'] }) },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('Some Board')
+      expect(info.compilerFlags).toEqual({ cxx_flags: ['-std=gnu++17'] })
+    })
+
+    it('emits partial compilerFlags when only ld_flags is set', () => {
+      const r = makeResolver({ 'Some Board': makeHalsEntry({ ld_flags: ['-Wl,foo'] }) }, makePackageManager([], {}))
+      const info = r.resolve('Some Board')
+      expect(info.compilerFlags).toEqual({ ld_flags: ['-Wl,foo'] })
+    })
+
+    it('omits core / platform / halSourceFile when those hals fields are absent', () => {
+      // The schema marks all three as optional; the resolver must not
+      // attach `undefined` keys to the result (downstream callers do
+      // truthy checks).
+      const r = makeResolver(
+        {
+          // Type-system shortcut: a HalsBoardEntry minimally requires
+          // `compiler`, the other fields are optional.
+          Minimal: { compiler: 'arduino-cli' } as HalsBoardEntry,
+        },
+        makePackageManager([], {}),
+      )
+      const info = r.resolve('Minimal')
+      expect(info.core).toBeUndefined()
+      expect(info.platform).toBeUndefined()
+      expect(info.halSourceFile).toBeUndefined()
+    })
+
+    it('propagates entry.debug (DebugSpec) onto BoardBuildInfo for hals entries', () => {
+      // The renderer pulls `.debug` to decide whether the toolbar's
+      // debug button should be enabled (and which transport to wire).
+      // No `debug` on the entry must produce no `.debug` on the info.
+      const debugSpec = {
+        channels: [
+          {
+            label: 'Modbus TCP',
+            channel: 'tcp' as const,
+            enabledWhen: true,
+            params: { ip: '192.168.0.1' },
+          },
+        ],
+      }
+      const r = makeResolver({ 'Debuggable Board': makeHalsEntry({ debug: debugSpec }) }, makePackageManager([], {}))
+      const info = r.resolve('Debuggable Board')
+      expect(info.debug).toEqual(debugSpec)
+    })
+
     it('falls through to VPP when hals.json has no entry', () => {
       const pkg = makePkg()
       const manifest = makeManifest()
@@ -320,6 +381,39 @@ describe('BoardInfoResolver', () => {
       const r = makeResolver({}, pm)
       const info = r.resolve('Arduino Mega')
       expect(info.platformOptions).toBeUndefined()
+    })
+
+    it('propagates device.debug (DebugSpec) onto BoardBuildInfo for VPP devices', () => {
+      // Same renderer-side consumer as the hals branch above (Debug
+      // button enable state); the VPP path goes through `#fromVppDevice`,
+      // so we need an independent regression here.
+      const debugSpec = {
+        channels: [
+          {
+            label: 'Modbus TCP',
+            channel: 'tcp' as const,
+            enabledWhen: true,
+            params: { ip: '192.168.0.1' },
+          },
+        ],
+      }
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'arduino-mega',
+            name: 'Arduino Mega',
+            preview: 'p.png',
+            target: { type: 'arduino-cli', core: 'arduino:avr', platform: 'arduino:avr:mega' },
+            hal: { type: 'arduino-hal', source: 'hal/arduino/mega.cpp' },
+            debug: debugSpec,
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Mega')
+      expect(info.debug).toEqual(debugSpec)
     })
 
     it('passes through unknown target types as compiler value', () => {

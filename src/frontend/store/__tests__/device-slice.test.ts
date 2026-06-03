@@ -951,6 +951,78 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // restoreVendorScreenSlice — revert path for vendor-screen tabs
+  // -----------------------------------------------------------------------
+  describe('restoreVendorScreenSlice', () => {
+    // The snapshot-vs-current model: the tab captures `vendorScreenData`
+    // at open / last-save time, and clicking "Don't save" replays the
+    // snapshot over only the keys the tab owns.  Other tabs' keys must
+    // stay untouched so unrelated edits on the device editor don't get
+    // rolled back at the same time.
+
+    it('restores values for keys present in the snapshot', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true, baud: '115200' })
+      // Capture snapshot AFTER the first edit, simulating "tab opened
+      // with these values".
+      const snapshot = { modbus_rtu: { enabled: true, baud: '115200' } }
+      // User then edits — flip a value the snapshot will revert.
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: false, baud: '57600' })
+
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], snapshot)
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: true,
+        baud: '115200',
+      })
+    })
+
+    it('deletes owned keys that the snapshot does NOT contain', () => {
+      // Snapshot represents the pre-tab-open state; if the user added a
+      // brand-new key during the tab session, "Don't save" must drop it.
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
+      const snapshot: Record<string, unknown> = {}
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], snapshot)
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toBeUndefined()
+    })
+
+    it('leaves keys outside ownedKeys untouched', () => {
+      // The whole point of the ownedKeys list: other vendor-screen tabs
+      // (or the device editor itself) may have written to vendorScreenData
+      // in this same session.  The revert must be tab-scoped.
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
+      store.getState().deviceActions.setVendorScreenData('io-mapping', { rows: ['from-other-tab'] })
+
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
+
+      // modbus_rtu was reverted to snapshot…
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: false,
+      })
+      // …but io-mapping (out of scope) is preserved.
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toEqual({
+        rows: ['from-other-tab'],
+      })
+    })
+
+    it('initializes vendorScreenData when the store has no prior key', () => {
+      // Edge: a freshly loaded device with no vendor-screen edits yet.
+      // The restore path must still produce a valid object so subsequent
+      // edits don't NPE.
+      const store = makeStore()
+      // Make sure vendorScreenData starts absent.
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(
+        defaultDeviceConfiguration.vendorScreenData,
+      )
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: false,
+      })
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setCommunicationPort
   // -----------------------------------------------------------------------
   describe('setCommunicationPort', () => {

@@ -146,6 +146,9 @@ function parseWordAddress(addr: string): number | null {
 /** Parse a double-word IEC address (%ID12 / %QD5) into a dword index. */
 function parseDwordAddress(addr: string): number | null {
   const m = DWORD_ADDRESS_REGEX.exec(addr)
+  /* istanbul ignore if -- callers (buildDwordRange) only invoke this with addresses
+     pulled from `io-mapping` rows the editor already validated; malformed input is a
+     schema-drift guard, not a runtime path */
   if (!m) return null
   return Number(m[1])
 }
@@ -172,6 +175,8 @@ function buildBitRange(channels: { name: string; address: string }[]): BitRangeM
   const parsed: { byte: number; bit: number; linear: number }[] = []
   for (const ch of channels) {
     const p = parseBitAddress(ch.address)
+    /* istanbul ignore if -- defensive: channel addresses come from the editor's io-mapping
+       store which validates address shape on entry */
     if (!p) return null
     parsed.push({ ...p, linear: bitAddressToLinear(p.byte, p.bit) })
   }
@@ -200,6 +205,7 @@ function buildDwordRange(channels: { name: string; address: string }[]): DwordRa
   const parsed: number[] = []
   for (const ch of channels) {
     const d = parseDwordAddress(ch.address)
+    /* istanbul ignore if -- defensive guard, same rationale as buildBitRange */
     if (d === null) return null
     parsed.push(d)
   }
@@ -321,6 +327,8 @@ function buildPins(devicePins: DevicePinInput[]): PluginPin[] {
       pins.push({ pin: pinNumber, direction, byte: parsed.byte, bit: parsed.bit })
     } else if (dp.pinType === 'analogOutput') {
       const word = parseWordAddress(dp.address)
+      /* istanbul ignore if -- defensive: addresses on the pin-mapping table go through the
+         same IEC-address validator that gates the io-mapping entries */
       if (word === null) continue
       pins.push({ pin: pinNumber, direction: 'pwm', word })
     }

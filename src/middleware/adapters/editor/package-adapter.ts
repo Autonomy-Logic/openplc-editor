@@ -78,6 +78,7 @@ export function createEditorPackageAdapter(): PackagePort {
     },
 
     async listRemoteCatalog(): Promise<RemoteCatalog> {
+      /* istanbul ignore if -- USE_LOCAL_MOCK is a working-tree-only dev toggle (committed false) */
       if (USE_LOCAL_MOCK) return mockListRemoteCatalog()
       const response = await fetch(`${CATALOG_BASE_URL}/vpp-catalog/v1/catalog.json`)
       if (!response.ok) {
@@ -87,6 +88,7 @@ export function createEditorPackageAdapter(): PackagePort {
     },
 
     installFromRemote(packageId: string, version: string, downloadUrl: string): Promise<ImportResult> {
+      /* istanbul ignore if -- USE_LOCAL_MOCK is a working-tree-only dev toggle (committed false) */
       if (USE_LOCAL_MOCK) return mockInstallFromRemote(packageId, version, downloadUrl)
       // Defer to main — it downloads the binary, writes it to a temp file,
       // and hands it off to PackageManagerModule.importFromFile (the same

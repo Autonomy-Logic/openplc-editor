@@ -220,7 +220,12 @@ describe('createEditorCompilerPlatformPort', () => {
     // handler then splices it straight into the spawned xml2st argv.
     // Editor's local xml2st is trusted, so the adapter passes the
     // array through verbatim (no filtering).
-    const handleTranspileXMLtoST = jest.fn(async () => undefined)
+    const handleTranspileXMLtoST = jest
+      .fn<
+        ReturnType<EditorCompilerHandlers['handleTranspileXMLtoST']>,
+        Parameters<EditorCompilerHandlers['handleTranspileXMLtoST']>
+      >()
+      .mockResolvedValue({ success: true, data: '' })
     const tmp = mkdtempSync(join(tmpdir(), 'xml2st-args-'))
     try {
       const port = createEditorCompilerPlatformPort(
@@ -243,7 +248,12 @@ describe('createEditorCompilerPlatformPort', () => {
     // The adapter must not "helpfully" inject defaults when the
     // pipeline asked for nothing — that would be the exact kind of
     // silent drift the shared port contract exists to prevent.
-    const handleTranspileXMLtoST = jest.fn(async () => undefined)
+    const handleTranspileXMLtoST = jest
+      .fn<
+        ReturnType<EditorCompilerHandlers['handleTranspileXMLtoST']>,
+        Parameters<EditorCompilerHandlers['handleTranspileXMLtoST']>
+      >()
+      .mockResolvedValue({ success: true, data: '' })
     const tmp = mkdtempSync(join(tmpdir(), 'xml2st-empty-args-'))
     try {
       const port = createEditorCompilerPlatformPort(

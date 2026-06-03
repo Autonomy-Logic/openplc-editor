@@ -77,6 +77,20 @@ describe('resolveDebugConnection', () => {
       expect(result).toEqual({ kind: 'error', title: 'Modbus Required', body: 'Enable RTU or TCP.' })
     })
 
+    it('falls back to generic copy when `noneEnabled` message is absent', () => {
+      // `messages.noneEnabled` is optional — boards may omit it and
+      // expect the resolver to provide a sensible default.
+      const spec: DebugSpec = {
+        channels: [{ label: 'RTU', channel: 'rtu', enabledWhen: { $ref: 'screens.modbus_rtu.enabled' }, params: {} }],
+      }
+      const result = resolveDebugConnection(spec, makeContext())
+      expect(result).toEqual({
+        kind: 'error',
+        title: 'No Debug Channel',
+        body: 'No debug channel is enabled for this board.',
+      })
+    })
+
     it('returns `pick` when multiple channels match', () => {
       const spec: DebugSpec = {
         channels: [
@@ -98,6 +112,28 @@ describe('resolveDebugConnection', () => {
           { index: 1, label: 'TCP' },
         ])
         expect(result.title).toBe('Pick')
+      }
+    })
+
+    it('falls back to generic copy on `pick` when `pickProtocol` message is absent', () => {
+      // Same shape as noneEnabled — `messages.pickProtocol` is optional;
+      // the resolver supplies neutral defaults when boards omit it.
+      const spec: DebugSpec = {
+        channels: [
+          { label: 'RTU', channel: 'rtu', enabledWhen: { $ref: 'screens.modbus_rtu.enabled' }, params: {} },
+          { label: 'TCP', channel: 'tcp', enabledWhen: { $ref: 'screens.modbus_tcp.enabled' }, params: {} },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        makeContext({
+          state: { screens: { modbus_rtu: { enabled: true }, modbus_tcp: { enabled: true } } },
+        }),
+      )
+      expect(result.kind).toBe('pick')
+      if (result.kind === 'pick') {
+        expect(result.title).toBe('Select Debug Channel')
+        expect(result.body).toBe('Multiple debug channels are enabled.  Which one should the debugger use?')
       }
     })
 
@@ -250,6 +286,80 @@ describe('resolveDebugConnection', () => {
       expect(result).toEqual({ kind: 'error', title: 'Configuration Error', body: 'No serial port selected.' })
     })
 
+    it('returns undefined for `as: number` when the ref value is non-finite', () => {
+      // Number('abc') is NaN — the resolver drops the param rather
+      // than emitting NaN downstream where it would silently break
+      // the transport.
+      const spec: DebugSpec = {
+        channels: [
+          {
+            label: 'RTU',
+            channel: 'rtu',
+            enabledWhen: true,
+            params: { baudRate: { $ref: 'screens.modbus_rtu.rtu_baud_rate', as: 'number' } },
+          },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        makeContext({ state: { screens: { modbus_rtu: { rtu_baud_rate: 'not-a-number' } } } }),
+      )
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        expect(result.config.connectionParams).toEqual({})
+      }
+    })
+
+    it('coerces values via `as: boolean`', () => {
+      const spec: DebugSpec = {
+        channels: [
+          {
+            label: 'RTU',
+            channel: 'rtu',
+            enabledWhen: true,
+            params: { jwtToken: { $ref: 'runtimeConnection.jwtToken', as: 'boolean' } },
+          },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        // jwtToken value here is truthy; `as: 'boolean'` should
+        // resolve it to a literal `true`.
+        makeContext({ state: { runtimeConnection: { jwtToken: 'real-token' } } }),
+      )
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        // Cast via unknown: the static typing in connectionParams
+        // says jwtToken is string, but the resolver writes through
+        // whatever `as: 'boolean'` produced. The point of this test
+        // is to assert that runtime behaviour.
+        expect(result.config.connectionParams.jwtToken as unknown).toBe(true)
+      }
+    })
+
+    it('coerces values via `as: string`', () => {
+      // `as: 'string'` is the inverse of `as: 'number'` — used when
+      // a screen stores a number but the transport expects a string.
+      const spec: DebugSpec = {
+        channels: [
+          {
+            label: 'RTU',
+            channel: 'rtu',
+            enabledWhen: true,
+            params: { slaveId: { $ref: 'screens.modbus_rtu.rtu_slave_id', as: 'string' } },
+          },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        makeContext({ state: { screens: { modbus_rtu: { rtu_slave_id: 7 } } } }),
+      )
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        expect(result.config.connectionParams.slaveId).toBe('7')
+      }
+    })
+
     it('forwards literal param values verbatim', () => {
       const spec: DebugSpec = {
         channels: [{ label: 'S', channel: 'simulator', enabledWhen: true, params: { someFlag: true, count: 42 } }],
@@ -323,6 +433,30 @@ describe('resolveDebugConnection', () => {
       expect(result.kind).toBe('config')
       if (result.kind === 'config') {
         expect(result.config.connectionParams.ipAddress).toBe('10.0.0.5')
+      }
+    })
+
+    it('surfaces a prompt without a cacheKey on every resolution (no cache lookup)', () => {
+      // Some prompts shouldn't be cached at all (one-off confirms).
+      // The resolver must still surface them, and the response field
+      // in the result must omit `cacheKey` rather than emit undefined.
+      const spec: DebugSpec = {
+        channels: [
+          {
+            label: 'TCP',
+            channel: 'tcp',
+            enabledWhen: true,
+            params: {},
+            prompts: [{ field: 'extraConfirm', title: 'Confirm', message: 'Confirm now.' }],
+          },
+        ],
+      }
+      const result = resolveDebugConnection(spec, makeContext())
+      expect(result.kind).toBe('prompt')
+      if (result.kind === 'prompt') {
+        expect(result.fields).toEqual([{ field: 'extraConfirm', title: 'Confirm', message: 'Confirm now.' }])
+        // No `cacheKey` key on the returned field object.
+        expect(result.fields[0]).not.toHaveProperty('cacheKey')
       }
     })
 
