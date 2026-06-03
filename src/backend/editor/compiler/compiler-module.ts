@@ -9,6 +9,7 @@ import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
+import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
 import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
 import { runWithConcurrencyLimit } from './run-with-concurrency'
@@ -100,7 +101,7 @@ import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
-import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
@@ -2343,44 +2344,20 @@ class CompilerModule {
     ]
 
     // Resolve board info uniformly across hals.json + installed VPP
-    // packages.  `BoardInfoResolver` is the canonical source of truth
-    // for the pipeline's `boardEntry`, the runtime-classification
-    // flags, and the FQBN-derivation downstream — same call works for
-    // legacy hals entries (Simulator / Runtime v3 / Runtime v4) and
-    // VPP-installed Arduino boards.  Web's adapter ships a no-op
-    // packageManager until the VPP catalog lands there; the same
-    // resolver then naturally degrades to hals-only behavior.
+    // packages via the shared `resolveBoardSelection` helper — the
+    // same code path runs on web (no VPP packages installed → falls
+    // through to hals-only).  `halsContent` is still read separately
+    // because `boardHalsContent` below needs the raw entry slice.
     const halsContent = await readHalsFile<HalsFile>()
     const resolver = await this.#createBoardInfoResolver()
-    let boardInfo: BoardBuildInfo
-    try {
-      boardInfo = resolver.resolve(boardTarget)
-    } catch {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
-      })
+    const selection = resolveBoardSelection(resolver, boardTarget)
+    if (!selection.ok) {
+      _mainProcessPort.postMessage({ logLevel: 'error', message: selection.error })
       _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
       _mainProcessPort.close()
       return
     }
-    const { boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = boardInfo
-
-    // Adapt BoardBuildInfo → pipeline's BoardHalsBuildEntry shape.
-    // Runtime-v3 / runtime-v4 / simulator targets carry an empty
-    // `platform` (intentionally — they don't go through arduino-cli)
-    // so the cast bypasses the shape's required-platform constraint;
-    // downstream code only dereferences `platform` on the arduino-cli
-    // compile + upload paths, which those runtimes skip.
-    const boardEntry: Parameters<typeof runCompilePipeline>[0]['boardEntry'] = {
-      ...(boardInfo.platform ? { platform: boardInfo.platform } : {}),
-      ...(boardInfo.core ? { core: boardInfo.core } : {}),
-      ...(boardInfo.define ? { define: boardInfo.define } : {}),
-      ...(boardInfo.compilerFlags?.c_flags ? { c_flags: boardInfo.compilerFlags.c_flags } : {}),
-      ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
-      ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
-      ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
-    } as unknown as Parameters<typeof runCompilePipeline>[0]['boardEntry']
+    const { boardEntry, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = selection
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
@@ -2481,6 +2458,12 @@ class CompilerModule {
         // it into the firmware skeleton at the canonical path;
         // without it, the link fails with `undefined reference to
         // hardwareInit` etc.
+        // `resolveBoardSelection` above already validated the lookup;
+        // this `resolve` call is therefore guaranteed not to throw.
+        // Calling it again (rather than threading `halSourceFile`
+        // through the selection result) keeps the shared selection
+        // type laser-focused on what the pipeline branches on.
+        const boardInfo = resolver.resolve(boardTarget)
         let boardHalContent: string | undefined
         if (boardInfo.halSourceFile) {
           try {
