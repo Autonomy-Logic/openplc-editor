@@ -395,51 +395,51 @@ const ProjectTreeExpandableLeaf = ({
         </div>
 
         {popoverOptions.length > 0 && (
-        <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
-          <Popover.Trigger
-            disabled={isDebuggerVisible}
-            className={cn(
-              'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
-              {
-                'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen,
-                'cursor-not-allowed': isDebuggerVisible,
-              },
-            )}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreOptionsIcon className='h-4 w-4' />
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              align='start'
-              side='right'
-              sideOffset={2}
+          <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
+            <Popover.Trigger
+              disabled={isDebuggerVisible}
               className={cn(
-                'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
-                'focus:outline-none focus-visible:outline-none',
-                'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
+                {
+                  'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen,
+                  'cursor-not-allowed': isDebuggerVisible,
+                },
               )}
               onClick={(e) => e.stopPropagation()}
             >
-              {popoverOptions.map((option, index) => (
-                <div
-                  key={option.name}
-                  className={cn(
-                    'flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900',
-                    { 'rounded-t-lg': index === 0, 'rounded-b-lg': index === popoverOptions.length - 1 },
-                  )}
-                  onClick={() => {
-                    option.onClick()
-                    setPopoverOpen(false)
-                  }}
-                >
-                  {option.icon}
-                  <p>{option.name}</p>
-                </div>
-              ))}
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
+              <MoreOptionsIcon className='h-4 w-4' />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align='start'
+                side='right'
+                sideOffset={2}
+                className={cn(
+                  'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                  'focus:outline-none focus-visible:outline-none',
+                  'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {popoverOptions.map((option, index) => (
+                  <div
+                    key={option.name}
+                    className={cn(
+                      'flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                      { 'rounded-t-lg': index === 0, 'rounded-b-lg': index === popoverOptions.length - 1 },
+                    )}
+                    onClick={() => {
+                      option.onClick()
+                      setPopoverOpen(false)
+                    }}
+                  >
+                    {option.icon}
+                    <p>{option.name}</p>
+                  </div>
+                ))}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
         )}
       </div>
 

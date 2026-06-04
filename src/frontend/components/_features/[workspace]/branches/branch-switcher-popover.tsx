@@ -193,85 +193,85 @@ export function BranchSwitcherPopover({
                 {/* Actions menu (3 dots) — reveals merge + delete on hover.
                     Hidden in read-only: a non-owner can't merge or delete. */}
                 {!isReadOnly && (
-                <div className='shrink-0' data-branch-actions>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button
-                        className='rounded p-0.5 opacity-0 transition-opacity hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-800'
-                        title='More actions'
-                      >
-                        <svg
-                          className='h-3.5 w-3.5 text-neutral-500 dark:text-neutral-400'
-                          viewBox='0 0 16 16'
-                          fill='currentColor'
-                        >
-                          <path d='M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' />
-                        </svg>
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        side='right'
-                        align='start'
-                        sideOffset={4}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                        className='z-[60] min-w-[140px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
-                      >
-                        <DropdownMenu.Item
-                          disabled={isActive}
-                          onSelect={(e) => {
-                            e.preventDefault()
-                            if (isActive) return
-                            onMerge(branch)
-                            handleClose()
-                          }}
-                          title={isActive ? 'Cannot merge a branch into itself' : undefined}
-                          className={cn(
-                            'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                            isActive
-                              ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
-                              : 'cursor-pointer text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
-                          )}
+                  <div className='shrink-0' data-branch-actions>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          className='rounded p-0.5 opacity-0 transition-opacity hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-800'
+                          title='More actions'
                         >
                           <svg
-                            className={cn(
-                              'h-3.5 w-3.5',
-                              isActive ? 'text-neutral-400 dark:text-neutral-600' : 'text-blue-500',
-                            )}
+                            className='h-3.5 w-3.5 text-neutral-500 dark:text-neutral-400'
                             viewBox='0 0 16 16'
                             fill='currentColor'
                           >
-                            <path d='M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5zm-8.5 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z' />
+                            <path d='M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' />
                           </svg>
-                          <span>
-                            Merge <span className='font-mono'>{branch.name}</span> into{' '}
-                            <span className='font-mono'>{currentBranchName}</span>
-                          </span>
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          disabled={branch.isDefault}
-                          onSelect={(e) => {
-                            e.preventDefault()
-                            if (branch.isDefault) return
-                            onDelete(branch)
-                          }}
-                          title={branch.isDefault ? 'Cannot delete the default branch' : undefined}
-                          className={cn(
-                            'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                            branch.isDefault
-                              ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
-                              : 'cursor-pointer text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
-                          )}
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          side='right'
+                          align='start'
+                          sideOffset={4}
+                          onCloseAutoFocus={(e) => e.preventDefault()}
+                          className='z-[60] min-w-[140px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
                         >
-                          <svg className='h-3.5 w-3.5' viewBox='0 0 16 16' fill='currentColor'>
-                            <path d='M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25ZM4.005 5.073a.75.75 0 0 1 .673.627l.79 5.532a.75.75 0 0 0 .742.643h3.58a.75.75 0 0 0 .742-.643l.79-5.532a.75.75 0 0 1 1.49.214l-.79 5.532A2.25 2.25 0 0 1 9.79 13.5H6.21a2.25 2.25 0 0 1-2.23-1.928l-.79-5.532a.75.75 0 0 1 .626-.867Z' />
-                          </svg>
-                          Delete
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                </div>
+                          <DropdownMenu.Item
+                            disabled={isActive}
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              if (isActive) return
+                              onMerge(branch)
+                              handleClose()
+                            }}
+                            title={isActive ? 'Cannot merge a branch into itself' : undefined}
+                            className={cn(
+                              'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                              isActive
+                                ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
+                                : 'cursor-pointer text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                            )}
+                          >
+                            <svg
+                              className={cn(
+                                'h-3.5 w-3.5',
+                                isActive ? 'text-neutral-400 dark:text-neutral-600' : 'text-blue-500',
+                              )}
+                              viewBox='0 0 16 16'
+                              fill='currentColor'
+                            >
+                              <path d='M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5zm-8.5 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z' />
+                            </svg>
+                            <span>
+                              Merge <span className='font-mono'>{branch.name}</span> into{' '}
+                              <span className='font-mono'>{currentBranchName}</span>
+                            </span>
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            disabled={branch.isDefault}
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              if (branch.isDefault) return
+                              onDelete(branch)
+                            }}
+                            title={branch.isDefault ? 'Cannot delete the default branch' : undefined}
+                            className={cn(
+                              'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                              branch.isDefault
+                                ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
+                                : 'cursor-pointer text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                            )}
+                          >
+                            <svg className='h-3.5 w-3.5' viewBox='0 0 16 16' fill='currentColor'>
+                              <path d='M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25ZM4.005 5.073a.75.75 0 0 1 .673.627l.79 5.532a.75.75 0 0 0 .742.643h3.58a.75.75 0 0 0 .742-.643l.79-5.532a.75.75 0 0 1 1.49.214l-.79 5.532A2.25 2.25 0 0 1 9.79 13.5H6.21a2.25 2.25 0 0 1-2.23-1.928l-.79-5.532a.75.75 0 0 1 .626-.867Z' />
+                            </svg>
+                            Delete
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
+                  </div>
                 )}
               </div>
             )
