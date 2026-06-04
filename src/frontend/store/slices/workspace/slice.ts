@@ -58,8 +58,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     // Project loading state
     isProjectLoading: false,
     projectLoadingMessage: '',
-    // Read-only mode (no edit permission on the open project)
-    isReadOnly: false,
+    // Persist-permission flag (backend write access on the open project)
+    canEdit: true,
   },
 
   workspaceActions: {
@@ -185,7 +185,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           }
           workspace.isProjectLoading = false
           workspace.projectLoadingMessage = ''
-          workspace.isReadOnly = false
+          workspace.canEdit = true
         }),
       )
     },
@@ -445,10 +445,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setReadOnly: (value: boolean) => {
+    setCanEdit: (value: boolean) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.isReadOnly = value
+          workspace.canEdit = value
         }),
       )
     },

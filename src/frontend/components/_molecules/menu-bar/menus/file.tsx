@@ -13,7 +13,7 @@ export const FileMenu = () => {
   const capabilities = useCapabilities()
   const {
     editor: activeEditor,
-    workspace: { editingState, isReadOnly },
+    workspace: { editingState },
     readme: { savedContent: readmeSavedContent },
     sharedWorkspaceActions: { closeProject },
     modalActions: { openModal },
@@ -34,25 +34,13 @@ export const FileMenu = () => {
 
   const isSaving = editingState === 'save-request'
 
-  // Read-only projects: route the click to the fork modal directly so
-  // we don't even briefly toggle 'save-request' → 'unsaved' in the
-  // editingState flag.  The save-actions helpers gate this too, but
-  // doing it here keeps the menu honest about what the click will do.
   const handleSave = () => {
-    if (isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
     if (activeEditor.meta.name && !isSaving) {
       void executeSaveActiveFile(projectPort, capabilities)
     }
   }
 
   const handleSaveProject = () => {
-    if (isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
     if (!isSaving) {
       void executeSaveProject(projectPort, capabilities)
     }

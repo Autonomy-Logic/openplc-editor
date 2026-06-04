@@ -19,6 +19,7 @@ import type { LadderFlowType } from '../store/slices/ladder'
 import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
+import { notifyNoWritePermission } from '../utils/notify-no-write-permission'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../utils/PLC/pou-text-parser'
 import { serializePouToText } from '../utils/PLC/pou-text-serializer'
@@ -313,12 +314,14 @@ export async function executeSaveProject(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
-  // Read-only gate.  The Monaco / graphical editors are already in
-  // read-only mode, but explicit Save shortcuts (Ctrl+S, menu File →
-  // Save) still funnel through here.  Surface the modal so the user
-  // gets the "fork me" affordance instead of a silent no-op.
-  if (state.workspace.isReadOnly) {
-    state.modalActions.openModal('read-only-project')
+  // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
+  // a rename/delete, the AI panel — funnels through here.  When the viewer
+  // lacks write permission (e.g. a public project they don't own) we skip
+  // the doomed backend write and warn instead of surfacing a raw 401.
+  // (Compile's auto-save guards on `canEdit` before calling us, so a build
+  // proceeds with the in-memory project rather than tripping this.)
+  if (!state.workspace.canEdit) {
+    notifyNoWritePermission('save changes to')
     return { success: false }
   }
   const { project, pendingDeletions } = state
@@ -481,9 +484,9 @@ export async function executeSaveFile(
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
-  // See executeSaveProject for rationale — same read-only gate.
-  if (state.workspace.isReadOnly) {
-    state.modalActions.openModal('read-only-project')
+  // See executeSaveProject for rationale — same persist gate.
+  if (!state.workspace.canEdit) {
+    notifyNoWritePermission('save changes to')
     return { success: false }
   }
   const { project, files } = state

@@ -29,11 +29,6 @@ export type ModalTypes =
   /** Confirmation step chained off `public-catalog-browser` — lists
    *  the user's selection and runs the install on confirm. */
   | 'confirm-install-libraries'
-  /** Surfaced whenever the user tries a write action (save, commit,
-   *  create/delete branch, create/rename/delete POU) on a project they
-   *  don't have edit permission on.  Shows the "this project belongs to
-   *  someone else" message and the inline Fork flow. */
-  | 'read-only-project'
   /** Project README viewer/editor — GitHub-style edit/preview tabs +
    *  commit-message override.  Available only when the project port
    *  exposes the README slot (web adapter against the Edge API). */
