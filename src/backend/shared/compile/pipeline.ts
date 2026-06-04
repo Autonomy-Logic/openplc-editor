@@ -665,9 +665,7 @@ async function runCompilePipelineInner(
   // a runtime JSON parser.  Non-VPP arduino-cli boards skip emission
   // and the firmware skeleton's placeholder `vpp_config.h` stays in
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
-  const vppConfigH = targetCapabilities.vppIo
-    ? generateVppConfigContent({ vendorScreenData })
-    : undefined
+  const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
 
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
