@@ -1,6 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
+import { useTheme } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
@@ -16,12 +17,6 @@ type ThemeChoice = 'light' | 'dark' | 'nineties'
 const THEME_ORDER: readonly ThemeChoice[] = ['light', 'dark', 'nineties']
 const THEME_LABEL: Record<ThemeChoice, string> = { light: 'light', dark: 'dark', nineties: "90's" }
 
-function getThemePreference(): ThemeChoice {
-  const stored = localStorage.getItem('theme')
-  if (stored === 'dark' || stored === 'light' || stored === 'nineties') return stored
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 export const DisplayMenu = () => {
   const {
     workspaceActions: { setSystemConfigs, toggleCollapse },
@@ -29,18 +24,21 @@ export const DisplayMenu = () => {
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const [theme, setTheme] = useState(getThemePreference())
+  // The theme port owns persistence (localStorage, the cross-app cookie and
+  // the backend preference) and the DOM class; this component only mirrors
+  // the current value for the menu label and the Monaco light/dark flag.
+  const themePort = useTheme()
+  const [theme, setTheme] = useState<ThemeChoice>(themePort.getCurrentTheme())
+
+  useEffect(() => themePort.onThemeChanged(setTheme), [themePort])
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light', 'nineties')
-    document.documentElement.classList.add(theme)
     setSystemConfigs({ shouldUseDarkMode: theme === 'dark' })
   }, [theme, setSystemConfigs])
 
   const cycleTheme = () => {
     const newTheme = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length] ?? 'light'
-    setTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
+    themePort.setTheme(newTheme)
     // The desktop bridge only understands the OS-level light/dark themes; the
     // retro skin is a web/UI-only flavour, so don't push it over IPC.
     if ((newTheme === 'light' || newTheme === 'dark') && 'bridge' in window) {
