@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { toast } from '../../../../utils/toast'
 
 type DeleteBranchModalProps = {
@@ -15,8 +16,7 @@ type DeleteBranchModalProps = {
 
 export function DeleteBranchModal({ isOpen, projectId, branch, onClose, onDeleted }: DeleteBranchModalProps) {
   const versionControl = useVersionControl()
-  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
-  const openReadOnlyModal = useOpenPLCStore((s) => s.modalActions.openModal)
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
@@ -28,19 +28,15 @@ export function DeleteBranchModal({ isOpen, projectId, branch, onClose, onDelete
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isPending, onClose])
 
-  // Same pattern as CreateBranchModal — if a read-only project is open,
-  // close this dialog and route the user to the fork affordance.
-  useEffect(() => {
-    if (isOpen && isReadOnly) {
-      onClose()
-      openReadOnlyModal('read-only-project')
-    }
-  }, [isOpen, isReadOnly, onClose, openReadOnlyModal])
-
   if (!isOpen || !branch) return null
 
   const handleDelete = () => {
     if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend write and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('delete branches in')
+      return
+    }
 
     setIsPending(true)
     versionControl

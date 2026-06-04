@@ -5,6 +5,7 @@ import type { PendingChange, Stash } from '../../../../../middleware/shared/port
 import { StashConflictError } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { StashDropConfirmationModal } from './modals/stash-drop-confirmation-modal'
@@ -31,8 +32,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   const versionControl = useVersionControl()
   const projectPort = useProject()
   const { versionControlActions, sharedWorkspaceActions } = useOpenPLCStore()
-  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
-  const openReadOnlyModal = useOpenPLCStore((s) => s.modalActions.openModal)
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
   const [stashes, setStashes] = useState<Stash[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -81,8 +81,9 @@ export function StashSection({ projectId }: StashSectionProps) {
 
   const handleApplyOrPop = async (stash: Stash, pop: boolean) => {
     if (!versionControl || busyRef) return
-    if (isReadOnly) {
-      openReadOnlyModal('read-only-project')
+    // No write permission ⇒ skip the doomed backend write and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('modify stashes in')
       return
     }
     setBusyRef(stash.hash)
@@ -109,6 +110,11 @@ export function StashSection({ projectId }: StashSectionProps) {
 
   const handleDrop = async () => {
     if (!versionControl || !dropTarget) return
+    // No write permission ⇒ skip the doomed backend write and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('modify stashes in')
+      return
+    }
     setIsDropping(true)
     try {
       await versionControl.dropStash(projectId, dropTarget.hash)

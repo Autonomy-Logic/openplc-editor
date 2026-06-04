@@ -104,7 +104,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
-  const isReadOnly = useOpenPLCStore((state) => state.workspace.isReadOnly)
+  const canEdit = useOpenPLCStore((state) => state.workspace.canEdit)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
@@ -172,10 +172,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // a few JSON.stringify + file writes; save is idempotent when
       // nothing changed.
       //
-      // Read-only projects skip the save (Monaco/graphical editors
-      // are already locked, so there's nothing to flush; the explicit
-      // gate keeps a stray dirty flag from 403-ing the build).
-      if (!isReadOnly) {
+      // Viewers without write permission (public projects they don't
+      // own) can compile their in-memory edits but can't push them
+      // back; skip the pre-build save for them so the doomed backend
+      // write never gates the build.
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) return
       }
@@ -268,7 +269,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog,
       isCompiling,
       executeSave,
-      isReadOnly,
+      canEdit,
       jwtToken,
     ],
   )
@@ -703,8 +704,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // Mirror the build flow: always save before starting the
       // debugger so the on-disk project matches what the user sees
       // on screen. Avoids the race where an editor change hadn't
-      // bubbled up to `editingState === 'unsaved'` yet.
-      if (!isReadOnly) {
+      // bubbled up to `editingState === 'unsaved'` yet. Viewers
+      // without write permission skip the save (same rationale as
+      // the build path — backend write would fail).
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) {
           setIsDebuggerProcessing(false)
@@ -762,7 +765,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     availableBoards,
     isSimulatorBoard,
     isDebuggerProcessing,
-    isReadOnly,
+    canEdit,
     executeSave,
     addLog,
     resolveDebugConfigWithUx,

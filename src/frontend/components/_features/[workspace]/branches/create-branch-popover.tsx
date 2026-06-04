@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { getBranchNameFeedback } from '../../../../utils/sanitize-branch-name'
 
 type CreateBranchPopoverProps = {
@@ -14,8 +15,7 @@ type CreateBranchPopoverProps = {
 
 export function CreateBranchPopover({ projectId, onCreated, onCloseParent }: CreateBranchPopoverProps) {
   const versionControl = useVersionControl()
-  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
-  const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const [isOpen, setIsOpen] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
@@ -64,10 +64,10 @@ export function CreateBranchPopover({ projectId, onCreated, onCloseParent }: Cre
     <Popover.Root
       open={isOpen}
       onOpenChange={(open) => {
-        // Read-only ⇒ redirect to the fork-or-cancel modal instead of
-        // opening a branch form the backend would 403 anyway.
-        if (open && isReadOnly) {
-          openModal('read-only-project')
+        // No write permission ⇒ warn instead of opening a branch form the
+        // backend would reject anyway.
+        if (open && !canEdit) {
+          notifyNoWritePermission('create branches in')
           return
         }
         setIsOpen(open)

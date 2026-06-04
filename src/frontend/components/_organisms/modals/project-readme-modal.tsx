@@ -54,7 +54,7 @@ const ProjectReadmeModal = () => {
   const setStatus = useOpenPLCStore((s) => s.readmeActions.setStatus)
   const commitSaved = useOpenPLCStore((s) => s.readmeActions.commitSaved)
 
-  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
+  const projectCanEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const projectId = useOpenPLCStore((s) => s.project.meta.path)
   const projectName = useOpenPLCStore((s) => s.project.meta.name)
   const projectPort = useProject()
@@ -73,7 +73,7 @@ const ProjectReadmeModal = () => {
     }
   }, [isOpen])
 
-  const canEdit = !isReadOnly && savedContent !== undefined
+  const canEdit = projectCanEdit && savedContent !== undefined
 
   const handleStartEdit = (defaultContent?: string) => {
     beginEdit(defaultContent)

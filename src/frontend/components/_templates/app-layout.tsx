@@ -18,7 +18,6 @@ import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-mo
 import { ProjectReadmeModal } from '../_organisms/modals/project-readme-modal'
 import { PublicCatalogBrowserModal } from '../_organisms/modals/public-catalog-browser-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
-import { ReadOnlyProjectModal } from '../_organisms/modals/read-only-project-modal'
 import { RuntimeConnectionLostModal } from '../_organisms/modals/runtime-connection-lost-modal'
 import type { SaveChangesFileModalData } from '../_organisms/modals/save-changes-file-modal'
 import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-modal'
@@ -136,7 +135,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
           {modals?.['public-catalog-browser']?.open === true && <PublicCatalogBrowserModal />}
           {modals?.['confirm-install-libraries']?.open === true && <ConfirmInstallLibrariesModal />}
-          {modals?.['read-only-project']?.open === true && <ReadOnlyProjectModal />}
           {modals?.['project-readme']?.open === true && <ProjectReadmeModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}

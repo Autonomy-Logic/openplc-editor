@@ -570,22 +570,22 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setPlcLogsLastId(5)
 
     store.getState().workspaceActions.setProjectLoading(true, 'Loading project...')
-    store.getState().workspaceActions.setReadOnly(true)
+    store.getState().workspaceActions.setCanEdit(false)
 
     expect(store.getState().workspace.isProjectLoading).toBe(true)
     expect(store.getState().workspace.projectLoadingMessage).toBe('Loading project...')
-    expect(store.getState().workspace.isReadOnly).toBe(true)
+    expect(store.getState().workspace.canEdit).toBe(false)
 
     store.getState().workspaceActions.setProjectLoading(false)
-    store.getState().workspaceActions.setReadOnly(false)
+    store.getState().workspaceActions.setCanEdit(true)
 
     expect(store.getState().workspace.isProjectLoading).toBe(false)
     expect(store.getState().workspace.projectLoadingMessage).toBe('')
-    expect(store.getState().workspace.isReadOnly).toBe(false)
+    expect(store.getState().workspace.canEdit).toBe(true)
 
-    // setReadOnly(true) again so clearWorkspace's reset path is exercised
-    // — keeps the assertion below honest about the reset.
-    store.getState().workspaceActions.setReadOnly(true)
+    // setCanEdit(false) again so clearWorkspace's reset path is exercised
+    // — keeps the assertion below honest about the reset back to `true`.
+    store.getState().workspaceActions.setCanEdit(false)
 
     store.getState().workspaceActions.clearWorkspace()
 
@@ -617,6 +617,6 @@ describe('createWorkspaceSlice', () => {
       searchTerm: '',
       timestampFormat: 'full',
     })
-    expect(workspace.isReadOnly).toBe(false)
+    expect(workspace.canEdit).toBe(true)
   })
 })

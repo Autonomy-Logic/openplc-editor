@@ -511,11 +511,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
-      // Apply the edit-permission flag from the backend.  `canEdit ===
-      // false` ⇒ read-only mode; `true` or `undefined` ⇒ editable.
-      // clearStatesOnCloseProject above already reset to `false`, so an
-      // editable project just stays in that default.
-      getState().workspaceActions.setReadOnly(data.canEdit === false)
+      // Apply the persist-permission flag from the backend.  `canEdit ===
+      // false` ⇒ the viewer can't push changes back (e.g. a public project
+      // they don't own), so backend writes (save/commit/branch) are gated;
+      // `true` or `undefined` ⇒ full write access.  Only persistence is
+      // affected — in-memory editing, simulation, and compilation stay on.
+      getState().workspaceActions.setCanEdit(data.canEdit !== false)
 
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {
