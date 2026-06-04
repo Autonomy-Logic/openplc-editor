@@ -78,6 +78,25 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         }),
       )
     },
+    renameLadderFlow: (oldName, newName) => {
+      if (oldName === newName) return
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((f) => f.name === oldName)
+          if (!flow) return
+          // Defensive: if a flow already exists under `newName` (e.g.
+          // because the editor cold-seeded an empty one before this
+          // rename ran), drop the empty placeholder so the original
+          // rungs survive.  The shared rename path validates name
+          // uniqueness on the POU side, so by the time we get here
+          // `newName` is guaranteed unique on the project — any
+          // pre-existing flow under that name is stale.
+          const existingIndex = ladderFlows.findIndex((f) => f.name === newName)
+          if (existingIndex !== -1) ladderFlows.splice(existingIndex, 1)
+          flow.name = newName
+        }),
+      )
+    },
 
     /**
      * Control the rungs of the flow

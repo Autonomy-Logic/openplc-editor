@@ -537,6 +537,54 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.updatePouName('Missing', 'NewName')
       expect(store.getState().project.data.pous[0].name).toBe('Main')
     })
+
+    it('cascades the rename into matching configuration instances (program POUs)', () => {
+      // Regression guard for the "user renames `main` and the build
+      // breaks" report.  The template seeds an instance bound to the
+      // template's `main` program; without this cascade, renaming
+      // the POU would orphan that instance and the IEC compile would
+      // fail with a "program not found" error.
+      seedPou(store, makePou('OldProg'))
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'OldProg' },
+      })
+      store.getState().projectActions.updatePouName('OldProg', 'NewProg')
+      const instances = store.getState().project.data.configurations.resource.instances
+      expect(instances[0].program).toBe('NewProg')
+    })
+
+    it('syncs the LD body.value.name when a graphical POU is renamed', () => {
+      // Regression guard for the "rename made all rungs disappear"
+      // report.  LD/FBD bodies embed their `name` field inside
+      // `body.value`; the project-load path uses it as the
+      // ladderFlows key, so the rename has to update the inner name
+      // too or the on-disk file ends up with a stale name and the
+      // next reload renders an empty canvas under the new POU name.
+      const pou: PLCPou = {
+        name: 'main',
+        pouType: 'program',
+        interface: { variables: [] },
+        body: { language: 'ld', value: { name: 'main', updated: false, rungs: [] } },
+        documentation: '',
+      }
+      seedPou(store, pou)
+      store.getState().projectActions.updatePouName('main', 'PLC_PRG')
+      const updated = store.getState().project.data.pous[0]
+      expect(updated.name).toBe('PLC_PRG')
+      expect((updated.body.value as { name: string }).name).toBe('PLC_PRG')
+    })
+
+    it('does not cascade renames into instances when the POU is a function (no instance binding)', () => {
+      seedPou(store, makePou('Helper', 'function'))
+      // Defensive: a stray instance with the same `program` value
+      // shouldn't be rewritten when a function POU is renamed —
+      // only program POUs participate in the instance contract.
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'Helper' },
+      })
+      store.getState().projectActions.updatePouName('Helper', 'Renamed')
+      expect(store.getState().project.data.configurations.resource.instances[0].program).toBe('Helper')
+    })
   })
 
   describe('applyPouSnapshot', () => {
