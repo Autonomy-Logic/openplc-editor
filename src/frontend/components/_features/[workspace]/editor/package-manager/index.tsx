@@ -154,7 +154,7 @@ const PackageManagerEditor = () => {
                         onClick={handleSwitchToCatalog}
                         className='flex w-full items-center rounded-md px-3 py-2 text-left font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850'
                       >
-                        Add from the internet...
+                        Add from catalog...
                       </button>
                     </Popover.Content>
                   </Popover.Portal>
