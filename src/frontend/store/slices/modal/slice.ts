@@ -25,7 +25,6 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'missing-libraries',
   'public-catalog-browser',
   'confirm-install-libraries',
-  'read-only-project',
   'project-readme',
 ]
 

@@ -115,15 +115,17 @@ export type WorkspaceState = {
     isProjectLoading: boolean
     projectLoadingMessage: string
     /**
-     * True when the currently open project is read-only for the viewer
-     * (no edit permission).  Drives every write-action gate in the UI
-     * — Monaco/graphical readOnly, Save/Commit/Branch dialog, project-
-     * tree menu items, etc.  Set by `handleOpenProjectResponse` from
-     * the `canEdit` flag returned by the backend; reset to `false` on
-     * project close so a subsequent open of an editable project comes
-     * up unrestricted.
+     * Whether the viewer has permission to persist changes to the open
+     * project (e.g. they own it or have write access).  Only gates
+     * operations that write to the backend — save, commit, branch
+     * create/delete, stash, discard.  In-memory editing, simulation,
+     * and compilation are always allowed: a viewer of a public project
+     * works on a local copy and just can't push it back.  Set by
+     * `handleOpenProjectResponse` from the backend `canEdit` flag;
+     * absent (desktop editor / dev-local) ⇒ `true`.  Reset to `true`
+     * on project close.
      */
-    isReadOnly: boolean
+    canEdit: boolean
   }
 }
 
@@ -189,8 +191,8 @@ export type WorkspaceActions = {
   removeDebugVariable: (compositeKey: string) => void
   // Project loading
   setProjectLoading: (isLoading: boolean, message?: string) => void
-  // Read-only mode (no edit permission on the open project)
-  setReadOnly: (value: boolean) => void
+  // Persist-permission flag (backend write access on the open project)
+  setCanEdit: (value: boolean) => void
 }
 
 export type WorkspaceSlice = WorkspaceState & {

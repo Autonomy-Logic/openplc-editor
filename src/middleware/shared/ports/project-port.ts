@@ -56,10 +56,11 @@ export interface ProjectResponse {
      */
     rawLoadedFiles?: Record<string, string>
     /**
-     * Whether the current user has edit permission on this project. Drives
-     * the editor's read-only gating (Monaco/graphical/save/commit/branch).
-     * Absent ⇒ treated as `true` (desktop editor and dev:local mode have no
-     * remote permission concept and must remain fully editable).
+     * Whether the current user has permission to persist changes to this
+     * project. Gates only backend writes (save/commit/branch/stash/discard);
+     * in-memory editing, simulation, and compilation stay enabled so a viewer
+     * works on a local copy.  Absent ⇒ treated as `true` (desktop editor and
+     * dev:local mode have no remote permission concept).
      */
     canEdit?: boolean
     /**
@@ -164,41 +165,6 @@ export interface RawProjectFiles {
      *  raw layer for the same reason as `canEdit`. */
     readme?: string | null
   }
-  error?: { title: string; description: string }
-}
-
-/**
- * Folder in the user's namespace, used by the read-only project modal's
- * Fork flow to let the user pick where the fork should land.  Mirrors the
- * shape returned by autonomy-edge `GET /folders?includeHierarchy=true`.
- */
-export interface ProjectFolder {
-  id: string
-  name: string
-  /** Backend folder kind.  The well-known value `'root'` identifies the
-   *  implicit user-root folder (shown as "Root (/)" in the picker); any
-   *  other string is a normal user-created folder type from
-   *  autonomy-edge's `/folders` endpoint. */
-  type: string
-  parentId: string | null
-  children?: ProjectFolder[]
-}
-
-/** Params for {@link ProjectPort.forkProject}. */
-export interface ForkProjectParams {
-  projectId: string
-  destinationFolderId: string
-  /** Optional rename.  When forking a project that already lives in the
-   *  caller's namespace the backend requires a name different from the
-   *  source; otherwise it falls back to "<original> (N)". */
-  name?: string
-}
-
-/** Result of {@link ProjectPort.forkProject}.  On success the new project
- *  id is surfaced so the editor can navigate the URL to `?project_id=<id>`. */
-export interface ForkProjectResponse {
-  success: boolean
-  data?: { projectId: string }
   error?: { title: string; description: string }
 }
 
@@ -307,24 +273,5 @@ export interface ProjectPort {
     /** True when the same call migrated the legacy column into a commit. */
     migrated?: boolean
     error?: string
-  }>
-
-  /**
-   * Fork a project into the caller's namespace.  Optional — only the
-   * web adapter implements this (desktop editor has no remote project
-   * concept).  Returns `{ success: true, data: { projectId } }` on success
-   * so the caller can navigate to the new project.
-   */
-  forkProject?(params: ForkProjectParams): Promise<ForkProjectResponse>
-
-  /**
-   * List the caller's folders (root + nested hierarchy) so the fork
-   * destination picker can render a tree.  Optional — desktop editor
-   * returns `{ success: false, error }` since it has no remote folders.
-   */
-  listMyFolders?(): Promise<{
-    success: boolean
-    data?: ProjectFolder[]
-    error?: { title: string; description: string }
   }>
 }

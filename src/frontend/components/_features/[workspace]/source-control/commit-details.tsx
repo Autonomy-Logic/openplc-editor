@@ -5,6 +5,7 @@ import type { Commit, CommitFile } from '../../../../../middleware/shared/ports/
 import { useNavigation, useProject, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { toast } from '../../../../utils/toast'
 import { RestoreConfirmationModal } from './modals/restore-confirmation-modal'
 
@@ -22,6 +23,7 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
     },
     sharedWorkspaceActions,
   } = useOpenPLCStore()
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const projectPort = useProject()
 
   const [showRestoreModal, setShowRestoreModal] = useState(false)
@@ -71,6 +73,12 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
 
   const handleRestore = async () => {
     if (!versionControl) return
+    // Restore overwrites the working tree from a past commit — a backend
+    // write.  No write permission ⇒ skip it and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('restore commits in')
+      return
+    }
 
     setIsRestoring(true)
     try {
