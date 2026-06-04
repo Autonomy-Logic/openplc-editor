@@ -181,5 +181,29 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
     files['src/vpp_config.h'] = vppConfigH
   }
 
+  // OpenPLCUserLib.h stub — Baremetal.ino unconditionally
+  // `#include <OpenPLCUserLib.h>` to trigger arduino-cli's
+  // library-discovery for the strucpp pipeline.  On the editor's
+  // local build path that header lives in a separately-staged
+  // precompiled-archive library tree (see `installAsArduinoLibrary`)
+  // and the include resolves through arduino-cli's library search
+  // pass.  On the web's compile-service single-pass build the
+  // strucpp `.cpp` files live directly under `src/` and are compiled
+  // alongside the sketch via `--library src` — no precompiled
+  // archive — so the include needs a sibling stub here to satisfy
+  // the preprocessor.  Bundling it on the client keeps the editor /
+  // web compile flows symmetric without the server needing to know
+  // about the precompile/no-precompile distinction.  Real
+  // declarations come via `arduino_runtime_glue.h`; the stub is
+  // intentionally empty.
+  files['src/OpenPLCUserLib.h'] = [
+    '// Auto-generated stub for OpenPLCUserLib.',
+    '// Resolves Baremetal.ino\'s `#include <OpenPLCUserLib.h>` in the',
+    '// strucpp pipeline.  Real declarations come via',
+    '// arduino_runtime_glue.h (already in src/).',
+    '#pragma once',
+    '',
+  ].join('\n')
+
   return files
 }

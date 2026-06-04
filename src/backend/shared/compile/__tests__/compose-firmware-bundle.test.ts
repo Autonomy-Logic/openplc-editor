@@ -142,6 +142,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       'src/pou_BLINK_CPP.cpp': 'POU_BLINK_CPP',
       'src/c_blocks.h': 'CBLOCKS_HEADER',
       'src/defines.h': 'DEFINES_H',
+      'src/OpenPLCUserLib.h': expect.stringContaining('#pragma once') as unknown as string,
     })
   })
 
@@ -168,7 +169,34 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       'src/c_blocks.h': '// Empty file\n',
       'src/generated.cpp': 'GEN_CPP',
       'src/defines.h': 'DEFINES_H',
+      'src/OpenPLCUserLib.h': expect.stringContaining('#pragma once') as unknown as string,
     })
+  })
+})
+
+describe('composeFirmwareBundle — OpenPLCUserLib.h stub', () => {
+  // Baremetal.ino `#include <OpenPLCUserLib.h>` is what triggers
+  // arduino-cli's library discovery for the strucpp pipeline.  The
+  // bundle must always ship a stub at this exact path so the include
+  // resolves on both compile flows:
+  //
+  //   - Editor: arduino-cli sees both this stub AND a separately-
+  //     staged precompiled-archive library; library discovery picks
+  //     whichever the per-board search picks first.  The stub is
+  //     header-only so it can't shadow the precompiled archive's
+  //     symbols.
+  //   - Web (compile-service single-pass): the stub at <sketch>/src/
+  //     is the only one that exists, and `--library src` makes it
+  //     discoverable.  Without it the build fails at the preprocessor
+  //     with `fatal error: OpenPLCUserLib.h: No such file or directory`.
+  it('always emits the stub under src/OpenPLCUserLib.h', () => {
+    const out = composeFirmwareBundle({
+      firmwareSkeleton: {},
+      strucppFiles: {},
+      cBlocks: { header: '', code: null },
+      definesH: '',
+    })
+    expect(out['src/OpenPLCUserLib.h']).toContain('#pragma once')
   })
 })
 
