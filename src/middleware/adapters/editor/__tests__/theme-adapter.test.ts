@@ -2,10 +2,12 @@ import type { ThemePort } from '../../../shared/ports/theme-port'
 import { createEditorThemeAdapter } from '../theme-adapter'
 
 let adapter: ThemePort
-let themeChangeHandler: ((_event: unknown) => void) | null
+let themeChangeHandler: ((_event: unknown, ...args: unknown[]) => void) | null
 
 beforeEach(() => {
   themeChangeHandler = null
+  localStorage.clear()
+  document.documentElement.classList.remove('dark', 'light', 'nineties')
 
   // Default: matchMedia says dark mode
   Object.defineProperty(window, 'matchMedia', {
@@ -15,7 +17,7 @@ beforeEach(() => {
 
   window.bridge = {
     winHandleUpdateTheme: jest.fn(),
-    handleUpdateTheme: jest.fn().mockImplementation((handler: (_event: unknown) => void) => {
+    handleUpdateTheme: jest.fn().mockImplementation((handler: (_event: unknown, ...args: unknown[]) => void) => {
       themeChangeHandler = handler
     }),
   } as unknown as typeof window.bridge
@@ -34,14 +36,42 @@ describe('getCurrentTheme', () => {
 
     expect(adapter.getCurrentTheme()).toBe('light')
   })
+
+  it('prefers the stored explicit theme over matchMedia', () => {
+    localStorage.setItem('theme', 'nineties')
+    adapter = createEditorThemeAdapter()
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(document.documentElement.classList.contains('nineties')).toBe(true)
+  })
 })
 
 describe('setTheme', () => {
-  it('updates the current theme and calls bridge', () => {
+  it('updates the theme, applies the DOM class, persists, and drives nativeTheme', () => {
     adapter.setTheme('light')
 
     expect(adapter.getCurrentTheme()).toBe('light')
-    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('theme')).toBe('light')
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('light')
+  })
+
+  it('notifies subscribers', () => {
+    const cb = jest.fn()
+    adapter.onThemeChanged(cb)
+
+    adapter.setTheme('light')
+
+    expect(cb).toHaveBeenCalledWith('light')
+  })
+
+  it('does not drive nativeTheme for the UI-only nineties skin', () => {
+    adapter.setTheme('nineties')
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(document.documentElement.classList.contains('nineties')).toBe(true)
+    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
   })
 })
 
@@ -52,7 +82,7 @@ describe('toggleTheme', () => {
     adapter.toggleTheme()
 
     expect(adapter.getCurrentTheme()).toBe('light')
-    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledTimes(1)
+    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('light')
   })
 
   it('toggles from light to dark', () => {
@@ -64,18 +94,34 @@ describe('toggleTheme', () => {
   })
 })
 
-describe('onThemeChanged', () => {
-  it('registers a bridge listener and toggles theme on event', () => {
+describe('main process theme events', () => {
+  it('registers the bridge listener once at creation', () => {
+    expect(window.bridge.handleUpdateTheme).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies an explicit theme from the native menu without echoing IPC', () => {
     const cb = jest.fn()
     adapter.onThemeChanged(cb)
 
-    expect(window.bridge.handleUpdateTheme).toHaveBeenCalledTimes(1)
+    themeChangeHandler!({}, 'nineties')
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(localStorage.getItem('theme')).toBe('nineties')
+    expect(document.documentElement.classList.contains('nineties')).toBe(true)
+    expect(cb).toHaveBeenCalledWith('nineties')
+    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
+  })
+
+  it('toggles theme on a payload-less (OS-level) event without persisting', () => {
+    const cb = jest.fn()
+    adapter.onThemeChanged(cb)
 
     // Theme starts as dark, so handler should toggle to light
     themeChangeHandler!({})
 
     expect(cb).toHaveBeenCalledWith('light')
     expect(adapter.getCurrentTheme()).toBe('light')
+    expect(localStorage.getItem('theme')).toBeNull()
   })
 
   it('toggles back on second event', () => {
@@ -90,6 +136,19 @@ describe('onThemeChanged', () => {
     expect(adapter.getCurrentTheme()).toBe('dark')
   })
 
+  it('does not flip off the retro skin on a payload-less event', () => {
+    const cb = jest.fn()
+    adapter.setTheme('nineties')
+    adapter.onThemeChanged(cb)
+
+    themeChangeHandler!({})
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(cb).not.toHaveBeenCalled()
+  })
+})
+
+describe('onThemeChanged', () => {
   it('returns an unsubscribe function that deactivates the callback', () => {
     const cb = jest.fn()
     const unsub = adapter.onThemeChanged(cb)
