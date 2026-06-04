@@ -1118,7 +1118,11 @@ class CompilerModule {
 
     handleOutputData(`Installing missing libraries: ${missingLibraries.join(', ')}`, 'info')
 
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+    // The promise never rejects — install failures are caught inside
+    // the close handler and converted to warnings, so `reject` is
+    // intentionally unused (underscore-prefixed to satisfy the
+    // unused-vars rule).
+    return new Promise<MethodsResult<string | Buffer>>((resolve, _reject) => {
       const executeCommand = spawn(binaryPath, [
         'lib',
         'install',
