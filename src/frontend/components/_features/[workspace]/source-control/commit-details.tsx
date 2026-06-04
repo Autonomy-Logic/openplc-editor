@@ -20,6 +20,8 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
     project: {
       meta: { path: storedProjectId },
     },
+    workspace: { isReadOnly },
+    modalActions: { openModal },
     sharedWorkspaceActions,
   } = useOpenPLCStore()
   const projectPort = useProject()
@@ -171,7 +173,11 @@ export function CommitDetails({ commit, projectId }: CommitDetailsProps) {
           View All Files
         </button>
         <button
-          onClick={() => setShowRestoreModal(true)}
+          // Restore overwrites the working tree from a past commit — a write
+          // action. In read-only (no edit permission) route straight to the
+          // fork modal instead of the restore confirmation, same as Commit/
+          // Stash/Discard.
+          onClick={() => (isReadOnly ? openModal('read-only-project') : setShowRestoreModal(true))}
           className='w-full rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-yellow-50 hover:text-yellow-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-yellow-900/30 dark:hover:text-yellow-400'
         >
           Restore to This Version
