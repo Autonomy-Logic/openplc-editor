@@ -471,9 +471,26 @@ const EditableLocationCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
+  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
+  // can take it into account — when the user's previously-bound alias
+  // has been renamed/removed upstream (pin mapping, backplane, etc.),
+  // re-picking the same address from the dropdown should refresh the
+  // variable's stored alias.  Without this hoist `isOrphaned` was
+  // only used for the rendered warning glyph below.
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
-    if (value === initialValue) return
+    // Short-circuit unchanged-value blurs so re-focus doesn't fire a
+    // gratuitous state update.  Exception: when the user re-picks the
+    // SAME location for a variable whose stored alias is now orphaned
+    // (the producer renamed it), force the update through so
+    // `updateVariable`'s auto-adopt path re-resolves the address
+    // against the live alias registry and refreshes the variable's
+    // alias field.  Otherwise the orphan warning would persist
+    // forever and the only workaround would be Clear → re-pick.
+    if (value === initialValue && !(id === 'location' && isOrphaned)) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -516,8 +533,6 @@ const EditableLocationCell = ({
   // flip the cell's appearance. When there's no alias, only the
   // address shows. The combobox `value` stays as the raw address so
   // typing / picking still operates on the canonical form.
-  const aliasRegistry = useAliasRegistry()
-  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
   const orphanTooltip = isOrphaned
     ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
     : undefined
