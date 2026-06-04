@@ -149,9 +149,7 @@ function walk(value: unknown, path: string, lines: string[]): void {
     // an array of objects. A mixed array (rare; signals a misshaped
     // screen value) is treated as an object array — safer to emit
     // per-index defines than to lose information.
-    const allScalar = value.every(
-      (el) => el === null || ['boolean', 'number', 'string'].includes(typeof el),
-    )
+    const allScalar = value.every((el) => el === null || ['boolean', 'number', 'string'].includes(typeof el))
 
     if (allScalar) {
       // Brace-initializer literal — driver consumes as
@@ -167,7 +165,11 @@ function walk(value: unknown, path: string, lines: string[]): void {
           return el.toString()
         }
         // string
-        const escaped = String(el).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+        const escaped = String(el)
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
         return `"${escaped}"`
       })
       lines.push(`#define ${path}_COUNT ${value.length}`)

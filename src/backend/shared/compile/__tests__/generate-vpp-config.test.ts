@@ -63,10 +63,7 @@ describe('generateVppConfigContent', () => {
     const out = generateVppConfigContent({
       vendorScreenData: {
         'module-config': {
-          slots: [
-            { moduleId: 'opta-builtin', i1_mode: 'bool' },
-            { moduleId: 'opta-ext-d1608e' },
-          ],
+          slots: [{ moduleId: 'opta-builtin', i1_mode: 'bool' }, { moduleId: 'opta-ext-d1608e' }],
         },
       },
     })

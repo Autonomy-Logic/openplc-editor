@@ -784,8 +784,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         // delete "main", and the editor must not break for projects
         // that don't have it.
         const programPou =
-          pous.find((p) => p.name === 'main' && p.pouType === 'program') ??
-          pous.find((p) => p.pouType === 'program')
+          pous.find((p) => p.name === 'main' && p.pouType === 'program') ?? pous.find((p) => p.pouType === 'program')
         if (programPou) {
           const language = programPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
           const tabToBeCreated: TabsProps = {

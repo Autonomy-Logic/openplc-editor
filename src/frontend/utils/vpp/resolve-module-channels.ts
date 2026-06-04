@@ -108,8 +108,7 @@ export function resolveModuleChannels(
   if (mapping.perChannelChoices) {
     for (const entry of mapping.perChannelChoices) {
       const slotValue = slotConfig?.[entry.fieldId]
-      const key =
-        slotValue !== undefined && slotValue !== null && slotValue !== '' ? String(slotValue) : entry.default
+      const key = slotValue !== undefined && slotValue !== null && slotValue !== '' ? String(slotValue) : entry.default
       if (key === undefined) continue
       const channel = entry.modes[key]
       if (channel) {

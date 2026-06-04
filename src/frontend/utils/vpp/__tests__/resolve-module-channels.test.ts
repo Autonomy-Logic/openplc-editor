@@ -117,7 +117,9 @@ describe('resolveModuleChannels', () => {
       },
     }
     expect(resolveModuleChannels(md, {})).toEqual([withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog')])
-    expect(resolveModuleChannels(md, undefined)).toEqual([withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog')])
+    expect(resolveModuleChannels(md, undefined)).toEqual([
+      withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog'),
+    ])
   })
 
   it('drops a per-channel entry whose mode maps to null (disabled mode)', () => {

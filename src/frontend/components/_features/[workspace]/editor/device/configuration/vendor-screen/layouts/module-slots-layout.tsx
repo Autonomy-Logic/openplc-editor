@@ -670,9 +670,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 // it.  Without this guard the button would always
                 // appear enabled for fixed-module devices even when
                 // every expansion slot is already empty.
-                disabled={
-                  !slots.some((s, idx) => s !== null && !slotIsLocked(idx))
-                }
+                disabled={!slots.some((s, idx) => s !== null && !slotIsLocked(idx))}
                 className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
               >
                 {action.label}
@@ -750,7 +748,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     const dropdownModules = locked && fixedModule ? [fixedModule] : selectableModules
                     return (
                       <div className='mb-4 flex items-center gap-3'>
-                        <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
+                        <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>
+                          Module
+                        </Label>
                         <Select
                           value={selectedModule ? selectedModule.id : '__empty__'}
                           onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
@@ -760,7 +760,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                             aria-label={`Module for slot ${selectedSlot + 1}`}
                             placeholder='-- Empty --'
                             withIndicator
-                            className='flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                            className='flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[disabled]:cursor-not-allowed data-[state=open]:border-brand-medium-dark data-[disabled]:opacity-60 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                           />
                           <SelectContent
                             className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
@@ -886,9 +886,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                                   {entry.modeFieldId && entry.modeOptions && entry.modeOptions.length > 0 ? (
                                     <select
                                       value={entry.modeValue ?? entry.modeOptions[0]}
-                                      onChange={(e) =>
-                                        handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)
-                                      }
+                                      onChange={(e) => handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)}
                                       className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
                                     >
                                       {entry.modeOptions.map((opt) => (
@@ -898,7 +896,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                                       ))}
                                     </select>
                                   ) : (
-                                    <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>—</span>
+                                    <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>
+                                      —
+                                    </span>
                                   )}
                                 </td>
                               )}

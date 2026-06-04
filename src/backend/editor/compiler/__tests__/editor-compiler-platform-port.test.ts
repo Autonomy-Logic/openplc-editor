@@ -202,10 +202,7 @@ describe('createEditorCompilerPlatformPort', () => {
     // The per-board library list is the first argument; the output
     // callback follows.  Asserting the exact list catches accidental
     // drops in plumbing between port → handler.
-    expect(handleLibraryInstallation).toHaveBeenCalledWith(
-      ['Arduino_Opta_Blueprint', 'P1AM'],
-      expect.any(Function),
-    )
+    expect(handleLibraryInstallation).toHaveBeenCalledWith(['Arduino_Opta_Blueprint', 'P1AM'], expect.any(Function))
     expect(result).toEqual({ ok: true })
   })
 
