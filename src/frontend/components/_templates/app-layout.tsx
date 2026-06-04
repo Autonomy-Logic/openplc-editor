@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
+import { useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
@@ -37,21 +37,14 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
-  // Theme initialization - applies the theme class before DisplayMenu mounts.
-  // Supports the retro 'nineties' skin alongside light/dark; it is light-based,
-  // so shouldUseDarkMode (which drives Monaco) stays false for it.
+  // Theme initialization - the theme port adapter owns reading the stored
+  // preference (cross-app cookie → localStorage → OS) and applying the
+  // <html> class; here we only seed the Monaco light/dark flag. The retro
+  // 'nineties' skin is light-based, so shouldUseDarkMode stays false for it.
+  const themePort = useTheme()
   useEffect(() => {
-    const stored = localStorage.getItem('theme')
-    const theme =
-      stored === 'dark' || stored === 'light' || stored === 'nineties'
-        ? stored
-        : window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-    document.documentElement.classList.remove('dark', 'light', 'nineties')
-    document.documentElement.classList.add(theme)
-    setSystemConfigs({ shouldUseDarkMode: theme === 'dark' })
-  }, [setSystemConfigs])
+    setSystemConfigs({ shouldUseDarkMode: themePort.getCurrentTheme() === 'dark' })
+  }, [themePort, setSystemConfigs])
 
   // System initialization
   useEffect(() => {

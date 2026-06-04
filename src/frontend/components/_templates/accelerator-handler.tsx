@@ -302,15 +302,14 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, openModal])
 
   /**
-   * Theme update from main process
+   * Theme changes (user toggle, OS preference, or cross-app cookie sync).
+   * The theme adapter owns the DOM class and persistence; here we only
+   * mirror the Monaco light/dark flag (set explicitly from the theme —
+   * toggling drifts when cycling through the 90's skin, and the retro
+   * theme uses light Monaco).
    */
   useEffect(() => {
     const unsub = themePort.onThemeChanged((newTheme) => {
-      document.documentElement.classList.remove('dark', 'light')
-      document.documentElement.classList.add(newTheme)
-      localStorage.setItem('theme', newTheme)
-      // Set the Monaco light/dark flag explicitly from the theme (toggling drifts
-      // when cycling through the 90's skin); the retro theme uses light Monaco.
       setSystemConfigs({ shouldUseDarkMode: newTheme === 'dark' })
     })
     return unsub

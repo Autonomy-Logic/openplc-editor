@@ -803,6 +803,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // Theme and store handlers
     this.ipcMain.on('system:update-theme', this.mainIpcEventHandlers.handleUpdateTheme)
+    this.ipcMain.handle('system:get-theme', this.mainIpcEventHandlers.handleGetTheme)
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
 
     // ===================== COMPILER SERVICE =====================
@@ -2261,11 +2262,20 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== EVENT HANDLERS =====================
   mainIpcEventHandlers = {
-    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark') => {
+    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark' | 'nineties') => {
       const newTheme = theme ?? (nativeTheme.shouldUseDarkColors ? 'light' : 'dark')
-      nativeTheme.themeSource = newTheme
+      // nativeTheme only models light/dark; the 90's skin is UI-only and rides
+      // on a light base (mirrors MenuBuilder.updateAppTheme). The store keeps
+      // the full preference — it is the desktop's durable source of truth,
+      // analogous to the edge backend's user preference on the web app.
+      nativeTheme.themeSource = newTheme === 'dark' ? 'dark' : 'light'
       const appStore = this.store as unknown as { set: (key: string, value: string) => void }
       appStore.set('theme', newTheme)
+    },
+    handleGetTheme: (): 'light' | 'dark' | 'nineties' | null => {
+      const appStore = this.store as unknown as { get: (key: string) => unknown }
+      const stored = appStore.get('theme')
+      return stored === 'light' || stored === 'dark' || stored === 'nineties' ? stored : null
     },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
   }
