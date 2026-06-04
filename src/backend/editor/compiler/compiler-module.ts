@@ -113,7 +113,7 @@ interface MethodsResult<T> {
   success: boolean
   data?: T
 }
-type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'error') => void
+type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'warning' | 'error') => void
 
 /**
  * Decode a `MessagePortMain` payload back to a string, handling the
@@ -1065,16 +1065,43 @@ class CompilerModule {
     })
   }
 
-  // Handle library installation
-  // In the future, this method will be responsible for installing any missing libraries.
-  // This should receive a list of libraries to install.
-  async handleLibraryInstallation(handleOutputData: HandleOutputDataCallback) {
-    // 1. Check what are the required libraries for the project - This will be the global libraries and the extra libraries that comes from the hals.json file.
-    // This will be filled later, for now is just a placeholder.
-    const extraLibraries: string[] = ['P1AM'] // We provide this value just for testing purposes.
+  /**
+   * Install every arduino-cli library the selected board needs.
+   *
+   * Inputs are layered:
+   *   - `GLOBAL_LIBRARIES`     — always-on libs that pre-date the
+   *                              per-board contract (DallasTemperature,
+   *                              OneWire, etc.).  Will shrink over time
+   *                              as boards take ownership of their own
+   *                              dependencies via `extra_libraries`.
+   *   - `extraLibraries`       — per-board libs forwarded from the
+   *                              `BoardBuildInfo.extraArduinoLibraries`
+   *                              field.  Sourced from `hals.json`
+   *                              `extra_libraries` (static boards) or
+   *                              the VPP manifest's `hal.extraArduinoLibraries`
+   *                              (installed VPP boards).  Keeps board-
+   *                              specific deps (Arduino_Opta_Blueprint
+   *                              for the Opta, P1AM for the P1AM board)
+   *                              out of every user's install footprint.
+   *
+   * Failure contract: this method does NOT throw on a non-zero
+   * `arduino-cli lib install` exit.  Install is opportunistic — the
+   * library the user needs may already be available from another
+   * source the editor doesn't manage (system-wide install, user
+   * sketchbook, custom library path).  We log a warning that names
+   * the libs we couldn't install + arduino-cli's stderr, then
+   * resolve cleanly so the build continues.  The downstream
+   * `arduino-cli compile` step is the source of truth: if a required
+   * library is genuinely unresolvable, compile fails with a precise
+   * "header not found" error pointing at the file that needed it.
+   */
+  async handleLibraryInstallation(extraLibraries: string[], handleOutputData: HandleOutputDataCallback) {
     const requiredLibraries = Array.from(new Set([...CompilerModule.GLOBAL_LIBRARIES, ...extraLibraries]))
 
-    // 2. Check if all required libraries are already installed
+    if (extraLibraries.length > 0) {
+      handleOutputData(`Per-board libraries: ${extraLibraries.join(', ')}`, 'info')
+    }
+
     const installedLibraries = await this.getArduinoInstalledLibraries()
     const missingLibraries = requiredLibraries.filter((lib) => !installedLibraries.includes(lib))
 
@@ -1089,7 +1116,8 @@ class CompilerModule {
       binaryPath += '.exe'
     }
 
-    // 3. If not installed, run the installation command
+    handleOutputData(`Installing missing libraries: ${missingLibraries.join(', ')}`, 'info')
+
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
       const executeCommand = spawn(binaryPath, [
         'lib',
@@ -1109,15 +1137,27 @@ class CompilerModule {
       executeCommand.on('close', (code) => {
         if (code === 0) {
           handleOutputData(`All libraries installed!`, 'info')
-          resolve({
-            success: true,
-          })
+          resolve({ success: true })
         } else {
-          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
+          // Soft failure — log a warning with the libs we couldn't
+          // install and arduino-cli's stderr, then resolve cleanly.
+          // The build continues; if the missing library is actually
+          // required, the arduino-cli compile step will fail with a
+          // precise header-not-found error.  If the library is
+          // already available from a non-managed source (sketchbook,
+          // system install) the compile succeeds and the warning is
+          // benign.
+          const trimmedStderr = stderrData.trim()
+          handleOutputData(
+            `Warning: arduino-cli lib install exited with code ${code} for: ${missingLibraries.join(', ')}. ` +
+              `Continuing build — these libraries may already be available from another source.` +
+              (trimmedStderr ? `\n${trimmedStderr}` : ''),
+            'warning',
+          )
+          resolve({ success: true })
         }
       })
     })
-    // 4. Update the library index
   }
 
   // TODO: This method is used to update the index of the Arduino libraries.
@@ -2343,6 +2383,7 @@ class CompilerModule {
       runtimeJwtToken,
       cleanBuild,
       communicationPort,
+      vendorScreenData,
     ] = args as [
       string,
       string,
@@ -2353,6 +2394,7 @@ class CompilerModule {
       string | null,
       boolean | undefined,
       string | null | undefined,
+      Record<string, unknown> | undefined,
     ]
 
     // Resolve board info uniformly across hals.json + installed VPP
@@ -2633,6 +2675,7 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
+        vendorScreenData,
       },
       platformPort,
       (event) => {

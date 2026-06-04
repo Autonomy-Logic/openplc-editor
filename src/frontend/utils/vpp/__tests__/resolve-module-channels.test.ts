@@ -59,4 +59,107 @@ describe('resolveModuleChannels', () => {
     }
     expect(resolveModuleChannels(md, { mode: 1 })).toEqual(euChannels)
   })
+
+  // ---------------------------------------------------------------
+  // perChannelChoices — Arduino Opta-style per-pin mode selection
+  // ---------------------------------------------------------------
+
+  const boolPin1 = { name: 'I1', type: 'digitalInput', dataType: 'BOOL', addressPrefix: '%IX' }
+  const analogPin1 = { name: 'I1', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' }
+  const boolPin2 = { name: 'I2', type: 'digitalInput', dataType: 'BOOL', addressPrefix: '%IX' }
+  const analogPin2 = { name: 'I2', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' }
+  const staticRelay = { name: 'O1', type: 'digitalOutput', dataType: 'BOOL', addressPrefix: '%QX' }
+
+  // Channels resolved via perChannelChoices carry the originating
+  // fieldId + the set of mode keys + the currently-selected mode key
+  // so the IO Table can render a per-row mode selector that mutates
+  // the same slotsConfig field. Use this helper to add the expected
+  // augmentation to a raw channel literal.
+  const withMode = (
+    channel: { name: string; type: string; dataType: string; addressPrefix: string },
+    fieldId: string,
+    modeKeys: string[],
+    value: string,
+  ) => ({ ...channel, modeFieldId: fieldId, modeOptions: modeKeys, modeValue: value })
+
+  it('emits per-channel-resolved channels in declaration order', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        perChannelChoices: [
+          { fieldId: 'i1_mode', default: 'bool', modes: { bool: boolPin1, analog: analogPin1 } },
+          { fieldId: 'i2_mode', default: 'bool', modes: { bool: boolPin2, analog: analogPin2 } },
+        ],
+      },
+    }
+    expect(resolveModuleChannels(md, { i1_mode: 'analog', i2_mode: 'bool' })).toEqual([
+      withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog'),
+      withMode(boolPin2, 'i2_mode', ['bool', 'analog'], 'bool'),
+    ])
+  })
+
+  it('appends per-channel-resolved channels after the static channels (relays/LEDs/button)', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        channels: [staticRelay],
+        perChannelChoices: [{ fieldId: 'i1_mode', default: 'bool', modes: { bool: boolPin1, analog: analogPin1 } }],
+      },
+    }
+    expect(resolveModuleChannels(md, { i1_mode: 'analog' })).toEqual([
+      staticRelay,
+      withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog'),
+    ])
+  })
+
+  it('uses the per-channel `default` when the slot has not set the field', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        perChannelChoices: [{ fieldId: 'i1_mode', default: 'analog', modes: { bool: boolPin1, analog: analogPin1 } }],
+      },
+    }
+    expect(resolveModuleChannels(md, {})).toEqual([withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog')])
+    expect(resolveModuleChannels(md, undefined)).toEqual([withMode(analogPin1, 'i1_mode', ['bool', 'analog'], 'analog')])
+  })
+
+  it('drops a per-channel entry whose mode maps to null (disabled mode)', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        perChannelChoices: [
+          { fieldId: 'i1_mode', default: 'off', modes: { off: null, bool: boolPin1 } },
+          { fieldId: 'i2_mode', default: 'bool', modes: { bool: boolPin2 } },
+        ],
+      },
+    }
+    expect(resolveModuleChannels(md, {})).toEqual([withMode(boolPin2, 'i2_mode', ['bool'], 'bool')])
+  })
+
+  it('drops a per-channel entry whose mode is not in the modes map (unknown value)', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        perChannelChoices: [{ fieldId: 'i1_mode', default: 'bool', modes: { bool: boolPin1 } }],
+      },
+    }
+    expect(resolveModuleChannels(md, { i1_mode: 'banana' })).toEqual([])
+  })
+
+  it('drops a per-channel entry with no default + no slot value', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        perChannelChoices: [{ fieldId: 'i1_mode', modes: { bool: boolPin1 } }],
+      },
+    }
+    expect(resolveModuleChannels(md, {})).toEqual([])
+  })
+
+  it('module-wide channelsByFormat short-circuits before perChannelChoices', () => {
+    const md: ResolverModuleDef = {
+      addressMapping: {
+        formatFieldId: 'data_format',
+        formatDefault: 'raw',
+        channelsByFormat: { raw: rawChannels, engineering: euChannels },
+        // perChannelChoices declared too — should be ignored when channelsByFormat matches.
+        perChannelChoices: [{ fieldId: 'i1_mode', default: 'bool', modes: { bool: boolPin1 } }],
+      },
+    }
+    expect(resolveModuleChannels(md, { data_format: 'engineering', i1_mode: 'bool' })).toEqual(euChannels)
+  })
 })

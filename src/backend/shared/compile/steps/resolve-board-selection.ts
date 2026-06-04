@@ -55,6 +55,23 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
       ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
       ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
+      // Per-board extra libraries — the editor's arduino-cli `lib
+      // install` step uses these.  Identical contract for static
+      // hals.json (`extra_libraries`) and VPP manifests
+      // (`hal.extraArduinoLibraries`); both arrive in
+      // `BoardBuildInfo.extraArduinoLibraries` from the resolver.
+      ...(boardInfo.extraArduinoLibraries && boardInfo.extraArduinoLibraries.length > 0
+        ? { extra_libraries: boardInfo.extraArduinoLibraries }
+        : {}),
+      // Capability resolution inputs.  `resolveTargetCapabilities`
+      // reads `compiler` + `vpp` + `capabilities` on whatever board
+      // shape it's handed — without forwarding all three the
+      // resolver picks the empty preset and `vppIo` collapses to
+      // false, which silently disables `vpp_config.h` emission for
+      // every VPP arduino-cli target (Opta, future P1AM VPP).
+      compiler: boardInfo.compiler,
+      ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
+      ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),
     } as unknown as BoardHalsBuildEntry
 
     return {

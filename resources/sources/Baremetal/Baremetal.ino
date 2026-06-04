@@ -65,6 +65,13 @@ IEC_BOOL *bool_output[MAX_DIGITAL_OUTPUT/8][8] = {};
 IEC_UINT *int_input[MAX_ANALOG_INPUT] = {};
 IEC_UINT *int_output[MAX_ANALOG_OUTPUT] = {};
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+// REAL-typed I/O at %ID / %QD.  Populated by `runtime_bind_located_vars`
+// when the IEC program declares a REAL variable AT %ID<n> / %QD<n>.
+// Drivers that want to deliver engineering-unit values (volts, mA, °C)
+// instead of raw ADC counts write into these slots — the Opta HAL is
+// the first consumer.
+IEC_REAL *real_input[MAX_REAL_INPUT] = {};
+IEC_REAL *real_output[MAX_REAL_OUTPUT] = {};
 IEC_UINT *int_memory[MAX_MEMORY_WORD] = {};
 IEC_UDINT *dint_memory[MAX_MEMORY_DWORD] = {};
 IEC_ULINT *lint_memory[MAX_MEMORY_LWORD] = {};

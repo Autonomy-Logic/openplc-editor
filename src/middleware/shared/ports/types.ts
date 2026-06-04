@@ -648,6 +648,13 @@ export interface VppModuleDefinition {
    *  definition. Optional — modules with no hwId can only be added
    *  manually. */
   hwId?: string
+  /** When true, this module represents a fixed (always-present) part
+   *  of the device hardware — e.g. the Arduino Opta's built-in I/O.
+   *  The renderer auto-places it in slot 1 on first load, locks that
+   *  slot against removal/replacement, and hides the module from the
+   *  per-slot module-picker dropdown (slot 1 is the only place it
+   *  belongs). */
+  fixed?: boolean
   image?: string
   /** One-line prose displayed in the per-slot detail pane of the
    *  backplane editor. */
@@ -848,6 +855,21 @@ export interface IoMappingEntry {
   dataType: string
   iecAddress: string
   alias: string
+  /** When this channel was resolved out of a module's
+   *  `addressMapping.perChannelChoices`, the `fieldId` whose value
+   *  selected the current mode. Drives the IO Table's per-row "Mode"
+   *  selector — picking a new option writes the chosen key to
+   *  `slotsConfig[slot][modeFieldId]`, which re-triggers the channel
+   *  resolver and the address allocator. Absent for statically-
+   *  declared channels (modules with no per-pin mode switch). */
+  modeFieldId?: string
+  /** Available mode keys for the per-row selector
+   *  (`Object.keys(perChannelChoices[*].modes)`). Absent for static
+   *  channels. */
+  modeOptions?: string[]
+  /** Currently-selected mode key. Reflects `slotsConfig[slot][modeFieldId]`
+   *  at the time the allocator ran. Absent for static channels. */
+  modeValue?: string
 }
 
 export interface VendorIoMapping {

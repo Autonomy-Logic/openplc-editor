@@ -212,12 +212,23 @@ describe('createEditorCompilerAdapter', () => {
         // Args layout (verbatim, in order):
         //   projectPath, boardTarget, boardCore, compileOnly,
         //   projectData, runtimeIpAddress, runtimeJwtToken,
-        //   cleanBuild, communicationPort.
-        // `communicationPort` is the 9th slot — added so the
-        // arduino-cli upload step receives the user's serial-port
-        // picker selection without waiting on a project save round-
-        // trip.  `null` when the caller didn't supply one.
-        ['/path/to/project', 'Arduino Mega', 'arduino:avr:mega', true, expect.any(Object), null, null, false, null],
+        //   cleanBuild, communicationPort, vendorScreenData.
+        // `vendorScreenData` is the 10th slot — threaded through to
+        // the shared compile pipeline for `vpp_config.h` emission on
+        // arduino-cli VPP boards (Arduino Opta, P1AM).  `null` when
+        // the caller didn't supply one (non-VPP build).
+        [
+          '/path/to/project',
+          'Arduino Mega',
+          'arduino:avr:mega',
+          true,
+          expect.any(Object),
+          null,
+          null,
+          false,
+          null,
+          null,
+        ],
         expect.any(Function),
       )
       expect(result).toEqual({ success: true, message: 'Compilation complete', hexPath: undefined })

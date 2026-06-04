@@ -24,7 +24,6 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
-import { isArduinoTarget } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -213,6 +212,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             // saved the project yet (the legacy disk-read path lags
             // the live store by one save cycle).
             communicationPort: deviceDefinitions.configuration.communicationPort || undefined,
+            // User-authored configuration-screen data — the shared
+            // compile pipeline emits `vpp_config.h` from this for
+            // arduino-cli VPP boards (Arduino Opta, P1AM).  Same
+            // store path on editor + web, single source of truth.
+            vendorScreenData: deviceDefinitions.configuration.vendorScreenData,
           },
           (event) => {
             if (event.plcStatus) {
@@ -794,12 +798,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             triggerTooltip={
               isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
             }
-            // Arduino targets always allow upload (arduino-cli connects via USB
-            // at upload time). Runtime v3/v4 targets must be connected first
-            // since the upload goes over the network to the on-device webserver.
+            // Direct-USB targets (every arduino-cli board, simulator)
+            // always allow upload — arduino-cli connects via USB at
+            // upload time, no prior network handshake needed.  Runtime
+            // v3/v4 targets must be connected first since the upload
+            // goes over the network to the on-device webserver.
+            //
+            // Capability-driven (`directUsbUpload`) rather than
+            // `isArduinoTarget`, because VPP-IO boards (Opta) flip
+            // `pinMapping: false` and the legacy
+            // `isArduinoTarget` helper keys off `pinMapping`.  Those
+            // boards still upload over USB via arduino-cli, so the
+            // gate needs the more direct flag.
             uploadAvailable={(() => {
-              const arduino = isArduinoTarget(currentBoardInfo)
-              if (arduino) return true
+              const caps = resolveTargetCapabilities(currentBoardInfo)
+              if (caps.directUsbUpload) return true
               return connectionStatus === 'connected'
             })()}
             uploadDisabledReason='must be connected to the device to upload'

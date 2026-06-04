@@ -214,7 +214,7 @@ const rendererProcessBridge = {
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (
-    compileProgramArgs: Array<string | boolean | null | PLCProjectData>,
+    compileProgramArgs: Array<string | boolean | null | PLCProjectData | Record<string, unknown>>,
     callback: (args: CompilerPortMessage) => void,
   ) => {
     // Create a MessageChannel to communicate between the renderer and main process

@@ -278,6 +278,7 @@ class HardwareModule {
                   id: m.id,
                   name: m.name,
                   hwId: m.hwId,
+                  fixed: m.fixed,
                   image: m.image,
                   description: m.description,
                   specs: m.specs,

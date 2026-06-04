@@ -191,23 +191,45 @@ describe('createEditorCompilerPlatformPort', () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining('core install failed'), 'error')
   })
 
-  it('installArduinoLib forwards to handler and returns ok:true', async () => {
+  it('installArduinoLib forwards extraLibraries to handler and returns ok:true', async () => {
     const handleLibraryInstallation = jest.fn(async () => undefined)
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
-    const result = await port.installArduinoLib({ libId: '' }, () => undefined)
+    const result = await port.installArduinoLib(
+      { libId: '', extraLibraries: ['Arduino_Opta_Blueprint', 'P1AM'] },
+      () => undefined,
+    )
     expect(handleLibraryInstallation).toHaveBeenCalledTimes(1)
+    // The per-board library list is the first argument; the output
+    // callback follows.  Asserting the exact list catches accidental
+    // drops in plumbing between port → handler.
+    expect(handleLibraryInstallation).toHaveBeenCalledWith(
+      ['Arduino_Opta_Blueprint', 'P1AM'],
+      expect.any(Function),
+    )
     expect(result).toEqual({ ok: true })
   })
 
-  it('installArduinoLib returns ok:false when the handler throws', async () => {
+  it('installArduinoLib defaults extraLibraries to [] when the caller omits it', async () => {
+    const handleLibraryInstallation = jest.fn(async () => undefined)
+    const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
+    await port.installArduinoLib({ libId: '' }, () => undefined)
+    expect(handleLibraryInstallation).toHaveBeenCalledWith([], expect.any(Function))
+  })
+
+  it('installArduinoLib warns and returns ok:true when the install machinery throws', async () => {
+    // The handler swallows non-zero `arduino-cli lib install` exits as
+    // warnings — only catastrophic failures (binary missing, spawn
+    // error) bubble out as throws.  Either way the port logs a warning
+    // and reports ok:true so the build continues and arduino-cli
+    // compile becomes the source of truth for missing headers.
     const handleLibraryInstallation = jest.fn(async () => {
       throw new Error('lib install failed')
     })
     const log = jest.fn()
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
     const result = await port.installArduinoLib({ libId: '' }, log)
-    expect(result.ok).toBe(false)
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('lib install failed'), 'error')
+    expect(result.ok).toBe(true)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('lib install failed'), 'warning')
   })
 
   // ---- transpileXmlToSt — xml2stArgs forwarding (STRUCT drift regression) ----

@@ -25,6 +25,7 @@
 
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
+import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 
 // ---------------------------------------------------------------------------
 // Public shapes
@@ -52,6 +53,10 @@ export interface HalsBoardEntry {
   define?: string | string[]
   extra_libraries?: string[]
   max_data_size?: number
+  /** Per-board capability overrides — same merge semantics as the
+   *  VPP-side `device.capabilities` field.  Resolved by
+   *  `resolveTargetCapabilities` on top of the compiler preset. */
+  capabilities?: Partial<TargetCapabilities>
   /** Declarative debug-channel resolver spec.  See `debug-spec.ts`
    *  for the schema.  Boards without a spec fall back to the
    *  "Debugging Not Available" outcome on the renderer side. */
@@ -151,6 +156,12 @@ export interface BoardBuildInfo {
   extraArduinoLibraries?: string[]
   /** Opaque key for a package-supplied `libraries/` folder. */
   localLibrariesDir?: string
+  /** Per-board capability overrides.  Merged by
+   *  `resolveTargetCapabilities` on top of the compiler preset.
+   *  Sourced from `hals.json` `capabilities` (static boards) or VPP
+   *  manifest `device.capabilities` (VPP boards) — both paths feed
+   *  the same shape so the pipeline reads a single field. */
+  capabilities?: Partial<TargetCapabilities>
   /** Override for arduino-cli's `upload.maximum_data_size` check. */
   maxDataSize?: number
   /**
@@ -231,6 +242,7 @@ export class BoardInfoResolver {
     if (entry.define) info.define = entry.define
     if (entry.extra_libraries) info.extraArduinoLibraries = entry.extra_libraries
     if (entry.max_data_size !== undefined) info.maxDataSize = entry.max_data_size
+    if (entry.capabilities) info.capabilities = entry.capabilities
     if (entry.debug) info.debug = entry.debug
     return info
   }
@@ -282,6 +294,7 @@ export class BoardInfoResolver {
     if (flags) info.compilerFlags = flags
     if (device.hal.define) info.define = device.hal.define
     if (device.hal.extraArduinoLibraries) info.extraArduinoLibraries = device.hal.extraArduinoLibraries
+    if (device.capabilities) info.capabilities = device.capabilities
 
     if (device.hal.pluginType === 'python' || device.hal.pluginType === 'native') {
       info.pluginType = device.hal.pluginType

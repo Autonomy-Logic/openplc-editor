@@ -65,8 +65,18 @@ void runtime_bind_located_vars()
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
+                // OpenPLC convention: %ID<n> is REAL.  Drivers that
+                // deliver engineering-unit readings (volts, mA, °C, …)
+                // bind here instead of int_input.  Declaring DINT AT
+                // %ID<n> is not supported on arduino-cli; the
+                // variable's bytes would still land in this slot but
+                // the runtime treats them as a float.
+                if (lv.byte_index < MAX_REAL_INPUT) {
+                    real_input[lv.byte_index] = (::IEC_REAL*)lv.pointer;
+                }
+                break;
             case LocatedSize::LWord:
-                // dint_input / lint_input not available on all boards
+                // lint_input not available on arduino-cli targets.
                 break;
 #endif
             default: break;
@@ -83,8 +93,15 @@ void runtime_bind_located_vars()
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
+                // OpenPLC convention: %QD<n> is REAL.  Drivers that
+                // accept engineering-unit setpoints (volts on an
+                // analog DAC, °C, …) bind here instead of int_output.
+                if (lv.byte_index < MAX_REAL_OUTPUT) {
+                    real_output[lv.byte_index] = (::IEC_REAL*)lv.pointer;
+                }
+                break;
             case LocatedSize::LWord:
-                // dint_output / lint_output not available on all boards
+                // lint_output not available on arduino-cli targets.
                 break;
 #endif
             default: break;

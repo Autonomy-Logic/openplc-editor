@@ -856,13 +856,28 @@ describe('runCompilePipeline — failure propagation', () => {
     expect(port.compileArduino).not.toHaveBeenCalled()
   })
 
-  it('returns success=false when installArduinoLib reports failure', async () => {
+  it('continues with a warning when installArduinoLib reports failure (does not bail)', async () => {
+    // Library install is opportunistic — the user's target lib may
+    // already be available from a non-managed source (sketchbook,
+    // system install) and arduino-cli compile is the source of
+    // truth for whether a required header can be resolved.  An
+    // adapter returning `{ ok: false }` SHOULD emit a warning and
+    // let the pipeline proceed; the build only fails later if the
+    // missing header genuinely can't be found at compile time.
     const port = makePort({
       installArduinoLib: jest.fn().mockResolvedValue({ ok: false }),
     })
-    const { emit } = captureEvents()
+    const { emit, events } = captureEvents()
     const result = await runCompilePipeline(makeArgs(), port, emit)
-    expect(result.success).toBe(false)
+    // Pipeline proceeded past lib-install — compileArduino fires.
+    expect(port.compileArduino).toHaveBeenCalled()
+    // A warning fired during the lib-install stage explaining the
+    // soft pass-through.
+    expect(events.some((e) => e.stage === 'lib-install' && e.level === 'warning')).toBe(true)
+    // Success/failure is now determined downstream — explicitly not
+    // asserted here because the test fixture's compileArduino mock
+    // controls it.  Just confirm the bail-on-lib-install is gone.
+    expect(typeof result.success).toBe('boolean')
   })
 
   it('returns success=false when generateRuntimeConfs throws (OPC-UA / EtherCAT failure)', async () => {

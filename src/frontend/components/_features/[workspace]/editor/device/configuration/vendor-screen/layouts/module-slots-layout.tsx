@@ -169,6 +169,26 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   // Memoize so hooks depending on this don't fire every render.
   const availableModules = useMemo(() => moduleSystem?.modules ?? [], [moduleSystem])
 
+  /* Some packages mark one module as `fixed: true` to mean "this is a
+   * built-in part of the device hardware that's always present at
+   * slot 1" (Arduino Opta's built-in I/O is the first example).  The
+   * renderer auto-places it on first load, locks the slot against
+   * removal/replacement, and filters it out of the per-slot module
+   * picker.  Multiple fixed modules would be unusual; if a package
+   * ever declares more than one, the first wins. */
+  const fixedModule = useMemo(
+    () => availableModules.find((m) => (m as { fixed?: boolean }).fixed) ?? null,
+    [availableModules],
+  )
+
+  /* Modules eligible for user-selection in the slot picker.  Fixed
+   * modules are hidden because they belong only at slot 1, which the
+   * renderer manages itself. */
+  const selectableModules = useMemo(
+    () => availableModules.filter((m) => !(m as { fixed?: boolean }).fixed),
+    [availableModules],
+  )
+
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
   const persistenceKey = getSectionPersistenceKey(section) ?? 'module-configuration'
@@ -180,6 +200,27 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     return [...stored, ...Array<string | null>(maxSlots - stored.length).fill(null)]
   }, [moduleConfig.slots, maxSlots])
   const slotsConfig = useMemo(() => moduleConfig.slotsConfig ?? {}, [moduleConfig.slotsConfig])
+
+  /* Auto-pin the fixed module to slot 1 on first load.  Runs when the
+   * backplane is empty (or when slot 0 doesn't hold the fixed module
+   * yet) and the package declares one.  Without this users would see
+   * an empty backplane for a device whose first slot must structurally
+   * contain its built-in I/O. */
+  useEffect(() => {
+    if (!fixedModule) return
+    if (slots[0] === fixedModule.id) return
+    const next = [...slots]
+    next[0] = fixedModule.id
+    writeModuleConfig({ ...moduleConfig, slots: next, slotsConfig })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixedModule?.id, slots[0]])
+
+  /* Predicate used at every mutator site that could affect the fixed
+   * slot.  Centralised so adding new mutators is a one-line guard. */
+  const slotIsLocked = useCallback(
+    (slotIdx: number) => fixedModule !== null && slotIdx === 0 && slots[0] === fixedModule.id,
+    [fixedModule, slots],
+  )
 
   /* Stackable mode treats the backplane as a contiguous chain: empty
    * slots only exist at the tail, the user adds modules at the end,
@@ -269,18 +310,29 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* slot:channel key. Writes to the 'io-mapping' persistence key */
   /* so the rest of the compile flow keeps reading the same data. */
   /* ------------------------------------------------------------ */
-  // Re-allocate when the slot module list OR any format selector
-  // (per-slot channelsByFormat resolver input) changes.
+  // Re-allocate when the slot module list OR any resolver-affecting
+  // config field changes. Two kinds of fields can flip channel
+  // resolution: `formatFieldId` (module-wide V/mA switch) and any
+  // `perChannelChoices[*].fieldId` (per-pin BOOL/analog switch — Opta
+  // built-in pins). Both are captured here so the address allocator
+  // re-runs the instant the user flips a mode.
   const formatSelectionKey = useMemo(() => {
     return slots
       .map((moduleId, idx) => {
         if (!moduleId) return ''
         const md = availableModules.find((m) => m.id === moduleId) as ResolverModuleDef | undefined
-        const fid = md?.addressMapping?.formatFieldId
-        if (!fid) return ''
         const cfg = slotsConfig[String(idx + 1)] ?? {}
-        const val = cfg[fid] ?? md?.addressMapping?.formatDefault ?? ''
-        return `${idx}:${val}`
+        const parts: string[] = []
+        const fid = md?.addressMapping?.formatFieldId
+        if (fid) parts.push(`${fid}=${cfg[fid] ?? md?.addressMapping?.formatDefault ?? ''}`)
+        const pcc = md?.addressMapping?.perChannelChoices
+        if (pcc) {
+          for (const entry of pcc) {
+            parts.push(`${entry.fieldId}=${cfg[entry.fieldId] ?? entry.default ?? ''}`)
+          }
+        }
+        if (parts.length === 0) return ''
+        return `${idx}:${parts.join(',')}`
       })
       .join('|')
   }, [slots, slotsConfig, availableModules])
@@ -339,6 +391,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           dataType: channel.dataType,
           iecAddress,
           alias: existingAliases.get(aliasKey) ?? '',
+          modeFieldId: channel.modeFieldId,
+          modeOptions: channel.modeOptions,
+          modeValue: channel.modeValue,
         })
       }
     }
@@ -358,6 +413,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }
 
   const handleSlotChange = (slotIndex: number, moduleId: string) => {
+    // Fixed slots (built-in I/O) can't be replaced or cleared from
+    // the picker — the renderer manages slot 0 itself when a fixed
+    // module is declared.
+    if (slotIsLocked(slotIndex)) return
     const next = [...slots]
     next[slotIndex] = moduleId || null
     const nextConfig = { ...slotsConfig }
@@ -366,17 +425,31 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }
 
   const handleClearAll = () => {
-    writeModuleConfig({ ...moduleConfig, slots: Array<string | null>(maxSlots).fill(null), slotsConfig: {} })
+    // "Clear All" wipes every user-added slot but preserves the fixed
+    // built-in module at slot 0 — that slot is part of the hardware,
+    // not a user choice.
+    const cleared = Array<string | null>(maxSlots).fill(null)
+    const clearedConfig: SlotConfigMap = {}
+    if (fixedModule) {
+      cleared[0] = fixedModule.id
+      // Preserve slot 0's per-channel config (BOOL/analog modes)
+      // through a Clear All — those choices belong to the built-in
+      // module, not the expansion modules the user is clearing.
+      if (slotsConfig['1']) clearedConfig['1'] = slotsConfig['1']
+    }
+    writeModuleConfig({ ...moduleConfig, slots: cleared, slotsConfig: clearedConfig })
   }
 
   /* Stackable: append the first available module to the tail of the
-   * populated range. The user can then change it via the dropdown. */
+   * populated range. The user can then change it via the dropdown.
+   * Picks from `selectableModules` (fixed modules excluded) so the
+   * built-in I/O can't be duplicated into expansion slots. */
   const handleAddModule = () => {
     if (!stackable) return
-    if (populatedCount >= maxSlots || availableModules.length === 0) return
+    if (populatedCount >= maxSlots || selectableModules.length === 0) return
     const targetIndex = populatedCount
     const next = [...slots]
-    next[targetIndex] = availableModules[0].id
+    next[targetIndex] = selectableModules[0].id
     writeModuleConfig({ ...moduleConfig, slots: next, slotsConfig })
     setSelectedSlot(targetIndex)
   }
@@ -391,6 +464,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     if (fromIdx === toIdx) return
     if (fromIdx < 0 || fromIdx >= slots.length) return
     if (toIdx < 0 || toIdx >= slots.length) return
+    // The fixed slot (built-in I/O) stays at index 0 — neither end
+    // of a reorder can touch it.  Drop these as no-ops.
+    if (slotIsLocked(fromIdx) || slotIsLocked(toIdx)) return
 
     const nextSlots = arrayMove(slots, fromIdx, toIdx)
 
@@ -448,6 +524,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const performRemoveModule = (index: number) => {
     if (!stackable) return
     if (index < 0 || index >= populatedCount) return
+    // Fixed slot (built-in I/O) can't be removed by the user.
+    if (slotIsLocked(index)) return
 
     const nextSlots = [...slots]
     for (let i = index; i < maxSlots - 1; i++) nextSlots[i] = nextSlots[i + 1] ?? null
@@ -499,6 +577,34 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 
+  /**
+   * Flip a per-channel mode (Opta built-in pins, where each input can
+   * be BOOL on %IX or UINT analog on %IW). Writes the chosen mode key
+   * to `slotsConfig[slot][modeFieldId]` via the 'module-configuration'
+   * persistence key — the same field a per-module configScreen would
+   * write to. The allocator effect above watches `formatSelectionKey`,
+   * which includes every perChannelChoices field; the write triggers
+   * the channel resolver (picks the new mode), then the allocator
+   * (rewrites IEC addresses), and the io-mapping table re-renders
+   * with the new channelType / dataType / iecAddress.
+   *
+   * `slot` is 1-indexed (matches IoMappingEntry.slot and the
+   * slotsConfig key convention).
+   */
+  const handleModeChange = (slot: number, modeFieldId: string, newValue: string) => {
+    const state = useOpenPLCStore.getState()
+    const vsd = state.deviceDefinitions.configuration.vendorScreenData
+    const moduleConfig = (vsd?.['module-configuration'] ?? {}) as ModuleConfigState
+    const prevSlotsConfig = moduleConfig.slotsConfig ?? {}
+    const key = String(slot)
+    const prevForSlot = prevSlotsConfig[key] ?? {}
+    const nextSlotsConfig: SlotConfigMap = {
+      ...prevSlotsConfig,
+      [key]: { ...prevForSlot, [modeFieldId]: newValue },
+    }
+    setVendorScreenData('module-configuration', { ...moduleConfig, slotsConfig: nextSlotsConfig })
+  }
+
   /* ------------------------------------------------------------ */
   /* Config field values (with defaults)                           */
   /* ------------------------------------------------------------ */
@@ -535,6 +641,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     return entries.filter((e) => e.slot === selectedSlot + 1)
   })()
 
+  // Render a "Mode" column only when at least one channel in the
+  // selected slot was resolved out of a `perChannelChoices` entry
+  // (i.e. has a runtime-settable mode — Opta built-in pins, Opta
+  // analog-expansion inputs). Static channels (SLM-RP4 modules,
+  // Opta relays/LEDs/button) keep the original 4-column layout.
+  const showModeColumn = ioEntriesForSelected.some((e) => !!e.modeFieldId)
+
   return (
     // `flex-1 min-h-0` claims all available vertical space the parent
     // section grants us; both panes inside scroll independently so the
@@ -551,8 +664,16 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 key={action.id}
                 type='button'
                 onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
-                disabled={!slots.some((s) => s !== null)}
-                className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                // Clear All only does work if there's at least one
+                // non-locked, non-empty slot to clear.  The fixed
+                // built-in slot doesn't count — Clear All preserves
+                // it.  Without this guard the button would always
+                // appear enabled for fixed-module devices even when
+                // every expansion slot is already empty.
+                disabled={
+                  !slots.some((s, idx) => s !== null && !slotIsLocked(idx))
+                }
+                className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
               >
                 {action.label}
               </button>
@@ -576,7 +697,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     moduleName={mod?.name}
                     ioSummary={slotIoSummary(moduleId)}
                     isSelected={idx === selectedSlot}
-                    draggable={!!mod}
+                    draggable={!!mod && !slotIsLocked(idx)}
                     onSelect={() => setSelectedSlot(idx)}
                   />
                 )
@@ -587,8 +708,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
             <button
               type='button'
               onClick={handleAddModule}
-              disabled={populatedCount >= maxSlots || availableModules.length === 0}
-              className='hover:bg-brand-light/10 dark:hover:bg-brand-medium-dark/10 flex shrink-0 items-center justify-center gap-1 border-t border-neutral-100 px-3 py-2 text-xs font-medium text-brand disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent dark:border-neutral-800 dark:text-brand-light dark:disabled:text-neutral-600'
+              disabled={populatedCount >= maxSlots || selectableModules.length === 0}
+              className='hover:bg-brand-light/10 dark:hover:bg-brand-medium-dark/10 flex shrink-0 cursor-pointer items-center justify-center gap-1 border-t border-neutral-100 px-3 py-2 text-xs font-medium text-brand disabled:cursor-not-allowed disabled:text-neutral-400 disabled:hover:bg-transparent dark:border-neutral-800 dark:text-brand-light dark:disabled:text-neutral-600'
             >
               + Add module
             </button>
@@ -616,59 +737,73 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   {/* Module picker — always visible. In physical mode,
                   selecting "-- Empty --" clears the slot; in stackable
                   mode there is no empty option and removal goes through
-                  the Remove button so the remaining slots shift up. */}
-                  <div className='mb-4 flex items-center gap-3'>
-                    <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
-                    <Select
-                      value={selectedModule ? selectedModule.id : '__empty__'}
-                      onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
-                    >
-                      <SelectTrigger
-                        aria-label={`Module for slot ${selectedSlot + 1}`}
-                        placeholder='-- Empty --'
-                        withIndicator
-                        className='flex h-[32px] w-80 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                      />
-                      <SelectContent
-                        className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                        sideOffset={5}
-                        position='popper'
-                        align='center'
-                        side='bottom'
-                      >
-                        {!stackable && (
-                          <SelectItem
-                            value='__empty__'
-                            className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                  the Remove button so the remaining slots shift up.
+                  Locked (built-in) slots render a disabled picker
+                  pinned to the fixed module — the underlying handler
+                  is also a no-op for those slots. */}
+                  {(() => {
+                    const locked = slotIsLocked(selectedSlot)
+                    // For the locked slot the only visible option is
+                    // the fixed module (the user can't change it).
+                    // For every other slot, fixed modules are filtered
+                    // out — they belong only at slot 1.
+                    const dropdownModules = locked && fixedModule ? [fixedModule] : selectableModules
+                    return (
+                      <div className='mb-4 flex items-center gap-3'>
+                        <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>Module</Label>
+                        <Select
+                          value={selectedModule ? selectedModule.id : '__empty__'}
+                          onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
+                          disabled={locked}
+                        >
+                          <SelectTrigger
+                            aria-label={`Module for slot ${selectedSlot + 1}`}
+                            placeholder='-- Empty --'
+                            withIndicator
+                            className='flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                          />
+                          <SelectContent
+                            className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                            sideOffset={5}
+                            position='popper'
+                            align='center'
+                            side='bottom'
                           >
-                            <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
-                              -- Empty --
-                            </span>
-                          </SelectItem>
+                            {!stackable && !locked && (
+                              <SelectItem
+                                value='__empty__'
+                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                              >
+                                <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
+                                  -- Empty --
+                                </span>
+                              </SelectItem>
+                            )}
+                            {dropdownModules.map((mod) => (
+                              <SelectItem
+                                key={mod.id}
+                                value={mod.id}
+                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                              >
+                                <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                  {mod.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {stackable && selectedModule && !locked && (
+                          <button
+                            type='button'
+                            onClick={() => setRemoveModalOpen(true)}
+                            className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+                          >
+                            Remove module
+                          </button>
                         )}
-                        {availableModules.map((mod) => (
-                          <SelectItem
-                            key={mod.id}
-                            value={mod.id}
-                            className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                          >
-                            <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                              {mod.name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {stackable && selectedModule && (
-                      <button
-                        type='button'
-                        onClick={() => setRemoveModalOpen(true)}
-                        className='rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
-                      >
-                        Remove module
-                      </button>
-                    )}
-                  </div>
+                      </div>
+                    )
+                  })()}
 
                   {selectedModule && (
                     <>
@@ -721,6 +856,11 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                             <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
                               Type
                             </th>
+                            {showModeColumn && (
+                              <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
+                                Mode
+                              </th>
+                            )}
                             <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
                               IEC Address
                             </th>
@@ -741,6 +881,27 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                               <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
                                 {entry.channelType}
                               </td>
+                              {showModeColumn && (
+                                <td className='px-2 py-1.5'>
+                                  {entry.modeFieldId && entry.modeOptions && entry.modeOptions.length > 0 ? (
+                                    <select
+                                      value={entry.modeValue ?? entry.modeOptions[0]}
+                                      onChange={(e) =>
+                                        handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)
+                                      }
+                                      className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
+                                    >
+                                      {entry.modeOptions.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>—</span>
+                                  )}
+                                </td>
+                              )}
                               <td className='px-2 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
                                 {entry.iecAddress}
                               </td>
