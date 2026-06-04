@@ -26,8 +26,8 @@ import type {
   PlatformLog,
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
-import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
+import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
 import { describeIncompatibleRuntime, isStrucppCompatibleRuntime } from '../firmware/runtime-version-gate'
