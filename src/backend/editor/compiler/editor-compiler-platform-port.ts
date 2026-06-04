@@ -204,22 +204,30 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Arduino-cli library install.  Existing
-     * `handleLibraryInstallation` installs the full set of libs
-     * configured in hals.json — args.libId is currently a no-op
-     * for backward compat with the existing handler.
+     * Arduino-cli library install.  Forwards `args.extraLibraries`
+     * (the per-board library list from `BoardBuildInfo`) to
+     * `handleLibraryInstallation`, which combines them with the
+     * editor's `GLOBAL_LIBRARIES` and runs `arduino-cli lib install`
+     * for whatever's missing.  `args.libId` is unused on this path —
+     * kept in the port shape for the legacy single-library callers.
      */
-    async installArduinoLib(_args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
+    async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation((chunk, level) => {
+        await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
         })
         return { ok: true }
       } catch (error) {
+        // Reached only when the install machinery itself can't run
+        // (arduino-cli binary missing, spawn failure, etc.).  Non-
+        // zero `arduino-cli lib install` exits are warnings inside
+        // `handleLibraryInstallation` and don't throw.  Either way
+        // the build continues — arduino-cli compile is the source of
+        // truth for whether a required header can be found.
         const message = error instanceof Error ? error.message : String(error)
-        log(`Arduino library install failed: ${message}`, 'error')
-        return { ok: false }
+        log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
+        return { ok: true }
       }
     },
 

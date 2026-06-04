@@ -44,6 +44,8 @@ type FBDFlowActions = {
   clearFBDFlows: () => void
   addFBDFlow: (flow: FBDFlowType) => void
   removeFBDFlow: (flowId: string) => void
+  /** See `renameLadderFlow` in ../ladder/types — same contract for FBD. */
+  renameFBDFlow: (oldName: string, newName: string) => void
 
   /**
    * Control the rungs of the flow

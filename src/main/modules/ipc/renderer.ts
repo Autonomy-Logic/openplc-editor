@@ -170,6 +170,15 @@ const rendererProcessBridge = {
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
+  /** Drop a recent-projects entry without touching disk — used by the
+   *  start screen's "Remove from list" action. */
+  removeProjectFromRecent: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:remove-from-recent', projectPath),
+  /** Recursively delete a project directory AND drop it from the recent
+   *  list. Gated by the main-process service's `project.json` safety
+   *  check — see `ProjectService.deleteProject`. */
+  deleteProject: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:delete', projectPath),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
 
   // ===================== WINDOW CONTROLS =====================
@@ -206,7 +215,7 @@ const rendererProcessBridge = {
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (
-    compileProgramArgs: Array<string | boolean | null | PLCProjectData>,
+    compileProgramArgs: Array<string | boolean | null | PLCProjectData | Record<string, unknown>>,
     callback: (args: CompilerPortMessage) => void,
   ) => {
     // Create a MessageChannel to communicate between the renderer and main process
@@ -338,6 +347,18 @@ const rendererProcessBridge = {
     devices?: string[]
     error?: string
   }> => ipcRenderer.invoke('packages:import-from-file'),
+  installPackageFromUrl: (args: {
+    packageId: string
+    version: string
+    downloadUrl: string
+  }): Promise<{
+    success: boolean
+    canceled?: boolean
+    packageId?: string
+    packageName?: string
+    devices?: string[]
+    error?: string
+  }> => ipcRenderer.invoke('packages:install-from-url', args),
   listInstalledPackages: (): Promise<
     Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
   > => ipcRenderer.invoke('packages:list-installed'),

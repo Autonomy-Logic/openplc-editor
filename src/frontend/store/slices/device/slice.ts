@@ -12,6 +12,25 @@ import {
   removeAddressPrefix,
 } from './validation/pins'
 
+/**
+ * Lazily resolve the active board's pin array on an Immer draft,
+ * creating the entry the first time a board claims pins. Returns a
+ * reference that's safe to mutate (push / splice / index-assign) —
+ * the surrounding `produce()` call captures the changes.
+ *
+ * Centralising this keeps every action's "operate on the current
+ * board's pins" intent obvious and prevents a stale write when the
+ * dict didn't yet have a key for the active board (which would
+ * otherwise crash with `Cannot read properties of undefined`).
+ */
+function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
+  const board = draft.deviceDefinitions.configuration.deviceBoard
+  if (!draft.deviceDefinitions.pinMapping.pinsByBoard[board]) {
+    draft.deviceDefinitions.pinMapping.pinsByBoard[board] = []
+  }
+  return draft.deviceDefinitions.pinMapping.pinsByBoard[board]
+}
+
 const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
   deviceAvailableOptions: {
     availableBoards: new Map(),
@@ -20,7 +39,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
   deviceDefinitions: {
     configuration: defaultDeviceConfiguration,
     pinMapping: {
-      pins: [],
+      pinsByBoard: {},
       currentSelectedPinTableRow: -1,
     },
   },
@@ -85,7 +104,18 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             }
           }
           if (pinMapping) {
-            deviceDefinitions.pinMapping.pins = pinMapping
+            // Two shapes are accepted by design — see DeviceActions.setDeviceDefinitions.
+            // Legacy flat array attaches to whatever board the
+            // accompanying configuration names (or the current
+            // store value if no configuration was passed). This
+            // is the migration path for projects saved before
+            // per-board scoping landed.
+            if (Array.isArray(pinMapping)) {
+              const targetBoard = deviceDefinitions.configuration.deviceBoard
+              deviceDefinitions.pinMapping.pinsByBoard = targetBoard ? { [targetBoard]: pinMapping } : {}
+            } else {
+              deviceDefinitions.pinMapping.pinsByBoard = { ...pinMapping }
+            }
             deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
           }
         }),
@@ -96,7 +126,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
-            pins: [],
+            pinsByBoard: {},
             currentSelectedPinTableRow: -1,
           }
           runtimeConnection.jwtToken = null
@@ -129,12 +159,14 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
 
     createNewPin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
 
-          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const referencePin = pins[pinMapping.currentSelectedPinTableRow]
           const defaultPinType = 'digitalInput'
-          const nextHighestPinAddress = getHighestPinAddress(pinMapping.pins, defaultPinType)
+          const nextHighestPinAddress = getHighestPinAddress(pins, defaultPinType)
           const nextAddress = createNewAddress('INCREMENT', nextHighestPinAddress)
 
           let newPin: DevicePin = {
@@ -145,23 +177,23 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
-            pinMapping.pins.push(newPin)
-            pinMapping.currentSelectedPinTableRow = pinMapping.pins.length - 1
+            pins.push(newPin)
+            pinMapping.currentSelectedPinTableRow = pins.length - 1
             return
           }
 
           const newAddress = createNewAddress('INCREMENT', referencePin.address)
-          const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
+          const pinExists = pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
             newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, alias: '' }
-            pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
+            pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
           }
 
-          const highestPinAddress = getHighestPinAddress(pinMapping.pins, pinExists.pinType)
-          const indexOfHighestPinAddress = pinMapping.pins.findIndex((pin) => pin.address === highestPinAddress)
+          const highestPinAddress = getHighestPinAddress(pins, pinExists.pinType)
+          const indexOfHighestPinAddress = pins.findIndex((pin) => pin.address === highestPinAddress)
           const newAddressForHighestPinAddress = createNewAddress('INCREMENT', highestPinAddress)
           const newPinForHighestPinAddress = {
             pin: '',
@@ -170,23 +202,25 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             alias: '',
           }
 
-          pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
+          pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
           pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
         }),
       )
     },
     removePin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
 
-          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const referencePin = pins[pinMapping.currentSelectedPinTableRow]
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) return
 
           const referencePinType = referencePin.pinType
           const referencePinAddressPosition = Number(removeAddressPrefix(referencePin.address))
 
-          pinMapping.pins.forEach((pin) => {
+          pins.forEach((pin) => {
             if (
               pin.pinType === referencePinType &&
               Number(removeAddressPrefix(pin.address)) > referencePinAddressPosition
@@ -196,13 +230,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           })
 
           const selectedRow =
-            pinMapping.pins.length - 1 > 0
-              ? pinMapping.pins.length - 1 === pinMapping.currentSelectedPinTableRow
+            pins.length - 1 > 0
+              ? pins.length - 1 === pinMapping.currentSelectedPinTableRow
                 ? Math.max(pinMapping.currentSelectedPinTableRow - 1, 0)
                 : pinMapping.currentSelectedPinTableRow
               : -1
 
-          pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
+          pins.splice(pinMapping.currentSelectedPinTableRow, 1)
           pinMapping.currentSelectedPinTableRow = selectedRow
         }),
       )
@@ -215,10 +249,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         data: { pin: '', pinType: '', address: '', alias: '' },
       }
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
+          const activeBoard = draft.deviceDefinitions.configuration.deviceBoard
 
-          const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const currentPin = pins[pinMapping.currentSelectedPinTableRow]
 
           if (!currentPin) {
             returnMessage.ok = false
@@ -230,7 +267,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           for (const key in updatedData) {
             switch (key) {
               case 'pin': {
-                const validation = checkIfPinIsValid(pinMapping.pins, updatedData.pin)
+                const validation = checkIfPinIsValid(pins, updatedData.pin)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
@@ -251,7 +288,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
 
                   const originalIndex = pinMapping.currentSelectedPinTableRow
 
-                  const newPinsArray = pinMapping.pins
+                  const newPinsArray = pins
                     .filter((_, index) => index !== originalIndex)
                     .map((p) => {
                       if (p.pinType === oldPinType && Number(removeAddressPrefix(p.address)) > oldAddressPosition) {
@@ -284,9 +321,11 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
                     return Number(removeAddressPrefix(a.address)) - Number(removeAddressPrefix(b.address))
                   })
 
-                  pinMapping.pins = newPinsArray
-
-                  pinMapping.currentSelectedPinTableRow = pinMapping.pins.findIndex((p) => p === currentPin)
+                  // Replace the active board's bucket with the
+                  // re-sorted array. Re-resolve currentPin's index
+                  // by identity — the sort moved it.
+                  pinMapping.pinsByBoard[activeBoard] = newPinsArray
+                  pinMapping.currentSelectedPinTableRow = newPinsArray.findIndex((p) => p === currentPin)
 
                   returnMessage.data!.pinType = newPinType
                   returnMessage.data!.address = finalAddress
@@ -308,7 +347,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
                 break
 
               case 'alias': {
-                const validation = checkIfPinAliasIsValid(pinMapping.pins, updatedData.alias)
+                const validation = checkIfPinAliasIsValid(pins, updatedData.alias)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
@@ -332,7 +371,45 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
+          // Wipe platformOption selections when the board changes — they're
+          // declared per-board in the VPP manifest, so a `cpu=atmega328old`
+          // choice from a previous Nano session shouldn't bleed into a fresh
+          // Mega/Opta/etc. setup. Compile-time code falls back to each
+          // manifest's `default` when the record is empty.
+          //
+          // Pin mappings on the other hand stay on disk per-board (the
+          // `pinsByBoard` dict), so switching here just changes which
+          // bucket the active selector pulls from — the previous board's
+          // pins are preserved for when the user switches back. The
+          // selected-row pointer is reset because the new board's
+          // bucket has its own row count.
+          if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+            deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+          }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
+        }),
+      )
+    },
+    setSelectedPlatformOption: (key, value): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          /* istanbul ignore if -- selectedPlatformOptions is always initialized to {} on
+             store creation (defaults + the merge in normalizeConfigurationForLoad), so this
+             defensive guard only fires if the store is ever migrated from an older shape */
+          if (!deviceDefinitions.configuration.selectedPlatformOptions) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+          }
+          deviceDefinitions.configuration.selectedPlatformOptions[key] = value
+        }),
+      )
+    },
+    clearSelectedPlatformOptions: (): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          deviceDefinitions.configuration.selectedPlatformOptions = {}
         }),
       )
     },
@@ -341,14 +418,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
           deviceDefinitions.configuration.communicationPort = communicationPort
-        }),
-      )
-    },
-    setCompileOnly: (compileOnly): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          deviceDefinitions.configuration.compileOnly = compileOnly
         }),
       )
     },
@@ -495,8 +564,12 @@ function mergeDeviceConfigWithDefaults(
     deviceBoard: provided.deviceBoard || defaults.deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
-    compileOnly: provided.compileOnly ?? defaults.compileOnly,
     vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
+    // Must merge — otherwise loading a project whose configuration.json
+    // predates platformOptions leaves the field undefined in the store, and
+    // every selector falling back to `?? {}` returns a fresh literal that
+    // triggers an infinite Zustand re-render loop (blank device screen).
+    selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
   }
 }
 

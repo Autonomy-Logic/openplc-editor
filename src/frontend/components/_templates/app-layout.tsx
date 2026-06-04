@@ -10,6 +10,7 @@ import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import AboutModal from '../_organisms/about-modal'
 import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal } from '../_organisms/modals'
+import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
@@ -112,6 +113,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
               isOpen={modals['confirm-delete-element'].open}
               rung={modals['confirm-delete-element'].data as RungLadderState}
             />
+          )}
+          {modals?.['confirm-delete-project']?.open === true && (
+            <ConfirmDeleteProjectModal isOpen={modals['confirm-delete-project'].open} />
           )}
           {modals?.['quit-application']?.open === true && (
             <QuitApplicationModal isOpen={modals['quit-application'].open} />

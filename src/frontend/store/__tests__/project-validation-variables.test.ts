@@ -399,6 +399,17 @@ describe('updateVariableValidation', () => {
     expect(result.title).toContain('Location already exists')
   })
 
+  it('does not flag self-collision when re-setting a variable to its current location', () => {
+    // Regression guard: the user re-picks the same address from the
+    // location dropdown to refresh a renamed alias.  The uniqueness
+    // check must exclude the variable being updated; otherwise the
+    // re-pick would be rejected against the variable's own existing
+    // location entry.  Pairs with the alias-refresh path in the
+    // editable-cell `onBlur` handler.
+    const result = updateVariableValidation(existingVars, { location: existingVars[0].location }, existingVars[0])
+    expect(result.ok).toBe(true)
+  })
+
   it('returns error when location format is invalid for variable type', () => {
     const boolVar = makeVariable('Test', 'BOOL', '')
     const result = updateVariableValidation(existingVars, { location: '%MD0' }, boolVar)

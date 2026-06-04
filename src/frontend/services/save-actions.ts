@@ -148,7 +148,13 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
 
     yield {
       path: 'devices/pin-mapping.json',
-      content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+      // Serialise the full per-board dict — each board's pins are
+      // preserved on disk even when it's not the active target, so a
+      // user switching Mega → MKR → back to Mega gets their Mega
+      // pin-mapping work back. The parser accepts both this dict
+      // shape and the legacy flat array (which it auto-migrates by
+      // keying under the active board on load).
+      content: JSON.stringify(deviceDefinitions.pinMapping.pinsByBoard, null, 2),
       category: 'pin-mapping',
     }
   }
@@ -203,7 +209,9 @@ function serializeProjectFile(
       },
       {
         path: 'devices/pin-mapping.json',
-        content: JSON.stringify(deviceDefinitions.pinMapping.pins, null, 2),
+        // Per-board dict — see the matching comment in
+        // serializeAllProjectFiles for the rationale.
+        content: JSON.stringify(deviceDefinitions.pinMapping.pinsByBoard, null, 2),
         category: 'pin-mapping',
       },
     ]

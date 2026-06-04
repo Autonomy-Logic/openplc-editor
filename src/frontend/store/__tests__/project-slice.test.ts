@@ -17,6 +17,7 @@ import type {
   PLCVariable,
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
+import { generateIecVariablesToString } from '../../utils/generate-iec-variables-to-string'
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
 import { createEditorSlice } from '../slices/editor'
@@ -535,6 +536,54 @@ describe('createProjectSlice', () => {
       seedPou(store, makePou('Main'))
       store.getState().projectActions.updatePouName('Missing', 'NewName')
       expect(store.getState().project.data.pous[0].name).toBe('Main')
+    })
+
+    it('cascades the rename into matching configuration instances (program POUs)', () => {
+      // Regression guard for the "user renames `main` and the build
+      // breaks" report.  The template seeds an instance bound to the
+      // template's `main` program; without this cascade, renaming
+      // the POU would orphan that instance and the IEC compile would
+      // fail with a "program not found" error.
+      seedPou(store, makePou('OldProg'))
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'OldProg' },
+      })
+      store.getState().projectActions.updatePouName('OldProg', 'NewProg')
+      const instances = store.getState().project.data.configurations.resource.instances
+      expect(instances[0].program).toBe('NewProg')
+    })
+
+    it('syncs the LD body.value.name when a graphical POU is renamed', () => {
+      // Regression guard for the "rename made all rungs disappear"
+      // report.  LD/FBD bodies embed their `name` field inside
+      // `body.value`; the project-load path uses it as the
+      // ladderFlows key, so the rename has to update the inner name
+      // too or the on-disk file ends up with a stale name and the
+      // next reload renders an empty canvas under the new POU name.
+      const pou: PLCPou = {
+        name: 'main',
+        pouType: 'program',
+        interface: { variables: [] },
+        body: { language: 'ld', value: { name: 'main', updated: false, rungs: [] } },
+        documentation: '',
+      }
+      seedPou(store, pou)
+      store.getState().projectActions.updatePouName('main', 'PLC_PRG')
+      const updated = store.getState().project.data.pous[0]
+      expect(updated.name).toBe('PLC_PRG')
+      expect((updated.body.value as { name: string }).name).toBe('PLC_PRG')
+    })
+
+    it('does not cascade renames into instances when the POU is a function (no instance binding)', () => {
+      seedPou(store, makePou('Helper', 'function'))
+      // Defensive: a stray instance with the same `program` value
+      // shouldn't be rewritten when a function POU is renamed —
+      // only program POUs participate in the instance contract.
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'Helper' },
+      })
+      store.getState().projectActions.updatePouName('Helper', 'Renamed')
+      expect(store.getState().project.data.configurations.resource.instances[0].program).toBe('Helper')
     })
   })
 
@@ -1867,6 +1916,57 @@ describe('createProjectSlice', () => {
   // =========================================================================
   // Remote devices
   // =========================================================================
+  describe('updateLibraryManifest', () => {
+    it('writes the manifest blob into project.data.libraryManifest', () => {
+      // libraryManifest is the .stlib metadata the library editor
+      // dumps back into project.json on save; the action is a pure
+      // setter, so the assertion is straight value-equality.
+      store.getState().projectActions.updateLibraryManifest('# my library')
+      expect(store.getState().project.data.libraryManifest).toBe('# my library')
+    })
+  })
+
+  describe('updateEthercatConfig', () => {
+    // Surfaces three explicit failure shapes — exercised separately
+    // because the error message is the contract the EtherCAT screen
+    // surfaces back to the user.
+    it('fails when remoteDevices is undefined', () => {
+      store.setState((s) => ({
+        project: {
+          ...s.project,
+          data: { ...s.project.data, remoteDevices: undefined as unknown as PLCRemoteDevice[] },
+        },
+      }))
+      const result = store.getState().projectActions.updateEthercatConfig('Dev1', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'No remote devices found' })
+    })
+
+    it('fails when the named device is missing', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Other'))
+      const result = store.getState().projectActions.updateEthercatConfig('Missing', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'Remote device not found' })
+    })
+
+    it('fails when the device protocol is not ethercat', () => {
+      // makeRemoteDevice defaults to modbus-tcp — same guard the
+      // EtherCAT screen relies on to refuse cross-protocol writes.
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      const result = store.getState().projectActions.updateEthercatConfig('Dev1', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'Device is not an EtherCAT device' })
+    })
+
+    it('writes ethercatConfig onto an ethercat-protocol device', () => {
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const cfg = {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [],
+      }
+      const result = store.getState().projectActions.updateEthercatConfig('BusA', cfg)
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.remoteDevices![0].ethercatConfig).toEqual(cfg)
+    })
+  })
+
   describe('createRemoteDevice', () => {
     it('creates a remote device with default modbus config', () => {
       const result = store.getState().projectActions.createRemoteDevice({
@@ -2800,9 +2900,12 @@ describe('createProjectSlice', () => {
       // typed anything, so reconcile should skip the parse entirely
       // (and still regenerate after the new variable lands).
       seedPou(store, makePou('Main', 'program', [makeVariable('Existing')]))
-      // The serializer's exact output for one variable named
-      // "Existing : INT" — using the same template as the helper.
-      const cleanText = 'VAR\n\tExisting : INT;\nEND_VAR'
+      // Use the production serializer so the byte-for-byte format
+      // (2-space block indent, 4-space decl indent, class-grouped
+      // VAR blocks) stays in lockstep without us mirroring the
+      // template here.
+      const existing = store.getState().project.data.pous[0].interface!.variables
+      const cleanText = generateIecVariablesToString(existing)
       const model = {
         type: 'plc-textual' as const,
         meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },

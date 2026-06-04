@@ -123,6 +123,61 @@ class ProjectService {
   }
 
   /**
+   * Recursively delete a project directory from disk and drop its entry
+   * from the recent-projects history. Used by the start screen's "Delete
+   * project" 3-dot-menu action.
+   *
+   * Safety gate: refuses to delete a directory that doesn't contain a
+   * top-level `project.json`. Without this, a corrupt history file
+   * pointing at an arbitrary path (e.g. `/Users/foo/Documents`) would
+   * silently `rm -rf` it. The gate makes the operation no-op against
+   * any path that isn't an OpenPLC project root.
+   *
+   * Returns `{ success: true }` on actual deletion; `{ success: false,
+   * error }` when the gate trips or fs.rm fails. The history entry is
+   * dropped on either success OR a `project.json`-missing error
+   * (renderer-side: a missing project.json means the project is gone
+   * already; keeping the stale entry in the recent list serves no
+   * one), but NOT on other fs errors (permission denied, etc.) so the
+   * user can retry after fixing the cause.
+   */
+  async deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
+    const directoryPath = projectPath.endsWith('/project.json')
+      ? projectPath.slice(0, -'/project.json'.length)
+      : projectPath
+    const projectJsonPath = join(directoryPath, 'project.json')
+
+    let projectJsonExists = false
+    try {
+      const stat = await promises.stat(projectJsonPath)
+      projectJsonExists = stat.isFile()
+    } catch {
+      projectJsonExists = false
+    }
+
+    if (!projectJsonExists) {
+      // Stale entry — wipe from history but don't touch disk.
+      await this.removeProjectFromHistory(directoryPath)
+      return {
+        success: false,
+        error: `Path "${directoryPath}" does not contain a project.json. Removed the entry from the recent list.`,
+      }
+    }
+
+    try {
+      await promises.rm(directoryPath, { recursive: true, force: true })
+    } catch (err) {
+      return {
+        success: false,
+        error: `Failed to delete project directory: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    }
+
+    await this.removeProjectFromHistory(directoryPath)
+    return { success: true }
+  }
+
+  /**
    * Read all project files as raw strings — no parsing, no transformation.
    * The frontend is responsible for parsing the returned content.
    */

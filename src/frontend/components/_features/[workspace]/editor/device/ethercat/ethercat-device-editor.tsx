@@ -117,9 +117,11 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
           | undefined
       )?.entries ?? []
+    const activePins =
+      state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? []
     const pool = buildAddressPool(
       {
-        pinMapping: { pins: state.deviceDefinitions.pinMapping.pins },
+        pinMapping: { pins: activePins },
         vendorIoMapping: { entries: ioMapping },
         remoteDevices: project.data.remoteDevices,
       },

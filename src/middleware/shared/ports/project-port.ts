@@ -45,7 +45,12 @@ export interface ProjectResponse {
     meta: ProjectMeta
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
+    /** Pin mappings parsed from `devices/pin-mapping.json`. The
+     *  per-board dict (`Record<string, DevicePin[]>`) is the
+     *  canonical shape; the legacy flat array is still accepted
+     *  on load and auto-migrated by the store on the next save.
+     *  See `pinMappingFileSchema` for the on-disk contract. */
+    devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
     /**
@@ -210,6 +215,24 @@ export interface ProjectPort {
 
   /** Get list of recently opened projects. */
   getRecentProjects(): Promise<RecentProject[]>
+
+  /**
+   * Drop a project entry from the recent-projects list without
+   * touching disk. Used by the start-screen 3-dot menu's "Remove
+   * from list" action. Disk state is preserved — re-opening the
+   * project by path later re-adds it to the recent list.
+   */
+  removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Recursively delete a project directory and drop its entry from
+   * the recent list. Destructive — the editor surfaces a confirmation
+   * modal before invoking this. Implementations gate the recursive
+   * delete on the directory actually containing a top-level
+   * `project.json` to refuse arbitrary paths (stale history entries
+   * pointing at user-home directories etc.).
+   */
+  deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
   /**
    * Read a file's content by path.

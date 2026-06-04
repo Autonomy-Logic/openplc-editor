@@ -147,7 +147,7 @@ export interface LibraryPort {
    * Page through the public library catalog hosted on autonomy-edge.
    * Optional — platforms that don't reach the catalog endpoint
    * (offline builds, unconfigured environments) leave it undefined
-   * and the UI hides the "Add from the internet" entry point.
+   * and the UI hides the "Add from catalog" entry point.
    */
   queryPublicCatalog?(args: ListPublicLibrariesArgs): Promise<CatalogQueryResult>
 

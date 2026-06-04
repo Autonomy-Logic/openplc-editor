@@ -18,6 +18,9 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
+import { generateModbusDefines, type VppModbusScreenState } from './modbus-defines'
+
+export type { VppModbusScreenState } from './modbus-defines'
 
 /**
  * Slice of a `hals.json` board entry we read here.  Defined inline
@@ -65,6 +68,17 @@ export interface GenerateDefinesInput {
    *  bridge keys off.  Real Arduino targets emit comms defines
    *  via VPP packages instead. */
   boardRuntime: string
+  /** Persisted VPP Modbus screen state, sourced from
+   *  `DeviceConfiguration.vendorScreenData` under the
+   *  `modbus_rtu` / `modbus_tcp` keys.  When present and the
+   *  runtime is anything other than `'simulator'`, the emitter
+   *  swaps the comms-config block for `generateModbusDefines()`
+   *  output (canonical `MBSERIAL_*` / `MBTCP_*` macros consumed
+   *  by `resources/sources/Baremetal/ModbusSlave.cpp`).
+   *  Simulator targets ignore this field — they always emit the
+   *  fixed RTU-over-USART0 block.  Web passes `undefined` until
+   *  VPP screens land on the web build. */
+  vppModbusState?: VppModbusScreenState
 }
 
 /**
@@ -86,7 +100,7 @@ export interface GenerateDefinesInput {
  * editor-produced and web-produced firmware comes out clean).
  */
 export function generateDefinesContent(input: GenerateDefinesInput): string {
-  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime } = input
+  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState } = input
 
   let DEFINES_CONTENT = ''
 
@@ -116,12 +130,21 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
   DEFINES_CONTENT += `\n\n`
 
-  // 4. Simulator-only Comms Configuration.  Real Arduino targets
-  //    emit comms defines via their VPP packages (or returned
-  //    silently when communicationConfigurationSchema was removed
-  //    — see the editor history); only the simulator still emits
-  //    them from the core compiler because there's no VPP wrapping
-  //    the emulator HAL.
+  // 4. Comms Configuration.  Two sources, mutually exclusive:
+  //      - Simulator: fixed RTU-over-USART0 macros the avr8js
+  //        emulator's serial bridge keys off.  Always emitted on
+  //        simulator targets regardless of vppModbusState.
+  //      - Arduino-family baremetal: emitted from the persisted
+  //        VPP Modbus screen state via `generateModbusDefines()`.
+  //        The historical `communicationConfigurationSchema`
+  //        pipeline (removed in c379c7a9c) used to source this
+  //        from `DeviceConfiguration.communicationConfiguration`;
+  //        the VPP screen replaces it.  Empty/disabled screens
+  //        emit nothing — `ModbusSlave.cpp` then sees no
+  //        MODBUS_ENABLED define and stays quiescent.
+  //    Runtime-v4 / runtime-v3 targets route Modbus config through
+  //    `conf/modbus_slave.json` in the upload bundle and emit no
+  //    macros here.
   if (boardRuntime === 'simulator') {
     DEFINES_CONTENT += '//Comms Configuration\n'
     DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
@@ -131,6 +154,12 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MBSERIAL\n'
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
+  } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
+    const modbusBlock = generateModbusDefines(vppModbusState)
+    if (modbusBlock.length > 0) {
+      DEFINES_CONTENT += modbusBlock
+      DEFINES_CONTENT += '\n\n'
+    }
   }
 
   // 5. IO Config — derived from devicePinMapping.  Pin order is

@@ -34,9 +34,15 @@ const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => 
 
 /**
  * This is a validation to check if the value of the location is unique.
+ *
+ * `exclude` lets the update path skip the variable currently being
+ * mutated — re-setting a variable's location to its current value
+ * (e.g. to re-resolve a renamed alias) must not collide with itself.
+ * Reference-equality is enough since `variables` is the live array
+ * and the caller passes the same object reference.
  */
-const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
-  return variables.some((variable) => variable.location === location)
+const checkIfLocationExists = (variables: PLCVariable[], location: string, exclude?: PLCVariable) => {
+  return variables.some((variable) => variable !== exclude && variable.location === location)
 }
 
 /**
@@ -346,7 +352,10 @@ const updateVariableValidation = (
 
   if (dataToBeUpdated.location) {
     const { location } = dataToBeUpdated
-    if (checkIfLocationExists(variables, location)) {
+    // Exclude the variable being updated so re-setting its own
+    // location (e.g. re-picking the same address to refresh a
+    // renamed alias) doesn't trip the uniqueness check on itself.
+    if (checkIfLocationExists(variables, location, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Location already exists',

@@ -211,6 +211,9 @@ const reconcileVariablesText = (
   getState: ProjectGetState,
   setState: ProjectSetState,
 ): ProjectResponse => {
+  /* istanbul ignore if -- callers only invoke this in the `scope === 'local'` branch where
+     `associatedPou` is required; the `string | undefined` parameter type tracks the union
+     used in createVariable / updateVariable, where global-scope callers never reach here */
   if (!pouName) return ok()
   const state = getState()
   const editorModel =
@@ -221,6 +224,8 @@ const reconcileVariablesText = (
   if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return ok()
   if (editorModel.variable.display !== 'code') return ok()
   const code = editorModel.variable.code
+  /* istanbul ignore if -- TS guarantees `code` is a string when `display === 'code'`; this
+     runtime guard exists only as a belt-and-braces against the editor-model union drifting */
   if (typeof code !== 'string') return ok()
 
   const pou = state.project.data.pous.find((p) => p.name === pouName)
@@ -250,6 +255,7 @@ const reconcileVariablesText = (
 }
 
 const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
+  /* istanbul ignore if -- same callsite guarantees as reconcileVariablesText */
   if (!pouName) return
   const state = getState()
   const editorModel =
@@ -425,6 +431,36 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             const ext = getExtensionFromLanguage(pou.body.language)
             slice.pendingDeletions.push(`pous/${folder}/${oldName}${ext}`)
             pou.name = newName
+
+            // Graphical bodies (LD / FBD) carry a `name` field inside
+            // `body.value` — that's the key the project-load path uses
+            // to seed `ladderFlows[]` / `fbdFlows[]`.  Without syncing
+            // it here, the on-disk serialized JSON keeps the OLD name
+            // inside the body; on the next project open the flow gets
+            // keyed under that stale name and the editor's lookup
+            // (which uses the new `pou.name`) misses, rendering an
+            // empty canvas.  Textual languages don't embed a name in
+            // their body, so the cast guards on the shape.
+            if (pou.body.language === 'ld' || pou.body.language === 'fbd') {
+              const bodyValue = pou.body.value as { name?: string } | undefined
+              if (bodyValue && typeof bodyValue === 'object') {
+                bodyValue.name = newName
+              }
+            }
+
+            // Cascade the rename into the configuration's `instances[]`.
+            // Each instance binds an IEC task to a program POU by name;
+            // without this cascade, renaming a program POU (e.g. the
+            // template-seeded "main") would leave its instance pointing
+            // at the now-deleted name, and the IEC compile step would
+            // fail with a "program not found" error.  Only program POU
+            // renames need to cascade — function-block instances aren't
+            // tracked in `configurations.resource.instances`.
+            if (pou.pouType === 'program') {
+              for (const instance of slice.project.data.configurations.resource.instances) {
+                if (instance.program === oldName) instance.program = newName
+              }
+            }
           }
         }),
       )
@@ -541,7 +577,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           )?.entries ?? []
         const pool = buildAddressPool(
           {
-            pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+            pinMapping: {
+              pins:
+                live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+            },
             vendorIoMapping: { entries: ioMapping },
             remoteDevices: live.project.data.remoteDevices,
           },
@@ -699,7 +738,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         )?.entries ?? []
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          pinMapping: {
+            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+          },
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: live.project.data.remoteDevices,
         },
@@ -732,6 +773,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           for (const pou of slice.project.data.pous) {
+            /* istanbul ignore if -- PLCPouSchema requires `interface.variables` to be an
+               array (defaults to []), so every POU sourced from a Zod-validated project
+               carries the field; defensive against future schema relaxation */
             if (!pou.interface?.variables) continue
             const result = syncVariablesPure(pou.interface.variables, registry)
             adopted += result.report.adopted.length
@@ -1334,7 +1378,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
 
       const pool = buildAddressPool(
         {
-          pinMapping: { pins: live.deviceDefinitions.pinMapping.pins },
+          pinMapping: {
+            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+          },
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: live.project.data.remoteDevices,
         },

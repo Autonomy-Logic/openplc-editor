@@ -216,6 +216,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
             args.runtimeJwtToken ?? null,
             args.cleanBuild ?? false,
             args.communicationPort ?? null,
+            // User-authored configuration-screen data — threaded
+            // through to the shared compile pipeline so it can emit
+            // `vpp_config.h` for arduino-cli VPP boards (Arduino
+            // Opta, P1AM).  The pipeline gates emission on the
+            // board's resolved `vppIo` capability; non-VPP boards
+            // ignore this argument and the field is a no-op.
+            args.vendorScreenData ?? null,
           ],
           (data: Record<string, unknown>) => {
             // Extract simulator firmware path BEFORE the closePort early return,

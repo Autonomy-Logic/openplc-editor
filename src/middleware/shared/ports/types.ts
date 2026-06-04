@@ -579,6 +579,29 @@ import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capa
 
 export type { DebuggerTransport, TargetCapabilities }
 
+/**
+ * VPP-declared FQBN sub-option (e.g. Nano `cpu=atmega328old`). Shared
+ * shape between the manifest wire type, the resolved BoardBuildInfo, the
+ * boards Map exposed to the renderer, and the BoardInfo IPC payload —
+ * keeping it as a single exported interface so adding a field (say,
+ * `condition` for conditional visibility) doesn't drift across the four
+ * sites that reference it. See CompilerModule.applyPlatformOptions for
+ * how the editor turns a value pick into an FQBN segment.
+ */
+export interface PlatformOptionValue {
+  id: string
+  label: string
+  help?: string
+}
+
+export interface PlatformOption {
+  key: string
+  label: string
+  default: string
+  help?: string
+  values: PlatformOptionValue[]
+}
+
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
@@ -596,6 +619,21 @@ export interface BoardInfo {
    *  field (back-compat for pre-migration data). */
   capabilities?: Partial<TargetCapabilities>
   vpp?: VppMetadata
+  /**
+   * Mirrors the VPP manifest's `target.platformOptions`. Surfaced on the
+   * flat BoardInfo (rather than only inside `vpp`) so the device-screen UI
+   * can decide whether to render the variant dropdown without reaching
+   * into VPP-specific metadata. Builtins (Simulator / Runtime v3/v4) never
+   * declare it.
+   */
+  platformOptions?: PlatformOption[]
+  /**
+   * Declarative debug-channel resolver spec carried through from the
+   * source catalog (hals.json or VPP manifest).  Consumed by
+   * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
+   * Absent → the renderer surfaces "Debugging Not Available".
+   */
+  debug?: import('./debug-spec-types').DebugSpec
 }
 
 // ---------------------------------------------------------------------------
@@ -610,6 +648,13 @@ export interface VppModuleDefinition {
    *  definition. Optional — modules with no hwId can only be added
    *  manually. */
   hwId?: string
+  /** When true, this module represents a fixed (always-present) part
+   *  of the device hardware — e.g. the Arduino Opta's built-in I/O.
+   *  The renderer auto-places it in slot 1 on first load, locks that
+   *  slot against removal/replacement, and hides the module from the
+   *  per-slot module-picker dropdown (slot 1 is the only place it
+   *  belongs). */
+  fixed?: boolean
   image?: string
   /** One-line prose displayed in the per-slot detail pane of the
    *  backplane editor. */
@@ -645,6 +690,11 @@ export interface VppModuleDefinition {
 
 export interface VppMetadata {
   packageId: string
+  /** Human-readable vendor name from the package manifest's
+   *  `package.vendor.name` field.  Used by the device-dropdown to
+   *  group boards under their vendor heading (e.g. all boards from
+   *  `com.openplc.arduino` cluster under "Arduino"). */
+  vendor: string
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
@@ -679,6 +729,15 @@ export interface PackageManifest {
       type: string
       platform?: string
       core?: string
+      boardManagerUrl?: string
+      /**
+       * User-selectable FQBN sub-options for arduino-cli targets. The editor
+       * renders a dropdown per entry (next to the board picker) and appends
+       * `:<key>=<chosen_id>` to `platform` at compile and upload time —
+       * mirroring arduino-cli's boards.txt menu mechanism. See
+       * manifest.schema.json for the canonical field documentation.
+       */
+      platformOptions?: PlatformOption[]
     }
     specs?: Record<string, string>
     hal: {
@@ -688,6 +747,14 @@ export interface PackageManifest {
       configTemplate?: string
       requirements?: string
       source?: string
+      compilerFlags?: {
+        c_flags?: string[]
+        cxx_flags?: string[]
+        ld_flags?: string[]
+      }
+      define?: string | string[]
+      extraArduinoLibraries?: string[]
+      libraries?: string
     }
     defaults?: {
       runtimeIpAddress?: string
@@ -699,6 +766,18 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Declarative debug-channel resolver spec, consumed by
+     *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
+     *  the `debug` field on built-in hals.json entries — the
+     *  editor's resolver doesn't care which catalog the device
+     *  came from.  Absence means no debug capability is declared. */
+    debug?: import('./debug-spec-types').DebugSpec
+    /** Optional target capability overrides for this device, merged over
+     *  the preset the editor derives from the target type. A runtime-v4
+     *  board exposing physical GPIO (e.g. the Raspberry Pi) sets
+     *  `{ pinMapping: true }` to surface the pin-mapping table and feed a
+     *  pins[] array into its plugin config. */
+    capabilities?: Partial<TargetCapabilities>
     moduleSystem?: {
       enabled: boolean
       maxSlots: number
@@ -729,6 +808,44 @@ export interface ImportResult {
   error?: string
 }
 
+export interface RemoteVersionEntry {
+  version: string
+  downloadUrl: string
+  publishedAt?: string
+  /**
+   * Minimum editor semver required to run this package version. The UI
+   * compares this against `APP_VERSION` and flags incompatible entries in
+   * the dropdown so users don't try to install something the editor can't
+   * load.
+   */
+  minEditorVersion?: string
+  deviceCount: number
+  releaseNotes?: string
+}
+
+export interface RemoteCatalogEntry {
+  packageId: string
+  name: string
+  vendor: {
+    name: string
+    url?: string
+    logoUrl?: string
+  }
+  description: string
+  license?: string
+  tags?: string[]
+  /**
+   * Available versions, ordered newest-first. The adapter/CDN owns the
+   * ordering contract — UI code treats `versions[0]` as the latest.
+   */
+  versions: RemoteVersionEntry[]
+}
+
+export interface RemoteCatalog {
+  entries: RemoteCatalogEntry[]
+  fetchedAt: string
+}
+
 export interface IoMappingEntry {
   slot: number
   moduleId: string
@@ -738,6 +855,21 @@ export interface IoMappingEntry {
   dataType: string
   iecAddress: string
   alias: string
+  /** When this channel was resolved out of a module's
+   *  `addressMapping.perChannelChoices`, the `fieldId` whose value
+   *  selected the current mode. Drives the IO Table's per-row "Mode"
+   *  selector — picking a new option writes the chosen key to
+   *  `slotsConfig[slot][modeFieldId]`, which re-triggers the channel
+   *  resolver and the address allocator. Absent for statically-
+   *  declared channels (modules with no per-pin mode switch). */
+  modeFieldId?: string
+  /** Available mode keys for the per-row selector
+   *  (`Object.keys(perChannelChoices[*].modes)`). Absent for static
+   *  channels. */
+  modeOptions?: string[]
+  /** Currently-selected mode key. Reflects `slotsConfig[slot][modeFieldId]`
+   *  at the time the allocator ran. Absent for static channels. */
+  modeValue?: string
 }
 
 export interface VendorIoMapping {
@@ -769,8 +901,18 @@ export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
-  compileOnly: boolean
   vendorScreenData?: Record<string, unknown>
+  /**
+   * User's choices for the board's `target.platformOptions` (VPP-declared
+   * FQBN sub-options like processor variant, USB type, clock speed).
+   * Keyed by option `key`, value is the chosen `values[].id`. Missing keys
+   * fall back to the manifest's `default` at compile/upload time. Cleared
+   * automatically when the selected board changes — platformOptions are
+   * board-specific and a `cpu=atmega328old` choice on Nano makes no sense
+   * for Mega. Optional for back-compat with project configs saved before
+   * this field existed.
+   */
+  selectedPlatformOptions?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------

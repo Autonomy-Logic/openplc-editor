@@ -1,3 +1,4 @@
+import { CollapsibleCard } from '@root/frontend/components/_atoms/collapsible-card'
 import { useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from './index'
@@ -25,6 +26,21 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
       default:
         return <UnsupportedLayout layoutType={section.layout} />
     }
+  }
+
+  // `form` sections render as an expandable card (S7Comm look). The
+  // card owns its own header/title, so we don't render the plain <h2>
+  // header path below for these.
+  if (section.layout === 'form') {
+    return (
+      <CollapsibleCard
+        title={section.title}
+        defaultOpen={!(section.collapsed ?? false)}
+        collapsible={section.collapsible ?? false}
+      >
+        {renderLayout()}
+      </CollapsibleCard>
+    )
   }
 
   // `module-slots` is a master-detail layout that owns the full visible
