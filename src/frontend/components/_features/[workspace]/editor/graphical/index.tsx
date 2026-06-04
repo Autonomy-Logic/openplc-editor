@@ -20,7 +20,7 @@ type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   isActive?: boolean
 }
 
-const GraphicalEditor = ({ name, language, readOnly, isActive = true }: GraphicalEditorProps) => {
+const GraphicalEditor = ({ name, language, isActive = true }: GraphicalEditorProps) => {
   const editorComponents = {
     sfc: SfcEditor,
     fbd: FbdEditor,
@@ -29,11 +29,15 @@ const GraphicalEditor = ({ name, language, readOnly, isActive = true }: Graphica
 
   const EditorComponent = editorComponents[language]
 
+  // Read-only projects (no edit permission) stay fully interactive: the user
+  // can add/remove blocks and rewire the diagram in memory. Nothing persists
+  // until an explicit Save (Ctrl+S), which routes through the fork modal. The
+  // `readOnly` prop is intentionally ignored here — we no longer overlay the
+  // editor to block interaction.
   return (
     <GraphicalEditorActiveProvider pouName={name} isActive={isActive}>
       <div className='relative h-full w-full overflow-y-auto'>
-        {readOnly && <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only' />}
-        <div className={`h-full w-full${readOnly ? ' pointer-events-none' : ''}`}>
+        <div className='h-full w-full'>
           <EditorComponent />
         </div>
       </div>

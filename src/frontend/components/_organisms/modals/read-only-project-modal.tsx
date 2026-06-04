@@ -114,7 +114,14 @@ const ReadOnlyProjectModal = () => {
         onOpenChange('read-only-project', open)
       }}
     >
-      <ModalContent className='flex !h-auto !max-h-[80vh] !w-[480px] select-none flex-col gap-4 p-6'>
+      {/*
+        Base ModalContent centers via `inset-0 m-auto h-[500px]`. Overriding only the
+        height to `h-auto` leaves `inset-0` in place — with both top:0 and bottom:0 the
+        box is over-constrained and CSS stretches it to fill `max-h`, hence the giant
+        empty modal. Switch this modal to translate-centering (`inset-auto` + left/top
+        1/2 + -translate-1/2) so the height hugs the content instead.
+      */}
+      <ModalContent className='flex !inset-auto !left-1/2 !top-1/2 !m-0 !h-auto !max-h-[85vh] !w-[480px] !-translate-x-1/2 !-translate-y-1/2 select-none flex-col gap-4 overflow-y-auto p-6'>
         {step === 'intro' ? (
           <>
             <ModalTitle className='text-lg font-semibold'>This project is read-only</ModalTitle>

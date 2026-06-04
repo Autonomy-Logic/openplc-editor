@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { CreateBranchPopover } from './create-branch-popover'
 
@@ -28,6 +29,10 @@ export function BranchSwitcherPopover({
   onMerge,
 }: BranchSwitcherPopoverProps) {
   const versionControl = useVersionControl()
+  // Read-only projects (no edit permission) can still switch/browse branches,
+  // but the write actions (merge, delete, create branch) are removed entirely
+  // — there's nothing to surface for a user who can't persist them.
+  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
   const [branches, setBranches] = useState<Branch[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [filter, setFilter] = useState('')
@@ -185,7 +190,9 @@ export function BranchSwitcherPopover({
                     default
                   </span>
                 )}
-                {/* Actions menu (3 dots) — reveals merge + delete on hover. */}
+                {/* Actions menu (3 dots) — reveals merge + delete on hover.
+                    Hidden in read-only: a non-owner can't merge or delete. */}
+                {!isReadOnly && (
                 <div className='shrink-0' data-branch-actions>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
@@ -265,16 +272,19 @@ export function BranchSwitcherPopover({
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
                 </div>
+                )}
               </div>
             )
           })}
         </div>
 
-        {/* Create new branch */}
-        <div className='px-2 pb-2'>
-          <div className='mb-1 h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
-          <CreateBranchPopover projectId={projectId} onCloseParent={handleClose} />
-        </div>
+        {/* Create new branch — hidden in read-only (a non-owner can't create). */}
+        {!isReadOnly && (
+          <div className='px-2 pb-2'>
+            <div className='mb-1 h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
+            <CreateBranchPopover projectId={projectId} onCloseParent={handleClose} />
+          </div>
+        )}
       </div>
     </div>
   )

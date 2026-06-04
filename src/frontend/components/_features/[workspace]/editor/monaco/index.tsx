@@ -143,7 +143,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
-      isReadOnly,
       fbSelectedInstance,
       fbDebugInstances,
     },
@@ -429,13 +428,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [editorMounted])
 
-  // Update readOnly when debugger visibility or project read-only flag changes.
-  // Debugger visibility forces read-only for safety; the project's own
-  // read-only flag (no edit permission) does the same so users browsing
-  // someone else's project can't make local modifications they couldn't save.
+  // Update readOnly when debugger visibility changes. Debugger visibility
+  // forces read-only for safety. A project's own read-only flag (no edit
+  // permission) does NOT lock the editor: users browsing someone else's
+  // project can edit text freely in memory; the explicit Save (Ctrl+S)
+  // routes through the fork modal instead of persisting.
   useEffect(() => {
-    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible || isReadOnly })
-  }, [isDebuggerVisible, isReadOnly])
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
+  }, [isDebuggerVisible])
 
   // Apply programmatic cursor jumps (e.g. clicking a compile error in
   // the console) to an already-mounted editor.  The onMount path
@@ -1240,7 +1240,7 @@ void loop()
   const monacoEditorUserOptions: monacoEditorOptionsType = {
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
-    readOnly: isDebuggerVisible || isReadOnly,
+    readOnly: isDebuggerVisible,
     // Lock indentation to 4 spaces across every language Monaco
     // hosts (ST / IL / Python / C++).  Without this Monaco's
     // `detectIndentation` heuristic kicks in on the existing model
