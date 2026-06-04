@@ -2114,12 +2114,24 @@ class CompilerModule {
           // pinMapping). The generator turns these into the plugin config's
           // pins[] array. Module-based boards have no pins, so this stays
           // empty and no pins[] key is emitted.
+          //
+          // Like the main compile path above, this file has two on-disk
+          // shapes (per `pinMappingFileSchema`): per-board dict
+          // `{ [boardName]: DevicePin[] }` for post-refactor projects,
+          // and the legacy flat `DevicePin[]` for older saves. Handle
+          // both — pre-refactor we only handled the array branch, which
+          // meant new projects fed the VPP packager no pins at all.
           let devicePins: DevicePin[] = []
           try {
             const pinMappingPath = join(normalizedProjectPath, 'devices', 'pin-mapping.json')
             const pinMappingRaw = await readFile(pinMappingPath, 'utf-8')
             const parsedPins: unknown = JSON.parse(pinMappingRaw)
-            if (Array.isArray(parsedPins)) devicePins = parsedPins as DevicePin[]
+            if (Array.isArray(parsedPins)) {
+              devicePins = parsedPins as DevicePin[]
+            } else if (parsedPins && typeof parsedPins === 'object') {
+              const dict = parsedPins as Record<string, DevicePin[]>
+              devicePins = dict[boardTarget] ?? []
+            }
           } catch {
             // No pin-mapping file — leave empty.
           }
@@ -2488,9 +2500,30 @@ class CompilerModule {
         })
       }
       try {
-        devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
+        // `devices/pin-mapping.json` ships in one of two shapes (the
+        // `pinMappingFileSchema` union):
+        //   - **Per-board dict** `{ [boardName]: DevicePin[] }` — what
+        //     the editor writes after the per-target scoping refactor.
+        //     The pipeline only consumes the active target's pins, so
+        //     we index in by `boardTarget`.
+        //   - **Legacy flat array** `DevicePin[]` — what older projects
+        //     have on disk. Their pin set is whatever target they were
+        //     last saved against, so we pass it through verbatim.
+        //
+        // Passing the raw dict to `generateDefinesContent` is the bug
+        // that just bit us — `.filter` doesn't exist on an object,
+        // and the pipeline crashes with
+        // "devicePinMapping.filter is not a function".
+        const raw = await CompilerModule.readJSONFile<DevicePin[] | Record<string, DevicePin[]>>(
           join(normalizedProjectPath, 'devices', 'pin-mapping.json'),
         )
+        if (Array.isArray(raw)) {
+          devicePinMapping = raw
+        } else if (raw && typeof raw === 'object') {
+          devicePinMapping = raw[boardTarget] ?? []
+        } else {
+          devicePinMapping = []
+        }
       } catch {
         // Projects with no devices/pin-mapping.json (libraries, fresh
         // projects) get an empty array — generateDefinesContent emits
