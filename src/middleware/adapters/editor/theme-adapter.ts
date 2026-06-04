@@ -3,23 +3,28 @@
  *
  * The shared frontend surface (display menu, app-layout, accelerator
  * handler) no longer touches localStorage or the <html> classes directly —
- * the platform's theme adapter owns persistence and DOM application (the
- * web adapter additionally syncs a cross-subdomain cookie and the edge
- * backend; on desktop neither applies). This adapter therefore:
+ * the platform's theme adapter owns persistence and DOM application. The
+ * layering mirrors the web adapter so the logic stays aligned across repos:
  *
- *   - reads the stored preference (localStorage `theme`) at creation and
- *     applies the <html> class before the UI mounts
- *   - applies + persists explicit changes from `setTheme`/`toggleTheme`,
- *     driving Electron's nativeTheme for light/dark via IPC
- *   - listens for theme events from the main process (native menu) and
- *     mirrors them into the DOM and subscribers
+ *   1. localStorage `theme` + the <html> class — renderer cache (what you
+ *      see; same role as the web app's per-origin localStorage)
+ *   2. electron-store `theme` on the main process — the desktop's durable
+ *      source of truth, analogous to the edge backend's user preference
+ *      on the web app (read via winGetTheme, written via
+ *      winHandleUpdateTheme)
+ *
+ * Conflict policy (same as web): the system store wins once per launch at
+ * boot; after that, explicit `setTheme`/`toggleTheme` changes write
+ * through to every layer. Native-menu theme events from the main process
+ * are mirrored into the DOM and subscribers without echoing IPC back.
  *
  * IPC flow:
  *   Renderer → winHandleUpdateTheme(theme) → main sets nativeTheme + store
+ *   Renderer → winGetTheme() → main returns the stored preference
  *   Main (native menu) → handleUpdateTheme() → renderer applies + notifies
  *
  * 'nineties' is a UI-only retro skin: it has no OS-level counterpart, so
- * it never drives nativeTheme and is light-based for Monaco purposes.
+ * it rides on a light nativeTheme and is light-based for Monaco purposes.
  */
 
 import type { ThemePort, ThemeVariant } from '../../shared/ports/theme-port'
@@ -70,6 +75,24 @@ export function createEditorThemeAdapter(): ThemePort {
     notifyListeners()
   }
 
+  // Boot reconcile: the system store (electron-store on the main process)
+  // is the desktop's durable source of truth — a theme stored there wins
+  // over the renderer's localStorage cache (e.g. after a cleared renderer
+  // session, or when the native menu changed it while no window listened).
+  // If the store has no theme yet but the renderer does (pre-feature
+  // users), seed the store from the local value instead.
+  void window.bridge
+    .winGetTheme?.()
+    .then((stored) => {
+      if (stored === 'light' || stored === 'dark' || stored === 'nineties') {
+        // The value came FROM the store — apply locally without echoing IPC.
+        applyExplicitTheme(stored)
+      } else if (explicitPreference) {
+        window.bridge.winHandleUpdateTheme(explicitPreference)
+      }
+    })
+    .catch(() => undefined)
+
   // Theme events from the main process (native menu picks, OS changes).
   window.bridge.handleUpdateTheme((_event: unknown, ...args: unknown[]) => {
     const theme = args[0]
@@ -95,11 +118,11 @@ export function createEditorThemeAdapter(): ThemePort {
 
     setTheme(theme: ThemeVariant): void {
       applyExplicitTheme(theme)
-      // Passing the theme explicitly makes the IPC idempotent (no toggle
-      // semantics), so the display menu's own bridge push is harmless.
-      if (theme === 'light' || theme === 'dark') {
-        window.bridge.winHandleUpdateTheme(theme)
-      }
+      // Persist every theme (including 'nineties') to the system store —
+      // the main process maps it onto nativeTheme as needed. Passing the
+      // theme explicitly makes the IPC idempotent (no toggle semantics),
+      // so the display menu's own bridge push is harmless.
+      window.bridge.winHandleUpdateTheme(theme)
     },
 
     toggleTheme(): void {

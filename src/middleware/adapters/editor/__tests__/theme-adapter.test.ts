@@ -4,6 +4,22 @@ import { createEditorThemeAdapter } from '../theme-adapter'
 let adapter: ThemePort
 let themeChangeHandler: ((_event: unknown, ...args: unknown[]) => void) | null
 
+function flushPromises() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+function mockBridge(storedTheme: 'light' | 'dark' | 'nineties' | null = null) {
+  window.bridge = {
+    winHandleUpdateTheme: jest.fn(),
+    // System store (electron-store on the main process) — the desktop's
+    // durable source of truth, analogous to the edge backend on web.
+    winGetTheme: jest.fn().mockResolvedValue(storedTheme),
+    handleUpdateTheme: jest.fn().mockImplementation((handler: (_event: unknown, ...args: unknown[]) => void) => {
+      themeChangeHandler = handler
+    }),
+  } as unknown as typeof window.bridge
+}
+
 beforeEach(() => {
   themeChangeHandler = null
   localStorage.clear()
@@ -15,12 +31,7 @@ beforeEach(() => {
     value: jest.fn().mockReturnValue({ matches: true }),
   })
 
-  window.bridge = {
-    winHandleUpdateTheme: jest.fn(),
-    handleUpdateTheme: jest.fn().mockImplementation((handler: (_event: unknown, ...args: unknown[]) => void) => {
-      themeChangeHandler = handler
-    }),
-  } as unknown as typeof window.bridge
+  mockBridge()
 
   adapter = createEditorThemeAdapter()
 })
@@ -66,12 +77,14 @@ describe('setTheme', () => {
     expect(cb).toHaveBeenCalledWith('light')
   })
 
-  it('does not drive nativeTheme for the UI-only nineties skin', () => {
+  it('persists the UI-only nineties skin to the system store too', () => {
     adapter.setTheme('nineties')
 
     expect(adapter.getCurrentTheme()).toBe('nineties')
     expect(document.documentElement.classList.contains('nineties')).toBe(true)
-    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
+    // The main process maps 'nineties' onto a light nativeTheme but keeps
+    // the full preference in its store.
+    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('nineties')
   })
 })
 
@@ -91,6 +104,44 @@ describe('toggleTheme', () => {
 
     expect(adapter.getCurrentTheme()).toBe('dark')
     expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('system store boot reconcile', () => {
+  it('applies the stored theme over the renderer localStorage cache', async () => {
+    localStorage.setItem('theme', 'dark')
+    mockBridge('nineties')
+
+    adapter = createEditorThemeAdapter()
+    await flushPromises()
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(localStorage.getItem('theme')).toBe('nineties')
+    expect(document.documentElement.classList.contains('nineties')).toBe(true)
+    // The value came FROM the store — no echo IPC.
+    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
+  })
+
+  it('seeds the system store from the renderer preference when the store has none', async () => {
+    localStorage.setItem('theme', 'nineties')
+    mockBridge(null)
+
+    adapter = createEditorThemeAdapter()
+    await flushPromises()
+
+    expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('nineties')
+  })
+
+  it('does nothing when neither layer has an explicit preference', async () => {
+    mockBridge(null)
+
+    adapter = createEditorThemeAdapter()
+    await flushPromises()
+
+    expect(adapter.getCurrentTheme()).toBe('dark') // matchMedia fallback
+    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
+    expect(localStorage.getItem('theme')).toBeNull()
   })
 })
 
