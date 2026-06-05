@@ -718,7 +718,7 @@ async function runCompilePipelineInner(
     { files: firmwareFiles, argv: arduinoArgs, parallel: arduinoCliParallel },
     makePlatformLog(emit, 'arduino-compile'),
   )
-  if (!compileResult.ok || !compileResult.binary) {
+  if (!compileResult.ok) {
     if (compileResult.errors && compileResult.errors.length > 0) {
       emitCompileErrorEvents(
         compileResult.errors.map((e) => ({ formatted: e.message, raw: e as unknown as never })),
@@ -728,8 +728,22 @@ async function runCompilePipelineInner(
     return bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
   }
 
-  // Simulator: return the hex bytes for the caller to load into avr8js.
+  // Simulator: avr8js needs the Intel HEX bytes in memory.  The
+  // editor adapter reads `Baremetal.ino.hex` off disk for AVR builds;
+  // if it's missing here the compile silently succeeded but produced
+  // no .hex, which would crash the simulator loader downstream.
+  // Surface a precise error instead.  Non-simulator branches don't
+  // require `binary` — arduino-cli's upload step finds whatever
+  // artefact the core produced (.uf2 / .bin / .hex) on disk directly.
   if (isSimulator) {
+    if (!compileResult.binary) {
+      return bailError(
+        emit,
+        'arduino-compile',
+        'Simulator build did not produce a .hex artefact.',
+        compileResult.errors,
+      )
+    }
     emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
     return { success: true, md5, binary: compileResult.binary, uploaded: false }
   }

@@ -166,6 +166,13 @@ const configuration: webpack.Configuration = {
 
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
+      // Override for the editor's VPP catalog backend host.  Falsy
+      // (empty string) when the dev shell doesn't set it — the
+      // adapter (`package-adapter.ts`) then falls back to the
+      // production default hardcoded there.  Set the env BEFORE
+      // `npm run dev` to point at staging or localhost:
+      //   `VPP_CATALOG_URL=http://localhost:3333 npm run dev`
+      VPP_CATALOG_URL: '',
     }),
 
     new webpack.DefinePlugin({

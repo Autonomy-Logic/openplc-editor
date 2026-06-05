@@ -132,13 +132,36 @@ describe('attachMonacoModelSync', () => {
   })
 
   it('disposes the model when its POU is removed', () => {
-    setProjectPous([makeStPou('Doomed')])
+    // Genuine single-POU removal: another POU survives, so the list is
+    // non-empty and the disappeared-POU sweep runs.
+    setProjectPous([makeStPou('Doomed'), makeStPou('Keeper')])
     const stub = makeMonacoStub()
     const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
     expect(stub.__models.has('inmemory://pou/Doomed.st')).toBe(true)
 
-    setProjectPous([])
+    setProjectPous([makeStPou('Keeper')])
     expect(stub.__models.has('inmemory://pou/Doomed.st')).toBe(false)
+    expect(stub.__models.has('inmemory://pou/Keeper.st')).toBe(true)
+    handle.dispose()
+  })
+
+  it('does NOT dispose models on the transient empty-pous clear (stash reload guard)', () => {
+    // `handleOpenProjectResponse` sets `pous = []` before repopulating on every
+    // project reload (e.g. after a stash apply/pop).  The owned models must
+    // survive that transient so the open editor keeps its (still-attached)
+    // model — otherwise @monaco-editor/react crashes on a null getModel().
+    setProjectPous([makeStPou('Main', 'a := 1;')])
+    const stub = makeMonacoStub()
+    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    expect(stub.__models.has('inmemory://pou/Main.st')).toBe(true)
+
+    // Transient clear — model must NOT be disposed.
+    setProjectPous([])
+    expect(stub.__models.get('inmemory://pou/Main.st')!.disposed).toBe(false)
+
+    // Repopulate with updated body — same model is reused and synced.
+    setProjectPous([makeStPou('Main', 'a := 2;')])
+    expect(stub.__models.get('inmemory://pou/Main.st')!.value).toBe('a := 2;')
     handle.dispose()
   })
 
