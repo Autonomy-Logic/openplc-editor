@@ -97,42 +97,6 @@ describe('buildArduinoCliCompileArgs', () => {
     expect(nonAvr.find((a) => a.startsWith('compiler.cpp.extra_flags='))).toBe('compiler.cpp.extra_flags=-std=gnu++17')
   })
 
-  it('prepends -std=gnu++17 when cxx_flags has no -std= flag (mbed-core regression)', () => {
-    // mbed_nano / mbed_opta / mbed_giga cores hard-code -std=gnu++14 in
-    // their platform's cxxflags.txt — our IEC headers need C++17, so
-    // the shared composer must always emit -std=gnu++17 unless the
-    // manifest already pinned one.
-    const mbedEntry: BoardHalsCompileEntry = {
-      platform: 'arduino:mbed_nano:nanorp2040connect',
-      core: 'arduino:mbed_nano',
-      cxx_flags: ['-fexceptions'],
-    }
-    const args = buildArduinoCliCompileArgs(mbedEntry, {
-      sketchPath: 'a.ino',
-      libraryPath: 'src',
-      parallel: false,
-    })
-    expect(args.find((a) => a.startsWith('compiler.cpp.extra_flags='))).toBe(
-      'compiler.cpp.extra_flags=-std=gnu++17 -fexceptions',
-    )
-  })
-
-  it('does not override a manifest-specified -std= (opt-up to newer C++ standards)', () => {
-    const futureEntry: BoardHalsCompileEntry = {
-      platform: 'arduino:future:board',
-      core: 'arduino:future',
-      cxx_flags: ['-std=gnu++20', '-fexceptions'],
-    }
-    const args = buildArduinoCliCompileArgs(futureEntry, {
-      sketchPath: 'a.ino',
-      libraryPath: 'src',
-      parallel: false,
-    })
-    expect(args.find((a) => a.startsWith('compiler.cpp.extra_flags='))).toBe(
-      'compiler.cpp.extra_flags=-std=gnu++20 -fexceptions',
-    )
-  })
-
   it('skips compiler.cpp.extra_flags entirely when cxx_flags is missing or empty', () => {
     const without = buildArduinoCliCompileArgs(
       { platform: 'arduino:avr:mega' },

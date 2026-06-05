@@ -77,25 +77,6 @@ export function buildArduinoCliCompileArgs(
     if (entry.core?.startsWith('arduino:avr') && options.avrLibStdCppInclude) {
       cxxFlags.push(`-I${options.avrLibStdCppInclude}`)
     }
-    // Ensure C++17 unless the manifest explicitly pins a different std.
-    // Several Arduino cores hard-code an older standard in their
-    // platform's `cxxflags.txt` (e.g. mbed_nano / mbed_opta / mbed_giga
-    // all force `-std=gnu++14`), but our generated runtime headers
-    // (`iec_var.hpp`, `iec_traits.hpp`, `iec_string.hpp`) require C++17
-    // features — `std::is_X_v` variable templates, `auto` template
-    // parameters, `std::bool_constant`, `std::is_base_of_v`.  Without
-    // this override the user's C/C++ POU sketch compile fails on every
-    // mbed-based board with "is_convertible_v is not a member of std"
-    // and friends.
-    //
-    // Prepended (not appended) so an explicit `-std=...` in the
-    // manifest still wins on the gcc command line — gcc takes the
-    // LAST `-std=` flag, so manifest authors can opt up to gnu++20 by
-    // including `-std=gnu++20` in their `cxx_flags`.
-    const manifestSpecifiesStd = cxxFlags.some((f) => f.startsWith('-std='))
-    if (!manifestSpecifiesStd) {
-      cxxFlags.unshift('-std=gnu++17')
-    }
     args.push('--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`)
   }
 
