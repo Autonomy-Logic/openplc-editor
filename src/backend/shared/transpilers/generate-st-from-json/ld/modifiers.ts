@@ -16,7 +16,7 @@
  */
 
 import type { Location, ProgramChunk } from './path_tree'
-import type { ContactModifier, CoilModifier } from './types'
+import type { CoilModifier,ContactModifier } from './types'
 import type { WalkerState } from './walker_state'
 
 export function extractModifier(

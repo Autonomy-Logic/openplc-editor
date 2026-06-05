@@ -385,7 +385,7 @@ function computeSfcTransition(state: SfcWalkerState, transitionId: number): void
   // Recurse into destination steps.
   for (const toGroup of infos.to) {
     for (const [stepName] of toGroup) {
-      computeSfcStep(state, stepName as string)
+      computeSfcStep(state, stepName)
     }
   }
 }

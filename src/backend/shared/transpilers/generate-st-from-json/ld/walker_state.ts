@@ -6,8 +6,8 @@
  * touches are surfaced here; FBD/SFC ports add their own.
  */
 
-import type { LdBody, LdInstance } from './types'
 import type { ProgramChunk } from './path_tree'
+import type { LdBody, LdInstance } from './types'
 
 export interface TriggerVar {
   /** `R_TRIG1`, `R_TRIG2`, … or `F_TRIG1`, `F_TRIG2`, … */

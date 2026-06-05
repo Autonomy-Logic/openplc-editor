@@ -9,9 +9,9 @@
  * existing DOM walker produces.
  */
 
+import type { LdBody } from '../ld/types'
 import { emitLdBody } from '../ld/walker'
 import { newWalkerState } from '../ld/walker_state'
-import type { LdBody } from '../ld/types'
 import { resolveBlockType } from '../src/PLCGenerator/block_library'
 import { PLC_BASE_TYPES } from '../src/PLCGenerator/ctn_globals'
 import type { ProgramChunk } from '../src/PLCGenerator/program'

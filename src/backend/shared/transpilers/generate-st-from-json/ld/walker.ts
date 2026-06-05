@@ -26,8 +26,8 @@ import { extractModifier } from './modifiers'
 import {
   computePaths,
   factorizePaths,
-  type Location,
   leafNode,
+  type Location,
   type PathNode,
   type ProgramChunk,
   TRUE_NODE,

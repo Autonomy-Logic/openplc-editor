@@ -18,8 +18,8 @@
  * repeated children) map straight to DOM API calls.
  */
 
-import { DOMImplementation } from '@xmldom/xmldom'
 import type { Document, Element } from '@xmldom/xmldom'
+import { DOMImplementation } from '@xmldom/xmldom'
 
 import type {
   TranspileBody,
