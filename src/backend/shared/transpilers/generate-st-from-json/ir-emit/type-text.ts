@@ -28,10 +28,7 @@ function formatType(type: TranspileVariableType): string {
   // `data` property in scope.  Web's tsconfig accepted the fall-
   // through; editor's doesn't.
   if (type.definition !== 'array') return ''
-  const baseName =
-    typeof type.data.baseType === 'string'
-      ? type.data.baseType
-      : type.data.baseType.value
+  const baseName = typeof type.data.baseType === 'string' ? type.data.baseType : type.data.baseType.value
   const dims = type.data.dimensions.map((d) => d.dimension).join(',')
   return `ARRAY [${dims}] OF ${baseName.toUpperCase()}`
 }
@@ -44,10 +41,7 @@ function formatType(type: TranspileVariableType): string {
  * `interface.ts:resolveDeclaredType` quirk.
  */
 export function declaredTypeName(variable: TranspileVariable): string {
-  if (
-    variable.type.definition === 'derived' ||
-    variable.type.definition === 'user-data-type'
-  ) {
+  if (variable.type.definition === 'derived' || variable.type.definition === 'user-data-type') {
     return variable.type.value
   }
   return getTypeAsText(variable)

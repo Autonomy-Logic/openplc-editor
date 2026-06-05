@@ -20,10 +20,7 @@
  * `PLCProjectData` the editor's IPC delivers) — see `from-schema.ts`.
  */
 
-import {
-  type GenerateConfigurationOptions,
-  generateConfigurations,
-} from './ir-emit/configuration'
+import { type GenerateConfigurationOptions, generateConfigurations } from './ir-emit/configuration'
 import { generateDataTypes } from './ir-emit/data-types'
 import { generateGraphicalPou } from './ir-emit/pou-graphical'
 import { generateTextualPou } from './ir-emit/pou-textual'
@@ -82,10 +79,7 @@ const TEXTUAL_LANGUAGES = new Set(['st', 'il', 'python', 'cpp'])
  * compile errors land in `result.errors` and the rest of the
  * program still emits.
  */
-export function transpileToSt(
-  project: TranspileProject,
-  options: TranspileOptions = {},
-): TranspileResult {
+export function transpileToSt(project: TranspileProject, options: TranspileOptions = {}): TranspileResult {
   const errors: string[] = []
   const warnings: string[] = []
   const pouNames: string[] = []

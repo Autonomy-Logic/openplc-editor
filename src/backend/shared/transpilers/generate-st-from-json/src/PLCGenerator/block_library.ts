@@ -37,12 +37,7 @@ import {
   getvariable,
 } from '../plcopen/accessors'
 import type { ProjectTree } from '../plcopen/plcopen'
-import {
-  childElements,
-  type Element,
-  getLocalTag,
-  isElement,
-} from '../xmlclass/xsdschema'
+import { childElements, type Element, getLocalTag, isElement } from '../xmlclass/xsdschema'
 
 /* ───────────────────────────── data model ────────────────────────────────── */
 
@@ -124,7 +119,7 @@ export function getblockInfos(pou: Element): BlockInfos {
       // inner element, so we synthesize a temporary view: re-extract via
       // `getLocalTag`. For `derived`, read `@name`; else uppercase the tag.
       const tag = getLocalTag(returnTypeInner)
-      const t = tag === 'derived' ? getname(returnTypeInner) ?? '' : tag.toUpperCase()
+      const t = tag === 'derived' ? (getname(returnTypeInner) ?? '') : tag.toUpperCase()
       infos.outputs.push({ name: 'OUT', type: t, qualifier: 'none' })
     }
 
@@ -182,20 +177,24 @@ export function synthesizePermissiveBlockInfos(instance: Element): BlockInfos {
   const outputWrapper = getoutputVariables(instance)
   const inputs: BlockIO[] = inputWrapper
     ? getvariable(inputWrapper)
-        .map((v): BlockIO => ({
-          name: getformalParameter(v) ?? '',
-          type: 'ANY',
-          qualifier: 'none',
-        }))
+        .map(
+          (v): BlockIO => ({
+            name: getformalParameter(v) ?? '',
+            type: 'ANY',
+            qualifier: 'none',
+          }),
+        )
         .filter((io) => io.name !== 'EN')
     : []
   const outputs: BlockIO[] = outputWrapper
     ? getvariable(outputWrapper)
-        .map((v): BlockIO => ({
-          name: getformalParameter(v) ?? '',
-          type: 'ANY',
-          qualifier: 'none',
-        }))
+        .map(
+          (v): BlockIO => ({
+            name: getformalParameter(v) ?? '',
+            type: 'ANY',
+            qualifier: 'none',
+          }),
+        )
         .filter((io) => io.name !== 'ENO')
     : []
   const infos: BlockInfos = {
@@ -311,10 +310,7 @@ export function resolveBlockType(
         return { source: 'project', infos }
       }
       const sigTypes = infos.inputs.map((i) => i.type)
-      if (
-        sigTypes.length === inputs.length &&
-        sigTypes.every((t, i) => t === inputs[i])
-      ) {
+      if (sigTypes.length === inputs.length && sigTypes.every((t, i) => t === inputs[i])) {
         return { source: 'project', infos }
       }
     }

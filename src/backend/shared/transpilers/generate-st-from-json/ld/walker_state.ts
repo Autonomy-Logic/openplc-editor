@@ -79,11 +79,7 @@ export interface WalkerState {
   warnings: string[]
 }
 
-export function newWalkerState(
-  tagName: string,
-  body: LdBody,
-  declaredVars: Set<string>,
-): WalkerState {
+export function newWalkerState(tagName: string, body: LdBody, declaredVars: Set<string>): WalkerState {
   const byId = new Map<number, LdInstance>()
   for (const inst of body.instances) byId.set(inst.localId, inst)
   return {

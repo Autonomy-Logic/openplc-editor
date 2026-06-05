@@ -62,12 +62,16 @@ export function emitLdBody(state: WalkerState): void {
   const others: LdInstance[] = []
 
   for (const inst of state.body.instances) {
-    if (inst.kind !== 'outVariable' && inst.kind !== 'inOutVariable' &&
-        inst.kind !== 'coil' && inst.kind !== 'block' && inst.kind !== 'connector') {
+    if (
+      inst.kind !== 'outVariable' &&
+      inst.kind !== 'inOutVariable' &&
+      inst.kind !== 'coil' &&
+      inst.kind !== 'block' &&
+      inst.kind !== 'connector'
+    ) {
       continue
     }
-    const eoid =
-      'executionOrderId' in inst ? (inst.executionOrderId ?? 0) : 0
+    const eoid = 'executionOrderId' in inst ? (inst.executionOrderId ?? 0) : 0
     if (eoid > 0) ordered.push(inst)
     else others.push(inst)
   }
@@ -96,10 +100,7 @@ function dispatchInstance(state: WalkerState, inst: LdInstance, order: boolean):
  * caches the resulting expression under the connector's `name`.
  * Continuation visits later look up the cached chunks.
  */
-function emitConnector(
-  state: WalkerState,
-  conn: Extract<LdInstance, { kind: 'connector' }>,
-): void {
+function emitConnector(state: WalkerState, conn: Extract<LdInstance, { kind: 'connector' }>): void {
   if (state.connectorExprs.has(conn.name)) return
   const paths = generatePaths(state, conn.connections, false)
   if (paths.length === 0) return
@@ -120,11 +121,7 @@ function comparePosition(a: LdInstance, b: LdInstance): number {
 
 /* ─────────────────────────── per-sink emitters ──────────────────────────── */
 
-function emitCoil(
-  state: WalkerState,
-  coil: Extract<LdInstance, { kind: 'coil' }>,
-  _order: boolean,
-): void {
+function emitCoil(state: WalkerState, coil: Extract<LdInstance, { kind: 'coil' }>, _order: boolean): void {
   void _order
   // Top-level sinks always invoke generatePaths with order=false —
   // matches `body_emit.emitCoil` / `emitOutVariable` not threading the
@@ -145,11 +142,7 @@ function emitCoil(
   state.program.push([';\n', []])
 }
 
-function emitOutVariable(
-  state: WalkerState,
-  ov: Extract<LdInstance, { kind: 'outVariable' }>,
-  _order: boolean,
-): void {
+function emitOutVariable(state: WalkerState, ov: Extract<LdInstance, { kind: 'outVariable' }>, _order: boolean): void {
   void _order
   const paths = generatePaths(state, ov.connections, false)
   if (paths.length === 0) return
@@ -239,11 +232,7 @@ function emitStandaloneBlockCall(
  * building a `PathNode[]` (lists for series, tuples for parallels).
  * Mirrors `src/PLCGenerator/path_tree.ts:generatePaths`.
  */
-export function generatePaths(
-  state: WalkerState,
-  connections: readonly Connection[],
-  order = false,
-): PathNode[] {
+export function generatePaths(state: WalkerState, connections: readonly Connection[], order = false): PathNode[] {
   const paths: PathNode[] = []
   for (const conn of connections) {
     const next = state.byId.get(conn.refLocalId)
@@ -254,24 +243,14 @@ export function generatePaths(
   return paths
 }
 
-function visit(
-  state: WalkerState,
-  inst: LdInstance,
-  conn: Connection,
-  order: boolean,
-): PathNode | undefined {
+function visit(state: WalkerState, inst: LdInstance, conn: Connection, order: boolean): PathNode | undefined {
   switch (inst.kind) {
     case 'leftPowerRail':
       return TRUE_NODE
 
     case 'inVariable':
     case 'inOutVariable':
-      return leafNode([
-        [
-          inst.expression,
-          [state.tagName, 'io_variable', inst.localId, 'expression'],
-        ],
-      ])
+      return leafNode([[inst.expression, [state.tagName, 'io_variable', inst.localId, 'expression']]])
 
     case 'block':
       return visitBlockOutput(state, inst, conn, order)
@@ -317,25 +296,16 @@ function visit(
   }
 }
 
-function findConnectorByName(
-  state: WalkerState,
-  name: string,
-): Extract<LdInstance, { kind: 'connector' }> | null {
+function findConnectorByName(state: WalkerState, name: string): Extract<LdInstance, { kind: 'connector' }> | null {
   for (const inst of state.body.instances) {
     if (inst.kind === 'connector' && inst.name === name) return inst
   }
   return null
 }
 
-function visitContact(
-  state: WalkerState,
-  inst: Extract<LdInstance, { kind: 'contact' }>,
-  order: boolean,
-): PathNode {
+function visitContact(state: WalkerState, inst: Extract<LdInstance, { kind: 'contact' }>, order: boolean): PathNode {
   const contactInfo: Location = [state.tagName, 'contact', inst.localId]
-  const variableChunks: ProgramChunk[] = [
-    [inst.variable, [...contactInfo, 'reference']],
-  ]
+  const variableChunks: ProgramChunk[] = [[inst.variable, [...contactInfo, 'reference']]]
   const variableLeaf = leafNode(extractModifier(state, inst.modifier, variableChunks, contactInfo))
 
   const upstream = generatePaths(state, inst.connections, order)
@@ -389,16 +359,12 @@ function visitBlockOutput(
     // via `emittedBlocks`).
     if (!order) emitFunctionCall(state, block)
     const tempName = `_TMP_${block.typeName}${block.localId}_${out}`
-    return leafNode([
-      [tempName, [state.tagName, 'block', block.localId, 'output', out]],
-    ])
+    return leafNode([[tempName, [state.tagName, 'block', block.localId, 'output', out]]])
   }
   if (!order) emitFunctionBlockCall(state, block)
   const instName = block.instanceName!
   const out = conn.refFormalParameter ?? block.outputs[0]?.formalParameter ?? 'OUT'
-  return leafNode([
-    [`${instName}.${out}`, [state.tagName, 'block', block.localId, 'output', out]],
-  ])
+  return leafNode([[`${instName}.${out}`, [state.tagName, 'block', block.localId, 'output', out]]])
 }
 
 /**
@@ -406,10 +372,7 @@ function visitBlockOutput(
  * block (idempotent across multiple output reads).  Downstream
  * readers access outputs as `instance.<output>`.
  */
-function emitFunctionBlockCall(
-  state: WalkerState,
-  block: Extract<LdInstance, { kind: 'block' }>,
-): void {
+function emitFunctionBlockCall(state: WalkerState, block: Extract<LdInstance, { kind: 'block' }>): void {
   if (state.emittedBlocks.has(block.localId)) return
   state.emittedBlocks.add(block.localId)
 
@@ -449,22 +412,16 @@ function emitFunctionBlockCall(
  * placed on the LHS of the call; other outputs (notably `ENO`) are
  * passed as extra `param => tempName` named args inside the call.
  */
-function emitFunctionCall(
-  state: WalkerState,
-  block: Extract<LdInstance, { kind: 'block' }>,
-): void {
+function emitFunctionCall(state: WalkerState, block: Extract<LdInstance, { kind: 'block' }>): void {
   if (state.emittedBlocks.has(block.localId)) return
   state.emittedBlocks.add(block.localId)
 
   const info: Location = [state.tagName, 'block', block.localId]
-  const allInputConnected = block.inputs.every(
-    (inp) => inp.connections.length > 0,
-  )
+  const allInputConnected = block.inputs.every((inp) => inp.connections.length > 0)
   const useNamedArgs = block.outputs.length > 1 || !allInputConnected
 
   // Build input arg parts.
-  const recurseOrdered =
-    'executionOrderId' in block && (block.executionOrderId ?? 0) > 0
+  const recurseOrdered = 'executionOrderId' in block && (block.executionOrderId ?? 0) > 0
   const parts: ProgramChunk[][] = []
   for (const input of block.inputs) {
     const upstream = generatePaths(state, input.connections, recurseOrdered)
@@ -492,10 +449,7 @@ function emitFunctionCall(
       originBlockTypeName: block.typeName,
       originFormalParameter: out.formalParameter,
     })
-    const isPrimary =
-      block.outputs.length === 1 ||
-      out.formalParameter === '' ||
-      out.formalParameter === 'OUT'
+    const isPrimary = block.outputs.length === 1 || out.formalParameter === '' || out.formalParameter === 'OUT'
     if (isPrimary && primaryName === null) {
       primaryName = tempName
       primaryFormal = out.formalParameter
@@ -530,12 +484,8 @@ function emitFunctionCall(
  *  `recurseOrdered` is true when the block's own executionOrderId
  *  is > 0 — propagated to upstream walks so cascaded ordered blocks
  *  don't eagerly emit each other. */
-function buildInputArgs(
-  state: WalkerState,
-  block: Extract<LdInstance, { kind: 'block' }>,
-): ProgramChunk[][] {
-  const recurseOrdered =
-    'executionOrderId' in block && (block.executionOrderId ?? 0) > 0
+function buildInputArgs(state: WalkerState, block: Extract<LdInstance, { kind: 'block' }>): ProgramChunk[][] {
+  const recurseOrdered = 'executionOrderId' in block && (block.executionOrderId ?? 0) > 0
   const parts: ProgramChunk[][] = []
   for (const input of block.inputs) {
     const upstream = generatePaths(state, input.connections, recurseOrdered)
@@ -547,7 +497,6 @@ function buildInputArgs(
   }
   return parts
 }
-
 
 /* ─────────────────────────── helpers ────────────────────────────────────── */
 

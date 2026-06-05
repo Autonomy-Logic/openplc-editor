@@ -16,12 +16,7 @@ import type { ProgramChunk } from '../src/PLCGenerator/program'
 import { reIndentText } from '../src/PLCGenerator/text_helpers'
 import { computePouName } from '../src/PLCGenerator/text_helpers'
 import { varTypeNames } from '../src/PLCGenerator/type_text'
-import type {
-  TranspilePou,
-  TranspileProject,
-  TranspileVariable,
-  TranspileVariableClass,
-} from '../types'
+import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
 
@@ -34,9 +29,7 @@ import { computeValue } from './value'
  */
 function formatReturnType(returnType: string | undefined): string {
   if (returnType === undefined || returnType === '') return 'BOOL'
-  return PLC_BASE_TYPES.has(returnType.toUpperCase())
-    ? returnType.toUpperCase()
-    : returnType
+  return PLC_BASE_TYPES.has(returnType.toUpperCase()) ? returnType.toUpperCase() : returnType
 }
 
 interface InterfaceEntry {
@@ -56,17 +49,15 @@ interface InterfaceEntry {
  * Throws `Error` when the POU has no interface or no body — same
  * guards Python uses.
  */
-export function generateTextualPou(
-  pou: TranspilePou,
-  project: TranspileProject,
-  indent = 2,
-): ProgramChunk[] {
+export function generateTextualPou(pou: TranspilePou, project: TranspileProject, indent = 2): ProgramChunk[] {
   const tagName = computePouName(pou.name)
-  const kindKeyword = ({
-    program: 'PROGRAM',
-    function: 'FUNCTION',
-    'function-block': 'FUNCTION_BLOCK',
-  } as Record<string, string>)[pou.pouType]
+  const kindKeyword = (
+    {
+      program: 'PROGRAM',
+      function: 'FUNCTION',
+      'function-block': 'FUNCTION_BLOCK',
+    } as Record<string, string>
+  )[pou.pouType]
 
   const program: ProgramChunk[] = []
   program.push([`${kindKeyword} `, []])

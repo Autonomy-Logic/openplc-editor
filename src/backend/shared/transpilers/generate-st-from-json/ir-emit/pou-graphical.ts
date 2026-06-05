@@ -17,12 +17,7 @@ import { PLC_BASE_TYPES } from '../src/PLCGenerator/ctn_globals'
 import type { ProgramChunk } from '../src/PLCGenerator/program'
 import { computePouName } from '../src/PLCGenerator/text_helpers'
 import { varTypeNames } from '../src/PLCGenerator/type_text'
-import type {
-  TranspilePou,
-  TranspileProject,
-  TranspileVariable,
-  TranspileVariableClass,
-} from '../types'
+import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
 
@@ -46,11 +41,13 @@ export function generateGraphicalPou(
   indent = 2,
 ): ProgramChunk[] {
   const tagName = computePouName(pou.name)
-  const kindKeyword = ({
-    program: 'PROGRAM',
-    function: 'FUNCTION',
-    'function-block': 'FUNCTION_BLOCK',
-  } as Record<string, string>)[pou.pouType]
+  const kindKeyword = (
+    {
+      program: 'PROGRAM',
+      function: 'FUNCTION',
+      'function-block': 'FUNCTION_BLOCK',
+    } as Record<string, string>
+  )[pou.pouType]
 
   // Pre-populate the walker's declaredVars set so trigger-var
   // synthesis (`R_TRIG1`, …) avoids collisions with the POU's
@@ -90,9 +87,7 @@ export function generateGraphicalPou(
     }
     const stdResolved = resolveBlockType(null, tv.originBlockTypeName)
     if (stdResolved) {
-      const outPort = stdResolved.infos.outputs.find(
-        (o) => o.name === tv.originFormalParameter,
-      )
+      const outPort = stdResolved.infos.outputs.find((o) => o.name === tv.originFormalParameter)
       if (outPort) {
         const t = outPort.type
         const collapsed = t.startsWith('ANY') ? 'BOOL' : t
@@ -102,11 +97,7 @@ export function generateGraphicalPou(
     return tv
   })
 
-  const iface = computeInterface(
-    pou.interface?.variables ?? [],
-    walkerState.triggerVars,
-    resolvedTempVars,
-  )
+  const iface = computeInterface(pou.interface?.variables ?? [], walkerState.triggerVars, resolvedTempVars)
   for (const entry of iface) {
     const variableType = locationCategory(entry.keyword)
     program.push([`  ${entry.keyword}`, []])

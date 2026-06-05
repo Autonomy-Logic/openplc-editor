@@ -31,9 +31,7 @@
 
 import type { TranspilePou, TranspileProject } from './types'
 
-export function buildPouEmissionOrder(
-  pous: readonly TranspilePou[],
-): TranspilePou[] {
+export function buildPouEmissionOrder(pous: readonly TranspilePou[]): TranspilePou[] {
   const byName = new Map<string, TranspilePou>()
   for (const p of pous) byName.set(p.name, p)
   const pouNames = new Set(byName.keys())
@@ -54,10 +52,7 @@ export function buildPouEmissionOrder(
   return order
 }
 
-function extractPouDeps(
-  pou: TranspilePou,
-  pouNames: ReadonlySet<string>,
-): string[] {
+function extractPouDeps(pou: TranspilePou, pouNames: ReadonlySet<string>): string[] {
   const deps = new Set<string>()
 
   // Variable references: a `derived` / `user-data-type` variable
@@ -72,18 +67,10 @@ function extractPouDeps(
   }
 
   // Body references.
-  if (
-    pou.body.language === 'ld' ||
-    pou.body.language === 'fbd' ||
-    pou.body.language === 'sfc'
-  ) {
+  if (pou.body.language === 'ld' || pou.body.language === 'fbd' || pou.body.language === 'sfc') {
     if (pou.body.ldBody) {
       for (const inst of pou.body.ldBody.instances) {
-        if (
-          inst.kind === 'block' &&
-          inst.typeName !== pou.name &&
-          pouNames.has(inst.typeName)
-        ) {
+        if (inst.kind === 'block' && inst.typeName !== pou.name && pouNames.has(inst.typeName)) {
           deps.add(inst.typeName)
         }
       }
@@ -108,9 +95,7 @@ function extractPouDeps(
     const upper = pou.body.value.toUpperCase()
     for (const name of pouNames) {
       if (name === pou.name) continue
-      const re = new RegExp(
-        `(?:^|[^0-9^A-Z])${escapeRegex(name.toUpperCase())}(?:$|[^0-9^A-Z])`,
-      )
+      const re = new RegExp(`(?:^|[^0-9^A-Z])${escapeRegex(name.toUpperCase())}(?:$|[^0-9^A-Z])`)
       if (re.test(upper)) deps.add(name)
     }
   }

@@ -13,12 +13,7 @@ export type { Element }
  * + typeof check, negligible inside traversal loops.
  */
 export function isElement(value: unknown): value is Element {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    'nodeType' in value &&
-    value.nodeType === 1
-  )
+  return value !== null && typeof value === 'object' && 'nodeType' in value && value.nodeType === 1
 }
 
 /**

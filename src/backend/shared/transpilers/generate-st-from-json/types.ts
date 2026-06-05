@@ -88,13 +88,7 @@ export type TranspileBody =
 
 /* ──────────────────────────── variable ──────────────────────────────────── */
 
-export type TranspileVariableClass =
-  | 'input'
-  | 'output'
-  | 'inOut'
-  | 'external'
-  | 'local'
-  | 'temp'
+export type TranspileVariableClass = 'input' | 'output' | 'inOut' | 'external' | 'local' | 'temp'
 
 export interface TranspileVariable {
   name: string

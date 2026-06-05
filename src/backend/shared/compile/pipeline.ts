@@ -415,10 +415,7 @@ async function runCompilePipelineInner(
   // routes through `fromSchemaShape`; web routes through `fromPortShape`
   // after converting at the adapter boundary.  Casting to `never` here
   // erases the structural mismatch without losing runtime fidelity.
-  const stResult = await port.transpileToSt(
-    { projectData: processedData as never },
-    makePlatformLog(emit, 'st'),
-  )
+  const stResult = await port.transpileToSt({ projectData: processedData as never }, makePlatformLog(emit, 'st'))
   if (!stResult.ok || !stResult.programSt) {
     if (stResult.errors && stResult.errors.length > 0) {
       emitCompileErrorEvents(

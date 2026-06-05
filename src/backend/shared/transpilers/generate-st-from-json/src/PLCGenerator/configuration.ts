@@ -44,16 +44,10 @@ import {
 import type { ProjectTree } from '../plcopen/plcopen'
 import { type Element } from '../xmlclass/xsdschema'
 import { getLocalTag } from '../xmlclass/xsdschema'
-import {
-  type ConfigurationExtraVariablesProvider,
-  resolveExtraVarLists,
-} from './ctn_globals'
+import { type ConfigurationExtraVariablesProvider, resolveExtraVarLists } from './ctn_globals'
 import { computeValue } from './pou_assembly'
 import type { ProgramChunk } from './program'
-import {
-  computeConfigurationName,
-  computeConfigurationResourceName,
-} from './text_helpers'
+import { computeConfigurationName, computeConfigurationResourceName } from './text_helpers'
 import { gettypeAsText } from './type_text'
 
 /* ─────────────────────────── GenerateConfiguration ──────────────────────── */
@@ -128,15 +122,7 @@ export function generateResource(
   // — Python only consults the provider for configuration-scope
   // globals (PLCGenerator.py:345 is inside GenerateConfiguration,
   // not GenerateResource).
-  emitGlobalVarLists(
-    out,
-    resource,
-    project,
-    tagname,
-    /*indent=*/ '    ',
-    /*varIndent=*/ '      ',
-    /*provider=*/ null,
-  )
+  emitGlobalVarLists(out, resource, project, tagname, /*indent=*/ '    ', /*varIndent=*/ '      ', /*provider=*/ null)
 
   // Tasks.
   const tasks = gettask(resource)
@@ -226,9 +212,7 @@ function emitGlobalVarLists(
   let varNumber = 0
   const baseVarLists = getglobalVars(parent)
   const varLists =
-    provider !== null && project !== null
-      ? resolveExtraVarLists(baseVarLists, provider, project)
-      : baseVarLists
+    provider !== null && project !== null ? resolveExtraVarLists(baseVarLists, provider, project) : baseVarLists
   for (const varlist of varLists) {
     const variables = getvariable(varlist)
     out.push([`${indent}VAR_GLOBAL`, []])
@@ -268,10 +252,7 @@ function emitGlobalVarLists(
       if (initial !== null) {
         const value = getvalue(initial) ?? ''
         out.push([' := ', []])
-        out.push([
-          computeValue(project, value, varType),
-          [tagname, variableType, varNumber, 'initial value'],
-        ])
+        out.push([computeValue(project, value, varType), [tagname, variableType, varNumber, 'initial value']])
       }
       out.push([';\n', []])
       varNumber++

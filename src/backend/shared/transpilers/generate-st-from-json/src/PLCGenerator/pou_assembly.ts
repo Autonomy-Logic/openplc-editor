@@ -48,10 +48,7 @@ function variableLocationCategory(keyword: string): string {
  *   - the input typename if the project defines it but `GetDataTypeBaseType` returns null
  *   - `null` if the type is unknown
  */
-export function getBaseType(
-  project: ProjectTree | Element | null,
-  typename: string,
-): string | null {
+export function getBaseType(project: ProjectTree | Element | null, typename: string): string | null {
   if (typename in TypeHierarchy) return typename
   if (project === null) return null
 
@@ -87,24 +84,12 @@ export function getBaseType(
  * Wrap STRING / WSTRING initial values in quotes when the user didn't already.
  * Mirrors `ProgramGenerator.ComputeValue` (PLCGenerator.py:135).
  */
-export function computeValue(
-  project: ProjectTree | Element | null,
-  value: string,
-  varType: string,
-): string {
+export function computeValue(project: ProjectTree | Element | null, value: string, varType: string): string {
   const baseType = getBaseType(project, varType)
-  if (
-    baseType === 'STRING' &&
-    !value.startsWith("'") &&
-    !value.endsWith("'")
-  ) {
+  if (baseType === 'STRING' && !value.startsWith("'") && !value.endsWith("'")) {
     return `'${value}'`
   }
-  if (
-    baseType === 'WSTRING' &&
-    !value.startsWith('"') &&
-    !value.endsWith('"')
-  ) {
+  if (baseType === 'WSTRING' && !value.startsWith('"') && !value.endsWith('"')) {
     return `"${value}"`
   }
   return value
@@ -131,10 +116,7 @@ export interface GenerateProgramOptions {
  * Throws `PLCGenException` when the POU has no interface or no body —
  * matches Python's validation guards.
  */
-export function generateProgram(
-  pou: Element,
-  options: GenerateProgramOptions = {},
-): ProgramChunk[] {
+export function generateProgram(pou: Element, options: GenerateProgramOptions = {}): ProgramChunk[] {
   const indent = options.indent ?? 2
   const project = options.project ?? null
 
@@ -143,11 +125,14 @@ export function generateProgram(
   //   "function"       → "FUNCTION"
   //   "functionBlock"  → "FUNCTION_BLOCK"
   const pouType = getpouType(pou) ?? ''
-  const type = ({
-    program: 'PROGRAM',
-    function: 'FUNCTION',
-    functionBlock: 'FUNCTION_BLOCK',
-  } as Record<string, string>)[pouType] ?? pouType.toUpperCase()
+  const type =
+    (
+      {
+        program: 'PROGRAM',
+        function: 'FUNCTION',
+        functionBlock: 'FUNCTION_BLOCK',
+      } as Record<string, string>
+    )[pouType] ?? pouType.toUpperCase()
 
   const name = getname(pou) ?? ''
   const tagName = computePouName(name)
@@ -224,31 +209,19 @@ export function generateProgram(
     for (const v of entry.vars) {
       program.push(['    ', []])
       if (v.name) {
-        program.push([
-          v.name,
-          [tagName, variableType, varNumber, 'name'],
-        ])
+        program.push([v.name, [tagName, variableType, varNumber, 'name']])
         program.push([' ', []])
       }
       if (v.address !== null) {
         program.push(['AT ', []])
-        program.push([
-          v.address,
-          [tagName, variableType, varNumber, 'location'],
-        ])
+        program.push([v.address, [tagName, variableType, varNumber, 'location']])
         program.push([' ', []])
       }
       program.push([': ', []])
-      program.push([
-        v.type,
-        [tagName, variableType, varNumber, 'type'],
-      ])
+      program.push([v.type, [tagName, variableType, varNumber, 'type']])
       if (v.initial !== null) {
         program.push([' := ', []])
-        program.push([
-          computeValue(project, v.initial, v.type),
-          [tagName, variableType, varNumber, 'initial value'],
-        ])
+        program.push([computeValue(project, v.initial, v.type), [tagName, variableType, varNumber, 'initial value']])
       }
       program.push([';\n', []])
       varNumber++

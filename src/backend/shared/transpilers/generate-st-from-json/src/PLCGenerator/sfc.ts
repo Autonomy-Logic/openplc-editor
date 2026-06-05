@@ -59,11 +59,7 @@ import { PLCGenException } from './connection_types'
 import type { GenState, SfcStepActionInfos } from './gen_state'
 import { computeExpression } from './path_tree'
 import type { Location, ProgramChunk } from './program'
-import {
-  computePouActionName,
-  computePouTransitionName,
-  reIndentText,
-} from './text_helpers'
+import { computePouActionName, computePouTransitionName, reIndentText } from './text_helpers'
 
 /* ────────────────────── divergence/convergence helpers ─────────────────── */
 
@@ -72,11 +68,7 @@ import {
  * its single inbound link, returning the resolved predecessor instance.
  * Mirrors `ExtractDivergenceInput` (PLCGenerator.py:1995).
  */
-function extractDivergenceInput(
-  divergence: Element,
-  _pou: Element,
-  body: Element,
-): Element | null {
+function extractDivergenceInput(divergence: Element, _pou: Element, body: Element): Element | null {
   const cpIn = getconnectionPointIn(divergence)
   if (!cpIn) return null
   const connections = getconnections(cpIn)
@@ -92,21 +84,13 @@ function extractDivergenceInput(
  * predecessor instances. Mirrors `ExtractConvergenceInputs`
  * (PLCGenerator.py:2007).
  */
-function extractConvergenceInputs(
-  convergence: Element,
-  _pou: Element,
-  body: Element,
-): Element[] {
+function extractConvergenceInputs(convergence: Element, _pou: Element, body: Element): Element[] {
   const out: Element[] = []
   // The convergence has multiple `<connectionPointIn>` children; each carries
   // a single connection to its upstream step / transition.
   for (let i = 0; i < convergence.childNodes.length; i++) {
     const child = convergence.childNodes.item(i)
-    if (
-      child &&
-      child.nodeType === 1 &&
-      (child as Element).localName === 'connectionPointIn'
-    ) {
+    if (child && child.nodeType === 1 && (child as Element).localName === 'connectionPointIn') {
       const cpIn = child as Element
       const connections = getconnections(cpIn)
       if (connections.length !== 1) continue
@@ -129,11 +113,7 @@ function extractConvergenceInputs(
  * (b) a selectionConvergence (which fans in multiple transitions), or
  * (c) a simultaneousDivergence (which may itself wrap a selectionConvergence).
  */
-function resolveStepPredecessorTransitions(
-  step: Element,
-  pou: Element,
-  body: Element,
-): Element[] {
+function resolveStepPredecessorTransitions(step: Element, pou: Element, body: Element): Element[] {
   const cpIn = getconnectionPointIn(step)
   if (!cpIn) return []
   const connections = getconnections(cpIn)
@@ -168,11 +148,7 @@ function resolveStepPredecessorTransitions(
  * step or a simultaneousConvergence), or (c) a simultaneousConvergence
  * (which fans in multiple steps).
  */
-function resolveTransitionPredecessorSteps(
-  transition: Element,
-  pou: Element,
-  body: Element,
-): Element[] {
+function resolveTransitionPredecessorSteps(transition: Element, pou: Element, body: Element): Element[] {
   const cpIn = getconnectionPointIn(transition)
   if (!cpIn) return []
   const connections = getconnections(cpIn)
@@ -229,13 +205,7 @@ export function generateSfcStep(state: GenState, step: Element, pou: Element): v
     generateSfcTransition(state, transition, pou)
     const transitionInfos = state.sfcTransitions.get(transition)
     if (transitionInfos) {
-      const targetInfo: Location = [
-        state.tagName,
-        'transition',
-        getlocalId(transition) ?? 0,
-        'to',
-        stepId,
-      ]
+      const targetInfo: Location = [state.tagName, 'transition', getlocalId(transition) ?? 0, 'to', stepId]
       transitionInfos.to.push([[stepName, targetInfo]])
     }
   }
@@ -252,9 +222,7 @@ export function generateSfcJump(state: GenState, jump: Element, pou: Element): v
     throw new PLCGenException(`SFC jump in pou "${getname(pou) ?? ''}" has no @targetName`)
   }
   if (!hasstep(pou, targetName)) {
-    throw new PLCGenException(
-      `SFC jump in pou "${getname(pou) ?? ''}" refers to non-existent SFC step "${targetName}"`,
-    )
+    throw new PLCGenException(`SFC jump in pou "${getname(pou) ?? ''}" refers to non-existent SFC step "${targetName}"`)
   }
 
   const bodies = getbody(pou)
@@ -265,12 +233,7 @@ export function generateSfcJump(state: GenState, jump: Element, pou: Element): v
     generateSfcTransition(state, transition, pou)
     const transitionInfos = state.sfcTransitions.get(transition)
     if (transitionInfos) {
-      const targetInfo: Location = [
-        state.tagName,
-        'jump',
-        getlocalId(jump) ?? 0,
-        'target',
-      ]
+      const targetInfo: Location = [state.tagName, 'jump', getlocalId(jump) ?? 0, 'target']
       transitionInfos.to.push([[targetName, targetInfo]])
     }
   }
@@ -280,11 +243,7 @@ export function generateSfcJump(state: GenState, jump: Element, pou: Element): v
  * Process an `<actionBlock>` instance: connect it to its step, then register
  * each action (inline or by reference). Mirrors `GenerateSFCStepActions`.
  */
-export function generateSfcStepActions(
-  state: GenState,
-  actionBlock: Element,
-  pou: Element,
-): void {
+export function generateSfcStepActions(state: GenState, actionBlock: Element, pou: Element): void {
   const cpIn = getconnectionPointIn(actionBlock)
   if (!cpIn) return
   const connections = getconnections(cpIn)
@@ -321,14 +280,7 @@ export function generateSfcStepActions(
       // Inline action — synthesize a unique action name and register its body.
       state.actionNumber += 1
       const actionName = `${stepName.toUpperCase()}_INLINE${state.actionNumber}`
-      const inlineLocation: Location = [
-        state.tagName,
-        'action_block',
-        actionBlockId,
-        'action',
-        i,
-        'inline',
-      ]
+      const inlineLocation: Location = [state.tagName, 'action_block', actionBlockId, 'action', i, 'inline']
       state.sfcActions.set(actionName, {
         content: [
           [state.currentIndent, []],
@@ -349,11 +301,7 @@ export function generateSfcStepActions(
  * recursively via a deferred-import handle to avoid an import cycle with
  * `program.ts`.
  */
-export function generateSfcAction(
-  state: GenState,
-  actionName: string,
-  pou: Element,
-): void {
+export function generateSfcAction(state: GenState, actionName: string, pou: Element): void {
   if (state.sfcActions.has(actionName)) return
   const actionElement = getaction(pou, actionName)
   if (!actionElement) return
@@ -383,11 +331,7 @@ export function generateSfcAction(
  * Register a transition's predecessor links + condition content. Mirrors
  * `GenerateSFCTransition` (PLCGenerator.py:2172).
  */
-export function generateSfcTransition(
-  state: GenState,
-  transition: Element,
-  pou: Element,
-): void {
+export function generateSfcTransition(state: GenState, transition: Element, pou: Element): void {
   if (state.sfcTransitions.has(transition)) return
 
   const bodies = getbody(pou)
@@ -412,10 +356,7 @@ export function generateSfcTransition(
   } else if (condition.kind === 'inline') {
     transitionInfos.content = [
       [`\n${state.currentIndent}:= `, []],
-      [
-        condition.value,
-        [state.tagName, 'transition', transitionId, 'inline'],
-      ],
+      [condition.value, [state.tagName, 'transition', transitionId, 'inline']],
       [';\n', []],
     ]
   } else if (condition.kind === 'reference') {
@@ -425,10 +366,7 @@ export function generateSfcTransition(
       if (transitionBodies.length > 0) {
         const transitionBody = transitionBodies[0]
         const previousTagName = state.tagName
-        state.tagName = computePouTransitionName(
-          getname(pou) ?? '',
-          condition.value,
-        )
+        state.tagName = computePouTransitionName(getname(pou) ?? '', condition.value)
         const content = getcontent(transitionBody)
         const transitionType = content ? getLocalTag(content) : null
         if (transitionType === 'IL') {
@@ -445,10 +383,7 @@ export function generateSfcTransition(
           const text = innerP?.textContent ?? ''
           transitionInfos.content = [
             ['\n', []],
-            [
-              reIndentText(text, state.currentIndent.length),
-              [state.tagName, 'body', state.currentIndent.length],
-            ],
+            [reIndentText(text, state.currentIndent.length), [state.tagName, 'body', state.currentIndent.length]],
           ]
         } else {
           // LD/FBD — look for the outVariable/coil that matches the transition name.
@@ -456,26 +391,16 @@ export function generateSfcTransition(
           for (const instance of getcontentInstances(transitionBody)) {
             const tag = getLocalTag(instance)
             const matchesName =
-              (tag === InstanceTag.OutVariable &&
-                getexpression(instance) === condition.value) ||
-              (tag === InstanceTag.Coil &&
-                getvariableText(instance) === condition.value)
+              (tag === InstanceTag.OutVariable && getexpression(instance) === condition.value) ||
+              (tag === InstanceTag.Coil && getvariableText(instance) === condition.value)
             if (!matchesName) continue
             const innerCpIn = getconnectionPointIn(instance)
             if (!innerCpIn) continue
             const innerConnections = getconnections(innerCpIn)
             if (innerConnections.length === 0) continue
-            const expression = computeExpression(
-              state,
-              transitionBody,
-              innerConnections,
-            )
+            const expression = computeExpression(state, transitionBody, innerConnections)
             if (expression !== null) {
-              transitionInfos.content = [
-                [`\n${state.currentIndent}:= `, []],
-                ...expression,
-                [';\n', []],
-              ]
+              transitionInfos.content = [[`\n${state.currentIndent}:= `, []], ...expression, [';\n', []]]
               // Any side-effect chunks (e.g. block calls) need to land in
               // sfcComputedBlocks so they're emitted before the SFC framework.
               state.sfcComputedBlocks.push(...state.program)
@@ -497,11 +422,7 @@ export function generateSfcTransition(
     if (innerConnections.length > 0) {
       const expression = computeExpression(state, body, innerConnections)
       if (expression !== null) {
-        transitionInfos.content = [
-          [`\n${state.currentIndent}:= `, []],
-          ...expression,
-          [';\n', []],
-        ]
+        transitionInfos.content = [[`\n${state.currentIndent}:= `, []], ...expression, [';\n', []]]
         state.sfcComputedBlocks.push(...state.program)
         state.program = []
       }
@@ -513,12 +434,7 @@ export function generateSfcTransition(
     const stepName = getname(step)
     if (stepName === null || !state.sfcSteps.has(stepName)) continue
     const stepId = getlocalId(step) ?? 0
-    transitionInfos.from.push([
-      [
-        stepName,
-        [state.tagName, 'transition', transitionId, 'from', stepId],
-      ],
-    ])
+    transitionInfos.from.push([[stepName, [state.tagName, 'transition', transitionId, 'from', stepId]]])
     state.sfcSteps.get(stepName)?.transitions.push(transition)
   }
 }
@@ -542,49 +458,26 @@ export function computeSfcStep(state: GenState, stepName: string): void {
   state.program.push([state.currentIndent, []])
   if (stepInfos.initial) state.program.push(['INITIAL_', []])
   state.program.push(['STEP ', []])
-  state.program.push([
-    stepName,
-    [state.tagName, 'step', stepInfos.id, 'name'],
-  ])
+  state.program.push([stepName, [state.tagName, 'step', stepInfos.id, 'name']])
   state.program.push([':\n', []])
 
   const actions: string[] = []
   state.currentIndent += '  '
   for (const actionInfos of stepInfos.actions) {
     const actionInfo: Location =
-      actionInfos.id !== undefined
-        ? [
-            state.tagName,
-            'action_block',
-            actionInfos.id,
-            'action',
-            actionInfos.num,
-          ]
-        : []
+      actionInfos.id !== undefined ? [state.tagName, 'action_block', actionInfos.id, 'action', actionInfos.num] : []
     actions.push(actionInfos.content)
     state.program.push([state.currentIndent, []])
-    state.program.push([
-      actionInfos.content,
-      [...actionInfo, 'reference'],
-    ])
+    state.program.push([actionInfos.content, [...actionInfo, 'reference']])
     state.program.push(['(', []])
-    state.program.push([
-      actionInfos.qualifier,
-      [...actionInfo, 'qualifier'],
-    ])
+    state.program.push([actionInfos.qualifier, [...actionInfo, 'qualifier']])
     if (actionInfos.duration !== undefined) {
       state.program.push([', ', []])
-      state.program.push([
-        actionInfos.duration,
-        [...actionInfo, 'duration'],
-      ])
+      state.program.push([actionInfos.duration, [...actionInfo, 'duration']])
     }
     if (actionInfos.indicator !== undefined) {
       state.program.push([', ', []])
-      state.program.push([
-        actionInfos.indicator,
-        [...actionInfo, 'indicator'],
-      ])
+      state.program.push([actionInfos.indicator, [...actionInfo, 'indicator']])
     }
     state.program.push([');\n', []])
   }
@@ -625,10 +518,7 @@ export function computeSfcTransition(state: GenState, transition: Element): void
   state.program.push([`${state.currentIndent}TRANSITION`, []])
   if (infos.priority !== null) {
     state.program.push([' (PRIORITY := ', []])
-    state.program.push([
-      String(infos.priority),
-      [state.tagName, 'transition', infos.id, 'priority'],
-    ])
+    state.program.push([String(infos.priority), [state.tagName, 'transition', infos.id, 'priority']])
     state.program.push([')', []])
   }
 
@@ -640,9 +530,7 @@ export function computeSfcTransition(state: GenState, transition: Element): void
   } else if (infos.from.length === 1) {
     state.program.push(...infos.from[0])
   } else {
-    throw new PLCGenException(
-      `Transition not connected to a previous step in "${getname(state.pou) ?? ''}" POU`,
-    )
+    throw new PLCGenException(`Transition not connected to a previous step in "${getname(state.pou) ?? ''}" POU`)
   }
 
   state.program.push([' TO ', []])
@@ -653,9 +541,7 @@ export function computeSfcTransition(state: GenState, transition: Element): void
   } else if (infos.to.length === 1) {
     state.program.push(...infos.to[0])
   } else {
-    throw new PLCGenException(
-      `Transition not connected to a next step in "${getname(state.pou) ?? ''}" POU`,
-    )
+    throw new PLCGenException(`Transition not connected to a next step in "${getname(state.pou) ?? ''}" POU`)
   }
 
   state.program.push(...infos.content)

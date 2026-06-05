@@ -27,11 +27,7 @@ import {
   getvalue,
   getvariable,
 } from '../plcopen/accessors'
-import {
-  childElements,
-  type Element,
-  getLocalTag,
-} from '../xmlclass/xsdschema'
+import { childElements, type Element, getLocalTag } from '../xmlclass/xsdschema'
 import { gettypeAsText, varTypeNames } from './type_text'
 
 /** One declared variable: type, name, optional located address, optional initial value. */

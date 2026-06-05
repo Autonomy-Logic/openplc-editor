@@ -28,13 +28,7 @@ import {
   getupper,
 } from '../plcopen/accessors'
 import type { ProjectTree } from '../plcopen/plcopen'
-import {
-  childElements,
-  type Element,
-  findChildren,
-  getAttr,
-  getLocalTag,
-} from '../xmlclass/xsdschema'
+import { childElements, type Element, findChildren, getAttr, getLocalTag } from '../xmlclass/xsdschema'
 
 /**
  * `"D::" + name` — the namespace prefix `GetDataTypeInfos` keys on to know
@@ -52,9 +46,7 @@ export function ComputeDataTypeName(datatype: string): string {
  * Python shape verbatim — JSON serializes the tuple as a 3-array which
  * stays comparable across implementations.
  */
-export type StructFieldType =
-  | string
-  | readonly ['array', string, readonly (readonly [string, string])[]]
+export type StructFieldType = string | readonly ['array', string, readonly (readonly [string, string])[]]
 
 export interface StructElement {
   Name: string
@@ -84,10 +76,7 @@ export type DataTypeInfos =
  * `"D::"` namespace is supported — `"P::"` (POUs) is handled by the block
  * library path, not this function.
  */
-export function GetDataTypeInfos(
-  project: ProjectTree | Element,
-  tagname: string,
-): DataTypeInfos | null {
+export function GetDataTypeInfos(project: ProjectTree | Element, tagname: string): DataTypeInfos | null {
   const words = tagname.split('::')
   if (words[0] !== 'D' || words[1] === undefined) return null
   const datatype = getdataType(project, words[1])
@@ -175,7 +164,7 @@ function readBaseContent(content: Element): DataTypeInfos | null {
       type: 'Subrange',
       min: getlower(range) ?? '',
       max: getupper(range) ?? '',
-      base_type: innerTag === 'derived' ? getname(innerBase) ?? '' : innerTag,
+      base_type: innerTag === 'derived' ? (getname(innerBase) ?? '') : innerTag,
       initial: '',
     }
   }
@@ -191,9 +180,7 @@ function readBaseContent(content: Element): DataTypeInfos | null {
   }
 
   if (tag === 'array') {
-    const dims = getdimension(content).map(
-      (d) => [getlower(d) ?? '', getupper(d) ?? ''] as const,
-    )
+    const dims = getdimension(content).map((d) => [getlower(d) ?? '', getupper(d) ?? ''] as const)
     const innerBaseWrap = getbaseType(content)
     if (!innerBaseWrap) return null
     const innerBase = getcontentOfType(innerBaseWrap)
@@ -202,8 +189,7 @@ function readBaseContent(content: Element): DataTypeInfos | null {
     return {
       type: 'Array',
       dimensions: dims,
-      base_type:
-        innerTag === 'derived' ? getname(innerBase) ?? '' : innerTag.toUpperCase(),
+      base_type: innerTag === 'derived' ? (getname(innerBase) ?? '') : innerTag.toUpperCase(),
       initial: '',
     }
   }
@@ -220,7 +206,7 @@ function readBaseContent(content: Element): DataTypeInfos | null {
   // Directly-derived: <derived name="X"/> or elementary.
   return {
     type: 'Directly',
-    base_type: tag === 'derived' ? getname(content) ?? '' : tag.toUpperCase(),
+    base_type: tag === 'derived' ? (getname(content) ?? '') : tag.toUpperCase(),
     initial: '',
   }
 }
@@ -236,16 +222,13 @@ function readStructElement(variable: Element): StructElement | null {
   let resolvedType: StructFieldType
   const tag = getLocalTag(elementType)
   if (tag === 'array') {
-    const dimensions = getdimension(elementType).map(
-      (d) => [getlower(d) ?? '', getupper(d) ?? ''] as const,
-    )
+    const dimensions = getdimension(elementType).map((d) => [getlower(d) ?? '', getupper(d) ?? ''] as const)
     const innerWrap = getbaseType(elementType)
     const innerEl = innerWrap ? getcontentOfType(innerWrap) : null
     let arrayBase = ''
     if (innerEl) {
       const innerTag = getLocalTag(innerEl)
-      arrayBase =
-        innerTag === 'derived' ? getname(innerEl) ?? '' : innerTag.toUpperCase()
+      arrayBase = innerTag === 'derived' ? (getname(innerEl) ?? '') : innerTag.toUpperCase()
     }
     resolvedType = ['array', arrayBase, dimensions] as const
   } else if (tag === 'derived') {
@@ -263,4 +246,3 @@ function readStructElement(variable: Element): StructElement | null {
     'Initial Value': initial,
   }
 }
-

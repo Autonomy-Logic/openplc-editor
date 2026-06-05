@@ -26,10 +26,7 @@ function getBaseType(typename: string, dataTypeIndex: Map<string, TranspileDataT
   if (!dt) return null
 
   if (dt.derivation === 'array') {
-    return getBaseType(
-      typeof dt.baseType === 'string' ? dt.baseType : dt.baseType.value,
-      dataTypeIndex,
-    )
+    return getBaseType(typeof dt.baseType === 'string' ? dt.baseType : dt.baseType.value, dataTypeIndex)
   }
   if (dt.derivation === 'directly-derived') {
     return getBaseType(dt.baseType, dataTypeIndex)
@@ -46,10 +43,7 @@ function getBaseType(typename: string, dataTypeIndex: Map<string, TranspileDataT
  * (`'foo'` for STRING, `"foo"` for WSTRING).  Returns `null` when
  * the chain doesn't terminate at an elementary type.
  */
-export function resolveBaseType(
-  typename: string,
-  project: TranspileProject,
-): string | null {
+export function resolveBaseType(typename: string, project: TranspileProject): string | null {
   const index = new Map<string, TranspileDataType>()
   for (const dt of project.dataTypes) index.set(dt.name, dt)
   return getBaseType(typename, index)
@@ -60,11 +54,7 @@ export function resolveBaseType(
  * STRING / WSTRING initial values in quotes when the source text
  * doesn't already carry them.
  */
-export function computeValue(
-  project: TranspileProject,
-  value: string,
-  varType: string,
-): string {
+export function computeValue(project: TranspileProject, value: string, varType: string): string {
   const baseType = resolveBaseType(varType, project)
   if (baseType === 'STRING' && !value.startsWith("'") && !value.endsWith("'")) {
     return `'${value}'`

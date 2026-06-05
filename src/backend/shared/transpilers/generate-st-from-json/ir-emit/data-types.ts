@@ -15,12 +15,7 @@
 
 import { ComputeDataTypeName } from '../src/PLCGenerator/data_type'
 import type { ProgramChunk } from '../src/PLCGenerator/program'
-import type {
-  TranspileDataType,
-  TranspileProject,
-  TranspileVariable,
-  TranspileVariableType,
-} from '../types'
+import type { TranspileDataType, TranspileProject, TranspileVariable, TranspileVariableType } from '../types'
 import { computeValue } from './value'
 
 interface DataTypeState {
@@ -123,23 +118,14 @@ function generateDataType(state: DataTypeState, datatypeName: string): void {
   }
 
   if (dt.initialValue !== undefined && dt.initialValue !== '') {
-    chunks.push(
-      [' := ', []],
-      [
-        computeValue(state.project, dt.initialValue, datatypeName),
-        [tagname, 'initial value'],
-      ],
-    )
+    chunks.push([' := ', []], [computeValue(state.project, dt.initialValue, datatypeName), [tagname, 'initial value']])
   }
   chunks.push([';\n', []])
 
   state.out.push(...chunks)
 }
 
-function resolveArrayBaseName(
-  baseType: string | { value: string },
-  state: DataTypeState,
-): string {
+function resolveArrayBaseName(baseType: string | { value: string }, state: DataTypeState): string {
   const name = typeof baseType === 'string' ? baseType : baseType.value
   if (state.byName.has(name)) {
     generateDataType(state, name)
@@ -148,10 +134,7 @@ function resolveArrayBaseName(
   return name.toUpperCase()
 }
 
-function resolveStructFieldType(
-  variable: TranspileVariable,
-  state: DataTypeState,
-): string {
+function resolveStructFieldType(variable: TranspileVariable, state: DataTypeState): string {
   const type = variable.type
   if (type.definition === 'derived' || type.definition === 'user-data-type') {
     if (state.byName.has(type.value)) generateDataType(state, type.value)
@@ -170,10 +153,7 @@ function formatBaseType(type: TranspileVariableType): string {
     return type.value.toUpperCase()
   }
   if (type.definition === 'array') {
-    const baseName =
-      typeof type.data.baseType === 'string'
-        ? type.data.baseType
-        : type.data.baseType.value
+    const baseName = typeof type.data.baseType === 'string' ? type.data.baseType : type.data.baseType.value
     const dimensions = type.data.dimensions.map((d) => d.dimension).join(',')
     return `ARRAY [${dimensions}] OF ${baseName.toUpperCase()}`
   }

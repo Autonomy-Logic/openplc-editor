@@ -44,11 +44,7 @@ import {
   InstanceTag,
 } from '../plcopen/accessors'
 import { type Element, getLocalTag } from '../xmlclass/xsdschema'
-import {
-  type BlockInfos,
-  GetBlockType,
-  synthesizePermissiveBlockInfos,
-} from './block_library'
+import { type BlockInfos, GetBlockType, synthesizePermissiveBlockInfos } from './block_library'
 import { PLCGenException } from './connection_types'
 import type { GenState } from './gen_state'
 import { extractModifier } from './modifiers'
@@ -245,8 +241,7 @@ export function factorizePaths(paths: readonly PathNode[]): PathNode[] {
   for (const [key, elements] of samePaths) {
     if (elements.length <= 1) continue
     const innerPaths = elements.map(
-      (e): PathNode =>
-        e.prefix.length === 1 ? e.prefix[0] : { kind: 'and', children: e.prefix },
+      (e): PathNode => (e.prefix.length === 1 ? e.prefix[0] : { kind: 'and', children: e.prefix }),
     )
     // Decode the key back into the [lastChild] list, then peel off lastChild.
     const innerFactorized = factorizePaths(innerPaths)
@@ -376,12 +371,7 @@ export function generatePaths(
       case InstanceTag.InVariable:
       case InstanceTag.InOutVariable: {
         const expr = getexpression(next) ?? ''
-        const chunks: ProgramChunk[] = [
-          [
-            expr,
-            [state.tagName, 'io_variable', localId, 'expression'],
-          ],
-        ]
+        const chunks: ProgramChunk[] = [[expr, [state.tagName, 'io_variable', localId, 'expression']]]
         paths.push({ kind: 'leaf', chunks })
         break
       }
@@ -402,9 +392,7 @@ export function generatePaths(
               })
           : []
         let blockInfos: BlockInfos | null =
-          state.project !== null
-            ? GetBlockType(state.project, typeName, callerInputTypes)
-            : null
+          state.project !== null ? GetBlockType(state.project, typeName, callerInputTypes) : null
         if (blockInfos === null && state.project !== null) {
           blockInfos = GetBlockType(state.project, typeName)
         }
@@ -413,15 +401,7 @@ export function generatePaths(
         }
         let outputChunks: ProgramChunk[] | undefined
         try {
-          outputChunks = generateBlock(
-            state,
-            next,
-            blockInfos,
-            body,
-            connection,
-            order,
-            toInout,
-          )
+          outputChunks = generateBlock(state, next, blockInfos, body, connection, order, toInout)
         } catch (e) {
           if (e instanceof Error) {
             throw new PLCGenException(e.message)
@@ -440,14 +420,8 @@ export function generatePaths(
         throw new NotYetImplementedError(`generatePaths ${tag} branch`)
 
       case InstanceTag.Contact: {
-        const contactInfo: Location = [
-          state.tagName,
-          'contact',
-          localId,
-        ]
-        const variableChunks: ProgramChunk[] = [
-          [getvariableText(next), [...contactInfo, 'reference']],
-        ]
+        const contactInfo: Location = [state.tagName, 'contact', localId]
+        const variableChunks: ProgramChunk[] = [[getvariableText(next), [...contactInfo, 'reference']]]
         const variableLeaf: PathNode = {
           kind: 'leaf',
           chunks: extractModifier(state, next, variableChunks, contactInfo),
@@ -707,9 +681,7 @@ function emitFunctionCall(
       const parameter = getformalParameter(variable)
       if (parameter !== null) inputConnected.set(parameter, variable)
     }
-    inputParameters = inputVariables
-      .map((v) => getformalParameter(v))
-      .filter((n): n is string => n !== null)
+    inputParameters = inputVariables.map((v) => getformalParameter(v)).filter((n): n is string => n !== null)
   }
 
   // First pass: build `connected_vars` as label/expression pairs.
@@ -782,14 +754,10 @@ function emitFunctionCall(
       !inoutVariables.has(parameter) &&
       (outputNames.includes(parameter) || parameter === '' || parameter === 'ENO')
     ) {
-      const variableName =
-        parameter === ''
-          ? `${blockType}${localId}`
-          : `_TMP_${blockType}${localId}_${parameter}`
+      const variableName = parameter === '' ? `${blockType}${localId}` : `_TMP_${blockType}${localId}_${parameter}`
       ensureFreshVarSection(state)
       const cpOut = getconnectionPointOut(variable)
-      const connType =
-        cpOut !== null ? state.connectionTypes.get(cpOut) ?? 'ANY' : 'ANY'
+      const connType = cpOut !== null ? (state.connectionTypes.get(cpOut) ?? 'ANY') : 'ANY'
       state.iface[state.iface.length - 1].vars.push({
         type: connType,
         name: variableName,
@@ -863,29 +831,16 @@ function emitFunctionBlockCall(
     const connections = cpIn ? getconnections(cpIn) : []
     if (connections.length === 0) continue
 
-    const expression = computeExpression(
-      state,
-      body,
-      connections,
-      executionOrderId > 0,
-      inoutVariables.has(parameter),
-    )
+    const expression = computeExpression(state, body, connections, executionOrderId > 0, inoutVariables.has(parameter))
     if (expression !== null) {
-      vars.push([
-        [parameter, inputInfo],
-        [' := ', []],
-        ...extractModifier(state, variable, expression, inputInfo),
-      ])
+      vars.push([[parameter, inputInfo], [' := ', []], ...extractModifier(state, variable, expression, inputInfo)])
     } else if (inoutVariables.has(parameter)) {
       raiseUnconnectedInOutError(instanceName, blockInfos.name, parameter, state)
     }
   }
 
   state.program.push([state.currentIndent, []])
-  state.program.push([
-    instanceName ?? '',
-    [state.tagName, 'block', localId, 'name'],
-  ])
+  state.program.push([instanceName ?? '', [state.tagName, 'block', localId, 'name']])
   state.program.push(['(', []])
   state.program.push(...joinChunkLists([[', ', []]], vars))
   state.program.push([');\n', []])
@@ -945,8 +900,7 @@ function resolveBlockOutput(
       if (!blockPos) continue
       const matches =
         connectionPoint === null ||
-        (blockPos.x + rel[0] === connectionPoint.x &&
-          blockPos.y + rel[1] === connectionPoint.y)
+        (blockPos.x + rel[0] === connectionPoint.x && blockPos.y + rel[1] === connectionPoint.y)
       if (matches) {
         outputVariable = variable
         outputParameter = getformalParameter(variable)
@@ -958,13 +912,7 @@ function resolveBlockOutput(
 
   if (outputVariable !== null && outputParameter !== null) {
     if (blockInfos.type === 'function') {
-      const outputInfo: Location = [
-        state.tagName,
-        'block',
-        localId,
-        'output',
-        outputIdx,
-      ]
+      const outputInfo: Location = [state.tagName, 'block', localId, 'output', outputIdx]
       let outputValue: ProgramChunk[]
       if (inoutVariables.has(outputParameter)) {
         // The "output" is actually an inout — return the input-side expression.
@@ -974,13 +922,7 @@ function resolveBlockOutput(
             const cpIn = getconnectionPointIn(variable)
             const connections = cpIn ? getconnections(cpIn) : []
             if (connections.length > 0) {
-              inoutExpr = computeExpression(
-                state,
-                body,
-                connections,
-                executionOrderId > 0,
-                true,
-              )
+              inoutExpr = computeExpression(state, body, connections, executionOrderId > 0, true)
             }
             break
           }
@@ -989,22 +931,14 @@ function resolveBlockOutput(
         outputValue = inoutExpr
       } else {
         const outName =
-          outputParameter === ''
-            ? `${blockType}${localId}`
-            : `_TMP_${blockType}${localId}_${outputParameter}`
+          outputParameter === '' ? `${blockType}${localId}` : `_TMP_${blockType}${localId}_${outputParameter}`
         outputValue = [[outName, outputInfo]]
       }
       return extractModifier(state, outputVariable, outputValue, outputInfo)
     }
 
     if (blockInfos.type === 'functionBlock') {
-      const outputInfo: Location = [
-        state.tagName,
-        'block',
-        localId,
-        'output',
-        outputIdx,
-      ]
+      const outputInfo: Location = [state.tagName, 'block', localId, 'output', outputIdx]
       const outputChunks = extractModifier(
         state,
         outputVariable,
@@ -1016,8 +950,7 @@ function resolveBlockOutput(
         if (!isAlreadyDefinedInIface(state, variableName)) {
           ensureFreshVarSection(state)
           const cpOut = getconnectionPointOut(outputVariable)
-          const connType =
-            cpOut !== null ? state.connectionTypes.get(cpOut) ?? 'ANY' : 'ANY'
+          const connType = cpOut !== null ? (state.connectionTypes.get(cpOut) ?? 'ANY') : 'ANY'
           state.iface[state.iface.length - 1].vars.push({
             type: connType,
             name: variableName,
@@ -1048,12 +981,7 @@ function resolveBlockOutput(
 
 function ensureFreshVarSection(state: GenState): void {
   const last = state.iface[state.iface.length - 1]
-  if (
-    last === undefined ||
-    last.keyword !== 'VAR' ||
-    last.option !== null ||
-    last.located
-  ) {
+  if (last === undefined || last.keyword !== 'VAR' || last.option !== null || last.located) {
     state.iface.push({ keyword: 'VAR', option: null, located: false, vars: [] })
   }
 }
@@ -1074,9 +1002,7 @@ function raiseUnconnectedInOutError(
   state: GenState,
 ): never {
   const blockname = instanceName ? `${instanceName}(${blockType})` : blockType
-  throw new Error(
-    `InOut variable ${parameter} in block ${blockname} in POU ${state.pou.localName} must be connected.`,
-  )
+  throw new Error(`InOut variable ${parameter} in block ${blockname} in POU ${state.pou.localName} must be connected.`)
 }
 
 /* ────────────────────────── small helpers ──────────────────────────────── */

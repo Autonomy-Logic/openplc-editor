@@ -145,9 +145,8 @@ export async function runLibraryBuildPipeline(
   // receives (desktop → `fromSchemaShape`; web → `fromPortShape` after
   // its adapter converts).  See the matching cast site in
   // `pipeline.ts` (Step 1) for the same comment.
-  const transpile = await port.transpileToSt(
-    { projectData: stubbedData as never },
-    (message, level) => emit({ message, level }),
+  const transpile = await port.transpileToSt({ projectData: stubbedData as never }, (message, level) =>
+    emit({ message, level }),
   )
   if (!transpile.ok || !transpile.programSt) {
     const firstError = transpile.errors?.[0]?.message ?? 'transpile-from-json failed'

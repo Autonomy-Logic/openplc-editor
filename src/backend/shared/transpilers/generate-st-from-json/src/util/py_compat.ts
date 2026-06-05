@@ -121,9 +121,7 @@ function scalarCompare(av: unknown, bv: unknown): number {
   if (Array.isArray(av) && Array.isArray(bv)) {
     return tupleCompare(av, bv)
   }
-  throw new Error(
-    `tupleCompare: cannot compare ${typeof av} with ${typeof bv} (Python would raise TypeError)`,
-  )
+  throw new Error(`tupleCompare: cannot compare ${typeof av} with ${typeof bv} (Python would raise TypeError)`)
 }
 
 /**

@@ -43,11 +43,7 @@ import {
 } from '../plcopen/accessors'
 import type { ProjectTree } from '../plcopen/plcopen'
 import { type Element, getLocalTag, isElement } from '../xmlclass/xsdschema'
-import {
-  type BlockInfos,
-  GetBlockType,
-  synthesizePermissiveBlockInfos,
-} from './block_library'
+import { type BlockInfos, GetBlockType, synthesizePermissiveBlockInfos } from './block_library'
 import {
   ExtractRelatedConnections,
   GetConnectedConnector,
@@ -126,8 +122,7 @@ export function computeConnectionTypes(
   // POUs aren't overloaded so the narrowed lookup gives the same result.
   for (const instance of undefinedBlocks) {
     const typeName = gettypeName(instance) ?? ''
-    let blockInfos: BlockInfos | null =
-      project !== null ? GetBlockType(project, typeName) : null
+    let blockInfos: BlockInfos | null = project !== null ? GetBlockType(project, typeName) : null
     if (blockInfos === null) {
       blockInfos = synthesizePermissiveBlockInfos(instance)
     }
@@ -451,20 +446,13 @@ function findFirstChildElement(el: Element): Element | null {
   return null
 }
 
-function handleTransition(
-  body: Element,
-  instance: Element,
-  pou: Element,
-  state: Phase2State,
-): void {
+function handleTransition(body: Element, instance: Element, pou: Element, state: Phase2State): void {
   const cpIn = getConditionConnectionPoint(instance)
   if (!cpIn) return // text-based condition; handled elsewhere
   state.connectionTypes.set(cpIn, 'BOOL')
   const links = getconnections(cpIn)
   if (links.length === 0) {
-    throw new PLCGenException(
-      `SFC transition in POU "${getname(pou) ?? ''}" must be connected.`,
-    )
+    throw new PLCGenException(`SFC transition in POU "${getname(pou) ?? ''}" must be connected.`)
   }
   for (const link of links) {
     const connected = GetLinkedConnector(link, body)
@@ -486,9 +474,7 @@ function handleContinuation(body: Element, instance: Element, state: Phase2State
   for (const candidate of getcontentInstances(body)) {
     if (getLocalTag(candidate) === InstanceTag.Connector && getname(candidate) === name) {
       if (connector !== null) {
-        throw new PLCGenException(
-          `More than one connector found corresponding to "${name}" continuation`,
-        )
+        throw new PLCGenException(`More than one connector found corresponding to "${name}" continuation`)
       }
       connector = candidate
     }

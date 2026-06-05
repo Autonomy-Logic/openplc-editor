@@ -35,9 +35,7 @@ const CDATA_CLOSE_BARE = /]]>(?!<\/xhtml:p>)/g
  */
 export type ProjectTree = XmlDocument
 
-export type LoadResult =
-  | { tree: ProjectTree; error: null }
-  | { tree: null; error: string }
+export type LoadResult = { tree: ProjectTree; error: null } | { tree: null; error: string }
 
 /**
  * Apply the same string-level normalizations Python applies before parsing.

@@ -7,21 +7,8 @@
  *   - `gettypeAsText`        (plcopen/plcopen.py:1100)
  */
 
-import {
-  getbaseType,
-  getcontentOfType,
-  getdimension,
-  getlower,
-  getname,
-  gettype,
-  getupper,
-} from '../plcopen/accessors'
-import {
-  childElements,
-  type Element,
-  getLocalTag,
-  isElement,
-} from '../xmlclass/xsdschema'
+import { getbaseType, getcontentOfType, getdimension, getlower, getname, gettype, getupper } from '../plcopen/accessors'
+import { childElements, type Element, getLocalTag, isElement } from '../xmlclass/xsdschema'
 
 /**
  * Literal-prefix → IEC type mapping. `T#…`, `D#…`, `TOD#…`, `DT#…` are

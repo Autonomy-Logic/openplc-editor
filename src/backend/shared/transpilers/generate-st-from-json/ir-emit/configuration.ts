@@ -22,10 +22,7 @@
 
 import type { ConfigurationExtraVariablesProvider } from '../src/PLCGenerator/ctn_globals'
 import type { ProgramChunk } from '../src/PLCGenerator/program'
-import {
-  computeConfigurationName,
-  computeConfigurationResourceName,
-} from '../src/PLCGenerator/text_helpers'
+import { computeConfigurationName, computeConfigurationResourceName } from '../src/PLCGenerator/text_helpers'
 import type { TranspileProject, TranspileVariable } from '../types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'

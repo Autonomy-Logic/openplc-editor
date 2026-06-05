@@ -80,9 +80,7 @@ export interface CtnGlobalVarTuple {
  * tuple to be synthesized into a `<variable>` (Python's CTN-global
  * path).
  */
-export type CtnGlobalEntry =
-  | { kind: 'varlist'; varlist: Element }
-  | { kind: 'variable'; variable: CtnGlobalVarTuple }
+export type CtnGlobalEntry = { kind: 'varlist'; varlist: Element } | { kind: 'variable'; variable: CtnGlobalVarTuple }
 
 /**
  * Host-provided source of CTN-injected configuration globals. Mirrors
@@ -139,10 +137,7 @@ export function resolveExtraVarLists(
  * carries no `constant`/`retain`/`nonretain` modifier — same as
  * Python's `PLCOpenParser.CreateElement("globalVars", "interface")`.
  */
-function synthesizeGlobalVarsElement(
-  tuples: readonly CtnGlobalVarTuple[],
-  project: ProjectTree | Element,
-): Element {
+function synthesizeGlobalVarsElement(tuples: readonly CtnGlobalVarTuple[], project: ProjectTree | Element): Element {
   const doc = getOwnerDocument(project)
   const wrapper = doc.createElementNS(TC6_NS, 'globalVars')
   for (const tuple of tuples) {
@@ -162,19 +157,13 @@ function synthesizeGlobalVarsElement(
  * branch). Empty initial values are omitted entirely, matching
  * Python's `if var_initial != ""` guard.
  */
-function synthesizeVariableElement(
-  doc: ReturnType<typeof getOwnerDocument>,
-  tuple: CtnGlobalVarTuple,
-): Element {
+function synthesizeVariableElement(doc: ReturnType<typeof getOwnerDocument>, tuple: CtnGlobalVarTuple): Element {
   const variable = doc.createElementNS(TC6_NS, 'variable')
   variable.setAttribute('name', tuple.name)
 
   const typeEl = doc.createElementNS(TC6_NS, 'type')
   if (PLC_BASE_TYPES.has(tuple.type)) {
-    const localName =
-      tuple.type === 'STRING' || tuple.type === 'WSTRING'
-        ? tuple.type.toLowerCase()
-        : tuple.type
+    const localName = tuple.type === 'STRING' || tuple.type === 'WSTRING' ? tuple.type.toLowerCase() : tuple.type
     typeEl.appendChild(doc.createElementNS(TC6_NS, localName))
   } else {
     const derived = doc.createElementNS(TC6_NS, 'derived')
@@ -204,7 +193,7 @@ function synthesizeVariableElement(
  */
 function getOwnerDocument(project: ProjectTree | Element) {
   if ('createElementNS' in project) return project
-  const owner = (project).ownerDocument
+  const owner = project.ownerDocument
   if (owner) return owner
   return new DOMImplementation().createDocument(TC6_NS, 'project', null)
 }

@@ -56,9 +56,7 @@ function projectPou(pou: SchemaPou): TranspilePou {
     documentation: pou.data.documentation ?? '',
     interface: {
       variables,
-      ...(pou.type === 'function'
-        ? { returnType: stringifyReturnType(pou.data.returnType) }
-        : {}),
+      ...(pou.type === 'function' ? { returnType: stringifyReturnType(pou.data.returnType) } : {}),
     },
     body: projectBody(pou.data.body),
   }
@@ -72,15 +70,14 @@ function projectBody(body: SchemaBody): TranspileBody {
     case 'cpp':
       return { language: body.language, value: body.value }
     case 'ld': {
-      const xmlBody = ladderToXml(
-        body.value.rungs as Parameters<typeof ladderToXml>[0],
-      ) as unknown as Record<string, unknown>
+      const xmlBody = ladderToXml(body.value.rungs as Parameters<typeof ladderToXml>[0]) as unknown as Record<
+        string,
+        unknown
+      >
       return { language: 'ld', xmlBody, ldBody: xmlObjectToLdBody(xmlBody) }
     }
     case 'fbd': {
-      const xmlBody = fbdToXml(
-        body.value.rung as Parameters<typeof fbdToXml>[0],
-      ) as unknown as Record<string, unknown>
+      const xmlBody = fbdToXml(body.value.rung as Parameters<typeof fbdToXml>[0]) as unknown as Record<string, unknown>
       return { language: 'fbd', xmlBody, ldBody: xmlObjectToLdBody(xmlBody) }
     }
     case 'sfc':
@@ -103,9 +100,7 @@ function projectVariable(v: SchemaVariable): TranspileVariable {
     ...(v.initialValue !== undefined && v.initialValue !== null && v.initialValue !== ''
       ? { initialValue: v.initialValue }
       : {}),
-    ...(v.documentation !== undefined && v.documentation !== ''
-      ? { documentation: v.documentation }
-      : {}),
+    ...(v.documentation !== undefined && v.documentation !== '' ? { documentation: v.documentation } : {}),
   }
 }
 

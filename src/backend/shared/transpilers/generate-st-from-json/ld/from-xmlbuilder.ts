@@ -235,9 +235,7 @@ function buildContactModifier(el: Obj): { negated?: boolean; edge?: 'rising' | '
   return mod
 }
 
-function buildCoilModifier(
-  el: Obj,
-): { negated?: boolean; storage?: 'set' | 'reset'; edge?: 'rising' | 'falling' } {
+function buildCoilModifier(el: Obj): { negated?: boolean; storage?: 'set' | 'reset'; edge?: 'rising' | 'falling' } {
   const mod: { negated?: boolean; storage?: 'set' | 'reset'; edge?: 'rising' | 'falling' } = {}
   if (getAttrBool(el, 'negated')) mod.negated = true
   const storage = getAttrString(el, 'storage')

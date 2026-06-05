@@ -225,8 +225,7 @@ function appendTypeContent(doc: Document, parent: Element, type: TranspileVariab
       appendChildEl(doc, arrayEl, 'dimension', { lower, upper })
     }
     const baseTypeEl = appendChildEl(doc, arrayEl, 'baseType')
-    const baseName =
-      typeof type.data.baseType === 'string' ? type.data.baseType : type.data.baseType.value
+    const baseName = typeof type.data.baseType === 'string' ? type.data.baseType : type.data.baseType.value
     appendTypeLeaf(doc, baseTypeEl, baseName)
     return
   }
@@ -395,12 +394,7 @@ function createNamedElement(doc: Document, key: string): Element {
 
 /* ─────────────────────────── helpers ────────────────────────────────────── */
 
-function appendChildEl(
-  doc: Document,
-  parent: Element,
-  name: string,
-  attrs?: Record<string, string>,
-): Element {
+function appendChildEl(doc: Document, parent: Element, name: string, attrs?: Record<string, string>): Element {
   const el = doc.createElementNS(TC6_NS, name)
   if (attrs) {
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)

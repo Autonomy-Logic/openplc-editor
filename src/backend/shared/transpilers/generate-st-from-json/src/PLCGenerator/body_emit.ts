@@ -33,18 +33,11 @@ import {
   InstanceTag,
 } from '../plcopen/accessors'
 import { type Element, getLocalTag } from '../xmlclass/xsdschema'
-import {
-  type BlockInfos,
-  GetBlockType,
-  synthesizePermissiveBlockInfos,
-} from './block_library'
+import { type BlockInfos, GetBlockType, synthesizePermissiveBlockInfos } from './block_library'
 import { PLCGenException } from './connection_types'
 import type { GenState } from './gen_state'
 import { extractModifier } from './modifiers'
-import {
-  computeExpression,
-  generateBlock,
-} from './path_tree'
+import { computeExpression, generateBlock } from './path_tree'
 import type { Location, ProgramChunk } from './program'
 
 /* ──────────────────────── SortInstances ─────────────────────────────────── */
@@ -139,10 +132,7 @@ function emitOutVariable(state: GenState, instance: Element, body: Element): voi
   const localId = getlocalId(instance) ?? 0
   const expressionText = getexpression(instance) ?? ''
   state.program.push([state.currentIndent, []])
-  state.program.push([
-    expressionText,
-    [state.tagName, 'io_variable', localId, 'expression'],
-  ])
+  state.program.push([expressionText, [state.tagName, 'io_variable', localId, 'expression']])
   state.program.push([' := ', []])
   state.program.push(...expression)
   state.program.push([';\n', []])
@@ -174,9 +164,7 @@ function emitStandaloneBlock(state: GenState, instance: Element, body: Element):
         })
     : []
   let blockInfos: BlockInfos | null =
-    state.project !== null
-      ? GetBlockType(state.project, typeName, callerInputTypes)
-      : null
+    state.project !== null ? GetBlockType(state.project, typeName, callerInputTypes) : null
   if (blockInfos === null && state.project !== null) {
     blockInfos = GetBlockType(state.project, typeName)
   }
@@ -233,10 +221,7 @@ function emitCoil(state: GenState, instance: Element, body: Element): void {
   expression = extractModifier(state, instance, expression, coilInfo)
 
   state.program.push([state.currentIndent, []])
-  state.program.push([
-    getvariableText(instance),
-    [...coilInfo, 'reference'],
-  ])
+  state.program.push([getvariableText(instance), [...coilInfo, 'reference']])
   state.program.push([' := ', []])
   state.program.push(...expression)
   state.program.push([';\n', []])
@@ -259,18 +244,11 @@ export function emitFbdLdBody(state: GenState, body: Element): void {
 
   for (const instance of getcontentInstances(body)) {
     const tag = getLocalTag(instance)
-    if (
-      tag === InstanceTag.OutVariable ||
-      tag === InstanceTag.InOutVariable ||
-      tag === InstanceTag.Block
-    ) {
+    if (tag === InstanceTag.OutVariable || tag === InstanceTag.InOutVariable || tag === InstanceTag.Block) {
       const order = getexecutionOrderId(instance) ?? 0
       if (order > 0) {
         orderedInstances.push([order, instance])
-      } else if (
-        tag === InstanceTag.OutVariable ||
-        tag === InstanceTag.InOutVariable
-      ) {
+      } else if (tag === InstanceTag.OutVariable || tag === InstanceTag.InOutVariable) {
         outVariablesAndCoils.push(instance)
       } else {
         blocks.push(instance)

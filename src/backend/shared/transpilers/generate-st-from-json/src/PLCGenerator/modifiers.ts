@@ -19,7 +19,7 @@
 
 import { getedge, getnegated, getstorage } from '../plcopen/accessors'
 import type { Element } from '../xmlclass/xsdschema'
-import { type GenState,isAlreadyDefined } from './gen_state'
+import { type GenState, isAlreadyDefined } from './gen_state'
 import type { Location, ProgramChunk } from './program'
 
 /* ────────────────────────── ExtractModifier ─────────────────────────────── */
@@ -44,11 +44,7 @@ export function extractModifier(
   varInfo: Location,
 ): ProgramChunk[] {
   if (getnegated(variable)) {
-    return [
-      ['NOT(', [...varInfo, 'negated']],
-      ...expression,
-      [')', []],
-    ]
+    return [['NOT(', [...varInfo, 'negated']], ...expression, [')', []]]
   }
 
   const storage = getstorage(variable)
@@ -57,12 +53,7 @@ export function extractModifier(
     state.program.push(...expression)
     state.program.push([' THEN\n  ', []])
     const value = storage === 'set' ? 'TRUE' : 'FALSE'
-    return [
-      [
-        `${value}; (*${storage}*)\n${state.currentIndent}END_IF`,
-        [],
-      ],
-    ]
+    return [[`${value}; (*${storage}*)\n${state.currentIndent}END_IF`, []]]
   }
 
   const edge = getedge(variable)
@@ -142,12 +133,7 @@ export function addTrigger(
  */
 function ensureTriggerVarSection(state: GenState): void {
   const last = state.iface[state.iface.length - 1]
-  if (
-    last === undefined ||
-    last.keyword !== 'VAR' ||
-    last.option !== null ||
-    last.located
-  ) {
+  if (last === undefined || last.keyword !== 'VAR' || last.option !== null || last.located) {
     state.iface.push({ keyword: 'VAR', option: null, located: false, vars: [] })
   }
 }

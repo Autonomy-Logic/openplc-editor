@@ -14,13 +14,7 @@
  * Phase 7 (POU assembly) concern and is **not** invoked here.
  */
 
-import {
-  getanyText,
-  getbody,
-  getcontent,
-  getname,
-  getpouType,
-} from '../plcopen/accessors'
+import { getanyText, getbody, getcontent, getname, getpouType } from '../plcopen/accessors'
 import type { ProjectTree } from '../plcopen/plcopen'
 import { type Element, getLocalTag } from '../xmlclass/xsdschema'
 import { emitFbdLdBody } from './body_emit'
@@ -89,10 +83,7 @@ export interface ComputeProgramOptions {
  *
  * For SFC: throws `NotYetImplementedError` until Phase 6 lands.
  */
-export function computeProgram(
-  pou: Element,
-  options: ComputeProgramOptions = {},
-): ProgramChunk[] {
+export function computeProgram(pou: Element, options: ComputeProgramOptions = {}): ProgramChunk[] {
   const indent = options.indent ?? 2
   const project = options.project ?? null
 
@@ -115,8 +106,7 @@ export function computeProgram(
   }
 
   if (bodyType === 'SFC') {
-    const sfcState =
-      options.state ?? createFreshState(pou, body, tagName, indent, project)
+    const sfcState = options.state ?? createFreshState(pou, body, tagName, indent, project)
     if (sfcState.connectionTypes.size === 0) {
       runTypeInferenceIntoState(pou, body, project, sfcState)
     }
@@ -125,8 +115,7 @@ export function computeProgram(
   }
 
   // FBD / LD path.
-  const state =
-    options.state ?? createFreshState(pou, body, tagName, indent, project)
+  const state = options.state ?? createFreshState(pou, body, tagName, indent, project)
   if (state.connectionTypes.size === 0) {
     runTypeInferenceIntoState(pou, body, project, state)
   }
@@ -203,11 +192,7 @@ function runTypeInferenceIntoState(
  * but that uppercase form is ONLY used for POU-reference scanning — the
  * emitted chunk uses the ORIGINAL case. We mirror by emitting the original.
  */
-function emitInlineText(
-  bodyContent: Element,
-  tagName: string,
-  indent: number,
-): ProgramChunk[] {
+function emitInlineText(bodyContent: Element, tagName: string, indent: number): ProgramChunk[] {
   const text = getanyText(bodyContent)
   return [[reIndentText(text, indent), [tagName, 'body', indent] as const]]
 }

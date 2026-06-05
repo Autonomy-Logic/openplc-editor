@@ -16,14 +16,7 @@
  * that consume them.
  */
 
-import {
-  childElements,
-  type Element,
-  findChild,
-  findChildren,
-  getAttr,
-  getAttrInt,
-} from '../xmlclass/xsdschema'
+import { childElements, type Element, findChild, findChildren, getAttr, getAttrInt } from '../xmlclass/xsdschema'
 import type { ProjectTree } from './plcopen'
 
 /* ───────────────────────── project / pou navigation ───────────────────────── */
@@ -482,10 +475,7 @@ export function getdataTypes(project: ProjectTree | Element): Element[] {
  * Mirrors `project.getdataType(name)` (plcopen.py:525, attached via
  * `gettypeElementFunc("dataType")`).
  */
-export function getdataType(
-  project: ProjectTree | Element,
-  name: string,
-): Element | null {
+export function getdataType(project: ProjectTree | Element, name: string): Element | null {
   const root = (project as ProjectTree).documentElement ?? (project as Element)
   if (!root) return null
   const types = findChild(root, 'types')

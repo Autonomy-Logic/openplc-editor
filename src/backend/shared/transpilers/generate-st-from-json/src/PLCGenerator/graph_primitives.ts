@@ -87,11 +87,7 @@ export function GetLinkedConnector(link: Element, body: Element): Element | null
   }
 }
 
-function resolveBlockOutput(
-  link: Element,
-  block: Element,
-  parameter: string | null,
-): Element | null {
+function resolveBlockOutput(link: Element, block: Element, parameter: string | null): Element | null {
   const outputs = getoutputVariables(block)
   if (!outputs) return null
   const outputVars = getvariable(outputs)
@@ -106,7 +102,11 @@ function resolveBlockOutput(
     }
     return null
   }
-  return resolveByEndpointPosition(link, block, outputVars.map((v) => getconnectionPointOut(v)))
+  return resolveByEndpointPosition(
+    link,
+    block,
+    outputVars.map((v) => getconnectionPointOut(v)),
+  )
 }
 
 function resolvePowerRailOutput(link: Element, rail: Element): Element | null {
@@ -125,11 +125,7 @@ function resolvePowerRailOutput(link: Element, rail: Element): Element | null {
  * a `<connectionPointOut>` child); those are skipped silently to match
  * Python's truthy-check pattern.
  */
-function resolveByEndpointPosition(
-  link: Element,
-  owner: Element,
-  candidates: (Element | null)[],
-): Element | null {
+function resolveByEndpointPosition(link: Element, owner: Element, candidates: (Element | null)[]): Element | null {
   const positions = getpositions(link)
   if (positions.length === 0) return null
   const endpoint = positions[positions.length - 1]
@@ -167,10 +163,7 @@ export function GetConnectedConnector(connector: Element, body: Element): Elemen
  * Python uses `list.pop(i)` to remove the group during iteration; the TS
  * port does the same via `splice`. The function mutates `state`.
  */
-export function ExtractRelatedConnections(
-  state: Phase2State,
-  connection: Element,
-): Element[] {
+export function ExtractRelatedConnections(state: Phase2State, connection: Element): Element[] {
   for (let i = 0; i < state.relatedConnections.length; i++) {
     if (state.relatedConnections[i].includes(connection)) {
       const [group] = state.relatedConnections.splice(i, 1)

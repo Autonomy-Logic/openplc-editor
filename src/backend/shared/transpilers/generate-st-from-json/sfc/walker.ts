@@ -19,12 +19,7 @@
  */
 
 import type { ProgramChunk } from '../ld/path_tree'
-import type {
-  Connection,
-  SfcActionEntry,
-  SfcInstance,
-  SfcTransitionCondition,
-} from './types'
+import type { Connection, SfcActionEntry, SfcInstance, SfcTransitionCondition } from './types'
 import type { SfcWalkerState } from './walker_state'
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
@@ -81,9 +76,9 @@ function registerStep(state: SfcWalkerState, step: Extract<SfcInstance, { kind: 
     if (candidate.kind === 'jumpStep') continue
     if (transitionLeadsTo(state, candidate, step.localId)) {
       registerTransition(state, candidate)
-      state.sfcTransitions.get(candidate.localId)?.to.push([
-        [step.name, [state.tagName, 'transition', candidate.localId, 'to', step.localId]],
-      ])
+      state.sfcTransitions
+        .get(candidate.localId)
+        ?.to.push([[step.name, [state.tagName, 'transition', candidate.localId, 'to', step.localId]]])
     }
   }
 }
@@ -95,17 +90,14 @@ function registerJump(state: SfcWalkerState, jump: Extract<SfcInstance, { kind: 
     if (candidate.kind !== 'transition') continue
     if (transitionLeadsTo(state, candidate, jump.localId)) {
       registerTransition(state, candidate)
-      state.sfcTransitions.get(candidate.localId)?.to.push([
-        [jump.targetName, [state.tagName, 'jump', jump.localId, 'target']],
-      ])
+      state.sfcTransitions
+        .get(candidate.localId)
+        ?.to.push([[jump.targetName, [state.tagName, 'jump', jump.localId, 'target']]])
     }
   }
 }
 
-function registerTransition(
-  state: SfcWalkerState,
-  transition: Extract<SfcInstance, { kind: 'transition' }>,
-): void {
+function registerTransition(state: SfcWalkerState, transition: Extract<SfcInstance, { kind: 'transition' }>): void {
   if (state.sfcTransitions.has(transition.localId)) return
 
   // Walk back from the transition's fromConnections through any
@@ -196,11 +188,7 @@ function transitionLeadsTo(
   return false
 }
 
-function consumersReach(
-  state: SfcWalkerState,
-  fromLocalId: number,
-  stepLocalId: number,
-): boolean {
+function consumersReach(state: SfcWalkerState, fromLocalId: number, stepLocalId: number): boolean {
   for (const candidate of state.body.instances) {
     const consumers = consumerConnectionsOf(candidate)
     if (!consumers) continue
@@ -236,10 +224,7 @@ function consumerConnectionsOf(inst: SfcInstance): readonly Connection[] | null 
   return null
 }
 
-function registerActionBlock(
-  state: SfcWalkerState,
-  block: Extract<SfcInstance, { kind: 'actionBlock' }>,
-): void {
+function registerActionBlock(state: SfcWalkerState, block: Extract<SfcInstance, { kind: 'actionBlock' }>): void {
   // Each actionBlock has exactly one upstream step.  Walk back
   // through any divergences (rare for actionBlocks) to find it.
   const stepNames = walkBackToSteps(state, block.fromConnections)
@@ -390,29 +375,19 @@ function computeSfcTransition(state: SfcWalkerState, transitionId: number): void
   }
 }
 
-function emitTransitionCondition(
-  state: SfcWalkerState,
-  transitionId: number,
-  condition: SfcTransitionCondition,
-): void {
+function emitTransitionCondition(state: SfcWalkerState, transitionId: number, condition: SfcTransitionCondition): void {
   state.program.push(['\n', []])
   state.currentIndent += '  '
   if (condition.kind === 'inline') {
     state.program.push([state.currentIndent, []])
     state.program.push([':= ', []])
-    state.program.push([
-      condition.value,
-      [state.tagName, 'transition', transitionId, 'inline'],
-    ])
+    state.program.push([condition.value, [state.tagName, 'transition', transitionId, 'inline']])
     state.program.push([';\n', []])
   } else if (condition.kind === 'reference') {
     const subPou = state.body.transitionSubPous.get(condition.name)
     if (subPou) {
       state.program.push([state.currentIndent, []])
-      state.program.push([
-        subPou.value,
-        [state.tagName, 'transition', transitionId, 'reference', condition.name],
-      ])
+      state.program.push([subPou.value, [state.tagName, 'transition', transitionId, 'reference', condition.name]])
       // Sub-POU bodies may or may not end with a newline.  Add one
       // if missing so END_TRANSITION lands on its own line.
       if (!subPou.value.endsWith('\n')) state.program.push(['\n', []])

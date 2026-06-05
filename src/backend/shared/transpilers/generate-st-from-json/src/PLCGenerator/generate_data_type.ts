@@ -83,10 +83,7 @@ export function generateDataType(state: DataTypeState, datatypeName: string): vo
     const basetypeName = getname(baseContent) ?? ''
     generateDataType(state, basetypeName)
     chunks.push([basetypeName, [tagname, 'base']])
-  } else if (
-    baseTypeKind === 'subrangeSigned' ||
-    baseTypeKind === 'subrangeUnsigned'
-  ) {
+  } else if (baseTypeKind === 'subrangeSigned' || baseTypeKind === 'subrangeUnsigned') {
     const innerBaseWrap = getbaseType(baseContent)
     const innerBase = innerBaseWrap ? getcontentOfType(innerBaseWrap) : null
     let basetypeName = ''
@@ -189,10 +186,7 @@ export function generateDataType(state: DataTypeState, datatypeName: string): vo
         const initialValue = getvalue(initial) ?? ''
         chunks.push(
           [' := ', []],
-          [
-            computeValue(state.project, initialValue, elementtypeName),
-            [tagname, 'struct', i, 'initial value'],
-          ],
+          [computeValue(state.project, initialValue, elementtypeName), [tagname, 'struct', i, 'initial value']],
         )
       }
       chunks.push([';', []])
@@ -206,13 +200,7 @@ export function generateDataType(state: DataTypeState, datatypeName: string): vo
   const initial = getinitialValue(datatype)
   if (initial !== null) {
     const initialValue = getvalue(initial) ?? ''
-    chunks.push(
-      [' := ', []],
-      [
-        computeValue(state.project, initialValue, datatypeName),
-        [tagname, 'initial value'],
-      ],
-    )
+    chunks.push([' := ', []], [computeValue(state.project, initialValue, datatypeName), [tagname, 'initial value']])
   }
   chunks.push([';\n', []])
 
@@ -225,9 +213,7 @@ export function generateDataType(state: DataTypeState, datatypeName: string): vo
  * project has no data types (matching Python's `if len(…) > 0`
  * guard at PLCGenerator.py:642).
  */
-export function generateDataTypes(
-  project: ProjectTree | Element,
-): ProgramChunk[] {
+export function generateDataTypes(project: ProjectTree | Element): ProgramChunk[] {
   const datatypes = getdataTypes(project)
   if (datatypes.length === 0) return []
 
