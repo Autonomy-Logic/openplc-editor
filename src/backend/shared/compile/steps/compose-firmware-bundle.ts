@@ -198,7 +198,7 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // intentionally empty.
   files['src/OpenPLCUserLib.h'] = [
     '// Auto-generated stub for OpenPLCUserLib.',
-    '// Resolves Baremetal.ino\'s `#include <OpenPLCUserLib.h>` in the',
+    "// Resolves Baremetal.ino's `#include <OpenPLCUserLib.h>` in the",
     '// strucpp pipeline.  Real declarations come via',
     '// arduino_runtime_glue.h (already in src/).',
     '#pragma once',
