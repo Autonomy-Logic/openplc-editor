@@ -1,8 +1,8 @@
 /**
  * Editor-side implementation of `CompilerPlatformPort`.
  *
- * Wraps the existing editor handlers (`handleTranspileXMLtoST`,
- * `handleCompileArduinoProgram`, etc.) so the shared compile pipeline
+ * Wraps the existing editor handlers (`handleCompileArduinoProgram`,
+ * etc.) so the shared compile pipeline
  * (`backend/shared/compile/pipeline.ts`) can drive editor's compile
  * flow through the canonical platform-port contract.
  *
@@ -16,10 +16,12 @@
  *   - Translates the handler's return value back into the port's
  *     canonical result shape
  *
- * No new pipeline logic lives here — only the platform-specific glue
- * the editor needs to materialise the in-memory inputs to disk so
- * `xml2st` / `arduino-cli` subprocesses can consume them, and to
- * read the resulting artefacts back into memory for the pipeline.
+ * `transpileToSt` no longer needs disk materialisation or a
+ * subprocess: it projects the project IR via `fromSchemaShape`
+ * (editor IPC delivers schema-shape data) and runs the in-process
+ * JSON-fed transpiler
+ * (`backend/shared/transpilers/generate-st-from-json/`).  The old
+ * `xml2st` binary path has been retired.
  *
  * This module is editor-only (lives under `backend/editor/`); the
  * web platform implements the same port interface separately under
@@ -28,6 +30,11 @@
 
 import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
+import {
+  fromSchemaShape,
+  type SchemaProjectData,
+  transpileToSt as runJsonTranspiler,
+} from '@root/backend/shared/transpilers/generate-st-from-json'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -40,8 +47,8 @@ import type {
   PackageVppPluginResult,
   PlatformDeviceContext,
   PlatformLog,
-  TranspileXmlToStArgs,
-  TranspileXmlToStResult,
+  TranspileToStArgs,
+  TranspileToStResult,
   UploadArduinoBoardArgs,
   UploadResult,
   UploadRuntimeV3Args,
@@ -152,33 +159,34 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Spawn the bundled `xml2st` binary to transpile IEC 61131-3
-     * XML to ST.  The existing `handleTranspileXMLtoST` expects a
-     * file path (it opens the file via the subprocess's stdin), so
-     * we materialise the in-memory XML to a temp file first and
-     * read the produced `program.st` back from disk.
+     * Project the editor's port-shape data straight to Structured
+     * Text via the in-process JSON-fed transpiler.  No subprocess,
+     * no disk round-trip — Electron's main process drives the
+     * walker directly.
      */
-    async transpileXmlToSt(args: TranspileXmlToStArgs, log: PlatformLog): Promise<TranspileXmlToStResult> {
-      const xmlPath = join(context.sourceTargetFolderPath, 'plc.xml')
+    async transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> {
       try {
-        await fs.mkdir(dirname(xmlPath), { recursive: true })
-        await fs.writeFile(xmlPath, args.xml, 'utf-8')
-
-        await handlers.handleTranspileXMLtoST(
-          xmlPath,
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.xml2stArgs,
-        )
-
-        const programStPath = join(context.sourceTargetFolderPath, 'program.st')
-        const programSt = await fs.readFile(programStPath, 'utf-8')
-        return { ok: true, programSt }
+        // Editor IPC delivers the schema-shape project data
+        // (discriminated-union POUs + singular `configuration`).
+        // The port's declared `projectData` type is port-shape, but
+        // the pipeline reaches us with the editor's schema-shape IPC
+        // payload (matching `compileProgram`'s actual contract).  The
+        // double cast bridges the static mismatch without serialising
+        // through `unknown` at runtime.
+        const ir = fromSchemaShape(args.projectData as unknown as SchemaProjectData)
+        const result = runJsonTranspiler(ir)
+        if (result.programSt === null || result.errors.length > 0) {
+          const message = result.errors.join('\n') || 'Failed to generate Structured Text'
+          log(message, 'error')
+          return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+        }
+        for (const warning of result.warnings) {
+          log(warning, 'info')
+        }
+        return { ok: true, programSt: result.programSt }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        log(`xml2st failed: ${message}`, 'error')
+        log(`generate-st-from-json failed: ${message}`, 'error')
         return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
       }
     },

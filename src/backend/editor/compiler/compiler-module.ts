@@ -2977,7 +2977,6 @@ class CompilerModule {
     // glue the library build needs — every stage decision lives in
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
-      transpileXmlToSt: (xmlPath, log, extraArgs) => this.handleTranspileXMLtoST(xmlPath, log, extraArgs),
       loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
       runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
         this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>

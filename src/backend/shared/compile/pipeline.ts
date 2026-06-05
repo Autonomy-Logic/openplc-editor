@@ -40,7 +40,6 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
-import { XmlGenerator } from '../utils/PLC/xml-generator'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -398,35 +397,26 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 1: Generate IEC 61131-3 XML from the project JSON.
-  // ---------------------------------------------------------------------
-  emit({ stage: 'xml', message: 'Generating IEC 61131-3 XML...', level: 'info' })
-  // XmlGenerator accepts the schema-shape PLCProjectData (singular
-  // `configuration`).  We pass through the preprocessor's output
-  // which is structurally compatible at runtime — see Step 0's type
-  // note.
-  const xmlResult = XmlGenerator(processedData as never, 'old-editor')
-  if (!xmlResult.ok || !xmlResult.data) {
-    return bailError(emit, 'xml', `Error generating XML from JSON: ${xmlResult.message}`)
-  }
-  const plcXml = xmlResult.data
-
-  // ---------------------------------------------------------------------
-  // Step 2: Transpile XML to ST via the platform port (xml2st binary
-  // on editor, HTTP /generate-st on web).
+  // Step 1: Transpile the project IR straight to Structured Text via
+  // the platform port.  Both adapters (editor + web) route through
+  // the in-process JSON-fed transpiler (`generate-st-from-json/`),
+  // so this hop never builds PLCOpen XML.  Native STRUCT declarations
+  // are the only emission mode the transpiler supports — the legacy
+  // matiec struct→FB rewrite isn't ported, so there are no
+  // equivalents of the old `xml2stArgs` flags.
   // ---------------------------------------------------------------------
   emit({ stage: 'st', message: 'Generating Structured Text...', level: 'info' })
-  // `['--keep-structs']` — strucpp parses native `STRUCT` declarations
-  // and rejects matiec's legacy struct→FB rewrite as a type-vs-instance
-  // mismatch.  Editor's local xml2st always passed `--keep-structs`;
-  // pre-pipeline this was hardcoded inside its compiler-module while
-  // the web's compile-service `/generate-st` endpoint ran without it,
-  // causing structs to compile on the desktop and fail on the web.
-  // The flag set is now part of the port contract so both adapters
-  // observe the same tokens — future xml2st flags get appended here
-  // at this single call site.
-  const stResult = await port.transpileXmlToSt(
-    { xml: plcXml, xml2stArgs: ['--keep-structs'] },
+  // The pipeline carries the editor's schema-shape `PLCProjectData`,
+  // but the port's `transpileToSt` is typed against the renderer's
+  // port-shape (`middleware/shared/ports/types`).  The two diverge in
+  // POU layout (discriminated union vs. flat record) and configuration
+  // field name (`configuration` vs. `configurations`).  Each platform
+  // port impl knows which shape it actually receives — desktop/editor
+  // routes through `fromSchemaShape`; web routes through `fromPortShape`
+  // after converting at the adapter boundary.  Casting to `never` here
+  // erases the structural mismatch without losing runtime fidelity.
+  const stResult = await port.transpileToSt(
+    { projectData: processedData as never },
     makePlatformLog(emit, 'st'),
   )
   if (!stResult.ok || !stResult.programSt) {
