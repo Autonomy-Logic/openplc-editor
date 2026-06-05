@@ -33,14 +33,34 @@ import type {
 import { mockInstallFromRemote, mockListRemoteCatalog } from './remote-catalog-mock'
 
 /**
- * Base URL of the OpenPLC VPP catalog backend (autonomy-edge). Points at
- * the staging deployment by default. For local backend dev, flip to
- * `http://localhost:3333` (the `pnpm dev:backend` listen address). When
- * the production deployment lands, promote this to a webpack DefinePlugin
- * -injected constant mirroring `APP_VERSION` so the value travels through
- * CI and per-environment builds carry the right host.
+ * Base URL of the OpenPLC VPP catalog backend (autonomy-edge).
+ *
+ * Resolution order:
+ *
+ *   1. `process.env.VPP_CATALOG_URL` — injected at webpack build time via
+ *      `EnvironmentPlugin` (renderer dev + prod configs).  Set this in
+ *      your shell before `npm run dev` to point a local editor at
+ *      staging / localhost / etc.  Example:
+ *
+ *          export VPP_CATALOG_URL=http://localhost:3333
+ *          npm run dev
+ *
+ *      `EnvironmentPlugin` evaluates the env at build time, not at
+ *      runtime — Electron renderer bundles don't have a live
+ *      `process.env`.  The CI/CD release pipeline doesn't set the
+ *      variable, so the empty-string default in webpack falls through
+ *      to step 2 below and shipped builds always point at production.
+ *
+ *   2. `PRODUCTION_CATALOG_URL` — the hardcoded production host below.
+ *      Authoritative for shipped builds; the empty-string default
+ *      from step 1 evaluates as falsy and this string takes over.
+ *
+ * Local-backend dev tip: setting `VPP_CATALOG_URL=http://localhost:3333`
+ * targets a `pnpm dev:backend` autonomy-edge instance instead of the
+ * production CDN.
  */
-const CATALOG_BASE_URL = 'https://api-staging.autonomylogic.com'
+const PRODUCTION_CATALOG_URL = 'https://api.autonomylogic.com'
+const CATALOG_BASE_URL = process.env.VPP_CATALOG_URL || PRODUCTION_CATALOG_URL
 
 /**
  * Local-dev toggle: when `true`, the catalog port methods are served from
