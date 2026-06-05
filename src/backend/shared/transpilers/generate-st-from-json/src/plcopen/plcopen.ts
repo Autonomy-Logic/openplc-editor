@@ -42,7 +42,10 @@ export type LoadResult = { tree: ProjectTree; error: null } | { tree: null; erro
  * Exposed so tests can pin the normalization step independently of parsing.
  */
 export function normalizePlcOpenXml(projectXml: string): string {
-  let s = projectXml.replaceAll(TC6_OLD_NS, TC6_NEW_NS)
+  // `String.prototype.replaceAll` is es2021 — web's tsconfig target lib
+  // doesn't include it.  Use `split/join` for the global non-regex
+  // replacement (TC6_OLD_NS contains no regex metacharacters anyway).
+  let s = projectXml.split(TC6_OLD_NS).join(TC6_NEW_NS)
   s = s.replace(CDATA_OPEN_BARE, '<xhtml:p><![CDATA[')
   s = s.replace(CDATA_CLOSE_BARE, ']]></xhtml:p>')
   return s
