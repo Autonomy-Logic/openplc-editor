@@ -135,6 +135,12 @@ const configuration: webpack.Configuration = {
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',
       DEBUG_PROD: false,
+      // Optional override for the VPP catalog backend host.  Shipped
+      // CI release builds leave this unset → empty string at build
+      // time → the adapter's hardcoded production default
+      // (`https://api.autonomylogic.com`) wins.  Local/staging
+      // builds can prepend `VPP_CATALOG_URL=...` to override.
+      VPP_CATALOG_URL: '',
     }),
 
     new MiniCssExtractPlugin({
