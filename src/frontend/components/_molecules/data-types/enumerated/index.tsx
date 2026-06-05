@@ -1,0 +1,245 @@
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+
+import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
+import { MinusIcon } from '../../../../assets/icons/interface/Minus'
+import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
+import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { useOpenPLCStore } from '../../../../store'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms/select'
+import TableActions from '../../../_atoms/table-actions'
+import { EnumeratedTable } from './table'
+
+type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>
+
+type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
+  data: PLCEnumeratedDatatype
+}
+const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
+  const {
+    editor,
+    projectActions: { updateDatatype },
+  } = useOpenPLCStore()
+
+  const { captureAndPush } = usePouSnapshot()
+
+  const ROWS_NOT_SELECTED = -1
+
+  const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
+  const [initialValueData, setInitialValueData] = useState<string>('')
+
+  const [tableData, setTableData] = useState<PLCEnumeratedDatatype['values']>([])
+
+  useEffect(() => {
+    setInitialValueData(data.initialValue || '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    setTableData(data.values)
+  }, [data.values])
+
+  const handleInitialValueChange = (value: string) => {
+    setInitialValueData(value)
+    captureAndPush(editor.meta.name)
+    updateDatatype(data.name, {
+      ...data,
+      initialValue: value,
+    })
+  }
+
+  // `updateDatatype` is a full replace — spread `data` first so we
+  // don't strip `name` / `derivation` and corrupt the entry for
+  // downstream consumers.
+  const writeValues = (newValues: PLCEnumeratedDatatype['values']) => {
+    updateDatatype(data.name, { ...data, values: newValues })
+  }
+
+  const addNewRow = () => {
+    captureAndPush(editor.meta.name)
+
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, { description: '' }]
+      setArrayTable({ selectedRow: newRows.length - 1 })
+      writeValues(newRows.map((row) => ({ description: row?.description })))
+      return newRows
+    })
+  }
+
+  const removeRow = () => {
+    captureAndPush(editor.meta.name)
+
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null) {
+        const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
+
+        const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        writeValues(newRows.map((row) => ({ description: row?.description })))
+
+        return newRows
+      }
+      return prevRows
+    })
+  }
+
+  const moveRowUp = () => {
+    captureAndPush(editor.meta.name)
+
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
+        const newRows = [...prevRows]
+        const temp = newRows[arrayTable.selectedRow]
+        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
+        newRows[arrayTable.selectedRow - 1] = temp
+
+        const newFocusIndex = arrayTable.selectedRow - 1
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        writeValues(newRows.map((row) => ({ description: row?.description })))
+
+        prevRows = newRows
+      }
+      return prevRows
+    })
+  }
+
+  const moveRowDown = () => {
+    captureAndPush(editor.meta.name)
+
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
+        const newRows = [...prevRows]
+        const temp = newRows[arrayTable.selectedRow]
+        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
+        newRows[arrayTable.selectedRow + 1] = temp
+
+        const newFocusIndex = arrayTable.selectedRow + 1
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        writeValues(newRows.map((row) => ({ description: row?.description })))
+
+        prevRows = newRows
+      }
+      return prevRows
+    })
+  }
+
+  return (
+    <div
+      aria-label='Enumerated data type container'
+      className='flex h-full w-full flex-1 flex-row gap-4 overflow-hidden bg-transparent'
+      {...rest}
+    >
+      <div className='flex w-full justify-between gap-8'>
+        <div className='w-[600px]'>
+          <div aria-label='Enumerated base type container' className='flex flex-col gap-3'></div>
+          <div
+            aria-label='Enum data type table actions container'
+            className='mb-3 flex h-8 w-full items-center justify-between'
+          >
+            <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+              Description
+            </p>
+            <div
+              aria-label='Data type table actions buttons container'
+              className='flex-start flex h-full *:rounded-md *:p-1'
+            >
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add table row button',
+                    onClick: addNewRow,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-new-row-button',
+                  },
+                  {
+                    ariaLabel: 'Remove table row button',
+                    onClick: removeRow,
+                    icon: <MinusIcon className='stroke-[#0464FB]' />,
+                  },
+                  {
+                    ariaLabel: 'Move table row up button',
+                    onClick: () => moveRowUp(),
+                    disabled:
+                      arrayTable.selectedRow === null || arrayTable.selectedRow === 0 || arrayTable.selectedRow === -1,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                  },
+                  {
+                    ariaLabel: 'Move table row down button',
+                    onClick: () => moveRowDown(),
+                    disabled:
+                      arrayTable.selectedRow === null ||
+                      arrayTable.selectedRow === tableData.length - 1 ||
+                      tableData.length === 1 ||
+                      arrayTable.selectedRow === -1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                  },
+                ]}
+              />
+            </div>
+          </div>
+
+          <EnumeratedTable
+            name={data.name}
+            values={tableData}
+            initialValue={initialValueData}
+            selectedRow={arrayTable.selectedRow}
+            handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
+            setArrayTable={setArrayTable}
+          />
+        </div>
+
+        <div aria-label='Enumerated initial value container' className='w-1/2'>
+          <div
+            aria-label='Enumerated data type initial value container'
+            className='flex w-full items-center justify-end'
+          >
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
+              Initial Value:
+            </label>
+            <Select
+              onValueChange={(value) =>
+                value === 'none' ? handleInitialValueChange('') : handleInitialValueChange(value)
+              }
+              value={initialValueData === '' ? '' : initialValueData}
+            >
+              <SelectTrigger
+                withIndicator
+                className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+              >
+                {initialValueData === '' ? '' : initialValueData}
+              </SelectTrigger>
+              <SelectContent className='box h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'>
+                <SelectItem
+                  value='none'
+                  className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                >
+                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'></span>
+                </SelectItem>
+                {data.values.map((value) => (
+                  <>
+                    {value.description !== '' && (
+                      <SelectItem
+                        key={value.description}
+                        value={value.description}
+                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                      >
+                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {value.description}
+                        </span>
+                      </SelectItem>
+                    )}
+                  </>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export { EnumeratorDataType }

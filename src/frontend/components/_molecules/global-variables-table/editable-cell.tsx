@@ -1,0 +1,417 @@
+import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
+import type { CellContext, RowData } from '@tanstack/react-table'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
+import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
+import { useOpenPLCStore } from '../../../store'
+import type { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
+import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
+import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
+import {
+  findAllReferencesToVariable,
+  propagateVariableRename,
+  type ReferenceImpactAnalysis,
+} from '../../../utils/variable-references'
+import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
+import { HighlightedText } from '../../_atoms/highlighted-text'
+import { InputWithRef } from '../../_atoms/input'
+import { useToast } from '../../_features/[app]/toast/use-toast'
+import { RenameImpactModal } from '../rename-impact-modal'
+
+declare module '@tanstack/react-table' {
+  // This is a helper interface that adds the `updateData` property to the table meta.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => ProjectResponse
+  }
+}
+
+type IEditableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
+const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+  const { toast } = useToast()
+
+  const {
+    searchQuery,
+    ladderFlows,
+    ladderFlowActions: { updateNode },
+    fbdFlows,
+    fbdFlowActions: { updateNode: updateFBDNode },
+    projectActions: { updatePou, updateVariable },
+    project: {
+      data: { pous },
+    },
+  } = useOpenPLCStore()
+
+  const [cellValue, setCellValue] = useState(initialValue)
+  const [isEditing, setIsEditing] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [impactAnalysis, setImpactAnalysis] = useState<ReferenceImpactAnalysis | null>(null)
+  const confirmResolveRef = useRef<(v: boolean) => void>()
+
+  const currentVariable = table.options.data[index]
+
+  const askRenameBlocks = () =>
+    new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve
+      setConfirmOpen(true)
+    })
+
+  const onBlur = async () => {
+    if (cellValue === initialValue) return setIsEditing(false)
+
+    const oldName = initialValue
+    const newName = cellValue
+
+    const [isNameLegal, reason] = isLegalIdentifier(newName)
+    if (isNameLegal === false) {
+      toast({ title: 'Error', description: `'${newName}' ${reason}`, variant: 'fail' })
+      setCellValue(oldName)
+      setIsEditing(false)
+      return
+    }
+
+    const impact = findAllReferencesToVariable(
+      oldName,
+      currentVariable.type,
+      'Resource',
+      pous,
+      ladderFlows,
+      fbdFlows,
+      'global',
+    )
+
+    let shouldPropagate = true
+    if (impact.totalReferences > 0) {
+      setImpactAnalysis(impact)
+      shouldPropagate = await askRenameBlocks()
+      setImpactAnalysis(null)
+    }
+
+    const res = table.options.meta?.updateData(index, id, cellValue)
+    if (!res?.ok) {
+      setCellValue(initialValue)
+      toast({ title: res?.title, description: res?.message, variant: 'fail' })
+      return
+    }
+
+    if (shouldPropagate && impact.totalReferences > 0) {
+      propagateVariableRename(
+        oldName,
+        newName,
+        impact.references,
+        ladderFlows,
+        fbdFlows,
+        pous,
+        { updateNode },
+        { updateNode: updateFBDNode },
+        { updatePou, updateVariable },
+        'global',
+      )
+    }
+
+    setIsEditing(false)
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue)
+  }, [initialValue])
+
+  const handleStartEditing = () => {
+    if (!editable) return
+    setIsEditing(true)
+  }
+
+  return (
+    <>
+      {confirmOpen && impactAnalysis && (
+        <RenameImpactModal
+          open={confirmOpen}
+          oldName={initialValue}
+          newName={cellValue}
+          impact={impactAnalysis}
+          onConfirm={() => {
+            confirmResolveRef.current?.(true)
+            setConfirmOpen(false)
+          }}
+          onCancel={() => {
+            confirmResolveRef.current?.(false)
+            setConfirmOpen(false)
+          }}
+        />
+      )}
+
+      {isEditing ? (
+        <InputWithRef
+          value={cellValue}
+          onChange={(e) => setCellValue(e.target.value)}
+          onBlur={() => void onBlur()}
+          onInput={(e) => sanitizeVariableInput(e.currentTarget)}
+          className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+            'pointer-events-none': !editable,
+          })}
+        />
+      ) : (
+        <div
+          onClick={handleStartEditing}
+          className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
+        >
+          <HighlightedText
+            text={cellValue}
+            searchQuery={searchQuery}
+            className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
+const EditableDocumentationCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
+  const initialValue = getValue<string | undefined>()
+
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
+
+  const onBlur = () => {
+    table.options.meta?.updateData(index, id, cellValue)
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue ?? '')
+  }, [initialValue])
+
+  return (
+    <PrimitivePopover.Root>
+      <PrimitivePopover.Trigger asChild>
+        <div
+          className={cn('flex h-full w-full cursor-text items-center justify-center p-2', {
+            'pointer-events-none': !editable,
+          })}
+        >
+          <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
+        </div>
+      </PrimitivePopover.Trigger>
+      <PrimitivePopover.Portal>
+        <PrimitivePopover.Content
+          align='center'
+          side='bottom'
+          sideOffset={-32}
+          className='box h-fit w-[175px] rounded-lg bg-white p-2 dark:bg-neutral-950 lg:w-[275px] 2xl:w-[375px]'
+          onInteractOutside={onBlur}
+        >
+          <textarea
+            value={cellValue}
+            onChange={(e) => setCellValue(e.target.value)}
+            rows={5}
+            autoComplete='off'
+            className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
+          />
+        </PrimitivePopover.Content>
+      </PrimitivePopover.Portal>
+    </PrimitivePopover.Root>
+  )
+}
+
+const EditableInitialValueCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+
+  const { searchQuery } = useOpenPLCStore()
+
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
+  const [isEditing, setIsEditing] = useState(false)
+
+  const onBlur = () => {
+    if (cellValue === initialValue) return setIsEditing(false)
+
+    table.options.meta?.updateData(index, id, cellValue)
+    setIsEditing(false)
+  }
+
+  const handleStartEditing = () => {
+    if (!editable) return
+    setIsEditing(true)
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue ?? '')
+  }, [initialValue])
+
+  return isEditing ? (
+    <InputWithRef
+      value={cellValue}
+      onChange={(e) => setCellValue(e.target.value)}
+      onBlur={onBlur}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
+    />
+  ) : (
+    <div
+      onClick={handleStartEditing}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+        'pointer-events-none': !editable,
+      })}
+    >
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+      />
+    </div>
+  )
+}
+
+const EditableLocationCell = ({
+  getValue,
+  row: { index, original },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+  const { toast } = useToast()
+
+  const { searchQuery } = useOpenPLCStore()
+  const existingPins = pinSelectors.usePins()
+  const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
+  const vendorIoEntries = vendorIoSelectors.useVendorIoEntries()
+
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
+
+  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
+  // can take it into account — when the user's previously-bound alias
+  // has been renamed/removed upstream, re-picking the same address
+  // from the dropdown should still refresh the variable's stored
+  // alias.  Mirrors the local-table variant of this cell.
+  const variableAlias = original?.alias
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+
+  const onBlur = (value: string) => {
+    // Same short-circuit semantics as the local variables-table cell:
+    // skip unchanged-value blurs unless the variable's alias is
+    // orphaned, in which case the user re-picking the same address
+    // is their signal to refresh the alias.  `updateVariable`'s
+    // auto-adopt path re-resolves against the live alias registry.
+    if (value === initialValue && !isOrphaned) return
+    const res = table.options.meta?.updateData(index, id, value)
+    if (res?.ok) {
+      setCellValue(value)
+      return
+    }
+    setCellValue(initialValue ?? '')
+    toast({ title: res?.title, description: res?.message, variant: 'fail' })
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue ?? '')
+  }, [initialValue])
+
+  const selectableValues = useCallback(() => {
+    const ainPins = existingPins
+      .filter((pin) => pin.pinType === 'analogInput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
+      }))
+    const aoutPins = existingPins
+      .filter((pin) => pin.pinType === 'analogOutput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
+      }))
+
+    const dinPins = existingPins
+      .filter((pin) => pin.pinType === 'digitalInput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
+      }))
+
+    const doutPins = existingPins
+      .filter((pin) => pin.pinType === 'digitalOutput')
+      .map((pin) => ({
+        id: `${id}-${pin.pin}`,
+        value: pin.address,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
+      }))
+
+    const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
+    const vendorGroups = buildVendorIoOptionGroups(id, vendorIoEntries)
+
+    return [
+      { label: 'Analog Inputs', options: ainPins },
+      { label: 'Analog Outputs', options: aoutPins },
+      { label: 'Digital Inputs', options: dinPins },
+      { label: 'Digital Outputs', options: doutPins },
+      ...remoteGroups,
+      ...vendorGroups,
+    ]
+  }, [id, existingPins, remoteIOPoints, vendorIoEntries])
+
+  // Combined display: "alias (address)" stays consistent across
+  // editable and read-only states so the cell doesn't flip on row
+  // select.  `variableAlias` + `isOrphaned` are defined above the
+  // `onBlur` so the short-circuit can read them.
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+  const combinedLabel = variableAlias ? `${variableAlias} (${cellValue})` : cellValue
+
+  return editable ? (
+    <GenericComboboxCell
+      value={cellValue}
+      displayLabel={combinedLabel}
+      onValueChange={(value) => {
+        onBlur(value)
+      }}
+      selectValues={selectableValues()}
+      selected={editable}
+      openOnSelectedOption
+      canAddACustomOption
+    />
+  ) : (
+    <div
+      title={orphanTooltip ?? (variableAlias ? `${variableAlias} -> ${cellValue}` : undefined)}
+      className={cn(
+        'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
+        {
+          'pointer-events-none': !editable,
+        },
+      )}
+    >
+      {isOrphaned && (
+        <span aria-label='Orphaned alias' className='text-amber-500 dark:text-amber-400'>
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
+      <HighlightedText
+        text={combinedLabel}
+        searchQuery={searchQuery}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
+      />
+    </div>
+  )
+}
+
+export { EditableDocumentationCell, EditableInitialValueCell, EditableLocationCell, EditableNameCell }

@@ -20,7 +20,7 @@ const distRendererPath = join(distPath, 'renderer')
 
 const buildPath = join(releasePath, 'build')
 
-const typesPath = join(srcPath, 'types')
+const typesPath = join(rootPath, 'src', 'types')
 
 export default {
   rootPath,

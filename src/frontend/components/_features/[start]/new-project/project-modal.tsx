@@ -1,0 +1,87 @@
+import { useEffect, useState } from 'react'
+
+import { useOpenPLCStore } from '../../../../store'
+import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
+import { Step1 } from './steps/first-step'
+import { Step2 } from './steps/second-step'
+import { Step3 } from './steps/third-step'
+import { NewProjectStore } from './store'
+
+const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
+  const {
+    workspaceActions: { setEditingState },
+    tabsActions: { clearTabs },
+    modalActions: { closeModal, onOpenChange },
+  } = useOpenPLCStore()
+
+  const resetFormData = NewProjectStore((state) => state.resetFormData)
+  const projectType = NewProjectStore((state) => state.formData.type)
+  const [currentStep, setCurrentStep] = useState(1)
+
+  // Library projects don't need the language / cycle-time step —
+  // they have no main program and no cyclic task to configure.  The
+  // modal stops at Step 2 and creates the project from there.  Step
+  // count is read everywhere it matters so a future fourth step
+  // doesn't have to be threaded through three different `< 3` /
+  // `< 4` literals.
+  const totalSteps = projectType === 'plc-library' ? 2 : 3
+
+  const handleNext = () => {
+    setCurrentStep((prevStep) => (prevStep < totalSteps ? prevStep + 1 : prevStep))
+  }
+
+  const handlePrev = () => {
+    setCurrentStep((prevStep) => (prevStep > 1 ? prevStep - 1 : prevStep))
+  }
+
+  const handleClose = () => {
+    closeModal()
+  }
+
+  const handleFinishForm = () => {
+    try {
+      handleClose()
+    } catch (error) {
+      console.error('Navigation failed:', error)
+    }
+  }
+
+  useEffect(() => {
+    setCurrentStep(1)
+    resetFormData()
+    setEditingState('unsaved')
+    clearTabs()
+  }, [])
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return <Step1 onClose={handleClose} onNext={handleNext} />
+      case 2:
+        return (
+          <Step2
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onFinish={handleFinishForm}
+            onClose={handleClose}
+            isFinalStep={totalSteps === 2}
+          />
+        )
+      case 3:
+        return <Step3 onPrev={handlePrev} onFinish={handleFinishForm} onClose={handleClose} />
+      default:
+        return null
+    }
+  }
+
+  return (
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('create-project', open)}>
+      <ModalContent onClose={handleClose} className='flex h-[400px] flex-col justify-between p-6'>
+        <ModalTitle className='absolute -top-10 opacity-0' />
+        {renderStep()}
+      </ModalContent>
+    </Modal>
+  )
+}
+
+export { ProjectModal }

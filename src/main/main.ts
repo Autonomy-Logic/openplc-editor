@@ -14,15 +14,16 @@ import { enableMapSet } from 'immer'
 import { platform, release } from 'os'
 import { join, resolve } from 'path'
 
+import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
-import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
+import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
+import { HardwareModule } from '../backend/editor/hardware'
+import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
+import { resolveHtmlPath } from '../backend/editor/utils'
+import { getErrorMessage } from '../frontend/utils/get-error-message'
 import MenuBuilder from './menu'
-import { CompilerModule } from './modules/compiler'
-import { HardwareModule } from './modules/hardware'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { PouService, ProjectService, UserService } from './services'
-import { resolveHtmlPath } from './utils'
 
 enableMapSet()
 
@@ -97,7 +98,7 @@ const installExtensions = async () => {
       extensions.map((name) => installer[name as keyof typeof Installer]),
       forceDownload,
     )
-    .catch(console.log)
+    .catch((err: unknown) => logger.error(getErrorMessage(err)))
 }
 
 const createMainWindow = async () => {
@@ -138,8 +139,8 @@ const createMainWindow = async () => {
     : 'src/main/modules/preload/splash-screen/splash.html'
   splash
     .loadFile(splashPath)
-    .then(() => console.log('Splash screen loaded successfully'))
-    .catch((error) => console.error('Error loading splash screen:', error))
+    .then(() => logger.info('Splash screen loaded successfully'))
+    .catch((error: unknown) => logger.error('Error loading splash screen: ' + getErrorMessage(error)))
 
   splash.setIgnoreMouseEvents(false)
 
@@ -207,7 +208,7 @@ const createMainWindow = async () => {
    */
   mainWindow.on('close', saveBounds)
   mainWindow.on('close', () => {
-    console.log('mainWindow close')
+    logger.info('mainWindow close')
     mainWindow?.webContents.send('window-controls:is-closing')
   })
 
@@ -217,7 +218,7 @@ const createMainWindow = async () => {
    * and avoid using it any more.
    */
   mainWindow.on('closed', () => {
-    console.log('mainWindow closed')
+    logger.info('mainWindow closed')
     mainWindow = null
   })
 
@@ -345,7 +346,7 @@ app.on('activate', () => {
  * which is terminating the application.
  */
 app.on('before-quit', () => {
-  console.log('before-quit')
+  logger.info('before-quit')
   if (process.platform === 'darwin' && process.env.NODE_ENV === 'production') {
     mainWindow?.webContents.send('app:darwin-is-closing')
     return
@@ -359,7 +360,7 @@ app.on('before-quit', () => {
  * behavior, which is terminating the application.
  */
 app.on('will-quit', () => {
-  console.log('will-quit')
+  logger.info('will-quit')
 })
 
 /**
@@ -367,7 +368,7 @@ app.on('will-quit', () => {
  */
 // Emitted when the application is quitting.
 app.on('quit', () => {
-  console.log('quit')
+  logger.info('quit')
 })
 
 /**
@@ -378,7 +379,7 @@ app.on('quit', () => {
  */
 // --> Quit the app when all windows are closed except on macOS. There, it's common for applications and their menu bar to stay active;
 app.on('window-all-closed', () => {
-  console.log('window-all-closed')
+  logger.info('window-all-closed')
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
@@ -410,4 +411,4 @@ app
       if (mainWindow === null) void createMainWindow()
     })
   })
-  .catch(console.log)
+  .catch((err: unknown) => logger.error(getErrorMessage(err)))

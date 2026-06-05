@@ -1,0 +1,223 @@
+import { cn } from '@root/frontend/utils/cn'
+import type { ESIChannel, EtherCATChannelMapping } from '@root/middleware/shared/ports/esi-types'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+type ChannelMappingTableProps = {
+  channels: ESIChannel[]
+  mappings: EtherCATChannelMapping[]
+  onAliasChange: (channelId: string, newAlias: string) => void
+}
+
+type FilterDirection = 'all' | 'input' | 'output'
+
+/**
+ * Alias cell with local state to avoid re-rendering the entire table on every keystroke.
+ */
+const AliasCell = React.memo(
+  ({
+    channelId,
+    alias,
+    onAliasChange,
+  }: {
+    channelId: string
+    alias: string
+    onAliasChange: (channelId: string, newAlias: string) => void
+  }) => {
+    const [localAlias, setLocalAlias] = useState(alias)
+
+    useEffect(() => {
+      setLocalAlias(alias)
+    }, [alias])
+
+    const handleBlur = useCallback(() => {
+      if (localAlias !== alias) {
+        onAliasChange(channelId, localAlias)
+      }
+    }, [channelId, localAlias, alias, onAliasChange])
+
+    return (
+      <input
+        type='text'
+        value={localAlias}
+        onChange={(e) => setLocalAlias(e.target.value)}
+        onBlur={handleBlur}
+        placeholder='Alias'
+        className='h-[24px] w-full rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+      />
+    )
+  },
+)
+
+/**
+ * Channel Mapping Table Component
+ *
+ * Displays channels with auto-generated IEC 61131-3 located variable addresses (read-only)
+ * and editable alias column.
+ */
+const ChannelMappingTable = ({ channels, mappings, onAliasChange }: ChannelMappingTableProps) => {
+  const [filterDirection, setFilterDirection] = useState<FilterDirection>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Build a lookup map from channelId to mapping
+  const mappingMap = useMemo(() => {
+    const map = new Map<string, EtherCATChannelMapping>()
+    for (const m of mappings) {
+      map.set(m.channelId, m)
+    }
+    return map
+  }, [mappings])
+
+  // Build a 1-based per-direction index for each channel (stable regardless of filtering)
+  const channelIndexMap = useMemo(() => {
+    const map = new Map<string, number>()
+    let inputIdx = 0
+    let outputIdx = 0
+    for (const ch of channels) {
+      if (ch.direction === 'input') {
+        inputIdx++
+        map.set(ch.id, inputIdx)
+      } else {
+        outputIdx++
+        map.set(ch.id, outputIdx)
+      }
+    }
+    return map
+  }, [channels])
+
+  // Filter channels based on direction and search
+  const filteredChannels = useMemo(() => {
+    return channels.filter((channel) => {
+      if (filterDirection !== 'all' && channel.direction !== filterDirection) {
+        return false
+      }
+
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase()
+        const mapping = mappingMap.get(channel.id)
+        return (
+          channel.iecType.toLowerCase().includes(search) ||
+          (mapping?.iecLocation.toLowerCase().includes(search) ?? false) ||
+          (mapping?.alias?.toLowerCase().includes(search) ?? false)
+        )
+      }
+
+      return true
+    })
+  }, [channels, filterDirection, searchTerm, mappingMap])
+
+  const inputCount = channels.filter((c) => c.direction === 'input').length
+  const outputCount = channels.filter((c) => c.direction === 'output').length
+
+  return (
+    <div className='flex flex-col gap-3'>
+      {/* Filters */}
+      <div className='flex flex-wrap items-center gap-3'>
+        {/* Direction Filter */}
+        <div className='flex gap-2'>
+          <button
+            onClick={() => setFilterDirection('all')}
+            className={cn(
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
+              filterDirection === 'all'
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
+            )}
+          >
+            All ({channels.length})
+          </button>
+          <button
+            onClick={() => setFilterDirection('input')}
+            className={cn(
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
+              filterDirection === 'input'
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
+            )}
+          >
+            Inputs ({inputCount})
+          </button>
+          <button
+            onClick={() => setFilterDirection('output')}
+            className={cn(
+              'h-7 rounded-md px-3 text-xs font-medium transition-colors',
+              filterDirection === 'output'
+                ? 'bg-blue-500 text-white'
+                : 'bg-neutral-100 text-brand-light dark:bg-neutral-900 dark:text-neutral-700',
+            )}
+          >
+            Outputs ({outputCount})
+          </button>
+        </div>
+
+        {/* Search */}
+        <input
+          type='text'
+          placeholder='Search channels...'
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className='h-[30px] rounded-md border border-neutral-300 bg-white px-2 text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+        />
+      </div>
+
+      {/* Table */}
+      <div className='max-h-[400px] overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
+        <table className='w-full table-fixed'>
+          <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
+            <tr>
+              <th className='w-[8%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                #
+              </th>
+              <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                Dir
+              </th>
+              <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                IEC Type
+              </th>
+              <th className='w-[22%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                Address
+              </th>
+              <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Alias</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredChannels.length === 0 ? (
+              <tr>
+                <td colSpan={5} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                  {channels.length === 0 ? 'No channels available' : 'No channels match the current filter'}
+                </td>
+              </tr>
+            ) : (
+              filteredChannels.map((channel) => {
+                const mapping = mappingMap.get(channel.id)
+                return (
+                  <tr
+                    key={channel.id}
+                    className='border-b border-neutral-200 transition-colors hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50'
+                  >
+                    <td className='px-2 py-1.5 text-sm font-medium text-neutral-950 dark:text-neutral-100'>
+                      {channelIndexMap.get(channel.id) ?? ''}
+                    </td>
+                    <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      {channel.direction === 'input' ? 'Input' : 'Output'}
+                    </td>
+                    <td className='px-2 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      {channel.iecType}
+                    </td>
+                    <td className='px-2 py-1.5 font-mono text-xs text-neutral-600 dark:text-neutral-400'>
+                      {mapping?.iecLocation ?? ''}
+                    </td>
+                    <td className='px-2 py-1.5'>
+                      <AliasCell channelId={channel.id} alias={mapping?.alias ?? ''} onAliasChange={onAliasChange} />
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export { ChannelMappingTable }

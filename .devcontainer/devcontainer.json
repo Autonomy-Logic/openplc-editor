@@ -1,0 +1,44 @@
+{
+  "name": "OpenPLC Editor",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [1313, 3000],
+  "portsAttributes": {
+    "1313": { "label": "Webpack Dev Server (Renderer)" },
+    "3000": { "label": "Electron Debug Port" }
+  },
+  "mounts": [
+    "source=openplc-editor-node-modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
+  ],
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": "sudo mkdir -p /run/dbus && sudo dbus-daemon --system 2>/dev/null || true; start-xvfb.sh 99 2>/dev/null || true",
+  "remoteEnv": {
+    "DISPLAY": "host.docker.internal:0",
+    "ELECTRON_DISABLE_GPU": "1",
+    "ELECTRON_EXTRA_LAUNCH_ARGS": "--no-sandbox --disable-gpu-sandbox",
+    "NODE_ENV": "development"
+  },
+  "runArgs": ["--init", "--security-opt", "seccomp=unconfined", "--cap-add", "SYS_ADMIN"],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "eslint.validate": ["typescript", "typescriptreact"],
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}

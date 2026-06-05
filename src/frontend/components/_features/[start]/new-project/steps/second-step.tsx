@@ -1,0 +1,184 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+
+import { useEffect, useState } from 'react'
+import { SubmitHandler, useForm } from 'react-hook-form'
+
+import { useCapabilities, useProject } from '../../../../../../middleware/shared/providers/platform-context'
+import { PathIcon } from '../../../../../assets/icons/interface/Path'
+import { cn } from '../../../../../utils/cn'
+import { NewProjectStore } from '../store'
+import { useCreateProjectSubmit } from '../use-create-project-submit'
+
+interface Step2Props {
+  onNext: () => void
+  onPrev: () => void
+  /** Library projects make Step 2 the final step (no Step 3 for
+   *  language / cycle time).  When true the form submits the project
+   *  creation directly instead of advancing. */
+  isFinalStep?: boolean
+  /** Called on successful project creation when this is the final
+   *  step.  Mirrors Step 3's `onFinish`. */
+  onFinish?: () => void
+  /** Called to dismiss the modal — same hook Step 3 uses. */
+  onClose?: () => void
+}
+
+const Step2 = ({ onNext, onPrev, isFinalStep = false, onFinish, onClose }: Step2Props) => {
+  const { register, handleSubmit, setValue, watch } = useForm<{ name: string; path: string }>()
+  const handleUpdateForm = NewProjectStore((state) => state.setFormData)
+  const projectData = NewProjectStore((state) => state.formData)
+  const capabilities = useCapabilities()
+  const project = useProject()
+  const submitCreate = useCreateProjectSubmit()
+  const [path, setPath] = useState('')
+  const [pathErrorMessage, setPathErrorMessage] = useState('')
+
+  const formData = watch()
+
+  useEffect(() => {
+    if (projectData.name) setValue('name', projectData.name)
+    if (projectData.path) setValue('path', projectData.path)
+  }, [projectData, setValue])
+
+  const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = async (data) => {
+    const allData = { ...projectData, name: data.name, path: data.path }
+
+    // PLC projects advance to Step 3 (language + cycle time).
+    // Library projects finalise creation here — they don't have a
+    // main program or a cyclic task, so the third step would be
+    // irrelevant.
+    if (!isFinalStep) {
+      handleUpdateForm(allData)
+      onNext()
+      return
+    }
+
+    // Language + cycle time are placeholders for the library path.
+    // Backend's library branch ignores them and the resulting
+    // project has no POU at all; we still pass ST / 20 ms so any
+    // consumer that reads the IPC payload sees a safe-looking
+    // default rather than empty strings.
+    await submitCreate(
+      { ...allData, language: 'st', time: 'T#20ms' },
+      {
+        onSuccess: () => {
+          onClose?.()
+          onFinish?.()
+        },
+      },
+    )
+  }
+
+  const handlePathPicker = async () => {
+    const res = await project.pickPath()
+    if (res.success && res.path) {
+      setPath(res.path)
+      setValue('path', res.path)
+      handleUpdateForm({ ...projectData, path: res.path })
+      setPathErrorMessage('')
+    } else if (res.error) {
+      setPathErrorMessage(` ${res.error.description}`)
+    }
+  }
+
+  const inputStyle =
+    'border h-[40px] dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
+
+  const isFormValid = capabilities.hasNativeFileDialogs ? formData.name && formData.path : !!formData.name
+
+  return (
+    <>
+      <div className='relative flex select-none items-center justify-center pt-2'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
+          1
+        </div>
+        <div className='h-[2px] w-12 bg-blue-300'></div>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500 dark:bg-neutral-950'>
+          2
+        </div>
+        {/* Step 3 only renders for PLC projects.  Library projects
+            stop at Step 2 — see `isFinalStep`. */}
+        {!isFinalStep && (
+          <>
+            <div className='h-[2px] w-12 bg-gray-500'></div>
+            <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+              3
+            </div>
+          </>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
+        {/* Project Name */}
+        <div className='flex flex-col items-center justify-center'>
+          <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+            Give a name for the project: *
+          </h2>
+          <div className='relative h-10 w-64'>
+            <input
+              id='project-name'
+              className={`flex w-64 truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white ${inputStyle}`}
+              {...register('name', { required: true })}
+              autoFocus
+              placeholder='Project Name'
+            />
+          </div>
+        </div>
+
+        {/* Path Selection — only shown when platform supports native file dialogs */}
+        {capabilities.hasNativeFileDialogs && (
+          <div className='flex flex-col items-center'>
+            <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+              Choose an empty directory for your project: *
+            </h2>
+            <div className='relative h-20 w-64'>
+              {' '}
+              {/* Fixed height for the div element */}
+              <div
+                className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2'
+                onClick={handlePathPicker}
+              >
+                <PathIcon className='mr-2 mt-3 flex-shrink-0 cursor-pointer text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
+                <input
+                  type='text'
+                  id='project-path'
+                  className='flex w-full cursor-pointer truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white'
+                  placeholder={path || 'Choose path'}
+                  {...register('path')}
+                  readOnly
+                />
+              </div>
+              {/* Error message with fixed height */}
+              {pathErrorMessage && (
+                <div className='absolute bottom-0 left-0 w-full text-sm text-red-600' style={{ height: '20px' }}>
+                  {pathErrorMessage}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Navigation Buttons */}
+        <div className='mt-4 flex flex-row justify-center space-x-4'>
+          <button
+            type='button'
+            className={cn(
+              'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+            )}
+            onClick={onPrev}
+          >
+            Prev
+          </button>
+          <button
+            type='submit'
+            disabled={!isFormValid}
+            className={`h-8 w-52 rounded-lg bg-brand text-white ${!isFormValid ? 'cursor-not-allowed opacity-50' : ''}`}
+          >
+            {isFinalStep ? 'Create Library' : 'Next'}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+}
+
+export { Step2 }

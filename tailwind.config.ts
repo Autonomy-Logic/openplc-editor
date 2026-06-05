@@ -1,8 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 
 module.exports = {
-  content: ['./src/renderer/**/*.{js,jsx,ts,tsx,ejs,html}', './src/main/**/*.{js,jsx,ts,tsx,ejs,html}'],
-  darkMode: 'media', // or 'media' or 'class'
+  content: ['./src/**/*.{js,jsx,ts,tsx,ejs,html}'],
+  darkMode: 'class',
   theme: {
     extend: {
       scrollbar: ['rounded'],

@@ -1,5 +1,0 @@
-export * from './display'
-export * from './edit'
-export * from './file'
-export * from './help'
-export * from './recent'

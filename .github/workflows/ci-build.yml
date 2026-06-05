@@ -1,0 +1,32 @@
+name: CI - Build
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Download strucpp + xml2st binaries
+        # tsc needs the strucpp package to resolve the types imported
+        # from `backend/shared/library/strucpp-runtime.ts` and friends.
+        # Run the binary downloader directly (skipping the rest of
+        # postinstall — electron-builder install-app-deps + build:dll
+        # are dev-/packaging-only).
+        run: npx ts-node scripts/download-binaries.ts
+
+      - name: Type check
+        run: npx tsc --noEmit

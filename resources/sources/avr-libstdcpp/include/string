@@ -1,0 +1,18 @@
+// -*- C++ -*-
+// OpenPLC Editor stub for <string> on AVR.
+//
+// modm-io/avr-libstdcpp intentionally excludes <string> because std::string
+// requires heap allocation, exceptions, and a hosted environment, none of
+// which are appropriate for AVR targets.
+//
+// STruC++ generated code emits `#include <string>` unconditionally in its
+// header preamble, but never actually uses std::string — it uses its own
+// IECString<N> template (stack-allocated, fixed-size) for IEC STRING
+// variables. This stub satisfies the include without providing the type.
+//
+// If you do try to use std::string on AVR with this stub, you'll get a
+// clear compile error rather than a silent misbehavior.
+
+#ifndef _OPENPLC_AVR_STRING_STUB
+#define _OPENPLC_AVR_STRING_STUB
+#endif

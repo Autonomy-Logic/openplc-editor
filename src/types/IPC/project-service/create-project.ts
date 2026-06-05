@@ -1,5 +1,5 @@
-import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
+import { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
+import { PLCPou, PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 
 /**
  * Type designed to create a new project file in OpenPLC Editor.

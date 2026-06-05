@@ -1,0 +1,74 @@
+import type { CellContext, RowData } from '@tanstack/react-table'
+import { useEffect, useState } from 'react'
+
+import type { PLCInstance } from '../../../../middleware/shared/ports/types'
+import { useOpenPLCStore } from '../../../store'
+import type { ProjectResponse } from '../../../store/slices/project'
+import { cn } from '../../../utils/cn'
+import { HighlightedText } from '../../_atoms/highlighted-text'
+import { InputWithRef } from '../../_atoms/input'
+import { useToast } from '../../_features/[app]/toast/use-toast'
+
+declare module '@tanstack/react-table' {
+  // This is a helper interface that adds the `updateData` property to the table meta.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => ProjectResponse
+  }
+}
+
+type IEditableCellProps = CellContext<PLCInstance, unknown> & { editable?: boolean }
+
+const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+  const initialValue = getValue<string>()
+  const { toast } = useToast()
+
+  const { searchQuery } = useOpenPLCStore()
+
+  const [cellValue, setCellValue] = useState(initialValue)
+  const [isEditing, setIsEditing] = useState(false)
+
+  const onBlur = () => {
+    if (cellValue === initialValue) return setIsEditing(false)
+
+    const res = table.options.meta?.updateData(index, id, cellValue)
+
+    if (res?.ok) return setIsEditing(false)
+
+    setCellValue(initialValue)
+    toast({ title: res?.title, description: res?.message, variant: 'fail' })
+  }
+
+  const handleStartEditing = () => {
+    if (!editable) return
+    setIsEditing(true)
+  }
+
+  useEffect(() => {
+    setCellValue(initialValue)
+  }, [initialValue])
+
+  return isEditing ? (
+    <InputWithRef
+      value={cellValue}
+      onChange={(e) => setCellValue(e.target.value)}
+      onBlur={onBlur}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+        'pointer-events-none': !editable,
+      })}
+    />
+  ) : (
+    <div
+      onClick={handleStartEditing}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
+    >
+      <HighlightedText
+        text={cellValue}
+        searchQuery={searchQuery}
+        className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'
+      />
+    </div>
+  )
+}
+
+export default EditableNameCell

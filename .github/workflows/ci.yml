@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  architecture:
+    uses: ./.github/workflows/ci-architecture.yml
+
+  build-check:
+    uses: ./.github/workflows/ci-build.yml
+
+  lint:
+    uses: ./.github/workflows/ci-lint.yml
+
+  format:
+    needs: [architecture, build-check, lint]
+    uses: ./.github/workflows/ci-format.yml
+
+  sync:
+    needs: [format]
+    uses: ./.github/workflows/ci-sync.yml
+    secrets: inherit
+
+  complete-build:
+    needs: [sync]
+    uses: ./.github/workflows/build.yml

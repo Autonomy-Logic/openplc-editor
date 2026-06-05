@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 // OpenPLC HAL for FX3U-24MR Clone / Seller: Dollatek over Amazon
 // 2024 by Dieter Lambrecht

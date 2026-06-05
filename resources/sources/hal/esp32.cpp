@@ -3,7 +3,7 @@ extern "C" {
  #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 //#include "driver/ledc.h"
 
 // OpenPLC HAL for ESP32 boards

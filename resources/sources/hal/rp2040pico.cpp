@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 #include "RP2040_PWM.h"
 
 //OpenPLC HAL for Raspberry Pi Pico/Pico W with the RP2040

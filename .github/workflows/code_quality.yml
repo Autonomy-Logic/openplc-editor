@@ -1,17 +1,7 @@
-name: Code quality
-
-run-name: OpenPLC CI pipeline - Code quality
+name: Code Quality
 
 on:
-  push:
-    branches:
-      - main
-      - development
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches:
-      - main
-      - development
+  workflow_call:
 jobs:
   quality:
     runs-on: ubuntu-latest
