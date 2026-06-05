@@ -750,7 +750,12 @@ async function runCompilePipelineInner(
   // artefact the core produced (.uf2 / .bin / .hex) on disk directly.
   if (isSimulator) {
     if (!compileResult.binary) {
-      return bailError(emit, 'arduino-compile', 'Simulator build did not produce a .hex artefact.', compileResult.errors)
+      return bailError(
+        emit,
+        'arduino-compile',
+        'Simulator build did not produce a .hex artefact.',
+        compileResult.errors,
+      )
     }
     emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
     return { success: true, md5, binary: compileResult.binary, uploaded: false }
