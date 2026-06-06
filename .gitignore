@@ -51,11 +51,6 @@ resources/st-compiler/**.spec
 
 # External tool binaries (downloaded by scripts/download-binaries.ts)
 # arduino-cli stays committed since we don't own its releases
-resources/bin/**/xml2st
-resources/bin/**/xml2st.exe
-resources/bin/**/xml2st/
-resources/bin/.binary-metadata.json
-resources/bin/**/.binary-metadata.json
 resources/strucpp/
 
 # Playwright

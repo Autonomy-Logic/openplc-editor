@@ -113,7 +113,6 @@ describe('CompilerModule', () => {
     expect(typeof compilerModule.arduinoCliBinaryPath).toBe('string')
     expect(typeof compilerModule.arduinoCliConfigurationFilePath).toBe('string')
     expect(Array.isArray(compilerModule.arduinoCliBaseParameters)).toBe(true)
-    expect(typeof compilerModule.xml2stBinaryPath).toBe('string')
     expect(typeof compilerModule.strucppRuntimeDir).toBe('string')
   })
 

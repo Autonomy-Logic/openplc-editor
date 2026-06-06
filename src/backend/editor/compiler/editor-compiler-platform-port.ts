@@ -67,7 +67,6 @@ import type { CompilerModule } from './compiler-module'
  * file-watching, etc.).
  */
 export interface EditorCompilerHandlers {
-  handleTranspileXMLtoST: CompilerModule['handleTranspileXMLtoST']
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
   handleCoreInstallation: CompilerModule['handleCoreInstallation']
