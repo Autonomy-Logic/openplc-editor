@@ -25,7 +25,6 @@ import {
   type ProgramChunk,
   TRUE_NODE,
 } from '../core/path-tree'
-
 import {
   asBlockData,
   asCoilData,
@@ -36,9 +35,9 @@ import {
   asPowerRailData,
   asVariableData,
   asVariableExpressionData,
+  type BlockData,
   coilModifierFromVariant,
   contactModifierFromVariant,
-  type BlockData,
   type VariableData,
 } from './narrow'
 import type { RFBody, RFEdge, RFNode, RFRung } from './types'

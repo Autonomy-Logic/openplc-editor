@@ -15,8 +15,8 @@
  * State carried via `WalkerState` (defined in `walker.ts`).
  */
 
+import type { CoilModifier,ContactModifier } from './modifier-types'
 import type { Location, ProgramChunk } from './path-tree'
-import type { ContactModifier, CoilModifier } from './modifier-types'
 import type { TriggerVar } from './trigger-var'
 
 /**

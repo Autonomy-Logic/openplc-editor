@@ -9,15 +9,15 @@
  * declaration order matches what the python oracle produces.
  */
 
-import { emitFbdBody } from '../walker/fbd'
-import type { SyntheticVar } from '../walker/ld'
-import { emitLdBody } from '../walker/ld'
 import { resolveBlockType } from '../helpers/block-library'
 import { PLC_BASE_TYPES } from '../helpers/ctn-globals'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
 import { varTypeNames } from '../helpers/type-text'
 import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
+import { emitFbdBody } from '../walker/fbd'
+import type { SyntheticVar } from '../walker/ld'
+import { emitLdBody } from '../walker/ld'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
 

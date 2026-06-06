@@ -11,9 +11,6 @@
 
 import type { PLCProjectData as SchemaPLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 
-import type { RFFbdBody } from './walker/fbd'
-import type { RFBody, RFEdge, RFNode, RFRung } from './walker/types'
-
 import type {
   TranspileBody,
   TranspileDataType,
@@ -24,6 +21,8 @@ import type {
   TranspileVariable,
   TranspileVariableType,
 } from './types'
+import type { RFFbdBody } from './walker/fbd'
+import type { RFBody, RFEdge, RFNode, RFRung } from './walker/types'
 
 export type SchemaProjectData = SchemaPLCProjectData
 
