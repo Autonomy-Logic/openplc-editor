@@ -9,9 +9,10 @@
  * types are middleware-scoped.
  */
 
-import { fbdToXml } from '../../../../frontend/utils/PLC/xml-generator/old-editor/language/fbd-xml'
-import { ladderToXml } from '../../../../frontend/utils/PLC/xml-generator/old-editor/language/ladder-xml'
-import type { PLCProjectData as SchemaPLCProjectData } from '../../types/PLC/open-plc'
+import type { PLCProjectData as SchemaPLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import { fbdToXml } from '@root/frontend/utils/PLC/xml-generator/old-editor/language/fbd-xml'
+import { ladderToXml } from '@root/frontend/utils/PLC/xml-generator/old-editor/language/ladder-xml'
+
 import { xmlObjectToLdBody } from './ld/from-xmlbuilder'
 import type {
   TranspileBody,

@@ -105,7 +105,7 @@ export function getcontentInstances(body: Element): Element[] {
   if (!content) return []
   const tag = content.localName
   if (tag !== 'LD' && tag !== 'FBD' && tag !== 'SFC') {
-    throw new TypeError(`${tag} body don't have instances!`)
+    throw new TypeError(`${tag} body doesn't have instances!`)
   }
   return childElements(content)
 }
@@ -119,7 +119,7 @@ export function getcontentInstance(body: Element, localId: number): Element | nu
   if (!content) return null
   const tag = content.localName
   if (tag !== 'LD' && tag !== 'FBD' && tag !== 'SFC') {
-    throw new TypeError(`${tag} body don't have instances!`)
+    throw new TypeError(`${tag} body doesn't have instances!`)
   }
   for (const child of childElements(content)) {
     if (getAttrInt(child, 'localId') === localId) return child
