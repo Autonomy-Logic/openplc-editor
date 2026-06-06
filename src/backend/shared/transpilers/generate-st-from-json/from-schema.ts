@@ -82,9 +82,11 @@ function projectBody(body: SchemaBody): TranspileBody {
       return { language: 'fbd', xmlBody, ldBody: xmlObjectToLdBody(xmlBody) }
     }
     case 'sfc':
-      // Schema's SFC body is currently typed as `string`; fall back
-      // to ST passthrough until the SFC pipeline ports JSON-native.
-      return { language: 'st', value: body.value }
+      // SFC support is under development — fail-fast with a clear
+      // message instead of silently falling through to the legacy
+      // DOM walker (which produced unreliable output for SFC
+      // anyway).  Re-enable when the JSON-native SFC walker lands.
+      throw new Error('SFC support is under development')
     default: {
       const unreachable: never = body
       throw new Error(`Unknown body language: ${JSON.stringify(unreachable)}`)
