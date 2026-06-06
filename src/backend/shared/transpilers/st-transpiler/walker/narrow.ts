@@ -195,6 +195,16 @@ export function asBlockData(data: Record<string, unknown>): BlockData | null {
       const cls = v['class']
       if (cls === 'input') inputs.push(name)
       else if (cls === 'output') outputs.push(name)
+      // `inOut` (also written `'inout'` in some shapes) is a single
+      // formal parameter that the call site binds as an input *and*
+      // the caller can read post-call as an output.  For call-site
+      // emission both the python oracle and the editor's XML
+      // serializer treat it as an input slot (the binding appears in
+      // the argument list as `<param> := <source>`), so we list it
+      // under `inputs` in source order — VAR_IN_OUT typically appears
+      // before VAR_INPUT in the declaration, which is the order the
+      // call site emits.
+      else if (cls === 'inOut' || cls === 'inout') inputs.push(name)
     }
   }
   const rawNumericId = data['numericId']
