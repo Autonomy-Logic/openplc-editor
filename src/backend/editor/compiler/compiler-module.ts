@@ -30,7 +30,7 @@ import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
-} from '@root/backend/shared/transpilers/generate-st-from-json'
+} from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
@@ -2742,7 +2742,7 @@ class CompilerModule {
       return
     }
 
-    // JSON → ST in-process via `generate-st-from-json` — replaces the
+    // JSON → ST in-process via `st-transpiler` — replaces the
     // legacy XmlGenerator + xml2st-subprocess hop the program-compile
     // pipeline already retired.  Mirrors what
     // `editor-compiler-platform-port.transpileToSt` does for the

@@ -8,7 +8,7 @@
  *
  *   - MD5 hashing (Node `crypto`)
  *   - in-process JSON → ST transpilation via
- *     `backend/shared/transpilers/generate-st-from-json/`
+ *     `backend/shared/transpilers/st-transpiler/`
  *   - read / write / delete project files on the local disk
  *   - resolve library-name → `.stlib` archive via the main-process bridge
  *   - drive a verification compile through the editor's existing
@@ -30,7 +30,7 @@ import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
-} from '@root/backend/shared/transpilers/generate-st-from-json'
+} from '@root/backend/shared/transpilers/st-transpiler'
 import type { TranspileToStArgs, TranspileToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
 import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-build-port'
 

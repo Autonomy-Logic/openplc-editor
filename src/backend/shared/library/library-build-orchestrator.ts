@@ -135,7 +135,7 @@ export async function runLibraryBuildPipeline(
   // Stage 2: project → ST via the shared compiler platform port.
   //
   // The port routes through the in-process JSON-fed transpiler
-  // (`generate-st-from-json/`).  Native STRUCT emission is the only
+  // (`st-transpiler/`).  Native STRUCT emission is the only
   // mode — no equivalents of the old `--keep-structs` flag exist.
   // The resulting ST lives in memory only.
   // -------------------------------------------------------------------------

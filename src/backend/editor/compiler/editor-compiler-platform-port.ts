@@ -20,7 +20,7 @@
  * subprocess: it projects the project IR via `fromSchemaShape`
  * (editor IPC delivers schema-shape data) and runs the in-process
  * JSON-fed transpiler
- * (`backend/shared/transpilers/generate-st-from-json/`).  The old
+ * (`backend/shared/transpilers/st-transpiler/`).  The old
  * `xml2st` binary path has been retired.
  *
  * This module is editor-only (lives under `backend/editor/`); the
@@ -34,7 +34,7 @@ import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
-} from '@root/backend/shared/transpilers/generate-st-from-json'
+} from '@root/backend/shared/transpilers/st-transpiler'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -185,7 +185,7 @@ export function createEditorCompilerPlatformPort(
         return { ok: true, programSt: result.programSt }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        log(`generate-st-from-json failed: ${message}`, 'error')
+        log(`st-transpiler failed: ${message}`, 'error')
         return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
       }
     },

@@ -100,7 +100,7 @@ export interface LibraryBuildPort {
 
   /**
    * Transpile the project IR directly to ST via the in-process
-   * JSON transpiler (`generate-st-from-json`).  Both editor and
+   * JSON transpiler (`st-transpiler`).  Both editor and
    * web adapters project their port-shape input into the
    * transpiler's minimal `TranspileProject` IR.  The `log`
    * callback is the orchestrator's emit channel.

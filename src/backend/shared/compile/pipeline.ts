@@ -399,7 +399,7 @@ async function runCompilePipelineInner(
   // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
   // the platform port.  Both adapters (editor + web) route through
-  // the in-process JSON-fed transpiler (`generate-st-from-json/`),
+  // the in-process JSON-fed transpiler (`st-transpiler/`),
   // so this hop never builds PLCOpen XML.  Native STRUCT declarations
   // are the only emission mode the transpiler supports — the legacy
   // matiec struct→FB rewrite isn't ported, so there are no
