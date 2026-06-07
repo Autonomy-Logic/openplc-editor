@@ -108,13 +108,26 @@ const AcceleratorHandler = () => {
 
   /**
    * Open project via file picker
+   *
+   * Mirrors the start-screen's `handleOpenProject` flow: the picker
+   * returns `{ success, data }` and the renderer must dispatch
+   * `handleOpenProjectResponse(data)` to actually load the project
+   * into the store.  Discarding the promise (`void
+   * projectPort.openProject()`) opened the picker but threw the
+   * result on the floor, so File → Open silently no-op'd after the
+   * user picked a folder — only the start-screen shortcut worked.
    */
   useEffect(() => {
     const unsub = accelerator.onOpenProject(() => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          void projectPort.openProject()
+          void (async () => {
+            const result = await projectPort.openProject()
+            if (result.success && result.data) {
+              handleOpenProjectResponse(result.data)
+            }
+          })()
           break
         case 'unsaved':
           openModal('save-changes-project', {
@@ -133,7 +146,7 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, projectPort])
+  }, [editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
 
   /**
    * Open recent project (editor-specific — data passed via IPC accelerator)
