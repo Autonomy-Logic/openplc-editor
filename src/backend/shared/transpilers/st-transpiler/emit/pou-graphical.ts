@@ -35,9 +35,27 @@ interface InterfaceEntry {
  * polymorphic conversion target.
  */
 const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
-  'BCD', 'BOOL', 'BYTE', 'DATE', 'DINT', 'DT', 'DWORD', 'INT',
-  'LINT', 'LREAL', 'LWORD', 'REAL', 'SINT', 'STRING', 'TIME',
-  'TOD', 'UDINT', 'UINT', 'ULINT', 'USINT', 'WORD',
+  'BCD',
+  'BOOL',
+  'BYTE',
+  'DATE',
+  'DINT',
+  'DT',
+  'DWORD',
+  'INT',
+  'LINT',
+  'LREAL',
+  'LWORD',
+  'REAL',
+  'SINT',
+  'STRING',
+  'TIME',
+  'TOD',
+  'UDINT',
+  'UINT',
+  'ULINT',
+  'USINT',
+  'WORD',
 ])
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
