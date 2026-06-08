@@ -129,7 +129,6 @@ describe('findHexInCompilationPath', () => {
 describe('createEditorCompilerPlatformPort', () => {
   function makeHandlers(overrides?: Partial<EditorCompilerHandlers>): EditorCompilerHandlers {
     return {
-      handleTranspileXMLtoST: jest.fn(),
       handleCompileArduinoProgram: jest.fn(),
       handleUploadProgram: jest.fn(),
       handleCoreInstallation: jest.fn(),
@@ -227,64 +226,6 @@ describe('createEditorCompilerPlatformPort', () => {
     const result = await port.installArduinoLib({ libId: '' }, log)
     expect(result.ok).toBe(true)
     expect(log).toHaveBeenCalledWith(expect.stringContaining('lib install failed'), 'warning')
-  })
-
-  // ---- transpileXmlToSt — xml2stArgs forwarding (STRUCT drift regression) ----
-
-  it('transpileXmlToSt forwards args.xml2stArgs to handleTranspileXMLtoST verbatim', async () => {
-    // Regression guard for the editor/web STRUCT drift bug: the
-    // shared pipeline owns the xml2st flag set as an array of CLI
-    // tokens, and the editor adapter must thread that array into
-    // handleTranspileXMLtoST as the third positional arg — the
-    // handler then splices it straight into the spawned xml2st argv.
-    // Editor's local xml2st is trusted, so the adapter passes the
-    // array through verbatim (no filtering).
-    const handleTranspileXMLtoST = jest
-      .fn<
-        ReturnType<EditorCompilerHandlers['handleTranspileXMLtoST']>,
-        Parameters<EditorCompilerHandlers['handleTranspileXMLtoST']>
-      >()
-      .mockResolvedValue({ success: true, data: '' })
-    const tmp = mkdtempSync(join(tmpdir(), 'xml2st-args-'))
-    try {
-      const port = createEditorCompilerPlatformPort(
-        makeHandlers({ handleTranspileXMLtoST }),
-        makeContext({ sourceTargetFolderPath: tmp }),
-      )
-      // The handler stub never produces a program.st, so the readFile
-      // after the spawn-equivalent step throws — that's fine, we only
-      // care about the xml2stArgs argument forwarded to the handler.
-      await port.transpileXmlToSt({ xml: '<plc/>', xml2stArgs: ['--keep-structs'] }, () => undefined)
-      expect(handleTranspileXMLtoST).toHaveBeenCalledTimes(1)
-      const callArgs = handleTranspileXMLtoST.mock.calls[0]!
-      expect(callArgs[2]).toEqual(['--keep-structs'])
-    } finally {
-      rmSync(tmp, { recursive: true, force: true })
-    }
-  })
-
-  it('transpileXmlToSt forwards an empty xml2stArgs array verbatim', async () => {
-    // The adapter must not "helpfully" inject defaults when the
-    // pipeline asked for nothing — that would be the exact kind of
-    // silent drift the shared port contract exists to prevent.
-    const handleTranspileXMLtoST = jest
-      .fn<
-        ReturnType<EditorCompilerHandlers['handleTranspileXMLtoST']>,
-        Parameters<EditorCompilerHandlers['handleTranspileXMLtoST']>
-      >()
-      .mockResolvedValue({ success: true, data: '' })
-    const tmp = mkdtempSync(join(tmpdir(), 'xml2st-empty-args-'))
-    try {
-      const port = createEditorCompilerPlatformPort(
-        makeHandlers({ handleTranspileXMLtoST }),
-        makeContext({ sourceTargetFolderPath: tmp }),
-      )
-      await port.transpileXmlToSt({ xml: '<plc/>', xml2stArgs: [] }, () => undefined)
-      const callArgs = handleTranspileXMLtoST.mock.calls[0]!
-      expect(callArgs[2]).toEqual([])
-    } finally {
-      rmSync(tmp, { recursive: true, force: true })
-    }
   })
 
   // ---- uploadArduinoBoard — port wiring (regression for issue #5) ----
