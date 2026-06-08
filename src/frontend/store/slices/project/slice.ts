@@ -14,8 +14,10 @@ import type {
 import {
   buildAddressPool,
   buildAliasRegistry,
+  describeSource,
   nextFreeAddress,
   syncVariableAliases as syncVariablesPure,
+  validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
@@ -167,6 +169,57 @@ function generateIOPoints(
   }
 
   return points
+}
+
+// ---------------------------------------------------------------------------
+// Alias auto-adopt
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the canonical alias that a variable should carry for its
+ * current `location`.  Builds a fresh pool + registry from the live
+ * store state, scoped to the active target's capabilities, then
+ * returns whatever alias the registry attaches to that address (or
+ * `undefined` when the address isn't aliased, or `location` is empty).
+ *
+ * Used by both `createVariable` and `updateVariable` to enforce the
+ * alias-↔-location invariant: a variable's `alias` field MUST point
+ * at the same producer-channel its `location` points at.  Without
+ * this, the "+" button (which auto-increments the location of a
+ * spread-from-previous variable) leaves the OLD alias attached to a
+ * NEW address — `syncVariableAliases` then collapses every such
+ * variable back to the OLD alias's canonical address on the next
+ * refresh pass, producing the duplicate-address compile errors
+ * reported in v4.2.0.
+ *
+ * Returns `undefined` for an empty / missing location so callers can
+ * distinguish "no alias because the address is unmapped" from "no
+ * alias because we didn't bother to look".
+ */
+function resolveAliasForLocation(getState: ProjectGetState, location: string | undefined): string | undefined {
+  if (!location) return undefined
+  const live = getState()
+  const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+    live.deviceDefinitions.configuration.deviceBoard ?? '',
+  )
+  const ioMapping =
+    (
+      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+        | undefined
+    )?.entries ?? []
+  const pool = buildAddressPool(
+    {
+      pinMapping: {
+        pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+      },
+      vendorIoMapping: { entries: ioMapping },
+      remoteDevices: live.project.data.remoteDevices,
+    },
+    resolveTargetCapabilities(boardInfo),
+  )
+  const registry = buildAliasRegistry(pool)
+  return registry.byAddress.get(location)?.alias
 }
 
 // ---------------------------------------------------------------------------
@@ -494,6 +547,24 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         if (!reconcile.ok) return reconcile
       }
 
+      // Apply the validator's name + location auto-increment OUTSIDE
+      // produce so we can then re-resolve the alias against the live
+      // store state.  The new variable's `alias` MUST point at the
+      // channel its post-increment `location` points at — otherwise
+      // the "+ button" UI flow (which spreads the previous variable
+      // as a template) carries a stale alias from the previous row
+      // forward, breaking the alias-↔-location invariant.  The next
+      // `syncVariableAliases` refresh would then silently collapse
+      // the new variable back to the stale alias's canonical
+      // address, producing the duplicate-address compile errors
+      // reported in v4.2.0 (forum thread "openplc-420-teething-bugs").
+      const sourceVariables =
+        scope === 'local' && associatedPou
+          ? (getState().project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables ?? [])
+          : getState().project.data.configurations.resource.globalVariables
+      const validated = createVariableValidation(sourceVariables, data)
+      data = { ...data, ...validated, alias: resolveAliasForLocation(getState, validated.location) }
+
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
@@ -509,9 +580,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           } else {
             variables = slice.project.data.configurations.resource.globalVariables
           }
-
-          // Validate and auto-increment name/location
-          data = { ...data, ...createVariableValidation(variables, data) }
 
           // Insert or append
           if (rowToInsert !== undefined) {
@@ -555,40 +623,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
 
       let response: ProjectResponse = { ok: true }
 
-      // Auto-adopt path: whenever the location changes, look up the
-      // alias registry and patch updates.alias to match the new
-      // address. If the address has an alias, the variable adopts it
-      // (cell shows the alias name, Phase 4 sync will keep the
-      // location current as the alias moves). If not, the alias
+      // Auto-adopt path: whenever the location changes, re-resolve
+      // the alias against the live registry so the variable's alias
+      // always points at the producer-channel its location points at.
+      // If the address has an alias, the variable adopts it (cell
+      // shows the alias name; `syncVariableAliases` will keep the
+      // location current as the alias moves).  If not, the alias
       // clears — re-typing a now-orphaned location intentionally
-      // drops the stale alias label too. Done outside `produce` so
+      // drops the stale alias label too.  Done outside `produce` so
       // we read the live store state including pinMapping + caps.
-      let aliasOverride: { alias: string | undefined } | undefined
-      if (typeof updates.location === 'string') {
-        const live = getState()
-        const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-          live.deviceDefinitions.configuration.deviceBoard ?? '',
-        )
-        const ioMapping =
-          (
-            live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-              | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-              | undefined
-          )?.entries ?? []
-        const pool = buildAddressPool(
-          {
-            pinMapping: {
-              pins:
-                live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-            },
-            vendorIoMapping: { entries: ioMapping },
-            remoteDevices: live.project.data.remoteDevices,
-          },
-          resolveTargetCapabilities(boardInfo),
-        )
-        const registry = buildAliasRegistry(pool)
-        aliasOverride = { alias: registry.byAddress.get(updates.location)?.alias }
-      }
+      const aliasOverride: { alias: string | undefined } | undefined =
+        typeof updates.location === 'string'
+          ? { alias: resolveAliasForLocation(getState, updates.location) }
+          : undefined
 
       setState(
         produce((slice: ProjectSlice) => {
@@ -765,6 +812,23 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           message: `Address pool reports ${pool.conflicts.length} conflicting claim(s): ${sample}${overflow}. The first source wins; later ones lose their address binding.`,
         })
       }
+      // Same migration warning, alias side: projects authored before
+      // the write-time `validateAliasEdit` gate landed may have
+      // duplicate alias names across producers.  The registry
+      // first-wins on `byAlias`, but every variable bound to the
+      // losing entry gets quietly collapsed to the winner's address
+      // through the sync's refresh path.  Surface this loudly so the
+      // user can resolve it (rename one of the duplicates) instead
+      // of silently inheriting a broken state.
+      if (registry.duplicateAliases.length > 0) {
+        const sample = registry.duplicateAliases.slice(0, 5).join(', ')
+        const overflow = registry.duplicateAliases.length > 5 ? ` (+${registry.duplicateAliases.length - 5} more)` : ''
+        live.consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Alias registry reports ${registry.duplicateAliases.length} duplicate alias name(s): ${sample}${overflow}. Each alias must be unique across all I/O channels — rename the duplicates in the IO mapping screens. Until then, variables bound to the losing entries will resolve to the winning entry's address.`,
+        })
+      }
 
       let adopted = 0
       let refreshed = 0
@@ -801,6 +865,63 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
 
       return { adopted, refreshed, orphaned }
+    },
+
+    /**
+     * Cascade-rename every variable's `.alias` from `oldAlias` to
+     * `newAlias`.  See the type doc in `project/types.ts` for the
+     * full contract — short version: when the user renames the
+     * alias on a producer channel (pin mapping, VPP module, Modbus
+     * TCP, EtherCAT), the bound variables follow so they don't drop
+     * into the orphan path.  Case-insensitive match.  A subsequent
+     * `syncVariableAliases()` then refreshes the variables'
+     * `.location` against the now-renamed alias's address.
+     */
+    renameAlias: (oldAlias, newAlias) => {
+      const trimmedOld = oldAlias?.trim() ?? ''
+      const trimmedNew = newAlias?.trim() ?? ''
+      // No-op when there's nothing to rename FROM.  Caller is the IO
+      // mapping screen on first-time alias write where there's no
+      // prior text to cascade.
+      if (trimmedOld.length === 0) return { renamed: 0 }
+      // No-op when the rename is a pure case change or an actual
+      // no-op — saves a render pass and avoids spurious mutation.
+      if (trimmedOld.toLowerCase() === trimmedNew.toLowerCase()) return { renamed: 0 }
+
+      let renamed = 0
+      const cascade = (variable: PLCVariable): PLCVariable => {
+        if (!variable.alias) return variable
+        if (variable.alias.toLowerCase() !== trimmedOld.toLowerCase()) return variable
+        renamed += 1
+        // When the user clears the alias on the producer side, the
+        // bound variables should also drop their alias — the next
+        // `syncVariableAliases()` will then re-evaluate them against
+        // the live registry (auto-adopt by raw location if the same
+        // address is still claimed by some other producer, or leave
+        // them alias-less otherwise).  `undefined` rather than ''
+        // matches the rest of the codebase's "no alias" convention.
+        return { ...variable, alias: trimmedNew.length > 0 ? trimmedNew : undefined }
+      }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            /* istanbul ignore if -- schema guarantees `interface.variables`; defensive */
+            if (!pou.interface?.variables) continue
+            for (let i = 0; i < pou.interface.variables.length; i++) {
+              pou.interface.variables[i] = cascade(pou.interface.variables[i])
+            }
+          }
+          const globals = slice.project.data.configurations.resource.globalVariables
+          if (globals) {
+            for (let i = 0; i < globals.length; i++) {
+              globals[i] = cascade(globals[i])
+            }
+          }
+        }),
+      )
+
+      return { renamed }
     },
 
     // -----------------------------------------------------------------------
@@ -1421,6 +1542,58 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return ok()
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {
+      // Phase 1 — write-time alias-uniqueness gate (global, across
+      // all producers).  Build a fresh registry from the live state
+      // and reject the edit on collision.  See
+      // `module-slots-layout.tsx::handleAliasChange` for the longer
+      // rationale.
+      const live = getState()
+      const sourceRef = { kind: 'modbus-tcp-remote' as const, ref: `${deviceName}:${pointId}` }
+      const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
+        live.deviceDefinitions?.configuration?.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (
+          live.deviceDefinitions?.configuration?.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
+      const pool = buildAddressPool(
+        {
+          pinMapping: {
+            pins:
+              live.deviceDefinitions?.pinMapping?.pinsByBoard[
+                live.deviceDefinitions?.configuration?.deviceBoard ?? ''
+              ] ?? [],
+          },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: live.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+      const registry = buildAliasRegistry(pool)
+      const validation = validateAliasEdit(registry, alias, sourceRef)
+      if (!validation.ok) {
+        return {
+          ok: false,
+          title: 'Alias already in use',
+          message: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+        }
+      }
+
+      // Phase 2 — capture the old alias and cascade rename onto
+      // bound variables BEFORE writing the new alias so the
+      // downstream sync sees variables pointing at the new name and
+      // refreshes locations rather than orphaning them.
+      const oldAlias =
+        live.project.data.remoteDevices
+          ?.find((d) => d.name === deviceName)
+          ?.modbusTcpConfig?.ioGroups?.find((g) => g.id === groupId)
+          ?.ioPoints?.find((p) => p.id === pointId)?.alias ?? ''
+      if (oldAlias) {
+        getState().projectActions.renameAlias(oldAlias, alias)
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)

@@ -27,19 +27,12 @@ import { DownloadIcon } from '@root/frontend/assets/icons/interface/Download'
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { RefreshIcon } from '@root/frontend/assets/icons/interface/Refresh'
 import { TrashCanIcon } from '@root/frontend/assets/icons/interface/TrashCan'
+import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { compareSemver, isCompatibleEditorVersion } from '@root/frontend/utils/semver'
 import type { RemoteCatalogEntry, RemoteVersionEntry } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-
-// Build-time global injected by the bundler (webpack DefinePlugin on
-// editor; Vite `define` on web).  Declared module-locally here so the
-// shared file resolves on web — editor also has a project-wide
-// declaration in `src/globals.d.ts` with the same type, which this
-// one duplicates (TypeScript merges identical `declare const`
-// declarations within scopes, so there's no conflict on editor).
-declare const APP_VERSION: string
 
 interface CatalogBrowserProps {
   installedVersions: Map<string, string>

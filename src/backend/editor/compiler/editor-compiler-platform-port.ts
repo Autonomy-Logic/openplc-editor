@@ -1,8 +1,8 @@
 /**
  * Editor-side implementation of `CompilerPlatformPort`.
  *
- * Wraps the existing editor handlers (`handleTranspileXMLtoST`,
- * `handleCompileArduinoProgram`, etc.) so the shared compile pipeline
+ * Wraps the existing editor handlers (`handleCompileArduinoProgram`,
+ * etc.) so the shared compile pipeline
  * (`backend/shared/compile/pipeline.ts`) can drive editor's compile
  * flow through the canonical platform-port contract.
  *
@@ -16,18 +16,29 @@
  *   - Translates the handler's return value back into the port's
  *     canonical result shape
  *
- * No new pipeline logic lives here — only the platform-specific glue
- * the editor needs to materialise the in-memory inputs to disk so
- * `xml2st` / `arduino-cli` subprocesses can consume them, and to
- * read the resulting artefacts back into memory for the pipeline.
+ * `transpileToSt` selects between two backends at runtime via
+ * `isNewTranspilerEnabled()` (env: `OPENPLC_USE_NEW_TRANSPILER`):
+ * the in-process JSON-fed transpiler
+ * (`backend/shared/transpilers/st-transpiler/`) when the flag is on,
+ * or the bundled `xml2st` subprocess (default) — serialising the
+ * project IR via `XmlGenerator` and running it through
+ * `handleTranspileXMLtoST` on disk, the same way the editor handled
+ * compilation before Phase 2.
  *
  * This module is editor-only (lives under `backend/editor/`); the
  * web platform implements the same port interface separately under
  * `middleware/adapters/web/`.
  */
 
+import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
 import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
+import {
+  fromSchemaShape,
+  type SchemaProjectData,
+  transpileToSt as runJsonTranspiler,
+} from '@root/backend/shared/transpilers/st-transpiler'
+import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -40,8 +51,8 @@ import type {
   PackageVppPluginResult,
   PlatformDeviceContext,
   PlatformLog,
-  TranspileXmlToStArgs,
-  TranspileXmlToStResult,
+  TranspileToStArgs,
+  TranspileToStResult,
   UploadArduinoBoardArgs,
   UploadResult,
   UploadRuntimeV3Args,
@@ -152,17 +163,54 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Spawn the bundled `xml2st` binary to transpile IEC 61131-3
-     * XML to ST.  The existing `handleTranspileXMLtoST` expects a
-     * file path (it opens the file via the subprocess's stdin), so
-     * we materialise the in-memory XML to a temp file first and
-     * read the produced `program.st` back from disk.
+     * Transpile the project IR to Structured Text. The toggle —
+     * `OPENPLC_USE_NEW_TRANSPILER` via `isNewTranspilerEnabled()` — selects
+     * between the in-process JSON-fed transpiler (new path, opt-in)
+     * and the bundled `xml2st` subprocess (legacy path, default).
+     *
+     * The legacy branch reproduces the pre-Phase-2 behaviour:
+     * serialise the project to IEC 61131-3 XML via the shared
+     * `XmlGenerator`, materialise it to `<sourceTargetFolder>/plc.xml`,
+     * run `handleTranspileXMLtoST` (which spawns the bundled `xml2st`
+     * binary), then read `program.st` back from disk.
      */
-    async transpileXmlToSt(args: TranspileXmlToStArgs, log: PlatformLog): Promise<TranspileXmlToStResult> {
+    async transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> {
+      if (isNewTranspilerEnabled()) {
+        try {
+          // Editor IPC delivers the schema-shape project data
+          // (discriminated-union POUs + singular `configuration`).
+          // The port's declared `projectData` type is port-shape, but
+          // the pipeline reaches us with the editor's schema-shape IPC
+          // payload (matching `compileProgram`'s actual contract).  The
+          // double cast bridges the static mismatch without serialising
+          // through `unknown` at runtime.
+          const ir = fromSchemaShape(args.projectData as unknown as SchemaProjectData)
+          const result = runJsonTranspiler(ir)
+          if (result.programSt === null || result.errors.length > 0) {
+            const message = result.errors.join('\n') || 'Failed to generate Structured Text'
+            log(message, 'error')
+            return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+          }
+          for (const warning of result.warnings) {
+            log(warning, 'info')
+          }
+          return { ok: true, programSt: result.programSt }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          log(`st-transpiler failed: ${message}`, 'error')
+          return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+        }
+      }
+
+      const xmlResult = XmlGenerator(args.projectData as never, 'old-editor')
+      if (!xmlResult.ok || !xmlResult.data) {
+        log(`XML generation failed: ${xmlResult.message}`, 'error')
+        return { ok: false, errors: [{ message: xmlResult.message, line: 0, column: 0, severity: 'error' }] }
+      }
       const xmlPath = join(context.sourceTargetFolderPath, 'plc.xml')
       try {
         await fs.mkdir(dirname(xmlPath), { recursive: true })
-        await fs.writeFile(xmlPath, args.xml, 'utf-8')
+        await fs.writeFile(xmlPath, xmlResult.data, 'utf-8')
 
         await handlers.handleTranspileXMLtoST(
           xmlPath,
@@ -170,7 +218,7 @@ export function createEditorCompilerPlatformPort(
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')
           },
-          args.xml2stArgs,
+          ['--keep-structs'],
         )
 
         const programStPath = join(context.sourceTargetFolderPath, 'program.st')

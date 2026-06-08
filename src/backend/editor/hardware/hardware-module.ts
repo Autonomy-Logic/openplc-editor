@@ -1,11 +1,10 @@
-import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
-import { promisify } from 'node:util'
 
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
+import { SerialPort as NodeSerialPort } from 'serialport'
 
 import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
@@ -95,46 +94,20 @@ class HardwareModule {
 
   // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<SerialPort[]> {
-    let xml2stBinaryPath = join(
-      this.binaryDirectoryPath,
-      'xml2st',
-      HardwareModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '',
-    )
-    if (HardwareModule.HOST_PLATFORM === 'win32') {
-      xml2stBinaryPath += '.exe'
-    }
-    const executeCommand = promisify(exec)
-
+    // Native `serialport` package replaces the legacy `xml2st
+    // --list-ports` subprocess (xml2st was retired when the JSON
+    // transpiler landed in-process; see
+    // `editor-compiler-platform-port.transpileToSt`).  `NodeSerialPort.list()`
+    // returns each port's `path` plus optional vendor metadata; map
+    // it onto the `{name, address}` shape the renderer expects.
     try {
-      const { stdout, stderr } = await executeCommand(`"${xml2stBinaryPath}" --list-ports`)
-
-      if (stderr) {
-        logger.warn(`xml2st stderr output: ${stderr}`)
-      }
-
-      let normalizedOutputString: SerialPort[] = [{ name: '', address: 'fallback' }]
-
-      if (stdout) {
-        try {
-          const parsedOutput = JSON.parse(stdout) as {
-            ports: {
-              name: string
-              address: string
-            }[]
-          }
-          normalizedOutputString = parsedOutput.ports.map((port) => ({
-            name: port.name ?? port.address,
-            address: port.address,
-          }))
-        } catch (parseError: unknown) {
-          logger.error(`Failed to parse xml2st output: ${String(parseError)}`)
-          return []
-        }
-      }
-
-      return normalizedOutputString
-    } catch (execError: unknown) {
-      logger.error(`Failed to execute xml2st: ${String(execError)}`)
+      const ports = await NodeSerialPort.list()
+      return ports.map((port) => ({
+        name: port.manufacturer ?? port.path,
+        address: port.path,
+      }))
+    } catch (error: unknown) {
+      logger.error(`Failed to enumerate serial ports: ${String(error)}`)
       return []
     }
   }

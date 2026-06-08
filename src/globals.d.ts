@@ -3,10 +3,11 @@
  */
 
 /**
- * Application version from package.json
- * @example "4.1.1"
+ * Per-app product name (e.g. "OpenPLC Editor"), injected per build. The
+ * shared About modal reads this; the app version itself is now imported from
+ * src/frontend/data/constants/app-version.ts, not injected as a global.
  */
-declare const APP_VERSION: string
+declare const APP_NAME: string
 
 /**
  * Build date in YYYY-MM-DD format
