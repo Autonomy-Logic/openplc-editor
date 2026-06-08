@@ -130,7 +130,7 @@ jobs:
     # underlying VS 2026 maxBuffer issue could trip x64 too on a
     # future runner rotation.  Pinning both today is cheaper than
     # debugging the same class of failure again in a few months.
-    runs-on: windows-2025
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -192,22 +192,27 @@ jobs:
   # Windows Build - ARM64
   # =============================================================================
   build-windows-arm64:
-    # Pin to windows-2025 (NOT windows-latest): `windows-latest`
-    # rotated to the `windows-2025-vs2026` image variant between the
-    # v4.2.1 (Jun 7) and v4.2.2 (Jun 8) release runs.  v4.2.1's
-    # successful build ran on the base `windows-2025` image (VS 2022
-    # default); v4.2.2's failed build ran on `windows-2025-vs2026`
-    # (Visual Studio 2026).  VS 2026's `vswhere`/PowerShell
-    # enumeration emits enough metadata that node-gyp's child_process
-    # stdout read overflows with `RangeError
+    # Pin to windows-2022 (the only label that still gets VS 2022):
+    # `windows-latest` rotated to the VS 2026 variant on Jun 8 and
+    # broke this job. v4.2.1 (Jun 7) ran on `Image: windows-2025`
+    # which AT THE TIME used the `win25` runner-images branch with
+    # VS 2022.  GitHub has since re-bound the `windows-2025` label
+    # to the `win25-vs2026` branch (VS 2026) — verified by an
+    # explicit `runs-on: windows-2025` resolving to `Image:
+    # windows-2025-vs2026` and failing identically.  So `windows-
+    # 2025` is no longer a working label for our purposes;
+    # `windows-2022` (Windows Server 2022 + VS 2022) is the only
+    # remaining GitHub-hosted image that ships VS 2022.
+    #
+    # The failure mode: VS 2026's `vswhere`/PowerShell enumeration
+    # emits enough metadata that node-gyp's child_process stdout
+    # read overflows with `RangeError
     # [ERR_CHILD_PROCESS_STDIO_MAXBUFFER]` — node-gyp then reports
-    # "Could not find any Visual Studio installation to use" and the
-    # ARM64 cross-compile of `@serialport/bindings-cpp` fails.
-    # Explicit pin to `windows-2025` (VS 2022 default) restores the
-    # environment that produced v4.2.0 / v4.2.1.  When node-gyp /
-    # electron-builder ship a fix for the VS 2026 maxBuffer issue
-    # we can revert to `windows-latest`.
-    runs-on: windows-2025
+    # "Could not find any Visual Studio installation to use" and
+    # the ARM64 cross-compile of `@serialport/bindings-cpp` fails.
+    # When node-gyp / electron-builder ship a fix we can revert to
+    # `windows-latest`.
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
