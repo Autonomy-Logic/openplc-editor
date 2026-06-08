@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { Commit } from '../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useActiveBranch } from '../../../../hooks/use-active-branch'
 import { CommitDetails } from './commit-details'
 import { CommitItem } from './commit-item'
 
@@ -13,12 +14,19 @@ type HistorySectionProps = {
 
 export function HistorySection({ projectId }: HistorySectionProps) {
   const versionControl = useVersionControl()
+  const [activeBranchName] = useActiveBranch(projectId)
   const [commits, setCommits] = useState<Commit[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isFetching, setIsFetching] = useState(false)
   const [selectedHash, setSelectedHash] = useState<string | null>(null)
+
+  // Reset pagination when the active branch changes
+  useEffect(() => {
+    setOffset(0)
+    setSelectedHash(null)
+  }, [activeBranchName])
 
   useEffect(() => {
     if (!versionControl) return
@@ -28,7 +36,7 @@ export function HistorySection({ projectId }: HistorySectionProps) {
     setIsFetching(true)
 
     versionControl
-      .listCommits(projectId, { limit: PAGE_SIZE, offset })
+      .listCommits(projectId, { limit: PAGE_SIZE, offset, branch: activeBranchName })
       .then((data) => {
         setCommits(data.commits)
         setTotal(data.total)
@@ -41,7 +49,7 @@ export function HistorySection({ projectId }: HistorySectionProps) {
         setIsLoading(false)
         setIsFetching(false)
       })
-  }, [projectId, offset, versionControl])
+  }, [projectId, offset, versionControl, activeBranchName])
 
   const hasMore = offset + PAGE_SIZE < total
 
@@ -52,7 +60,7 @@ export function HistorySection({ projectId }: HistorySectionProps) {
   if (isLoading) {
     return (
       <div className='space-y-2 p-3'>
-        {[...Array(5)].map((_, i) => (
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className='h-10 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800' />
         ))}
       </div>

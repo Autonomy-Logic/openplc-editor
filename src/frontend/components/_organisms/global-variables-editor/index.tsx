@@ -99,6 +99,7 @@ const GlobalVariablesEditor = () => {
 
   useEffect(() => {
     lastParsedCodeRef.current = editorCode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor.meta.name])
 
   useEffect(() => {
@@ -305,7 +306,6 @@ const GlobalVariablesEditor = () => {
       // Mark project as unsaved
       handleFileAndWorkspaceSavedState('Resource')
 
-      toast({ title: 'Global Variables updated', description: 'Changes applied successfully.' })
       setParseError(null)
       return true
     } catch (err) {

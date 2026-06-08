@@ -20,6 +20,12 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
     },
     libraries: { system, user },
   } = useOpenPLCStore()
+  // Project enablement: bundled libs (canonical) are always-on; opt-in
+  // libs only surface when the project enables them.  Joined here so
+  // every consumer below (the filtered list, the documentation
+  // lookup) sees the same scoped pool.
+  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
+  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
@@ -46,8 +52,13 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
     return userLibrary.name !== editor.meta.name
   })
 
-  // System Libraries filtering with type and text filter
-  const filteredLibraries = system.filter((library) =>
+  // System Libraries filtering — restrict to bundled (canonical) +
+  // project-enabled, then apply the text/POU-type filter.  Bundled
+  // libs are always-on regardless of project enablement.
+  const visiblePool = system.filter(
+    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
+  )
+  const filteredLibraries = visiblePool.filter((library) =>
     pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),

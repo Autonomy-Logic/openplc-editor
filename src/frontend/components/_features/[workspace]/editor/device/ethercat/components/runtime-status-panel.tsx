@@ -1,12 +1,11 @@
 import { cn } from '@root/frontend/utils/cn'
-import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import type {
-  EtherCATCycleMetrics,
   EtherCATMasterStatus,
   EtherCATPluginState,
   EtherCATRuntimeStatusResponse,
   EtherCATSlaveStatus,
-} from '@root/types/ethercat'
+} from '@root/middleware/shared/ports/ethercat-types'
+import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const POLL_INTERVAL_MS = 2000
@@ -61,57 +60,28 @@ function SlaveStateCell({ status }: { status: EtherCATSlaveStatus }) {
   )
 }
 
-function MetricCard({ label, value, unit }: { label: string; value: string | number; unit?: string }) {
-  return (
-    <div className='flex flex-col items-center rounded-md border border-neutral-200 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900'>
-      <span className='text-[10px] text-neutral-500 dark:text-neutral-400'>{label}</span>
-      <span className='text-sm font-semibold text-neutral-800 dark:text-neutral-200'>
-        {value}
-        {unit && <span className='ml-0.5 text-[10px] font-normal text-neutral-500'>{unit}</span>}
-      </span>
-    </div>
-  )
-}
-
 interface RuntimeStatusPanelProps {
   ipAddress: string | null
   jwtToken: string | null
   isConnected: boolean
-  /** Master name to filter from multi-master response. If omitted, uses first master or flat fields. */
+  /** Master name to filter from the response. If omitted, uses the first master. */
   masterName?: string
 }
 
 /**
- * Resolve the status for a specific master from the runtime response.
- * Tries the multi-master "masters" array first, then falls back to flat fields.
+ * Pick a master from the runtime response — by name when supplied, otherwise
+ * the first one. Returns null when the runtime hasn't reported any.
  */
 function resolveMasterStatus(
   response: EtherCATRuntimeStatusResponse,
   masterName?: string,
 ): EtherCATMasterStatus | null {
-  // Try multi-master array first
-  if (response.masters && response.masters.length > 0) {
-    if (masterName) {
-      const match = response.masters.find((m) => m.name === masterName)
-      if (match) return match
-    }
-    // Fallback: first master in array
-    return response.masters[0]
+  if (!response.masters || response.masters.length === 0) return null
+  if (masterName) {
+    const match = response.masters.find((m) => m.name === masterName)
+    if (match) return match
   }
-
-  // Fallback: flat fields (single-master backward compat)
-  if (response.plugin_state && response.slaves && response.metrics) {
-    return {
-      name: masterName ?? 'default',
-      plugin_state: response.plugin_state,
-      slave_count: response.slave_count ?? 0,
-      expected_wkc: response.expected_wkc ?? 0,
-      slaves: response.slaves,
-      metrics: response.metrics,
-    }
-  }
-
-  return null
+  return response.masters[0]
 }
 
 function extractErrorMessage(rawError: string): string {
@@ -262,7 +232,6 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected, masterName }: Ru
 
   const pluginState = masterStatus.plugin_state
   const stateColor = stateColorMap[pluginState] ?? 'gray'
-  const metrics: EtherCATCycleMetrics = masterStatus.metrics
 
   return (
     <div className='flex flex-col gap-3 rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'>
@@ -290,17 +259,12 @@ function RuntimeStatusPanel({ ipAddress, jwtToken, isConnected, masterName }: Ru
         </button>
       </div>
 
-      {/* Cycle metrics */}
-      {(pluginState === 'OPERATIONAL' || pluginState === 'RECOVERING' || pluginState === 'ERROR') && (
-        <div className='flex flex-wrap gap-2'>
-          <MetricCard label='Avg Cycle' value={metrics.avg_cycle_us} unit='us' />
-          <MetricCard label='Max Cycle' value={metrics.max_cycle_us} unit='us' />
-          <MetricCard label='Max Exchange' value={metrics.max_exchange_us} unit='us' />
-          <MetricCard label='Cycles' value={metrics.cycle_count.toLocaleString()} />
-          <MetricCard label='WKC Errors' value={metrics.wkc_error_count.toLocaleString()} />
-          {metrics.recovery_attempts > 0 && <MetricCard label='Recoveries' value={metrics.recovery_attempts} />}
-        </div>
-      )}
+      {/*
+       * Cycle metrics moved to the Device → Configuration screen
+       * (`board.tsx`), which now hosts both the PLC scan-cycle stats and
+       * the EtherCAT cycle stats in a unified card grid. This panel keeps
+       * the per-slave diagnostics that only make sense in the bus context.
+       */}
 
       {/* Slave table */}
       {masterStatus.slaves.length > 0 && (

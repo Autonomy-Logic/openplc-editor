@@ -50,7 +50,31 @@ function isBoolType(dataType: string): boolean {
 }
 
 /**
- * Value cell with local state to avoid re-rendering the entire table on every keystroke.
+ * Parse a user-entered value the same way the runtime exporter will.
+ * Accepts decimal, hex (0x.../#x...), TRUE/FALSE.  Returns NaN for unparseable input.
+ */
+function parseUserInput(input: string): number {
+  const trimmed = input.trim()
+  if (trimmed === '') return NaN
+  const lower = trimmed.toLowerCase()
+  if (lower === 'true') return 1
+  if (lower === 'false') return 0
+  if (/^(0x|#x)/i.test(trimmed)) {
+    return Number(trimmed.replace(/^#x/i, '0x'))
+  }
+  return Number(trimmed)
+}
+
+/**
+ * Value cell with local state and range validation.
+ *
+ * On blur, parses the input the same way the runtime config exporter does,
+ * then validates against the type's range.  Invalid input is NOT silently
+ * clamped: the cell shows a red border + tooltip with the valid range so
+ * the operator notices and decides explicitly.  The raw user string is
+ * still propagated upward so the project file reflects what was typed --
+ * the runtime's strict_sdo will reject the SDO write at startup if the
+ * operator ignores the warning.
  */
 const ValueCell = ({
   entry,
@@ -65,22 +89,28 @@ const ValueCell = ({
     setLocalValue(entry.value)
   }, [entry.value])
 
+  const range = getDataTypeRange(entry.dataType, entry.bitLength)
+
+  const validation = useMemo<{ valid: boolean; message?: string }>(() => {
+    if (localValue.trim() === '') return { valid: true }
+    const num = parseUserInput(localValue)
+    if (isNaN(num)) {
+      return { valid: false, message: `Cannot parse "${localValue}" as ${entry.dataType}` }
+    }
+    if (range && (num < range.min || num > range.max)) {
+      return {
+        valid: false,
+        message: `${num} out of range for ${entry.dataType} (allowed: ${range.min} .. ${range.max})`,
+      }
+    }
+    return { valid: true }
+  }, [localValue, entry.dataType, range])
+
   const handleBlur = useCallback(() => {
     if (localValue !== entry.value) {
-      const range = getDataTypeRange(entry.dataType, entry.bitLength)
-      if (range && localValue !== '') {
-        const num = Number(localValue)
-        if (!isNaN(num)) {
-          const clamped = Math.max(range.min, Math.min(range.max, num))
-          const clampedStr = String(clamped)
-          setLocalValue(clampedStr)
-          onValueChange(entry.index, entry.subIndex, clampedStr)
-          return
-        }
-      }
       onValueChange(entry.index, entry.subIndex, localValue)
     }
-  }, [entry.index, entry.subIndex, entry.value, entry.dataType, entry.bitLength, localValue, onValueChange])
+  }, [entry.index, entry.subIndex, entry.value, localValue, onValueChange])
 
   if (isBoolType(entry.dataType)) {
     return (
@@ -97,7 +127,6 @@ const ValueCell = ({
     )
   }
 
-  const range = getDataTypeRange(entry.dataType, entry.bitLength)
   const isFloat = ['REAL', 'REAL32', 'FLOAT', 'LREAL', 'REAL64', 'DOUBLE'].includes(entry.dataType.toUpperCase())
   const isNumeric = range !== null
 
@@ -108,9 +137,14 @@ const ValueCell = ({
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
-      min={isNumeric ? range?.min : undefined}
-      max={isNumeric ? range?.max : undefined}
-      className='h-[24px] w-full max-w-[120px] rounded border border-neutral-300 bg-white px-1.5 font-mono text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300'
+      title={validation.valid ? undefined : validation.message}
+      aria-invalid={!validation.valid}
+      className={cn(
+        'h-[24px] w-full max-w-[120px] rounded border bg-white px-1.5 font-mono text-xs outline-none dark:bg-neutral-950',
+        validation.valid
+          ? 'border-neutral-300 text-neutral-700 focus:border-brand dark:border-neutral-700 dark:text-neutral-300'
+          : 'border-red-500 text-red-600 focus:border-red-500 dark:text-red-400',
+      )}
     />
   )
 }

@@ -57,10 +57,13 @@ export type {
 export type { CompilerPort } from './compiler-port'
 export type { DebuggerPort } from './debugger-port'
 export type { DevicePort } from './device-port'
+export type { NavigationPort, NavigationSearch } from './navigation-port'
+export { buildNavigationUrl } from './navigation-port'
 export type { OrchestratorPort } from './orchestrator-port'
 export type { ProjectPort } from './project-port'
 export type { RuntimePort } from './runtime-port'
 export type { SimulatorPort } from './simulator-port'
+export type { StlibSource, StlibSourcePort } from './stlib-source-port'
 export type { SystemPort } from './system-port'
 export type { ThemePort } from './theme-port'
 export type { VersionControlPort } from './version-control-port'
@@ -92,8 +95,6 @@ export type {
   // Console
   LogObject,
   Md5VerifyResult,
-  ModbusRTUConfig,
-  ModbusTCPConfig,
   PinType,
   // System
   Platform,
@@ -131,7 +132,13 @@ export type {
 export { isV4Logs } from './types'
 
 // --- PLC type system Zod schemas ---
-export { BaseLibraryPouSchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from './plc-schemas'
+export {
+  BaseLibraryPouSchema,
+  BaseLibraryVariableSchema,
+  baseTypeEnum,
+  baseTypeSchema,
+  genericTypeSchema,
+} from './plc-schemas'
 
 // --- Port parameter/result types ---
 export type { CompileProgramArgs, DebugCompileArgs, ExportXmlArgs } from './compiler-port'
@@ -146,6 +153,9 @@ export type {
 export type {
   CompilationStatusResult,
   CreateUserParams,
+  DiscoverDevicesOptions,
+  DiscoverDevicesResult,
+  DiscoveredRuntimeDevice,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,

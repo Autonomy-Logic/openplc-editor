@@ -1,103 +1,40 @@
-import { DeviceConfiguration, DevicePin } from '@root/backend/shared/types/PLC/devices'
-import { PLCPou, PLCProject } from '@root/backend/shared/types/PLC/open-plc'
-import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
+import { buildProjectFileContent } from '@root/backend/shared/project/create-project-files'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
   projectDefaultDirectories,
-  projectDefaultFilesMapSchema,
 } from '@root/types/IPC/project-service'
 import { writeFileSync } from 'fs'
 
 import { createDirectory, fileOrDirectoryExists, ipcPouToFlat } from '../../../utils'
 import { CreateJSONFile } from '../../../utils'
 
-const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
-  type: 'program',
-  data: {
-    name: 'main',
-    language: language,
-    variables: [],
-    documentation: '',
-    body: (() => {
-      switch (language) {
-        case 'ld':
-          return { language, value: { name: 'main', rungs: [] } }
-        case 'fbd':
-          return {
-            language,
-            value: {
-              name: 'main',
-              rung: {
-                comment: '',
-                edges: [],
-                nodes: [],
-              },
-            },
-          }
-        default:
-          return { language, value: '' }
-      }
-    })(),
-  },
-})
-
-const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => ({
-  meta: {
-    name: dataToCreateProjectFile.name,
-    type: dataToCreateProjectFile.type,
-  },
-  data: {
-    pous: [],
-    dataTypes: [],
-    configuration: {
-      resource: {
-        tasks: [
-          {
-            name: 'task0',
-            triggering: 'Cyclic',
-            interval: dataToCreateProjectFile.time,
-            priority: 1,
-          },
-        ],
-        instances: [
-          {
-            name: 'instance0',
-            program: 'main',
-            task: 'task0',
-          },
-        ],
-        globalVariables: [],
-      },
-    },
-  },
-})
-
+/**
+ * Electron-side orchestration for project creation.
+ *
+ * The "what content do we write?" half lives in
+ * `backend/shared/project/create-project-files` so the web editor's
+ * backend service can reuse it.  This module is now the thin
+ * `mkdir` / `writeFile` glue around that content.
+ */
 const createProjectDefaultStructure = (
   basePath: string,
   dataToCreateProjectFile: CreateProjectFileProps,
 ): CreateProjectDefaultDirectoriesResponse => {
-  const content: {
-    project: PLCProject | null
-    pous: PLCPou[]
-    deviceConfiguration: DeviceConfiguration | null
-    devicePinMapping: DevicePin[]
-  } = {
-    project: null,
-    pous: [],
-    deviceConfiguration: null,
-    devicePinMapping: [],
-  }
+  // 1. Author all file content (shared, no fs).
+  const built = buildProjectFileContent(dataToCreateProjectFile)
+  const isLibrary = dataToCreateProjectFile.type === 'plc-library'
 
-  /**
-   * Create the default directories in the project structure
-   */
-
-  // Create all the default directories if they do not exist
-  const directories = projectDefaultDirectories
-  for (const directory of directories) {
+  // 2. Create directories.  Use the canonical list from
+  //    `projectDefaultDirectories` so a future "deletedPous" or
+  //    similar directory addition picks up automatically.  For
+  //    library projects we still create the device dirs (they stay
+  //    empty) — keeping the directory shape uniform across project
+  //    types means save-flow consumers don't need their own
+  //    library-only branch just to find the directory tree.
+  for (const directory of projectDefaultDirectories) {
     const dirPath = `${basePath}/${directory}`
     try {
       if (!fileOrDirectoryExists(dirPath)) createDirectory(dirPath)
@@ -107,139 +44,110 @@ const createProjectDefaultStructure = (
         error: {
           title: 'Error creating project directories',
           description: `Failed to create directory at ${dirPath}`,
-          error: error,
+          error,
         },
       }
     }
   }
 
-  /**
-   * Create the default files in the project structure
-   */
-
-  // Create the root files
-  // These are files that are not in a subdirectory, but directly in the project root
-  // For example: project.json
-  const rootFiles = Object.entries(projectDefaultFilesMapSchema).filter(
-    ([file]) => !file.includes('/') && file.includes('.'),
-  )
-  for (const [file, _schema] of rootFiles) {
-    const filePath = basePath
-
-    switch (file) {
-      case 'project.json':
-        content.project = createProjectFile(dataToCreateProjectFile)
-        try {
-          CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
-        } catch (error) {
-          return {
-            success: false,
-            error: {
-              title: 'Error creating project file',
-              description: `Failed to create project file at ${filePath}`,
-              error: error,
-            },
-          }
-        }
-        break
-      default:
-        break
-    }
-  }
-
-  // Create the directories and files that are in subdirectories
-  // For example: devices/configuration.json
-  const fileDirectories = Object.entries(projectDefaultFilesMapSchema).filter(
-    ([file]) => file.includes('/') && file.includes('.'),
-  )
-  for (const [file, schema] of fileDirectories) {
-    const [directory, fileName] = file.split('/')
-    const filePath = `${basePath}/${directory}`
-    const defaultValue = getDefaultSchemaValues(schema)
-
-    try {
-      switch (file) {
-        case 'devices/configuration.json':
-          content.deviceConfiguration = defaultValue as DeviceConfiguration
-          content.deviceConfiguration.communicationConfiguration.modbusRTU.rtuBaudRate = '115200'
-          try {
-            CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
-          } catch (error) {
-            return {
-              success: false,
-              error: {
-                title: 'Error creating device configuration file',
-                description: `Failed to create device configuration file at ${filePath}`,
-                error: error,
-              },
-            }
-          }
-          break
-        case 'devices/pin-mapping.json':
-          content.devicePinMapping = defaultValue as DevicePin[]
-          try {
-            CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
-          } catch (error) {
-            return {
-              success: false,
-              error: {
-                title: 'Error creating device pin mapping file',
-                description: `Failed to create device pin mapping file at ${filePath}`,
-                error: error,
-              },
-            }
-          }
-          break
-        default:
-          break
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: {
-          title: 'Error creating project directories',
-          description: `Failed to create directory or file at ${filePath}`,
-          error: error,
-        },
-      }
-    }
-  }
-
-  const pou = definePou(dataToCreateProjectFile.language)
-  const pouPath = `${basePath}/pous/${pou.type}s`
-
+  // 3. Write project.json from the shared-built object.
   try {
-    if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
-    const flat = ipcPouToFlat(pou)
-    const extension: string = getExtensionFromLanguage(flat.body.language)
-    const textContent: string = serializePouToText(flat)
-    const filePath = `${pouPath}/${flat.name}${extension}`
-    writeFileSync(filePath, textContent, 'utf-8')
+    CreateJSONFile(basePath, JSON.stringify(built.project, null, 2), 'project')
   } catch (error) {
     return {
       success: false,
       error: {
-        title: 'Error creating POU file',
-        description: `Failed to create POU file at ${pouPath}`,
-        error: error,
+        title: 'Error creating project file',
+        description: `Failed to create project file at ${basePath}`,
+        error,
       },
     }
   }
 
-  content.pous.push(pou)
+  // 4. Device-level files.  Identical content for both project
+  //    types — libraries get the same empty-but-valid skeletons so
+  //    the save pipeline can read them later without branching.
+  try {
+    CreateJSONFile(`${basePath}/devices`, JSON.stringify(built.deviceConfiguration, null, 2), 'configuration')
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        title: 'Error creating device configuration file',
+        description: `Failed to create device configuration file at ${basePath}/devices`,
+        error,
+      },
+    }
+  }
+
+  try {
+    CreateJSONFile(`${basePath}/devices`, JSON.stringify(built.devicePinMapping, null, 2), 'pin-mapping')
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        title: 'Error creating device pin mapping file',
+        description: `Failed to create device pin mapping file at ${basePath}/devices`,
+        error,
+      },
+    }
+  }
+
+  // 5. Library-only: emit the `library.json` manifest template.  No
+  //    POUs are created for libraries — the manifest is the single
+  //    "open this by default" entry.
+  if (isLibrary && built.libraryManifest !== undefined) {
+    try {
+      writeFileSync(`${basePath}/library.json`, built.libraryManifest, 'utf-8')
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error creating library manifest',
+          description: `Failed to create library.json at ${basePath}`,
+          error,
+        },
+      }
+    }
+  }
+
+  // 6. PLC-project-only: write the default `main` POU.  Libraries
+  //    skip this entirely — the user creates their own functions /
+  //    function-blocks / data types after the project opens.
+  if (!isLibrary && built.pous.length > 0) {
+    const pou = built.pous[0]
+    const pouPath = `${basePath}/pous/${pou.type}s`
+    try {
+      if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
+      const flat = ipcPouToFlat(pou)
+      const extension: string = getExtensionFromLanguage(flat.body.language)
+      const textContent: string = serializePouToText(flat)
+      writeFileSync(`${pouPath}/${flat.name}${extension}`, textContent, 'utf-8')
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error creating POU file',
+          description: `Failed to create POU file at ${pouPath}`,
+          error,
+        },
+      }
+    }
+  }
 
   return {
     success: true,
     data: {
       meta: { path: basePath },
-      content: content as {
-        project: PLCProject
-        pous: PLCPou[]
-        deviceConfiguration: DeviceConfiguration
-        devicePinMapping: DevicePin[]
+      content: {
+        project: built.project,
+        pous: built.pous,
+        deviceConfiguration: built.deviceConfiguration,
+        devicePinMapping: built.devicePinMapping,
+        ...(built.libraryManifest !== undefined ? { libraryManifest: built.libraryManifest } : {}),
       },
     },
   }
 }
 
-export { createProjectDefaultStructure, createProjectFile }
+export { createProjectDefaultStructure }

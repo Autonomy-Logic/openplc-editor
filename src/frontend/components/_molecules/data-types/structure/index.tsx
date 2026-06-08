@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import type { PLCDataType, PLCStructureVariable } from '../../../../../middleware/shared/ports/types'
+import type { PLCStructureVariable } from '../../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
@@ -58,6 +58,15 @@ const StructureDataType = () => {
     })
   }
 
+  // `updateDatatype` is a full replace.  Read the current entry from
+  // the store and spread it before writing so we don't strip any
+  // field the structure schema may carry beyond `variable`.
+  const writeVariables = (newVariables: PLCStructureVariable[]) => {
+    const current = dataTypes.find((dt) => dt.name === editor.meta.name)
+    if (!current || current.derivation !== 'structure') return
+    updateDatatype(editor.meta.name, { ...current, variable: newVariables })
+  }
+
   const handleCreateStructureVariable = () => {
     captureAndPush(editor.meta.name)
 
@@ -98,18 +107,14 @@ const StructureDataType = () => {
         : structureVariables[selectedRow]
 
     if (!structureVariable || !structureVariable.type) {
-      updateDatatype(editor.meta.name, {
-        derivation: 'structure',
-        name: editor.meta.name,
-        variable: [
-          ...structureVariables,
-          {
-            name: getNextVariableName(baseName),
-            type: { definition: 'base-type', value: 'DINT' },
-            initialValue: { simpleValue: { value: '' } },
-          },
-        ],
-      } as unknown as PLCDataType)
+      writeVariables([
+        ...structureVariables,
+        {
+          name: getNextVariableName(baseName),
+          type: { definition: 'base-type', value: 'DINT' },
+          initialValue: { simpleValue: { value: '' } },
+        },
+      ])
       updateModelStructure({
         selectedRow: structureVariables.length,
       })
@@ -123,24 +128,16 @@ const StructureDataType = () => {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      updateDatatype(editor.meta.name, {
-        derivation: 'structure',
-        name: editor.meta.name,
-        variable: [...structureVariables, newVariable],
-      } as unknown as PLCDataType)
+      writeVariables([...structureVariables, newVariable])
       updateModelStructure({
         selectedRow: structureVariables.length,
       })
     } else {
-      updateDatatype(editor.meta.name, {
-        derivation: 'structure',
-        name: editor.meta.name,
-        variable: [
-          ...structureVariables.slice(0, selectedRow + 1),
-          newVariable,
-          ...structureVariables.slice(selectedRow + 1),
-        ],
-      } as unknown as PLCDataType)
+      writeVariables([
+        ...structureVariables.slice(0, selectedRow + 1),
+        newVariable,
+        ...structureVariables.slice(selectedRow + 1),
+      ])
       updateModelStructure({
         selectedRow: selectedRow + 1,
       })
@@ -159,11 +156,7 @@ const StructureDataType = () => {
 
     const updatedVariables = [...structureVariables.slice(0, selectedRow), ...structureVariables.slice(selectedRow + 1)]
 
-    updateDatatype(editor.meta.name, {
-      derivation: 'structure',
-      name: editor.meta.name,
-      variable: updatedVariables,
-    } as unknown as PLCDataType)
+    writeVariables(updatedVariables)
 
     let newSelectedRow = selectedRow - 1
     if (newSelectedRow < 0 && updatedVariables.length > 0) {

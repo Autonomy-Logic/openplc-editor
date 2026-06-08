@@ -112,6 +112,33 @@ const CreateServerEditor = (
   meta: { name, protocol },
 })
 
+const CreateVendorScreenEditor = (name: string, screenName: string): EditorModel => ({
+  type: 'plc-vendor-screen',
+  meta: { name, screenName },
+})
+
+const CreatePackageManagerEditor = (name = 'Package Manager'): EditorModel => ({
+  type: 'plc-package-manager',
+  meta: { name },
+})
+
+const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
+  type: 'plc-library-manager',
+  meta: { name },
+})
+
+/** Canonical tab name + factory for the Library Project's manifest
+ *  editor.  Display label (also the file-slice key the dirty
+ *  tracker + save flow look up under); intentionally NOT the on-
+ *  disk filename — the file is `library.json` and the save flow
+ *  joins it against `project.meta.path` independently. */
+const LIBRARY_MANIFEST_TAB_NAME = 'Manifest'
+
+const CreateLibraryManifestEditor = (name = LIBRARY_MANIFEST_TAB_NAME): EditorModel => ({
+  type: 'plc-library-manifest',
+  meta: { name },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -133,6 +160,14 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEtherCATDeviceEditor(name, elementType.busName, elementType.deviceId)
     case 'server':
       return CreateServerEditor(name, elementType.protocol)
+    case 'vendor-screen':
+      return CreateVendorScreenEditor(name, elementType.screenName)
+    case 'package-manager':
+      return CreatePackageManagerEditor(name)
+    case 'library-manager':
+      return CreateLibraryManagerEditor(name)
+    case 'library-manifest':
+      return CreateLibraryManifestEditor(name)
   }
 }
 
@@ -141,9 +176,14 @@ export {
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
+  CreateLibraryManagerEditor,
+  CreateLibraryManifestEditor,
+  CreatePackageManagerEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,
   CreateRemoteDeviceEditor,
   CreateResourceEditor,
   CreateServerEditor,
+  CreateVendorScreenEditor,
+  LIBRARY_MANIFEST_TAB_NAME,
 }

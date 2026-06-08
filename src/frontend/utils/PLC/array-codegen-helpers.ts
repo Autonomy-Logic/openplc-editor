@@ -91,11 +91,27 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * Both scalars and arrays use pointers:
  * - Scalars: pointer to the single value
  * - Arrays: pointer to the first element of the table
+ *
+ * Every base type — including STRING / WSTRING — resolves to the
+ * strucpp IECVar / IECStringVar wrapper (e.g. `strucpp::IEC_INT =
+ * IECVar<INT_t>`, `strucpp::IEC_STRING = IECStringVar<254>`).  The
+ * single, uniform qualification keeps the c_blocks.h ↔ strucpp
+ * runtime ABI byte-identical for every elementary type — no parallel
+ * raw POD shape, no copy-in/copy-out stub at scan boundaries.
+ *
+ * User-syntax consequence for STRING / WSTRING: the historical
+ * `name.len` / `name.body[i]` pattern is replaced by `name.length()`
+ * / `name[i]` (read-only — returns by value) / `name.c_str()` /
+ * `name = "literal";` — exposed by `IECStringVar`.  Byte-level
+ * mutation goes through `auto raw = name.get(); raw[i] = '…';
+ * name.set(raw);`.  See `generateCBlocksCode.ts` for the file-scope
+ * numeric raw typedefs that still cover the user's local-variable
+ * declarations inside `setup()` / `loop()`.
  */
 const generateStructMember = (variable: PLCVariable): string => {
   const iecType = getVariableIECType(variable)
   const name = variable.name.toUpperCase()
-  return `  ${iecType} *${name};\n`
+  return `  strucpp::${iecType} *${name};\n`
 }
 
 export {

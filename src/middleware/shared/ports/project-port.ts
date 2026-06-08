@@ -45,9 +45,37 @@ export interface ProjectResponse {
     meta: ProjectMeta
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
+    /** Pin mappings parsed from `devices/pin-mapping.json`. The
+     *  per-board dict (`Record<string, DevicePin[]>`) is the
+     *  canonical shape; the legacy flat array is still accepted
+     *  on load and auto-migrated by the store on the next save.
+     *  See `pinMappingFileSchema` for the on-disk contract. */
+    devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
+    /**
+     * Raw file contents as returned by the backend (path → text), captured
+     * before parsing. Used by the save flow to upload byte-identical content
+     * for files the user didn't edit, avoiding phantom "modified" diffs that
+     * arise from parse-serialize formatting drift.
+     */
+    rawLoadedFiles?: Record<string, string>
+    /**
+     * Whether the current user has permission to persist changes to this
+     * project. Gates only backend writes (save/commit/branch/stash/discard);
+     * in-memory editing, simulation, and compilation stay enabled so a viewer
+     * works on a local copy.  Absent ⇒ treated as `true` (desktop editor and
+     * dev:local mode have no remote permission concept).
+     */
+    canEdit?: boolean
+    /**
+     * Resolved project README. Backend prefers the on-disk `README.md`
+     * over the legacy `project.readme` column, so this is the single
+     * source of truth — `null` means the project has no README (file
+     * absent and column empty). Absent (`undefined`) ⇒ adapter doesn't
+     * expose READMEs (desktop editor, dev:local).
+     */
+    readme?: string | null
   }
   error?: {
     title: string
@@ -64,10 +92,20 @@ export interface WriteProjectFiles {
   projectPath: string
   /** Pre-serialized project.json content */
   projectJson: string
-  /** Pre-serialized devices/configuration.json content */
-  deviceConfig: string
-  /** Pre-serialized devices/pin-mapping.json content */
-  pinMapping: string
+  /** Pre-serialized devices/configuration.json content.  `undefined`
+   *  for project types that don't own this file (library projects);
+   *  the backend skips the write rather than truncating the on-disk
+   *  copy to an empty string. */
+  deviceConfig?: string
+  /** Pre-serialized devices/pin-mapping.json content.  Same
+   *  optional-on-libraries semantics as `deviceConfig`. */
+  pinMapping?: string
+  /** Pre-serialized library.json content for library projects.
+   *  `undefined` for PLC projects (no manifest file) and for
+   *  library projects whose manifest tab hasn't been mounted this
+   *  session (no in-memory buffer to persist).  Backend skips the
+   *  write when undefined — never truncates the on-disk copy. */
+  libraryManifest?: string
   /** POU files with pre-serialized IEC text content */
   pouFiles: RawProjectFile[]
   /** Server config files with pre-serialized JSON content */
@@ -113,12 +151,24 @@ export interface RawProjectFiles {
     deviceConfig: string
     /** Raw content of devices/pin-mapping.json */
     pinMapping: string
+    /** Raw content of `library.json` for library projects.  Empty
+     *  string for PLC projects (no manifest file) and for library
+     *  projects whose disk shape is missing the file (defensive —
+     *  the manifest editor seeds a template on first save). */
+    libraryManifest: string
     /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
     pouFiles: RawProjectFile[]
     /** Raw server config files from devices/servers/ */
     serverFiles: RawProjectFile[]
     /** Raw remote device config files from devices/remote/ */
     remoteDeviceFiles: RawProjectFile[]
+    /** See {@link ProjectResponse.data.canEdit}.  Carried through the
+     *  raw layer so adapters that build `ProjectResponse` from a raw
+     *  fetch don't have to round-trip the details endpoint twice. */
+    canEdit?: boolean
+    /** See {@link ProjectResponse.data.readme}.  Carried through the
+     *  raw layer for the same reason as `canEdit`. */
+    readme?: string | null
   }
   error?: { title: string; description: string }
 }
@@ -167,6 +217,24 @@ export interface ProjectPort {
   getRecentProjects(): Promise<RecentProject[]>
 
   /**
+   * Drop a project entry from the recent-projects list without
+   * touching disk. Used by the start-screen 3-dot menu's "Remove
+   * from list" action. Disk state is preserved — re-opening the
+   * project by path later re-adds it to the recent list.
+   */
+  removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Recursively delete a project directory and drop its entry from
+   * the recent list. Destructive — the editor surfaces a confirmation
+   * modal before invoking this. Implementations gate the recursive
+   * delete on the directory actually containing a top-level
+   * `project.json` to refuse arbitrary paths (stale history entries
+   * pointing at user-home directories etc.).
+   */
+  deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
    * Read a file's content by path.
    * Editor: reads from local filesystem via IPC.
    * Web: reads from in-memory project state or API.
@@ -200,4 +268,33 @@ export interface ProjectPort {
    * Web: not applicable (never fires).
    */
   onFileExternalChange?(callback: (filePath: string) => void): Unsubscribe
+
+  /**
+   * Fetch the current README for a project.  Returns `null` when the
+   * project has no README (file absent and legacy column empty).
+   * Optional — desktop editor returns `null` since there's no remote
+   * README concept in that mode.
+   */
+  getReadme?(projectId: string): Promise<string | null>
+
+  /**
+   * Save the project README.  `content === null` deletes the README
+   * (creates a `git rm` commit on the default branch); an empty string
+   * keeps the file present but empty.  `commitMessage` overrides the
+   * default `docs: create/update/remove README` subject.  Optional —
+   * desktop editor returns `{ success: false }` until file-level
+   * README editing is wired up there.
+   */
+  saveReadme?(
+    projectId: string,
+    content: string | null,
+    opts?: { commitMessage?: string },
+  ): Promise<{
+    success: boolean
+    /** Backend-reported action — useful for tailoring success toasts. */
+    action?: 'noop' | 'create' | 'update' | 'remove'
+    /** True when the same call migrated the legacy column into a commit. */
+    migrated?: boolean
+    error?: string
+  }>
 }

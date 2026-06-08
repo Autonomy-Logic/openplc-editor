@@ -8,6 +8,7 @@ import {
 } from '../../../../../../../_atoms/graphical-editor/ladder/node-builders'
 import { BlockNode, BlockVariant } from '../../../../../../../_atoms/graphical-editor/ladder/utils/types'
 import { buildEdge } from '../../edges'
+import { hasBranchOnHandle } from '../handle-branch'
 
 export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []
@@ -19,11 +20,15 @@ export const renderVariableBlock = <T extends BlockVariant>(rung: RungLadderStat
 
   const inputHandles =
     blockElement.data.inputHandles.length > 1
-      ? blockElement.data.inputHandles.slice(1, blockElement.data.inputHandles.length)
+      ? blockElement.data.inputHandles
+          .slice(1, blockElement.data.inputHandles.length)
+          .filter((handle) => !hasBranchOnHandle(rung, blockElement.id, handle.id as string))
       : []
   const outputHandles =
     blockElement.data.outputHandles.length > 1
-      ? blockElement.data.outputHandles.slice(1, blockElement.data.outputHandles.length)
+      ? blockElement.data.outputHandles
+          .slice(1, blockElement.data.outputHandles.length)
+          .filter((handle) => !hasBranchOnHandle(rung, blockElement.id, handle.id as string))
       : []
 
   inputHandles.forEach((inputHandle) => {

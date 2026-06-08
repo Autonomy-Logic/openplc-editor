@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
 import { createEditorSlice } from '../slices/editor/slice'
@@ -34,6 +35,7 @@ function makeStore() {
     ...createLadderFlowSlice(...args),
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
+    ...createAISlice(...args),
     ...createSharedSlice(...args),
   }))
 }
@@ -127,6 +129,23 @@ describe('createSharedSlice', () => {
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
         expect(state.libraries.user).toHaveLength(3)
+      })
+
+      it('seeds ladderFlows when creating an LD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'LdProg', language: 'ld' })
+        const state = store.getState()
+        const flow = state.ladderFlows.find((f) => f.name === 'LdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rungs).toEqual([])
+      })
+
+      it('seeds fbdFlows when creating an FBD POU', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdProg', language: 'fbd' })
+        const state = store.getState()
+        const flow = state.fbdFlows.find((f) => f.name === 'FbdProg')
+        expect(flow).toBeDefined()
+        expect(flow!.rung.nodes).toEqual([])
+        expect(flow!.rung.edges).toEqual([])
       })
     })
 
@@ -279,6 +298,23 @@ describe('createSharedSlice', () => {
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'LdCopy')
         expect(copyPou).toBeDefined()
         expect(copyPou!.body.language).toBe('ld')
+
+        // The duplicate must also seed ladderFlows so the editor renders.
+        const flow = store.getState().ladderFlows.find((f) => f.name === 'LdCopy')
+        expect(flow).toBeDefined()
+      })
+
+      it('duplicates a POU with FBD language and seeds fbdFlows', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'FbdSource', language: 'fbd' })
+        const result = store.getState().pouActions.duplicate('FbdSource', 'FbdCopy')
+        expect(result.ok).toBe(true)
+
+        const copyPou = store.getState().project.data.pous.find((p) => p.name === 'FbdCopy')
+        expect(copyPou).toBeDefined()
+        expect(copyPou!.body.language).toBe('fbd')
+
+        const flow = store.getState().fbdFlows.find((f) => f.name === 'FbdCopy')
+        expect(flow).toBeDefined()
       })
 
       it('duplicates a POU that has no interface variables (null branch)', () => {
@@ -769,6 +805,132 @@ describe('createSharedSlice', () => {
         const result = store.getState().remoteDeviceActions.rename('OldDevice', 'ExistingDevice')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Device name already exists')
+      })
+    })
+  })
+
+  // =========================================================================
+  // ethercatDeviceActions
+  // =========================================================================
+  describe('ethercatDeviceActions', () => {
+    function addEthercatBus(name: string, slaves: Array<{ id: string; name: string }>) {
+      store.getState().projectActions.createRemoteDevice({
+        data: { name, protocol: 'ethercat' },
+      })
+      store.getState().projectActions.updateEthercatConfig(name, {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
+        devices: slaves as never,
+      })
+      for (const slave of slaves) {
+        store
+          .getState()
+          .editorActions.addModel({ type: 'plc-remote-device', meta: { name: slave.name, protocol: 'ethercat' } })
+        store.getState().fileActions.addFile({ name: slave.name, type: 'ethercat-device', filePath: name })
+        store.getState().tabsActions.updateTabs({
+          name: slave.name,
+          elementType: { type: 'ethercat-device', busName: name, deviceId: slave.id },
+        })
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // delete
+    // -----------------------------------------------------------------------
+    describe('delete', () => {
+      beforeEach(() => {
+        addEthercatBus('bus1', [{ id: 'slave-1', name: 'EK1100' }])
+      })
+
+      it('removes the slave from project, files, tabs and editor', () => {
+        store.getState().editorActions.setEditor({
+          type: 'plc-remote-device',
+          meta: { name: 'EK1100', protocol: 'ethercat' },
+        })
+
+        const result = store.getState().ethercatDeviceActions.delete('bus1', 'slave-1')
+        expect(result).toEqual({ ok: true })
+
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        expect(bus?.ethercatConfig?.devices).toHaveLength(0)
+        expect(state.files['EK1100']).toBeUndefined()
+        expect(state.tabs.some((t) => t.name === 'EK1100')).toBe(false)
+        expect(state.editor.type).toBe('available')
+      })
+
+      it('returns error when the bus does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.delete('missing-bus', 'slave-1')
+        expect(result).toEqual({ ok: false, message: 'Bus not found' })
+      })
+
+      it('returns error when the slave id does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.delete('bus1', 'missing-slave')
+        expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
+      })
+
+      it('does not clear the editor when a different slave is active', () => {
+        store.getState().editorActions.setEditor({
+          type: 'plc-remote-device',
+          meta: { name: 'other-device', protocol: 'ethercat' },
+        })
+        store.getState().ethercatDeviceActions.delete('bus1', 'slave-1')
+        expect(store.getState().editor.meta.name).toBe('other-device')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // rename
+    // -----------------------------------------------------------------------
+    describe('rename', () => {
+      beforeEach(() => {
+        addEthercatBus('bus1', [
+          { id: 'slave-1', name: 'EK1100' },
+          { id: 'slave-2', name: 'EL1809' },
+        ])
+        addEthercatBus('bus2', [{ id: 'slave-3', name: 'EL1809_01' }])
+      })
+
+      it('renames the slave across project, files and tabs', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100-renamed')
+        expect(result).toEqual({ ok: true })
+
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        const slave = bus?.ethercatConfig?.devices?.find((d) => d.id === 'slave-1')
+        expect(slave?.name).toBe('EK1100-renamed')
+        expect(state.files['EK1100-renamed']).toBeDefined()
+        expect(state.files['EK1100']).toBeUndefined()
+        expect(state.tabs.some((t) => t.name === 'EK1100-renamed')).toBe(true)
+      })
+
+      it('rejects renaming to a name already used by another slave in the same bus', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EL1809')
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain('EL1809')
+        const state = store.getState()
+        const bus = state.project.data.remoteDevices?.find((d) => d.name === 'bus1')
+        expect(bus?.ethercatConfig?.devices?.find((d) => d.id === 'slave-1')?.name).toBe('EK1100')
+      })
+
+      it('rejects renaming to a name already used by a slave on a different bus', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-2', 'EL1809_01')
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain('EL1809_01')
+      })
+
+      it('allows renaming to the same name (no-op)', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
+        expect(result).toEqual({ ok: true })
+      })
+
+      it('returns error when the bus does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.rename('missing-bus', 'slave-1', 'X')
+        expect(result).toEqual({ ok: false, message: 'Bus not found' })
+      })
+
+      it('returns error when the slave id does not exist', () => {
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'missing-slave', 'X')
+        expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
       })
     })
   })
@@ -1294,6 +1456,28 @@ describe('createSharedSlice', () => {
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().editor.type).toBe('available')
       })
+
+      it('does not resurrect the closed model in editors[]', () => {
+        // Multi-mount keeps every open POU's editor model in `editors[]`.
+        // `forceCloseFile` removes the active model from `editors[]`
+        // BEFORE handing off to `setEditor` for the next tab.  If
+        // `setEditor` ever started snapshotting the *outgoing* editor
+        // back into `editors[]` unconditionally, the freshly-closed
+        // model would reappear and the user would see a "closed" tab
+        // pop back on the next focus switch.  Lock the invariant here.
+        store.getState().pouActions.create({ type: 'program', name: 'A', language: 'st' })
+        store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
+        // A becomes active (creation flips active to the new one), then
+        // we explicitly switch to A for the regression scenario.
+        store.getState().editorActions.setEditor(store.getState().editorActions.getEditorFromEditors('A')!)
+        expect(store.getState().editor.meta.name).toBe('A')
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('A')
+
+        expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
+        // And the next tab took over cleanly.
+        expect(store.getState().editor.meta.name).toBe('B')
+      })
     })
 
     // -----------------------------------------------------------------------
@@ -1303,10 +1487,12 @@ describe('createSharedSlice', () => {
       it('opens save-changes modal when there are unsaved changes', () => {
         store.getState().workspaceActions.setEditingState('unsaved')
 
-        store.getState().sharedWorkspaceActions.closeProject()
+        const result = store.getState().sharedWorkspaceActions.closeProject()
 
         const modalState = store.getState().modalActions.getModalState('save-changes-project')
         expect(modalState.open).toBe(true)
+        // Caller should defer host navigation until the modal resolves.
+        expect(result).toEqual({ pendingConfirmation: true })
       })
 
       it('clears state when everything is saved', () => {
@@ -1314,11 +1500,13 @@ describe('createSharedSlice', () => {
         store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
         store.getState().workspaceActions.setEditingState('saved')
 
-        store.getState().sharedWorkspaceActions.closeProject()
+        const result = store.getState().sharedWorkspaceActions.closeProject()
 
         // State should be cleared
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().project.data.pous).toHaveLength(0)
+        // Caller should navigate to the host immediately.
+        expect(result).toEqual({ pendingConfirmation: false })
       })
     })
 
@@ -1519,29 +1707,6 @@ describe('createSharedSlice', () => {
           deviceBoard: 'test-board',
           communicationPort: '',
           compileOnly: false,
-          communicationConfiguration: {
-            modbusRTU: {
-              rtuInterface: '',
-              rtuBaudRate: '',
-              rtuSlaveId: null,
-              rtuRS485ENPin: null,
-            },
-            modbusTCP: {
-              tcpInterface: '',
-              tcpMacAddress: null,
-              tcpStaticHostConfiguration: {
-                ipAddress: '',
-                dns: '',
-                gateway: '',
-                subnet: '',
-              },
-            },
-            communicationPreferences: {
-              enabledRTU: false,
-              enabledTCP: false,
-              enabledDHCP: false,
-            },
-          },
         }
         const data = {
           ...makeMinimalProjectResponse(),
@@ -1755,6 +1920,30 @@ describe('createSharedSlice', () => {
         ldFlows.forEach((flow) => {
           expect(flow.updated).toBe(false)
         })
+      })
+
+      // -----------------------------------------------------------------------
+      // canEdit → workspace.canEdit (persist-permission gate)
+      // -----------------------------------------------------------------------
+      it('sets workspace.canEdit=false when backend canEdit is false', () => {
+        const data = { ...makeMinimalProjectResponse(), canEdit: false }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.canEdit).toBe(false)
+      })
+
+      it('keeps workspace.canEdit=true when backend canEdit is true', () => {
+        // Pre-seed denied so we observe the reset path, not just the default.
+        store.getState().workspaceActions.setCanEdit(false)
+        const data = { ...makeMinimalProjectResponse(), canEdit: true }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.canEdit).toBe(true)
+      })
+
+      it('treats absent canEdit as editable (desktop / dev-local default)', () => {
+        store.getState().workspaceActions.setCanEdit(false)
+        const data = makeMinimalProjectResponse()
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+        expect(store.getState().workspace.canEdit).toBe(true)
       })
     })
   })

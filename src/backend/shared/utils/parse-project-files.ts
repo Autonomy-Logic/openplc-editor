@@ -27,7 +27,7 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
-import { deviceConfigurationSchema, devicePinSchema } from '../types/PLC/devices'
+import { deviceConfigurationSchema, pinMappingFileSchema } from '../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
 
@@ -55,10 +55,28 @@ export interface ParsedProjectData {
     }
     servers?: PLCServer[]
     remoteDevices?: PLCRemoteDevice[]
+    /** Per-project library enablement.  Defaults to `[]` for legacy
+     *  projects that don't carry the field on disk — bundled libs
+     *  are always-on regardless. */
+    libraries: { name: string; version: string }[]
+    /** Raw library manifest content (the bytes of `library.json` at
+     *  the project root).  Set for library projects only — same
+     *  shape POU bodies live in: text content held in the store,
+     *  serialised verbatim to its own file by the save pipeline,
+     *  not embedded in `project.json`.  Empty string when the file
+     *  was missing on disk (the manifest editor's load effect
+     *  seeds a template on first edit). */
+    libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
   deviceConfiguration?: DeviceConfiguration
-  devicePinMapping?: DevicePin[]
+  /** Pin mappings parsed from `devices/pin-mapping.json`. Forwarded
+   *  to the store's `setDeviceDefinitions`, which accepts BOTH:
+   *  - `DevicePin[]` (legacy flat array, pre-per-board-scoping) —
+   *    gets keyed under `deviceConfiguration.deviceBoard` on load.
+   *  - `Record<string, DevicePin[]>` (per-board dict, canonical) —
+   *    taken verbatim, one entry per target the user has touched. */
+  devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings collected during parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
 }
@@ -173,6 +191,7 @@ function createFallbackPou(content: string, language: string, pouType: string, p
         ? remainingContent.slice(bodyStartIndex, bodyStartIndex + endMatch).trim()
         : remainingContent.slice(bodyStartIndex).trim()
   } else {
+    /* istanbul ignore next -- defensive: unreachable via public API (getLanguageFromExt filters to the 6 languages handled above) */
     bodyValue = ''
   }
 
@@ -205,6 +224,8 @@ function createFallbackPou(content: string, language: string, pouType: string, p
  */
 function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
+  /* istanbul ignore if -- defensive: parseProjectFiles upstream only forwards files whose
+     extension matched the POU file glob; an extension-less file path can never reach here */
   if (!ext) return null
 
   const pouType = detectPouTypeFromPath(file.relativePath)
@@ -252,11 +273,17 @@ function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string 
       const pouName = getBaseNameFromPath(file.relativePath)
       return createFallbackPou(file.content, language, pouType, pouName)
     } catch (fallbackErr) {
+      /* istanbul ignore next -- defensive: createFallbackPou itself is non-throwing for any
+         (content, language, pouType, pouName) tuple producible by getLanguageFromExt */
       console.error(`[parseProjectFiles] Fallback also failed: ${file.relativePath}`, fallbackErr)
+      /* istanbul ignore next -- paired with the catch above */
       return null
     }
   }
 
+  /* istanbul ignore next -- unreachable: the try block above either returns or throws into the
+     catch which itself returns; this fallthrough exists only because TS narrowing of the
+     `language` union doesn't carry through into the catch's return-coverage analysis */
   return null
 }
 
@@ -318,6 +345,7 @@ export function parseProjectFiles(
   pouFiles: RawProjectFile[],
   serverFiles: RawProjectFile[],
   remoteDeviceFiles: RawProjectFile[],
+  libraryManifest: string = '',
 ): ParsedProjectData {
   const warnings: string[] = []
 
@@ -370,26 +398,30 @@ export function parseProjectFiles(
     deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
   }
 
-  // Parse and Zod-validate pin mapping
-  const pinMappingSchema = devicePinSchema.array()
-  let devicePinMapping: DevicePin[] | undefined
+  // Parse and Zod-validate pin mapping. The on-disk schema is a union
+  // of `Record<string, DevicePin[]>` (canonical per-board dict) and
+  // `DevicePin[]` (legacy flat array). The store-side
+  // `setDeviceDefinitions` accepts both shapes; the legacy branch is
+  // keyed under whatever `configuration.deviceBoard` resolves to on
+  // first load and rewritten in the dict shape on next save.
+  let devicePinMapping: DevicePin[] | Record<string, DevicePin[]> | undefined
   try {
     const raw = pinMapping ? (JSON.parse(pinMapping) as unknown) : null
     if (raw) {
-      const result = pinMappingSchema.safeParse(raw)
+      const result = pinMappingFileSchema.safeParse(raw)
       if (result.success) {
         devicePinMapping = result.data
       } else {
         console.error('[parseProjectFiles] devices/pin-mapping.json Zod errors:', result.error.issues)
         warnings.push('devices/pin-mapping.json has invalid structure and was loaded with defaults.')
-        devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+        devicePinMapping = {}
       }
     } else {
-      devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+      devicePinMapping = {}
     }
   } catch {
     warnings.push('devices/pin-mapping.json is malformed and could not be read. Using defaults.')
-    devicePinMapping = getDefaultSchemaValues(pinMappingSchema) as DevicePin[]
+    devicePinMapping = {}
   }
 
   // Deduplicate POU files (prefer text-based over JSON when both exist)
@@ -449,12 +481,21 @@ export function parseProjectFiles(
       resource: { tasks: [], instances: [], globalVariables: [] },
     }) as ParsedProjectData['projectData']['configurations']
 
-  // Ensure resource has all required fields
+  // Ensure resource has all required fields.  In practice unreachable: the Zod schema rejects
+  // `{ resource: null }` and replaces the whole project with defaults upstream, so by the time we
+  // get here `configuration.resource` is always populated.  Kept as a defensive guard against
+  // future schema changes that loosen the constraint.
+  /* istanbul ignore if -- defensive: PLCProjectSchema requires resource, so this is unreachable */
   if (!configuration.resource) {
     configuration.resource = { tasks: [], instances: [], globalVariables: [] }
   }
+  /* istanbul ignore next -- defensive: PLCConfigurationSchema requires tasks/instances/
+     globalVariables as arrays, so post-Zod the fields are always populated.  Kept as a guard
+     against future schema changes that loosen the constraints. */
   if (!configuration.resource.tasks) configuration.resource.tasks = []
+  /* istanbul ignore next -- defensive guard, same rationale as above */
   if (!configuration.resource.instances) configuration.resource.instances = []
+  /* istanbul ignore next -- defensive guard, same rationale as above */
   if (!configuration.resource.globalVariables) configuration.resource.globalVariables = []
 
   return {
@@ -465,6 +506,18 @@ export function parseProjectFiles(
       configurations: configuration,
       servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
       remoteDevices: remoteDevices.length > 0 ? remoteDevices : ((data.remoteDevices as PLCRemoteDevice[]) ?? []),
+      // Migration: legacy projects (no `libraries` field on disk)
+      // load with an empty list — bundled / canonical strucpp libs
+      // are always-on regardless, so the project compiles without
+      // needing an explicit enablement record.
+      libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
+      // Library projects own a `library.json` at the project root.
+      // The raw bytes are threaded through here from the disk read
+      // (same way the .st POU contents are) so the editor's store
+      // has the manifest content the manifest tab + the save flow
+      // both read.  Empty string when the file is missing on disk
+      // — the manifest editor seeds a template before first save.
+      ...(metaType === 'plc-library' ? { libraryManifest } : {}),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },
     deviceConfiguration,

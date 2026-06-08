@@ -24,6 +24,19 @@ export interface DebugSetResult {
 }
 
 /**
+ * Result of an MD5-probe call.  The `md5` is the runtime's program hash;
+ * `targetEndian` is the byte order detected from the 2-byte sentinel the
+ * runtime writes into the response trailer via a native `uint16_t*`
+ * store (LE target writes `[0xAD, 0xDE]`, BE target writes `[0xDE,
+ * 0xAD]`).  Renderer-side code uses `targetEndian` to drive the byte
+ * swap at the debugger's read / write boundaries.
+ */
+export interface Md5ProbeResult {
+  md5: string
+  targetEndian: 'le' | 'be'
+}
+
+/**
  * Common transport interface. Every debug transport implements these methods
  * so the polling loop and session management never know which transport is active.
  *
@@ -33,7 +46,7 @@ export interface DebugSetResult {
 export interface DebugTransport {
   connect(): Promise<void>
   disconnect(): void
-  getMd5Hash(): Promise<string>
+  getMd5Hash(): Promise<Md5ProbeResult>
   getVariablesList(indexes: number[]): Promise<DebugTransportResult>
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult>
 }

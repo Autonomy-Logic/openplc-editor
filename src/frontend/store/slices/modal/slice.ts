@@ -13,14 +13,20 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'save-changes-project',
   'save-changes-file',
   'confirm-delete-element',
+  'confirm-delete-project',
   'confirm-device-switch',
   'quit-application',
   'runtime-create-user',
+  'runtime-discover-devices',
   'runtime-login',
   'server-ip-mismatch',
   'runtime-connection-lost',
   'debugger-message',
   'debugger-ip-input',
+  'missing-libraries',
+  'public-catalog-browser',
+  'confirm-install-libraries',
+  'project-readme',
 ]
 
 function createDefaultModals() {

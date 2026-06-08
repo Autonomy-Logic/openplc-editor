@@ -40,6 +40,21 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
         }),
       )
     },
+    renameFBDFlow: (oldName, newName) => {
+      if (oldName === newName) return
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flow = fbdFlows.find((f) => f.name === oldName)
+          if (!flow) return
+          // Defensive: drop a stale empty placeholder under `newName`
+          // if one snuck in via the editor's cold-seed path before
+          // this rename ran.  Mirrors the ladder-flow rename logic.
+          const existingIndex = fbdFlows.findIndex((f) => f.name === newName)
+          if (existingIndex !== -1) fbdFlows.splice(existingIndex, 1)
+          flow.name = newName
+        }),
+      )
+    },
 
     /**
      * Control the rungs of the flow

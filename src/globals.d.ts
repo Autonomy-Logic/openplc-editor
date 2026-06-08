@@ -22,3 +22,14 @@ declare const BUILD_DATE: string
  */
 
 declare const vi: typeof jest
+
+/**
+ * PNG asset imports resolve to the emitted asset URL (webpack asset/resource).
+ * Declared here because the renderer's tsconfig only includes `src/`, so the
+ * root `assets/assets.d.ts` declaration isn't visible to shared `src/frontend`
+ * code (e.g. the retro theme icons).
+ */
+declare module '*.png' {
+  const content: string
+  export default content
+}

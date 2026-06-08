@@ -6,30 +6,17 @@ interface SelectedVariablesListProps {
   onRemove: (nodeId: string) => void
 }
 
-// Get icon component for node type
-const NodeTypeIcon = ({ nodeType }: { nodeType: OpcUaNodeConfig['nodeType'] }) => {
-  switch (nodeType) {
-    case 'structure':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-amber-100 text-[9px] font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300'>
-          S
-        </span>
-      )
-    case 'array':
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-cyan-100 text-[9px] font-bold text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300'>
-          []
-        </span>
-      )
-    case 'variable':
-    default:
-      return (
-        <span className='flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[9px] font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'>
-          V
-        </span>
-      )
-  }
+const NODE_TYPE_LABEL: Record<NonNullable<OpcUaNodeConfig['nodeType']>, string> = {
+  structure: 'S',
+  array: '[]',
+  variable: 'V',
 }
+
+const NodeTypeIcon = ({ nodeType }: { nodeType: OpcUaNodeConfig['nodeType'] }) => (
+  <span className='flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[9px] font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'>
+    {NODE_TYPE_LABEL[nodeType] ?? 'V'}
+  </span>
+)
 
 // Format permissions for display
 const formatPermissions = (permissions: OpcUaNodeConfig['permissions']): string => {
@@ -83,7 +70,7 @@ export const SelectedVariablesList = ({ nodes, onEdit, onRemove }: SelectedVaria
               <button
                 type='button'
                 onClick={() => onRemove(node.id)}
-                className='h-[24px] rounded-md border border-red-300 bg-white px-2 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
+                className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
               >
                 Remove
               </button>

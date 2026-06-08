@@ -1,8 +1,11 @@
 import { Files, GitBranch } from 'lucide-react'
 import { useCallback } from 'react'
 
+import { useNavigation } from '../../../../middleware/shared/providers'
+import { useIsNinetiesTheme } from '../../../hooks/use-nineties-theme'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
+import { RetroExplorer, RetroSourceControl } from '../../_atoms/retro-icons'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { ExitButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
@@ -30,12 +33,19 @@ type ActivityBarProps = {
 export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceControl }: ActivityBarProps) => {
   const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
   const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
+  const navigation = useNavigation()
 
   const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
+  const isNineties = useIsNinetiesTheme()
 
   const handleExitApplication = () => {
-    closeProject()
+    const { pendingConfirmation } = closeProject()
+    // When the modal opens, defer exiting to the modal's save/discard
+    // path so the user's choice is respected.
+    if (!pendingConfirmation) {
+      navigation.exitToHost()
+    }
   }
   return (
     <>
@@ -52,7 +62,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
               )}
               aria-label='Explorer'
             >
-              <Files className='h-4 w-4' />
+              {isNineties ? <RetroExplorer /> : <Files className='h-4 w-4' />}
             </button>
           </TooltipSidebarWrapperButton>
         )}
@@ -68,7 +78,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
               )}
               aria-label='Source Control'
             >
-              <GitBranch className='h-4 w-4' />
+              {isNineties ? <RetroSourceControl /> : <GitBranch className='h-4 w-4' />}
               {sourceControl.pendingCount > 0 && (
                 <span className='absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white'>
                   {sourceControl.pendingCount > 9 ? '9+' : sourceControl.pendingCount}

@@ -61,6 +61,7 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
+    expect(workspace.debugConnectionType).toBeNull()
   })
 
   // -------------------------------------------------------------------------
@@ -422,6 +423,19 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugMd5Mismatch).toBeNull()
   })
 
+  it('setDebugConnectionType', () => {
+    expect(store.getState().workspace.debugConnectionType).toBeNull()
+
+    store.getState().workspaceActions.setDebugConnectionType('websocket')
+    expect(store.getState().workspace.debugConnectionType).toBe('websocket')
+
+    store.getState().workspaceActions.setDebugConnectionType('rtu')
+    expect(store.getState().workspace.debugConnectionType).toBe('rtu')
+
+    store.getState().workspaceActions.setDebugConnectionType(null)
+    expect(store.getState().workspace.debugConnectionType).toBeNull()
+  })
+
   // -------------------------------------------------------------------------
   // clearDebugState
   // -------------------------------------------------------------------------
@@ -460,6 +474,7 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebugGraphList(['a'])
     store.getState().workspaceActions.setDebugDataStale(true)
     store.getState().workspaceActions.setDebugMd5Mismatch({ runtimeMd5: 'r', localMd5: 'l' })
+    store.getState().workspaceActions.setDebugConnectionType('websocket')
 
     store.getState().workspaceActions.clearDebugState()
 
@@ -480,6 +495,7 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
+    expect(workspace.debugConnectionType).toBeNull()
   })
 
   // -------------------------------------------------------------------------
@@ -554,14 +570,22 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setPlcLogsLastId(5)
 
     store.getState().workspaceActions.setProjectLoading(true, 'Loading project...')
+    store.getState().workspaceActions.setCanEdit(false)
 
     expect(store.getState().workspace.isProjectLoading).toBe(true)
     expect(store.getState().workspace.projectLoadingMessage).toBe('Loading project...')
+    expect(store.getState().workspace.canEdit).toBe(false)
 
     store.getState().workspaceActions.setProjectLoading(false)
+    store.getState().workspaceActions.setCanEdit(true)
 
     expect(store.getState().workspace.isProjectLoading).toBe(false)
     expect(store.getState().workspace.projectLoadingMessage).toBe('')
+    expect(store.getState().workspace.canEdit).toBe(true)
+
+    // setCanEdit(false) again so clearWorkspace's reset path is exercised
+    // — keeps the assertion below honest about the reset back to `true`.
+    store.getState().workspaceActions.setCanEdit(false)
 
     store.getState().workspaceActions.clearWorkspace()
 
@@ -584,6 +608,7 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
+    expect(workspace.debugConnectionType).toBeNull()
     expect(workspace.isPlcLogsVisible).toBe(false)
     expect(workspace.plcLogs).toBe('')
     expect(workspace.plcLogsLastId).toBeNull()
@@ -592,5 +617,6 @@ describe('createWorkspaceSlice', () => {
       searchTerm: '',
       timestampFormat: 'full',
     })
+    expect(workspace.canEdit).toBe(true)
   })
 })

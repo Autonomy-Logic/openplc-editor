@@ -1,6 +1,5 @@
 import * as Switch from '@radix-ui/react-switch'
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { EditorModel } from '@root/frontend/store/slices/editor'
 import type { LibraryState } from '@root/frontend/store/slices/library'
 import { cn } from '@root/frontend/utils/cn'
 import {
@@ -29,7 +28,9 @@ import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types
 import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { updateDiagramElementsPosition } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { reconcileBranchesIfNeeded } from '../../../../../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
+import { useBoundEditorModel, useBoundPou } from '../../../active-context'
 import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
@@ -39,16 +40,11 @@ type BlockElementProps<T> = {
   selectedNode: BlockNode<T>
 }
 
-const searchLibraryByPouName = (
-  libraries: LibraryState['libraries'],
-  editor: EditorModel,
-  pous: PLCPou[],
-  pouName: string,
-) => {
+const searchLibraryByPouName = (libraries: LibraryState['libraries'], pous: PLCPou[], pouName: string) => {
   let libraryBlock: unknown = undefined
 
   const filteredLibraries = libraries.system.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+    pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.pous.some((pou) => pou.type === 'function')
       : true,
   )
@@ -65,11 +61,12 @@ const searchLibraryByPouName = (
 }
 
 const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: BlockElementProps<T>) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
     editorActions: { updateModelVariables },
     ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    ladderFlowActions: { setNodes, setEdges, setHandleBranches },
     project: {
       data: { pous },
     },
@@ -209,7 +206,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleNameInputSubmit = () => {
-    const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
+    const libraryBlock = searchLibraryByPouName(libraries, pous, formState.name)
     if (libraryBlock) {
       setSelectedFile(libraryBlock as LadderBlockVariant)
     }
@@ -375,7 +372,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, edges, variables } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return
@@ -385,7 +382,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         deleteVariable({
           rowId: variables.all.indexOf(variables.selected),
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (
           editor.type === 'plc-graphical' &&
@@ -405,7 +402,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           },
           rowId: variables.all.indexOf(variables.selected),
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         newNode.data = { ...newNode.data, variable: variables.selected }
       }
@@ -416,6 +413,25 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
 
+    // Reconcile branches when the block changes: remap surviving branches
+    // to the new block ID and remove branches for deleted/incompatible handles.
+    // Must run BEFORE main connector edge remapping so branch edges get new IDs
+    // and the main remapping loop below won't overwrite them.
+    const reconciled = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newNode.id,
+      LadderBlockVariant?.variables ?? [],
+    )
+    if (reconciled) {
+      newNodes = reconciled.nodes
+      newEdges = reconciled.edges
+    }
+    const reconciledHandleBranches = reconciled?.handleBranches
+
+    // Remap main connector edges (inputConnector/outputConnector) to new block ID.
+    // Branch edges are already remapped by reconcileBranches (their IDs changed,
+    // so the old edge.id won't match in newEdges).
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -440,20 +456,28 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: variableNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranches({
+        editorName: pouName,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
 
     handleCloseModal()
   }

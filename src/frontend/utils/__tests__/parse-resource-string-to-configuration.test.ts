@@ -55,7 +55,9 @@ describe('parseResourceStringToConfiguration', () => {
     const { tasks } = parseResourceStringToConfiguration(input)
     expect(tasks).toHaveLength(1)
     expect(tasks[0].interval).toBe('')
-    expect(tasks[0].priority).toBe(0)
+    // Parser defaults priority to 1 when PRIORITY := isn't supplied —
+    // matches the IEC 61131-3 default and the codegen's task table.
+    expect(tasks[0].priority).toBe(1)
   })
 
   it('ignores unknown task parameters', () => {

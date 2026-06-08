@@ -1,24 +1,45 @@
 import * as Popover from '@radix-ui/react-popover'
 import { useState } from 'react'
 
+import { projectCapabilities } from '../../../../../middleware/shared/ports/types'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
 
+type CreatePLCElementType = 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
+
 const CreatePLCElement = () => {
   const {
     workspace: { isDebuggerVisible },
+    project: {
+      meta: { type: projectType },
+    },
   } = useOpenPLCStore()
   const [isContainerOpen, setIsContainerOpen] = useState(false)
-  const CreatePLCElementTypes: (
-    | 'function'
-    | 'function-block'
-    | 'program'
-    | 'data-type'
-    | 'server'
-    | 'remote-device'
-  )[] = ['function', 'function-block', 'program', 'data-type', 'server', 'remote-device']
+
+  // Filter the picker by the current project's capability matrix.
+  // Libraries only allow function / function-block / data-type —
+  // programs / servers / remote devices are program-level
+  // affordances that don't apply to a `.stlib` build.  Project-type
+  // gating happens here so a future new POU type doesn't have to be
+  // wired up in two places.
+  const projectCaps = projectCapabilities({ type: projectType })
+  const CreatePLCElementTypes: CreatePLCElementType[] = (
+    ['function', 'function-block', 'program', 'data-type', 'server', 'remote-device'] as const
+  ).filter((target) => {
+    switch (target) {
+      case 'program':
+        return projectCaps.hasPrograms
+      case 'server':
+        return projectCaps.hasServers
+      case 'remote-device':
+        return projectCaps.hasRemoteDevices
+      default:
+        // function / function-block / data-type — always available.
+        return true
+    }
+  })
 
   return (
     <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen && !isDebuggerVisible}>

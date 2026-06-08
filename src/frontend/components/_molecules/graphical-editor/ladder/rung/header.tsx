@@ -14,6 +14,7 @@ import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
 import { cn } from '../../../../../utils/cn'
 import { HighlightedTextArea } from '../../../../_atoms/highlighted-textarea'
+import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 
 type RungHeaderProps = {
   rung: RungLadderState
@@ -24,13 +25,11 @@ type RungHeaderProps = {
 }
 
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
+  const editorName = useBoundPou()
   const {
-    editor,
     ladderFlowActions: { addComment, duplicateRung },
     modalActions: { openModal },
   } = useOpenPLCStore()
-
-  const editorName = editor.meta.name
 
   const containerRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)

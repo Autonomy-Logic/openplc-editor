@@ -135,34 +135,34 @@ const isAddressTheLowestInItsType = (address: string) => {
 }
 
 // ---------------------------------------------------------------------------
-// Name validation
+// Alias validation
 // ---------------------------------------------------------------------------
 
-const checkIfPinNameExists = (pinMap: DevicePin[], name: string) => {
-  return pinMap.some((pin) => pin.name?.toLowerCase() === name?.toLowerCase())
+const checkIfPinAliasExists = (pinMap: DevicePin[], alias: string) => {
+  return pinMap.some((pin) => pin.alias?.toLowerCase() === alias?.toLowerCase())
 }
 
-const pinNameValidation = (name: string) => {
+const pinAliasValidation = (alias: string) => {
   const regex = /^(?:\d+|[A-Za-z]+(?:_\d+|_[A-Za-z]+)*|[A-Za-z]+\d*(?:_[A-Za-z]+\d*)*)$/
-  return regex.test(name)
+  return regex.test(alias)
 }
 
-const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) => {
-  if (!name) {
-    return { ok: false, title: 'Invalid Pin Name', message: 'Pin name cannot be empty.' }
+const checkIfPinAliasIsValid = (pinMap: DevicePin[], alias: string | undefined) => {
+  if (!alias) {
+    return { ok: false, title: 'Invalid Pin Alias', message: 'Pin alias cannot be empty.' }
   }
-  if (!pinNameValidation(name)) {
-    return { ok: false, title: 'Invalid Pin Name', message: 'Pin name must be alphanumeric or use underscores.' }
+  if (!pinAliasValidation(alias)) {
+    return { ok: false, title: 'Invalid Pin Alias', message: 'Pin alias must be alphanumeric or use underscores.' }
   }
-  if (checkIfPinNameExists(pinMap, name)) {
-    const existingPin = pinMap.findIndex((pin) => pin.name?.toLowerCase() === name.toLowerCase())
+  if (checkIfPinAliasExists(pinMap, alias)) {
+    const existingPin = pinMap.findIndex((pin) => pin.alias?.toLowerCase() === alias.toLowerCase())
     return {
       ok: false,
-      title: 'Pin Name Already Exists',
-      message: 'Pin name must be unique. Check the table row: ' + (existingPin !== -1 ? existingPin + 1 : 'Unknown'),
+      title: 'Pin Alias Already Exists',
+      message: 'Pin alias must be unique. Check the table row: ' + (existingPin !== -1 ? existingPin + 1 : 'Unknown'),
     }
   }
-  return { ok: true, title: 'Valid Pin Name', message: 'Pin name is valid.' }
+  return { ok: true, title: 'Valid Pin Alias', message: 'Pin alias is valid.' }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,16 +211,16 @@ const checkIfAddressExists = (pinMap: DevicePin[], address: string) => {
 export {
   ADDRESS_ACTIONS,
   checkIfAddressExists,
+  checkIfPinAliasExists,
+  checkIfPinAliasIsValid,
   checkIfPinExists,
   checkIfPinIsValid,
-  checkIfPinNameExists,
-  checkIfPinNameIsValid,
   createNewAddress,
   extractPositionForAnalogAddress,
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
   isAddressTheLowestInItsType,
-  pinNameValidation,
+  pinAliasValidation,
   pinValidation,
   removeAddressPrefix,
 }

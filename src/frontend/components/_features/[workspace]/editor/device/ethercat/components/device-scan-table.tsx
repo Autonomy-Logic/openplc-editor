@@ -1,5 +1,5 @@
 import { cn } from '@root/frontend/utils/cn'
-import type { EtherCATDevice } from '@root/types/ethercat'
+import type { EtherCATDevice } from '@root/middleware/shared/ports/ethercat-types'
 
 type DeviceScanTableProps = {
   devices: EtherCATDevice[]

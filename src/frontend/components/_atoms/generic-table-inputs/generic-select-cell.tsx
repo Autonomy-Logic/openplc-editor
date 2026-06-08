@@ -36,6 +36,7 @@ export const GenericSelectCell = ({
 
   useEffect(() => {
     scrollToSelectedOption(selectRef, selectIsOpen)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectIsOpen])
 
   return (

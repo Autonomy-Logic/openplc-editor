@@ -27,6 +27,77 @@
   background-color: transparent;
 }
 
+/* Select dropdown viewport — force a visible, always-on scrollbar.
+ *
+ * Radix Select injects a <style> tag in the portal that hides the native
+ * scrollbar on [data-radix-select-viewport] (scrollbar-width: none +
+ * ::-webkit-scrollbar { display: none }). We override that with a higher-
+ * specificity selector that combines the Radix data attribute with our
+ * own class, so the rule beats Radix's without needing !important on
+ * ordinary properties. */
+[data-radix-select-viewport].oplc-select-viewport {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-medium) transparent;
+}
+
+[data-radix-select-viewport].oplc-select-viewport::-webkit-scrollbar {
+  display: block !important;
+  width: 10px;
+  height: 10px;
+  background-color: transparent;
+}
+
+[data-radix-select-viewport].oplc-select-viewport::-webkit-scrollbar-thumb {
+  background-color: var(--primary-medium);
+  border-radius: 0.5rem;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+[data-radix-select-viewport].oplc-select-viewport::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-medium-dark);
+  background-clip: content-box;
+}
+
+@keyframes ai-chat-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* Tailwind's animate-spin utility emits `animation: spin 1s linear infinite`
+   but our tailwind.config.ts overrides `theme.keyframes` (instead of
+   extending it), wiping out the default `spin` keyframe. Redefine it here
+   so animate-spin works app-wide. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-chat-typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 2px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ai-chat-pulse 1.2s infinite;
+}
+.ai-chat-typing-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ai-chat-typing-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
 @layer base {
   :root {
     --primary-default: #0464fb;
@@ -185,6 +256,506 @@
 .apexcharts-yaxis-label tspan,
 .apexcharts-xaxis-label tspan {
   @apply fill-neutral-1000 !text-[10px] dark:fill-neutral-50;
+}
+
+/* ============================================================================
+   90's (retro) theme — a blocky "Windows 98-ish" skin.
+   It is a LIGHT-based theme (no `.dark` class), so components render with their
+   light palette and these scoped overrides sit on top: light surfaces become
+   silver, controls get 3D bevels, corners go square, and the UI font turns
+   crisp. Everything is scoped under `.nineties`, so light/dark are untouched.
+
+   Bevel recipes (classic 3D control palette — silver #c0c0c0, hilight #fff,
+   light #dfdfdf, shadow grey #808080, dark #0a0a0a):
+     raised : inset -1px -1px #0a0a0a, inset 1px 1px #fff,
+              inset -2px -2px #808080, inset 2px 2px #dfdfdf
+     pressed: inset -1px -1px #fff,    inset 1px 1px #0a0a0a,
+              inset -2px -2px #dfdfdf, inset 2px 2px #808080
+     sunken : inset -1px -1px #fff,    inset 1px 1px #808080,
+              inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a
+   ========================================================================== */
+
+/* Crisp, aliased period typeface across the whole app. */
+.nineties,
+.nineties * {
+  font-family: 'Tahoma', 'Geneva', 'Segoe UI', 'MS Sans Serif', system-ui, sans-serif !important;
+  -webkit-font-smoothing: none;
+  letter-spacing: 0;
+}
+
+/* No rounded corners, no soft shadows. The bevel rules re-add their own. */
+.nineties *,
+.nineties *::before,
+.nineties *::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Light surfaces → silver. These are the near-white neutrals the app uses for
+   panels, cards, toolbars and page backgrounds in light mode. */
+.nineties .bg-white,
+.nineties .bg-neutral-50,
+.nineties .bg-neutral-100,
+.nineties .bg-neutral-200,
+.nineties .bg-neutral-300 {
+  background-color: #c0c0c0 !important;
+}
+
+/* Greyscale the brand-blue chrome accents so the look stays period-correct. */
+.nineties .bg-brand,
+.nineties .bg-brand-light,
+.nineties .bg-brand-medium {
+  background-color: #c0c0c0 !important;
+}
+
+/* Soft light borders → solid grey hairlines. */
+.nineties .border-neutral-100,
+.nineties .border-neutral-200,
+.nineties .border-neutral-300,
+.nineties .border-brand-light {
+  border-color: #808080 !important;
+}
+
+/* ── Beveled "outset" buttons ─────────────────────────────────────────────
+   Every button becomes a grey 3D control — how 90's UIs treated them all. */
+.nineties button {
+  background-color: #c0c0c0 !important;
+  color: #0a0a0a !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf !important;
+}
+
+.nineties button:active:not(:disabled) {
+  box-shadow:
+    inset -1px -1px #fff,
+    inset 1px 1px #0a0a0a,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #808080 !important;
+}
+
+.nineties button:disabled {
+  color: #808080 !important;
+}
+
+/* ── Sunken input fields, textareas & selects ─────────────────────────────*/
+.nineties input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.nineties textarea,
+.nineties select {
+  background-color: #fff !important;
+  color: #0a0a0a !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #fff,
+    inset 1px 1px #808080,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #0a0a0a !important;
+}
+
+/* ── Chunky 16px beveled scrollbars ───────────────────────────────────────*/
+.nineties ::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  background-color: #dfdfdf;
+}
+.nineties ::-webkit-scrollbar-thumb {
+  background-color: #c0c0c0;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf;
+}
+
+/* ── Top menu bar → classic Win98 grey menu bar ───────────────────────────
+   The app's title strip becomes a flat silver bar; File/Edit/… drop their
+   bevel and gain the canonical navy highlight on hover / when open. */
+.nineties .oplc-titlebar-content {
+  background-color: #c0c0c0 !important;
+  box-shadow:
+    inset 0 1px #fff,
+    inset 0 -1px #808080 !important;
+}
+.nineties [role='menubar'] button {
+  background-color: transparent !important;
+  color: #0a0a0a !important;
+  box-shadow: none !important;
+}
+.nineties [role='menubar'] button:hover,
+.nineties [role='menubar'] button[aria-expanded='true'] {
+  background-color: #000080 !important;
+  color: #fff !important;
+}
+
+/* ── Menu dropdowns → silver beveled panel, navy item highlight ───────────*/
+.nineties [role='menu'] {
+  background-color: #c0c0c0 !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf !important;
+}
+.nineties [role='menu'] [role='menuitem'],
+.nineties [role='menu'] [role='menuitem'] * {
+  color: #0a0a0a !important;
+}
+.nineties [role='menu'] [role='menuitem']:hover:not([data-disabled]),
+.nineties [role='menu'] [role='menuitem']:hover:not([data-disabled]) *,
+.nineties [role='menu'] [role='menuitem'][data-highlighted],
+.nineties [role='menu'] [role='menuitem'][data-highlighted] *,
+.nineties [role='menu'] [role='menuitem'][data-state='open'],
+.nineties [role='menu'] [role='menuitem'][data-state='open'] *,
+.nineties [role='menu'] [role='menuitem'][aria-expanded='true'],
+.nineties [role='menu'] [role='menuitem'][aria-expanded='true'] * {
+  background-color: #000080 !important;
+  color: #fff !important;
+}
+
+/* ── Left toolbar rail → silver instead of navy ───────────────────────────*/
+.nineties .bg-brand-dark {
+  background-color: #c0c0c0 !important;
+}
+
+/* Win98 activity rail layout: square, larger beveled buttons with tight
+   spacing. The 3D bevel already delimits each button, so the generous gap the
+   flat light/dark themes rely on isn't needed — collapse it. Bigger buttons
+   also let the 32/48px icons render close to native size, killing the blur
+   from heavy downscaling. Scoped to the 56px rail only. */
+.nineties .w-14.bg-brand-dark [class*='gap-'] {
+  gap: 3px !important;
+}
+.nineties .w-14.bg-brand-dark button {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 auto !important;
+}
+.nineties .w-14.bg-brand-dark button > * {
+  padding: 0 !important;
+}
+.nineties .w-14.bg-brand-dark .retro-icon {
+  width: 32px !important;
+  height: 32px !important;
+}
+/* Left-align the button COLUMNS (the container divs) so the squares hug the
+   left and aren't clipped by the scrollbar gutter — but DON'T touch the
+   buttons' own `items-center`, or the icon stops being centred inside each. */
+.nineties .w-14.bg-brand-dark .sidebar-scroll,
+.nineties .w-14.bg-brand-dark div[class*='items-center'] {
+  align-items: flex-start !important;
+}
+.nineties .w-14.bg-brand-dark .sidebar-scroll {
+  padding-left: 2px !important;
+}
+/* Keep the rail's own scrollbar thin — the global chunky 16px bar otherwise
+   eats most of the 56px rail and crops the 42px buttons. */
+.nineties .w-14.bg-brand-dark .sidebar-scroll::-webkit-scrollbar {
+  width: 6px !important;
+}
+/* Darken stroke-based custom rail icons (e.g. the Exit/back arrow, a pale
+   brand-blue that disappeared on silver). */
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) {
+  stroke: #0a0a0a !important;
+}
+
+/* ── Dark icons on the left activity rail ─────────────────────────────────
+   The rail's icons are brand-blue and wash out once the rail is silver.
+   Darken them — but SCOPED TO THE RAIL ONLY (`.w-14.bg-brand-dark`, the 56px
+   activity bar). `.bg-brand-dark` alone also matches a full-app wrapper, so a
+   broad descendant rule would repaint the whole canvas/tree black. */
+.nineties button [class*='lucide'] {
+  color: #0a0a0a !important;
+}
+/* Custom (non-lucide) rail icons hard-fill their shapes with a light brand
+   blue inside a 0.4-opacity group (tuned for the old navy rail). Re-fill dark
+   and make them fully opaque. Excludes lucide outline icons (fill:none). */
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) path,
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) circle,
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) rect,
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) polygon {
+  fill: #0a0a0a !important;
+}
+.nineties .w-14.bg-brand-dark svg:not([class*='lucide']):not(.retro-icon) g[opacity] {
+  opacity: 1 !important;
+}
+/* …but keep menu icons/text light when they sit on a navy highlight. */
+.nineties [role='menubar'] button:hover [class*='lucide'],
+.nineties [role='menubar'] button[aria-expanded='true'] [class*='lucide'],
+.nineties [role='menu'] [role='menuitem']:hover [class*='lucide'] {
+  color: #fff !important;
+}
+
+/* ── Win98 tree-view expanders (project tree + library) ───────────────────
+   The expand/collapse chevrons (a brand-blue 28×28 arrow that rotates with
+   state) become the classic Windows tree "node box": a small white square
+   with a grey border and a dark marker inside — the look from 98.css's
+   tree-view toggles. Faithful L-connector lines would need the tree to be
+   real <ul>/<details> markup; this keeps it additive over the existing rows. */
+/* Match BOTH expand states: collapsed uses `stroke-brand-light`, expanded
+   uses `stroke-brand` — so the boxed node toggle is consistent either way. */
+.nineties svg[class*='stroke-brand'][viewBox='0 0 28 28'] {
+  stroke: #0a0a0a !important;
+  background-color: #fff;
+  border: 1px solid #808080;
+  box-sizing: border-box;
+  padding: 1px;
+}
+
+/* ── Debugger panel → white output sheet ──────────────────────────────────
+   Live values print in lime-green; on the grey panel they're unreadable.
+   A white sheet (console-style) restores contrast while keeping the colours. */
+.nineties .debug-panel,
+.nineties .min-w-52 {
+  background-color: #ffffff !important;
+}
+
+/* ── Win98 tabs (POU tabs on top + Console/Debugger tabs) ─────────────────
+   Inactive tabs are raised grey; the active tab is white + bold so it clearly
+   reads as selected. Active state differs by widget: POU tabs use
+   aria-current=page, the console tabs use data-state=active / aria-selected. */
+.nineties [role='tab'] {
+  background-color: #c0c0c0 !important;
+  color: #0a0a0a !important;
+  border: none !important;
+  box-shadow:
+    inset 1px 1px #fff,
+    inset -1px -1px #808080 !important;
+}
+.nineties [role='tab'] * {
+  color: #0a0a0a !important;
+}
+.nineties [role='tab'][aria-current='page'],
+.nineties [role='tab'][data-state='active'],
+.nineties [role='tab'][aria-selected='true'] {
+  background-color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow:
+    inset 1px 1px #fff,
+    inset -1px -1px #dfdfdf !important;
+}
+
+/* ── Project Tree & Library → white panel, dark text, navy hover ──────────
+   The lists sit on the grey side panel with faint grey leaf text and a near-
+   white hover. Give them a white sheet (contrast vs the grey chrome), solid
+   dark text, and the classic navy row highlight on hover. */
+.nineties ul.list-none {
+  background-color: #ffffff !important;
+}
+.nineties ul.list-none li,
+.nineties ul.list-none li span,
+.nineties ul.list-none li p {
+  color: #0a0a0a !important;
+}
+/* Row hover → navy bar, white text (overrides the theme's pale hover). */
+.nineties ul.list-none li [class*='cursor-pointer']:hover,
+.nineties ul.list-none li > [class*='cursor-pointer']:hover {
+  background-color: #000080 !important;
+}
+.nineties ul.list-none li [class*='cursor-pointer']:hover span,
+.nineties ul.list-none li [class*='cursor-pointer']:hover p,
+.nineties ul.list-none li [class*='cursor-pointer']:hover [class*='lucide'] {
+  color: #ffffff !important;
+}
+
+/* ── FBD / Ladder / SFC canvas → white "paper" with black wires ───────────
+   The react-flow editor surface is transparent (silver shows through) with
+   light-grey edges. Give it a white drawing sheet and solid black connectors,
+   like a classic schematic. */
+.nineties .react-flow {
+  background-color: #fff !important;
+}
+.nineties .react-flow__edge-path,
+.nineties .react-flow__connection-path,
+.nineties .react-flow__connectionline path {
+  stroke: #000000 !important;
+}
+/* Blocks & variable boxes: white bodies with black borders (the silver
+   surface override above otherwise greys them). */
+.nineties .react-flow__node .bg-white,
+.nineties .react-flow__node [class*='bg-neutral-'] {
+  background-color: #ffffff !important;
+}
+.nineties .react-flow__node [class*='border-neutral-'],
+.nineties .react-flow__node [class*='border-brand'],
+/* Block bodies are `bg-white` + a bare `border` (default light grey) — match
+   the body itself so TON/TOF get a black outline, WITHOUT blackening the
+   `border-transparent` hover wrappers on contacts/coils (they have no
+   bg-white box, so they stay as plain | | / ( ) symbols). */
+.nineties .react-flow__node .bg-white {
+  border-color: #000000 !important;
+}
+/* LD editor: each rung is a narrow react-flow island inside full-width
+   wrappers that default to the silver panel behind. Whiten the rung wrappers
+   and the rung list so the whole ladder sheet is white like FBD. `:has` keeps
+   this scoped to containers that actually hold a rung canvas. */
+.nineties .react-flow,
+.nineties [class~='border']:has(> .react-flow),
+.nineties .overflow:has(> div > .react-flow),
+.nineties .rounded-lg:has(.react-flow) {
+  background-color: #ffffff !important;
+}
+/* In-canvas labels (variable/block/port names, comments) are editable
+   inputs meant to be flat & transparent. The global sunken-field bevel
+   otherwise wraps every label in a white Win98 textbox, cluttering the
+   diagram — keep them flat over the white sheet / inside their box. */
+.nineties .react-flow input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.nineties .react-flow textarea,
+.nineties .react-flow select {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+/* Selected block: the highlight border washes out to white/black — give it
+   the classic Win98 selection navy, and a thicker line so selected vs.
+   unselected (navy 3px vs black 1px) reads clearly. */
+/* Only the block bodies (bg-white boxes) get the navy selection border —
+   targeting `[class*='border-']` also caught the contact/coil
+   `border-transparent` hover wrappers, drawing a second square around them. */
+.nineties .react-flow__node.selected .bg-white {
+  border-color: #000080 !important;
+  border-width: 3px !important;
+  border-style: solid !important;
+}
+
+/* ── Win98 tables (variables grid &c.) — 98.css sunken-panel + table look ──
+   White recessed data area, raised grey column-header buttons, hairline grid,
+   solid black text (the cells were grey-on-silver = unreadable), and the
+   classic navy row selection. */
+.nineties table {
+  background-color: #ffffff !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #fff,
+    inset 1px 1px #808080,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #0a0a0a !important;
+}
+.nineties th {
+  background-color: #c0c0c0 !important;
+  color: #0a0a0a !important;
+  font-weight: normal !important;
+  border: none !important;
+  /* raised bevel — the Win98 column-header button */
+  box-shadow:
+    inset -1px -1px #808080,
+    inset 1px 1px #fff !important;
+}
+.nineties td {
+  background-color: #ffffff !important;
+  color: #0a0a0a !important;
+  border-right: 1px solid #c0c0c0 !important;
+  border-bottom: 1px solid #c0c0c0 !important;
+}
+/* Make cell contents (value spans, type labels, etc.) inherit the cell colour
+   — so they're dark on white normally and white on the navy selection — rather
+   than keeping their faint brand/neutral tints. */
+.nineties td * {
+  color: inherit !important;
+}
+/* Cell editors flat over the white cell (the sunken-field bevel otherwise
+   wraps every value in a recessed box). High specificity to beat that rule. */
+.nineties table input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.nineties table textarea,
+.nineties table select {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #0a0a0a !important;
+}
+/* Classic navy row selection. */
+.nineties tbody tr.highlighted td,
+.nineties tbody tr.selected td,
+.nineties tbody tr[aria-selected='true'] td,
+.nineties tbody tr[data-selected='true'] td {
+  background-color: #000080 !important;
+  color: #ffffff !important;
+}
+.nineties tbody tr.highlighted td input,
+.nineties tbody tr.selected td input,
+.nineties tbody tr[aria-selected='true'] td input {
+  color: #ffffff !important;
+}
+/* In-table Class/Type selectors read as plain labels, not beveled buttons. */
+.nineties td [role='combobox'] {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+/* Trigger value text → solid black (it's a child span with a faint neutral
+   tint, so the parent colour alone doesn't take). */
+.nineties [role='combobox'],
+.nineties [role='combobox'] * {
+  color: #0a0a0a !important;
+}
+
+/* ── Select / combobox dropdowns → readable Win98 list ────────────────────
+   Panels were silver with faint grey options. Give them the menu treatment:
+   silver beveled panel, solid black option text, navy highlight on hover /
+   the checked item. `:has([role='option'])` targets select/listbox poppers
+   only (leaves tooltips alone). */
+.nineties [data-radix-popper-content-wrapper]:has([role='option']) > * {
+  background-color: #c0c0c0 !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf !important;
+}
+.nineties [role='option'],
+.nineties [role='option'] * {
+  color: #0a0a0a !important;
+}
+.nineties [role='option']:hover,
+.nineties [role='option']:hover *,
+.nineties [role='option'][data-highlighted],
+.nineties [role='option'][data-highlighted] *,
+.nineties [role='option'][data-state='checked'],
+.nineties [role='option'][data-state='checked'] *,
+.nineties [role='option'][aria-selected='true'],
+.nineties [role='option'][aria-selected='true'] * {
+  background-color: #000080 !important;
+  color: #ffffff !important;
+}
+
+/* Popovers whose entries are <button>s (the tree "+" add-POU menu, build
+   options, …) → flat menu rows with navy hover on a silver beveled panel,
+   instead of a stack of 3D buttons. */
+.nineties [data-radix-popper-content-wrapper]:has(button) > * {
+  background-color: #c0c0c0 !important;
+  border: none !important;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #fff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf !important;
+}
+/* Flatten menu-entry buttons into navy-hover rows — but ONLY in pure menu
+   popovers. Form popovers (those containing an input or a combobox, e.g. the
+   Add-POU dialog) keep their real beveled buttons (Language select, Cancel,
+   Create). */
+.nineties [data-radix-popper-content-wrapper]:not(:has(input)):not(:has([role='combobox'])) button {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #0a0a0a !important;
+}
+.nineties [data-radix-popper-content-wrapper]:not(:has(input)):not(:has([role='combobox'])) button:hover,
+.nineties [data-radix-popper-content-wrapper]:not(:has(input)):not(:has([role='combobox'])) button:hover * {
+  background-color: #000080 !important;
+  color: #ffffff !important;
+}
+
+/* White-stroke icons (e.g. the tree "+" button) are invisible on silver —
+   darken them. Navy-highlight contexts set their own white via the rules above. */
+.nineties button [class*='stroke-white'],
+.nineties button [class*='stroke-white'] * {
+  stroke: #0a0a0a !important;
 }
 
 @keyframes spin-refresh {

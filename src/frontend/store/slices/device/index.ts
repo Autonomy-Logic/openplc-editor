@@ -7,9 +7,7 @@ export type {
   DeviceSlice,
   DeviceState,
   PinUpdateResponse,
-  RTUConfigParam,
   RuntimeConnection,
   SelectedDevice,
   StoredCredentials,
-  TCPConfigParam,
 } from './types'

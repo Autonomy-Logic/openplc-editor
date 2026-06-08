@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 
 import type {
+  BoardInfo,
   ModbusIOGroup,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
@@ -16,11 +17,27 @@ import type {
   PLCVariable,
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
+import { generateIecVariablesToString } from '../../utils/generate-iec-variables-to-string'
+import { createConsoleSlice } from '../slices/console'
+import { createDeviceSlice } from '../slices/device'
+import { createEditorSlice } from '../slices/editor'
+import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
-import type { ProjectSlice, ProjectState } from '../slices/project/types'
+import type { ProjectSliceRoot, ProjectState } from '../slices/project/types'
 
 function makeStore() {
-  return createStore<ProjectSlice>()(createProjectSlice)
+  // The project slice reads from device + console (alias-sync) plus
+  // editor + library (variables-text reconcile in createVariable /
+  // updateVariable / deleteVariable). All five are wired here so the
+  // cross-slice `ProjectSliceRoot` type resolves and the helpers see
+  // a real (default-initialised) editor/library state at test time.
+  return createStore<ProjectSliceRoot>()((...args) => ({
+    ...createProjectSlice(...args),
+    ...createDeviceSlice(...args),
+    ...createConsoleSlice(...args),
+    ...createEditorSlice(...args),
+    ...createLibrarySlice(...args),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +199,6 @@ function makeOpcUaNode(id: string): OpcUaNodeConfig {
     browseName: id,
     displayName: id,
     description: '',
-    initialValue: 0,
     permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
     nodeType: 'variable',
   }
@@ -231,6 +247,42 @@ function seedRemoteDevice(store: ReturnType<typeof makeStore>, device: PLCRemote
     ...current,
     data: { ...current.data, remoteDevices: [...(current.data.remoteDevices ?? []), device] },
   })
+}
+
+/** Seed a Runtime v4 target so the cap-gated address pool counts
+ *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
+ *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
+ *  allocating addresses. */
+function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'OpenPLC Runtime v4',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v4',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: false,
+            vppIo: false,
+            modbusTcpRemote: true,
+            ethercat: true,
+            modbusTcpServer: true,
+            opcuaServer: true,
+            s7Server: true,
+            debuggerTransports: ['websocket'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: true,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 }
 
 // ===========================================================================
@@ -484,6 +536,54 @@ describe('createProjectSlice', () => {
       seedPou(store, makePou('Main'))
       store.getState().projectActions.updatePouName('Missing', 'NewName')
       expect(store.getState().project.data.pous[0].name).toBe('Main')
+    })
+
+    it('cascades the rename into matching configuration instances (program POUs)', () => {
+      // Regression guard for the "user renames `main` and the build
+      // breaks" report.  The template seeds an instance bound to the
+      // template's `main` program; without this cascade, renaming
+      // the POU would orphan that instance and the IEC compile would
+      // fail with a "program not found" error.
+      seedPou(store, makePou('OldProg'))
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'OldProg' },
+      })
+      store.getState().projectActions.updatePouName('OldProg', 'NewProg')
+      const instances = store.getState().project.data.configurations.resource.instances
+      expect(instances[0].program).toBe('NewProg')
+    })
+
+    it('syncs the LD body.value.name when a graphical POU is renamed', () => {
+      // Regression guard for the "rename made all rungs disappear"
+      // report.  LD/FBD bodies embed their `name` field inside
+      // `body.value`; the project-load path uses it as the
+      // ladderFlows key, so the rename has to update the inner name
+      // too or the on-disk file ends up with a stale name and the
+      // next reload renders an empty canvas under the new POU name.
+      const pou: PLCPou = {
+        name: 'main',
+        pouType: 'program',
+        interface: { variables: [] },
+        body: { language: 'ld', value: { name: 'main', updated: false, rungs: [] } },
+        documentation: '',
+      }
+      seedPou(store, pou)
+      store.getState().projectActions.updatePouName('main', 'PLC_PRG')
+      const updated = store.getState().project.data.pous[0]
+      expect(updated.name).toBe('PLC_PRG')
+      expect((updated.body.value as { name: string }).name).toBe('PLC_PRG')
+    })
+
+    it('does not cascade renames into instances when the POU is a function (no instance binding)', () => {
+      seedPou(store, makePou('Helper', 'function'))
+      // Defensive: a stray instance with the same `program` value
+      // shouldn't be rewritten when a function POU is renamed —
+      // only program POUs participate in the instance contract.
+      store.getState().projectActions.createInstance({
+        data: { name: 'Inst0', task: 'task0', program: 'Helper' },
+      })
+      store.getState().projectActions.updatePouName('Helper', 'Renamed')
+      expect(store.getState().project.data.configurations.resource.instances[0].program).toBe('Helper')
     })
   })
 
@@ -1816,6 +1916,57 @@ describe('createProjectSlice', () => {
   // =========================================================================
   // Remote devices
   // =========================================================================
+  describe('updateLibraryManifest', () => {
+    it('writes the manifest blob into project.data.libraryManifest', () => {
+      // libraryManifest is the .stlib metadata the library editor
+      // dumps back into project.json on save; the action is a pure
+      // setter, so the assertion is straight value-equality.
+      store.getState().projectActions.updateLibraryManifest('# my library')
+      expect(store.getState().project.data.libraryManifest).toBe('# my library')
+    })
+  })
+
+  describe('updateEthercatConfig', () => {
+    // Surfaces three explicit failure shapes — exercised separately
+    // because the error message is the contract the EtherCAT screen
+    // surfaces back to the user.
+    it('fails when remoteDevices is undefined', () => {
+      store.setState((s) => ({
+        project: {
+          ...s.project,
+          data: { ...s.project.data, remoteDevices: undefined as unknown as PLCRemoteDevice[] },
+        },
+      }))
+      const result = store.getState().projectActions.updateEthercatConfig('Dev1', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'No remote devices found' })
+    })
+
+    it('fails when the named device is missing', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Other'))
+      const result = store.getState().projectActions.updateEthercatConfig('Missing', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'Remote device not found' })
+    })
+
+    it('fails when the device protocol is not ethercat', () => {
+      // makeRemoteDevice defaults to modbus-tcp — same guard the
+      // EtherCAT screen relies on to refuse cross-protocol writes.
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      const result = store.getState().projectActions.updateEthercatConfig('Dev1', { devices: [] })
+      expect(result).toEqual({ ok: false, message: 'Device is not an EtherCAT device' })
+    })
+
+    it('writes ethercatConfig onto an ethercat-protocol device', () => {
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const cfg = {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [],
+      }
+      const result = store.getState().projectActions.updateEthercatConfig('BusA', cfg)
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.remoteDevices![0].ethercatConfig).toEqual(cfg)
+    })
+  })
+
   describe('createRemoteDevice', () => {
     it('creates a remote device with default modbus config', () => {
       const result = store.getState().projectActions.createRemoteDevice({
@@ -1923,6 +2074,15 @@ describe('createProjectSlice', () => {
   })
 
   describe('addIOGroup', () => {
+    beforeEach(() => {
+      // Cap-gated pool needs a target with modbusTcpRemote capability,
+      // otherwise sibling Modbus groups don't count and consecutive
+      // addIOGroup calls collide on the same address space. In
+      // production the workspace screen seeds availableBoards before
+      // the user reaches the remote-device UI, so this mirrors reality.
+      seedRuntimeV4Board(store)
+    })
+
     it('adds an IO group and generates IO points', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '3', 3)
@@ -2092,9 +2252,72 @@ describe('createProjectSlice', () => {
       expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.1')
       expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
     })
+
+    it('ignores VPP claims on a target whose caps do not include vppIo', () => {
+      // Regression: a project saved with target SLM-RP4 carries VPP
+      // entries in vendorScreenData.io-mapping. When the user switches
+      // to plain Runtime v4 (vppIo=false), those claims become
+      // inactive — adding a Modbus group must allocate from %IW0
+      // upward, not skip past the inactive VPP block.
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI0',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW0',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI1',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW1',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI2',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW2',
+            alias: '',
+          },
+          {
+            slot: 1,
+            moduleId: 'm',
+            moduleName: 'M',
+            channelName: 'AI3',
+            channelType: 'analogInput',
+            dataType: 'INT',
+            iecAddress: '%IW3',
+            alias: '',
+          },
+        ],
+      })
+
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points[0].iecLocation).toBe('%IW0')
+      expect(points[1].iecLocation).toBe('%IW1')
+    })
   })
 
   describe('updateIOGroup', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('updates an IO group by id', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
@@ -2118,6 +2341,10 @@ describe('createProjectSlice', () => {
   })
 
   describe('deleteIOGroup', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('deletes an IO group by id', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
@@ -2136,6 +2363,10 @@ describe('createProjectSlice', () => {
   })
 
   describe('updateIOPointAlias', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
     it('updates a point alias', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
@@ -2375,7 +2606,6 @@ describe('createProjectSlice', () => {
         browseName: 'v',
         displayName: 'v',
         description: '',
-        initialValue: false,
         permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
         nodeType: 'variable',
       })
@@ -2538,6 +2768,242 @@ describe('createProjectSlice', () => {
       } as Record<string, unknown>)
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.servers![0].opcuaServerConfig!.cycleTimeMs).toBe(200)
+    })
+
+    it('reconcile no-ops when no editor matches the POU', () => {
+      // POU exists but no editor for it — variable-text path can't
+      // be active, so reconcile must short-circuit and let the
+      // mutation through unchanged.
+      seedPou(store, makePou('Untracked', 'program'))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Untracked',
+        data: {
+          name: 'V',
+          class: 'local',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+        },
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('reconcile no-ops when editor is in table mode', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('Existing')]))
+      store.getState().editorActions.addModel({
+        type: 'plc-textual',
+        meta: { name: 'Main', path: '/Main.st', language: 'st', pouType: 'program' },
+        variable: { display: 'table', selectedRow: '-1', classFilter: 'All', description: '' },
+      })
+      store.getState().editorActions.setEditor({
+        type: 'plc-textual',
+        meta: { name: 'Main', path: '/Main.st', language: 'st', pouType: 'program' },
+        variable: { display: 'table', selectedRow: '-1', classFilter: 'All', description: '' },
+      })
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: {
+          name: 'NewVar',
+          class: 'local',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+        },
+      })
+      expect(result.ok).toBe(true)
+      // Editor still in table mode — no `editor.variable.code`
+      // assignment happened, so display stays 'table'.
+      const editor = store.getState().editor
+      expect(editor.type).toBe('plc-textual')
+      if (editor.type === 'plc-textual') {
+        expect(editor.variable.display).toBe('table')
+      }
+    })
+
+    it('reconcile parses text + regenerate writes back when code-mode buffer is valid', () => {
+      // The user has been editing the text directly: text says
+      // `Manually` exists, but the table still holds `Original`.
+      // A block drop calls `createVariable('FromBlock')` — reconcile
+      // must adopt the text's `Manually`, then add `FromBlock`, then
+      // re-serialize so the buffer reflects both.
+      seedPou(store, makePou('Main', 'program', [makeVariable('Original')]))
+      const dirtyText = 'VAR\n\tManually : DINT;\nEND_VAR'
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: dirtyText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: {
+          name: 'FromBlock',
+          class: 'local',
+          type: { definition: 'derived', value: 'testing' },
+          location: '',
+          documentation: '',
+        },
+      })
+
+      expect(result.ok).toBe(true)
+      const finalVars = store.getState().project.data.pous[0].interface!.variables
+      expect(finalVars.map((v) => v.name).sort()).toEqual(['FromBlock', 'Manually'])
+      // The buffer is rewritten from the new variables array.
+      const editor = store.getState().editor
+      if (editor.type === 'plc-textual' && editor.variable.display === 'code') {
+        expect(editor.variable.code).toContain('Manually')
+        expect(editor.variable.code).toContain('FromBlock')
+      } else {
+        throw new Error('editor expected to remain in code mode')
+      }
+    })
+
+    it('reconcile refuses external mutation when code-mode buffer fails to parse', () => {
+      // User typed something that doesn't parse; an unrelated block
+      // drop must be blocked so the user's invalid edit is not
+      // silently clobbered.  The variables array stays untouched.
+      seedPou(store, makePou('Main', 'program', [makeVariable('Original')]))
+      const brokenText = 'VAR\n\tno colon here\nEND_VAR'
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: brokenText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: {
+          name: 'FromBlock',
+          class: 'local',
+          type: { definition: 'derived', value: 'testing' },
+          location: '',
+          documentation: '',
+        },
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variables table is invalid')
+      expect(store.getState().project.data.pous[0].interface!.variables.map((v) => v.name)).toEqual(['Original'])
+    })
+
+    it('reconcile is a no-op when buffer matches serialized variables', () => {
+      // Editor in code mode but the buffer is exactly the canonical
+      // serialization of the current variables — the user hasn't
+      // typed anything, so reconcile should skip the parse entirely
+      // (and still regenerate after the new variable lands).
+      seedPou(store, makePou('Main', 'program', [makeVariable('Existing')]))
+      // Use the production serializer so the byte-for-byte format
+      // (2-space block indent, 4-space decl indent, class-grouped
+      // VAR blocks) stays in lockstep without us mirroring the
+      // template here.
+      const existing = store.getState().project.data.pous[0].interface!.variables
+      const cleanText = generateIecVariablesToString(existing)
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: cleanText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: {
+          name: 'Added',
+          class: 'local',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+        },
+      })
+
+      expect(result.ok).toBe(true)
+      const editor = store.getState().editor
+      if (editor.type === 'plc-textual' && editor.variable.display === 'code') {
+        expect(editor.variable.code).toContain('Added')
+        expect(editor.variable.code).toContain('Existing')
+      } else {
+        throw new Error('editor expected to remain in code mode')
+      }
+    })
+
+    it('reconcile blocks updateVariable + deleteVariable when buffer is invalid', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('X')]))
+      // Inside an opened VAR block, a line without `:` triggers the
+      // parser's "unrecognized declaration" path — guaranteed to
+      // throw, exercising the reconcile-refusal branch.
+      const brokenText = 'VAR\n\tno-colon-here garbage\nEND_VAR'
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: brokenText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const upd = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        rowId: 0,
+        data: { name: 'X2' },
+      })
+      expect(upd.ok).toBe(false)
+
+      const del = store.getState().projectActions.deleteVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        rowId: 0,
+      })
+      expect(del.ok).toBe(false)
+
+      // Both mutations were blocked — original variable still there.
+      expect(store.getState().project.data.pous[0].interface!.variables.map((v) => v.name)).toEqual(['X'])
+    })
+
+    it('reconcile uses inactive-editor snapshot when the active editor is on a different POU', () => {
+      // Multi-mount keeps inactive editors live in `state.editors[]`.
+      // External mutation on POU A while the user has POU B focused
+      // must reconcile A's snapshot, not B's.
+      seedPou(store, makePou('A', 'program', [makeVariable('OldA')]))
+      seedPou(store, makePou('B', 'program', [makeVariable('OldB')]))
+      const modelA = {
+        type: 'plc-textual' as const,
+        meta: { name: 'A', path: '/A.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: 'VAR\n\tFromText : DINT;\nEND_VAR' },
+      }
+      const modelB = {
+        type: 'plc-textual' as const,
+        meta: { name: 'B', path: '/B.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'table' as const, selectedRow: '-1', classFilter: 'All' as const, description: '' },
+      }
+      store.getState().editorActions.addModel(modelA)
+      store.getState().editorActions.addModel(modelB)
+      store.getState().editorActions.setEditor(modelB)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'A',
+        data: {
+          name: 'FromBlock',
+          class: 'local',
+          type: { definition: 'derived', value: 'testing' },
+          location: '',
+          documentation: '',
+        },
+      })
+
+      expect(result.ok).toBe(true)
+      const pouA = store.getState().project.data.pous.find((p) => p.name === 'A')!
+      expect(pouA.interface!.variables.map((v) => v.name).sort()).toEqual(['FromBlock', 'FromText'])
     })
 
     it('updateVariable with class change propagates validation data', () => {

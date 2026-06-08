@@ -3,7 +3,6 @@ import { StateCreator } from 'zustand'
 
 import type { AIFeatureConfig } from '../../../../middleware/shared/ports/types'
 import type { AISlice } from './types'
-import { MAX_CONVERSATION_MESSAGES } from './types'
 
 const DEFAULT_AI_STATE: AISlice['ai'] = {
   isEnabled: false,
@@ -12,16 +11,24 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   preferences: {
     inlineCompletionsEnabled: true,
   },
+  acuUsed: 0,
+  acuTotal: 0,
+  subscriptionStatus: null,
+  planSlug: null,
   creditsUsed: 0,
   creditsTotal: 500,
   tier: 'free',
   currentPeriodEnd: null,
+  billingError: null,
   messages: [],
   activeEditorPou: null,
   isAgenticLoopRunning: false,
   isChatOpen: false,
   error: null,
   pendingDiffs: {},
+  conversationId: null,
+  conversations: [],
+  isLoadingConversation: false,
 }
 
 export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AISlice, [], [], AISlice> {
@@ -64,11 +71,37 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
+      setUsage: (used, total) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.acuUsed = used
+            ai.acuTotal = total
+            // Keep deprecated mirror fields in lockstep so unmigrated consumers
+            // (DOPE-287 / DOPE-288 still on `creditsUsed`/`creditsTotal`) read
+            // the same values. Removed once the rename is fully propagated.
+            ai.creditsUsed = used
+            ai.creditsTotal = total
+          }),
+        )
+      },
+      setSubscription: (status, currentPeriodEnd, planSlug) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.subscriptionStatus = status
+            ai.currentPeriodEnd = currentPeriodEnd
+            ai.planSlug = planSlug
+          }),
+        )
+      },
       setCredits: (used, total) => {
         setState(
           produce(({ ai }: AISlice) => {
             ai.creditsUsed = used
             ai.creditsTotal = total
+            // Mirror to the new ACU fields so consumers migrated ahead of their
+            // call-site refactor see the right numbers via either name.
+            ai.acuUsed = used
+            ai.acuTotal = total
           }),
         )
       },
@@ -83,6 +116,13 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.currentPeriodEnd = date
+          }),
+        )
+      },
+      setBillingError: (error) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.billingError = error
           }),
         )
       },
@@ -111,9 +151,6 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.messages.push(message)
-            if (ai.messages.length > MAX_CONVERSATION_MESSAGES) {
-              ai.messages = ai.messages.slice(-MAX_CONVERSATION_MESSAGES)
-            }
           }),
         )
       },
@@ -142,6 +179,10 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           produce(({ ai }: AISlice) => {
             ai.messages = []
             ai.error = null
+            // Drop the active conversation pointer so the next /ai/chat call
+            // is treated as a fresh conversation. The list itself stays —
+            // the user can still see prior conversations and resume one.
+            ai.conversationId = null
           }),
         )
       },
@@ -197,6 +238,65 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.pendingDiffs = {}
+          }),
+        )
+      },
+      setConversationId: (id) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversationId = id
+          }),
+        )
+      },
+      setConversations: (conversations) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversations = conversations
+          }),
+        )
+      },
+      prependConversation: (conversation) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            // Defensive: drop any existing entry with the same id
+            // before prepending so we never end up with duplicates.
+            ai.conversations = [conversation, ...ai.conversations.filter((c) => c.id !== conversation.id)]
+          }),
+        )
+      },
+      removeConversation: (id) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.conversations = ai.conversations.filter((c) => c.id !== id)
+            if (ai.conversationId === id) {
+              ai.conversationId = null
+              ai.messages = []
+            }
+          }),
+        )
+      },
+      updateConversationTitle: (id, title) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            const summary = ai.conversations.find((c) => c.id === id)
+            if (summary) {
+              summary.title = title
+            }
+          }),
+        )
+      },
+      replaceMessages: (messages) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.messages = messages
+            ai.error = null
+          }),
+        )
+      },
+      setLoadingConversation: (loading) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.isLoadingConversation = loading
           }),
         )
       },

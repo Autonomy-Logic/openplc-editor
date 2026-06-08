@@ -1,3 +1,4 @@
+import { PlusIcon, TrashIcon } from '@radix-ui/react-icons'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type { OpcUaServerConfig, OpcUaTrustedCertificate } from '@root/middleware/shared/ports/types'
@@ -250,67 +251,64 @@ MIIEvgIBADANBg...
         <button
           type='button'
           onClick={handleAddCertificate}
-          className='flex h-[36px] w-fit items-center gap-2 rounded-md border border-neutral-300 bg-white px-4 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+          className='flex w-fit items-center gap-2 rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
         >
-          <span className='text-lg leading-none'>+</span>
+          <PlusIcon className='h-4 w-4' />
           Add Trusted Certificate
         </button>
 
-        {/* Certificates List */}
+        {/* Certificates Table */}
         {config.security.trustedClientCertificates.length === 0 ? (
-          <div className='rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-center dark:border-neutral-800 dark:bg-neutral-900'>
-            <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-              No trusted certificates configured. Add certificates to enable certificate-based authentication.
-            </p>
-          </div>
+          <p className='text-sm text-neutral-500 dark:text-neutral-400'>
+            No trusted certificates configured. Add certificates to enable certificate-based authentication.
+          </p>
         ) : (
-          <div className='flex flex-col gap-3'>
-            {config.security.trustedClientCertificates.map((cert) => (
-              <div
-                key={cert.id}
-                className='flex flex-col gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900'
-              >
-                {/* Header row with icon, name, and actions */}
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-3'>
-                    <span className='text-lg'>📜</span>
-                    <span className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                      {cert.id}
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className='flex items-center gap-2'>
-                    <button
-                      type='button'
-                      onClick={() => handleDeleteCertificate(cert.id)}
-                      className='h-[28px] rounded-md border border-red-300 bg-white px-3 font-caption text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:bg-neutral-800 dark:text-red-400 dark:hover:bg-red-950'
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {/* Certificate Details */}
-                <div className='flex flex-col gap-1 pl-[36px]'>
-                  {cert.subject && (
-                    <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-                      <span className='font-medium'>Subject:</span> {cert.subject}
-                    </p>
-                  )}
-                  {cert.validFrom && cert.validTo && (
-                    <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-                      <span className='font-medium'>Valid:</span> {cert.validFrom} to {cert.validTo}
-                    </p>
-                  )}
-                  {cert.fingerprint && (
-                    <p className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>
-                      <span className='font-medium'>Fingerprint:</span> {cert.fingerprint}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className='overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
+            <table className='w-full'>
+              <thead className='bg-neutral-50 dark:bg-neutral-800'>
+                <tr>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>ID</th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                    Subject
+                  </th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                    Valid
+                  </th>
+                  <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                    Fingerprint
+                  </th>
+                  <th className='px-3 py-2 text-right text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {config.security.trustedClientCertificates.map((cert) => (
+                  <tr key={cert.id} className='border-t border-neutral-200 dark:border-neutral-700'>
+                    <td className='px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100'>{cert.id}</td>
+                    <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>{cert.subject || '-'}</td>
+                    <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                      {cert.validFrom && cert.validTo ? `${cert.validFrom} to ${cert.validTo}` : '-'}
+                    </td>
+                    <td className='px-3 py-2 font-mono text-xs text-neutral-500 dark:text-neutral-500'>
+                      {cert.fingerprint || '-'}
+                    </td>
+                    <td className='px-3 py-2 text-right'>
+                      <div className='flex justify-end gap-2'>
+                        <button
+                          type='button'
+                          onClick={() => handleDeleteCertificate(cert.id)}
+                          className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+                          title='Delete'
+                        >
+                          <TrashIcon className='h-4 w-4' />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

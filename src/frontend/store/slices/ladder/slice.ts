@@ -78,6 +78,25 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         }),
       )
     },
+    renameLadderFlow: (oldName, newName) => {
+      if (oldName === newName) return
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((f) => f.name === oldName)
+          if (!flow) return
+          // Defensive: if a flow already exists under `newName` (e.g.
+          // because the editor cold-seeded an empty one before this
+          // rename ran), drop the empty placeholder so the original
+          // rungs survive.  The shared rename path validates name
+          // uniqueness on the POU side, so by the time we get here
+          // `newName` is guaranteed unique on the project — any
+          // pre-existing flow under that name is stale.
+          const existingIndex = ladderFlows.findIndex((f) => f.name === newName)
+          if (existingIndex !== -1) ladderFlows.splice(existingIndex, 1)
+          flow.name = newName
+        }),
+      )
+    },
 
     /**
      * Control the rungs of the flow
@@ -316,9 +335,10 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements(rung, nodes)
           rung.nodes = newNodes
           rung.edges = newEdges
+          if (handleBranches) rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )
@@ -432,6 +452,21 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           rung.edges.push(edge)
+          flow.updated = true
+        }),
+      )
+    },
+
+    setHandleBranches({ handleBranches, editorName, rungId }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )

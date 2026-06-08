@@ -2,7 +2,6 @@ import { createStore, StoreApi } from 'zustand/vanilla'
 
 import { createAISlice, createAISliceFactory } from '../slices/ai/slice'
 import type { AISlice, ChatMessage } from '../slices/ai/types'
-import { MAX_CONVERSATION_MESSAGES } from '../slices/ai/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,10 +38,15 @@ describe('createAISlice', () => {
       expect(ai.isEnabled).toBe(false)
       expect(ai.isLoading).toBe(false)
       expect(ai.hasConsented).toBe(false)
+      expect(ai.acuUsed).toBe(0)
+      expect(ai.acuTotal).toBe(0)
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.planSlug).toBeNull()
       expect(ai.creditsUsed).toBe(0)
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
       expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.billingError).toBeNull()
       expect(ai.messages).toEqual([])
       expect(ai.activeEditorPou).toBeNull()
       expect(ai.isAgenticLoopRunning).toBe(false)
@@ -50,6 +54,9 @@ describe('createAISlice', () => {
       expect(ai.error).toBeNull()
       expect(ai.preferences).toEqual({ inlineCompletionsEnabled: true })
       expect(ai.pendingDiffs).toEqual({})
+      expect(ai.conversationId).toBeNull()
+      expect(ai.conversations).toEqual([])
+      expect(ai.isLoadingConversation).toBe(false)
     })
   })
 
@@ -109,11 +116,50 @@ describe('createAISlice', () => {
     })
   })
 
-  describe('setCredits', () => {
+  describe('setUsage', () => {
+    it('writes the new ACU fields', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
+    })
+
+    it('mirrors to deprecated creditsUsed/creditsTotal so unmigrated consumers stay in sync', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.creditsUsed).toBe(42)
+      expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+  })
+
+  describe('setSubscription', () => {
+    it('sets subscriptionStatus, currentPeriodEnd, and planSlug together', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBe('active')
+      expect(ai.currentPeriodEnd).toBe('2026-06-01')
+      expect(ai.planSlug).toBe('community')
+    })
+
+    it('accepts null for all three fields (e.g. on logout)', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      store.getState().aiActions.setSubscription(null, null, null)
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.planSlug).toBeNull()
+    })
+  })
+
+  describe('setCredits (deprecated)', () => {
     it('sets both used and total credits', () => {
       store.getState().aiActions.setCredits(42, 1000)
       expect(store.getState().ai.creditsUsed).toBe(42)
       expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+
+    it('mirrors to new acuUsed/acuTotal so consumers migrated ahead of their call sites stay correct', () => {
+      store.getState().aiActions.setCredits(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
     })
   })
 
@@ -140,6 +186,32 @@ describe('createAISlice', () => {
       store.getState().aiActions.setCurrentPeriodEnd('2026-04-01')
       store.getState().aiActions.setCurrentPeriodEnd(null)
       expect(store.getState().ai.currentPeriodEnd).toBeNull()
+    })
+  })
+
+  describe('setBillingError', () => {
+    it('sets the structured 402 payload', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'insufficient_acu',
+        message: 'Out of ACU',
+        remaining: 0,
+        required: 12,
+        monthlyLimit: 613,
+      })
+      const { billingError } = store.getState().ai
+      expect(billingError?.code).toBe('insufficient_acu')
+      expect(billingError?.required).toBe(12)
+      expect(billingError?.monthlyLimit).toBe(613)
+    })
+
+    it('clears the billing error when passed null', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'subscription_inactive',
+        message: 'Payment failed',
+        subscriptionStatus: 'past_due',
+      })
+      store.getState().aiActions.setBillingError(null)
+      expect(store.getState().ai.billingError).toBeNull()
     })
   })
 
@@ -209,17 +281,16 @@ describe('createAISlice', () => {
       expect(messages[1].id).toBe('msg-2')
     })
 
-    it('enforces MAX_CONVERSATION_MESSAGES by keeping the most recent messages', () => {
-      expect(MAX_CONVERSATION_MESSAGES).toBe(50)
-
-      for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 5; i++) {
+    it('retains every appended message without truncation', () => {
+      const total = 75
+      for (let i = 0; i < total; i++) {
         store.getState().aiActions.addMessage(makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
       }
 
       const messages = store.getState().ai.messages
-      expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-      expect(messages[0].id).toBe('msg-5')
-      expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`msg-${MAX_CONVERSATION_MESSAGES + 4}`)
+      expect(messages).toHaveLength(total)
+      expect(messages[0].id).toBe('msg-0')
+      expect(messages[total - 1].id).toBe(`msg-${total - 1}`)
     })
   })
 
@@ -281,21 +352,24 @@ describe('createAISlice', () => {
   })
 
   describe('clearConversation', () => {
-    it('clears all messages and the error', () => {
+    it('clears messages, error, and the active conversation id', () => {
       store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
       store.getState().aiActions.addMessage(makeMessage({ id: 'msg-2' }))
       store.getState().aiActions.setAIError('some error')
+      store.getState().aiActions.setConversationId('conv-1')
 
       store.getState().aiActions.clearConversation()
 
       expect(store.getState().ai.messages).toHaveLength(0)
       expect(store.getState().ai.error).toBeNull()
+      expect(store.getState().ai.conversationId).toBeNull()
     })
 
     it('is a no-op on empty state (no error)', () => {
       store.getState().aiActions.clearConversation()
       expect(store.getState().ai.messages).toHaveLength(0)
       expect(store.getState().ai.error).toBeNull()
+      expect(store.getState().ai.conversationId).toBeNull()
     })
   })
 
@@ -404,6 +478,176 @@ describe('createAISlice', () => {
       expect(store.getState().ai.pendingDiffs).toEqual({})
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Conversation management (DOPE-2)
+  // ---------------------------------------------------------------------------
+
+  describe('conversation management', () => {
+    const summaryA = {
+      id: 'conv-a',
+      title: 'Refactor motor control',
+      lastModel: 'sonnet' as const,
+      createdAt: '2026-05-04T10:00:00Z',
+      updatedAt: '2026-05-04T11:00:00Z',
+    }
+    const summaryB = {
+      id: 'conv-b',
+      title: 'Add timer',
+      lastModel: 'sonnet' as const,
+      createdAt: '2026-05-04T09:00:00Z',
+      updatedAt: '2026-05-04T09:30:00Z',
+    }
+
+    describe('setConversationId', () => {
+      it('sets the active conversation id', () => {
+        store.getState().aiActions.setConversationId('conv-a')
+        expect(store.getState().ai.conversationId).toBe('conv-a')
+      })
+
+      it('clears the active conversation id when set to null', () => {
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.setConversationId(null)
+        expect(store.getState().ai.conversationId).toBeNull()
+      })
+    })
+
+    describe('setConversations', () => {
+      it('replaces the conversations list', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        expect(store.getState().ai.conversations).toEqual([summaryA, summaryB])
+      })
+
+      it('replaces with an empty list', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.setConversations([])
+        expect(store.getState().ai.conversations).toEqual([])
+      })
+    })
+
+    describe('prependConversation', () => {
+      it('inserts a new conversation at the top', () => {
+        store.getState().aiActions.setConversations([summaryB])
+        store.getState().aiActions.prependConversation(summaryA)
+        expect(store.getState().ai.conversations.map((c) => c.id)).toEqual(['conv-a', 'conv-b'])
+      })
+
+      it('drops a duplicate id before prepending (no double rows)', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.prependConversation({ ...summaryA, title: 'Renamed' })
+        const ids = store.getState().ai.conversations.map((c) => c.id)
+        expect(ids).toEqual(['conv-a', 'conv-b'])
+        expect(store.getState().ai.conversations[0].title).toBe('Renamed')
+      })
+    })
+
+    describe('removeConversation', () => {
+      it('drops a conversation from the list', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.removeConversation('conv-a')
+        expect(store.getState().ai.conversations).toEqual([summaryB])
+      })
+
+      it('clears messages + active id when removing the active conversation', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+
+        store.getState().aiActions.removeConversation('conv-a')
+
+        expect(store.getState().ai.conversations).toEqual([])
+        expect(store.getState().ai.conversationId).toBeNull()
+        expect(store.getState().ai.messages).toHaveLength(0)
+      })
+
+      it('keeps messages + active id when removing a different conversation', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.setConversationId('conv-a')
+        store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1' }))
+
+        store.getState().aiActions.removeConversation('conv-b')
+
+        expect(store.getState().ai.conversationId).toBe('conv-a')
+        expect(store.getState().ai.messages).toHaveLength(1)
+      })
+
+      it('is a no-op for unknown ids', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.removeConversation('does-not-exist')
+        expect(store.getState().ai.conversations).toEqual([summaryA])
+      })
+    })
+
+    describe('updateConversationTitle', () => {
+      it('updates the title of an existing summary', () => {
+        store.getState().aiActions.setConversations([summaryA, summaryB])
+        store.getState().aiActions.updateConversationTitle('conv-a', 'New title')
+        expect(store.getState().ai.conversations[0].title).toBe('New title')
+        expect(store.getState().ai.conversations[1].title).toBe(summaryB.title)
+      })
+
+      it('is a no-op for unknown ids', () => {
+        store.getState().aiActions.setConversations([summaryA])
+        store.getState().aiActions.updateConversationTitle('nope', 'x')
+        expect(store.getState().ai.conversations[0].title).toBe(summaryA.title)
+      })
+    })
+
+    describe('replaceMessages', () => {
+      it('replaces the messages list wholesale', () => {
+        store.getState().aiActions.addMessage(makeMessage({ id: 'old-1' }))
+        const replacement = [
+          makeMessage({ id: 'new-1', role: 'user', content: 'one' }),
+          makeMessage({ id: 'new-2', role: 'assistant', content: 'two' }),
+        ]
+        store.getState().aiActions.replaceMessages(replacement)
+
+        expect(store.getState().ai.messages.map((m) => m.id)).toEqual(['new-1', 'new-2'])
+      })
+
+      it('clears the error', () => {
+        store.getState().aiActions.setAIError('boom')
+        store.getState().aiActions.replaceMessages([])
+        expect(store.getState().ai.error).toBeNull()
+      })
+
+      it('replaces with the full payload without truncation', () => {
+        const total = 75
+        const many: ChatMessage[] = []
+        for (let i = 0; i < total; i++) {
+          many.push(makeMessage({ id: `m-${i}`, content: `Message ${i}` }))
+        }
+        store.getState().aiActions.replaceMessages(many)
+
+        const messages = store.getState().ai.messages
+        expect(messages).toHaveLength(total)
+        expect(messages[0].id).toBe('m-0')
+        expect(messages[total - 1].id).toBe(`m-${total - 1}`)
+      })
+    })
+
+    describe('setLoadingConversation', () => {
+      it('toggles the isLoadingConversation flag', () => {
+        store.getState().aiActions.setLoadingConversation(true)
+        expect(store.getState().ai.isLoadingConversation).toBe(true)
+        store.getState().aiActions.setLoadingConversation(false)
+        expect(store.getState().ai.isLoadingConversation).toBe(false)
+      })
+    })
+  })
+
+  describe('updateMessageContent with block array', () => {
+    it('replaces a streamed text content with a block array (used at agentic-loop iteration boundary)', () => {
+      store.getState().aiActions.addMessage(makeMessage({ id: 'msg-1', role: 'assistant', content: 'streamed text' }))
+      const blocks = [
+        { type: 'text' as const, text: 'streamed text' },
+        { type: 'tool_use' as const, id: 'toolu_1', name: 'create_pou', input: { name: 'Foo' } },
+      ]
+      store.getState().aiActions.updateMessageContent('msg-1', blocks)
+
+      expect(store.getState().ai.messages[0].content).toEqual(blocks)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -439,10 +683,15 @@ describe('createAISliceFactory', () => {
       createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false, inlineCompletionsEnabled: true }),
     )
     const { ai } = store.getState()
+    expect(ai.acuUsed).toBe(0)
+    expect(ai.acuTotal).toBe(0)
+    expect(ai.subscriptionStatus).toBeNull()
+    expect(ai.planSlug).toBeNull()
     expect(ai.creditsUsed).toBe(0)
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
     expect(ai.currentPeriodEnd).toBeNull()
+    expect(ai.billingError).toBeNull()
     expect(ai.messages).toEqual([])
     expect(ai.activeEditorPou).toBeNull()
     expect(ai.isAgenticLoopRunning).toBe(false)

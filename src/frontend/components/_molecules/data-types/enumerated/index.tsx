@@ -32,6 +32,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -47,16 +48,20 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
     })
   }
 
+  // `updateDatatype` is a full replace — spread `data` first so we
+  // don't strip `name` / `derivation` and corrupt the entry for
+  // downstream consumers.
+  const writeValues = (newValues: PLCEnumeratedDatatype['values']) => {
+    updateDatatype(data.name, { ...data, values: newValues })
+  }
+
   const addNewRow = () => {
     captureAndPush(editor.meta.name)
 
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
       setArrayTable({ selectedRow: newRows.length - 1 })
-      updateDatatype(data.name, {
-        values: newRows.map((row) => ({ description: row?.description })),
-        initialValue: data.initialValue,
-      } as PLCEnumeratedDatatype)
+      writeValues(newRows.map((row) => ({ description: row?.description })))
       return newRows
     })
   }
@@ -71,10 +76,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
         setArrayTable({ selectedRow: newFocusIndex })
 
-        updateDatatype(data.name, {
-          values: newRows.map((row) => ({ description: row?.description })),
-          initialValue: data.initialValue,
-        } as PLCEnumeratedDatatype)
+        writeValues(newRows.map((row) => ({ description: row?.description })))
 
         return newRows
       }
@@ -95,10 +97,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow - 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        updateDatatype(data.name, {
-          values: newRows.map((row) => ({ description: row?.description })),
-          initialValue: data.initialValue,
-        } as PLCEnumeratedDatatype)
+        writeValues(newRows.map((row) => ({ description: row?.description })))
 
         prevRows = newRows
       }
@@ -119,10 +118,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow + 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        updateDatatype(data.name, {
-          values: newRows.map((row) => ({ description: row?.description })),
-          initialValue: data.initialValue,
-        } as PLCEnumeratedDatatype)
+        writeValues(newRows.map((row) => ({ description: row?.description })))
 
         prevRows = newRows
       }

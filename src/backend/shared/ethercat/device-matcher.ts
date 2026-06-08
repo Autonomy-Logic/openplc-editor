@@ -10,7 +10,7 @@ import type {
   ESIRepositoryItemLight,
   ScannedDeviceMatch,
 } from '@root/middleware/shared/ports/esi-types'
-import type { EtherCATDevice } from '@root/types/ethercat'
+import type { EtherCATDevice } from '@root/middleware/shared/ports/ethercat-types'
 
 /**
  * Parse a hex string to a number for comparison.

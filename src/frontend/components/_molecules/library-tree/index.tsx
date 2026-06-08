@@ -72,7 +72,14 @@ const LibraryFolder = ({ label, children, initiallyOpen, shouldBeOpen }: ILibrar
       </div>
       {children && folderIsOpen && (
         <div>
-          <ul className='list-none p-0'>{children}</ul>
+          {/*
+           * Indent the child list so nested folders and files visually
+           * track the hierarchy depth. Top-level folders sit flush
+           * because they live under `LibraryRoot`'s own padding-free
+           * `<ul>`; only this inner `<ul>` (rendered inside an open
+           * folder) carries the per-level offset.
+           */}
+          <ul className='list-none p-0 pl-3'>{children}</ul>
         </div>
       )}
     </li>

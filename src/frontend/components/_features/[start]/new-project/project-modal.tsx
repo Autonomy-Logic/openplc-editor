@@ -15,10 +15,19 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
   } = useOpenPLCStore()
 
   const resetFormData = NewProjectStore((state) => state.resetFormData)
+  const projectType = NewProjectStore((state) => state.formData.type)
   const [currentStep, setCurrentStep] = useState(1)
 
+  // Library projects don't need the language / cycle-time step —
+  // they have no main program and no cyclic task to configure.  The
+  // modal stops at Step 2 and creates the project from there.  Step
+  // count is read everywhere it matters so a future fourth step
+  // doesn't have to be threaded through three different `< 3` /
+  // `< 4` literals.
+  const totalSteps = projectType === 'plc-library' ? 2 : 3
+
   const handleNext = () => {
-    setCurrentStep((prevStep) => (prevStep < 3 ? prevStep + 1 : prevStep))
+    setCurrentStep((prevStep) => (prevStep < totalSteps ? prevStep + 1 : prevStep))
   }
 
   const handlePrev = () => {
@@ -49,7 +58,15 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
       case 1:
         return <Step1 onClose={handleClose} onNext={handleNext} />
       case 2:
-        return <Step2 onNext={handleNext} onPrev={handlePrev} />
+        return (
+          <Step2
+            onNext={handleNext}
+            onPrev={handlePrev}
+            onFinish={handleFinishForm}
+            onClose={handleClose}
+            isFinalStep={totalSteps === 2}
+          />
+        )
       case 3:
         return <Step3 onPrev={handlePrev} onFinish={handleFinishForm} onClose={handleClose} />
       default:

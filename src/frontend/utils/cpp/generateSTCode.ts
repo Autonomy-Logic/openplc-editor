@@ -1,10 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import {
-  getArrayStartIndex,
-  getArrayTotalElements,
-  getVariableIECType,
-  isArrayVariable,
-} from '../PLC/array-codegen-helpers'
+import { getArrayStartIndex, isArrayVariable } from '../PLC/array-codegen-helpers'
 
 type STCodeGenerationParams = {
   pouName: string
@@ -12,61 +7,28 @@ type STCodeGenerationParams = {
 }
 
 /**
- * Generate flat temporary array declarations for array variables.
- * iec2c wraps each element in __IEC_TYPE_t (value + flags), so we need
- * flat IEC_TYPE arrays for C code that expects contiguous typed elements.
- */
-const generateFlatArrayDeclarations = (arrayVariables: PLCVariable[]): string => {
-  let code = ''
-  arrayVariables.forEach((variable) => {
-    const name = variable.name.toUpperCase()
-    const iecType = getVariableIECType(variable)
-    const totalElements = getArrayTotalElements(variable)
-    code += `${iecType} __flat_${name}[${totalElements}];\n`
-  })
-  return code
-}
-
-/**
- * Generate code to copy .value from each wrapped table element into the flat array.
- */
-const generateFlatArrayCopiesIn = (arrayVariables: PLCVariable[]): string => {
-  let code = ''
-  arrayVariables.forEach((variable) => {
-    const name = variable.name.toUpperCase()
-    const totalElements = getArrayTotalElements(variable)
-    code += `for (int __i = 0; __i < ${totalElements}; __i++) __flat_${name}[__i] = data__->${name}.value.table[__i].value;\n`
-  })
-  return code
-}
-
-/**
- * Generate pointer assignment for a variable into the vars struct.
- * For arrays, points to the flat temporary array with start index offset.
- * For scalars, points to the wrapped value directly.
+ * Pointer assignment for the user-visible struct.
+ *
+ * - Scalars (including STRING / WSTRING): `vars.NAME = &NAME` — every
+ *   base type, strings included, is an `IECVar<T>` / `IECStringVar<N>`
+ *   on the strucpp side, and the struct field is the matching
+ *   `strucpp::IEC_T*` / `strucpp::IEC_STRING*` pointer. The user's
+ *   `*name = 5` / `name = "hi"` routes through the wrapper's
+ *   `operator=`, which respects forcing.
+ *
+ * - Base-type arrays: `vars.NAME = &NAME[lower] - lower`. `Array1D<T>`
+ *   stores `std::array<IECVar<T>, N>`; element 0 sits at `&NAME[lower]`.
+ *   Subtracting `lower` shifts the pointer so `vars->NAME[iec_idx]`
+ *   works for any IEC index in the declared range. Per-element forcing
+ *   is preserved.
  */
 const generateVariableAssignment = (variable: PLCVariable): string => {
   const name = variable.name.toUpperCase()
   if (isArrayVariable(variable)) {
     const startIndex = getArrayStartIndex(variable)
-    return `vars.${name} = __flat_${name} - ${startIndex};\n`
+    return `vars.${name} = &${name}[${startIndex}] - ${startIndex};\n`
   }
-  return `vars.${name} = &data__->${name}.value;\n`
-}
-
-/**
- * Generate code to copy output array values back from flat arrays to wrapped table elements.
- */
-const generateOutputArrayCopyBack = (outputVariables: PLCVariable[]): string => {
-  let code = ''
-  outputVariables.forEach((variable) => {
-    if (isArrayVariable(variable)) {
-      const name = variable.name.toUpperCase()
-      const totalElements = getArrayTotalElements(variable)
-      code += `for (int __i = 0; __i < ${totalElements}; __i++) data__->${name}.value.table[__i].value = __flat_${name}[__i];\n`
-    }
-  })
-  return code
+  return `vars.${name} = &${name};\n`
 }
 
 const generateSTCode = (params: STCodeGenerationParams): string => {
@@ -79,40 +41,29 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
   const setupFunctionName = `${pouName.toLowerCase()}_setup`
   const loopFunctionName = `${pouName.toLowerCase()}_loop`
 
-  const allArrayVariables = [...inputVariables, ...outputVariables].filter(isArrayVariable)
-
-  const flatArrayDecl = generateFlatArrayDeclarations(allArrayVariables)
-  const flatArrayCopiesIn = generateFlatArrayCopiesIn(allArrayVariables)
-
   let variableAssignments = ''
-  inputVariables.forEach((variable) => {
-    variableAssignments += generateVariableAssignment(variable)
-  })
-  outputVariables.forEach((variable) => {
-    variableAssignments += generateVariableAssignment(variable)
-  })
+  for (const variable of inputVariables) variableAssignments += generateVariableAssignment(variable)
+  for (const variable of outputVariables) variableAssignments += generateVariableAssignment(variable)
 
-  const outputCopyBack = generateOutputArrayCopyBack(outputVariables)
-
-  let stCode = `{{
+  // Header `{external}` block: declare the user-visible struct, fill
+  // the pointer fields. STruC++ emits this body verbatim into the
+  // program's run() method, so unqualified UPPERCASE names resolve to
+  // class members (the program's IEC variables). No boundary copy is
+  // needed — every pin (numeric, bit-string, STRING, WSTRING) is a
+  // `strucpp::IEC_*` wrapper on both sides of the call, so taking its
+  // address is type-compatible with the struct field.
+  return `{external
 ${structName} vars;
-${flatArrayDecl}${flatArrayCopiesIn}${variableAssignments}}}
+${variableAssignments}}
 if hasBeenInitialized = False then
-{{
+{external
 ${setupFunctionName}(&vars);
-}}
+}
 hasBeenInitialized := True;
 end_if;
-{{
+{external
 ${loopFunctionName}(&vars);
-}}`
-
-  if (outputCopyBack) {
-    stCode += `\n{{
-${outputCopyBack}}}`
-  }
-
-  return stCode
+}`
 }
 
 export { generateSTCode, type STCodeGenerationParams }

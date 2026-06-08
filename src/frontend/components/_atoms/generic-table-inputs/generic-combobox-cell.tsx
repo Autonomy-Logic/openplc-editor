@@ -25,6 +25,7 @@ export const GenericComboboxCell = ({
   selected = true,
   openOnSelectedOption = false,
   canAddACustomOption = false,
+  displayLabel,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -32,6 +33,11 @@ export const GenericComboboxCell = ({
   selected?: boolean
   openOnSelectedOption?: boolean
   canAddACustomOption?: boolean
+  /** Visible text in the closed-state trigger. When omitted, the
+   *  trigger shows `value` verbatim (the original behavior). Used by
+   *  variable cells to render `alias (address)` so the bound alias
+   *  stays visible alongside the raw address the combobox edits. */
+  displayLabel?: string
 }) => {
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
@@ -70,6 +76,7 @@ export const GenericComboboxCell = ({
         inputRef.current?.focus()
       }, 0)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectIsOpen, inputValue])
 
   const isButtonDisabled =
@@ -106,7 +113,7 @@ export const GenericComboboxCell = ({
         }
         return result
       },
-    [selectValues],
+    [],
   )
 
   // Helper to filter options/groups recursively (moved out for reuse)
@@ -134,7 +141,9 @@ export const GenericComboboxCell = ({
   }
 
   // Flatten filtered options for navigation
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredOptions = useMemo(() => filterOptions(selectValues, inputValue), [selectValues, inputValue])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const flatFilteredOptions = useMemo(() => flattenOptions(filteredOptions), [filteredOptions])
 
   // Reset highlight only when dropdown is first opened
@@ -142,6 +151,7 @@ export const GenericComboboxCell = ({
     if (selectIsOpen) {
       setHighlightedIndex(flatFilteredOptions.findIndex((opt) => opt.value === value))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectIsOpen])
 
   // Scroll highlighted option into view
@@ -204,7 +214,7 @@ export const GenericComboboxCell = ({
           { 'pointer-events-none': !selected },
         )}
       >
-        {value || ''}
+        {displayLabel ?? value ?? ''}
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Content
         sideOffset={12}

@@ -4,32 +4,35 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PendingChange } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
+import { buildAllProjectFileContents, buildAllProjectFileContentsPure } from '../../../../services/save-actions'
 import { useOpenPLCStore } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
+import type { PendingChangeStatus } from '../../../../store/slices/version-control/types'
 import { cn } from '../../../../utils/cn'
-import { serializePouToText } from '../../../../utils/PLC/pou-text-serializer'
-import { sanitizePou } from '../../../../utils/save-project'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
+import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
+import { StashCreateModal } from './modals/stash-create-modal'
 
 type ChangesSectionProps = {
   projectId: string
 }
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<PendingChangeStatus, string> = {
   modified: 'M',
   added: 'A',
   deleted: 'D',
 }
 
-const STATUS_COLOR: Record<string, string> = {
+const STATUS_COLOR: Record<PendingChangeStatus, string> = {
   modified: 'text-yellow-500 dark:text-yellow-400',
   added: 'text-green-500 dark:text-green-400',
   deleted: 'text-red-500 dark:text-red-400',
 }
 
-const STATUS_TOOLTIP: Record<string, string> = {
+const STATUS_TOOLTIP: Record<PendingChangeStatus, string> = {
   modified: 'Modified -- File has been changed since last commit',
   added: 'Added -- New file not in previous commit',
   deleted: 'Deleted -- File has been removed',
@@ -101,13 +104,13 @@ function FilePreviewModal({ filePath, content, onClose }: { filePath: string; co
 // Tree types & helpers
 // ---------------------------------------------------------------------------
 
-type ChangedFile = { path: string; status: string }
+type ChangedFile = { path: string; status: PendingChangeStatus }
 
 type FileTreeNode = {
   name: string
   path: string
   type: 'file' | 'folder'
-  status?: string
+  status?: PendingChangeStatus
   children?: FileTreeNode[]
 }
 
@@ -257,11 +260,11 @@ function ChangesTreeItem({
       <span
         className={cn(
           'w-4 shrink-0 text-right font-mono text-[10px] font-bold',
-          STATUS_COLOR[node.status ?? ''] ?? 'text-neutral-500',
+          node.status ? STATUS_COLOR[node.status] : 'text-neutral-500',
         )}
-        title={STATUS_TOOLTIP[node.status ?? ''] ?? node.status}
+        title={node.status ? STATUS_TOOLTIP[node.status] : undefined}
       >
-        {STATUS_LABEL[node.status ?? ''] ?? node.status}
+        {node.status ? STATUS_LABEL[node.status] : ''}
       </span>
     </div>
   )
@@ -278,14 +281,22 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     versionControlActions,
     sharedWorkspaceActions,
     project,
-    deviceDefinitions,
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
   const pous = project.data.pous
 
-  const [files, setFiles] = useState<PendingChange[]>([])
+  // System files (e.g. legacy `git-data.tar.gz` from migration) ride along on
+  // commits silently — they're never shown, never selectable, never discardable.
+  // We keep them in a separate bucket so the UI never has to filter them out
+  // again, and the commit path can pass them straight through.
+  const [pendingFiles, setPendingFiles] = useState<{ visible: PendingChange[]; system: PendingChange[] }>({
+    visible: [],
+    system: [],
+  })
+  const visibleFiles = pendingFiles.visible
   const [isLoading, setIsLoading] = useState(true)
   const [isFetching, setIsFetching] = useState(false)
   const [message, setMessage] = useState('')
@@ -294,22 +305,24 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCommitting, setIsCommitting] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
+  const [showStashModal, setShowStashModal] = useState(false)
+  const [isStashing, setIsStashing] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
 
-  const tree = useMemo(() => buildChangesTree(files), [files])
+  const tree = useMemo(() => buildChangesTree(visibleFiles), [visibleFiles])
 
   // Auto-expand all folders
   const folderKey = useMemo(() => {
     const folders = new Set<string>()
-    for (const file of files) {
+    for (const file of visibleFiles) {
       const parts = file.path.split('/').filter(Boolean)
       for (let i = 1; i < parts.length; i++) {
         folders.add(parts.slice(0, i).join('/'))
       }
     }
     return folders
-  }, [files])
+  }, [visibleFiles])
 
   const prevFolderKeyRef = useRef<Set<string>>(new Set())
   useEffect(() => {
@@ -325,10 +338,19 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     setIsFetching(true)
     try {
       const data = await versionControl.getChanges(projectId)
-      setFiles(data.changes)
-      versionControlActions.setPendingChangesCount(data.changes.length)
+      // Split into visible (user-facing) and system (silent passengers) once,
+      // so subsequent renders and the commit path can read them directly
+      // without re-filtering.
+      const visible: PendingChange[] = []
+      const system: PendingChange[] = []
+      for (const c of data.changes) {
+        if (isSystemFile(c.path)) system.push(c)
+        else visible.push(c)
+      }
+      setPendingFiles({ visible, system })
+      versionControlActions.syncFromChanges(visible.map((c) => ({ path: c.path, status: c.status })))
     } catch {
-      setFiles([])
+      setPendingFiles({ visible: [], system: [] })
     } finally {
       setIsLoading(false)
       setIsFetching(false)
@@ -339,28 +361,30 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     void fetchChanges()
   }, [fetchChanges])
 
-  // Auto-select all files on initial load or when file list changes
+  // Auto-select all files on initial load or when file list changes.
+  // Only visible files are tracked in `selectedFiles`; system files are auto-
+  // included at commit time regardless of selection.
   const fileListKey = useMemo(
     () =>
-      files
+      visibleFiles
         .map((f) => f.path)
         .sort()
         .join('\n'),
-    [files],
+    [visibleFiles],
   )
   const prevFileListKey = useRef(fileListKey)
   const isInitialLoad = useRef(true)
 
   useEffect(() => {
     if (isInitialLoad.current || fileListKey !== prevFileListKey.current) {
-      setSelectedFiles(new Set(files.map((f) => f.path)))
+      setSelectedFiles(new Set(visibleFiles.map((f) => f.path)))
       prevFileListKey.current = fileListKey
       isInitialLoad.current = false
     }
-  }, [fileListKey, files])
+  }, [fileListKey, visibleFiles])
 
-  const allSelected = files.length > 0 && selectedFiles.size === files.length
-  const someSelected = selectedFiles.size > 0 && selectedFiles.size < files.length
+  const allSelected = visibleFiles.length > 0 && selectedFiles.size === visibleFiles.length
+  const someSelected = selectedFiles.size > 0 && selectedFiles.size < visibleFiles.length
 
   const toggleFile = (path: string) => {
     setSelectedFiles((prev) => {
@@ -384,7 +408,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
 
   const toggleAll = () => {
     if (allSelected) setSelectedFiles(new Set())
-    else setSelectedFiles(new Set(files.map((f) => f.path)))
+    else setSelectedFiles(new Set(visibleFiles.map((f) => f.path)))
   }
 
   const toggleExpand = (path: string) => {
@@ -427,83 +451,81 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         return
       }
 
-      // Non-POU files: resolve content from store and show in preview modal
+      // Non-POU files: resolve content via the same canonical serializer
+      // the save flow uses. Building ad-hoc shapes here previously made the
+      // preview diverge from what got committed (e.g. `project.json` showed
+      // {name,type,path} while save wrote {meta,data,...}).
       try {
-        let content: string | null = null
-
-        if (filePath === 'project.json') {
-          content = JSON.stringify(
-            { name: project.meta.name, type: project.meta.type, path: project.meta.path },
-            null,
-            2,
-          )
-        } else if (filePath === 'devices/configuration.json') {
-          content = JSON.stringify(deviceDefinitions.configuration, null, 2)
-        } else if (filePath === 'devices/pin-mapping.json') {
-          content = JSON.stringify(deviceDefinitions.pinMapping, null, 2)
-        } else if (filePath.startsWith('devices/remote/')) {
-          const name = filePath.split('/').pop()?.replace('.json', '')
-          const rd = project.data.remoteDevices?.find((d) => d.name === name)
-          if (rd) content = JSON.stringify(rd, null, 2)
-        } else if (filePath.startsWith('devices/servers/')) {
-          const name = filePath.split('/').pop()?.replace('.json', '')
-          const srv = project.data.servers?.find((s) => s.name === name)
-          if (srv) content = JSON.stringify(srv, null, 2)
-        }
-
-        // Try POU serialization as fallback (in case the path format differs)
-        if (content === null) {
-          const filename = filePath.split('/').pop() ?? ''
-          const dotIndex = filename.lastIndexOf('.')
-          if (dotIndex > 0) {
-            const pouName = filename.substring(0, dotIndex)
-            const pou = pous.find((p) => p.name === pouName)
-            if (pou) {
-              const sanitized = sanitizePou(pou, undefined)
-              content = serializePouToText(sanitized)
-            }
-          }
-        }
-
-        if (content !== null) {
+        const content = buildAllProjectFileContentsPure()[filePath]
+        if (content !== undefined) {
           setPreviewFile({ path: filePath, content })
         }
       } catch {
         // Serialization failed — ignore
       }
     },
-    [pous, project, deviceDefinitions, updateTabs, getEditorFromEditors, addModel, setEditor],
+    [pous, updateTabs, getEditorFromEditors, addModel, setEditor],
   )
 
-  const hasChanges = files.length > 0
+  const hasChanges = visibleFiles.length > 0
   const canCommit = message.trim().length > 0 && selectedFiles.size > 0
 
   const handleCommit = async () => {
     if (!canCommit || !versionControl) return
+    // No write permission ⇒ skip the doomed backend commit and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('commit to')
+      return
+    }
 
     setIsCommitting(true)
     setErrorMessage(null)
 
     try {
-      // Re-fetch to avoid stale state
+      // Re-fetch to avoid stale state. Split into visible/system once so the
+      // commit path doesn't re-filter and so we can detect whether the user
+      // selected literally everything (passing `undefined` lets the backend
+      // commit all pending changes in one shot).
       const freshData = await versionControl.getChanges(projectId)
-      const freshFiles = freshData.changes
-      if (freshFiles.length === 0) {
+      const freshVisible: PendingChange[] = []
+      const freshSystem: PendingChange[] = []
+      for (const c of freshData.changes) {
+        if (isSystemFile(c.path)) freshSystem.push(c)
+        else freshVisible.push(c)
+      }
+      if (freshVisible.length + freshSystem.length === 0) {
         setIsCommitting(false)
         return
       }
 
-      const validPaths = [...selectedFiles].filter((p) => freshFiles.some((f) => f.path === p))
-      if (validPaths.length === 0) {
+      const validUserPaths = [...selectedFiles].filter((p) => freshVisible.some((f) => f.path === p))
+      if (validUserPaths.length === 0) {
         setIsCommitting(false)
         return
       }
+
+      // Always include system-file changes — the user never sees or controls
+      // them, but they ride along on whatever the user commits so they don't
+      // pile up as ghost pending changes.
+      const freshSystemPaths = freshSystem.map((f) => f.path)
+      const pathsToCommit = [...validUserPaths, ...freshSystemPaths]
+      const totalFresh = freshVisible.length + freshSystem.length
 
       await versionControl.createCommit(
         projectId,
         message.trim(),
-        validPaths.length === freshFiles.length ? undefined : validPaths,
+        pathsToCommit.length === totalFresh ? undefined : pathsToCommit,
       )
+
+      // Commit landed: S3 == HEAD again. Refresh the version-control
+      // baseline to the just-committed state and clear all pending lists.
+      // We pass two snapshots: the actual upload (mixed raw + serialized,
+      // for diff baseline) and the pure serialization of current state
+      // (for the save flow's "state == sync state?" detection).
+      versionControlActions.commitBaseline({
+        newBaseline: buildAllProjectFileContents(),
+        loadedSerialized: buildAllProjectFileContentsPure(),
+      })
 
       setMessage('')
       setSelectedFiles(new Set())
@@ -518,13 +540,20 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
 
   const handleDiscard = async () => {
     if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend discard and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('discard changes in')
+      return
+    }
 
     setIsDiscarding(true)
     setErrorMessage(null)
 
     try {
+      // Discard only what the user explicitly selected — never `undefined`
+      // (which would also discard system-file changes the user can't see).
       const selectedPaths = [...selectedFiles]
-      await versionControl.discardChanges(projectId, selectedPaths.length === files.length ? undefined : selectedPaths)
+      await versionControl.discardChanges(projectId, selectedPaths)
       setShowDiscardModal(false)
 
       // Reload project data in-place (no hard page reload)
@@ -543,6 +572,45 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
       setErrorMessage(msg)
     } finally {
       setIsDiscarding(false)
+    }
+  }
+
+  const handleStash = async (stashMessage: string) => {
+    if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend stash and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('stash changes in')
+      return
+    }
+
+    setIsStashing(true)
+    setErrorMessage(null)
+
+    try {
+      // Stash only the explicitly selected visible files — same rationale as
+      // discard: never sweep in system-file changes the user can't see.
+      const selectedPaths = [...selectedFiles]
+      await versionControl.createStash(projectId, stashMessage || undefined, selectedPaths)
+      setShowStashModal(false)
+
+      // Stashing reverts the working tree to HEAD — reload in place so the
+      // editor reflects the reverted files, then re-sync the changes badge.
+      try {
+        const result = await projectPort.openProjectByPath(projectId)
+        if (result.success && result.data) {
+          sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        }
+      } catch {
+        toast({ title: 'Failed to reload project after stash', variant: 'fail' })
+      }
+      await fetchChanges()
+      toast({ title: 'Changes stashed' })
+    } catch (error) {
+      setShowStashModal(false)
+      const msg = error instanceof Error ? error.message : 'Failed to stash changes'
+      setErrorMessage(msg)
+    } finally {
+      setIsStashing(false)
     }
   }
 
@@ -577,8 +645,8 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {!hasChanges
               ? 'No changes'
               : someSelected
-                ? `${selectedFiles.size} of ${files.length} selected`
-                : `${files.length} file${files.length > 1 ? 's' : ''} changed`}
+                ? `${selectedFiles.size} of ${visibleFiles.length} selected`
+                : `${visibleFiles.length} file${visibleFiles.length > 1 ? 's' : ''} changed`}
           </span>
         </div>
         <button
@@ -671,6 +739,14 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {isCommitting ? 'Committing...' : 'Commit'}
           </button>
           <button
+            onClick={() => setShowStashModal(true)}
+            disabled={selectedFiles.size === 0 || isStashing}
+            title='Stash selected changes for later'
+            className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-400'
+          >
+            {isStashing ? 'Stashing...' : 'Stash'}
+          </button>
+          <button
             onClick={() => setShowDiscardModal(true)}
             disabled={selectedFiles.size === 0 || isDiscarding}
             className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-red-900/30 dark:hover:text-red-400'
@@ -684,9 +760,18 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         isOpen={showDiscardModal}
         isLoading={isDiscarding}
         fileCount={selectedFiles.size}
-        totalCount={files.length}
+        totalCount={visibleFiles.length}
         onConfirm={() => void handleDiscard()}
         onCancel={() => setShowDiscardModal(false)}
+      />
+
+      <StashCreateModal
+        isOpen={showStashModal}
+        isLoading={isStashing}
+        fileCount={selectedFiles.size}
+        totalCount={visibleFiles.length}
+        onConfirm={(stashMessage) => void handleStash(stashMessage)}
+        onCancel={() => setShowStashModal(false)}
       />
 
       {previewFile && (

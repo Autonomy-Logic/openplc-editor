@@ -1,6 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
+import { useTheme } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
@@ -10,11 +11,11 @@ interface FullscreenElement extends HTMLElement {
   msRequestFullscreen?: () => Promise<void>
 }
 
-function getThemePreference(): 'light' | 'dark' {
-  const stored = localStorage.getItem('theme')
-  if (stored === 'dark' || stored === 'light') return stored
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
+type ThemeChoice = 'light' | 'dark' | 'nineties'
+
+// Cycle order for the Display ▸ Theme menu: Light → Dark → 90's → Light.
+const THEME_ORDER: readonly ThemeChoice[] = ['light', 'dark', 'nineties']
+const THEME_LABEL: Record<ThemeChoice, string> = { light: 'light', dark: 'dark', nineties: "90's" }
 
 export const DisplayMenu = () => {
   const {
@@ -23,19 +24,24 @@ export const DisplayMenu = () => {
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const [theme, setTheme] = useState(getThemePreference())
+  // The theme port owns persistence (localStorage, the cross-app cookie and
+  // the backend preference) and the DOM class; this component only mirrors
+  // the current value for the menu label and the Monaco light/dark flag.
+  const themePort = useTheme()
+  const [theme, setTheme] = useState<ThemeChoice>(themePort.getCurrentTheme())
+
+  useEffect(() => themePort.onThemeChanged(setTheme), [themePort])
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark', 'light')
-    document.documentElement.classList.add(theme)
     setSystemConfigs({ shouldUseDarkMode: theme === 'dark' })
   }, [theme, setSystemConfigs])
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
-    if ('bridge' in window) {
+  const cycleTheme = () => {
+    const newTheme = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length] ?? 'light'
+    themePort.setTheme(newTheme)
+    // The desktop bridge only understands the OS-level light/dark themes; the
+    // retro skin is a web/UI-only flavour, so don't push it over IPC.
+    if ((newTheme === 'light' || newTheme === 'dark') && 'bridge' in window) {
       ;(window as unknown as { bridge: { winHandleUpdateTheme: (t: string) => void } }).bridge.winHandleUpdateTheme(
         newTheme,
       )
@@ -96,10 +102,12 @@ export const DisplayMenu = () => {
             <span>{i18n.t('menu:display.submenu.sortAlpha')}</span>
             <span className={ACCELERATOR}>{'F10'}</span>
           </MenuPrimitive.Item>
-          <div onClick={toggleTheme}>
+          <div onClick={cycleTheme}>
             <MenuPrimitive.Item className={ITEM}>
               <span>{i18n.t('menu:display.submenu.theme')}</span>
-              <span className={ACCELERATOR}>{theme === 'light' ? 'dark' : 'light'}</span>
+              <span className={ACCELERATOR}>
+                {THEME_LABEL[THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length] ?? 'light']}
+              </span>
             </MenuPrimitive.Item>
           </div>
         </MenuPrimitive.Content>

@@ -1,11 +1,12 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
-import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
+import { useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
-import { BranchSwitcherModal } from './branch-switcher-modal'
-import { CreateBranchModal } from './create-branch-modal'
+import { BranchSwitcherPopover } from './branch-switcher-popover'
 import { DeleteBranchModal } from './delete-branch-modal'
+import type { CarryCheckState } from './unsaved-changes-warning-modal'
 import { UnsavedChangesWarningModal } from './unsaved-changes-warning-modal'
 
 type BranchStatusBarProps = {
@@ -15,24 +16,32 @@ type BranchStatusBarProps = {
 
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
   const versionControl = useVersionControl()
+  const navigation = useNavigation()
   const [activeBranchName, setActiveBranch] = useActiveBranch(projectId)
+  const branchButtonRef = useRef<HTMLButtonElement>(null)
 
   const [showSwitcher, setShowSwitcher] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
   const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null)
   const [pendingBranchSwitch, setPendingBranchSwitch] = useState<Branch | null>(null)
+  const [carryCheckState, setCarryCheckState] = useState<CarryCheckState>('loading')
+  const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
 
   const doSwitch = useCallback(
-    async (branch: Branch) => {
+    async (branch: Branch, strategy: 'discard' | 'carry' = 'discard') => {
       if (!versionControl) return
       try {
-        await versionControl.switchBranch(projectId, branch.name)
+        await versionControl.switchBranch(projectId, branch.name, strategy)
         setActiveBranch(branch.name)
         onBranchSwitch?.(branch.name)
+        return { ok: true as const }
       } catch (error) {
+        if (error instanceof SwitchBranchCarryConflictError) {
+          return { ok: false as const, conflictedFiles: error.conflictedFiles }
+        }
         console.error('Failed to switch branch:', error)
+        return { ok: false as const, conflictedFiles: [] as string[] }
       }
     },
     [projectId, versionControl, setActiveBranch, onBranchSwitch],
@@ -49,7 +58,27 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         if (changes.length > 0) {
           setPendingBranchSwitch(branch)
           setShowSwitcher(false)
+          setCarryCheckState('loading')
+          setConflictedFiles([])
           setShowUnsavedWarning(true)
+
+          // Fire the pre-check in parallel so the modal opens immediately
+          // and updates as soon as the dry-run lands.
+          void versionControl
+            .previewSwitchCarry(projectId, branch.name)
+            .then((result) => {
+              if (result.conflicts.length > 0) {
+                setCarryCheckState('conflict')
+                setConflictedFiles(result.conflicts)
+              } else {
+                setCarryCheckState('available')
+                setConflictedFiles([])
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to preview carry:', err)
+              setCarryCheckState('error')
+            })
           return
         }
       } catch {
@@ -62,10 +91,30 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   )
 
   const handleDiscardAndSwitch = useCallback(async () => {
-    if (pendingBranchSwitch) {
+    if (!pendingBranchSwitch) return
+    setShowUnsavedWarning(false)
+    await doSwitch(pendingBranchSwitch, 'discard')
+    setPendingBranchSwitch(null)
+  }, [pendingBranchSwitch, doSwitch])
+
+  const handleCarryAndSwitch = useCallback(async () => {
+    if (!pendingBranchSwitch) return
+    // Snapshot the branch — `doSwitch` clears state on success.
+    const branch = pendingBranchSwitch
+    const result = await doSwitch(branch, 'carry')
+    if (!result) return
+    if (result.ok) {
       setShowUnsavedWarning(false)
-      await doSwitch(pendingBranchSwitch)
       setPendingBranchSwitch(null)
+      return
+    }
+    // Race: the preview said "ok" but the apply hit a conflict (or another
+    // error happened). Surface conflicts in the still-open modal.
+    if (result.conflictedFiles.length > 0) {
+      setCarryCheckState('conflict')
+      setConflictedFiles(result.conflictedFiles)
+    } else {
+      setCarryCheckState('error')
     }
   }, [pendingBranchSwitch, doSwitch])
 
@@ -79,6 +128,20 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
     setShowSwitcher(false)
     setShowDelete(true)
   }, [])
+
+  const handleMerge = useCallback(
+    (branch: Branch) => {
+      // Source is the clicked branch; default target to the active branch
+      // (if different). When source == active, omit `target` entirely so the
+      // merge page can apply its own default rather than receiving `target=`.
+      navigation.navigate('/merge', {
+        project_id: projectId,
+        source: branch.name,
+        target: activeBranchName !== branch.name ? activeBranchName : undefined,
+      })
+    },
+    [projectId, activeBranchName, navigation],
+  )
 
   const handleDeleted = useCallback(() => {
     if (!versionControl) return
@@ -101,6 +164,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
     <>
       <div className='flex h-6 w-full shrink-0 items-center bg-brand-dark px-2 dark:bg-neutral-950'>
         <button
+          ref={branchButtonRef}
           onClick={() => setShowSwitcher(true)}
           className='flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs text-white transition-colors hover:bg-brand-medium-dark dark:text-neutral-400 dark:hover:bg-neutral-900'
           title='Switch branch'
@@ -112,17 +176,16 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         </button>
       </div>
 
-      <BranchSwitcherModal
+      <BranchSwitcherPopover
         isOpen={showSwitcher}
         projectId={projectId}
         currentBranchName={activeBranchName}
+        anchorRef={branchButtonRef}
         onClose={() => setShowSwitcher(false)}
         onSelect={handleSelect}
-        onCreateNew={() => setShowCreate(true)}
         onDelete={handleDelete}
+        onMerge={handleMerge}
       />
-
-      <CreateBranchModal isOpen={showCreate} projectId={projectId} onClose={() => setShowCreate(false)} />
 
       <DeleteBranchModal
         isOpen={showDelete}
@@ -138,7 +201,10 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       <UnsavedChangesWarningModal
         isOpen={showUnsavedWarning}
         targetBranchName={pendingBranchSwitch?.name ?? ''}
+        carryCheckState={carryCheckState}
+        conflictedFiles={conflictedFiles}
         onDiscard={handleDiscardAndSwitch}
+        onCarry={handleCarryAndSwitch}
         onCancel={handleCancelSwitch}
       />
     </>

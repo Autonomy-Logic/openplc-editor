@@ -98,6 +98,10 @@ export function useVersionControl() {
   return usePlatform().versionControl
 }
 
+export function useNavigation() {
+  return usePlatform().navigation
+}
+
 export function useCapabilities() {
   return usePlatform().capabilities
 }
@@ -106,6 +110,18 @@ export function useAI() {
   return usePlatform().ai
 }
 
+export function usePackages() {
+  return usePlatform().packages
+}
+
 export function useEsi() {
   return usePlatform().esi
+}
+
+export function useLibrary() {
+  return usePlatform().library
+}
+
+export function useStlibSource() {
+  return usePlatform().stlibSource
 }

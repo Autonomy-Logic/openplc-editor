@@ -9,7 +9,9 @@ import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { toast } from '../../../_features/[app]/toast/use-toast'
+import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { reconcileBranchesIfNeeded } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -55,12 +57,13 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable?: boolean
   scale?: number
 }) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
     editorActions: { updateModelVariables },
     libraries,
     ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    ladderFlowActions: { setNodes, setEdges, setHandleBranches },
     project: {
       data: { pous },
     },
@@ -171,7 +174,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: nodeId ?? '',
     })
     if (!pou || !rung || !node) return
@@ -198,18 +201,22 @@ export const BlockNodeElement = <T extends object>({
       }
 
       const project = useOpenPLCStore.getState().project
-      const currentPou = project.data.pous.find((p) => p.name === editor.meta.name)
-      pushToHistory(editor.meta.name, {
+      const currentPou = project.data.pous.find((p) => p.name === pouName)
+      pushToHistory(pouName, {
         variables: currentPou?.interface?.variables ?? [],
         body: currentPou?.body.value,
       })
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
-        deleteVariable({
+        const deletionResult = deleteVariable({
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
+        if (!deletionResult.ok) {
+          toast({ title: deletionResult.title, description: deletionResult.message, variant: 'fail' })
+          return
+        }
         if (
           editor.type === 'plc-graphical' &&
           editor.variable.display === 'table' &&
@@ -228,7 +235,7 @@ export const BlockNodeElement = <T extends object>({
           },
           rowId: variableIndex,
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (!res.ok) {
           toast({
@@ -265,6 +272,19 @@ export const BlockNodeElement = <T extends object>({
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
 
+    // Reconcile branches before main edge remapping so branch edges get new IDs
+    const reconciled = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newBlockNode.id,
+      (libraryBlock as { variables?: BlockVariant['variables'] })?.variables ?? [],
+    )
+    if (reconciled) {
+      newNodes = reconciled.nodes
+      newEdges = reconciled.edges
+    }
+    const reconciledHandleBranches = reconciled?.handleBranches
+
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -289,27 +309,35 @@ export const BlockNodeElement = <T extends object>({
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
     const project2 = useOpenPLCStore.getState().project
-    const currentPou2 = project2.data.pous.find((p) => p.name === editor.meta.name)
-    pushToHistory(editor.meta.name, {
+    const currentPou2 = project2.data.pous.find((p) => p.name === pouName)
+    pushToHistory(pouName, {
       variables: currentPou2?.interface?.variables ?? [],
       body: currentPou2?.body.value,
     })
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: variableNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranches({
+        editorName: pouName,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
 
     setWrongName(false)
   }
@@ -349,24 +377,26 @@ export const BlockNodeElement = <T extends object>({
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
-      {inputConnectors.map((connector, index) => (
-        <div
-          key={index}
-          className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
-        >
-          {connector}
-        </div>
-      ))}
-      {outputConnectors.map((connector, index) => (
-        <div
-          key={index}
-          className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
-        >
-          {connector}
-        </div>
-      ))}
+      {inputConnectors.map((connector, index) => {
+        const handle = (data as BasicNodeData).inputHandles?.[index]
+        const top =
+          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
+        return (
+          <div key={index} className='absolute text-xs' style={{ top, left: 6 }}>
+            {connector}
+          </div>
+        )
+      })}
+      {outputConnectors.map((connector, index) => {
+        const handle = (data as BasicNodeData).outputHandles?.[index]
+        const top =
+          (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
+        return (
+          <div key={index} className='absolute text-xs' style={{ top, right: 6 }}>
+            {connector}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -374,8 +404,8 @@ export const BlockNodeElement = <T extends object>({
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
 
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
@@ -383,7 +413,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     snapshotActions: { pushToHistory },
     libraries: { user: userLibraries },
     ladderFlows,
-    ladderFlowActions: { updateNode, setNodes, setEdges },
+    ladderFlowActions: { updateNode, setNodes, setEdges, setHandleBranches: setHandleBranchesBlock },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as newBlockVariant)
@@ -392,7 +422,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
     nodeId: id,
   })
 
@@ -459,7 +489,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       variables: freshVariables,
       rung: freshRung,
       node: freshNode,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: data.variable.name,
     })
@@ -490,7 +520,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
       if (nodeVariable.name !== variable.name) {
         updateNode({
-          editorName: editor.meta.name,
+          editorName: pouName,
           rungId: freshRung.id,
           nodeId: freshNode.id,
           node: {
@@ -538,7 +568,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: node.id,
         node: {
@@ -566,8 +596,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
         const project = useOpenPLCStore.getState().project
-        const currentPou = project.data.pous.find((p) => p.name === editor.meta.name)
-        pushToHistory(editor.meta.name, {
+        const currentPou = project.data.pous.find((p) => p.name === pouName)
+        pushToHistory(pouName, {
           variables: currentPou?.interface?.variables ?? [],
           body: currentPou?.body.value,
         })
@@ -583,7 +613,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             debug: false,
           },
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
 
         if (!creationResult.ok) {
@@ -604,7 +634,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
-    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
 
@@ -722,6 +752,19 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
 
+    // Reconcile branches before main edge remapping so branch edges get new IDs
+    const reconciled2 = reconcileBranchesIfNeeded(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      node.id,
+      newBlockNode.id,
+      newNodeVariables as BlockVariant['variables'],
+    )
+    if (reconciled2) {
+      newNodes = reconciled2.nodes
+      newEdges = reconciled2.edges
+    }
+    const reconciledHandleBranches = reconciled2?.handleBranches
+
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -746,20 +789,28 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
+        ...(reconciledHandleBranches && { handleBranches: reconciledHandleBranches }),
       },
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodes: variableNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       edges: variableEdges,
     })
+    if (reconciledHandleBranches) {
+      setHandleBranchesBlock({
+        editorName: pouName,
+        rungId: rung.id,
+        handleBranches: reconciledHandleBranches,
+      })
+    }
   }
 
   return (
@@ -823,7 +874,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               e.target.select()
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {
@@ -836,7 +887,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             onBlur={() => {
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {

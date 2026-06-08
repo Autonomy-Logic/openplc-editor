@@ -1,6 +1,21 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+
+import type { StructuredCompileError } from '@root/middleware/shared/ports/types'
 
 import { LogComponent } from '../log'
+
+const sampleCompileError = (overrides?: Partial<StructuredCompileError>): StructuredCompileError => ({
+  message: 'Cannot assign WSTRING to BOOL',
+  line: 9,
+  column: 10,
+  file: 'Manual_Override.st',
+  severity: 'error',
+  pouName: 'MANUAL_OVERRIDE',
+  pouKind: 'FUNCTION_BLOCK',
+  section: 'body',
+  bodyLine: 7,
+  ...overrides,
+})
 
 describe('LogComponent', () => {
   it('renders message text', () => {
@@ -68,6 +83,84 @@ describe('LogComponent', () => {
     // The Copy icon from lucide-react renders an SVG inside the button
     const svg = button.querySelector('svg')
     expect(svg).toBeTruthy()
+  })
+})
+
+describe('LogComponent compile-error click affordance', () => {
+  it('renders the bracketed POU prefix as a clickable button when compileError is present', () => {
+    const onClick = jest.fn()
+    const message = '[MANUAL_OVERRIDE / body line 7]\nManual_Override.st:7:10: error: ...'
+    render(
+      <LogComponent
+        level='error'
+        message={message}
+        tstamp='10:00:00'
+        compileError={sampleCompileError()}
+        onCompileErrorClick={onClick}
+      />,
+    )
+    const button = screen.getByTitle('Open in editor')
+    expect(button).toBeTruthy()
+    expect(button.tagName).toBe('BUTTON')
+    expect(button.textContent).toBe('[MANUAL_OVERRIDE / body line 7]')
+  })
+
+  it('invokes onCompileErrorClick with the structured error on click', () => {
+    const onClick = jest.fn()
+    const err = sampleCompileError()
+    render(
+      <LogComponent
+        level='error'
+        message='[MANUAL_OVERRIDE / body line 7]\nrest'
+        tstamp='10:00:00'
+        compileError={err}
+        onCompileErrorClick={onClick}
+      />,
+    )
+    fireEvent.click(screen.getByTitle('Open in editor'))
+    expect(onClick).toHaveBeenCalledTimes(1)
+    expect(onClick).toHaveBeenCalledWith(err)
+  })
+
+  it('falls back to plain rendering when no click handler is provided', () => {
+    render(
+      <LogComponent
+        level='error'
+        message='[MANUAL_OVERRIDE / body line 7]\nrest'
+        tstamp='10:00:00'
+        compileError={sampleCompileError()}
+      />,
+    )
+    // No 'Open in editor' button should appear without a handler.
+    expect(screen.queryByTitle('Open in editor')).toBeNull()
+  })
+
+  it('renders normally (no button) when compileError is absent', () => {
+    const onClick = jest.fn()
+    render(
+      <LogComponent
+        level='error'
+        message='[MANUAL_OVERRIDE / body line 7]\nrest'
+        tstamp='10:00:00'
+        onCompileErrorClick={onClick}
+      />,
+    )
+    expect(screen.queryByTitle('Open in editor')).toBeNull()
+  })
+
+  it('still renders the multi-line snippet underneath the clickable prefix', () => {
+    const onClick = jest.fn()
+    const message = '[MANUAL_OVERRIDE / body line 7]\nManual_Override.st:7:10: error: Cannot assign WSTRING to BOOL'
+    render(
+      <LogComponent
+        level='error'
+        message={message}
+        tstamp='10:00:00'
+        compileError={sampleCompileError()}
+        onCompileErrorClick={onClick}
+      />,
+    )
+    expect(screen.getByText(/Manual_Override.st:7:10: error/)).toBeTruthy()
   })
 })
 

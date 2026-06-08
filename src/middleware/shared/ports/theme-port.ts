@@ -18,7 +18,7 @@
 
 import type { Unsubscribe } from './types'
 
-export type ThemeVariant = 'light' | 'dark'
+export type ThemeVariant = 'light' | 'dark' | 'nineties'
 
 export interface ThemePort {
   /** Get the current active theme. */
