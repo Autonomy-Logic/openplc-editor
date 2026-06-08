@@ -61,12 +61,16 @@ describe('syncVariableAliases', () => {
     expect(result.report.refreshed).toEqual([])
   })
 
-  it('reports orphaned variables when the alias no longer exists in the registry', () => {
+  it('orphans clear the stale location but keep the alias for the UI warning glyph', () => {
     const registry = buildRegistryFromVpp([])
     const vars = [VAR({ name: 'ghost', location: '%QX2.0', alias: 'removed_module' })]
     const result = syncVariableAliases(vars, registry)
-    // Variable kept as-is so the user can re-bind manually.
-    expect(result.variables[0].location).toBe('%QX2.0')
+    // `location` is cleared so the ST / XML emitters don't bake an
+    // `AT %QX2.0` for an alias whose producer is no longer active.
+    // `alias` is kept so the variable cell renders the orphan glyph
+    // and tooltip; the previous address is preserved in the report's
+    // `lastKnownAddress` field for the tooltip + undo affordance.
+    expect(result.variables[0].location).toBe('')
     expect(result.variables[0].alias).toBe('removed_module')
     expect(result.report.orphaned).toEqual([{ varName: 'ghost', alias: 'removed_module', lastKnownAddress: '%QX2.0' }])
     expect(result.report.adopted).toEqual([])
@@ -87,7 +91,10 @@ describe('syncVariableAliases', () => {
     const result = syncVariableAliases(vars, registry)
     expect(result.variables[0]).toMatchObject({ name: 'adopted', alias: 'pressure', location: '%IW1' })
     expect(result.variables[1]).toMatchObject({ name: 'refreshed', alias: 'valve_open', location: '%QX3.2' })
-    expect(result.variables[2]).toMatchObject({ name: 'orphaned', alias: 'gone', location: '%QW9' })
+    // Orphaned variables retain their alias (for the UI warning) but
+    // get their location cleared — see the "orphans clear the stale
+    // location" case above for the standalone version of this rule.
+    expect(result.variables[2]).toMatchObject({ name: 'orphaned', alias: 'gone', location: '' })
     expect(result.variables[3]).toMatchObject({ name: 'untouched', location: '%MW100' })
 
     expect(result.report.adopted).toHaveLength(1)

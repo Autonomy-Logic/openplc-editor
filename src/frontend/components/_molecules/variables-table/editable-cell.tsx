@@ -471,26 +471,37 @@ const EditableLocationCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
-  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
-  // can take it into account — when the user's previously-bound alias
-  // has been renamed/removed upstream (pin mapping, backplane, etc.),
-  // re-picking the same address from the dropdown should refresh the
-  // variable's stored alias.  Without this hoist `isOrphaned` was
-  // only used for the rendered warning glyph below.
+  // Alias staleness checks.  Lifted above `onBlur` so the short-
+  // circuit can take them into account.  Two flavours of staleness
+  // both demand that the location-pick re-fires `updateVariable`
+  // even when the picked value matches the cell's current address:
+  //
+  //   - `isOrphaned`: the variable's stored alias is no longer in the
+  //     registry's `byAlias` (producer renamed/removed it).
+  //     Re-picking the same address re-runs the auto-adopt and
+  //     refreshes the alias against the live registry.
+  //   - `isMismatched`: the variable carries an alias that points at
+  //     a *different* address than its current location.  Happens when
+  //     legacy projects authored before `createVariable`'s auto-adopt
+  //     fix carried a stale alias from one row to the next through the
+  //     "+ button" template spread.  Without this exception, clicking
+  //     on the right alias for the current address would no-op because
+  //     the address itself isn't changing — the user would have to
+  //     pick a DIFFERENT alias first, then return to the desired one,
+  //     to force the alias write through.
   const aliasRegistry = useAliasRegistry()
   const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+  const isMismatched =
+    !!variable?.alias && aliasRegistry.byAlias.has(variable.alias)
+      ? aliasRegistry.byAlias.get(variable.alias)?.address !== variable.location
+      : false
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
     // Short-circuit unchanged-value blurs so re-focus doesn't fire a
-    // gratuitous state update.  Exception: when the user re-picks the
-    // SAME location for a variable whose stored alias is now orphaned
-    // (the producer renamed it), force the update through so
-    // `updateVariable`'s auto-adopt path re-resolves the address
-    // against the live alias registry and refreshes the variable's
-    // alias field.  Otherwise the orphan warning would persist
-    // forever and the only workaround would be Clear → re-pick.
-    if (value === initialValue && !(id === 'location' && isOrphaned)) return
+    // gratuitous state update.  Exceptions for the location column,
+    // see the `isOrphaned` / `isMismatched` block above.
+    if (value === initialValue && !(id === 'location' && (isOrphaned || isMismatched))) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)

@@ -340,6 +340,54 @@ describe('createVariableValidation', () => {
     expect(result.location).toBe('%MD0')
   })
 
+  // -- Multi-collision walk (regression for forum bug: contiguous "+" clicks
+  //    across a row with a variable already further down) --
+  it('walks past intervening claimed locations until it finds a free slot (BOOL)', () => {
+    // Existing rows occupy %IX0.0..%IX0.4 and %IX0.5 — user "+"-clicks the row
+    // at %IX0.4.  Single-step increment would land on %IX0.5 and collide; the
+    // validator must walk to %IX0.6.
+    const existing = [
+      makeVariable('I1', 'BOOL', '%IX0.0'),
+      makeVariable('I1_0', 'BOOL', '%IX0.1'),
+      makeVariable('I1_1', 'BOOL', '%IX0.2'),
+      makeVariable('I1_2', 'BOOL', '%IX0.3'),
+      makeVariable('I1_3', 'BOOL', '%IX0.4'),
+      makeVariable('I2', 'BOOL', '%IX0.5'),
+    ]
+    const variable = makeVariable('NewVar', 'BOOL', '%IX0.4')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%IX0.6')
+  })
+
+  it('walks past multiple consecutive claimed locations (WORD)', () => {
+    const existing = [
+      makeVariable('A', 'INT', '%QW5'),
+      makeVariable('B', 'INT', '%QW6'),
+      makeVariable('C', 'INT', '%QW7'),
+    ]
+    const variable = makeVariable('NewVar', 'INT', '%QW5')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QW8')
+  })
+
+  it('wraps past a full BOOL byte when every bit and the next byte are taken', () => {
+    // %QX0.0..%QX0.7 claimed plus %QX1.0 — must land at %QX1.1.
+    const existing = [
+      makeVariable('B0', 'BOOL', '%QX0.0'),
+      makeVariable('B1', 'BOOL', '%QX0.1'),
+      makeVariable('B2', 'BOOL', '%QX0.2'),
+      makeVariable('B3', 'BOOL', '%QX0.3'),
+      makeVariable('B4', 'BOOL', '%QX0.4'),
+      makeVariable('B5', 'BOOL', '%QX0.5'),
+      makeVariable('B6', 'BOOL', '%QX0.6'),
+      makeVariable('B7', 'BOOL', '%QX0.7'),
+      makeVariable('B8', 'BOOL', '%QX1.0'),
+    ]
+    const variable = makeVariable('NewVar', 'BOOL', '%QX0.0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QX1.1')
+  })
+
   // -- Edge case: location exists but not found in variables (defensive) --
   it('returns unchanged when location exists but variable not found in list', () => {
     // This covers the `if (!variableFound) return response` branch
