@@ -149,7 +149,16 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
           }
         },
       }
-    }, [selectedVariable, selectableValues, variables, searchValue, popoverRef, autocompleteFocus, submitAutocompletion, closeModal])
+    }, [
+      selectedVariable,
+      selectableValues,
+      variables,
+      searchValue,
+      popoverRef,
+      autocompleteFocus,
+      submitAutocompletion,
+      closeModal,
+    ])
 
     useEffect(() => {
       switch (keyDown) {
