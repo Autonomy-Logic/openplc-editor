@@ -11,6 +11,29 @@
  * the dropdown would offer addresses from producers the active target
  * has deactivated — e.g. an SLM-RP4 slot 1 entry still showing while
  * the user is targeting an Arduino Mega.
+ *
+ * Pin-mapping vs. VPP/remote-device dropdown asymmetry — by design:
+ *   - Pin-mapping options below (`pinGroup`) list **every pin**,
+ *     aliased or not.  Pin addresses on Arduino-style targets are
+ *     stable hardware facts (pin 13 = `%QX0.3` on Arduino Uno,
+ *     always), so addressing by raw IEC location stays meaningful
+ *     even without a user-supplied alias.  An empty `(alias)` suffix
+ *     just means the user hasn't given the pin a friendly name yet.
+ *   - VPP/module + remote-device options (`buildVendorIoOptionGroups` /
+ *     `buildRemoteDeviceOptionGroups` in `remote-device-options.ts`)
+ *     list only **aliased entries**.  Their IEC addresses are
+ *     allocator-assigned and can shift when the user changes slot
+ *     layout, adds modules, etc.  Variables that bind to an alias
+ *     survive those shifts (`syncVariableAliases` refreshes their
+ *     `location` via the registry); variables that bound to a raw
+ *     address would silently break.  Requiring an alias makes the
+ *     rebind-on-shift contract explicit.
+ *
+ * Do not "fix" the inconsistency by filtering the pin-mapping branch
+ * to aliased pins only — it would force users to write an alias
+ * before they can bind any variable to a pin, regressing the
+ * Arduino-style "bind by raw `%IX0.0`" workflow that pre-dates the
+ * alias machinery.
  */
 
 import type { DevicePin, IoMappingEntry } from '../../middleware/shared/ports/types'
