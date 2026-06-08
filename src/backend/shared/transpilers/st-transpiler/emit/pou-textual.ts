@@ -11,7 +11,7 @@
  * dispatch.
  */
 
-import { PLC_BASE_TYPES } from '../helpers/ctn-globals'
+import { PLC_BASE_TYPES } from '../helpers/base-types'
 import type { ProgramChunk } from '../helpers/program'
 import { reIndentText } from '../helpers/text-helpers'
 import { computePouName } from '../helpers/text-helpers'

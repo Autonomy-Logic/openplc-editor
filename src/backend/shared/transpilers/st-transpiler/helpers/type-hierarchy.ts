@@ -59,38 +59,3 @@ export const TypeHierarchy: Readonly<Record<string, string | null>> = {
   LWORD: 'ANY_NBIT',
   // WSTRING intentionally absent — matches Python's `# TODO` comment.
 }
-
-/**
- * Returns `true` iff `type` is `reference` or any of its subtypes (walking
- * the parent chain). `null` `reference` returns `true` ("matches anything"),
- * mirroring Python's `if reference is None: return True`.
- *
- * Unknown types (not in the hierarchy) return `false` against any
- * reference except themselves. Same behavior as Python where the unknown
- * type raises `KeyError` on the hierarchy lookup — we soften to `false` so
- * derived user types (e.g. `Irrigation_State`) don't crash overload checks.
- */
-export function isOfType(type: string, reference: string | null): boolean {
-  if (reference === null) return true
-  if (type === reference) return true
-  const parent = TypeHierarchy[type]
-  if (parent === undefined) return false // user-defined type, not in hierarchy
-  if (parent === null) return false // reached ANY without matching
-  return isOfType(parent, reference)
-}
-
-/**
- * Concrete (non-ANY-prefixed) types that are subtypes of `metaType`.
- * Used by `get_standard_funtions` to expand polymorphic CSV signatures into
- * concrete overload entries (e.g. `(ANY_NUM, ANY_NUM)` becomes one entry per
- * `INT`, `SINT`, `DINT`, …). Catalog already pre-expanded; this stays in TS
- * for completeness and future use.
- */
-export function getSubTypes(metaType: string): string[] {
-  const out: string[] = []
-  for (const typename of Object.keys(TypeHierarchy)) {
-    if (typename.startsWith('ANY')) continue
-    if (isOfType(typename, metaType)) out.push(typename)
-  }
-  return out
-}

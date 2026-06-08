@@ -9,8 +9,8 @@
  * declaration order matches what the python oracle produces.
  */
 
+import { PLC_BASE_TYPES } from '../helpers/base-types'
 import { resolveBlockType } from '../helpers/block-library'
-import { PLC_BASE_TYPES } from '../helpers/ctn-globals'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
 import { varTypeNames } from '../helpers/type-text'

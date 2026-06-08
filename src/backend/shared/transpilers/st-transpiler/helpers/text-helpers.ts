@@ -1,12 +1,7 @@
 /**
- * Text-manipulation helpers used by the body dispatcher and downstream phases.
- *
- * Mirrors:
- *   - `ReIndentText`            (PLCGenerator.py:66)
- *   - `ComputePouName`          (plcopen/types_enums.py:112)
- *   - `ComputePouTransitionName` (plcopen/types_enums.py:117)
- *   - `ComputePouActionName`    (plcopen/types_enums.py:122)
- *   - `ComputeConfigurationName` (plcopen/types_enums.py:127)
+ * Text-manipulation helpers — mirrors python's `ReIndentText`
+ * (`PLCGenerator.py:66`) and the `Compute*Name` family in
+ * `plcopen/types_enums.py:112-132`.
  */
 
 /**
@@ -69,16 +64,6 @@ function pySplitLines(text: string): string[] {
  *  Program-chunk location tuple. */
 export function computePouName(name: string): string {
   return `P::${name}`
-}
-
-/** `"T::" + pou + "::" + transition`. */
-export function computePouTransitionName(pou: string, transition: string): string {
-  return `T::${pou}::${transition}`
-}
-
-/** `"A::" + pou + "::" + action`. */
-export function computePouActionName(pou: string, action: string): string {
-  return `A::${pou}::${action}`
 }
 
 /** `"C::" + name`. */
