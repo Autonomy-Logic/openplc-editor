@@ -39,11 +39,17 @@ export interface EsiPort {
    * Dedup is filename-based: reimporting the same bytes under a different name
    * will add a new entry, and replacing a file's contents without renaming it
    * is reported as a duplicate.
+   *
+   * `dedupAfterRetry: true` indicates the duplicate response landed after a
+   * transient-failure retry — the first attempt likely persisted the file and
+   * its response was lost. Callers should treat this as "uploaded but absent
+   * from the response" rather than silently skipping, since the user expects
+   * the file to appear in the repository.
    */
   parseAndSaveFile(
     filename: string,
     content: string,
-  ): Promise<Result<{ item?: ESIRepositoryItemLight; duplicate?: boolean }>>
+  ): Promise<Result<{ item?: ESIRepositoryItemLight; duplicate?: boolean; dedupAfterRetry?: boolean }>>
 
   /**
    * Delete a single repository item and its associated XML file.
