@@ -26,6 +26,20 @@ interface InterfaceEntry {
   vars: TranspileVariable[]
 }
 
+/**
+ * Destination types of the IEC 61131-3 polymorphic conversion family
+ * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …).  Hard-coded here rather than
+ * derived at runtime from the catalog so any future addition is visible
+ * in code review.  Kept in sync with `data/std_block_catalog.json` — any
+ * `<SRC>_TO_<X>` entry in the catalog implies `TO_<X>` is a valid
+ * polymorphic conversion target.
+ */
+const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
+  'BCD', 'BOOL', 'BYTE', 'DATE', 'DINT', 'DT', 'DWORD', 'INT',
+  'LINT', 'LREAL', 'LWORD', 'REAL', 'SINT', 'STRING', 'TIME',
+  'TOD', 'UDINT', 'UINT', 'ULINT', 'USINT', 'WORD',
+])
+
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
 /**
@@ -68,6 +82,15 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
   //      …) collapse to `BOOL`, which matches the corpus where these
   //      operators are always Boolean rung logic.  A future
   //      computeConnectionTypes port will narrow these properly.
+  //   3. Polymorphic IEC 61131-3 type-conversion functions of the
+  //      form `TO_<TYPE>` (TO_INT, TO_UINT, TO_REAL, …) — the
+  //      catalog enumerates the source-specific variants
+  //      (`BOOL_TO_UINT`, `INT_TO_UINT`, …) but NOT the generic
+  //      `TO_<TYPE>` family, so resolveBlockType returns null for
+  //      them.  Without this case the synthetic var stayed at
+  //      `ANY` and strucpp rejected the program with
+  //      "Undefined type 'ANY' in PROGRAM" — fixed here by reading
+  //      the destination type directly from the function name.
   const resolvedSyntheticVars = emitted.syntheticVars.map<SyntheticVar>((sv) => {
     if (sv.type !== 'ANY' || sv.originBlockTypeName === undefined) return sv
     const referenced = project.pous.find((p) => p.name === sv.originBlockTypeName)
@@ -81,6 +104,10 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
         const collapsed = outPort.type.startsWith('ANY') ? 'BOOL' : outPort.type
         return { ...sv, type: collapsed }
       }
+    }
+    const polymorphicMatch = sv.originBlockTypeName.match(/^TO_([A-Z]+)$/)
+    if (polymorphicMatch && TO_CONVERSION_TARGETS.has(polymorphicMatch[1])) {
+      return { ...sv, type: polymorphicMatch[1] }
     }
     return sv
   })
