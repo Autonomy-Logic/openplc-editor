@@ -1,39 +1,21 @@
 /**
  * IR-native `CONFIGURATION … END_CONFIGURATION` block emitter.
  *
- * JSON-direct port of `src/PLCGenerator/configuration.ts` — walks
- * `TranspileProject.configuration` instead of the parsed DOM, but
- * emits byte-identical chunks.  Mirrors Python's
- * `ProgramGenerator.GenerateConfiguration` + `GenerateResource`
- * (PLCGenerator.py:334-628).
+ * Walks `TranspileProject.configuration` and emits byte-identical
+ * chunks against the python oracle's `ProgramGenerator.GenerateConfiguration`
+ * + `GenerateResource` (PLCGenerator.py:334-628).
  *
  * The IR carries exactly one configuration with one resource, named
- * `Config0` / `Res0` — same hardcoded names the XML-based emitter
- * produced.  Global vars are emitted under the configuration block
- * (not under the resource), matching `irToPlcOpenXml`'s layout.
- *
- * CTN-globals provider is honoured: `kind: 'variable'` entries
- * (tuple-shape globals) are appended after the IR's
- * `globalVariables`.  `kind: 'varlist'` entries (raw DOM `<globalVars>`
- * elements) are silently ignored on the IR-native path — they only
- * come from the legacy DOM-injection flow which has no caller after
- * Phase 1.
+ * `Config0` / `Res0` — same hardcoded names the python oracle
+ * produces.  Global vars are emitted under the configuration block
+ * (not under the resource).
  */
 
-import type { ConfigurationExtraVariablesProvider } from '../helpers/ctn-globals'
 import type { ProgramChunk } from '../helpers/program'
 import { computeConfigurationName, computeConfigurationResourceName } from '../helpers/text-helpers'
 import type { TranspileProject, TranspileVariable } from '../types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
-
-export interface GenerateConfigurationOptions {
-  /**
-   * Beremiz CTN-injected globals provider.  Mirrors
-   * `Controler.GetConfigurationExtraVariables` (PLCControler.py:1248).
-   */
-  extraVarsProvider?: ConfigurationExtraVariablesProvider | null
-}
 
 const CONFIG_NAME = 'Config0'
 const RESOURCE_NAME = 'Res0'
@@ -44,10 +26,7 @@ const RESOURCE_NAME = 'Res0'
  * globals (caller may still want the keyword shell — Python always
  * emits the block; we mirror that).
  */
-export function generateConfigurations(
-  project: TranspileProject,
-  options: GenerateConfigurationOptions = {},
-): ProgramChunk[] {
+export function generateConfigurations(project: TranspileProject): ProgramChunk[] {
   const configTagname = computeConfigurationName(CONFIG_NAME)
   const resourceTagname = computeConfigurationResourceName(CONFIG_NAME, RESOURCE_NAME)
 
@@ -57,11 +36,10 @@ export function generateConfigurations(
   out.push([CONFIG_NAME, [configTagname, 'name']])
   out.push(['\n', []])
 
-  // Configuration-level global variables.  IR-shape globals first,
-  // then any CTN-injected tuple-shape globals.
+  // Configuration-level global variables.
   emitGlobalVarList(
     out,
-    collectConfigGlobals(project, options.extraVarsProvider),
+    project.configuration.globalVariables,
     configTagname,
     /*indent=*/ '  ',
     /*varIndent=*/ '    ',
@@ -141,59 +119,6 @@ export function generateConfigurations(
 }
 
 /* ────────────────────── helpers ─────────────────────────────────────────── */
-
-function collectConfigGlobals(
-  project: TranspileProject,
-  provider: ConfigurationExtraVariablesProvider | null | undefined,
-): TranspileVariable[] {
-  const out: TranspileVariable[] = [...project.configuration.globalVariables]
-  if (!provider) return out
-  const entries = provider()
-  for (const entry of entries) {
-    if (entry.kind !== 'variable') continue
-    const tuple = entry.variable
-    out.push({
-      name: tuple.name,
-      type: tupleTypeToIr(tuple.type),
-      ...(tuple.initial ? { initialValue: tuple.initial } : {}),
-    })
-  }
-  return out
-}
-
-function tupleTypeToIr(typeName: string): TranspileVariable['type'] {
-  // CTN-globals tuples carry the type as a bare string.  IEC base
-  // types resolve to `base-type`; anything else becomes a derived
-  // reference — mirrors PLCControler.py:1258-1273.
-  const upper = typeName.toUpperCase()
-  const elementaryTypes = new Set([
-    'BOOL',
-    'SINT',
-    'INT',
-    'DINT',
-    'LINT',
-    'USINT',
-    'UINT',
-    'UDINT',
-    'ULINT',
-    'REAL',
-    'LREAL',
-    'TIME',
-    'DATE',
-    'TOD',
-    'DT',
-    'STRING',
-    'WSTRING',
-    'BYTE',
-    'WORD',
-    'DWORD',
-    'LWORD',
-  ])
-  if (elementaryTypes.has(upper)) {
-    return { definition: 'base-type', value: upper }
-  }
-  return { definition: 'derived', value: typeName }
-}
 
 function emitGlobalVarList(
   out: ProgramChunk[],

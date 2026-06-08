@@ -14,7 +14,7 @@
  * `PLCProjectData` the editor's IPC delivers) — see `from-schema.ts`.
  */
 
-import { type GenerateConfigurationOptions, generateConfigurations } from './emit/configuration'
+import { generateConfigurations } from './emit/configuration'
 import { generateDataTypes } from './emit/data-types'
 import { generateGraphicalPou } from './emit/pou-graphical'
 import { generateTextualPou } from './emit/pou-textual'
@@ -22,7 +22,6 @@ import { buildPouEmissionOrder } from './pou-emission-order'
 import type { TranspileProject } from './types'
 
 export { fromSchemaShape, type SchemaProjectData } from './from-schema'
-export type { ConfigurationExtraVariablesProvider, CtnGlobalEntry, CtnGlobalVarTuple } from './helpers/ctn-globals'
 export type {
   TranspileBody,
   TranspileBodyLanguage,
@@ -37,8 +36,6 @@ export type {
   TranspileVariableClass,
   TranspileVariableType,
 } from './types'
-
-export type TranspileOptions = GenerateConfigurationOptions
 
 export interface TranspileResult {
   /** Concatenated Structured Text, or `null` if no POU compiled. */
@@ -65,7 +62,7 @@ const TEXTUAL_LANGUAGES = new Set(['st', 'il', 'python', 'cpp'])
  * compile errors land in `result.errors` and the rest of the
  * program still emits.
  */
-export function transpileToSt(project: TranspileProject, options: TranspileOptions = {}): TranspileResult {
+export function transpileToSt(project: TranspileProject): TranspileResult {
   const errors: string[] = []
   const warnings: string[] = []
   const pouNames: string[] = []
@@ -106,7 +103,7 @@ export function transpileToSt(project: TranspileProject, options: TranspileOptio
   }
 
   // Trailing CONFIGURATION block — emit IR-native.
-  for (const [text] of generateConfigurations(project, options)) {
+  for (const [text] of generateConfigurations(project)) {
     pieces.push(text)
   }
 
