@@ -82,7 +82,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
     /**
      * Control the rungs of the flow
      */
-    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport, insertAtIndex }) => {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           if (!ladderFlows.find((flow) => flow.name === editorName)) {
@@ -116,7 +116,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               handleY: defaultBounds[1] / 2,
             }),
           ]
-          flow.rungs.push({
+          const newRung = {
             id: rungId,
             comment: '',
             defaultBounds,
@@ -134,7 +134,14 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               },
             ],
             selectedNodes: [],
-          })
+          }
+
+          if (typeof insertAtIndex === 'number') {
+            flow.rungs.splice(insertAtIndex, 0, newRung)
+          } else {
+            flow.rungs.push(newRung)
+          }
+          flow.updated = true
         }),
       )
     },

@@ -45,11 +45,13 @@ type LadderFlowActions = {
     rungId,
     defaultBounds,
     reactFlowViewport,
+    insertAtIndex,
   }: {
     editorName: string
     rungId: string
     defaultBounds: [number, number]
     reactFlowViewport?: [number, number]
+    insertAtIndex?: number
   }) => void
   setRungs: ({ rungs, editorName }: { rungs: RungLadderState[]; editorName: string }) => void
   removeRung: (editorName: string, rungId: string) => void
