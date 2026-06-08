@@ -163,7 +163,7 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     expect(vars[0].alias).toBe('conveyor_motor')
   })
 
-  it('reports orphans when the producer no longer exposes the alias', () => {
+  it('reports orphans and clears their stale location when the producer no longer exposes the alias', () => {
     const store = makeStore()
     seedBoard(store, 'SLM-RP4', VPP_V4)
     seedVendorScreenData(store, withVppEntries([])) // no VPP entries at all
@@ -172,10 +172,13 @@ describe('projectActions.syncVariableAliases (store integration)', () => {
     const report = store.getState().projectActions.syncVariableAliases()
     expect(report.orphaned).toBe(1)
 
-    // Variable kept as-is so the user can re-bind manually.
+    // Phase 3 contract: orphans keep the alias name (so the UI can
+    // render the warning glyph + tooltip) but their stale location
+    // is cleared so the ST / XML emitters don't bake an `AT %…` into
+    // the compile for an alias whose producer is no longer active.
     const vars = store.getState().project.data.pous[0].interface!.variables
     expect(vars[0].alias).toBe('conveyor_motor')
-    expect(vars[0].location).toBe('%QX0.0')
+    expect(vars[0].location).toBe('')
   })
 
   it('honours target capabilities: switching to an arduino board orphans VPP-bound aliases', () => {

@@ -424,8 +424,17 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     const variable: PLCVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
+    // Don't carry the previous variable's `alias` into the new row.
+    // The slice's `createVariable` auto-increments `location`; if we
+    // kept the old alias attached, the new variable would claim the
+    // OLD channel's alias while pointing at the NEW address —
+    // breaking the alias-↔-location invariant.  `createVariable`'s
+    // auto-adopt path resolves the right alias for the new location
+    // against the live registry (matching whichever producer-channel
+    // owns the auto-incremented address).
     const newVarData = {
       ...variable,
+      alias: undefined,
       class: defaultClass,
       type:
         variable.type.definition === 'derived'
