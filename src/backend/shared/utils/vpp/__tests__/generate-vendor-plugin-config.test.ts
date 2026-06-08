@@ -105,6 +105,36 @@ describe('generateVendorPluginConfig', () => {
     expect(result.plugin_name).toBe('acme')
   })
 
+  it('preserves boolean `false` toggles from form data (SLM-RP4 fault-detection regression)', () => {
+    // User-reported scenario: the SLM-RP4 HAL Settings screen's
+    // "Enable Bus Fault Detection" toggle was suspected of not
+    // making it to the runtime when set to false. The generator's
+    // `Object.assign(result, value)` MUST forward `false` verbatim
+    // — a stricter falsy check would silently drop the toggle and
+    // leave the plugin keying off its bundled default of `1`.
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'synergy' },
+      {
+        'hal-config': {
+          fault_detection_enabled: false,
+          fault_threshold: 25,
+          fault_action: 'log_and_retry',
+          scan_cycle_ms: 10,
+        },
+      },
+      [],
+    )
+    expect(result.fault_detection_enabled).toBe(false)
+    expect(result.fault_threshold).toBe(25)
+    expect(result.fault_action).toBe('log_and_retry')
+    expect(result.scan_cycle_ms).toBe(10)
+    // JSON serialisation MUST emit `false` (not `0`, not absent) so the
+    // plugin's cJSON_IsBool branch takes — the only branch that
+    // honours boolean false. A `0`-numeric here would still parse, but
+    // the load-bearing path is the bool case.
+    expect(JSON.stringify(result)).toContain('"fault_detection_enabled":false')
+  })
+
   it('skips reserved keys (module-configuration, io-mapping) when merging at root', () => {
     const data: VendorScreenData = {
       'module-configuration': { slots: [] },
@@ -642,5 +672,70 @@ describe('generateVendorPluginConfig', () => {
     const slot = (result.slots as Array<{ module_config?: string }>)[0]
     // empty -> use default 0x4003
     expect(slot.module_config?.startsWith('40 03')).toBe(true)
+  })
+})
+
+describe('generateVendorPluginConfig — pins[] (GPIO pin-mapping)', () => {
+  it('omits pins[] when no device pins are supplied', () => {
+    const result = generateVendorPluginConfig({ plugin_name: 'rpi_gpio' }, {}, [])
+    expect(result.pins).toBeUndefined()
+  })
+
+  it('maps digital input/output pins to pin + direction + byte/bit', () => {
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'rpi_gpio' },
+      {},
+      [],
+      [
+        { pin: '11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '13', pinType: 'digitalInput', address: '%IX1.3' },
+      ],
+    )
+    expect(result.pins).toEqual([
+      { pin: 11, direction: 'output', byte: 0, bit: 0 },
+      { pin: 13, direction: 'input', byte: 1, bit: 3 },
+    ])
+  })
+
+  it('maps analog outputs to PWM (word index) and skips analog inputs', () => {
+    const result = generateVendorPluginConfig(
+      {},
+      {},
+      [],
+      [
+        { pin: '11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '26', pinType: 'analogInput', address: '%IW0' },
+        { pin: '12', pinType: 'analogOutput', address: '%QW3' },
+      ],
+    )
+    expect(result.pins).toEqual([
+      { pin: 11, direction: 'output', byte: 0, bit: 0 },
+      { pin: 12, direction: 'pwm', word: 3 },
+    ])
+  })
+
+  it('skips rows with a non-numeric pin or an unparseable address', () => {
+    const result = generateVendorPluginConfig(
+      {},
+      {},
+      [],
+      [
+        { pin: 'P11', pinType: 'digitalOutput', address: '%QX0.0' },
+        { pin: '18', pinType: 'digitalOutput', address: '' },
+        { pin: '22', pinType: 'digitalInput', address: '%IX2.1' },
+      ],
+    )
+    expect(result.pins).toEqual([{ pin: 22, direction: 'input', byte: 2, bit: 1 }])
+  })
+
+  it('emits pins[] alongside an empty slots[] for pin-only boards', () => {
+    const result = generateVendorPluginConfig(
+      { plugin_name: 'rpi_gpio' },
+      {},
+      [],
+      [{ pin: '11', pinType: 'digitalOutput', address: '%QX0.0' }],
+    )
+    expect(result.slots).toEqual([])
+    expect(result.pins).toEqual([{ pin: 11, direction: 'output', byte: 0, bit: 0 }])
   })
 })

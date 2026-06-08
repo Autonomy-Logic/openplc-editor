@@ -17,6 +17,7 @@
 #include "arduino_runtime_glue.h"
 #include "openplc.h"
 #include "generated.hpp"
+#include "debug_dispatch.hpp"
 
 // ---------------------------------------------------------------------------
 // Storage
@@ -64,8 +65,18 @@ void runtime_bind_located_vars()
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
+                // OpenPLC convention: %ID<n> is REAL.  Drivers that
+                // deliver engineering-unit readings (volts, mA, °C, …)
+                // bind here instead of int_input.  Declaring DINT AT
+                // %ID<n> is not supported on arduino-cli; the
+                // variable's bytes would still land in this slot but
+                // the runtime treats them as a float.
+                if (lv.byte_index < MAX_REAL_INPUT) {
+                    real_input[lv.byte_index] = (::IEC_REAL*)lv.pointer;
+                }
+                break;
             case LocatedSize::LWord:
-                // dint_input / lint_input not available on all boards
+                // lint_input not available on arduino-cli targets.
                 break;
 #endif
             default: break;
@@ -82,8 +93,15 @@ void runtime_bind_located_vars()
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
+                // OpenPLC convention: %QD<n> is REAL.  Drivers that
+                // accept engineering-unit setpoints (volts on an
+                // analog DAC, °C, …) bind here instead of int_output.
+                if (lv.byte_index < MAX_REAL_OUTPUT) {
+                    real_output[lv.byte_index] = (::IEC_REAL*)lv.pointer;
+                }
+                break;
             case LocatedSize::LWord:
-                // dint_output / lint_output not available on all boards
+                // lint_output not available on arduino-cli targets.
                 break;
 #endif
             default: break;
@@ -170,4 +188,36 @@ void runtime_plc_cycle()
     updateOutputBuffers();
 
     strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
+}
+
+// ---------------------------------------------------------------------------
+// Debug dispatch shims — C-linkage wrappers around strucpp::debug::handle_*.
+// Declared in arduino_runtime_glue.h; ModbusSlave.cpp calls these by name so
+// it never has to include the strucpp template-heavy debug_dispatch.hpp.
+// ---------------------------------------------------------------------------
+
+extern "C" uint8_t openplc_debug_array_count()
+{
+    return strucpp::debug::handle_array_count();
+}
+
+extern "C" uint16_t openplc_debug_elem_count(uint8_t arr)
+{
+    return strucpp::debug::handle_elem_count(arr);
+}
+
+extern "C" uint16_t openplc_debug_size(uint8_t arr, uint16_t elem)
+{
+    return strucpp::debug::handle_size(arr, elem);
+}
+
+extern "C" uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t* dest)
+{
+    return strucpp::debug::handle_read(arr, elem, dest);
+}
+
+extern "C" uint8_t openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing,
+                                     const uint8_t* bytes, uint16_t len)
+{
+    return strucpp::debug::handle_set(arr, elem, forcing != 0, bytes, len);
 }

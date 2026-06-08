@@ -41,7 +41,7 @@ const AcceleratorHandler = () => {
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
     workspaceActions: {
-      switchAppTheme,
+      setSystemConfigs,
       toggleMaximizedWindow,
       setCloseWindow,
       setCloseAppDarwin,
@@ -108,13 +108,26 @@ const AcceleratorHandler = () => {
 
   /**
    * Open project via file picker
+   *
+   * Mirrors the start-screen's `handleOpenProject` flow: the picker
+   * returns `{ success, data }` and the renderer must dispatch
+   * `handleOpenProjectResponse(data)` to actually load the project
+   * into the store.  Discarding the promise (`void
+   * projectPort.openProject()`) opened the picker but threw the
+   * result on the floor, so File → Open silently no-op'd after the
+   * user picked a folder — only the start-screen shortcut worked.
    */
   useEffect(() => {
     const unsub = accelerator.onOpenProject(() => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          void projectPort.openProject()
+          void (async () => {
+            const result = await projectPort.openProject()
+            if (result.success && result.data) {
+              handleOpenProjectResponse(result.data)
+            }
+          })()
           break
         case 'unsaved':
           openModal('save-changes-project', {
@@ -133,7 +146,7 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, projectPort])
+  }, [editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
 
   /**
    * Open recent project (editor-specific — data passed via IPC accelerator)
@@ -302,17 +315,18 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, openModal])
 
   /**
-   * Theme update from main process
+   * Theme changes (user toggle, OS preference, or cross-app cookie sync).
+   * The theme adapter owns the DOM class and persistence; here we only
+   * mirror the Monaco light/dark flag (set explicitly from the theme —
+   * toggling drifts when cycling through the 90's skin, and the retro
+   * theme uses light Monaco).
    */
   useEffect(() => {
     const unsub = themePort.onThemeChanged((newTheme) => {
-      document.documentElement.classList.remove('dark', 'light')
-      document.documentElement.classList.add(newTheme)
-      localStorage.setItem('theme', newTheme)
-      switchAppTheme()
+      setSystemConfigs({ shouldUseDarkMode: newTheme === 'dark' })
     })
     return unsub
-  }, [themePort, switchAppTheme])
+  }, [themePort, setSystemConfigs])
 
   /**
    * Window lifecycle events (editor-only, gated by capabilities)

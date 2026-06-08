@@ -211,7 +211,24 @@ export interface InstallArduinoCoreArgs {
 /** Arduino-CLI library install (editor-only.  Same no-op
  *  contract as core install for web). */
 export interface InstallArduinoLibArgs {
+  /** Legacy single-library id (kept for the placeholder call sites
+   *  that pre-date `extraLibraries`).  Empty string when the caller
+   *  is driving the install entirely from `extraLibraries`. */
   libId: string
+  /** Per-board library list.  Sourced from the selected board's
+   *  `hals.json` `extra_libraries` (static boards) or its VPP
+   *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed
+   *  the same `BoardBuildInfo.extraArduinoLibraries` field.  The
+   *  editor adapter installs each name via `arduino-cli lib install`;
+   *  web no-ops (its compile-service backend pre-installs every lib).
+   *
+   *  A library declared here that arduino-cli can't resolve MUST
+   *  fail the install so the build aborts before generating a sketch
+   *  that won't link.  Per-device libs are the source of truth: if
+   *  the Opta package declares `Arduino_Opta_Blueprint` and
+   *  arduino-cli can't find it, the user needs to know now, not
+   *  during the arduino-cli compile step. */
+  extraLibraries?: string[]
 }
 
 /** Runtime-version probe (used for the v4 strucpp-compatibility

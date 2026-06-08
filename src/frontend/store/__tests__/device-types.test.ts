@@ -37,12 +37,12 @@ describe('Device slice types', () => {
   // DevicePinMapping
   // -----------------------------------------------------------------------
   describe('DevicePinMapping', () => {
-    it('has pins array and selected row', () => {
+    it('has per-board pins dict and selected row', () => {
       const mapping: DevicePinMapping = {
-        pins: [],
+        pinsByBoard: {},
         currentSelectedPinTableRow: -1,
       }
-      expect(mapping.pins).toEqual([])
+      expect(mapping.pinsByBoard).toEqual({})
       expect(mapping.currentSelectedPinTableRow).toBe(-1)
     })
   })
@@ -168,9 +168,8 @@ describe('Device slice types', () => {
           configuration: {
             deviceBoard: '',
             communicationPort: '',
-            compileOnly: false,
           },
-          pinMapping: { pins: [], currentSelectedPinTableRow: -1 },
+          pinMapping: { pinsByBoard: {}, currentSelectedPinTableRow: -1 },
         },
         deviceUpdated: { updated: false },
         runtimeConnection: {
@@ -249,7 +248,6 @@ describe('Device slice types', () => {
         'updatePin',
         'setDeviceBoard',
         'setCommunicationPort',
-        'setCompileOnly',
         'setRuntimeIpAddress',
         'setRuntimeJwtToken',
         'setRuntimeConnectionStatus',
@@ -260,7 +258,7 @@ describe('Device slice types', () => {
         'setIncludeTimingStatsInPolling',
         'clearRuntimeConnection',
       ]
-      expect(actionKeys).toHaveLength(20)
+      expect(actionKeys).toHaveLength(19)
     })
   })
 })

@@ -2,8 +2,10 @@ import * as Popover from '@radix-ui/react-popover'
 import { ReactNode, useState } from 'react'
 
 import { DownloadIcon } from '../../../../assets/icons/interface/Download'
+import { useIsNinetiesTheme } from '../../../../hooks/use-nineties-theme'
 import { cn } from '../../../../utils/cn'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
+import { RetroBuild } from '../../../_atoms/retro-icons'
 import { SidebarTooltipContent, Tooltip, TooltipProvider, TooltipTrigger } from '../../../_atoms/tooltip'
 
 export type BuildOption = 'build-only' | 'build-upload' | 'clean-upload'
@@ -93,6 +95,8 @@ export const BuildOptionsPopover = ({
     onSelect(option)
   }
 
+  const isNineties = useIsNinetiesTheme()
+
   return (
     <Popover.Root open={open && !disabled} onOpenChange={setOpen}>
       <TooltipProvider delayDuration={250}>
@@ -105,7 +109,7 @@ export const BuildOptionsPopover = ({
                   disabled={disabled}
                   className={cn(disabled && 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')}
                 >
-                  <DownloadIcon />
+                  {isNineties ? <RetroBuild /> : <DownloadIcon />}
                 </ActivityBarButton>
               </Popover.Trigger>
             </div>

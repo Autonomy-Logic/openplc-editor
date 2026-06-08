@@ -10,9 +10,11 @@ import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
 import type { PendingChangeStatus } from '../../../../store/slices/version-control/types'
 import { cn } from '../../../../utils/cn'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { isSystemFile } from '../../../../utils/system-files'
 import { toast } from '../../../../utils/toast'
 import { DiscardConfirmationModal } from './modals/discard-confirmation-modal'
+import { StashCreateModal } from './modals/stash-create-modal'
 
 type ChangesSectionProps = {
   projectId: string
@@ -282,8 +284,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
-  const isReadOnly = useOpenPLCStore((s) => s.workspace.isReadOnly)
-  const openReadOnlyModal = useOpenPLCStore((s) => s.modalActions.openModal)
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
   const pous = project.data.pous
 
@@ -304,6 +305,8 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isCommitting, setIsCommitting] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
+  const [showStashModal, setShowStashModal] = useState(false)
+  const [isStashing, setIsStashing] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
 
@@ -469,10 +472,9 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
 
   const handleCommit = async () => {
     if (!canCommit || !versionControl) return
-    // No edit permission ⇒ open the fork-or-cancel affordance instead
-    // of letting the backend 403 the commit silently.
-    if (isReadOnly) {
-      openReadOnlyModal('read-only-project')
+    // No write permission ⇒ skip the doomed backend commit and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('commit to')
       return
     }
 
@@ -538,6 +540,11 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
 
   const handleDiscard = async () => {
     if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend discard and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('discard changes in')
+      return
+    }
 
     setIsDiscarding(true)
     setErrorMessage(null)
@@ -565,6 +572,45 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
       setErrorMessage(msg)
     } finally {
       setIsDiscarding(false)
+    }
+  }
+
+  const handleStash = async (stashMessage: string) => {
+    if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend stash and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('stash changes in')
+      return
+    }
+
+    setIsStashing(true)
+    setErrorMessage(null)
+
+    try {
+      // Stash only the explicitly selected visible files — same rationale as
+      // discard: never sweep in system-file changes the user can't see.
+      const selectedPaths = [...selectedFiles]
+      await versionControl.createStash(projectId, stashMessage || undefined, selectedPaths)
+      setShowStashModal(false)
+
+      // Stashing reverts the working tree to HEAD — reload in place so the
+      // editor reflects the reverted files, then re-sync the changes badge.
+      try {
+        const result = await projectPort.openProjectByPath(projectId)
+        if (result.success && result.data) {
+          sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        }
+      } catch {
+        toast({ title: 'Failed to reload project after stash', variant: 'fail' })
+      }
+      await fetchChanges()
+      toast({ title: 'Changes stashed' })
+    } catch (error) {
+      setShowStashModal(false)
+      const msg = error instanceof Error ? error.message : 'Failed to stash changes'
+      setErrorMessage(msg)
+    } finally {
+      setIsStashing(false)
     }
   }
 
@@ -686,17 +732,23 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         </div>
         <div className='flex gap-2'>
           <button
-            onClick={() => (isReadOnly ? openReadOnlyModal('read-only-project') : void handleCommit())}
-            disabled={(!canCommit && !isReadOnly) || isCommitting}
-            title={isReadOnly ? 'Read-only project — fork to commit' : undefined}
+            onClick={() => void handleCommit()}
+            disabled={!canCommit || isCommitting}
             className='flex-1 rounded-md bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isCommitting ? 'Committing...' : 'Commit'}
           </button>
           <button
-            onClick={() => (isReadOnly ? openReadOnlyModal('read-only-project') : setShowDiscardModal(true))}
-            disabled={(selectedFiles.size === 0 && !isReadOnly) || isDiscarding}
-            title={isReadOnly ? 'Read-only project — fork to discard' : undefined}
+            onClick={() => setShowStashModal(true)}
+            disabled={selectedFiles.size === 0 || isStashing}
+            title='Stash selected changes for later'
+            className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-400'
+          >
+            {isStashing ? 'Stashing...' : 'Stash'}
+          </button>
+          <button
+            onClick={() => setShowDiscardModal(true)}
+            disabled={selectedFiles.size === 0 || isDiscarding}
             className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-red-900/30 dark:hover:text-red-400'
           >
             Discard
@@ -711,6 +763,15 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         totalCount={visibleFiles.length}
         onConfirm={() => void handleDiscard()}
         onCancel={() => setShowDiscardModal(false)}
+      />
+
+      <StashCreateModal
+        isOpen={showStashModal}
+        isLoading={isStashing}
+        fileCount={selectedFiles.size}
+        totalCount={visibleFiles.length}
+        onConfirm={(stashMessage) => void handleStash(stashMessage)}
+        onCancel={() => setShowStashModal(false)}
       />
 
       {previewFile && (

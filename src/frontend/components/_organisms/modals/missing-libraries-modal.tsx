@@ -41,7 +41,7 @@ const MissingLibrariesModal = () => {
 
   const handleSearchInternet = () => {
     // Placeholder for the future CDN flow — same disabled-stub
-    // approach VPP uses for "Add from the internet…".
+    // approach VPP uses for "Add from catalog…".
   }
 
   return (

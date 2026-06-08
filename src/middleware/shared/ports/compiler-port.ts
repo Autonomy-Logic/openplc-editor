@@ -45,6 +45,13 @@ export interface CompileProgramArgs {
   isSimulator?: boolean
   runtimeIpAddress?: string | null
   runtimeJwtToken?: string | null
+  /** User-authored configuration-screen data
+   *  (`DeviceConfiguration.vendorScreenData`).  Threaded through the
+   *  port so the shared `runCompilePipeline` can emit `vpp_config.h`
+   *  for arduino-cli VPP boards (Arduino Opta, P1AM).  The pipeline
+   *  gates emission on the board's resolved `vppIo` capability;
+   *  non-VPP boards ignore this. */
+  vendorScreenData?: Record<string, unknown>
 }
 
 export interface DebugCompileArgs {

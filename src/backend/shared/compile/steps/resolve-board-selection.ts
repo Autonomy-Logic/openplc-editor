@@ -1,41 +1,31 @@
 /**
  * Resolve the user's selected board to the canonical pipeline inputs
- * derived from `hals.json`.
+ * (`boardEntry`, `boardRuntime`, plus the three mutually-exclusive
+ * runtime-classification flags) the shared `runCompilePipeline`
+ * branches on.
  *
- * Both platforms hand `runCompilePipeline` the same five fields it
- * needs to branch on the target — `boardEntry`, `boardRuntime`,
- * `isSimulator`, `isRuntimeV4`, `isRuntimeV3` — and both used to do
- * the lookup + flag derivation inline at the entry to `compileProgram`,
- * duplicated character-for-character.  Centralising it here keeps the
- * branching logic on one side of the platform boundary so a future
- * tweak (e.g. introducing a new runtime kind) doesn't risk diverging
- * editor and web.
+ * Both platforms used to do this lookup + adapt inline at the entry
+ * to `compileProgram`, duplicated almost character-for-character.
+ * Centralising the editor's `BoardInfoResolver`-backed flow here
+ * means a future tweak (new runtime kind, new VPP-side capability)
+ * lands once and the editor + web compile entrypoints stay in lockstep.
  *
- * Pure: no I/O.  Caller is responsible for loading `hals.json` —
- * editor reads it off disk, web bundles it via Vite's
- * `import.meta.glob`.  The file's content is byte-identical between
- * the two repos (Shared Surface Sync gate).
+ * Pure dispatch — no I/O.  Caller wires the resolver with its own
+ * `hals.json` source (editor: filesystem; web: bundled via Vite's
+ * `import.meta.glob`) and `PackageManagerPort` (editor: the real
+ * module; web: a no-op stub until the VPP catalog lands there).
  *
  * Returns either the resolved selection or an `error` discriminator
  * with a human-readable message the renderer can surface verbatim.
  */
 
-/**
- * Subset of a `hals.json` entry this resolver inspects.  Kept narrow
- * so test fixtures can construct an entry without dragging through
- * every field downstream code consumes.  The full entry shape lives
- * in `backend/shared/firmware/build-arduino-cli-args.ts`.
- */
-export interface HalsEntryForSelection {
-  /** Runtime identifier — `'simulator'` (avr8js), `'arduino-cli'`
-   *  (direct Arduino board), `'openplc-compiler'` (OpenPLC v4 vPLC). */
-  compiler?: string
-}
+import type { BoardInfoResolver } from '../../hardware/board-info-resolver'
+import type { BoardHalsBuildEntry } from '../pipeline'
 
 export type ResolvedBoardSelection =
   | {
       ok: true
-      boardEntry: HalsEntryForSelection & Record<string, unknown>
+      boardEntry: BoardHalsBuildEntry
       boardRuntime: string
       isSimulator: boolean
       isRuntimeV4: boolean
@@ -43,44 +33,59 @@ export type ResolvedBoardSelection =
     }
   | { ok: false; error: string }
 
-/**
- * Look up `boardTarget` in `halsContent` and derive the four
- * mutually-exclusive runtime flags the pipeline branches on.
- *
- *   - `isRuntimeV3` is decided purely by the boardTarget string
- *     (legacy runtime is a special "OpenPLC Runtime v3" key — no
- *     `compiler` field would let it overlap with v4 otherwise).
- *   - `isRuntimeV4` is derived from `compiler === 'openplc-compiler'`
- *     AND NOT v3 — the v4 vPLC and the legacy v3 daemon share the
- *     `openplc-compiler` field on disk for historical reasons.
- *   - `isSimulator` is the in-browser avr8js path
- *     (`compiler === 'simulator'`).
- *   - The Arduino direct-board path is the residual: not v3, not v4,
- *     not simulator.
- */
-export function resolveBoardSelection(
-  halsContent: Record<string, HalsEntryForSelection & Record<string, unknown>>,
-  boardTarget: string,
-): ResolvedBoardSelection {
-  const boardEntry = halsContent[boardTarget]
-  if (!boardEntry) {
+export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: string): ResolvedBoardSelection {
+  // `BoardInfoResolver.resolve` covers both hals.json and installed
+  // VPP packages — the editor's canonical lookup.  Either source can
+  // raise (unknown board, malformed manifest, etc.); the caller only
+  // needs the boolean ok / error message split.
+  try {
+    const boardInfo = resolver.resolve(boardTarget)
+
+    // Adapt `BoardBuildInfo` → pipeline's `BoardHalsBuildEntry` shape.
+    // Runtime-v3 / runtime-v4 / simulator targets carry an empty
+    // `platform` (intentionally — they don't go through arduino-cli),
+    // so the cast bypasses the shape's required-platform constraint;
+    // downstream code only dereferences `platform` on the arduino-cli
+    // compile + upload paths, which those runtimes skip.
+    const boardEntry: BoardHalsBuildEntry = {
+      ...(boardInfo.platform ? { platform: boardInfo.platform } : {}),
+      ...(boardInfo.core ? { core: boardInfo.core } : {}),
+      ...(boardInfo.define ? { define: boardInfo.define } : {}),
+      ...(boardInfo.compilerFlags?.c_flags ? { c_flags: boardInfo.compilerFlags.c_flags } : {}),
+      ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
+      ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
+      ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
+      // Per-board extra libraries — the editor's arduino-cli `lib
+      // install` step uses these.  Identical contract for static
+      // hals.json (`extra_libraries`) and VPP manifests
+      // (`hal.extraArduinoLibraries`); both arrive in
+      // `BoardBuildInfo.extraArduinoLibraries` from the resolver.
+      ...(boardInfo.extraArduinoLibraries && boardInfo.extraArduinoLibraries.length > 0
+        ? { extra_libraries: boardInfo.extraArduinoLibraries }
+        : {}),
+      // Capability resolution inputs.  `resolveTargetCapabilities`
+      // reads `compiler` + `vpp` + `capabilities` on whatever board
+      // shape it's handed — without forwarding all three the
+      // resolver picks the empty preset and `vppIo` collapses to
+      // false, which silently disables `vpp_config.h` emission for
+      // every VPP arduino-cli target (Opta, future P1AM VPP).
+      compiler: boardInfo.compiler,
+      ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
+      ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),
+    } as unknown as BoardHalsBuildEntry
+
+    return {
+      ok: true,
+      boardEntry,
+      boardRuntime: boardInfo.boardRuntime,
+      isSimulator: boardInfo.isSimulator,
+      isRuntimeV4: boardInfo.isRuntimeV4,
+      isRuntimeV3: boardInfo.isRuntimeV3,
+    }
+  } catch {
     return {
       ok: false,
-      error: `hals.json is missing the "${boardTarget}" entry — bundled asset is out of sync.`,
+      error: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,
     }
-  }
-
-  const boardRuntime = typeof boardEntry.compiler === 'string' ? boardEntry.compiler : ''
-  const isRuntimeV3 = boardTarget === 'OpenPLC Runtime v3'
-  const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
-  const isSimulator = boardRuntime === 'simulator'
-
-  return {
-    ok: true,
-    boardEntry,
-    boardRuntime,
-    isSimulator,
-    isRuntimeV4,
-    isRuntimeV3,
   }
 }

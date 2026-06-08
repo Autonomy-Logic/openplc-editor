@@ -1,6 +1,11 @@
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import {
+  type DebugResolverContext,
+  type DebugSpec,
+  resolveDebugConnection,
+} from '../../../../backend/shared/hardware/debug-spec'
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import {
@@ -19,7 +24,6 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
-import { isArduinoTarget, isOpenPLCRuntimeTarget, isOpenPLCRuntimeV4Target } from '../../../utils/device'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -42,6 +46,18 @@ const showDebuggerMessage = (
       message,
       buttons,
       onResponse: (buttonIndex: number) => resolve(buttonIndex),
+    })
+  })
+}
+
+const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
+  return new Promise((resolve) => {
+    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+      title,
+      message,
+      defaultValue,
+      onSubmit: (value: string) => resolve(value),
+      onCancel: () => resolve(null),
     })
   })
 }
@@ -86,9 +102,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
-  const editingState = useOpenPLCStore((state) => state.workspace.editingState)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
-  const isReadOnly = useOpenPLCStore((state) => state.workspace.isReadOnly)
+  const canEdit = useOpenPLCStore((state) => state.workspace.canEdit)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
@@ -139,13 +154,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
       if (isCompiling) return
 
-      // Read-only projects can't save — but Run/Build must still work since
-      // we want the viewer to be able to compile and run the project on
-      // their own device.  The Monaco/graphical gates prevent the user from
-      // actually modifying anything, so `editingState` should stay 'saved'
-      // here; the explicit isReadOnly check is belt-and-suspenders so a
-      // stray dirty flag doesn't trip the save and 403 the build.
-      if (editingState === 'unsaved' && !isReadOnly) {
+      // Always save the full project before building. The compile
+      // pipeline reads source from disk (project.json, devices/*.json,
+      // pous/**, ...) so any in-memory edit that hasn't been flushed
+      // yet compiles from the previous session's bytes.
+      //
+      // We used to gate this on `editingState === 'unsaved'`, but that
+      // flag was effect-driven and lagged behind store mutations by a
+      // render (a quick "change a vendor-screen field → click Build"
+      // could miss the save). Each editor's dirty-tracking is also
+      // independent — Monaco buffers, vendor screens, the manifest,
+      // ladder/FBD nodes — so a workspace-level boolean was always a
+      // lossy summary. `executeSaveProject` is the same call the
+      // library-build path makes for the same reason: walks every
+      // project file and flushes the in-memory state to disk. Cost is
+      // a few JSON.stringify + file writes; save is idempotent when
+      // nothing changed.
+      //
+      // Viewers without write permission (public projects they don't
+      // own) can compile their in-memory edits but can't push them
+      // back; skip the pre-build save for them so the doomed backend
+      // write never gates the build.
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) return
       }
@@ -167,7 +197,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             projectData: freshProjectData,
             boardTarget: deviceDefinitions.configuration.deviceBoard,
             projectPath: projectMeta.path,
-            compileOnly: overrides?.compileOnly ?? deviceDefinitions.configuration.compileOnly,
+            // `compileOnly` is dictated entirely by the sidebar build
+            // menu (Build / Build & Upload / Clean Build & Upload).
+            // Default to `false` so the few callers that invoke
+            // `handleBuild()` with no overrides also get an upload.
+            compileOnly: overrides?.compileOnly ?? false,
             cleanBuild: overrides?.cleanBuild ?? false,
             isSimulator: isSimulatorBoard,
             runtimeIpAddress: deviceDefinitions.configuration.runtimeIpAddress || null,
@@ -178,6 +212,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             // saved the project yet (the legacy disk-read path lags
             // the live store by one save cycle).
             communicationPort: deviceDefinitions.configuration.communicationPort || undefined,
+            // User-authored configuration-screen data — the shared
+            // compile pipeline emits `vpp_config.h` from this for
+            // arduino-cli VPP boards (Arduino Opta, P1AM).  Same
+            // store path on editor + web, single source of truth.
+            vendorScreenData: deviceDefinitions.configuration.vendorScreenData,
           },
           (event) => {
             if (event.plcStatus) {
@@ -193,7 +232,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
                   if (pendingSimulatorDebugRef.current) {
                     pendingSimulatorDebugRef.current = false
-                    void debugSession.connectAndStart()
+                    // Simulator's debug spec resolves to the trivial
+                    // `{ connectionType: 'simulator' }` config — see
+                    // the hals.json entry.  Pass it explicitly so the
+                    // session's downstream MD5-verification path has
+                    // the right transport instead of falling back to
+                    // `connectAndStart`'s internal default.
+                    void debugSession.connectAndStart({ connectionType: 'simulator', connectionParams: {} })
                   }
                 } else {
                   pendingSimulatorDebugRef.current = false
@@ -227,9 +272,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       debugSession,
       addLog,
       isCompiling,
-      editingState,
       executeSave,
-      isReadOnly,
+      canEdit,
       jwtToken,
     ],
   )
@@ -534,10 +578,119 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }
 
   // ---------------------------------------------------------------------------
+  // Debug-spec resolver — surface picker / prompt / error dialogs and
+  // return a connection-ready DebugConnectionConfig, or null if the
+  // user cancelled or no config could be resolved.
+  // ---------------------------------------------------------------------------
+
+  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
+  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
+  // for hals.json entries) so two boards sharing a `cacheKey` value
+  // don't see each other's last-entered IP.  Lives on a ref so it
+  // survives across re-renders without triggering them.
+  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
+
+  const resolveDebugConfigWithUx = useCallback(
+    async (boardTarget: string, spec: DebugSpec | undefined): Promise<DebugConnectionConfig | null> => {
+      if (!spec) {
+        await showDebuggerMessage(
+          'warning',
+          'Debugging Not Available',
+          "This board hasn't declared a debug spec.  The VPP package (or hals.json entry) must provide a `debug` block.",
+          ['OK'],
+        )
+        return null
+      }
+
+      // Build resolver context from current store state on each call —
+      // captures the user's freshest screen edits without forcing the
+      // user to save first.
+      const buildContext = (): DebugResolverContext => {
+        const store = useOpenPLCStore.getState()
+        const cfg = store.deviceDefinitions.configuration
+        const rtConn = store.runtimeConnection
+        // `vendorScreenData` is already keyed by section ID (e.g.
+        // `modbus_rtu`); resolver state's `screens` shape matches
+        // 1:1 so we pass it straight through.
+        const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
+        const cacheBucketKey = `${cfg.deviceBoard}`
+        const promptCache = promptCacheRef.current[cacheBucketKey] ?? {}
+        return {
+          state: {
+            configuration: {
+              deviceBoard: cfg.deviceBoard,
+              ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
+              ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
+            },
+            screens,
+            runtimeConnection: {
+              ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
+              ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
+            },
+            promptCache,
+          },
+          capabilities: {
+            runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
+            jwtToken: Boolean(rtConn.jwtToken),
+          },
+        }
+      }
+
+      let selectedChannelIndex: number | undefined
+      // Loop: pickers/prompts re-invoke the resolver with extra state
+      // until it returns config or error/unsupported/cancelled.
+      // Capped at 8 iterations as a defensive guard against spec
+      // bugs that could otherwise loop forever.
+      for (let iteration = 0; iteration < 8; iteration += 1) {
+        const outcome = resolveDebugConnection(spec, buildContext(), selectedChannelIndex)
+        if (outcome.kind === 'config') {
+          return outcome.config
+        }
+        if (outcome.kind === 'error') {
+          await showDebuggerMessage('warning', outcome.title, outcome.body, ['OK'])
+          return null
+        }
+        if (outcome.kind === 'unsupported') {
+          // Defensive — buildContext already errored at top-level on
+          // missing spec, so we shouldn't reach here normally.
+          return null
+        }
+        if (outcome.kind === 'pick') {
+          const buttons = outcome.channels.map((c) => c.label)
+          const choice = await showDebuggerMessage('question', outcome.title, outcome.body, buttons)
+          if (choice < 0 || choice >= outcome.channels.length) return null
+          selectedChannelIndex = outcome.channels[choice].index
+          continue
+        }
+        if (outcome.kind === 'prompt') {
+          const bucketKey = boardTarget
+          const bucket = (promptCacheRef.current[bucketKey] ??= {})
+          for (const field of outcome.fields) {
+            const previous = field.cacheKey ? bucket[field.cacheKey] : undefined
+            const result = await showDebuggerIpInput(field.title, field.message, previous ?? field.defaultValue ?? '')
+            if (result === null) return null
+            const trimmed = result.trim()
+            if (!trimmed) return null
+            if (field.cacheKey) bucket[field.cacheKey] = trimmed
+          }
+          selectedChannelIndex = outcome.channelIndex
+          continue
+        }
+      }
+      return null
+    },
+    [runtime],
+  )
+
+  // ---------------------------------------------------------------------------
   // Debugger click — full orchestration for non-simulator targets
   // ---------------------------------------------------------------------------
 
   const handleDebuggerClick = useCallback(async () => {
+    // Simulator targets debug through the Start Simulator button
+    // (compile + load firmware + connect), so the Debugger button
+    // is hidden for them at the JSX level — but guard here too in
+    // case the gate ever flips.
     if (isSimulatorBoard) return
 
     const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
@@ -552,7 +705,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     setIsDebuggerProcessing(true)
 
     try {
-      if (editingState === 'unsaved') {
+      // Mirror the build flow: always save before starting the
+      // debugger so the on-disk project matches what the user sees
+      // on screen. Avoids the race where an editor change hadn't
+      // bubbled up to `editingState === 'unsaved'` yet. Viewers
+      // without write permission skip the save (same rationale as
+      // the build path — backend write would fail).
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) {
           setIsDebuggerProcessing(false)
@@ -563,48 +722,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const boardTarget = devDefs.configuration.deviceBoard
       const projectPath = project.meta.path
       const boardInfo = availableBoards.get(boardTarget)
-      const isRuntimeTarget = isOpenPLCRuntimeTarget(boardInfo)
 
-      // Resolve connection config
-      let debugConfig: DebugConnectionConfig = { connectionType: 'tcp', connectionParams: {} }
-
-      if (isRuntimeTarget) {
-        const rtConn = useOpenPLCStore.getState().runtimeConnection
-        const runtimeIpAddress = devDefs.configuration.runtimeIpAddress
-        if (!runtime.isReadyForDebug?.() || rtConn.connectionStatus !== 'connected') {
-          await showDebuggerMessage('warning', 'Connection Required', 'Connect to the target first.', ['OK'])
-          setIsDebuggerProcessing(false)
-          return
-        }
-        if (isOpenPLCRuntimeV4Target(boardTarget, boardInfo)) {
-          const token = rtConn.jwtToken || undefined
-          if (!token) {
-            await showDebuggerMessage(
-              'error',
-              'Authentication Required',
-              'JWT token missing. Reconnect to the runtime.',
-              ['OK'],
-            )
-            setIsDebuggerProcessing(false)
-            return
-          }
-          debugConfig = {
-            connectionType: 'websocket',
-            connectionParams: { ipAddress: runtimeIpAddress, jwtToken: token },
-          }
-        } else {
-          debugConfig = { connectionType: 'tcp', connectionParams: { ipAddress: runtimeIpAddress } }
-        }
-      } else {
-        // Non-runtime, non-simulator boards are expected to come back as
-        // VPP Arduino-family packages, each owning its own debug-connection
-        // surface. Refuse gracefully until that's wired in.
-        await showDebuggerMessage(
-          'warning',
-          'Debugging Not Available',
-          "Debugging for this target is not supported in the core editor. The selected board's VPP package must provide a debug adapter.",
-          ['OK'],
-        )
+      const debugConfig = await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)
+      if (!debugConfig) {
         setIsDebuggerProcessing(false)
         return
       }
@@ -624,6 +744,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
+      // `isRuntimeTarget` here only gates the "PLC stopped, start it?"
+      // dialog inside MD5 verification.  Tied to whether the active
+      // channel needs the runtime alive — websocket/tcp targets do,
+      // rtu/simulator targets don't.
+      const isRuntimeTarget = debugConfig.connectionType === 'websocket' || debugConfig.connectionType === 'tcp'
       void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
     } catch (error: unknown) {
       consoleActions.addLog({
@@ -644,9 +769,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     availableBoards,
     isSimulatorBoard,
     isDebuggerProcessing,
-    editingState,
+    canEdit,
     executeSave,
     addLog,
+    resolveDebugConfigWithUx,
   ])
 
   // ---------------------------------------------------------------------------
@@ -672,12 +798,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             triggerTooltip={
               isSimulatorBoard ? 'Use Start to build and run' : isCompiling ? 'Compiling…' : 'Build options'
             }
-            // Arduino targets always allow upload (arduino-cli connects via USB
-            // at upload time). Runtime v3/v4 targets must be connected first
-            // since the upload goes over the network to the on-device webserver.
+            // Direct-USB targets (every arduino-cli board, simulator)
+            // always allow upload — arduino-cli connects via USB at
+            // upload time, no prior network handshake needed.  Runtime
+            // v3/v4 targets must be connected first since the upload
+            // goes over the network to the on-device webserver.
+            //
+            // Capability-driven (`directUsbUpload`) rather than
+            // `isArduinoTarget`, because VPP-IO boards (Opta) flip
+            // `pinMapping: false` and the legacy
+            // `isArduinoTarget` helper keys off `pinMapping`.  Those
+            // boards still upload over USB via arduino-cli, so the
+            // gate needs the more direct flag.
             uploadAvailable={(() => {
-              const arduino = isArduinoTarget(currentBoardInfo)
-              if (arduino) return true
+              const caps = resolveTargetCapabilities(currentBoardInfo)
+              if (caps.directUsbUpload) return true
               return connectionStatus === 'connected'
             })()}
             uploadDisabledReason='must be connected to the device to upload'

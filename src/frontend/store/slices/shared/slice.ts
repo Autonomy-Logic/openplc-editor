@@ -54,6 +54,18 @@ function renameElement(
   state.editorActions.updateEditorName(oldName, newName)
   state.fileActions.updateFile({ name: oldName, newName })
   state.tabsActions.updateTabName(oldName, newName)
+
+  // Rekey the per-language graphical-flow slices.  Ladder + FBD store
+  // their canvas state (rungs, nodes, edges) in a separate Zustand
+  // slice keyed by POU name; without this rekey, a renamed LD/FBD POU
+  // would render an empty canvas in the editor and a subsequent save
+  // would overwrite the on-disk body with the empty in-memory state
+  // (data loss).  The rename actions are no-ops when no entry
+  // matches `oldName`, so it's safe to fire unconditionally — only
+  // LD/FBD POUs will have a flow entry to rekey.
+  state.ladderFlowActions.renameLadderFlow(oldName, newName)
+  state.fbdFlowActions.renameFBDFlow(oldName, newName)
+
   afterRename?.(oldName, newName)
 
   return { ok: true as const }
@@ -511,11 +523,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
-      // Apply the edit-permission flag from the backend.  `canEdit ===
-      // false` ⇒ read-only mode; `true` or `undefined` ⇒ editable.
-      // clearStatesOnCloseProject above already reset to `false`, so an
-      // editable project just stays in that default.
-      getState().workspaceActions.setReadOnly(data.canEdit === false)
+      // Apply the persist-permission flag from the backend.  `canEdit ===
+      // false` ⇒ the viewer can't push changes back (e.g. a public project
+      // they don't own), so backend writes (save/commit/branch) are gated;
+      // `true` or `undefined` ⇒ full write access.  Only persistence is
+      // affected — in-memory editing, simulation, and compilation stay on.
+      getState().workspaceActions.setCanEdit(data.canEdit !== false)
 
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {
@@ -530,14 +543,30 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         data: data.projectData,
       })
 
-      // Add ladder and FBD flows for graphical POUs
+      // Add ladder and FBD flows for graphical POUs.
+      //
+      // The flow object embeds its own `name` field — historically the
+      // load path trusted that name verbatim, but a rename bug in the
+      // editor (since fixed) could leave a project on disk where the
+      // POU header says one name and the body's `name` field still
+      // holds the pre-rename value.  When that drift exists, the
+      // ladder editor's `find(f => f.name === pou.name)` lookup
+      // misses and the canvas renders empty even though the rungs
+      // are on disk.
+      //
+      // Defend against it here by always keying the flow under
+      // `pou.name`.  Projects saved with the new (consistent) rename
+      // path see no change in behaviour; projects with the legacy
+      // drift auto-recover on first open.
       const pous = data.projectData.pous
       pous.forEach((pou) => {
         if (pou.body.language === 'ld') {
-          getState().ladderFlowActions.addLadderFlow(pou.body.value as LadderFlowType)
+          const bodyValue = pou.body.value as LadderFlowType
+          getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
-          getState().fbdFlowActions.addFBDFlow(pou.body.value as FBDFlowType)
+          const bodyValue = pou.body.value as FBDFlowType
+          getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
         }
       })
 
@@ -748,20 +777,27 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           type: 'library-manifest',
         })
       } else {
-        const mainPou = pous.find((p) => p.name === 'main' && p.pouType === 'program')
-        if (mainPou) {
-          const language = mainPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
+        // Auto-open a program POU on project load so the user lands on
+        // an editable tab instead of an empty workspace.  Prefer one
+        // named "main" (template default) when present, otherwise fall
+        // back to the first program POU — users are free to rename or
+        // delete "main", and the editor must not break for projects
+        // that don't have it.
+        const programPou =
+          pous.find((p) => p.name === 'main' && p.pouType === 'program') ?? pous.find((p) => p.pouType === 'program')
+        if (programPou) {
+          const language = programPou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
           const tabToBeCreated: TabsProps = {
-            name: mainPou.name,
-            path: `/data/pous/program/${mainPou.name}`,
+            name: programPou.name,
+            path: `/data/pous/program/${programPou.name}`,
             elementType: { type: 'program', language },
           }
           const model = CreateEditorObjectFromTab(tabToBeCreated)
           getState().editorActions.addModel(model)
           getState().editorActions.setEditor(model)
           getState().tabsActions.updateTabs(tabToBeCreated)
-          getState().tabsActions.setSelectedTab(mainPou.name)
-          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: mainPou.name, type: 'program' })
+          getState().tabsActions.setSelectedTab(programPou.name)
+          getState().workspaceActions.setSelectedProjectTreeLeaf({ label: programPou.name, type: 'program' })
         }
       }
 

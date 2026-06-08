@@ -99,6 +99,58 @@ describe('generateDefinesContent — simulator comms block', () => {
     expect(openplcCompiler).not.toContain('SIMULATOR_MODE')
     expect(openplcCompiler).not.toContain('Comms Configuration')
   })
+
+  it('emits a Modbus defines block from vppModbusState on arduino-cli runtimes', () => {
+    // arduino-cli is the runtime that drives `defines.h`-based Modbus
+    // config; runtime-v3/v4 route via `conf/modbus_slave.json` and
+    // skip this path. The state here exercises the rtu+tcp branches
+    // in `generateModbusDefines` so we know the wiring is end-to-end.
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: {
+        modbus_rtu: {
+          enabled: true,
+          rtu_interface: 'Serial1',
+          rtu_baud_rate: '115200',
+          rtu_slave_id: 1,
+        },
+      },
+    })
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_BAUD 115200')
+    expect(out).toContain('#define MBSERIAL_SLAVE 1')
+    expect(out).toContain('#define MODBUS_ENABLED')
+  })
+
+  it('skips the vppModbusState branch entirely for openplc-compiler', () => {
+    // openplc-compiler emits no MODBUS macros even when a screen
+    // payload is present — runtime-v3/v4 own that config via JSON.
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'openplc-compiler',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
+      },
+    })
+    expect(out).not.toContain('MBSERIAL_IFACE')
+    expect(out).not.toContain('MODBUS_ENABLED')
+  })
+
+  it('omits the Modbus block when vppModbusState produces an empty payload', () => {
+    // generateModbusDefines returns "" when both rtu and tcp are
+    // disabled — the wrapper must not append the trailing blank
+    // lines in that case (the visible behaviour is "the block is
+    // simply absent", same as no vppModbusState supplied).
+    const withEmptyState = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+    })
+    const withoutState = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    // Same output either way — empty state collapses to no block.
+    expect(withEmptyState).toEqual(withoutState)
+  })
 })
 
 describe('generateDefinesContent — IO Config (pin masks)', () => {

@@ -36,6 +36,19 @@ type LadderFlowActions = {
   clearLadderFlows: () => void
   addLadderFlow: (flow: LadderFlowType) => void
   removeLadderFlow: (flowId: string) => void
+  /**
+   * Rekey the ladder-flow entry from `oldName` → `newName`.
+   *
+   * Called when a POU is renamed.  The ladder editor looks up its
+   * rungs by `flow.name === editorName`, so without this rekey a
+   * renamed LD POU's editor would show an empty canvas — and worse,
+   * any subsequent rung edits would seed a fresh flow entry under
+   * the new name, leaving the original rungs orphaned in the
+   * `ladderFlows` array (they'd persist in memory but never reach
+   * the editor surface, and on save the empty new flow would
+   * overwrite the on-disk rungs).
+   */
+  renameLadderFlow: (oldName: string, newName: string) => void
 
   /**
    * Control the rungs of the flow

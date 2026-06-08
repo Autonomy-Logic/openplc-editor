@@ -1,5 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
+import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -9,7 +10,7 @@ import { useOpenPLCStore } from '../../../store'
 import { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
+import { buildLocationDropdownOptions } from '../../../utils/location-dropdown-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -441,6 +442,16 @@ const EditableLocationCell = ({
   const existingPins = pinSelectors.usePins()
   const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
   const vendorIoEntries = vendorIoSelectors.useVendorIoEntries()
+  // Target-capability gate: the project file can carry persisted state
+  // from previously-active targets (e.g. SLM-RP4 VPP-module entries
+  // left over from a project authored against runtime v4, kept on
+  // disk so switching back doesn't lose work). The address pool
+  // already scopes claims by `caps.<producer>`; mirror that here so
+  // the dropdown only surfaces addresses the active target can
+  // actually drive. Without this filter, switching SLM-RP4 → Arduino
+  // Mega leaves both `%QX0.0` rows (Arduino pin + stale VPP slot 1)
+  // in the picker.
+  const capabilities = useTargetCapabilities()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -460,9 +471,26 @@ const EditableLocationCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
+  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
+  // can take it into account — when the user's previously-bound alias
+  // has been renamed/removed upstream (pin mapping, backplane, etc.),
+  // re-picking the same address from the dropdown should refresh the
+  // variable's stored alias.  Without this hoist `isOrphaned` was
+  // only used for the rendered warning glyph below.
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
-    if (value === initialValue) return
+    // Short-circuit unchanged-value blurs so re-focus doesn't fire a
+    // gratuitous state update.  Exception: when the user re-picks the
+    // SAME location for a variable whose stored alias is now orphaned
+    // (the producer renamed it), force the update through so
+    // `updateVariable`'s auto-adopt path re-resolves the address
+    // against the live alias registry and refreshes the variable's
+    // alias field.  Otherwise the orphan warning would persist
+    // forever and the only workaround would be Clear → re-pick.
+    if (value === initialValue && !(id === 'location' && isOrphaned)) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -487,50 +515,17 @@ const EditableLocationCell = ({
     )
   }, [editor.meta.name, index, table.options.data, scope, getVariable])
 
-  const selectableValues = useCallback(() => {
-    const ainPins = existingPins
-      .filter((pin) => pin.pinType === 'analogInput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
-      }))
-    const aoutPins = existingPins
-      .filter((pin) => pin.pinType === 'analogOutput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
-      }))
-
-    const dinPins = existingPins
-      .filter((pin) => pin.pinType === 'digitalInput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
-      }))
-
-    const doutPins = existingPins
-      .filter((pin) => pin.pinType === 'digitalOutput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
-      }))
-
-    const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
-    const vendorGroups = buildVendorIoOptionGroups(id, vendorIoEntries)
-
-    return [
-      { label: 'Analog Inputs', options: ainPins },
-      { label: 'Analog Outputs', options: aoutPins },
-      { label: 'Digital Inputs', options: dinPins },
-      { label: 'Digital Outputs', options: doutPins },
-      ...remoteGroups,
-      ...vendorGroups,
-    ]
-  }, [id, variable, existingPins, remoteIOPoints, vendorIoEntries])
+  const selectableValues = useCallback(
+    () =>
+      buildLocationDropdownOptions({
+        cellId: id,
+        pins: existingPins,
+        remoteIOPoints,
+        vendorIoEntries,
+        capabilities,
+      }),
+    [id, existingPins, remoteIOPoints, vendorIoEntries, capabilities],
+  )
 
   // Combined display: when the variable carries an alias, show it
   // alongside the raw address as "alias (address)" — same shape
@@ -538,8 +533,6 @@ const EditableLocationCell = ({
   // flip the cell's appearance. When there's no alias, only the
   // address shows. The combobox `value` stays as the raw address so
   // typing / picking still operates on the canonical form.
-  const aliasRegistry = useAliasRegistry()
-  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
   const orphanTooltip = isOrphaned
     ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
     : undefined

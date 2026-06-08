@@ -74,6 +74,18 @@ export function attachMonacoModelSync(monacoApi: typeof monaco): MonacoModelSync
 
   function reconcile(pous: PLCPou[]): void {
     if (disposed) return
+    // Skip the transient empty state.  `handleOpenProjectResponse` clears the
+    // store (`pous = []`) before repopulating it on every project (re)load —
+    // e.g. the reload after a stash apply/pop.  Our store subscription fires
+    // synchronously on that empty list; without this guard the disappeared-POU
+    // sweep below would dispose EVERY owned model, including the one the
+    // currently-open `<Editor>` is bound to.  Monaco then detaches the disposed
+    // model, leaving `editorRef.current.getModel()` null, and
+    // `@monaco-editor/react`'s value-sync effect crashes with
+    // "null is not an object (evaluating 'getModel().getFullModelRange')".
+    // A real project always has at least one POU; genuine full teardown goes
+    // through `dispose()`, so an empty list here is never a real deletion.
+    if (pous.length === 0) return
     const seen = new Set<string>()
     for (const pou of pous) {
       // ST POUs live at pou://; everything else at stub://.  Matches

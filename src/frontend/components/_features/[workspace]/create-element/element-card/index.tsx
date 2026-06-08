@@ -128,22 +128,9 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     serverActions: { create: createServer },
     remoteDeviceActions: { create: createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
-    modalActions: { openModal },
   } = useOpenPLCStore()
-  const isReadOnly = useOpenPLCStore((state) => state.workspace.isReadOnly)
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
   const [isOpen, setIsOpen] = useState(false)
-
-  // Read-only ⇒ the create-element popover/menu just routes to the
-  // fork-or-cancel modal so the user knows why the affordance exists
-  // but can't make changes that wouldn't persist.
-  const handleOpen = (next: boolean) => {
-    if (next && isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
-    setIsOpen(next)
-  }
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
@@ -231,15 +218,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleMouseEnter = () => {
-    if (isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
     setIsOpen(true)
   }
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={handleOpen}>
+    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
       <Popover.Trigger
         onMouseEnter={handleMouseEnter}
         id={`create-${target}-trigger`}

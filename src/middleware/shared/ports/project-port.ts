@@ -45,7 +45,12 @@ export interface ProjectResponse {
     meta: ProjectMeta
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
+    /** Pin mappings parsed from `devices/pin-mapping.json`. The
+     *  per-board dict (`Record<string, DevicePin[]>`) is the
+     *  canonical shape; the legacy flat array is still accepted
+     *  on load and auto-migrated by the store on the next save.
+     *  See `pinMappingFileSchema` for the on-disk contract. */
+    devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
     /**
@@ -56,12 +61,21 @@ export interface ProjectResponse {
      */
     rawLoadedFiles?: Record<string, string>
     /**
-     * Whether the current user has edit permission on this project. Drives
-     * the editor's read-only gating (Monaco/graphical/save/commit/branch).
-     * Absent ⇒ treated as `true` (desktop editor and dev:local mode have no
-     * remote permission concept and must remain fully editable).
+     * Whether the current user has permission to persist changes to this
+     * project. Gates only backend writes (save/commit/branch/stash/discard);
+     * in-memory editing, simulation, and compilation stay enabled so a viewer
+     * works on a local copy.  Absent ⇒ treated as `true` (desktop editor and
+     * dev:local mode have no remote permission concept).
      */
     canEdit?: boolean
+    /**
+     * Resolved project README. Backend prefers the on-disk `README.md`
+     * over the legacy `project.readme` column, so this is the single
+     * source of truth — `null` means the project has no README (file
+     * absent and column empty). Absent (`undefined`) ⇒ adapter doesn't
+     * expose READMEs (desktop editor, dev:local).
+     */
+    readme?: string | null
   }
   error?: {
     title: string
@@ -152,42 +166,10 @@ export interface RawProjectFiles {
      *  raw layer so adapters that build `ProjectResponse` from a raw
      *  fetch don't have to round-trip the details endpoint twice. */
     canEdit?: boolean
+    /** See {@link ProjectResponse.data.readme}.  Carried through the
+     *  raw layer for the same reason as `canEdit`. */
+    readme?: string | null
   }
-  error?: { title: string; description: string }
-}
-
-/**
- * Folder in the user's namespace, used by the read-only project modal's
- * Fork flow to let the user pick where the fork should land.  Mirrors the
- * shape returned by autonomy-edge `GET /folders?includeHierarchy=true`.
- */
-export interface ProjectFolder {
-  id: string
-  name: string
-  /** Backend folder kind.  The well-known value `'root'` identifies the
-   *  implicit user-root folder (shown as "Root (/)" in the picker); any
-   *  other string is a normal user-created folder type from
-   *  autonomy-edge's `/folders` endpoint. */
-  type: string
-  parentId: string | null
-  children?: ProjectFolder[]
-}
-
-/** Params for {@link ProjectPort.forkProject}. */
-export interface ForkProjectParams {
-  projectId: string
-  destinationFolderId: string
-  /** Optional rename.  When forking a project that already lives in the
-   *  caller's namespace the backend requires a name different from the
-   *  source; otherwise it falls back to "<original> (N)". */
-  name?: string
-}
-
-/** Result of {@link ProjectPort.forkProject}.  On success the new project
- *  id is surfaced so the editor can navigate the URL to `?project_id=<id>`. */
-export interface ForkProjectResponse {
-  success: boolean
-  data?: { projectId: string }
   error?: { title: string; description: string }
 }
 
@@ -235,6 +217,24 @@ export interface ProjectPort {
   getRecentProjects(): Promise<RecentProject[]>
 
   /**
+   * Drop a project entry from the recent-projects list without
+   * touching disk. Used by the start-screen 3-dot menu's "Remove
+   * from list" action. Disk state is preserved — re-opening the
+   * project by path later re-adds it to the recent list.
+   */
+  removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Recursively delete a project directory and drop its entry from
+   * the recent list. Destructive — the editor surfaces a confirmation
+   * modal before invoking this. Implementations gate the recursive
+   * delete on the directory actually containing a top-level
+   * `project.json` to refuse arbitrary paths (stale history entries
+   * pointing at user-home directories etc.).
+   */
+  deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
    * Read a file's content by path.
    * Editor: reads from local filesystem via IPC.
    * Web: reads from in-memory project state or API.
@@ -270,21 +270,31 @@ export interface ProjectPort {
   onFileExternalChange?(callback: (filePath: string) => void): Unsubscribe
 
   /**
-   * Fork a project into the caller's namespace.  Optional — only the
-   * web adapter implements this (desktop editor has no remote project
-   * concept).  Returns `{ success: true, data: { projectId } }` on success
-   * so the caller can navigate to the new project.
+   * Fetch the current README for a project.  Returns `null` when the
+   * project has no README (file absent and legacy column empty).
+   * Optional — desktop editor returns `null` since there's no remote
+   * README concept in that mode.
    */
-  forkProject?(params: ForkProjectParams): Promise<ForkProjectResponse>
+  getReadme?(projectId: string): Promise<string | null>
 
   /**
-   * List the caller's folders (root + nested hierarchy) so the fork
-   * destination picker can render a tree.  Optional — desktop editor
-   * returns `{ success: false, error }` since it has no remote folders.
+   * Save the project README.  `content === null` deletes the README
+   * (creates a `git rm` commit on the default branch); an empty string
+   * keeps the file present but empty.  `commitMessage` overrides the
+   * default `docs: create/update/remove README` subject.  Optional —
+   * desktop editor returns `{ success: false }` until file-level
+   * README editing is wired up there.
    */
-  listMyFolders?(): Promise<{
+  saveReadme?(
+    projectId: string,
+    content: string | null,
+    opts?: { commitMessage?: string },
+  ): Promise<{
     success: boolean
-    data?: ProjectFolder[]
-    error?: { title: string; description: string }
+    /** Backend-reported action — useful for tailoring success toasts. */
+    action?: 'noop' | 'create' | 'update' | 'remove'
+    /** True when the same call migrated the legacy column into a commit. */
+    migrated?: boolean
+    error?: string
   }>
 }

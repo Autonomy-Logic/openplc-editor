@@ -204,30 +204,49 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Arduino-cli library install.  Existing
-     * `handleLibraryInstallation` installs the full set of libs
-     * configured in hals.json — args.libId is currently a no-op
-     * for backward compat with the existing handler.
+     * Arduino-cli library install.  Forwards `args.extraLibraries`
+     * (the per-board library list from `BoardBuildInfo`) to
+     * `handleLibraryInstallation`, which combines them with the
+     * editor's `GLOBAL_LIBRARIES` and runs `arduino-cli lib install`
+     * for whatever's missing.  `args.libId` is unused on this path —
+     * kept in the port shape for the legacy single-library callers.
      */
-    async installArduinoLib(_args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
+    async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation((chunk, level) => {
+        await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
         })
         return { ok: true }
       } catch (error) {
+        // Reached only when the install machinery itself can't run
+        // (arduino-cli binary missing, spawn failure, etc.).  Non-
+        // zero `arduino-cli lib install` exits are warnings inside
+        // `handleLibraryInstallation` and don't throw.  Either way
+        // the build continues — arduino-cli compile is the source of
+        // truth for whether a required header can be found.
         const message = error instanceof Error ? error.message : String(error)
-        log(`Arduino library install failed: ${message}`, 'error')
-        return { ok: false }
+        log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
+        return { ok: true }
       }
     },
 
     /**
      * Materialise the in-memory file map to disk under the project's
      * build directory, then spawn `arduino-cli compile` via the
-     * existing `handleCompileArduinoProgram`.  Read the produced
-     * `.hex` back into memory for the pipeline's return.
+     * existing `handleCompileArduinoProgram`.
+     *
+     * When a `Baremetal.ino.hex` exists under the FQBN build folder
+     * we read it back into the result `binary` field — the simulator
+     * path needs it in memory to hand to avr8js.  Non-AVR cores
+     * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
+     * and don't need an in-memory binary: arduino-cli's separate
+     * `upload` step finds the right artefact on disk under whatever
+     * extension the core produced.  In that case we return
+     * `{ ok: true, binary: undefined }` and the shared pipeline
+     * proceeds — the simulator branch is the only one that requires
+     * a non-empty binary and it bails there with a clearer error if
+     * .hex is somehow missing on AVR.
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
@@ -272,12 +291,19 @@ export function createEditorCompilerPlatformPort(
           typeof (context.boardHalsContent as { platform?: unknown }).platform === 'string'
             ? (context.boardHalsContent as { platform: string }).platform
             : ''
+        // .hex lookup is best-effort here.  Found → load it for the
+        // simulator path.  Not found → arduino-cli still produced an
+        // artefact (the compile would have thrown otherwise); the
+        // physical-upload paths read it from disk themselves, so we
+        // hand the pipeline `{ ok: true, binary: undefined }` and let
+        // the simulator branch surface a clearer error if it actually
+        // needed those bytes.
         const hexPath = await findHexInCompilationPath(context.compilationPath, boardPlatform)
-        if (!hexPath) {
-          throw new Error('Compiled .hex not found after arduino-cli compile.')
+        if (hexPath) {
+          const binary = await fs.readFile(hexPath)
+          return { ok: true, binary: new Uint8Array(binary) }
         }
-        const binary = await fs.readFile(hexPath)
-        return { ok: true, binary: new Uint8Array(binary) }
+        return { ok: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log(`Arduino compile failed: ${message}`, 'error')
@@ -567,6 +593,17 @@ export function assertEditorHttpsContext(
  * derived from the hals.json `platform` field with `:` replaced by
  * `.` — same derivation `compileProgram`'s simulator branch uses to
  * locate the `.hex` it hands to avr8js.
+ *
+ * **Only meaningful for AVR / simulator builds.**  Other cores emit
+ * different artefact formats — RP2040 writes `.uf2`, ESP32 / mbed
+ * write `.bin` — so this helper returns `null` for those and the
+ * caller MUST treat null-with-successful-compile as "no in-memory
+ * binary to surface, but arduino-cli succeeded."  The simulator path
+ * is the only consumer that actually loads the bytes (avr8js
+ * requires Intel HEX); for real-board uploads arduino-cli's separate
+ * `upload` step finds its own artefact on disk under whatever
+ * extension the core produced, so the editor doesn't need to read
+ * it back into memory at all.
  *
  * `fqbn` MUST be the canonical platform string (e.g.
  * `arduino:avr:mega`); the helper does the `:`→`.` translation

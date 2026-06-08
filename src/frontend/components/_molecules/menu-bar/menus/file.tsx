@@ -13,10 +13,16 @@ export const FileMenu = () => {
   const capabilities = useCapabilities()
   const {
     editor: activeEditor,
-    workspace: { editingState, isReadOnly },
+    workspace: { editingState },
+    readme: { savedContent: readmeSavedContent },
     sharedWorkspaceActions: { closeProject },
     modalActions: { openModal },
   } = useOpenPLCStore()
+  // The README item is only available when the active adapter exposes
+  // the README slot (currently: web adapter against the Edge API). The
+  // slice's `savedContent === undefined` means "not hydrated" — either
+  // dev:local mode or desktop editor, where the menu item would 404.
+  const isReadmeAvailable = readmeSavedContent !== undefined
 
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
 
@@ -28,25 +34,13 @@ export const FileMenu = () => {
 
   const isSaving = editingState === 'save-request'
 
-  // Read-only projects: route the click to the fork modal directly so
-  // we don't even briefly toggle 'save-request' → 'unsaved' in the
-  // editingState flag.  The save-actions helpers gate this too, but
-  // doing it here keeps the menu honest about what the click will do.
   const handleSave = () => {
-    if (isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
     if (activeEditor.meta.name && !isSaving) {
       void executeSaveActiveFile(projectPort, capabilities)
     }
   }
 
   const handleSaveProject = () => {
-    if (isReadOnly) {
-      openModal('read-only-project')
-      return
-    }
     if (!isSaving) {
       void executeSaveProject(projectPort, capabilities)
     }
@@ -81,6 +75,14 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
           </MenuPrimitive.Item>
+          {isReadmeAvailable && (
+            <>
+              <MenuPrimitive.Separator className={SEPARATOR} />
+              <MenuPrimitive.Item className={ITEM} onClick={() => openModal('project-readme')}>
+                <span>README</span>
+              </MenuPrimitive.Item>
+            </>
+          )}
           {capabilities.hasProjectExport && (
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />

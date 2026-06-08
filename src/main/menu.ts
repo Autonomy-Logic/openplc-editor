@@ -143,11 +143,32 @@ export default class MenuBuilder {
     })
   }
 
+  /** Theme order for the Display ▸ Change Theme cycle: Light → Dark → 90's. */
+  private static readonly THEME_ORDER = ['light', 'dark', 'nineties'] as const
+
+  /** Current persisted theme, falling back to the OS preference. */
+  private currentTheme(): 'light' | 'dark' | 'nineties' {
+    const stored = store.get('theme')
+    if (stored === 'dark' || stored === 'light' || stored === 'nineties') return stored
+    return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+  }
+
+  /** Sublabel shown next to the Change Theme menu item. */
+  private themeSublabel(): string {
+    const t = this.currentTheme()
+    return t === 'nineties' ? "90's" : t === 'dark' ? 'Dark' : 'Light'
+  }
+
   updateAppTheme() {
-    const newTheme = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
-    nativeTheme.themeSource = newTheme
+    const order = MenuBuilder.THEME_ORDER
+    const newTheme = order[(order.indexOf(this.currentTheme()) + 1) % order.length] ?? 'light'
+    // nativeTheme only models light/dark; the 90's skin is UI-only and rides on
+    // a light base, so don't drive a dark OS theme for it.
+    nativeTheme.themeSource = newTheme === 'dark' ? 'dark' : 'light'
     store.set('theme', newTheme)
-    this.mainWindow.webContents.send('system:update-theme')
+    // Send the explicit theme name so the renderer applies light / dark / 90's
+    // (the legacy no-payload signal just toggled light↔dark).
+    this.mainWindow.webContents.send('system:update-theme', newTheme)
     void this.buildMenu()
   }
 
@@ -381,7 +402,7 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:display.submenu.theme'),
-          sublabel: nativeTheme.shouldUseDarkColors ? 'Dark' : 'Light',
+          sublabel: this.themeSublabel(),
           click: () => this.updateAppTheme(),
         },
       ],
@@ -657,7 +678,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:display.submenu.theme'),
-            sublabel: nativeTheme.shouldUseDarkColors ? 'Dark' : 'Light',
+            sublabel: this.themeSublabel(),
             click: () => this.updateAppTheme(),
           },
         ],

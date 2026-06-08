@@ -60,6 +60,15 @@ export interface ComposeFirmwareBundleInput {
    *  it opaque so a future re-shaping of `defines.h` content
    *  doesn't ripple through. */
   definesH: string
+  /** Pre-authored `vpp_config.h` content for arduino-cli targets
+   *  whose VPP package declares `vppIo: true` (Arduino Opta, P1AM,
+   *  future arduino-toolchain VPPs).  Caller invokes
+   *  `generateVppConfigContent` to produce this; absent / undefined
+   *  when the board doesn't ship a VPP config header.  Always
+   *  overwrites `src/vpp_config.h` when present — the firmware
+   *  skeleton ships a placeholder stub so naive `#include "vpp_config.h"`
+   *  in shared HAL code still compiles on non-VPP boards. */
+  vppConfigH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -124,7 +133,7 @@ export function buildCBlocksFromPous(originalCppPous: CppPouDataCode[]): Compose
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -160,6 +169,41 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // project-specific content (board defines, PROGRAM_MD5, IO Config,
   // library toggles).
   files['src/defines.h'] = definesH
+
+  // vpp_config.h carries the user's configuration-screen data for
+  // arduino-cli VPP boards (currently Arduino Opta; P1AM next).
+  // Always overwrites when present so a board that JUST opted into
+  // vppIo gets the fresh content; non-VPP boards leave the skeleton's
+  // placeholder stub in place.  Drivers `#include "vpp_config.h"`
+  // unconditionally — the stub guarantees the include resolves on
+  // every board, the per-define content varies.
+  if (vppConfigH !== undefined) {
+    files['src/vpp_config.h'] = vppConfigH
+  }
+
+  // OpenPLCUserLib.h stub — Baremetal.ino unconditionally
+  // `#include <OpenPLCUserLib.h>` to trigger arduino-cli's
+  // library-discovery for the strucpp pipeline.  On the editor's
+  // local build path that header lives in a separately-staged
+  // precompiled-archive library tree (see `installAsArduinoLibrary`)
+  // and the include resolves through arduino-cli's library search
+  // pass.  On the web's compile-service single-pass build the
+  // strucpp `.cpp` files live directly under `src/` and are compiled
+  // alongside the sketch via `--library src` — no precompiled
+  // archive — so the include needs a sibling stub here to satisfy
+  // the preprocessor.  Bundling it on the client keeps the editor /
+  // web compile flows symmetric without the server needing to know
+  // about the precompile/no-precompile distinction.  Real
+  // declarations come via `arduino_runtime_glue.h`; the stub is
+  // intentionally empty.
+  files['src/OpenPLCUserLib.h'] = [
+    '// Auto-generated stub for OpenPLCUserLib.',
+    "// Resolves Baremetal.ino's `#include <OpenPLCUserLib.h>` in the",
+    '// strucpp pipeline.  Real declarations come via',
+    '// arduino_runtime_glue.h (already in src/).',
+    '#pragma once',
+    '',
+  ].join('\n')
 
   return files
 }

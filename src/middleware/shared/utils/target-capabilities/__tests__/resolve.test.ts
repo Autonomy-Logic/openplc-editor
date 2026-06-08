@@ -77,6 +77,23 @@ describe('resolveTargetCapabilities', () => {
     expect(caps.arduinoApiCompletions).toBe(true)
   })
 
+  it('allows vppIo on an arduino-cli board (Opta-shaped manifest)', () => {
+    // The Arduino Opta VPP declares moduleSystem + capabilities.vppIo on
+    // an arduino-cli-compiled board.  Both flags must take effect: the
+    // capability block enables the backplane configurator UI, and the
+    // pinMapping screen is suppressed in favor of the module slots.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { vppIo: true, pinMapping: false },
+    })
+    expect(caps.vppIo).toBe(true)
+    expect(caps.pinMapping).toBe(false)
+    // Arduino specifics still flow through where not overridden.
+    expect(caps.arduinoApiCompletions).toBe(true)
+    expect(caps.directUsbUpload).toBe(true)
+    expect(caps.debuggerTransports).toEqual(ARDUINO_CLI_CAPABILITIES.debuggerTransports)
+  })
+
   it('handles a board with capabilities but no compiler (web orchestrator devices)', () => {
     // openplc-web populates capabilities directly on vPLC entries with
     // no `compiler` field. Resolver must take the capabilities verbatim

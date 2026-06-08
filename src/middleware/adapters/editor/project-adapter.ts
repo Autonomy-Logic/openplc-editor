@@ -291,6 +291,14 @@ export function createEditorProjectAdapter(): ProjectPort {
       return window.bridge.retrieveRecent()
     },
 
+    async removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
+      return window.bridge.removeProjectFromRecent(projectPath)
+    },
+
+    async deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
+      return window.bridge.deleteProject(projectPath)
+    },
+
     async readFileContent(filePath: string): Promise<{ success: boolean; content?: string; error?: string }> {
       return window.bridge.fileReadContent(filePath)
     },

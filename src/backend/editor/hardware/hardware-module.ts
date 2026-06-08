@@ -1,16 +1,18 @@
 import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { promisify } from 'node:util'
 
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 
 import { readHalsFile } from '../../shared/firmware/hals-loader'
+import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
+import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 // interface MethodsResult<T> {
@@ -137,6 +139,36 @@ class HardwareModule {
     }
   }
 
+  /**
+   * Resolve compile/upload info for `boardName` from either hals.json or
+   * an installed VPP package. Compiler module should call this instead
+   * of reading hals.json directly.
+   */
+  async getBoardBuildInfo(boardName: string): Promise<BoardBuildInfo> {
+    const halsContent = await readHalsFile<HalsFile>()
+    const resolver = new BoardInfoResolver({
+      halsContent,
+      packageManager: new PackageManagerModule(),
+      // Editor maps hals.json `source` (relative HAL .cpp filename) to
+      // an absolute path under `resources/sources/hal/`.  Web's adapter
+      // (when VPP-on-web lands) will map the same string to a bundled-
+      // asset key.
+      resolveHalSourcePath: (rel) => join(this.sourcesDirectoryPath, 'hal', rel),
+      // Editor security-check: VPP-package-relative paths must resolve
+      // inside the package's root directory.  Web's adapter will pick
+      // its own scheme when VPP-on-web lands.
+      resolvePackageRelativePath: (pkgPath, relPath) => {
+        const root = pathResolve(pkgPath)
+        const candidate = pathResolve(root, relPath)
+        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+        }
+        return candidate
+      },
+    })
+    return resolver.resolve(boardName)
+  }
+
   async getAvailableBoards(): Promise<AvailableBoards> {
     // hals.json is now bundled at `src/backend/shared/firmware/hals.json`
     // (the canonical shared board catalogue editor and web both consume).
@@ -184,6 +216,7 @@ class HardwareModule {
                 .map((pin) => pin.trim())
                 .filter(Boolean) ?? [],
           },
+          ...(boardData.debug ? { debug: boardData.debug } : {}),
         })
       })
     }
@@ -191,9 +224,11 @@ class HardwareModule {
     const mutableBoards: AvailableBoards = new Map(availableBoards)
     await this.#mergeVppBoards(mutableBoards)
 
-    // Sort boards alphabetically by name
-    const sortedBoards: AvailableBoards = new Map([...mutableBoards.entries()].sort(([a], [b]) => a.localeCompare(b)))
-    return sortedBoards
+    // Group by source VPP package so devices from the same package land
+    // contiguously in the device dropdown, with the three built-in targets
+    // (OpenPLC Runtime v3, v4, Simulator) pinned to the top. See
+    // `order-boards-by-vpp-group.ts` for the full ordering contract.
+    return orderBoardsByVppGroup(mutableBoards)
   }
 
   async #mergeVppBoards(boards: AvailableBoards): Promise<void> {
@@ -243,6 +278,7 @@ class HardwareModule {
                   id: m.id,
                   name: m.name,
                   hwId: m.hwId,
+                  fixed: m.fixed,
                   image: m.image,
                   description: m.description,
                   specs: m.specs,
@@ -266,8 +302,21 @@ class HardwareModule {
               defaultAin: device.defaults?.pins?.defaultAin,
               defaultAout: device.defaults?.pins?.defaultAout,
             },
+            // Forward platformOptions only when the manifest actually declares
+            // some; the UI keys off `platformOptions?.length` to decide whether
+            // to render the variant dropdown, so leaving it undefined for
+            // boards that don't expose variants keeps the JSX gate tight.
+            platformOptions:
+              device.target.platformOptions && device.target.platformOptions.length > 0
+                ? device.target.platformOptions
+                : undefined,
+            // Forward any capability overrides the manifest declares (e.g. a
+            // runtime-v4 GPIO board setting `pinMapping: true`).
+            // `resolveTargetCapabilities` merges these over the preset.
+            capabilities: device.capabilities,
             vpp: {
               packageId: manifest.package.id,
+              vendor: manifest.package.vendor.name,
               deviceId: device.id,
               packagePath: pkg.path,
               screens,
@@ -279,6 +328,7 @@ class HardwareModule {
                   }
                 : null,
             },
+            ...(device.debug ? { debug: device.debug } : {}),
           })
         }
       }

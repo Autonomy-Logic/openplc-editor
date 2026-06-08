@@ -143,7 +143,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
-      isReadOnly,
       fbSelectedInstance,
       fbDebugInstances,
     },
@@ -353,7 +352,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
 
       if (capabilities.hasPythonLSP && language === 'python') {
-        cleanupPythonLSP()
+        cleanupPythonLSP(name)
       }
     }
   }, [name, language])
@@ -429,13 +428,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [editorMounted])
 
-  // Update readOnly when debugger visibility or project read-only flag changes.
-  // Debugger visibility forces read-only for safety; the project's own
-  // read-only flag (no edit permission) does the same so users browsing
-  // someone else's project can't make local modifications they couldn't save.
+  // Update readOnly when debugger visibility changes (editor-only)
   useEffect(() => {
-    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible || isReadOnly })
-  }, [isDebuggerVisible, isReadOnly])
+    editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
+  }, [isDebuggerVisible])
 
   // Apply programmatic cursor jumps (e.g. clicking a compile error in
   // the console) to an already-mounted editor.  The onMount path
@@ -758,12 +754,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         const code = model.getValue()
         const variableSuggestions = parseCppVariables(code, range)
+        const tableVariableSuggestions = tableVariablesCompletion({ range, variables: pouVariables }).suggestions
 
         const suggestions: monaco.languages.CompletionItem[] = [
           ...stdLibSuggestions,
           ...snippetSuggestions,
           ...arduinoSuggestions,
           ...variableSuggestions,
+          ...tableVariableSuggestions,
         ]
 
         return { suggestions }
@@ -776,7 +774,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard])
+  }, [language, deviceBoard, pouVariables])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)
@@ -856,45 +854,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     focusDisposables.current.onFocus?.dispose()
     focusDisposables.current.onBlur?.dispose()
-
-    // ST POU body editors silently lose plain-Space keystrokes after
-    // the STruC++ LSP completion provider became active in the v4.2.0
-    // RC line.  Symptom: with the suggest widget mounted (visible OR
-    // just tracking — the "active suggest model" state), `onKeyDown`
-    // for Space fires, `defaultPrevented` is false, no built-in
-    // Space binding exists in the editor surface (only Ctrl+Space /
-    // Cmd+Space for trigger-suggest), yet `onDidType(" ")` never
-    // fires and the model stays unchanged.  The break only shows up
-    // when the LSP provider is registered; every other Monaco editor
-    // surface in the app (IL, Python, C++) types space fine because
-    // no LSP provider attaches.  Reproduced cleanly with `if<Space>`
-    // (widget filtering on the keyword list) and inside snippet
-    // placeholders after Tab-accepting a suggestion.
-    //
-    // The fix is byte-equivalent to what Monaco's default Space
-    // dispatch *should* do: invoke the `type` core command with a
-    // single space, and dismiss the suggest widget so it doesn't
-    // dangle.  Binding via `addCommand(KeyCode.Space, …)` registers
-    // an editor-scoped keybinding at the highest user-priority slot;
-    // it never collides with built-in shortcuts because Monaco
-    // reserves Space only with modifiers (Ctrl/Cmd) and only for
-    // trigger-suggest, which still works because that binding lives
-    // at a different chord.  See `node_modules/monaco-editor/esm/vs/
-    // editor/contrib/suggest/browser/suggestController.js:676` for
-    // the only Space-key registration in editor scope.
-    //
-    // Root cause of the upstream interference between the LSP
-    // semantic-tokens / completion-model flow and Monaco's default
-    // type pipeline is still open — left for an upstream Monaco /
-    // strucpp-LSP investigation since the regression sits below the
-    // surface our converters touch (items carry no commitCharacters
-    // and no itemDefaults; the suggestModel just stops dispatching
-    // type for Space).  This binding restores the expected typing
-    // behaviour with zero side effects on other editors.
-    editorInstance.addCommand(monacoInstance.KeyCode.Space, () => {
-      editorInstance.trigger('keyboard', 'type', { text: ' ' })
-      editorInstance.trigger('keyboard', 'hideSuggestWidget', {})
-    })
 
     focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
       openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
@@ -1277,7 +1236,7 @@ void loop()
   const monacoEditorUserOptions: monacoEditorOptionsType = {
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
-    readOnly: isDebuggerVisible || isReadOnly,
+    readOnly: isDebuggerVisible,
     // Lock indentation to 4 spaces across every language Monaco
     // hosts (ST / IL / Python / C++).  Without this Monaco's
     // `detectIndentation` heuristic kicks in on the existing model
@@ -1447,7 +1406,27 @@ void loop()
 
   return (
     <>
-      <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
+      {/* `nokey` opts every keystroke inside this Monaco editor out of
+       *  @xyflow/react's global window-level `keydown` listener
+       *  (`downHandler` in @xyflow_react.js — tracks Space as a
+       *  pan-modifier for the diagram canvas and `preventDefault`s
+       *  it).  xyflow's `isInputDOMNode` guard bails out for
+       *  `<input>` / `<textarea>` / `[contenteditable]` targets, but
+       *  Monaco's new EditContext-API surface renders as a plain
+       *  `<div class="native-edit-context">` with NO `contenteditable`
+       *  attribute (the EditContext API replaces the legacy textarea
+       *  entirely), so xyflow doesn't recognise it as input —
+       *  preventDefault then swallows Space before the browser can
+       *  commit text to the EditContext, and `onWillType` /
+       *  `onDidType` never fire.  The `.nokey` class is xyflow's
+       *  documented escape hatch (`target.closest(".nokey")` in the
+       *  same guard); marking this wrapper opts every keystroke
+       *  inside the editor out cleanly, without leaking a global
+       *  keybinding into other Monaco instances on the page.  See
+       *  @xyflow/react `node_modules/.vite/deps/@xyflow_react.js`
+       *  around the `downHandler` definition (currently ~line 6080)
+       *  and `isInputDOMNode` (~line 3759). */}
+      <div id='editor drop handler' className='oplc-monaco-wrapper nokey relative h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
           key={capabilities.hasLocalFilesystem ? undefined : editorModelPath}
           options={monacoEditorUserOptions}

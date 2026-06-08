@@ -27,6 +27,7 @@ import type {
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
+import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
 import { describeIncompatibleRuntime, isStrucppCompatibleRuntime } from '../firmware/runtime-version-gate'
@@ -43,6 +44,7 @@ import { XmlGenerator } from '../utils/PLC/xml-generator'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,37 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Per-board #defines, fed through to `generateDefinesContent` as
    *  the `// Board defines` section. */
   define?: string | string[]
+  /** Per-board arduino-cli library list.  Sourced from `hals.json`
+   *  `extra_libraries` (static boards) and from VPP manifests'
+   *  `device.hal.extraArduinoLibraries` (installed VPP boards) — the
+   *  `BoardInfoResolver` collapses both onto the same key.  The
+   *  pipeline forwards these into `installArduinoLib`, which on the
+   *  editor runs `arduino-cli lib install <name>` and on the web
+   *  no-ops (compile-service backend pre-installs every library).
+   *
+   *  Per-board libs are the contract: a board that needs the
+   *  `Arduino_Opta_Blueprint` library declares it here, and the
+   *  install fires only when that board is selected.  Boards that
+   *  don't need a specific library never download it. */
+  extra_libraries?: string[]
+  /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
+   *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
+   *  preset lookup — without this the resolver can't pick the right
+   *  capability defaults for the board. */
+  compiler?: string
+  /** Truthy when the board came from a VPP package.  Lets the
+   *  capability resolver flip `vppIo` on for v4-derived VPP boards
+   *  that didn't ship an explicit capability block. */
+  vpp?: unknown
+  /** Per-board capability overrides — same source-of-truth contract
+   *  as the other per-board fields above.  Merged by
+   *  `resolveTargetCapabilities` on top of the compiler preset, so a
+   *  manifest can opt into `vppIo: true` without declaring the full
+   *  block.  Critical for the Opta + future arduino-cli VPP boards:
+   *  without forwarding this through the pipeline, `vppIo` resolves
+   *  to false and `vpp_config.h` never gets generated, leaving the
+   *  HAL with an unresolved `#include "vpp_config.h"`. */
+  capabilities?: Partial<import('../../../middleware/shared/utils/target-capabilities/types').TargetCapabilities>
 }
 
 export interface RunCompilePipelineArgs {
@@ -171,6 +204,29 @@ export interface RunCompilePipelineArgs {
    *  addresses without re-reading the file.  Called once per
    *  successful strucpp compile. */
   cacheDebugData?: (md5: string, debugMapJson: string) => void
+  /** Persisted VPP Modbus screen state for the target device,
+   *  sourced from `DeviceConfiguration.vendorScreenData` under
+   *  the `modbus_rtu` / `modbus_tcp` keys.  Threaded straight
+   *  through to `generateDefinesContent`, which emits the
+   *  matching `MBSERIAL_*` / `MBTCP_*` macros for non-simulator
+   *  Arduino targets.  Web passes `undefined` until the VPP
+   *  Modbus screen lands on the web build. */
+  vppModbusState?: import('./steps/modbus-defines').VppModbusScreenState
+  /** User-authored configuration-screen data from
+   *  `DeviceConfiguration.vendorScreenData`.  The platform adapter
+   *  reads `devices/configuration.json` (editor) or the store (web)
+   *  and forwards the `vendorScreenData` field as-is.  Threaded into
+   *  the shared `generateVppConfigContent` helper for arduino-cli
+   *  boards whose VPP package declares `vppIo: true` (Arduino Opta,
+   *  P1AM).  When `vppIo` resolves to `false` or this field is
+   *  absent, the pipeline skips `vpp_config.h` emission and the
+   *  firmware skeleton's placeholder stays.
+   *
+   *  Deliberately the only adapter-specific input the VPP-config
+   *  flow needs — `vppIo` itself is derived inside the pipeline by
+   *  `resolveTargetCapabilities(boardEntry)`, keeping capability
+   *  semantics in one place. */
+  vendorScreenData?: Record<string, unknown>
 }
 
 export interface RunCompilePipelineResult {
@@ -288,7 +344,17 @@ async function runCompilePipelineInner(
     deviceContext,
     communicationPort,
     cacheDebugData,
+    vppModbusState,
+    vendorScreenData,
   } = args
+
+  // Resolve the board's effective capabilities from `boardEntry`.
+  // Single source of truth — the same helper that gates the
+  // backplane UI in the renderer.  `boardEntry` may not be typed as
+  // BoardInfoLike, but the runtime shape (capabilities + compiler +
+  // optional vpp flag) is compatible — the resolver only reads
+  // those fields and treats unknowns as missing.
+  const targetCapabilities = resolveTargetCapabilities(boardEntry as Parameters<typeof resolveTargetCapabilities>[0])
 
   // ---------------------------------------------------------------------
   // Step 0: Use the already-preprocessed project data.
@@ -551,10 +617,34 @@ async function runCompilePipelineInner(
     return bailError(emit, 'core-install', 'Failed to install Arduino core.', coreInstall.errors)
   }
 
+  // Library install — forward the per-board `extra_libraries` list so
+  // boards that need a specific lib (Arduino_Opta_Blueprint for the
+  // Opta, P1AM for the P1AM board, etc.) get installed when that
+  // board is selected, and boards that don't never download it.
+  //
+  // Install is opportunistic: the editor adapter warns and continues
+  // on `arduino-cli lib install` failure because the library may
+  // already be available from another source the editor doesn't
+  // manage (sketchbook, system-wide install, custom library path).
+  // arduino-cli compile is the source of truth — if a required
+  // header truly can't be resolved, it fails with a precise message
+  // pointing at the file that needed it.  Web's adapter no-ops
+  // entirely (its compile-service backend pre-installs every
+  // library).  Either way `ok` should be true here; the defensive
+  // `!ok` branch below warns and continues if an adapter ever
+  // returns false.
   emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
-  const libInstall = await port.installArduinoLib({ libId: '' }, makePlatformLog(emit, 'lib-install'))
+  const libInstall = await port.installArduinoLib(
+    { libId: '', extraLibraries: boardEntry.extra_libraries ?? [] },
+    makePlatformLog(emit, 'lib-install'),
+  )
   if (!libInstall.ok) {
-    return bailError(emit, 'lib-install', 'Failed to install Arduino libraries.', libInstall.errors)
+    emit({
+      stage: 'lib-install',
+      message:
+        'Warning: library install reported a failure. Continuing — arduino-cli compile will surface any genuinely missing headers.',
+      level: 'warning',
+    })
   }
 
   // Build defines.h using the shared content authoring step.
@@ -564,16 +654,29 @@ async function runCompilePipelineInner(
     stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
+    ...(vppModbusState !== undefined ? { vppModbusState } : {}),
   })
 
+  // VPP config header — emitted only for arduino-cli targets whose
+  // capabilities flip `vppIo: true` (Arduino Opta + future P1AM).
+  // The header carries every field the user filled on the device's
+  // configuration screens as C preprocessor #defines; the HAL driver
+  // `#include`s it to recover backplane / per-module settings without
+  // a runtime JSON parser.  Non-VPP arduino-cli boards skip emission
+  // and the firmware skeleton's placeholder `vpp_config.h` stays in
+  // place (drivers can still `#include "vpp_config.h"` unconditionally).
+  const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
-  // c_blocks header/code + defines.h).  Pure function.
+  // c_blocks header/code + defines.h + optional vpp_config.h).
+  // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
   const cBlocks = buildCBlocksFromPous(originalCppPous as never)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     cBlocks,
     definesH,
+    vppConfigH,
     firmwareSkeleton,
   })
 
@@ -628,7 +731,7 @@ async function runCompilePipelineInner(
     { files: firmwareFiles, argv: arduinoArgs, parallel: arduinoCliParallel },
     makePlatformLog(emit, 'arduino-compile'),
   )
-  if (!compileResult.ok || !compileResult.binary) {
+  if (!compileResult.ok) {
     if (compileResult.errors && compileResult.errors.length > 0) {
       emitCompileErrorEvents(
         compileResult.errors.map((e) => ({ formatted: e.message, raw: e as unknown as never })),
@@ -638,8 +741,22 @@ async function runCompilePipelineInner(
     return bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
   }
 
-  // Simulator: return the hex bytes for the caller to load into avr8js.
+  // Simulator: avr8js needs the Intel HEX bytes in memory.  The
+  // editor adapter reads `Baremetal.ino.hex` off disk for AVR builds;
+  // if it's missing here the compile silently succeeded but produced
+  // no .hex, which would crash the simulator loader downstream.
+  // Surface a precise error instead.  Non-simulator branches don't
+  // require `binary` — arduino-cli's upload step finds whatever
+  // artefact the core produced (.uf2 / .bin / .hex) on disk directly.
   if (isSimulator) {
+    if (!compileResult.binary) {
+      return bailError(
+        emit,
+        'arduino-compile',
+        'Simulator build did not produce a .hex artefact.',
+        compileResult.errors,
+      )
+    }
     emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
     return { success: true, md5, binary: compileResult.binary, uploaded: false }
   }
@@ -650,16 +767,11 @@ async function runCompilePipelineInner(
     return { success: true, md5, binary: compileResult.binary, uploaded: false }
   }
 
-  // Physical Arduino direct upload.  Web no-ops (web doesn't target
-  // physical Arduinos directly).
-  if (!deviceContext) {
-    emit({
-      stage: 'upload',
-      message: 'Arduino board not configured (no device context). Skipping upload.',
-      level: 'warning',
-    })
-    return { success: true, md5, binary: compileResult.binary, uploaded: false }
-  }
+  // Physical Arduino direct upload.  Uses `communicationPort` (the
+  // user's serial-port pick) — no `deviceContext` involved; that
+  // shape is for the HTTPS/orchestrator runtime-v4 transports, which
+  // already returned above.  Web's `uploadArduinoBoard` adapter
+  // no-ops because web doesn't target physical Arduinos directly.
   emit({ stage: 'upload', message: 'Uploading firmware to Arduino board...', level: 'info' })
   const uploadResult = await port.uploadArduinoBoard(
     {

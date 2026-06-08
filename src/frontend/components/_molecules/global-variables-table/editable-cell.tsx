@@ -291,8 +291,22 @@ const EditableLocationCell = ({
 
   const [cellValue, setCellValue] = useState(initialValue ?? '')
 
+  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
+  // can take it into account — when the user's previously-bound alias
+  // has been renamed/removed upstream, re-picking the same address
+  // from the dropdown should still refresh the variable's stored
+  // alias.  Mirrors the local-table variant of this cell.
+  const variableAlias = original?.alias
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+
   const onBlur = (value: string) => {
-    if (value === initialValue) return
+    // Same short-circuit semantics as the local variables-table cell:
+    // skip unchanged-value blurs unless the variable's alias is
+    // orphaned, in which case the user re-picking the same address
+    // is their signal to refresh the alias.  `updateVariable`'s
+    // auto-adopt path re-resolves against the live alias registry.
+    if (value === initialValue && !isOrphaned) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -351,12 +365,10 @@ const EditableLocationCell = ({
     ]
   }, [id, existingPins, remoteIOPoints, vendorIoEntries])
 
-  // Same display + orphan-badge rules as the variables-table cell.
-  // Combined label "alias (address)" stays consistent across editable
-  // and read-only states so the cell doesn't flip on row select.
-  const variableAlias = original?.alias
-  const aliasRegistry = useAliasRegistry()
-  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+  // Combined display: "alias (address)" stays consistent across
+  // editable and read-only states so the cell doesn't flip on row
+  // select.  `variableAlias` + `isOrphaned` are defined above the
+  // `onBlur` so the short-circuit can read them.
   const orphanTooltip = isOrphaned
     ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
     : undefined

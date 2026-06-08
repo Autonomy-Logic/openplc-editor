@@ -34,6 +34,17 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('#endif // C_BLOCKS_H')
   })
 
+  it('pulls in the strucpp wrapper headers so `strucpp::IEC_*` qualifications resolve', () => {
+    // Every struct field this header emits is fully qualified as
+    // `strucpp::IEC_*` (numeric, bit-string, STRING, WSTRING). Without
+    // these includes, a TU that does `#include "c_blocks.h"` without
+    // first pulling in the strucpp runtime would fail with
+    // `'IEC_STRING' does not name a type`.
+    const result = generateCBlocksHeader([])
+    expect(result).toContain('#include "iec_var.hpp"')
+    expect(result).toContain('#include "iec_string.hpp"')
+  })
+
   it('generates struct and function declarations for a pou with scalar variables', () => {
     const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
 
