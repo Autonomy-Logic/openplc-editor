@@ -172,6 +172,57 @@ function generateIOPoints(
 }
 
 // ---------------------------------------------------------------------------
+// Alias auto-adopt
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the canonical alias that a variable should carry for its
+ * current `location`.  Builds a fresh pool + registry from the live
+ * store state, scoped to the active target's capabilities, then
+ * returns whatever alias the registry attaches to that address (or
+ * `undefined` when the address isn't aliased, or `location` is empty).
+ *
+ * Used by both `createVariable` and `updateVariable` to enforce the
+ * alias-↔-location invariant: a variable's `alias` field MUST point
+ * at the same producer-channel its `location` points at.  Without
+ * this, the "+" button (which auto-increments the location of a
+ * spread-from-previous variable) leaves the OLD alias attached to a
+ * NEW address — `syncVariableAliases` then collapses every such
+ * variable back to the OLD alias's canonical address on the next
+ * refresh pass, producing the duplicate-address compile errors
+ * reported in v4.2.0.
+ *
+ * Returns `undefined` for an empty / missing location so callers can
+ * distinguish "no alias because the address is unmapped" from "no
+ * alias because we didn't bother to look".
+ */
+function resolveAliasForLocation(getState: ProjectGetState, location: string | undefined): string | undefined {
+  if (!location) return undefined
+  const live = getState()
+  const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+    live.deviceDefinitions.configuration.deviceBoard ?? '',
+  )
+  const ioMapping =
+    (
+      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+        | undefined
+    )?.entries ?? []
+  const pool = buildAddressPool(
+    {
+      pinMapping: {
+        pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+      },
+      vendorIoMapping: { entries: ioMapping },
+      remoteDevices: live.project.data.remoteDevices,
+    },
+    resolveTargetCapabilities(boardInfo),
+  )
+  const registry = buildAliasRegistry(pool)
+  return registry.byAddress.get(location)?.alias
+}
+
+// ---------------------------------------------------------------------------
 // Variables-text ⇄ variables-table reconcile helpers
 // ---------------------------------------------------------------------------
 
@@ -496,6 +547,24 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         if (!reconcile.ok) return reconcile
       }
 
+      // Apply the validator's name + location auto-increment OUTSIDE
+      // produce so we can then re-resolve the alias against the live
+      // store state.  The new variable's `alias` MUST point at the
+      // channel its post-increment `location` points at — otherwise
+      // the "+ button" UI flow (which spreads the previous variable
+      // as a template) carries a stale alias from the previous row
+      // forward, breaking the alias-↔-location invariant.  The next
+      // `syncVariableAliases` refresh would then silently collapse
+      // the new variable back to the stale alias's canonical
+      // address, producing the duplicate-address compile errors
+      // reported in v4.2.0 (forum thread "openplc-420-teething-bugs").
+      const sourceVariables =
+        scope === 'local' && associatedPou
+          ? (getState().project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables ?? [])
+          : getState().project.data.configurations.resource.globalVariables
+      const validated = createVariableValidation(sourceVariables, data)
+      data = { ...data, ...validated, alias: resolveAliasForLocation(getState, validated.location) }
+
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
@@ -511,9 +580,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           } else {
             variables = slice.project.data.configurations.resource.globalVariables
           }
-
-          // Validate and auto-increment name/location
-          data = { ...data, ...createVariableValidation(variables, data) }
 
           // Insert or append
           if (rowToInsert !== undefined) {
@@ -557,40 +623,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
 
       let response: ProjectResponse = { ok: true }
 
-      // Auto-adopt path: whenever the location changes, look up the
-      // alias registry and patch updates.alias to match the new
-      // address. If the address has an alias, the variable adopts it
-      // (cell shows the alias name, Phase 4 sync will keep the
-      // location current as the alias moves). If not, the alias
+      // Auto-adopt path: whenever the location changes, re-resolve
+      // the alias against the live registry so the variable's alias
+      // always points at the producer-channel its location points at.
+      // If the address has an alias, the variable adopts it (cell
+      // shows the alias name; `syncVariableAliases` will keep the
+      // location current as the alias moves).  If not, the alias
       // clears — re-typing a now-orphaned location intentionally
-      // drops the stale alias label too. Done outside `produce` so
+      // drops the stale alias label too.  Done outside `produce` so
       // we read the live store state including pinMapping + caps.
-      let aliasOverride: { alias: string | undefined } | undefined
-      if (typeof updates.location === 'string') {
-        const live = getState()
-        const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-          live.deviceDefinitions.configuration.deviceBoard ?? '',
-        )
-        const ioMapping =
-          (
-            live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-              | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-              | undefined
-          )?.entries ?? []
-        const pool = buildAddressPool(
-          {
-            pinMapping: {
-              pins:
-                live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-            },
-            vendorIoMapping: { entries: ioMapping },
-            remoteDevices: live.project.data.remoteDevices,
-          },
-          resolveTargetCapabilities(boardInfo),
-        )
-        const registry = buildAliasRegistry(pool)
-        aliasOverride = { alias: registry.byAddress.get(updates.location)?.alias }
-      }
+      const aliasOverride: { alias: string | undefined } | undefined =
+        typeof updates.location === 'string'
+          ? { alias: resolveAliasForLocation(getState, updates.location) }
+          : undefined
 
       setState(
         produce((slice: ProjectSlice) => {
