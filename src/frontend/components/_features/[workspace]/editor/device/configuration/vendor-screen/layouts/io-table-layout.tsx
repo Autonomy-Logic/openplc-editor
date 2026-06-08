@@ -1,8 +1,15 @@
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
-import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  describeSource,
+  nextFreeAddress,
+  validateAliasEdit,
+} from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -144,11 +151,53 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
   }, [slots, formatSelectionKey])
 
   const handleAliasChange = (index: number, alias: string) => {
+    const target = entries[index]
+    if (!target) return
+    const sourceRef = { kind: 'vpp-io' as const, ref: `slot-${target.slot}:${target.channelName}` }
+
+    // Phase 1 — write-time uniqueness gate.  See
+    // `module-slots-layout.tsx::handleAliasChange` for the full
+    // rationale; same pattern, scoped to this layout's `entries`
+    // array as the VPP-IO source.
+    const state = useOpenPLCStore.getState()
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+      state.deviceDefinitions.configuration.deviceBoard ?? '',
+    )
+    const pool = buildAddressPool(
+      {
+        pinMapping: {
+          pins: state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
+        },
+        vendorIoMapping: { entries },
+        remoteDevices: state.project.data.remoteDevices,
+      },
+      resolveTargetCapabilities(boardInfo),
+    )
+    const registry = buildAliasRegistry(pool)
+    const validation = validateAliasEdit(registry, alias, sourceRef)
+    if (!validation.ok) {
+      toast({
+        title: 'Alias already in use',
+        description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+        variant: 'fail',
+      })
+      return
+    }
+
+    // Phase 2 — cascade rename onto bound variables BEFORE writing
+    // so the subsequent `syncVariableAliases()` sees variables
+    // pointing at the new alias and takes the refresh path instead
+    // of orphan.
+    const oldAlias = target.alias ?? ''
+    if (oldAlias) {
+      useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+    }
+
     const updated = [...entries]
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
-    // Alias name changed on a single entry — refresh.
+    // Refresh variables against any allocator-driven address shifts.
     useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 

@@ -6,6 +6,7 @@ import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -14,7 +15,13 @@ import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-k
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
-import { buildAddressPool, nextFreeAddress } from '@root/middleware/shared/utils/iec-address'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  describeSource,
+  nextFreeAddress,
+  validateAliasEdit,
+} from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -569,11 +576,55 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const handleAliasChange = (slot: number, channelName: string, alias: string) => {
     const state = useOpenPLCStore.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
-    const entries = ((vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []).map((e) =>
-      e.slot === slot && e.channelName === channelName ? { ...e, alias } : e,
+    const sourceRef = { kind: 'vpp-io' as const, ref: `slot-${slot}:${channelName}` }
+
+    // Phase 1 — write-time uniqueness gate.  Build a fresh registry
+    // from the live state (including the entry being edited, scoped
+    // to the active board's capabilities) and reject the edit if the
+    // new alias is already claimed by a different channel.  Without
+    // this gate, the pool's silent first-wins reservation would
+    // cause every variable that the user later binds to the losing
+    // entry to collapse to the winner's address through
+    // `syncVariableAliases`'s refresh path.
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+      state.deviceDefinitions.configuration.deviceBoard ?? '',
     )
+    const currentEntries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+    const pool = buildAddressPool(
+      {
+        pinMapping: {
+          pins: state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
+        },
+        vendorIoMapping: { entries: currentEntries },
+        remoteDevices: state.project.data.remoteDevices,
+      },
+      resolveTargetCapabilities(boardInfo),
+    )
+    const registry = buildAliasRegistry(pool)
+    const validation = validateAliasEdit(registry, alias, sourceRef)
+    if (!validation.ok) {
+      toast({
+        title: 'Alias already in use',
+        description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+        variant: 'fail',
+      })
+      return
+    }
+
+    // Phase 2 — cascade rename onto bound variables BEFORE writing
+    // the new entries, so the subsequent `syncVariableAliases()`
+    // call sees variables already pointing at the new alias name and
+    // takes the refresh path (location follows alias) instead of the
+    // orphan path (location cleared, warning glyph rendered).
+    const oldAlias = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)?.alias ?? ''
+    if (oldAlias) {
+      useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+    }
+
+    const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
-    // Alias name changed — refresh variables bound to the old name.
+    // Refresh variables bound to the (now-renamed) alias against
+    // any address shifts produced by the change.
     useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }
 

@@ -1,6 +1,12 @@
 import { ARDUINO_CLI_CAPABILITIES, RUNTIME_V4_CAPABILITIES } from '../../target-capabilities'
 import { buildAddressPool } from '../address-pool'
-import { aliasForAddress, buildAliasRegistry, isAliasNameAvailable, resolveAlias } from '../alias-registry'
+import {
+  aliasForAddress,
+  buildAliasRegistry,
+  isAliasNameAvailable,
+  resolveAlias,
+  validateAliasEdit,
+} from '../alias-registry'
 
 const v4 = RUNTIME_V4_CAPABILITIES
 const arduino = ARDUINO_CLI_CAPABILITIES
@@ -190,5 +196,46 @@ describe('isAliasNameAvailable', () => {
 
   it('returns false when ignoring a different source', () => {
     expect(isAliasNameAvailable(reg, 'tank', { kind: 'modbus-tcp-remote', ref: 'd:p' })).toBe(false)
+  })
+})
+
+describe('validateAliasEdit', () => {
+  const pool = buildAddressPool(
+    {
+      vendorIoMapping: {
+        entries: [{ iecAddress: '%IW0', alias: 'tank', slot: 1, channelName: 'AI1' }],
+      },
+    },
+    v4WithVpp,
+  )
+  const reg = buildAliasRegistry(pool)
+
+  it('accepts an empty alias (user clearing the field)', () => {
+    expect(validateAliasEdit(reg, '', { kind: 'vpp-io', ref: 'slot-2:AI1' })).toEqual({ ok: true })
+    expect(validateAliasEdit(reg, '   ', { kind: 'vpp-io', ref: 'slot-2:AI1' })).toEqual({ ok: true })
+    expect(validateAliasEdit(reg, undefined, { kind: 'vpp-io', ref: 'slot-2:AI1' })).toEqual({ ok: true })
+  })
+
+  it('accepts a brand-new alias name', () => {
+    expect(validateAliasEdit(reg, 'pressure', { kind: 'vpp-io', ref: 'slot-2:AI1' })).toEqual({ ok: true })
+  })
+
+  it('accepts a no-op rename (same alias, same source)', () => {
+    expect(validateAliasEdit(reg, 'tank', { kind: 'vpp-io', ref: 'slot-1:AI1' })).toEqual({ ok: true })
+  })
+
+  it('rejects a collision with another channel and returns the conflicting entry', () => {
+    const result = validateAliasEdit(reg, 'tank', { kind: 'vpp-io', ref: 'slot-2:AI1' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.conflict.alias).toBe('tank')
+      expect(result.conflict.address).toBe('%IW0')
+      expect(result.conflict.source).toEqual({ kind: 'vpp-io', ref: 'slot-1:AI1' })
+    }
+  })
+
+  it('rejects a collision across producers (pin-mapping vs VPP)', () => {
+    const result = validateAliasEdit(reg, 'tank', { kind: 'pin-mapping', ref: '%QX0.0' })
+    expect(result.ok).toBe(false)
   })
 })

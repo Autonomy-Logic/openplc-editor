@@ -15,12 +15,15 @@ export {
   type SourceRef,
 } from './address-pool'
 export {
+  type AliasEditValidation,
   type AliasEntry,
   aliasForAddress,
   type AliasRegistry,
   buildAliasRegistry,
+  describeSource,
   isAliasNameAvailable,
   resolveAlias,
+  validateAliasEdit,
 } from './alias-registry'
 export {
   type SyncableVariable,

@@ -35,7 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
-import type { StructuredCompileError } from './types'
+import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
  * Canonical progress callback the pipeline passes to every port
@@ -99,24 +99,30 @@ export type PlatformDeviceContext =
  *  `/generate-st` endpoint, logging a warning for anything it
  *  doesn't recognise (defence in depth — service has its own
  *  allowlist too). */
-export interface TranspileXmlToStArgs {
-  xml: string
-  /** Extra CLI tokens to append after `--generate-st <file>` in the
-   *  xml2st invocation.  For strucpp targets the shared pipeline
-   *  sets `['--keep-structs']`; future flags get added here at the
-   *  single call site in `runCompilePipeline`. */
-  xml2stArgs: readonly string[]
+/**
+ * Input to the in-process JSON → ST transpiler.  Each adapter
+ * projects this into the transpiler's `TranspileProject` IR with
+ * its own helper — editor: `fromSchemaShape` (IPC schema-shape);
+ * web: `fromPortShape` after a port→schema conversion at the
+ * adapter boundary.  Replaces the legacy XML-fed surface that
+ * routed through a bundled `xml2st` binary; transpilation now
+ * runs in-process against the JSON IR.
+ *
+ * The declared type is port-shape because that's the renderer
+ * store's shape; pipeline callers that hold schema-shape data
+ * cast through `never` at the call site (see `pipeline.ts` Step 1
+ * and `library-build-orchestrator.ts` Stage 2). */
+export interface TranspileToStArgs {
+  projectData: PLCProjectData
 }
 
-export interface TranspileXmlToStResult {
+export interface TranspileToStResult {
   ok: boolean
-  /** ST source emitted by xml2st when the transpile succeeded.
-   *  Empty / undefined on failure. */
+  /** ST source emitted by the JSON transpiler when transpilation
+   *  succeeded.  Empty / undefined on failure. */
   programSt?: string
-  /** Structured diagnostics emitted by xml2st.  Web maps the
-   *  server's `output_stderr` parser output here; editor parses
-   *  the binary's stderr stream.  Carried over to the pipeline's
-   *  caller via the `errors[]` return on `CompileResult`. */
+  /** Structured diagnostics from the transpiler.  Forwarded to the
+   *  pipeline caller via `errors[]` on `CompileResult`. */
   errors?: StructuredCompileError[]
   /** Same shape as `errors[]` but for non-fatal warnings. */
   warnings?: StructuredCompileError[]
@@ -304,8 +310,8 @@ export interface CompilerPlatformPort {
    *  hash-impl dependency. */
   computeMd5(input: string): Promise<string>
 
-  /** Step 3 of the editor pipeline.  Transpile IEC XML to ST. */
-  transpileXmlToSt(args: TranspileXmlToStArgs, log: PlatformLog): Promise<TranspileXmlToStResult>
+  /** Step 3 of the editor pipeline.  Transpile project IR to ST. */
+  transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult>
 
   /** Step 5 of the editor pipeline.  Arduino-CLI core install.
    *  Web returns `{ ok: true }` immediately. */

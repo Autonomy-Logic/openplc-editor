@@ -38,7 +38,6 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
-import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -216,24 +215,29 @@ const STUB_SPLIT_FILENAME = `${STUB_PROGRAM_NAME}.st`
 // ---------------------------------------------------------------------------
 
 export interface PrepareXmlResult {
-  /** Plc.xml content the caller passes to xml2st. */
-  xml: string
-  /** POU list the splitter needs to slice the xml2st output.
+  /** Stubbed project data — passes directly into the JSON-fed
+   *  transpiler via `port.transpileToSt({ projectData })`.  The
+   *  stub adds a synthesised `main` program so the transpiler's
+   *  "requires a main POU" check passes. */
+  projectData: PLCProject['data']
+  /** POU list the splitter needs to slice the transpiler output.
    *  Includes the stub so the splitter recognises and emits a slice
    *  for it — caller then drops that slice. */
   knownPous: KnownPou[]
   /** Manifest the second stage reads, parsed here so a malformed
-   *  manifest bails BEFORE xml2st runs. */
+   *  manifest bails BEFORE the transpile step. */
   manifest: LibraryBuildManifest
 }
 
 export type PrepareXmlOutcome = PrepareXmlResult | { error: string }
 
 /**
- * Stage 1.  Validates the manifest and produces the XML xml2st
- * consumes.  Returns `{error}` when the manifest fails validation
- * — caller surfaces that as a build error and bails before
- * spawning xml2st.
+ * Stage 1.  Validates the manifest and returns the stubbed project
+ * data the JSON transpiler consumes (plus the POU list the splitter
+ * needs).  The "stub" adds a synthesised `main` program so the
+ * transpiler's "requires a main POU" guard passes — the caller drops
+ * the stub's slice from the splitter output downstream.  Returns
+ * `{error}` when the manifest fails validation.
  */
 export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: string): PrepareXmlOutcome {
   const parsed = parseLibraryManifest(manifestJson)
@@ -242,15 +246,6 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
   }
 
   const stubbed = stubProgramFor(project)
-  // `'old-editor'` keeps the XML shape compatible with the bundled
-  // xml2st binary (the MatIEC-era flavor), which is the same pipeline
-  // every other library/program build in this repo speaks to.  The
-  // `'codesys'` flavor exists for export-only paths; using it here
-  // would leave xml2st unable to find the program block.
-  const xmlRes = XmlGenerator(stubbed.data, 'old-editor')
-  if (!xmlRes.ok || !xmlRes.data) {
-    return { error: `XML generation failed: ${xmlRes.message ?? 'unknown error'}` }
-  }
 
   const knownPous: KnownPou[] = stubbed.data.pous.map((p) => ({
     name: p.data.name,
@@ -258,7 +253,7 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
     language: p.data.language,
   }))
 
-  return { xml: xmlRes.data, knownPous, manifest: parsed.manifest }
+  return { projectData: stubbed.data, knownPous, manifest: parsed.manifest }
 }
 
 // ---------------------------------------------------------------------------

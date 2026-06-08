@@ -15,9 +15,14 @@
  *                    reallocates its addresses.
  *   - **orphaned**:  variable has an alias the registry no longer
  *                    knows about (its producer was removed, or
- *                    target-switched away). Keeps `location` and
- *                    `alias` so the user can decide; reported so
- *                    the UI can flag the cell.
+ *                    target-switched away).  Keeps `alias` so the
+ *                    UI can show the orphan warning + tooltip, but
+ *                    **clears `location`** so the ST / XML emitters
+ *                    don't bake the stale `AT %…` into the compile.
+ *                    The user can re-bind via the picker; the
+ *                    previous address is preserved in the report's
+ *                    `lastKnownAddress` field for an undo / tooltip
+ *                    affordance.
  *
  * Pure function: same inputs always produce the same outputs.
  * Safe to call from any context — store actions, the pre-compile
@@ -65,7 +70,14 @@ export function syncVariableAliases<V extends SyncableVariable>(
           alias: variable.alias,
           lastKnownAddress: variable.location,
         })
-        next.push(variable)
+        // Clear the stale location so the compile step (ST + XML
+        // emitters) doesn't bake an `AT %…` for an address whose
+        // producer is no longer active.  The alias name is retained
+        // so the variable cell can render the orphan warning and the
+        // tooltip can surface the last-known address from the report.
+        // When the user re-binds, `updateVariable`'s auto-adopt path
+        // re-attaches the alias against the live registry.
+        next.push({ ...variable, location: '' })
         continue
       }
       if (entry.address !== variable.location) {
