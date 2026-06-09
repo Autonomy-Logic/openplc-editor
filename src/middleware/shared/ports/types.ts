@@ -743,8 +743,17 @@ export interface PackageManifest {
     hal: {
       type: string
       pluginType?: string
+      /**
+       * Native runtime-v4 plugin provisioning. "source" (default when absent):
+       * pluginEntry is the entry source file and its directory is compiled on
+       * the runtime. "prebuilt": pluginEntry is the directory holding the
+       * precompiled .o objects plus a link-only Makefile; the runtime only links.
+       */
+      provisioning?: string
       pluginEntry?: string
       configTemplate?: string
+      /** Minimum runtime version the prebuilt objects are ABI-compatible with. */
+      minRuntimeVersion?: string
       requirements?: string
       source?: string
       compilerFlags?: {

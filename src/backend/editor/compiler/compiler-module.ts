@@ -2243,19 +2243,24 @@ class CompilerModule {
         handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
       }
 
-      // --- Step 2: Copy plugin source + generate checksum ---
+      // --- Step 2: Copy plugin payload + generate checksum ---
       const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
       if (!pluginEntryRelPath) {
         handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
         return
       }
 
-      // The plugin source directory is the parent directory of pluginEntry.
+      // Resolve the plugin directory. In "source" mode (default) pluginEntry is
+      // the entry source file, so the dir is its parent. In "prebuilt" mode
+      // (provisioning === 'prebuilt') pluginEntry is the directory itself,
+      // holding the precompiled .o objects plus the link-only Makefile.
       // pluginEntryRelPath is supplied by the package manifest; without
       // containment, an entry like `../../../etc` would resolve outside
       // matchingPackagePath and the recursive-copy below would slurp
       // arbitrary host files into the build's vpp_plugin directory.
-      const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
+      const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
+      const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
       try {
         assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
       } catch (err) {
@@ -2346,7 +2351,7 @@ class CompilerModule {
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
       handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
+        `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
     } catch (error) {
