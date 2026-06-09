@@ -7,8 +7,10 @@
  * `runLibraryBuildPipeline` cannot perform itself:
  *
  *   - MD5 hashing (Node `crypto`)
- *   - in-process JSON → ST transpilation via
- *     `backend/shared/transpilers/st-transpiler/`
+ *   - ST transpilation through either backend, selected via
+ *     `isNewTranspilerEnabled()` — the in-process JSON-fed
+ *     transpiler when on, the bundled `xml2st` subprocess (default)
+ *     when off
  *   - read / write / delete project files on the local disk
  *   - resolve library-name → `.stlib` archive via the main-process bridge
  *   - drive a verification compile through the editor's existing
@@ -21,16 +23,19 @@
  * shared with the web port impl.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import * as fs from 'node:fs/promises'
+import * as os from 'node:os'
 import * as path from 'node:path'
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
+import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
 import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import type { TranspileToStArgs, TranspileToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
 import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-build-port'
 
@@ -40,6 +45,22 @@ import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-bui
  * surface stays narrow + unit-testable.
  */
 export interface DesktopLibraryBuildPortDeps {
+  /**
+   * Spawn the bundled `xml2st` binary on the given input path.  The
+   * binary writes `program.st` next to its input; the port reads it
+   * back from disk after the spawn resolves.  Matches the existing
+   * `CompilerModule.handleTranspileXMLtoST` signature so the adapter
+   * can pass it through verbatim without a wrapper.
+   *
+   * Only invoked by the legacy transpile path (selected when
+   * `isNewTranspilerEnabled()` returns false).
+   */
+  transpileXmlToSt(
+    xmlPath: string,
+    log: (chunk: Buffer | string, level?: 'info' | 'error') => void,
+    extraArgs: readonly string[],
+  ): Promise<unknown>
+
   /**
    * Resolve the names of project-enabled libraries to their parsed
    * `.stlib` archives.  Bundled IEC standard set is included
@@ -76,27 +97,73 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       args: TranspileToStArgs,
       log: (message: string, level: 'info' | 'warning' | 'error') => void,
     ): Promise<TranspileToStResult> {
-      try {
-        // Editor library builds receive the same schema-shape
-        // project data as `compileProgram` (see `transpileToSt` on
-        // `editor-compiler-platform-port` for the IPC-shape note).
-        // The double cast bridges the port's declared port-shape type
-        // and the actual schema-shape payload at the boundary.
-        const ir = fromSchemaShape(args.projectData as unknown as SchemaProjectData)
-        const result = runJsonTranspiler(ir)
-        if (result.programSt === null || result.errors.length > 0) {
-          const message = result.errors.join('\n') || 'transpile-from-json failed'
-          log(message, 'error')
+      if (isNewTranspilerEnabled()) {
+        try {
+          // Editor library builds receive the same schema-shape
+          // project data as `compileProgram` (see `transpileToSt` on
+          // `editor-compiler-platform-port` for the IPC-shape note).
+          // The double cast bridges the port's declared port-shape type
+          // and the actual schema-shape payload at the boundary.
+          const ir = fromSchemaShape(args.projectData as unknown as SchemaProjectData)
+          const result = runJsonTranspiler(ir)
+          if (result.programSt === null || result.errors.length > 0) {
+            const message = result.errors.join('\n') || 'transpile-from-json failed'
+            log(message, 'error')
+            return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+          }
+          for (const warning of result.warnings) {
+            log(warning, 'info')
+          }
+          return { ok: true, programSt: result.programSt }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          log(`transpile-from-json failed: ${message}`, 'error')
           return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
         }
-        for (const warning of result.warnings) {
-          log(warning, 'info')
-        }
-        return { ok: true, programSt: result.programSt }
+      }
+
+      // Legacy path: serialise the project to PLCOpen XML and spawn
+      // the bundled `xml2st` binary on a temp file. Lifts the
+      // pre-Phase-2 implementation byte-for-byte; the only delta is
+      // the leading `XmlGenerator` call because the shared pipeline
+      // no longer hands the port a pre-built XML payload.
+      const xmlResult = XmlGenerator(args.projectData as never, 'old-editor')
+      if (!xmlResult.ok || !xmlResult.data) {
+        log(`XML generation failed: ${xmlResult.message}`, 'error')
+        return { ok: false, errors: [{ message: xmlResult.message, line: 0, column: 0, severity: 'error' }] }
+      }
+      // xml2st takes a file path on stdin, so materialise the
+      // in-memory XML to a unique temp file before spawning.
+      // Lives in `os.tmpdir()` because the user-visible `plc.xml`
+      // is written separately by the orchestrator via
+      // writeBuildFile — the intermediate here exists only for the
+      // subprocess.
+      const sessionDir = path.join(os.tmpdir(), `openplc-lib-xml2st-${randomUUID()}`)
+      try {
+        await fs.mkdir(sessionDir, { recursive: true })
+        const xmlPath = path.join(sessionDir, 'plc.xml')
+        const programStPath = path.join(sessionDir, 'program.st')
+        await fs.writeFile(xmlPath, xmlResult.data, 'utf-8')
+
+        await deps.transpileXmlToSt(
+          xmlPath,
+          (chunk, level) => log(typeof chunk === 'string' ? chunk : chunk.toString(), level ?? 'info'),
+          ['--keep-structs'],
+        )
+
+        const programSt = await fs.readFile(programStPath, 'utf-8')
+        return { ok: true, programSt }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        log(`transpile-from-json failed: ${message}`, 'error')
+        log(`xml2st failed: ${message}`, 'error')
         return { ok: false, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+      } finally {
+        // Best-effort cleanup.  Leaks aren't fatal (os.tmpdir is
+        // the OS's responsibility) but tidying after ourselves
+        // keeps the dev disk clean.
+        await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {
+          /* swallow — the temp dir is the OS's to GC */
+        })
       }
     },
 
