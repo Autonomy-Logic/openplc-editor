@@ -1457,6 +1457,21 @@ describe('createSharedSlice', () => {
         expect(store.getState().editor.type).toBe('available')
       })
 
+      it('selects a diff-viewer next tab with a null project-tree leaf', () => {
+        // A diff-viewer tab has no project-tree leaf to highlight, so when it
+        // becomes the active tab after a close its leaf type must be null.
+        store.getState().tabsActions.updateTabs({
+          name: 'Diff: pous/programs/Main.st',
+          elementType: { type: 'diff-viewer', filePath: 'pous/programs/Main.st' },
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'PouA', language: 'st' })
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('PouA')
+
+        expect(store.getState().editor.type).toBe('diff-viewer')
+        expect(store.getState().workspace.selectedProjectTreeLeaf.type).toBeNull()
+      })
+
       it('does not resurrect the closed model in editors[]', () => {
         // Multi-mount keeps every open POU's editor model in `editors[]`.
         // `forceCloseFile` removes the active model from `editors[]`

@@ -1,6 +1,7 @@
 import type { TabsProps } from '../slices/tabs/types'
 import {
   CreateDeviceEditor,
+  CreateDiffViewerEditor,
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreatePLCGraphicalObject,
@@ -225,6 +226,19 @@ describe('tabs/utils', () => {
   })
 
   // -------------------------------------------------------------------------
+  // CreateDiffViewerEditor
+  // -------------------------------------------------------------------------
+  describe('CreateDiffViewerEditor', () => {
+    it('creates a diff-viewer editor carrying name + filePath', () => {
+      const result = CreateDiffViewerEditor('Diff: pous/programs/Main.st', 'pous/programs/Main.st')
+      expect(result).toEqual({
+        type: 'diff-viewer',
+        meta: { name: 'Diff: pous/programs/Main.st', filePath: 'pous/programs/Main.st' },
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
   // CreateEditorObjectFromTab
   // -------------------------------------------------------------------------
   describe('CreateEditorObjectFromTab', () => {
@@ -275,6 +289,19 @@ describe('tabs/utils', () => {
       const tab: TabsProps = { name: 'Srv', elementType: { type: 'server', protocol: 's7comm' } }
       const result = CreateEditorObjectFromTab(tab)
       expect(result.type).toBe('plc-server')
+    })
+
+    it('creates editor from diff-viewer tab', () => {
+      const tab: TabsProps = {
+        name: 'Diff: devices/configuration.json',
+        elementType: { type: 'diff-viewer', filePath: 'devices/configuration.json' },
+      }
+      const result = CreateEditorObjectFromTab(tab)
+      expect(result.type).toBe('diff-viewer')
+      if (result.type === 'diff-viewer') {
+        expect(result.meta.filePath).toBe('devices/configuration.json')
+        expect(result.meta.name).toBe('Diff: devices/configuration.json')
+      }
     })
   })
 })
