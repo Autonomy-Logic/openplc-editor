@@ -1,3 +1,4 @@
+import { GitCompare } from 'lucide-react'
 import type React from 'react'
 import { ComponentPropsWithoutRef, useCallback } from 'react'
 
@@ -55,6 +56,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
+  'diff-viewer': <GitCompare className='h-4 w-4 flex-shrink-0 text-[#0464FB]' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -84,7 +86,8 @@ const Tab = (props: ITabProps) => {
     | 'package-manager'
     | 'ethercat-device'
     | 'library-manager'
-    | 'library-manifest' = 'il'
+    | 'library-manifest'
+    | 'diff-viewer' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation
@@ -119,6 +122,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'library-manifest') {
     languageOrDerivation = 'library-manifest'
+  }
+  if (fileDerivation?.type === 'diff-viewer') {
+    languageOrDerivation = 'diff-viewer'
   }
 
   const { file: associatedFile } = getFile({ name: fileName || '' })

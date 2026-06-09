@@ -64,6 +64,12 @@ export interface CommitInfo {
 export interface PendingChange {
   path: string
   status: 'added' | 'modified' | 'deleted'
+  /** HEAD (committed) content. Present only when getChanges is called with
+   *  `includeContent`. Empty string for added files. */
+  before?: string
+  /** Working-tree content. Present only when getChanges is called with
+   *  `includeContent`. Empty string for deleted files. */
+  after?: string
 }
 
 export interface Stash {
@@ -168,8 +174,16 @@ export interface VersionControlPort {
   /** Restore the project to a previous commit state. */
   restoreCommit(projectId: string, hash: string, branch?: string): Promise<{ message: string; restoredCommit: Commit }>
 
-  /** Get pending (uncommitted) changes. */
-  getChanges(projectId: string, branch?: string): Promise<{ changes: PendingChange[]; hasChanges: boolean }>
+  /**
+   * Get pending (uncommitted) changes. When `includeContent` is true, each
+   * change also carries `before` (HEAD) and `after` (working-tree) content so
+   * the caller can render a diff without further requests.
+   */
+  getChanges(
+    projectId: string,
+    branch?: string,
+    includeContent?: boolean,
+  ): Promise<{ changes: PendingChange[]; hasChanges: boolean }>
 
   /** Discard pending changes. Optionally specify which files to discard. */
   discardChanges(projectId: string, files?: string[], branch?: string): Promise<void>
