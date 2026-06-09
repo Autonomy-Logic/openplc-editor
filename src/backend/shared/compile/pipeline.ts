@@ -591,7 +591,53 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4b: Arduino / Simulator path — install core + lib (no-op on
+  // Step 4b: Runtime v3 branch — legacy target that ingests a single
+  // `program.st` (not a zip).  v3's on-device MatIEC recompiles the ST
+  // itself, so this MUST short-circuit BEFORE the arduino-cli path
+  // (core/lib install, firmware bundle, compile) — none of which apply
+  // to v3.  (Placing it after `installArduinoCore` was the bug: v3 has
+  // no Arduino core, so the install ran with an empty FQBN and aborted
+  // the build before the upload was ever reached.)
+  //
+  // Strucpp already ran above purely as a correctness check; a strucpp
+  // error bails before we get here, which is the desired behaviour
+  // (catch user code errors without an on-device round-trip).
+  //
+  // C/C++ and Python function blocks are NOT supported on v3 — they
+  // lower to strucpp `{external ...}` inline-C that v3's MatIEC can't
+  // parse — and are rejected up front by the editor compile adapter
+  // before this pipeline runs (see `createEditorCompilerAdapter`).  So
+  // the ST that reaches here is plain IEC that MatIEC accepts; we just
+  // upload it verbatim.
+  // ---------------------------------------------------------------------
+  if (isRuntimeV3) {
+    if (compileOnly) {
+      emit({ stage: 'done', message: 'Compile only mode — skipping upload to runtime v3.', level: 'info' })
+      return { success: true, md5, uploaded: false }
+    }
+    if (!deviceContext) {
+      emit({
+        stage: 'upload',
+        message: 'Runtime v3 not configured. Skipping upload.',
+        level: 'warning',
+      })
+      return { success: true, md5, uploaded: false }
+    }
+
+    emit({ stage: 'upload', message: 'Uploading program.st to Runtime v3...', level: 'info' })
+    const uploadResult = await port.uploadRuntimeV3(
+      { programSt, context: deviceContext },
+      makePlatformLog(emit, 'upload'),
+    )
+    if (!uploadResult.ok) {
+      return bailError(emit, 'upload', 'Failed to upload to Runtime v3.', uploadResult.errors)
+    }
+    emit({ stage: 'done', message: 'Runtime v3 upload complete.', level: 'info' })
+    return { success: true, md5, uploaded: true }
+  }
+
+  // ---------------------------------------------------------------------
+  // Step 4c: Arduino / Simulator path — install core + lib (no-op on
   // web), generate defines.h, compose firmware bundle, compile via
   // arduino-cli.
   // ---------------------------------------------------------------------
@@ -676,40 +722,6 @@ async function runCompilePipelineInner(
     avrLibStdCppInclude,
     parallel: arduinoCliParallel,
   })
-
-  // ---------------------------------------------------------------------
-  // Step 4b (cont.): Runtime v3 branch is a sub-case that runs BEFORE
-  // the arduino-cli compile — it embeds C blocks into program.st and
-  // uploads the merged ST file directly to the device.
-  // ---------------------------------------------------------------------
-  if (isRuntimeV3) {
-    if (compileOnly) {
-      emit({ stage: 'done', message: 'Compile only mode — skipping upload to runtime v3.', level: 'info' })
-      return { success: true, md5, uploaded: false }
-    }
-    if (!deviceContext) {
-      emit({
-        stage: 'upload',
-        message: 'Runtime v3 not configured. Skipping upload.',
-        level: 'warning',
-      })
-      return { success: true, md5, uploaded: false }
-    }
-    emit({ stage: 'embed-c-blocks', message: 'Embedding C blocks into program.st...', level: 'info' })
-    // Editor's port implementation embeds c_blocks.h + c_blocks_code.cpp
-    // into program.st as (*FILE:...*) marked comments; web's port
-    // implementation no-ops (web doesn't target v3).  The pipeline
-    // delegates to the port so the embed details stay platform-specific.
-    const uploadResult = await port.uploadRuntimeV3(
-      { programSt, context: deviceContext },
-      makePlatformLog(emit, 'upload'),
-    )
-    if (!uploadResult.ok) {
-      return bailError(emit, 'upload', 'Failed to upload to Runtime v3.', uploadResult.errors)
-    }
-    emit({ stage: 'done', message: 'Runtime v3 upload complete.', level: 'info' })
-    return { success: true, md5, uploaded: true }
-  }
 
   // Run arduino-cli compile.  Editor: spawns the binary.  Web: HTTP
   // POST.  Both consume the same `files` map + `argv`.
