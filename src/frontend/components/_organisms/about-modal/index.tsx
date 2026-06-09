@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
 
 import { useAccelerator, useCapabilities, useSystem } from '../../../../middleware/shared/providers'
-
-declare const APP_VERSION: string | undefined
-declare const BUILD_DATE: string | undefined
 import openPlcLogo from '../../../assets/icons/about/logo.svg'
+import { APP_VERSION } from '../../../data/constants/app-version'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent } from '../../_molecules/modal'
+
+// Per-app product name, injected at build time (Vite `define` in web =
+// 'OpenPLC Web'; webpack DefinePlugin in the editor = 'OpenPLC Editor'). This
+// file is byte-identical across both repos — the displayed name differs only
+// because the injected value differs. Declared defensively so an un-injected
+// build (tests) falls back to 'OpenPLC' instead of throwing.
+declare const APP_NAME: string | undefined
+declare const BUILD_DATE: string | undefined
 
 const AboutModal = () => {
   const {
@@ -27,7 +33,7 @@ const AboutModal = () => {
   const closeModal = () => {
     setModalOpen('aboutOpenPlc', false)
   }
-  const title = `OpenPLC Editor ${typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''}`
+  const title = `${typeof APP_NAME !== 'undefined' ? APP_NAME : 'OpenPLC'} ${APP_VERSION}`
   const releaseDate = `Release: ${typeof BUILD_DATE !== 'undefined' ? BUILD_DATE : ''}`
   const description = 'Open Source IDE for the OpenPLC Runtime, compliant with the IEC 61131-3 international standard.'
   const copyrightYear = new Date().getFullYear()

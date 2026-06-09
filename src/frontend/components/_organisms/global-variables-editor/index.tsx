@@ -236,7 +236,11 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
     ) as PLCGlobalVariable
 
-    const newVarData = { ...variable, documentation: '' }
+    // Don't carry the previous variable's `alias` into the new row.
+    // See variables-editor/index.tsx for the longer explanation —
+    // tl;dr: `createVariable` auto-increments `location`, and keeping
+    // the stale alias would break the alias-↔-location invariant.
+    const newVarData = { ...variable, alias: undefined, documentation: '' }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'global', data: newVarData })

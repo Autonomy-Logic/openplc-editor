@@ -165,6 +165,29 @@ export type ProjectActions = {
     orphaned: number
   }
 
+  /**
+   * Cascade-rename every variable's `.alias` field from `oldAlias` to
+   * `newAlias` across all POU-local and global variables.  Used by
+   * the IO-mapping screens (pin-mapping, VPP modules, VPP io-table,
+   * Modbus TCP remote, EtherCAT) when the user renames the alias on
+   * a producer channel — the rename cascades to bound variables so
+   * they don't become orphaned just because the alias text moved.
+   *
+   * Empty `oldAlias` (channel previously had no alias) is a no-op.
+   * Empty `newAlias` (user clearing the alias) causes the matching
+   * variables to drop their alias too; `syncVariableAliases` will
+   * then re-evaluate them against the live registry (auto-adopt by
+   * raw location when applicable, otherwise alias-less binding).
+   *
+   * Case-insensitive matching to align with the rest of the IEC
+   * identifier handling.  Callers should follow this with a
+   * `syncVariableAliases()` to refresh `.location` against the now-
+   * renamed alias's address.
+   *
+   * Returns the number of variables actually mutated.
+   */
+  renameAlias: (oldAlias: string, newAlias: string) => { renamed: number }
+
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void

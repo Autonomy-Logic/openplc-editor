@@ -291,22 +291,25 @@ const EditableLocationCell = ({
 
   const [cellValue, setCellValue] = useState(initialValue ?? '')
 
-  // Alias staleness check.  Lifted above `onBlur` so the short-circuit
-  // can take it into account — when the user's previously-bound alias
-  // has been renamed/removed upstream, re-picking the same address
-  // from the dropdown should still refresh the variable's stored
-  // alias.  Mirrors the local-table variant of this cell.
+  // Alias staleness checks.  See the local variables-table cell
+  // (`_molecules/variables-table/editable-cell.tsx`) for the longer
+  // explanation — same two flavours of staleness, same exception
+  // semantics on the location-column short-circuit.
   const variableAlias = original?.alias
+  const variableLocation = original?.location ?? ''
   const aliasRegistry = useAliasRegistry()
   const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+  const isMismatched =
+    !!variableAlias && aliasRegistry.byAlias.has(variableAlias)
+      ? aliasRegistry.byAlias.get(variableAlias)?.address !== variableLocation
+      : false
 
   const onBlur = (value: string) => {
-    // Same short-circuit semantics as the local variables-table cell:
-    // skip unchanged-value blurs unless the variable's alias is
-    // orphaned, in which case the user re-picking the same address
-    // is their signal to refresh the alias.  `updateVariable`'s
-    // auto-adopt path re-resolves against the live alias registry.
-    if (value === initialValue && !isOrphaned) return
+    // Short-circuit unchanged-value blurs unless the variable's alias
+    // is orphaned or mismatched (alias points at a different address
+    // than the variable's location) — in either case re-picking the
+    // same address is the user's signal to refresh the alias.
+    if (value === initialValue && !(isOrphaned || isMismatched)) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)

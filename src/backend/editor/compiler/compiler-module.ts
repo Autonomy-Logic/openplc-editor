@@ -26,6 +26,11 @@ import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-bu
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
+import {
+  fromSchemaShape,
+  type SchemaProjectData,
+  transpileToSt as runJsonTranspiler,
+} from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
@@ -79,6 +84,7 @@ const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
@@ -417,20 +423,20 @@ class CompilerModule {
     }
   }
 
-  #executeXml2st(args: string[]) {
-    let xml2stBinaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      xml2stBinaryPath += '.exe'
-    }
-    return spawn(xml2stBinaryPath, args)
-  }
-
   #executeArduinoCliCommand(args: string[]) {
     let arduinoCliBinaryPath = this.arduinoCliBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
       arduinoCliBinaryPath += '.exe'
     }
     return spawn(arduinoCliBinaryPath, args)
+  }
+
+  #executeXml2st(args: string[]) {
+    let xml2stBinaryPath = this.xml2stBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      xml2stBinaryPath += '.exe'
+    }
+    return spawn(xml2stBinaryPath, args)
   }
 
   // ############################################################################
@@ -2794,37 +2800,70 @@ class CompilerModule {
       return
     }
 
-    try {
-      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
-      _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
-      })
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error generating XML from JSON: ${error as string}\nStopping debug compilation process.`,
-      })
-      _mainProcessPort.close()
-      return
-    }
+    if (isNewTranspilerEnabled()) {
+      // JSON → ST in-process via `st-transpiler`.  Mirrors what
+      // `editor-compiler-platform-port.transpileToSt` does for the
+      // shared pipeline path, scoped down to the debug compile here.
+      try {
+        const ir = fromSchemaShape(projectData as unknown as SchemaProjectData)
+        const result = runJsonTranspiler(ir)
+        if (result.programSt === null || result.errors.length > 0) {
+          const message = result.errors.join('\n') || 'Failed to generate Structured Text'
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: `${message}\nStopping debug compilation process.`,
+          })
+          _mainProcessPort.close()
+          return
+        }
+        for (const warning of result.warnings) {
+          _mainProcessPort.postMessage({ logLevel: 'info', message: warning })
+        }
+        await mkdir(sourceTargetFolderPath, { recursive: true })
+        const programStPath = join(sourceTargetFolderPath, 'program.st')
+        await writeFile(programStPath, result.programSt, 'utf-8')
+        _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Error transpiling JSON to ST: ${getErrorMessage(error)}\nStopping debug compilation process.`,
+        })
+        _mainProcessPort.close()
+        return
+      }
+    } else {
+      try {
+        const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
+        })
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Error generating XML from JSON: ${error as string}\nStopping debug compilation process.`,
+        })
+        _mainProcessPort.close()
+        return
+      }
 
-    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
-    try {
-      await this.handleTranspileXMLtoST(
-        generatedXMLFilePath,
-        (data, logLevel) => {
-          _mainProcessPort.postMessage({ logLevel, message: data })
-        },
-        ['--keep-structs'],
-      )
-    } catch (error) {
-      _mainProcessPort.postMessage({
-        logLevel: 'error',
-        message: `Error transpiling XML to ST: ${error as string}\nStopping debug compilation process.`,
-      })
-      _mainProcessPort.close()
-      return
+      const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
+      try {
+        await this.handleTranspileXMLtoST(
+          generatedXMLFilePath,
+          (data, logLevel) => {
+            _mainProcessPort.postMessage({ logLevel, message: data })
+          },
+          ['--keep-structs'],
+        )
+      } catch (error) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Error transpiling XML to ST: ${error as string}\nStopping debug compilation process.`,
+        })
+        _mainProcessPort.close()
+        return
+      }
     }
 
     try {

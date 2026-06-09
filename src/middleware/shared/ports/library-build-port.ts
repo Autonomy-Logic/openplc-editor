@@ -28,7 +28,7 @@
  * the exact pattern.
  */
 
-import type { TranspileXmlToStArgs, TranspileXmlToStResult } from './compiler-platform-port'
+import type { TranspileToStArgs, TranspileToStResult } from './compiler-platform-port'
 
 /**
  * Outcome of an attempted verification compile against the OpenPLC
@@ -99,16 +99,16 @@ export interface LibraryBuildPort {
   computeMd5(input: string): Promise<string>
 
   /**
-   * Transpile IEC 61131-3 XML to ST.  Editor spawns the bundled
-   * `xml2st` binary; web posts to its compile-service.  Both honor
-   * the same `xml2stArgs` and surface the same diagnostic shape.
-   * The `log` callback is the orchestrator's emit channel — every
-   * line xml2st produces flows through here.
+   * Transpile the project IR directly to ST via the in-process
+   * JSON transpiler (`st-transpiler`).  Both editor and
+   * web adapters project their port-shape input into the
+   * transpiler's minimal `TranspileProject` IR.  The `log`
+   * callback is the orchestrator's emit channel.
    */
-  transpileXmlToSt(
-    args: TranspileXmlToStArgs,
+  transpileToSt(
+    args: TranspileToStArgs,
     log: (message: string, level: 'info' | 'warning' | 'error') => void,
-  ): Promise<TranspileXmlToStResult>
+  ): Promise<TranspileToStResult>
 
   // -------------------------------------------------------------------------
   // Generic file IO over the project tree

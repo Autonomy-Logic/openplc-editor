@@ -15,11 +15,11 @@
  * Stages:
  *
  *   0. Read `library.json` manifest.
- *   1. Validate manifest + generate plc.xml (via shared
- *      `prepareXmlForLibraryBuild`).
- *   2. xml2st → program.st (via `LibraryBuildPort.transpileXmlToSt`).
- *      The XML and ST live in memory only — no intermediate file
- *      persistence (see path-constants comment).
+ *   1. Validate manifest + stub the project for the transpiler
+ *      (via shared `prepareXmlForLibraryBuild`).
+ *   2. Project IR → program.st (via `LibraryBuildPort.transpileToSt`).
+ *      The ST lives in memory only — no intermediate file persistence
+ *      (see path-constants comment).
  *   3. Resolve project-enabled library archives + fail on missing
  *      names (one place — feeds BOTH verification and strucpp).
  *   4. Verification compile against the OpenPLC Simulator target
@@ -128,29 +128,29 @@ export async function runLibraryBuildPipeline(
   if ('error' in stage1) {
     return fail(emit, stage1.error)
   }
-  const { xml, knownPous, manifest } = stage1
+  const { projectData: stubbedData, knownPous, manifest } = stage1
   emit({ message: `Manifest OK — building "${manifest.name}" v${manifest.version}.`, level: 'info' })
 
   // -------------------------------------------------------------------------
-  // Stage 2: xml2st via the shared compiler platform port
+  // Stage 2: project → ST via the shared compiler platform port.
   //
-  // The shared port abstracts the spawn vs HTTP divergence; the
-  // `--keep-structs` arg mirrors what `runCompilePipeline` passes
-  // for program builds so manifest type compatibility carries over.
-  // The XML and the resulting ST live in memory only — no
-  // intermediate-file persistence, see the path-constants comment.
+  // The port routes through the in-process JSON-fed transpiler
+  // (`st-transpiler/`).  Native STRUCT emission is the only
+  // mode — no equivalents of the old `--keep-structs` flag exist.
+  // The resulting ST lives in memory only.
   // -------------------------------------------------------------------------
-  emit({ message: 'Compiling file plc.xml', level: 'info' })
-  const transpile = await port.transpileXmlToSt(
-    { xml, xml2stArgs: ['--keep-structs'] },
-    // Forward xml2st's stdout / stderr to the caller — same channel
-    // the desktop pre-refactor compileLibrary used (`post(message,
-    // logLevel)`), so the console output stays unchanged.
-    (message, level) => emit({ message, level }),
+  emit({ message: 'Transpiling project to Structured Text', level: 'info' })
+  // `stubbedData` is editor schema-shape; the port's signature is
+  // port-shape.  Each platform port impl knows the actual shape it
+  // receives (desktop → `fromSchemaShape`; web → `fromPortShape` after
+  // its adapter converts).  See the matching cast site in
+  // `pipeline.ts` (Step 1) for the same comment.
+  const transpile = await port.transpileToSt({ projectData: stubbedData as never }, (message, level) =>
+    emit({ message, level }),
   )
   if (!transpile.ok || !transpile.programSt) {
-    const firstError = transpile.errors?.[0]?.message ?? 'xml2st failed'
-    return fail(emit, `xml2st failed: ${firstError}`, { libraryName: manifest.name })
+    const firstError = transpile.errors?.[0]?.message ?? 'transpile-from-json failed'
+    return fail(emit, `transpile-from-json failed: ${firstError}`, { libraryName: manifest.name })
   }
   const programSt = transpile.programSt
 
