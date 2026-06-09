@@ -52,6 +52,18 @@ export type VersionControlState = {
     changedPaths: string[]
     /** Derived: |unique(initialPending paths ∪ changedPaths)|. */
     pendingChangesCount: number
+    /**
+     * Per-path HEAD (committed) content of the currently-changed files — the
+     * "original" side of source-control diffs. Populated from the backend's
+     * `/changes?includeContent=true` `before` field (authoritative against the
+     * real HEAD). `null` until lazily fetched by the diff view; reset to `null`
+     * on project load / commit / in-place reload so it refetches against the
+     * current HEAD. Unlike `baselineContent` (which reflects the loaded working
+     * tree and so already includes pre-existing pending changes), this is the
+     * committed content, so it can show a diff for changes made before the
+     * current session.
+     */
+    headContent: Record<string, string> | null
   }
 }
 
@@ -60,6 +72,9 @@ export type SavedFileRecord = { path: string; content: string }
 export type VersionControlActions = {
   setActivePanel: (panel: SidePanel) => void
   setSelectedCommitHash: (hash: string | null) => void
+  /** Set (or clear, with `null`) the lazily-fetched HEAD snapshot used as the
+   *  "original" side of source-control diffs. */
+  setHeadContent: (content: Record<string, string> | null) => void
   /**
    * Snapshot baseline + initial pending at the last "in-sync" point
    * (project load, after restore, after discard).
