@@ -199,6 +199,18 @@ export type EditorModel = EditorModelBase &
           deviceId: string
         }
       }
+    | {
+        /** Read-only source-control diff tab. Carries only the project-
+         *  relative `filePath`; the original (HEAD) and current (working-
+         *  tree) contents are derived live from the store at render time so
+         *  the diff stays fresh as the user edits. `name` is the unique tab
+         *  key (e.g. `Diff: pous/programs/Main.st`). */
+        type: 'diff-viewer'
+        meta: {
+          name: string
+          filePath: string
+        }
+      }
   )
 
 // ---------------------------------------------------------------------------

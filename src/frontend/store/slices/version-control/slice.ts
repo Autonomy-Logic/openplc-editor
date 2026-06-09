@@ -12,6 +12,7 @@ const initialState: VersionControlSlice['versionControl'] = {
   loadedSerialized: {},
   changedPaths: [],
   pendingChangesCount: 0,
+  headContent: null,
 }
 
 function dedupeByPath(entries: InitialPendingEntry[]): InitialPendingEntry[] {
@@ -50,6 +51,13 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
         }),
       ),
 
+    setHeadContent: (content: Record<string, string> | null) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.headContent = content ? { ...content } : null
+        }),
+      ),
+
     initBaseline: ({ initialPending, baselineContent, rawLoadedContent, loadedSerialized }) =>
       setState(
         produce<VersionControlSlice>((draft) => {
@@ -74,6 +82,9 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
           // doesn't compute it separately).
           draft.versionControl.loadedSerialized = loadedSerialized ? { ...loadedSerialized } : { ...baselineContent }
           draft.versionControl.changedPaths = []
+          // New project load → drop the cached HEAD snapshot so diffs refetch
+          // against this project's HEAD.
+          draft.versionControl.headContent = null
           recomputeCount(draft)
         }),
       ),
@@ -167,6 +178,9 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
           draft.versionControl.initialPending = []
           draft.versionControl.changedPaths = []
           draft.versionControl.pendingChangesCount = 0
+          // HEAD moved to the just-created commit → invalidate the cached
+          // snapshot so subsequent diffs compare against the new HEAD.
+          draft.versionControl.headContent = null
         }),
       ),
 

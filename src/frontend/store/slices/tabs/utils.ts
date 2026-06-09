@@ -139,6 +139,15 @@ const CreateLibraryManifestEditor = (name = LIBRARY_MANIFEST_TAB_NAME): EditorMo
   meta: { name },
 })
 
+/** Read-only source-control diff tab. The tab `name` doubles as the unique
+ *  editor key, so it must not collide with the editable POU tab of the same
+ *  POU — callers pass a `Diff: <filePath>` style name. `filePath` is the
+ *  project-relative path the diff view resolves its before/after content from. */
+const CreateDiffViewerEditor = (name: string, filePath: string): EditorModel => ({
+  type: 'diff-viewer',
+  meta: { name, filePath },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -168,11 +177,14 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateLibraryManagerEditor(name)
     case 'library-manifest':
       return CreateLibraryManifestEditor(name)
+    case 'diff-viewer':
+      return CreateDiffViewerEditor(name, elementType.filePath)
   }
 }
 
 export {
   CreateDeviceEditor,
+  CreateDiffViewerEditor,
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,

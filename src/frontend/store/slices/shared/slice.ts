@@ -478,7 +478,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().tabsActions.setSelectedTab(nextTab.name)
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: nextTab.name,
-        type: nextTab.elementType.type,
+        // A diff-viewer tab has no corresponding project-tree leaf to
+        // highlight, so it maps to `null` rather than a tree leaf type.
+        type: nextTab.elementType.type === 'diff-viewer' ? null : nextTab.elementType.type,
       })
 
       return { success: true }
@@ -523,6 +525,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('saved')
+      // Any in-place reload (branch switch, restore, discard, stash) can move
+      // HEAD, so drop the cached HEAD snapshot used by source-control diffs;
+      // it refetches lazily on the next diff open.
+      getState().versionControlActions.setHeadContent(null)
       // Apply the persist-permission flag from the backend.  `canEdit ===
       // false` ⇒ the viewer can't push changes back (e.g. a public project
       // they don't own), so backend writes (save/commit/branch) are gated;
