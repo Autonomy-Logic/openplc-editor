@@ -19,6 +19,7 @@ import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
+import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
 import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
@@ -530,6 +531,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
+                        {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
                         {/* EtherCAT device editors — multi-instance (one tab
                             per `deviceId`).  Kept mounted across tab switches
