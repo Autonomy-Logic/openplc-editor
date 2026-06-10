@@ -173,6 +173,16 @@ export function useDebugSession(): UseDebugSessionReturn {
           wsActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
         }
 
+        // Record the active transport so useDebugPolling picks the right
+        // poll cadence + batch size.  Set on EVERY start path (runtime
+        // targets also set it earlier in handleMd5Verification; this
+        // additionally covers the simulator path, which doesn't go
+        // through MD5 verification — without it the simulator stayed at
+        // the default 200ms instead of its intended 50ms).  Must be set
+        // before `setDebuggerVisible(true)`, which is what triggers the
+        // polling effect.
+        wsActions.setDebugConnectionType(debugConfig.connectionType)
+
         wsActions.setDebuggerVisible(true)
         logActions.addLog({
           id: crypto.randomUUID(),

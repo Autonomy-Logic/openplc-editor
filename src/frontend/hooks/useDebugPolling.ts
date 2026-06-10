@@ -18,14 +18,17 @@
  *   since the editor is read-only during debug
  *
  * Polling intervals:
- * - Modbus RTU / simulator: 50ms  (serial frame timing)
- * - Modbus TCP / WebSocket: 200ms (general purpose)
+ * - Modbus RTU / simulator: 50ms   (no network; keep the UI snappy)
+ * - Web HTTP fallback:      1000ms  (WebRTC failed; each poll is a slow
+ *                                    orchestrator round-trip, so back off)
+ * - Everything else:        200ms   (general purpose — TCP / WebSocket /
+ *                                    web WebRTC data channel)
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { DebugConnectionType, DebugTreeNode } from '../../middleware/shared/ports/types'
-import { useDebugger } from '../../middleware/shared/providers'
+import { useCapabilities, useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
 import { applySwapToVariableBytes } from '../utils/endian'
@@ -35,6 +38,10 @@ import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes
 const RTU_POLL_INTERVAL_MS = 50
 /** Polling interval for higher-bandwidth transports (TCP / WebSocket). */
 const DEFAULT_POLL_INTERVAL_MS = 200
+/** Polling interval for the web HTTP fallback (WebRTC unavailable): each
+ *  poll is a full orchestrator `run_command` round-trip, so we slow right
+ *  down to avoid hammering the edge API / runtime. */
+const HTTP_FALLBACK_POLL_INTERVAL_MS = 1000
 
 // Batch size is transport-dependent. The wire request packs 3 bytes per
 // variable (arr:u8 + elem:u16); the response packs raw type-sized values
@@ -111,8 +118,16 @@ export interface UseDebugPollingOptions {
 
 export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void {
   const debuggerPort = useDebugger()
+  const capabilities = useCapabilities()
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const { workspaceActions, consoleActions } = useOpenPLCStore()
+  // Web-only: which transport the debug session is actually running over.
+  // 'http' means WebRTC is unavailable and every poll is a slow
+  // orchestrator round-trip — so we back the cadence off (see below).
+  // On the desktop editor this is the unused 'http' default; the
+  // `!isNativeApplication` guard keeps the editor's real TCP/WebSocket
+  // transports on the standard 200ms regardless.
+  const sessionDebugTransport = useOpenPLCStore((state) => state.session.debugTransport)
 
   // Targeted selectors for active-index cache invalidation.
   // These only change on user interaction (not every poll cycle).
@@ -381,7 +396,17 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // RTU framing also covers the simulator's virtual serial port —
       // both need the tighter cadence to keep up with toggling state.
       const usesRtuFraming = debugConnectionType === 'rtu' || debugConnectionType === 'simulator'
-      const pollIntervalMs = usesRtuFraming ? RTU_POLL_INTERVAL_MS : DEFAULT_POLL_INTERVAL_MS
+      // Web HTTP fallback: WebRTC unavailable, so reads go over the
+      // orchestrator proxy (high latency) — slow the cadence right down.
+      // Gated on `!isNativeApplication` so the desktop editor's real
+      // TCP/WebSocket transports never hit this branch (their
+      // `session.debugTransport` is an unused 'http' default).
+      const usesHttpFallback = !capabilities.isNativeApplication && sessionDebugTransport === 'http'
+      const pollIntervalMs = usesRtuFraming
+        ? RTU_POLL_INTERVAL_MS
+        : usesHttpFallback
+          ? HTTP_FALLBACK_POLL_INTERVAL_MS
+          : DEFAULT_POLL_INTERVAL_MS
 
       // Fire first poll immediately, then schedule at fixed rate
       // Skip tick if previous poll is still in progress (isPolling guard)
@@ -429,7 +454,17 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       visibleVarsCacheRef.current = null
       batchOffsetRef.current = 0
     }
-  }, [isDebuggerVisible, debugConnectionType, workspaceActions])
+    // `sessionDebugTransport` + `capabilities.isNativeApplication` are
+    // in the deps so the cadence re-evaluates if WebRTC drops to the HTTP
+    // fallback (or recovers) mid-session — the effect tears down the old
+    // interval and restarts at the new rate.
+  }, [
+    isDebuggerVisible,
+    debugConnectionType,
+    sessionDebugTransport,
+    capabilities.isNativeApplication,
+    workspaceActions,
+  ])
 
   // Clean up on unmount
   useEffect(() => {
