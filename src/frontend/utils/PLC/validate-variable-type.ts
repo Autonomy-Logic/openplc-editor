@@ -58,6 +58,25 @@ function flattenGenericToBaseTypes(genericName: string, visited: Set<string> = n
   return out
 }
 
+/**
+ * An address produced by `ADR()` is pointer-width and is represented as
+ * `ULINT` (this mirrors CODESYS's `__XWORD` on a 64-bit target).  A
+ * `POINTER TO <T>` variable holds exactly such an address, so the two are
+ * interchangeable at a block pin — independently of `<T>`:
+ *
+ *   - `ADR`'s `OUT : ULINT` must accept a `POINTER TO INT` sink variable.
+ *   - a `POINTER TO <T>` pin must accept a `ULINT` address source.
+ *
+ * Checked in both directions so the rule fixes every pointer-using block,
+ * not just `ADR`.
+ */
+const POINTER_PREFIX = 'POINTER TO '
+const isAddressPointerPair = (a: string, b: string): boolean => {
+  const isPointer = (t: string) => t.startsWith(POINTER_PREFIX)
+  const isAddressWord = (t: string) => t === 'ULINT'
+  return (isPointer(a) && isAddressWord(b)) || (isAddressWord(a) && isPointer(b))
+}
+
 export const validateVariableType = (
   selectedType: string,
   expectedType: string,
@@ -66,6 +85,15 @@ export const validateVariableType = (
   const upperExpectedType = expectedType.toUpperCase()
 
   if (upperExpectedType === 'ANY') {
+    return {
+      isValid: true,
+      error: undefined,
+    }
+  }
+
+  // A POINTER TO <T> variable and a ULINT address word are interchangeable
+  // at a block pin (e.g. connecting POINTER TO INT to ADR's ULINT OUT pin).
+  if (isAddressPointerPair(upperSelectedType, upperExpectedType)) {
     return {
       isValid: true,
       error: undefined,
