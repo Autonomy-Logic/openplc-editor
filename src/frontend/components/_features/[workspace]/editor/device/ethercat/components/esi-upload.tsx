@@ -124,7 +124,17 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
         }
       }
 
-      onFilesLoaded([...repository, ...newItems], errors.length > 0 ? errors : undefined)
+      // A recovered add (item + dedupAfterRetry) can return a row that already
+      // exists in `repository` — the retry hit the backend dedup against a
+      // pre-existing entry. Dedup the merged list by id (repository wins) so the
+      // same row isn't rendered twice or assigned a duplicate React key.
+      const mergedById = new Map<ESIRepositoryItemLight['id'], ESIRepositoryItemLight>()
+      for (const item of [...repository, ...newItems]) {
+        if (!mergedById.has(item.id)) {
+          mergedById.set(item.id, item)
+        }
+      }
+      onFilesLoaded([...mergedById.values()], errors.length > 0 ? errors : undefined)
     },
     [onFilesLoaded, repository, esi],
   )

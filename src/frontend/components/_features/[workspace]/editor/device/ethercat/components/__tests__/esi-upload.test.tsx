@@ -1,10 +1,19 @@
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 
-// Mocked EsiPort surface — the two methods the upload flow touches. The
-// `mock`-prefixed name is referenced lazily inside the factory (only when
-// `useEsi()` is called at render time), so this works under both Vitest and
-// the editor's Jest+vi shim — without `vi.hoisted`, which the shim lacks.
+// Mocked EsiPort surface — the two methods the upload flow touches.
+//
+// Cross-runner compatibility relies on two independent mechanisms:
+//   - Under Vitest, `vi.mock` is hoisted above imports, so the factory runs
+//     before `import { ESIUpload }`. A hoisted factory may only reference names
+//     that survive hoisting — hence the `mock`-prefixed `mockEsi`, read lazily
+//     when `useEsi()` is called at render time (not at factory-eval time).
+//   - Under the editor's Jest+vi shim, `vi.mock` is NOT hoisted (ts-jest's
+//     transformer only hoists `jest.mock`). It works because the
+//     `import { ESIUpload }` below is deliberately placed AFTER this `vi.mock`
+//     call. That import position is load-bearing: do NOT move it into the top
+//     import block, or ESIUpload binds to the real platform-context module
+//     before the mock is registered.
 const mockEsi = {
   parseAndSaveFile: vi.fn(),
   loadRepositoryLight: vi.fn(),
@@ -82,6 +91,19 @@ describe('ESIUpload — dedupAfterRetry handling', () => {
     expect(mockEsi.loadRepositoryLight).toHaveBeenCalledTimes(1)
     // No new item was returned, so the fallback keeps the existing repository.
     expect(onFilesLoaded).toHaveBeenCalledWith(existing, undefined)
+  })
+
+  it('dedups a recovered add that already exists in the repository', async () => {
+    // dedupAfterRetry recovery: the retry hit the backend dedup against a row
+    // that was already present in `repository`, and the adapter returns that
+    // same row as `item`. The merged list must not contain it twice.
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({ success: true, item: SAMPLE_ITEM, dedupAfterRetry: true })
+
+    const { onFilesLoaded } = uploadFile([SAMPLE_ITEM])
+
+    await waitFor(() => expect(onFilesLoaded).toHaveBeenCalled())
+    expect(onFilesLoaded).toHaveBeenCalledWith([SAMPLE_ITEM], undefined)
+    expect(mockEsi.loadRepositoryLight).not.toHaveBeenCalled()
   })
 
   it('skips a real duplicate silently without re-listing', async () => {

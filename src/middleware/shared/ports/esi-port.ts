@@ -34,17 +34,29 @@ export interface EsiPort {
    * The filename and raw XML content are provided; parsing happens on the backend.
    *
    * On success, `item` is present when the file was newly added, and omitted
-   * with `duplicate: true` when a repository entry with the same filename
-   * already exists — letting callers distinguish a real add from a silent skip.
-   * Dedup is filename-based: reimporting the same bytes under a different name
-   * will add a new entry, and replacing a file's contents without renaming it
-   * is reported as a duplicate.
+   * with `duplicate: true` when the file is considered a duplicate — letting
+   * callers distinguish a real add from a silent skip.
    *
-   * `dedupAfterRetry: true` indicates the duplicate response landed after a
-   * transient-failure retry — the first attempt likely persisted the file and
-   * its response was lost. Callers should treat this as "uploaded but absent
-   * from the response" rather than silently skipping, since the user expects
-   * the file to appear in the repository.
+   * Dedup semantics are adapter-defined and differ by platform:
+   *   - Editor adapter: filename-based. Reimporting the same bytes under a
+   *     different name adds a new entry; replacing a file's contents without
+   *     renaming it is reported as a duplicate.
+   *   - Web adapter: SHA-256 content-hash-based. Identical bytes are a
+   *     duplicate regardless of filename.
+   *
+   * `dedupAfterRetry: true` marks a response that landed after a
+   * transient-failure retry — the first attempt likely persisted the file but
+   * its response was lost. It can accompany any of three result shapes (only
+   * the web adapter ever sets it; the editor's local IPC adapter never does):
+   *   - `item` + `dedupAfterRetry`: recovered add — the adapter relocated the
+   *     persisted row and returns it. Treat as a normal add, but note the row
+   *     may already be present in the caller's list, so dedup by `id` when
+   *     merging into an existing repository view.
+   *   - `duplicate` + `dedupAfterRetry`: persisted but unlisted — the row could
+   *     not be recovered. Callers should refresh the repository so the file
+   *     surfaces instead of silently skipping it.
+   *   - `duplicate` alone: a real duplicate — content already in the
+   *     repository. Safe to skip silently.
    */
   parseAndSaveFile(
     filename: string,
