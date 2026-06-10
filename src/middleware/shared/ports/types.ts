@@ -752,8 +752,6 @@ export interface PackageManifest {
       provisioning?: string
       pluginEntry?: string
       configTemplate?: string
-      /** Minimum runtime version the prebuilt objects are ABI-compatible with. */
-      minRuntimeVersion?: string
       requirements?: string
       source?: string
       compilerFlags?: {
