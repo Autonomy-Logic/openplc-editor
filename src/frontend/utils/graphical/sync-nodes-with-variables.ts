@@ -1,6 +1,7 @@
 import { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { validateVariableType } from '../PLC/validate-variable-type'
 
 type UpdateLadderNodeFn = (params: {
   editorName: string
@@ -29,8 +30,12 @@ const getBlockExpectedType = (node: Node): string => {
   return ''
 }
 
+// Delegate to the shared PLC validator so this re-sync path agrees with
+// connection-time validation: it understands ANY/ANY_* generics and treats
+// a POINTER TO <T> variable as compatible with the ULINT address word
+// (e.g. ADR's output), instead of a naive string-equality compare.
 const sameType = (firstType: string, secondType: string) =>
-  firstType.toString().trim().toLowerCase() === secondType.toString().trim().toLowerCase()
+  validateVariableType(firstType.toString().trim(), secondType.toString().trim()).isValid
 
 export const syncNodesWithVariables = (
   newVars: PLCVariable[],
