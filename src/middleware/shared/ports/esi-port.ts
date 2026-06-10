@@ -48,13 +48,13 @@ export interface EsiPort {
    * transient-failure retry — the first attempt likely persisted the file but
    * its response was lost. It can accompany any of three result shapes (only
    * the web adapter ever sets it; the editor's local IPC adapter never does):
-   *   - `item` + `dedupAfterRetry`: recovered add — the adapter relocated the
-   *     persisted row and returns it. Treat as a normal add, but note the row
-   *     may already be present in the caller's list, so dedup by `id` when
+   *   - `item` + `dedupAfterRetry`: recovered add — the backend returned the
+   *     matched row in the dedup response. Treat as a normal add, but note the
+   *     row may already be present in the caller's list, so dedup by `id` when
    *     merging into an existing repository view.
-   *   - `duplicate` + `dedupAfterRetry`: persisted but unlisted — the row could
-   *     not be recovered. Callers should refresh the repository so the file
-   *     surfaces instead of silently skipping it.
+   *   - `duplicate` + `dedupAfterRetry`: persisted but unlisted — the matched
+   *     row wasn't echoed back (e.g. an older backend). Callers should refresh
+   *     the repository so the file surfaces instead of silently skipping it.
    *   - `duplicate` alone: a real duplicate — content already in the
    *     repository. Safe to skip silently.
    */
