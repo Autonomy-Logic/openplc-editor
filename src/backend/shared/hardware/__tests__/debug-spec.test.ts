@@ -553,5 +553,48 @@ describe('resolveDebugConnection', () => {
         })
       }
     })
+
+    // Regression (openplc-web vPLC debug): the v4 websocket `ipAddress`
+    // param is an OPTIONAL `$ref` — no `required` annotation — so a
+    // platform that routes by orchestrator device context instead of a
+    // direct IP (web) resolves to `config` with the param simply
+    // dropped, rather than erroring with "Runtime IP address is not
+    // configured."  The desktop still gets a real IP because its
+    // `runtimeConnected` precondition can't pass without one.
+    it('Runtime v4: websocket resolves to config when runtimeIpAddress is absent (orchestrator-routed)', () => {
+      const spec: DebugSpec = {
+        preconditions: ['runtimeConnected', 'jwtToken'],
+        channels: [
+          {
+            label: 'WebSocket',
+            channel: 'websocket',
+            enabledWhen: true,
+            params: {
+              ipAddress: { $ref: 'configuration.runtimeIpAddress' },
+              jwtToken: { $ref: 'runtimeConnection.jwtToken' },
+            },
+          },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        makeContext({
+          // No runtimeIpAddress — web vPLC targets route through the orchestrator.
+          state: {
+            configuration: { deviceBoard: 'OpenPLC Runtime v4' },
+            runtimeConnection: { jwtToken: 'abc.def.ghi' },
+          },
+          capabilities: { runtimeConnected: true, jwtToken: true },
+        }),
+      )
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        // ipAddress dropped (undefined ref, not required); jwt still present.
+        expect(result.config).toEqual({
+          connectionType: 'websocket',
+          connectionParams: { jwtToken: 'abc.def.ghi' },
+        })
+      }
+    })
   })
 })

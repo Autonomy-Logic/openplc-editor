@@ -108,8 +108,7 @@
           "enabledWhen": true,
           "params": {
             "ipAddress": {
-              "$ref": "configuration.runtimeIpAddress",
-              "required": "Runtime IP address is not configured."
+              "$ref": "configuration.runtimeIpAddress"
             },
             "jwtToken": {
               "$ref": "runtimeConnection.jwtToken",
