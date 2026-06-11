@@ -69,13 +69,13 @@ export function ReadOnlyConnector({ data }: NodeProps) {
   )
 }
 
-export function ReadOnlyComment({ data }: NodeProps) {
+export function ReadOnlyComment({ data, width, height }: NodeProps) {
   const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
   const content = (data.content as string) ?? (data.comment as string) ?? ''
 
   return (
     <DiffWrapper status={status}>
-      <CommentVisual content={content} />
+      <CommentVisual content={content} width={width as number} height={height as number} />
       {renderFBDHandles(data.handles)}
     </DiffWrapper>
   )
