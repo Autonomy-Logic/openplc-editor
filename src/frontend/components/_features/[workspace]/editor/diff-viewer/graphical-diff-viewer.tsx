@@ -158,27 +158,61 @@ function RungCell({
   // Block labels are rendered with `-top-[16px]` absolute positioning, so we
   // need extra top padding in the ladder cell to keep them visible.
   const ladderTopPadding = isLadder ? 20 : 0
+
+  // FBD: render at natural scale (zoom 1) and scroll, mirroring the editable FBD
+  // editor (which renders nodes at their saved positions, no fitView). fitView
+  // scaled the graph down to the narrow column width — leaving a huge vertical
+  // gap, and clipping the top once large nodes (e.g. comment blocks) were
+  // measured. Instead we size the cell to the content bounds and offset the
+  // viewport so the diagram's top-left sits at the top-left of the cell.
+  const FBD_PAD = 24
+  const fbd = useMemo(() => {
+    if (isLadder || nodes.length === 0) return null
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const n of nodes) {
+      const x = n.position?.x ?? 0
+      const y = n.position?.y ?? 0
+      const w = (n.measured?.width as number) ?? (n.width as number) ?? 100
+      const h = (n.measured?.height as number) ?? (n.height as number) ?? 40
+      if (x < minX) minX = x
+      if (y < minY) minY = y
+      if (x + w > maxX) maxX = x + w
+      if (y + h > maxY) maxY = y + h
+    }
+    return {
+      width: maxX - minX + FBD_PAD * 2,
+      height: maxY - minY + FBD_PAD * 2,
+      viewport: { x: -minX + FBD_PAD, y: -minY + FBD_PAD, zoom: 1 },
+    }
+  }, [isLadder, nodes])
+
+  const outerStyle: React.CSSProperties = isLadder
+    ? { height: height + ladderTopPadding, paddingTop: ladderTopPadding }
+    : { height: Math.min(Math.max(fbd?.height ?? height, 120), 700) }
+
+  const innerMinWidth = isLadder ? minWidth : fbd?.width
+
   return (
-    <div
-      className={cn('w-full', isLadder && 'overflow-x-auto', className)}
-      style={{ height: height + ladderTopPadding, paddingTop: ladderTopPadding }}
-    >
-      <div style={isLadder && minWidth ? { minWidth } : undefined} className='h-full'>
+    <div className={cn('w-full', isLadder ? 'overflow-x-auto' : 'overflow-auto', className)} style={outerStyle}>
+      <div style={innerMinWidth ? { minWidth: innerMinWidth } : undefined} className='h-full'>
         <ReactFlowProvider>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            fitView={!isLadder}
-            fitViewOptions={!isLadder ? { padding: 0.15 } : undefined}
-            panOnDrag={!isLadder}
+            fitView={false}
+            defaultViewport={fbd?.viewport}
+            panOnDrag={false}
             panOnScroll={false}
-            zoomOnScroll={!isLadder}
-            zoomOnPinch={!isLadder}
-            zoomOnDoubleClick={!isLadder}
-            preventScrolling={!isLadder}
-            panActivationKeyCode={isLadder ? null : undefined}
-            zoomActivationKeyCode={isLadder ? null : undefined}
+            zoomOnScroll={false}
+            zoomOnPinch={false}
+            zoomOnDoubleClick={false}
+            preventScrolling={false}
+            panActivationKeyCode={null}
+            zoomActivationKeyCode={null}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}
@@ -319,7 +353,7 @@ export function GraphicalDiffViewer({
                   )}
                 </>
               ) : (
-                <div className='flex'>
+                <div className='flex items-start'>
                   {showOriginalSide &&
                     (original ? (
                       <RungCell
