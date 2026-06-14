@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksCode } from '../generateCBlocksCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'local', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,12 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (
+  name: string,
+  cls: 'input' | 'output' | 'local',
+  baseType: string,
+  dimension: string,
+): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -169,17 +174,12 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('// comment about setup')
   })
 
-  it('filters variables by class (only input and output)', () => {
+  it('exposes user local variables but excludes runtime-only locals', () => {
     const variables: PLCVariable[] = [
       makeScalarVar('inVar', 'input', 'INT'),
-      {
-        name: 'localVar',
-        class: 'local',
-        type: { definition: 'base-type', value: 'INT' },
-        location: '',
-        documentation: '',
-        debug: false,
-      },
+      makeScalarVar('localVar', 'local', 'INT'),
+      makeArrayVar('localArray', 'local', 'BOOL', '1..4'),
+      makeScalarVar('hasBeenInitialized', 'local', 'BOOL'),
       makeScalarVar('outVar', 'output', 'INT'),
     ]
     const code = 'void setup() { }\nvoid loop() { }'
@@ -187,10 +187,14 @@ describe('generateCBlocksCode', () => {
     const result = generateCBlocksCode([{ name: 'test', code, variables }])
 
     expect(result).toContain('#define inVar')
+    expect(result).toContain('#define localVar (*(vars->LOCALVAR))')
+    expect(result).toContain('#define localArray (vars->LOCALARRAY)')
     expect(result).toContain('#define outVar')
-    expect(result).not.toContain('#define localVar')
+    expect(result).not.toContain('#define hasBeenInitialized')
     expect(result).toContain('#undef inVar')
+    expect(result).toContain('#undef localVar')
+    expect(result).toContain('#undef localArray')
     expect(result).toContain('#undef outVar')
-    expect(result).not.toContain('#undef localVar')
+    expect(result).not.toContain('#undef hasBeenInitialized')
   })
 })

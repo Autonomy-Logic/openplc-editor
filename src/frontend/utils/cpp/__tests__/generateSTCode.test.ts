@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSTCode } from '../generateSTCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'local', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,12 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (
+  name: string,
+  cls: 'input' | 'output' | 'local',
+  baseType: string,
+  dimension: string,
+): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -153,21 +158,19 @@ describe('generateSTCode (cpp)', () => {
     expect(result).toContain('vars.D = &D[0] - 0;')
   })
 
-  it('filters out local variables', () => {
-    const localVar: PLCVariable = {
-      name: 'localVal',
-      class: 'local',
-      type: { definition: 'base-type', value: 'INT' },
-      location: '',
-      documentation: '',
-      debug: false,
-    }
-
+  it('assigns user local variables and excludes the runtime initialization flag', () => {
     const result = generateSTCode({
       pouName: 'test',
-      allVariables: [makeScalarVar('x', 'input', 'INT'), localVar],
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        makeScalarVar('localVal', 'local', 'INT'),
+        makeArrayVar('localArray', 'local', 'BOOL', '2..5'),
+        makeScalarVar('hasBeenInitialized', 'local', 'BOOL'),
+      ],
     })
 
-    expect(result).not.toContain('LOCALVAL')
+    expect(result).toContain('vars.LOCALVAL = &LOCALVAL;')
+    expect(result).toContain('vars.LOCALARRAY = &LOCALARRAY[2] - 2;')
+    expect(result).not.toContain('vars.HASBEENINITIALIZED')
   })
 })

@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksHeader } from '../generateCBlocksHeader'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'local', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,12 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (
+  name: string,
+  cls: 'input' | 'output' | 'local',
+  baseType: string,
+  dimension: string,
+): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -59,25 +64,22 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
   })
 
-  it('includes only input and output variables in the struct', () => {
+  it('includes user local variables and excludes runtime-only locals', () => {
     const variables: PLCVariable[] = [
       makeScalarVar('inVar', 'input', 'INT'),
-      {
-        name: 'localVar',
-        class: 'local',
-        type: { definition: 'base-type', value: 'BOOL' },
-        location: '',
-        documentation: '',
-        debug: false,
-      },
+      makeScalarVar('localVar', 'local', 'BOOL'),
+      makeArrayVar('localArray', 'local', 'REAL', '0..2'),
+      makeScalarVar('hasBeenInitialized', 'local', 'BOOL'),
       makeScalarVar('outVar', 'output', 'BOOL'),
     ]
 
     const result = generateCBlocksHeader([{ name: 'test', variables }])
 
     expect(result).toContain('strucpp::IEC_INT *INVAR;')
+    expect(result).toContain('strucpp::IEC_BOOL *LOCALVAR;')
+    expect(result).toContain('strucpp::IEC_REAL *LOCALARRAY;')
     expect(result).toContain('strucpp::IEC_BOOL *OUTVAR;')
-    expect(result).not.toContain('LOCALVAR')
+    expect(result).not.toContain('HASBEENINITIALIZED')
   })
 
   it('generates declarations for multiple pous', () => {

@@ -278,6 +278,27 @@ describe('createEditorCompilerAdapter', () => {
 
       expect(result).toEqual({ success: false, error: 'Compilation failed: missing file' })
       expect(progressEvents.some((e) => e.stage === 'error')).toBe(true)
+      expect(progressEvents.some((e) => e.stage === 'done')).toBe(false)
+    })
+
+    it('ignores late compiler callbacks after the port closes', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileProgram(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: '/path',
+        },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      compileCallback!({ message: 'Compilation failed', logLevel: 'error' })
+      compileCallback!({ closePort: true })
+      compileCallback!({ message: 'late duplicate error', logLevel: 'error' })
+
+      await expect(promise).resolves.toEqual({ success: false, error: 'Compilation failed' })
+      expect(progressEvents.map((event) => event.message)).not.toContain('late duplicate error')
     })
 
     it('captures simulatorFirmwarePath as hexPath', async () => {

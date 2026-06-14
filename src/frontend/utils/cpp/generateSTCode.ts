@@ -1,5 +1,6 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayStartIndex, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { getExposedCppVariables } from './shared'
 
 type STCodeGenerationParams = {
   pouName: string
@@ -34,16 +35,14 @@ const generateVariableAssignment = (variable: PLCVariable): string => {
 const generateSTCode = (params: STCodeGenerationParams): string => {
   const { pouName, allVariables } = params
 
-  const inputVariables = allVariables.filter((v) => v.class === 'input')
-  const outputVariables = allVariables.filter((v) => v.class === 'output')
+  const exposedVariables = getExposedCppVariables(allVariables)
 
   const structName = `${pouName.toUpperCase()}_VARS`
   const setupFunctionName = `${pouName.toLowerCase()}_setup`
   const loopFunctionName = `${pouName.toLowerCase()}_loop`
 
   let variableAssignments = ''
-  for (const variable of inputVariables) variableAssignments += generateVariableAssignment(variable)
-  for (const variable of outputVariables) variableAssignments += generateVariableAssignment(variable)
+  for (const variable of exposedVariables) variableAssignments += generateVariableAssignment(variable)
 
   // Header `{external}` block: declare the user-visible struct, fill
   // the pointer fields. STruC++ emits this body verbatim into the

@@ -204,6 +204,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         let hasError = false
         let lastError = ''
         let hexPath: string | undefined
+        let settled = false
 
         window.bridge.runCompileProgram(
           [
@@ -225,6 +226,8 @@ export function createEditorCompilerAdapter(): CompilerPort {
             args.vendorScreenData ?? null,
           ],
           (data: Record<string, unknown>) => {
+            if (settled) return
+
             // Extract simulator firmware path BEFORE the closePort early return,
             // because the backend sends both fields in the same message.
             if (data.simulatorFirmwarePath) {
@@ -233,7 +236,10 @@ export function createEditorCompilerAdapter(): CompilerPort {
             }
 
             if (data.closePort) {
-              onProgress({ stage: 'done', message: 'Compilation complete' })
+              settled = true
+              if (!hasError) {
+                onProgress({ stage: 'done', message: 'Compilation complete' })
+              }
               resolve(
                 hasError
                   ? { success: false, error: lastError }
