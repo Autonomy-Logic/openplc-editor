@@ -1,4 +1,5 @@
 import {
+  buildModuleConfigEntries,
   generateVendorPluginConfig,
   type VendorScreenData,
   type VppModuleDefinition,
@@ -737,5 +738,46 @@ describe('generateVendorPluginConfig — pins[] (GPIO pin-mapping)', () => {
     )
     expect(result.slots).toEqual([])
     expect(result.pins).toEqual([{ pin: 11, direction: 'output', byte: 0, bit: 0 }])
+  })
+})
+
+describe('buildModuleConfigEntries', () => {
+  const modules: VppModuleDefinition[] = [moduleDi8, moduleThm4]
+
+  it('encodes per-slot config bytes for a configurable module, keyed by 1-based slot', () => {
+    const vsd = {
+      'module-configuration': {
+        slots: [null, 'thm-4'], // slot 2 holds the THM-4
+        slotsConfig: { '2': { ch1_type: '0x5' } }, // override CH1 -> Type T
+      },
+    } as unknown as VendorScreenData
+    const entries = buildModuleConfigEntries(vsd, modules)
+    expect(entries).toHaveLength(1)
+    expect(entries[0].slot).toBe(2)
+    // 20-byte buffer: 0x4003, 0x6005 defaults, ch1 = 0x2100 | 0x5 = 0x2105
+    expect(entries[0].bytes).toHaveLength(20)
+    expect(entries[0].bytes.slice(0, 6)).toEqual([0x40, 0x03, 0x60, 0x05, 0x21, 0x05])
+  })
+
+  it('falls back to field defaults when the user set no values', () => {
+    const vsd = {
+      'module-configuration': { slots: ['thm-4'] },
+    } as unknown as VendorScreenData
+    const entries = buildModuleConfigEntries(vsd, modules)
+    expect(entries).toHaveLength(1)
+    expect(entries[0].slot).toBe(1)
+    // ch1 defaults to 0x0 -> 0x2100 | 0x0 = 0x2100
+    expect(entries[0].bytes.slice(0, 6)).toEqual([0x40, 0x03, 0x60, 0x05, 0x21, 0x00])
+  })
+
+  it('omits modules with no configScreen and unknown/empty slots', () => {
+    const vsd = {
+      'module-configuration': { slots: ['di-8', null, 'not-a-module'] },
+    } as unknown as VendorScreenData
+    expect(buildModuleConfigEntries(vsd, modules)).toEqual([])
+  })
+
+  it('returns [] when there is no module-configuration', () => {
+    expect(buildModuleConfigEntries({} as VendorScreenData, modules)).toEqual([])
   })
 })

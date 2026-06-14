@@ -100,7 +100,7 @@ import {
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
-import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import { buildModuleConfigEntries, generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
@@ -2353,6 +2353,71 @@ class CompilerModule {
   }
 
   /**
+   * Compute per-slot module-configuration bytes for an Arduino VPP
+   * target with a modular backplane.
+   *
+   * Microcontroller boards have no runtime JSON, so per-module config
+   * (analog ranges, thermocouple types, ...) must be baked into the
+   * firmware. This resolves the installed VPP device for `boardTarget`,
+   * loads each module's configScreen, and encodes the same bytes the
+   * runtime-v4 plugin path would — keyed by 1-based slot. The caller
+   * injects them into `vendorScreenData` under a synthetic
+   * `module-config` key so the `vpp_config.h` generator emits
+   * `VPP_MODULE_CONFIG_ENTRIES_*` macros for the HAL.
+   *
+   * Returns [] for non-modular / non-VPP boards. Never throws.
+   */
+  async buildVppArduinoModuleConfig(
+    boardTarget: string,
+    vendorScreenData: Record<string, unknown>,
+  ): Promise<Array<{ slot: number; bytes: number[] }>> {
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+
+      let matchingPackagePath: string | null = null
+      let matchingDevice: PackageManifest['devices'][number] | null = null
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        const device = manifest.devices.find((d) => d.name === boardTarget)
+        if (device) {
+          matchingPackagePath = pkg.path
+          matchingDevice = device
+          break
+        }
+      }
+
+      const rawModules = matchingDevice?.moduleSystem?.modules
+      if (!matchingDevice || !matchingPackagePath || !rawModules || rawModules.length === 0) return []
+
+      const pkgPath = matchingPackagePath
+      const modules = await Promise.all(
+        rawModules.map(async (m) => {
+          let configScreenDefinition: unknown
+          const rel = (m as { configScreen?: string }).configScreen
+          if (rel) {
+            try {
+              const raw = await readFile(join(pkgPath, rel), 'utf-8')
+              configScreenDefinition = JSON.parse(raw)
+            } catch {
+              // Missing/invalid configScreen — module contributes no bytes.
+            }
+          }
+          return { ...m, configScreenDefinition }
+        }),
+      )
+
+      return buildModuleConfigEntries(
+        vendorScreenData as Parameters<typeof buildModuleConfigEntries>[0],
+        modules as Parameters<typeof buildModuleConfigEntries>[1],
+      )
+    } catch {
+      return []
+    }
+  }
+
+  /**
    * Main compile entry point.  Drives the full Step 0-13 flow
    * through the shared `runCompilePipeline` orchestrator
    * (`backend/shared/compile/pipeline.ts`); platform-specific bits
@@ -2660,6 +2725,20 @@ class CompilerModule {
       }
     }
 
+    // For Arduino VPP targets with a modular backplane, bake the
+    // per-slot module-configuration bytes into vpp_config.h (the MCU
+    // has no runtime JSON to load them from). The synthetic
+    // `module-config` key flows through the generic vpp_config.h walker
+    // as VPP_MODULE_CONFIG_ENTRIES_* macros. No-op for non-modular /
+    // non-VPP / runtime-v4 / simulator targets.
+    let effectiveVendorScreenData = vendorScreenData
+    if (!isRuntimeV4 && !isSimulator) {
+      const moduleConfigEntries = await this.buildVppArduinoModuleConfig(boardTarget, vendorScreenData ?? {})
+      if (moduleConfigEntries.length > 0) {
+        effectiveVendorScreenData = { ...(vendorScreenData ?? {}), 'module-config': { entries: moduleConfigEntries } }
+      }
+    }
+
     // --- Run the shared pipeline ---
     const result = await runCompilePipeline(
       {
@@ -2685,7 +2764,7 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
-        vendorScreenData,
+        vendorScreenData: effectiveVendorScreenData,
       },
       platformPort,
       (event) => {
