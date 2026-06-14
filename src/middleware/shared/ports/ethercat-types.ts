@@ -273,19 +273,53 @@ export interface EtherCATSlaveStatus {
 }
 
 /**
- * Cycle performance metrics from the EtherCAT thread
+ * Cycle performance metrics from the EtherCAT bus thread.
+ *
+ * Two distinct categories:
+ *
+ *   Work-window — `avg_cycle_us`, `max_cycle_us`, `max_exchange_us`.
+ *     How long each cycle's work actually takes (mutex+exchange+mutex).
+ *     Tells you whether the configured period is enough to fit one
+ *     SOEM round-trip plus the IO copies. `cycle - exchange` exposes
+ *     buffer-mutex contention with the IEC tasks.
+ *
+ *   Scheduling — `avg/max/min_period_us`, `avg/max/min_latency_us`.
+ *     How well the bus thread is being scheduled. `period_us` is the
+ *     observed time between cycle starts (should equal the configured
+ *     cycle on average); `latency_us` is the wake-up delay from the
+ *     absolute clock_nanosleep deadline. Spikes here point at OS
+ *     scheduling jitter, not bus or PLC issues.
  */
 export interface EtherCATCycleMetrics {
   /** Total cycles executed since last reset */
   cycle_count: number
   /** Total WKC errors since last reset */
   wkc_error_count: number
-  /** Average cycle time in microseconds */
+  /** Moving-average bus-exchange duration in microseconds. Time-based EWMA
+   *  with a ~2 s wall-clock window (matches the editor poll cadence). */
   avg_cycle_us: number
-  /** Maximum cycle time in microseconds */
+  /** Best-case bus-exchange duration in microseconds */
+  min_cycle_us: number
+  /** Worst-case bus-exchange duration in microseconds */
   max_cycle_us: number
-  /** Maximum process data exchange time in microseconds */
+  /** Best-case process data exchange time in microseconds (just SOEM RTT) */
+  min_exchange_us: number
+  /** Maximum process data exchange time in microseconds (just SOEM RTT) */
   max_exchange_us: number
+  /** Average observed period between cycle starts (microseconds). On a
+   *  healthy RT system this equals the configured cycle time. */
+  avg_period_us: number
+  /** Worst-case observed cycle period in microseconds */
+  max_period_us: number
+  /** Best-case observed cycle period in microseconds */
+  min_period_us: number
+  /** Average wake-up scheduling delay (microseconds). How much later
+   *  than its absolute deadline the bus thread actually started a cycle. */
+  avg_latency_us: number
+  /** Worst-case wake-up scheduling delay in microseconds */
+  max_latency_us: number
+  /** Best-case wake-up scheduling delay in microseconds */
+  min_latency_us: number
   /** Current consecutive WKC error count */
   consecutive_wkc_errors: number
   /** Number of recovery attempts since last successful recovery */

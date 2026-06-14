@@ -32,10 +32,23 @@ const DimensionsTable = ({
 
   const {
     editor,
+    project: {
+      data: { dataTypes },
+    },
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
+
+  // `updateDatatype` is a full replace.  Read the current entry from
+  // the store and spread it before writing so we don't strip
+  // `derivation` / `baseType` / `initialValue` from the array
+  // datatype (which would corrupt it for downstream consumers).
+  const writeDimensions = (newDimensions: PLCArrayDatatype['dimensions']) => {
+    const current = dataTypes.find((dt) => dt.name === name)
+    if (!current || current.derivation !== 'array') return
+    updateDatatype(name, { ...current, dimensions: newDimensions })
+  }
 
   const columnHelper = createColumnHelper<{ dimension: string }>()
   const columns = React.useMemo(
@@ -73,11 +86,7 @@ const DimensionsTable = ({
         captureAndPush(editor.meta.name)
 
         const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        const optionalSchema = {
-          name: name,
-          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
-        }
-        updateDatatype(name, optionalSchema as PLCArrayDatatype)
+        writeDimensions(newRows.map((row) => ({ dimension: row.dimension })))
         setArrayTable({ selectedRow: -1 })
         toast({
           title: 'Invalid array',
@@ -91,11 +100,7 @@ const DimensionsTable = ({
           ...row,
           dimension: index === rowIndex ? inputValue : row.dimension,
         }))
-        const optionalSchema = {
-          name: name,
-          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
+        writeDimensions(newRows.map((row) => ({ dimension: row.dimension })))
       }
     }
   }

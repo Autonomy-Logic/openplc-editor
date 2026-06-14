@@ -1,3 +1,4 @@
+import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -25,20 +26,6 @@ const DebuggerMessageModal = () => {
 
   if (!modalData) return null
 
-  const getIcon = () => {
-    switch (modalData.type) {
-      case 'error':
-        return '❌'
-      case 'warning':
-        return '⚠️'
-      case 'question':
-        return '❓'
-      case 'info':
-      default:
-        return 'ℹ️'
-    }
-  }
-
   return (
     <Modal
       open={isOpen}
@@ -58,7 +45,9 @@ const DebuggerMessageModal = () => {
       }}
     >
       <ModalContent className='flex min-h-[200px] w-[450px] select-none flex-col items-center justify-start rounded-lg p-6'>
-        <div className='mb-4 text-4xl'>{getIcon()}</div>
+        <div className='mb-4'>
+          <WarningIcon size='lg' className='h-12 w-12' />
+        </div>
         <ModalTitle className='mb-4 text-xl font-semibold'>{modalData.title}</ModalTitle>
         <p className='mb-6 text-center text-sm text-neutral-700 dark:text-neutral-300'>{modalData.message}</p>
         <div className='mt-4 flex w-full gap-3'>

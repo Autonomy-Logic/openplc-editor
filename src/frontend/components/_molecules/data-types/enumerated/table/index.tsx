@@ -34,10 +34,23 @@ const EnumeratedTable = ({
 
   const {
     editor,
+    project: {
+      data: { dataTypes },
+    },
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
+
+  // `updateDatatype` is a full replace.  Read the current entry from
+  // the store and spread it before writing so we don't strip
+  // `name` / `derivation` / `initialValue` from the enumerated
+  // datatype (which would corrupt it for downstream consumers).
+  const writeValues = (newValues: PLCEnumeratedDatatype['values']) => {
+    const current = dataTypes.find((dt) => dt.name === name)
+    if (!current || current.derivation !== 'enumerated') return
+    updateDatatype(name, { ...current, values: newValues })
+  }
 
   const columnHelper = createColumnHelper<{ description: string }>()
   const columns = React.useMemo(
@@ -71,12 +84,7 @@ const EnumeratedTable = ({
 
       if (inputValue === '') {
         const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        const optionalSchema = {
-          name: name,
-          values: newRows.map((row) => ({ description: row.description })),
-          initialValue: initialValue,
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
+        writeValues(newRows.map((row) => ({ description: row.description })))
         resetBorders()
         setArrayTable({ selectedRow: -1 })
         toast({
@@ -96,12 +104,7 @@ const EnumeratedTable = ({
 
       if (checkIfExists) {
         const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        const optionalSchema = {
-          name: name,
-          values: newRows.map((row) => ({ description: row.description })),
-          initialValue: initialValue,
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
+        writeValues(newRows.map((row) => ({ description: row.description })))
         resetBorders()
         setArrayTable({ selectedRow: -1 })
         toast({
@@ -114,12 +117,7 @@ const EnumeratedTable = ({
 
       if (!validation.ok) {
         const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        const optionalSchema = {
-          name: name,
-          values: newRows.map((row) => ({ description: row.description })),
-          initialValue: initialValue,
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
+        writeValues(newRows.map((row) => ({ description: row.description })))
         resetBorders()
         setArrayTable({ selectedRow: -1 })
         toast({
@@ -133,12 +131,7 @@ const EnumeratedTable = ({
           ...row,
           description: index === rowIndex ? inputValue : row.description,
         }))
-        const optionalSchema = {
-          name: name,
-          values: newRows.map((row) => ({ description: row.description })),
-          initialValue: initialValue,
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
+        writeValues(newRows.map((row) => ({ description: row.description })))
         return newRows
       }
     }

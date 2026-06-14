@@ -1,7 +1,11 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import { openPLCStoreBase } from '../../store'
 import type { DebugVariableEntry } from '../debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from '../debug-tree-traversal'
-import { traverseNestedType, traverseVariable } from '../debug-tree-traversal'
+import { lookupEnumValues, resolveLeafType, traverseNestedType, traverseVariable } from '../debug-tree-traversal'
+
+/** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
+const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // Simple visitor that collects node info into a plain object
@@ -113,6 +117,7 @@ function makeContext(overrides: Partial<TraversalContext> = {}): TraversalContex
     debugVariables: [],
     projectPous: [],
     dataTypes: [],
+    systemLibraries: SYSTEM_LIBS,
     instanceName: 'INSTANCE0',
     pouName: 'Main',
     ...overrides,
@@ -127,14 +132,14 @@ describe('traverseVariable', () => {
   describe('base-type variables', () => {
     it('returns a leaf node for a base-type variable', () => {
       const variable = makeBaseVariable('SPEED', 'INT')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.SPEED', 'INT_ENUM', 0)]
+      const debugVars = [makeDebugVar('INSTANCE0.SPEED', 'INT_ENUM', 0)]
       const ctx = makeContext({ debugVariables: debugVars })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
 
       expect(result.kind).toBe('leaf')
       expect(result.name).toBe('SPEED')
-      expect(result.fullPath).toBe('RES0__INSTANCE0.SPEED')
+      expect(result.fullPath).toBe('INSTANCE0.SPEED')
       expect(result.compositeKey).toBe('Main:SPEED')
       expect(result.typeName).toBe('INT')
       expect(result.debugIndex).toBe(0)
@@ -151,14 +156,14 @@ describe('traverseVariable', () => {
   })
 
   describe('external variables', () => {
-    it('uses CONFIG0__ prefix for external base-type variables', () => {
+    it('uses  prefix for external base-type variables', () => {
       const variable = makeBaseVariable('GLOBAL_FLAG', 'BOOL', 'external')
-      const debugVars = [makeDebugVar('CONFIG0__GLOBAL_FLAG', 'BOOL_ENUM', 5)]
+      const debugVars = [makeDebugVar('GLOBAL_FLAG', 'BOOL_ENUM', 5)]
       const ctx = makeContext({ debugVariables: debugVars })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
 
-      expect(result.fullPath).toBe('CONFIG0__GLOBAL_FLAG')
+      expect(result.fullPath).toBe('GLOBAL_FLAG')
       expect(result.debugIndex).toBe(5)
     })
   })
@@ -167,9 +172,9 @@ describe('traverseVariable', () => {
     it('expands a standard library FB (SR) into complex node', () => {
       const variable = makeDerivedVariable('mySR', 'SR')
       const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
-        makeDebugVar('RES0__INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
-        makeDebugVar('RES0__INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
+        makeDebugVar('INSTANCE0.MYSR.S1', 'BOOL_ENUM', 0),
+        makeDebugVar('INSTANCE0.MYSR.R', 'BOOL_ENUM', 1),
+        makeDebugVar('INSTANCE0.MYSR.Q1', 'BOOL_ENUM', 2),
       ]
       const ctx = makeContext({ debugVariables: debugVars })
 
@@ -188,8 +193,8 @@ describe('traverseVariable', () => {
       ])
       const variable = makeDerivedVariable('inst', 'MyCustomFB')
       const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.INST.X', 'INT_ENUM', 10),
-        makeDebugVar('RES0__INSTANCE0.INST.Y', 'BOOL_ENUM', 11),
+        makeDebugVar('INSTANCE0.INST.X', 'INT_ENUM', 10),
+        makeDebugVar('INSTANCE0.INST.Y', 'BOOL_ENUM', 11),
       ]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
@@ -201,7 +206,7 @@ describe('traverseVariable', () => {
 
     it('treats unresolvable derived type as leaf', () => {
       const variable = makeDerivedVariable('inst', 'NonExistent')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.INST', 'INT_ENUM', 99)]
+      const debugVars = [makeDebugVar('INSTANCE0.INST', 'INT_ENUM', 99)]
       const ctx = makeContext({ debugVariables: debugVars })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -214,7 +219,7 @@ describe('traverseVariable', () => {
       const innerFb = makePou('InnerFB', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
       const outerFb = makePou('OuterFB', 'function-block', [makeDerivedVariable('inner', 'InnerFB', 'local')])
       const variable = makeDerivedVariable('outer', 'OuterFB')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.OUTER.INNER.Q', 'BOOL_ENUM', 20)]
+      const debugVars = [makeDebugVar('INSTANCE0.OUTER.INNER.Q', 'BOOL_ENUM', 20)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [innerFb, outerFb] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -229,7 +234,7 @@ describe('traverseVariable', () => {
       const innerFb = makePou('SubFB', 'function-block', [makeBaseVariable('Z', 'INT', 'output')])
       const outerFb = makePou('WrapperFB', 'function-block', [makeUdtVariable('sub', 'SubFB', 'local')])
       const variable = makeDerivedVariable('wrapper', 'WrapperFB')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.WRAPPER.SUB.Z', 'INT_ENUM', 30)]
+      const debugVars = [makeDebugVar('INSTANCE0.WRAPPER.SUB.Z', 'INT_ENUM', 30)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [innerFb, outerFb] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -244,7 +249,7 @@ describe('traverseVariable', () => {
       ])
       const outerFb = makePou('FBWithStruct', 'function-block', [makeUdtVariable('data', 'MyStruct', 'local')])
       const variable = makeDerivedVariable('inst', 'FBWithStruct')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.INST.DATA.value.FIELD1', 'INT_ENUM', 40)]
+      const debugVars = [makeDebugVar('INSTANCE0.INST.DATAFIELD1', 'INT_ENUM', 40)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [outerFb], dataTypes: [structType] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -260,8 +265,8 @@ describe('traverseVariable', () => {
       ])
       const variable = makeDerivedVariable('inst', 'FBWithArray')
       const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.INST.ARR.value.table[0]', 'INT_ENUM', 50),
-        makeDebugVar('RES0__INSTANCE0.INST.ARR.value.table[1]', 'INT_ENUM', 51),
+        makeDebugVar('INSTANCE0.INST.ARR[0]', 'INT_ENUM', 50),
+        makeDebugVar('INSTANCE0.INST.ARR[1]', 'INT_ENUM', 51),
       ]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [outerFb] })
 
@@ -300,10 +305,7 @@ describe('traverseVariable', () => {
         { name: 'y', type: { definition: 'base-type', value: 'INT' } },
       ])
       const variable = makeUdtVariable('pos', 'Point')
-      const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.POS.value.X', 'INT_ENUM', 10),
-        makeDebugVar('RES0__INSTANCE0.POS.value.Y', 'INT_ENUM', 11),
-      ]
+      const debugVars = [makeDebugVar('INSTANCE0.POSX', 'INT_ENUM', 10), makeDebugVar('INSTANCE0.POSY', 'INT_ENUM', 11)]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -311,12 +313,12 @@ describe('traverseVariable', () => {
       expect(result.kind).toBe('complex')
       expect(result.children).toHaveLength(2)
       expect(result.children![0].name).toBe('x')
-      expect(result.children![0].fullPath).toContain('.value.X')
+      expect(result.children![0].fullPath).toContain('X')
     })
 
     it('treats unresolvable UDT as leaf', () => {
       const variable = makeUdtVariable('unknown', 'NoSuchType')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.UNKNOWN', 'INT_ENUM', 99)]
+      const debugVars = [makeDebugVar('INSTANCE0.UNKNOWN', 'INT_ENUM', 99)]
       const ctx = makeContext({ debugVariables: debugVars })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -327,7 +329,7 @@ describe('traverseVariable', () => {
     it('resolves UDT to FB when name matches a function-block POU', () => {
       const customFb = makePou('SomeFB', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
       const variable = makeUdtVariable('inst', 'SomeFB')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.INST.Q', 'BOOL_ENUM', 55)]
+      const debugVars = [makeDebugVar('INSTANCE0.INST.Q', 'BOOL_ENUM', 55)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -344,7 +346,7 @@ describe('traverseVariable', () => {
         { name: 'nested', type: { definition: 'user-data-type', value: 'Inner' } },
       ])
       const variable = makeUdtVariable('obj', 'Outer')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.OBJ.value.NESTED.value.VAL', 'INT_ENUM', 70)]
+      const debugVars = [makeDebugVar('INSTANCE0.OBJNESTEDVAL', 'INT_ENUM', 70)]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [innerStruct, outerStruct] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -360,7 +362,7 @@ describe('traverseVariable', () => {
         { name: 'fb', type: { definition: 'user-data-type', value: 'NestedFB' } },
       ])
       const variable = makeUdtVariable('data', 'StructWithFB')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.DATA.value.FB.OUT', 'BOOL_ENUM', 80)]
+      const debugVars = [makeDebugVar('INSTANCE0.DATAFB.OUT', 'BOOL_ENUM', 80)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [fbPou], dataTypes: [outerStruct] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -385,8 +387,8 @@ describe('traverseVariable', () => {
       ])
       const variable = makeUdtVariable('s', 'StructWithArray')
       const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.S.value.ARR.value.table[0]', 'INT_ENUM', 90),
-        makeDebugVar('RES0__INSTANCE0.S.value.ARR.value.table[1]', 'INT_ENUM', 91),
+        makeDebugVar('INSTANCE0.SARR[0]', 'INT_ENUM', 90),
+        makeDebugVar('INSTANCE0.SARR[1]', 'INT_ENUM', 91),
       ]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [outerStruct] })
 
@@ -418,9 +420,9 @@ describe('traverseVariable', () => {
     it('builds an array node with base-type elements', () => {
       const variable = makeArrayVariable('myArr', 'base-type', 'INT', '1..3')
       const debugVars = [
-        makeDebugVar('RES0__INSTANCE0.MYARR.value.table[0]', 'INT_ENUM', 0),
-        makeDebugVar('RES0__INSTANCE0.MYARR.value.table[1]', 'INT_ENUM', 1),
-        makeDebugVar('RES0__INSTANCE0.MYARR.value.table[2]', 'INT_ENUM', 2),
+        makeDebugVar('INSTANCE0.MYARR[0]', 'INT_ENUM', 0),
+        makeDebugVar('INSTANCE0.MYARR[1]', 'INT_ENUM', 1),
+        makeDebugVar('INSTANCE0.MYARR[2]', 'INT_ENUM', 2),
       ]
       const ctx = makeContext({ debugVariables: debugVars })
 
@@ -436,7 +438,7 @@ describe('traverseVariable', () => {
     it('builds an array node with UDT elements', () => {
       const structType = makeStructDataType('Item', [{ name: 'val', type: { definition: 'base-type', value: 'INT' } }])
       const variable = makeArrayVariable('items', 'user-data-type', 'Item', '0..0')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.ITEMS.value.table[0].value.VAL', 'INT_ENUM', 100)]
+      const debugVars = [makeDebugVar('INSTANCE0.ITEMS[0]VAL', 'INT_ENUM', 100)]
       const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -497,7 +499,7 @@ describe('traverseVariable', () => {
     it('builds an array node with UDT elements that resolve to FB', () => {
       const customFb = makePou('InnerFB', 'function-block', [makeBaseVariable('Q', 'BOOL', 'output')])
       const variable = makeArrayVariable('fbArr', 'user-data-type', 'InnerFB', '0..0')
-      const debugVars = [makeDebugVar('RES0__INSTANCE0.FBARR.value.table[0].Q', 'BOOL_ENUM', 110)]
+      const debugVars = [makeDebugVar('INSTANCE0.FBARR[0].Q', 'BOOL_ENUM', 110)]
       const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
       const result = traverseVariable(variable, ctx, simpleVisitor)
@@ -555,18 +557,10 @@ describe('traverseVariable', () => {
 describe('traverseNestedType', () => {
   it('delegates to the internal traverseNestedNode for derived types', () => {
     const customFb = makePou('MyFB', 'function-block', [makeBaseVariable('X', 'INT', 'output')])
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.INST.X', 'INT_ENUM', 0)]
+    const debugVars = [makeDebugVar('INSTANCE0.INST.X', 'INT_ENUM', 0)]
     const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
 
-    const result = traverseNestedType(
-      'inst',
-      'RES0__INSTANCE0.INST',
-      'Main:inst',
-      'MyFB',
-      'derived',
-      ctx,
-      simpleVisitor,
-    )
+    const result = traverseNestedType('inst', 'INSTANCE0.INST', 'Main:inst', 'MyFB', 'derived', ctx, simpleVisitor)
 
     expect(result.kind).toBe('complex')
     expect(result.children![0].name).toBe('X')
@@ -574,25 +568,17 @@ describe('traverseNestedType', () => {
 
   it('delegates for user-data-type (structure)', () => {
     const structType = makeStructDataType('S', [{ name: 'f', type: { definition: 'base-type', value: 'BOOL' } }])
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.VAR.value.F', 'BOOL_ENUM', 5)]
+    const debugVars = [makeDebugVar('INSTANCE0.VARF', 'BOOL_ENUM', 5)]
     const ctx = makeContext({ debugVariables: debugVars, dataTypes: [structType] })
 
-    const result = traverseNestedType(
-      'var',
-      'RES0__INSTANCE0.VAR',
-      'Main:var',
-      'S',
-      'user-data-type',
-      ctx,
-      simpleVisitor,
-    )
+    const result = traverseNestedType('var', 'INSTANCE0.VAR', 'Main:var', 'S', 'user-data-type', ctx, simpleVisitor)
 
     expect(result.kind).toBe('complex')
     expect(result.children![0].name).toBe('f')
   })
 
   it('delegates for array type', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.ARR.value.table[0]', 'INT_ENUM', 10)]
+    const debugVars = [makeDebugVar('INSTANCE0.ARR[0]', 'INT_ENUM', 10)]
     const ctx = makeContext({ debugVariables: debugVars })
     const arrayData = {
       baseType: { definition: 'base-type' as const, value: 'INT' },
@@ -601,7 +587,7 @@ describe('traverseNestedType', () => {
 
     const result = traverseNestedType(
       'arr',
-      'RES0__INSTANCE0.ARR',
+      'INSTANCE0.ARR',
       'Main:arr',
       'ARRAY',
       'array',
@@ -617,19 +603,19 @@ describe('traverseNestedType', () => {
   it('falls through to leaf for unknown nested typeDefinition', () => {
     const ctx = makeContext()
 
-    const result = traverseNestedType('x', 'RES0__INSTANCE0.X', 'Main:x', 'SomeType', 'derived', ctx, simpleVisitor)
+    const result = traverseNestedType('x', 'INSTANCE0.X', 'Main:x', 'SomeType', 'derived', ctx, simpleVisitor)
 
     // 'derived' with no matching FB definition -> leaf
     expect(result.kind).toBe('leaf')
   })
 
   it('falls through to leaf for array typeDefinition without arrayData', () => {
-    const debugVars = [makeDebugVar('RES0__INSTANCE0.ARR', 'INT_ENUM', 42)]
+    const debugVars = [makeDebugVar('INSTANCE0.ARR', 'INT_ENUM', 42)]
     const ctx = makeContext({ debugVariables: debugVars })
 
     const result = traverseNestedType(
       'arr',
-      'RES0__INSTANCE0.ARR',
+      'INSTANCE0.ARR',
       'Main:arr',
       'ARRAY',
       'array',
@@ -650,9 +636,9 @@ describe('traverseNestedType', () => {
     ])
     const variable = makeUdtVariable('s', 'StructWithStdFB')
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0.S.value.SR_INST.S1', 'BOOL_ENUM', 100),
-      makeDebugVar('RES0__INSTANCE0.S.value.SR_INST.R', 'BOOL_ENUM', 101),
-      makeDebugVar('RES0__INSTANCE0.S.value.SR_INST.Q1', 'BOOL_ENUM', 102),
+      makeDebugVar('INSTANCE0.SSR_INST.S1', 'BOOL_ENUM', 100),
+      makeDebugVar('INSTANCE0.SSR_INST.R', 'BOOL_ENUM', 101),
+      makeDebugVar('INSTANCE0.SSR_INST.Q1', 'BOOL_ENUM', 102),
     ]
     const ctx = makeContext({ debugVariables: debugVars, dataTypes: [outerStruct] })
 
@@ -668,9 +654,9 @@ describe('traverseNestedType', () => {
     // Array of SR (standard library FB)
     const variable = makeArrayVariable('arr', 'user-data-type', 'SR', '0..0')
     const debugVars = [
-      makeDebugVar('RES0__INSTANCE0.ARR.value.table[0].S1', 'BOOL_ENUM', 200),
-      makeDebugVar('RES0__INSTANCE0.ARR.value.table[0].R', 'BOOL_ENUM', 201),
-      makeDebugVar('RES0__INSTANCE0.ARR.value.table[0].Q1', 'BOOL_ENUM', 202),
+      makeDebugVar('INSTANCE0.ARR[0].S1', 'BOOL_ENUM', 200),
+      makeDebugVar('INSTANCE0.ARR[0].R', 'BOOL_ENUM', 201),
+      makeDebugVar('INSTANCE0.ARR[0].Q1', 'BOOL_ENUM', 202),
     ]
     const ctx = makeContext({ debugVariables: debugVars })
 
@@ -679,5 +665,97 @@ describe('traverseNestedType', () => {
     expect(result.kind).toBe('array')
     expect(result.children).toHaveLength(1)
     expect(result.children![0].kind).toBe('complex')
+  })
+})
+
+describe('resolveLeafType', () => {
+  it('returns the project type unchanged when no debug variable is provided', () => {
+    expect(resolveLeafType('INT', null)).toBe('INT')
+    expect(resolveLeafType('Irrigation_State', null)).toBe('Irrigation_State')
+  })
+
+  it('returns the project type when debug variable has no type', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: '', index: 0 }
+    expect(resolveLeafType('REAL', debugVar)).toBe('REAL')
+  })
+
+  it('strips _ENUM suffix from MatIEC-shaped debug type', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'INT_ENUM', index: 0 }
+    expect(resolveLeafType('Irrigation_State', debugVar)).toBe('INT')
+  })
+
+  it('strips _O_ENUM suffix (output enum)', () => {
+    const debugVar: DebugVariableEntry = { name: 'q', type: 'BOOL_O_ENUM', index: 0 }
+    expect(resolveLeafType('SomeEnum', debugVar)).toBe('BOOL')
+  })
+
+  it('strips _P_ENUM suffix (param enum)', () => {
+    const debugVar: DebugVariableEntry = { name: 'p', type: 'DINT_P_ENUM', index: 0 }
+    expect(resolveLeafType('OtherEnum', debugVar)).toBe('DINT')
+  })
+
+  it('only strips the _O_ENUM/_P_ENUM at the end, not in the middle', () => {
+    // Underscore-rich names like FOO_O_ENUM_BAR are not enum-suffixed and
+    // should pass through unchanged (the regex anchors with $).
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'FOO_O_ENUM_BAR', index: 0 }
+    expect(resolveLeafType('whatever', debugVar)).toBe('FOO_O_ENUM_BAR')
+  })
+
+  it('returns the debug type as-is when it has no _ENUM suffix', () => {
+    const debugVar: DebugVariableEntry = { name: 'x', type: 'WORD', index: 0 }
+    expect(resolveLeafType('WORD', debugVar)).toBe('WORD')
+  })
+})
+
+describe('lookupEnumValues', () => {
+  const enumDataType: PLCDataType = {
+    name: 'TrafficLight',
+    derivation: 'enumerated',
+    values: [{ description: 'RED' }, { description: 'YELLOW' }, { description: 'GREEN' }],
+  }
+
+  const structDataType: PLCDataType = {
+    name: 'PointStruct',
+    derivation: 'structure',
+    variable: [],
+  }
+
+  it('returns the member descriptions in declaration order for an enum match', () => {
+    expect(lookupEnumValues('TrafficLight', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+  })
+
+  it('matches case-insensitively', () => {
+    expect(lookupEnumValues('trafficlight', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+    expect(lookupEnumValues('TRAFFICLIGHT', [enumDataType])).toEqual(['RED', 'YELLOW', 'GREEN'])
+  })
+
+  it('returns undefined when the named type is not enumerated', () => {
+    expect(lookupEnumValues('PointStruct', [structDataType])).toBeUndefined()
+  })
+
+  it('returns undefined when no data type matches the name', () => {
+    expect(lookupEnumValues('Unknown', [enumDataType])).toBeUndefined()
+  })
+
+  it('returns undefined for an empty data-types array', () => {
+    expect(lookupEnumValues('TrafficLight', [])).toBeUndefined()
+  })
+
+  it('finds the right enum among many data types', () => {
+    const otherEnum: PLCDataType = {
+      name: 'AnotherEnum',
+      derivation: 'enumerated',
+      values: [{ description: 'A' }, { description: 'B' }],
+    }
+    expect(lookupEnumValues('TrafficLight', [otherEnum, structDataType, enumDataType])).toEqual([
+      'RED',
+      'YELLOW',
+      'GREEN',
+    ])
+  })
+
+  it('returns an empty array when an enum has no members (degenerate but valid)', () => {
+    const empty: PLCDataType = { name: 'Empty', derivation: 'enumerated', values: [] }
+    expect(lookupEnumValues('Empty', [empty])).toEqual([])
   })
 })

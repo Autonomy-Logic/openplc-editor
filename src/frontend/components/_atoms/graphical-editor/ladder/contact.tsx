@@ -7,6 +7,7 @@ import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
@@ -18,8 +19,8 @@ export type { ContactNode } from './utils/types'
 
 export const Contact = (block: ContactProps) => {
   const { selected, data, id } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
       data: { pous },
     },
@@ -90,7 +91,7 @@ export const Contact = (block: ContactProps) => {
       node: contactNode,
       rung,
       variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
     if (!rung || !contactNode) return
@@ -112,7 +113,7 @@ export const Contact = (block: ContactProps) => {
 
     if ((contactNode.data as BasicNodeData).variable.name.toLowerCase() !== variable.name.toLowerCase()) {
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: contactNode.id,
         node: {
@@ -179,7 +180,7 @@ export const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -193,7 +194,7 @@ export const Contact = (block: ContactProps) => {
       variable.type.value.toUpperCase() !== 'BOOL'
     ) {
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         rungId: rung.id,
         nodeId: node.id,
         node: {
@@ -209,7 +210,7 @@ export const Contact = (block: ContactProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: node.id,
       node: {
@@ -263,12 +264,12 @@ export const Contact = (block: ContactProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {
@@ -279,12 +280,12 @@ export const Contact = (block: ContactProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
               updateNode({
-                editorName: editor.meta.name,
+                editorName: pouName,
                 nodeId: node.id,
                 rungId: rung.id,
                 node: {

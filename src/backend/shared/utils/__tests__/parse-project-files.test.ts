@@ -30,29 +30,6 @@ function makeDeviceConfig() {
     deviceBoard: 'uno',
     communicationPort: 'COM1',
     compileOnly: false,
-    communicationConfiguration: {
-      modbusRTU: {
-        rtuInterface: 'Serial',
-        rtuBaudRate: '9600',
-        rtuSlaveId: null,
-        rtuRS485ENPin: null,
-      },
-      modbusTCP: {
-        tcpInterface: 'Ethernet',
-        tcpMacAddress: null,
-        tcpStaticHostConfiguration: {
-          ipAddress: '0.0.0.0',
-          dns: '0.0.0.0',
-          gateway: '0.0.0.0',
-          subnet: '0.0.0.0',
-        },
-      },
-      communicationPreferences: {
-        enabledRTU: false,
-        enabledTCP: false,
-        enabledDHCP: false,
-      },
-    },
   })
 }
 
@@ -452,10 +429,12 @@ describe('parseProjectFiles — device config error paths', () => {
   })
 
   it('uses defaults when device config has invalid structure', () => {
+    // deviceBoard must be a string — feeding a number forces a Zod
+    // validation failure, exercising the invalid-structure fallback.
     const result = parseProjectFiles(
       '/p',
       makeProjectJson(),
-      JSON.stringify({ foo: 'bar' }),
+      JSON.stringify({ deviceBoard: 123 }),
       makePinMapping(),
       [],
       [],
@@ -502,6 +481,35 @@ describe('parseProjectFiles — pin mapping error paths', () => {
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), '{bad}', [], [], [])
     expect(result.warnings).toBeDefined()
     expect(result.warnings!.some((w) => w.includes('pin-mapping.json') && w.includes('malformed'))).toBe(true)
+  })
+
+  it('accepts the legacy flat-array shape and forwards it for store-side migration', () => {
+    // Pre-per-board-scoping projects wrote `DevicePin[]` to disk. The
+    // store's `setDeviceDefinitions` keys that array under the active
+    // board on load. Here we just verify the parser passes the flat
+    // array through verbatim — the migration responsibility is the
+    // store's, not the parser's (the parser doesn't know what the
+    // active board is from the schema alone).
+    const legacy = JSON.stringify([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), legacy, [], [], [])
+    expect(Array.isArray(result.devicePinMapping)).toBe(true)
+    expect(result.devicePinMapping).toEqual([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
+  })
+
+  it('accepts the canonical per-board dict shape (post-migration)', () => {
+    // Projects saved by post-migration editors write a per-board dict.
+    // Each key is a `BoardInfo.name`, each value is that board's pin
+    // array. The parser passes it through verbatim.
+    const dict = JSON.stringify({
+      'Arduino Mega': [{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }],
+      'Arduino MKR WiFi 1010': [{ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' }],
+    })
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), dict, [], [], [])
+    expect(Array.isArray(result.devicePinMapping)).toBe(false)
+    expect(result.devicePinMapping).toEqual({
+      'Arduino Mega': [{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }],
+      'Arduino MKR WiFi 1010': [{ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' }],
+    })
   })
 })
 
@@ -624,7 +632,10 @@ describe('parseProjectFiles — configuration fallback', () => {
   })
 
   it('fills missing resource entirely with defaults', () => {
-    // Use "configurations" (plural) with null resource to trigger line 452-453
+    // `data.configurations` is `{ resource: null }` — the `??` chain
+    // doesn't substitute the default object because `{ resource: null }`
+    // itself is not null/undefined, so we fall through to the explicit
+    // `if (!configuration.resource)` guard which fills in the default.
     const projectJson = JSON.stringify({
       meta: { name: 'Test', type: 'plc-project' },
       data: {
@@ -636,6 +647,8 @@ describe('parseProjectFiles — configuration fallback', () => {
     const result = parseProjectFiles('/p', projectJson, makeDeviceConfig(), makePinMapping(), [], [], [])
     expect(result.projectData.configurations.resource).toBeDefined()
     expect(result.projectData.configurations.resource.tasks).toEqual([])
+    expect(result.projectData.configurations.resource.instances).toEqual([])
+    expect(result.projectData.configurations.resource.globalVariables).toEqual([])
   })
 
   it('fills partially missing resource fields with empty arrays', () => {

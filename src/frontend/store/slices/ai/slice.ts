@@ -3,7 +3,6 @@ import { StateCreator } from 'zustand'
 
 import type { AIFeatureConfig } from '../../../../middleware/shared/ports/types'
 import type { AISlice } from './types'
-import { MAX_CONVERSATION_MESSAGES } from './types'
 
 const DEFAULT_AI_STATE: AISlice['ai'] = {
   isEnabled: false,
@@ -12,10 +11,15 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   preferences: {
     inlineCompletionsEnabled: true,
   },
+  acuUsed: 0,
+  acuTotal: 0,
+  subscriptionStatus: null,
+  planSlug: null,
   creditsUsed: 0,
   creditsTotal: 500,
   tier: 'free',
   currentPeriodEnd: null,
+  billingError: null,
   messages: [],
   activeEditorPou: null,
   isAgenticLoopRunning: false,
@@ -67,11 +71,37 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
           }),
         )
       },
+      setUsage: (used, total) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.acuUsed = used
+            ai.acuTotal = total
+            // Keep deprecated mirror fields in lockstep so unmigrated consumers
+            // (DOPE-287 / DOPE-288 still on `creditsUsed`/`creditsTotal`) read
+            // the same values. Removed once the rename is fully propagated.
+            ai.creditsUsed = used
+            ai.creditsTotal = total
+          }),
+        )
+      },
+      setSubscription: (status, currentPeriodEnd, planSlug) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.subscriptionStatus = status
+            ai.currentPeriodEnd = currentPeriodEnd
+            ai.planSlug = planSlug
+          }),
+        )
+      },
       setCredits: (used, total) => {
         setState(
           produce(({ ai }: AISlice) => {
             ai.creditsUsed = used
             ai.creditsTotal = total
+            // Mirror to the new ACU fields so consumers migrated ahead of their
+            // call-site refactor see the right numbers via either name.
+            ai.acuUsed = used
+            ai.acuTotal = total
           }),
         )
       },
@@ -86,6 +116,13 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.currentPeriodEnd = date
+          }),
+        )
+      },
+      setBillingError: (error) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.billingError = error
           }),
         )
       },
@@ -114,9 +151,6 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.messages.push(message)
-            if (ai.messages.length > MAX_CONVERSATION_MESSAGES) {
-              ai.messages = ai.messages.slice(-MAX_CONVERSATION_MESSAGES)
-            }
           }),
         )
       },
@@ -254,8 +288,7 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
       replaceMessages: (messages) => {
         setState(
           produce(({ ai }: AISlice) => {
-            ai.messages =
-              messages.length > MAX_CONVERSATION_MESSAGES ? messages.slice(-MAX_CONVERSATION_MESSAGES) : messages
+            ai.messages = messages
             ai.error = null
           }),
         )

@@ -82,6 +82,28 @@ describe('syncNodesWithVariables', () => {
     expect(updateNode).not.toHaveBeenCalled()
   })
 
+  it('treats a POINTER TO <T> variable as compatible with a ULINT expected type', () => {
+    // The sync path now delegates to the shared validateVariableType, so a
+    // POINTER TO INT variable on a ULINT-typed block pin (e.g. ADR output)
+    // must NOT be flagged as wrong.
+    const updateNode = vi.fn()
+    const variable = makeVariable('myPtr', 'POINTER TO INT', 'user-data-type')
+    const node = makeNode('n1', 'block', { name: 'myPtr' } as Partial<PLCVariable>, {
+      variant: { name: 'ULINT' },
+    })
+
+    const ladderFlows = [
+      {
+        name: 'editor1',
+        rungs: [{ id: 'r1', nodes: [node], edges: [] }],
+      },
+    ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
+
+    syncNodesWithVariables([variable], ladderFlows, updateNode)
+    // Types are considered compatible and wrongVariable is not set, so no update.
+    expect(updateNode).not.toHaveBeenCalled()
+  })
+
   it('does not update when node has no variable', () => {
     const updateNode = vi.fn()
     const node = makeNode('n1', 'contact')

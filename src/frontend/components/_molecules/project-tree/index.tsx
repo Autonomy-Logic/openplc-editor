@@ -19,6 +19,7 @@ import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
+import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { ProgramIcon } from '../../../assets/icons/project/Program'
@@ -265,7 +266,8 @@ const ProjectTreeExpandableLeaf = ({
     fileActions: { getFile },
   } = useOpenPLCStore()
   const projectPort = useProject()
-  const { hasVersionControl } = useCapabilities()
+  const capabilities = useCapabilities()
+  const { hasVersionControl } = capabilities
 
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
@@ -300,7 +302,7 @@ const ProjectTreeExpandableLeaf = ({
     if (hasVersionControl) {
       // Persist immediately so refresh doesn't show the old name (rename
       // queues the old path's deletion in `pendingDeletions`, save propagates).
-      await executeSaveProject(projectPort)
+      await executeSaveProject(projectPort, capabilities)
     }
   }
 
@@ -456,7 +458,9 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'devOrchestrators'
     | 'server'
     | 'remoteDevice'
+    | 'vendorScreen'
     | 'ethercatDevice'
+    | 'libraryManifest'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   busName?: string
@@ -480,7 +484,13 @@ const LeafSources = {
   devOrchestrators: { LeafIcon: OrchestratorIcon },
   server: { LeafIcon: ServerIcon },
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
+  vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
+  // Library manifest gets its own document-with-bookmark icon so
+  // the explorer leaf, the workspace tab, and the breadcrumb all
+  // render the same glyph — the manifest is the user's entry point
+  // into a library project, so it earns a dedicated mark.
+  libraryManifest: { LeafIcon: LibraryManifestIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,
@@ -505,7 +515,8 @@ const ProjectTreeLeaf = ({
     fileActions: { getFile },
   } = useOpenPLCStore()
   const projectPort = useProject()
-  const { hasVersionControl } = useCapabilities()
+  const capabilities = useCapabilities()
+  const { hasVersionControl } = capabilities
 
   const [isEditing, setIsEditing] = useState(false)
   const [newLabel, setNewLabel] = useState(label || '')
@@ -570,7 +581,7 @@ const ProjectTreeLeaf = ({
     // persist behind the capability and let the editor follow the regular
     // Ctrl+S flow.
     const persist = async () => {
-      if (hasVersionControl) await executeSaveProject(projectPort)
+      if (hasVersionControl) await executeSaveProject(projectPort, capabilities)
     }
 
     if (isAPou) {
@@ -654,7 +665,7 @@ const ProjectTreeLeaf = ({
       // Persist the new POU file to S3 immediately. Without this, the duplicate
       // exists only in editor memory and disappears on refresh — same class of
       // bug as the delete flow we fixed in delete-confirmation-modal.
-      await executeSaveProject(projectPort)
+      await executeSaveProject(projectPort, capabilities)
       return
     }
 
@@ -662,7 +673,7 @@ const ProjectTreeLeaf = ({
       duplicateDatatype(label, `${label}_copy`)
       // Datatypes live inside project.json; saving the project rewrites it
       // with the new datatype included.
-      await executeSaveProject(projectPort)
+      await executeSaveProject(projectPort, capabilities)
       return
     }
 

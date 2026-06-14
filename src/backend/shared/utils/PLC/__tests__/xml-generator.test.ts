@@ -86,18 +86,21 @@ describe('XmlGenerator', () => {
   })
 
   // -----------------------------------------------------------------------
-  // Missing main POU
+  // POU naming flexibility
   // -----------------------------------------------------------------------
-  it('returns error when main POU is not found', () => {
+  // The "Main POU not found" guard was a v3-era restriction.  The
+  // compiler now picks the entry program from the configuration's
+  // instance bindings — any program POU name is accepted, and a
+  // project with zero program POUs still serialises cleanly (the IEC
+  // compile step downstream surfaces a precise error if no program
+  // exists for the instance to point at).
+  it('serialises a project with zero program POUs without erroring at the XML stage', () => {
     const project = makeProject({ pous: [] })
     const result = XmlGenerator(project)
-
-    expect(result.ok).toBe(false)
-    expect(result.message).toBe('Main POU not found.')
-    expect(result.data).toBeUndefined()
+    expect(result.ok).toBe(true)
   })
 
-  it('returns error when no program-type POU named main exists', () => {
+  it('serialises a project whose only POU is a function (no program named "main")', () => {
     const project = makeProject({
       pous: [
         {
@@ -114,7 +117,26 @@ describe('XmlGenerator', () => {
       ],
     })
     const result = XmlGenerator(project)
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
+  })
+
+  it('serialises a project whose program POU has a non-"main" name', () => {
+    const project = makeProject({
+      pous: [
+        {
+          type: 'program',
+          data: {
+            language: 'st',
+            name: 'conveyor_ctrl',
+            variables: [],
+            body: { language: 'st', value: '' },
+            documentation: '',
+          },
+        },
+      ],
+    })
+    const result = XmlGenerator(project)
+    expect(result.ok).toBe(true)
   })
 
   // -----------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import { useDebugCompositeKey } from '../../../hooks/use-debug-composite-key'
 import { useIsDebuggerVisible } from '../../../hooks/use-debug-value'
+import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { DebugValueBadge } from './debug-value-badge'
 
 type BlockOutputDebugBadgesProps = {
@@ -35,9 +36,10 @@ const BlockOutputDebugBadges = ({
   connectedOutputNames,
 }: BlockOutputDebugBadgesProps) => {
   const isDebuggerVisible = useIsDebuggerVisible()
+  const isActive = useIsGraphicalEditorActive()
   const getCompositeKey = useDebugCompositeKey()
 
-  if (!isDebuggerVisible || blockType === 'generic') {
+  if (!isActive || !isDebuggerVisible || blockType === 'generic') {
     return null
   }
 

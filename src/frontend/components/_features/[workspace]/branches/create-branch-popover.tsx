@@ -2,7 +2,9 @@ import * as Popover from '@radix-ui/react-popover'
 import { useMemo, useState } from 'react'
 
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { getBranchNameFeedback } from '../../../../utils/sanitize-branch-name'
 
 type CreateBranchPopoverProps = {
@@ -13,6 +15,7 @@ type CreateBranchPopoverProps = {
 
 export function CreateBranchPopover({ projectId, onCreated, onCloseParent }: CreateBranchPopoverProps) {
   const versionControl = useVersionControl()
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const [isOpen, setIsOpen] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
@@ -61,6 +64,12 @@ export function CreateBranchPopover({ projectId, onCreated, onCloseParent }: Cre
     <Popover.Root
       open={isOpen}
       onOpenChange={(open) => {
+        // No write permission ⇒ warn instead of opening a branch form the
+        // backend would reject anyway.
+        if (open && !canEdit) {
+          notifyNoWritePermission('create branches in')
+          return
+        }
         setIsOpen(open)
         if (!open) {
           setName('')

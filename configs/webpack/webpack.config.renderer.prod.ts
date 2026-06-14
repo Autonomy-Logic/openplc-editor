@@ -81,6 +81,15 @@ const configuration: webpack.Configuration = {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         type: 'asset/resource',
       },
+      // Static JS assets — used by the STruC++ LSP worker.  The
+      // strucpp browser-server bundle is a pre-built IIFE that
+      // webpack must NOT re-bundle (it already self-contains the
+      // compiler).  Importing it with `?url` returns the emitted
+      // asset's URL so `new Worker(url)` spawns it directly.
+      {
+        resourceQuery: /^\?url$/,
+        type: 'asset/resource',
+      },
       // Images
       {
         test: /\.(png|jpg|jpeg|gif)$/i,
@@ -126,6 +135,12 @@ const configuration: webpack.Configuration = {
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'production',
       DEBUG_PROD: false,
+      // Optional override for the VPP catalog backend host.  Shipped
+      // CI release builds leave this unset → empty string at build
+      // time → the adapter's hardcoded production default
+      // (`https://api.autonomylogic.com`) wins.  Local/staging
+      // builds can prepend `VPP_CATALOG_URL=...` to override.
+      VPP_CATALOG_URL: '',
     }),
 
     new MiniCssExtractPlugin({
@@ -154,7 +169,12 @@ const configuration: webpack.Configuration = {
     }),
 
     new MonacoEditorWebpackPlugin({
-      languages: ['python'],
+      // `python` covers the Python POU editor; `json` covers the
+      // Library Project's manifest tab (`library.json`).  Without
+      // `json` here, opening the manifest tab spawns a worker with
+      // no asset registered, which surfaces as an unhandled Worker
+      // `error` event in the renderer console.
+      languages: ['python', 'json'],
     }),
   ],
 }

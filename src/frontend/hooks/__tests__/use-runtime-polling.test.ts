@@ -1,71 +1,69 @@
 import { renderHook } from '@testing-library/react'
 
-const storeMocks = vi.hoisted(() => {
-  const setPlcRuntimeStatus = vi.fn()
-  const setTimingStats = vi.fn()
-  const setEthercatStatus = vi.fn()
-  const setRuntimeJwtToken = vi.fn()
-  const setRuntimeConnectionStatus = vi.fn()
-  const openModal = vi.fn()
-  const setPlcLogsVisible = vi.fn()
-  const setPlcLogs = vi.fn()
-  const appendPlcLogs = vi.fn()
-  const setPlcLogsLastId = vi.fn()
-  const clearPlcLogs = vi.fn()
+// The `mock*` prefix lets ts-jest hoist these references into the
+// `jest.mock` factories below — Jest reuses the same babel-plugin-jest
+// rule Vitest's `vi.hoisted` was originally written against. Spelled out
+// long-hand (no Vitest API) so the suite runs under plain Jest.
+const mockSetPlcRuntimeStatus = jest.fn()
+const mockSetTimingStats = jest.fn()
+const mockSetEthercatStatus = jest.fn()
+const mockSetRuntimeJwtToken = jest.fn()
+const mockSetRuntimeConnectionStatus = jest.fn()
+const mockOpenModal = jest.fn()
+const mockSetPlcLogsVisible = jest.fn()
+const mockSetPlcLogs = jest.fn()
+const mockAppendPlcLogs = jest.fn()
+const mockSetPlcLogsLastId = jest.fn()
+const mockClearPlcLogs = jest.fn()
 
-  const state: Record<string, unknown> = {
-    runtimeConnection: {
-      connectionStatus: 'connected',
-      jwtToken: 'tok',
-      includeTimingStatsInPolling: false,
-      includeEthercatStatsInPolling: false,
-      plcStatus: null,
-      ethercatStatus: null,
-    },
-    workspace: { plcLogs: '', plcLogsLastId: null },
-    deviceActions: {
-      setPlcRuntimeStatus,
-      setTimingStats,
-      setEthercatStatus,
-      setRuntimeJwtToken,
-      setRuntimeConnectionStatus,
-    },
-    modalActions: { openModal },
-    workspaceActions: { setPlcLogsVisible, setPlcLogs, appendPlcLogs, setPlcLogsLastId, clearPlcLogs },
-  }
+const mockState: Record<string, unknown> = {
+  runtimeConnection: {
+    connectionStatus: 'connected',
+    jwtToken: 'tok',
+    includeTimingStatsInPolling: false,
+    includeEthercatStatsInPolling: false,
+    plcStatus: null,
+    ethercatStatus: null,
+  },
+  workspace: { plcLogs: '', plcLogsLastId: null },
+  deviceActions: {
+    setPlcRuntimeStatus: mockSetPlcRuntimeStatus,
+    setTimingStats: mockSetTimingStats,
+    setEthercatStatus: mockSetEthercatStatus,
+    setRuntimeJwtToken: mockSetRuntimeJwtToken,
+    setRuntimeConnectionStatus: mockSetRuntimeConnectionStatus,
+  },
+  modalActions: { openModal: mockOpenModal },
+  workspaceActions: {
+    setPlcLogsVisible: mockSetPlcLogsVisible,
+    setPlcLogs: mockSetPlcLogs,
+    appendPlcLogs: mockAppendPlcLogs,
+    setPlcLogsLastId: mockSetPlcLogsLastId,
+    clearPlcLogs: mockClearPlcLogs,
+  },
+}
 
-  type Selector<T> = (s: typeof state) => T
-  const useOpenPLCStore = ((selector?: Selector<unknown>) => (selector ? selector(state) : state)) as ReturnType<
-    typeof vi.fn
-  > & { getState: () => typeof state }
-  useOpenPLCStore.getState = () => state
+type Selector<T> = (s: typeof mockState) => T
+const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
+  selector ? selector(mockState) : mockState) as unknown as jest.Mock & { getState: () => typeof mockState }
+mockUseOpenPLCStore.getState = () => mockState
 
-  return {
-    state,
-    useOpenPLCStore,
-    setPlcRuntimeStatus,
-    setTimingStats,
-    setEthercatStatus,
-    openModal,
-    setPlcLogs,
-    appendPlcLogs,
-    clearPlcLogs,
-    setPlcLogsVisible,
-  }
-})
+const mockRuntime: {
+  getStatus: jest.Mock
+  getLogs: jest.Mock
+  getEthercatRuntimeStatus: undefined | jest.Mock
+} = {
+  getStatus: jest.fn(),
+  getLogs: jest.fn(),
+  getEthercatRuntimeStatus: undefined,
+}
 
-vi.mock('../../store', () => ({
-  useOpenPLCStore: storeMocks.useOpenPLCStore,
+jest.mock('../../store', () => ({
+  useOpenPLCStore: mockUseOpenPLCStore,
 }))
 
-const runtimeMocks = vi.hoisted(() => ({
-  getStatus: vi.fn(),
-  getLogs: vi.fn(),
-  getEthercatRuntimeStatus: undefined as undefined | ReturnType<typeof vi.fn>,
-}))
-
-vi.mock('../../../middleware/shared/providers', () => ({
-  useRuntime: () => runtimeMocks,
+jest.mock('../../../middleware/shared/providers', () => ({
+  useRuntime: () => mockRuntime,
 }))
 
 import { useRuntimePolling } from '../use-runtime-polling'
@@ -80,12 +78,12 @@ const flushAll = async () => {
 
 describe('useRuntimePolling — EtherCAT branches', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    jest.clearAllMocks()
     // Default: status/logs succeed, ethercat off, no method on runtime.
-    runtimeMocks.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
-    runtimeMocks.getLogs.mockResolvedValue({ success: true, logs: [] })
-    runtimeMocks.getEthercatRuntimeStatus = undefined
-    Object.assign(storeMocks.state.runtimeConnection as object, {
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = undefined
+    Object.assign(mockState.runtimeConnection as object, {
       connectionStatus: 'connected',
       jwtToken: 'tok',
       includeTimingStatsInPolling: false,
@@ -94,55 +92,55 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('clears stored ethercat status when the polling flag is off', async () => {
-    Object.assign(storeMocks.state.runtimeConnection as object, { includeEthercatStatsInPolling: false })
-    runtimeMocks.getEthercatRuntimeStatus = vi.fn().mockResolvedValue({ success: true, data: { masters: [] } })
+    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: false })
+    mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: { masters: [] } })
 
     renderHook(() => useRuntimePolling())
     await flushAll()
 
     // setEthercatStatus(null) is the soft-clear when the flag is off.
-    expect(storeMocks.setEthercatStatus).toHaveBeenCalledWith(null)
+    expect(mockSetEthercatStatus).toHaveBeenCalledWith(null)
     // The optional method is gated by the flag too — it shouldn't even be invoked.
-    expect(runtimeMocks.getEthercatRuntimeStatus).not.toHaveBeenCalled()
+    expect(mockRuntime.getEthercatRuntimeStatus).not.toHaveBeenCalled()
   })
 
   it('skips cleanly when the optional getEthercatRuntimeStatus method is not on the runtime', async () => {
-    Object.assign(storeMocks.state.runtimeConnection as object, { includeEthercatStatsInPolling: true })
-    runtimeMocks.getEthercatRuntimeStatus = undefined
+    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    mockRuntime.getEthercatRuntimeStatus = undefined
 
     renderHook(() => useRuntimePolling())
     await flushAll()
 
     // No data write — the soft-fail branch keeps whatever was in the store.
-    expect(storeMocks.setEthercatStatus).not.toHaveBeenCalled()
+    expect(mockSetEthercatStatus).not.toHaveBeenCalled()
     // status path still ran successfully so the rest of the cycle isn't disturbed.
-    expect(storeMocks.setPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
+    expect(mockSetPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
   })
 
   it('writes the runtime payload into the store on a successful ethercat poll', async () => {
-    Object.assign(storeMocks.state.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
     const payload = { masters: [{ name: 'BusA', plugin_state: 'OPERATIONAL' }] }
-    runtimeMocks.getEthercatRuntimeStatus = vi.fn().mockResolvedValue({ success: true, data: payload })
+    mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: payload })
 
     renderHook(() => useRuntimePolling())
     await flushAll()
 
-    expect(runtimeMocks.getEthercatRuntimeStatus).toHaveBeenCalledTimes(1)
-    expect(storeMocks.setEthercatStatus).toHaveBeenCalledWith(payload)
+    expect(mockRuntime.getEthercatRuntimeStatus).toHaveBeenCalledTimes(1)
+    expect(mockSetEthercatStatus).toHaveBeenCalledWith(payload)
   })
 
   it('does not tear down the connection on a transient ethercat rejection', async () => {
-    Object.assign(storeMocks.state.runtimeConnection as object, { includeEthercatStatsInPolling: true })
-    runtimeMocks.getEthercatRuntimeStatus = vi.fn().mockRejectedValue(new Error('boom'))
+    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    mockRuntime.getEthercatRuntimeStatus = jest.fn().mockRejectedValue(new Error('boom'))
 
     renderHook(() => useRuntimePolling())
     await flushAll()
 
     // status path still wrote — meaning Promise.all didn't reject.
-    expect(storeMocks.setPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
+    expect(mockSetPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
     // Soft-fail keeps prior data; setEthercatStatus is not called with anything.
-    expect(storeMocks.setEthercatStatus).not.toHaveBeenCalled()
+    expect(mockSetEthercatStatus).not.toHaveBeenCalled()
     // No connection-lost modal opened.
-    expect(storeMocks.openModal).not.toHaveBeenCalled()
+    expect(mockOpenModal).not.toHaveBeenCalled()
   })
 })

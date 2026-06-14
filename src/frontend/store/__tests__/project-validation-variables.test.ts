@@ -274,6 +274,20 @@ describe('createVariableValidation', () => {
     expect(result.location).toBe('%MD3')
   })
 
+  it('preserves DWORD input prefix on increment (%ID0 -> %ID1)', () => {
+    const existing = [makeVariable('Var1', 'REAL', '%ID0')]
+    const variable = makeVariable('NewVar', 'REAL', '%ID0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%ID1')
+  })
+
+  it('preserves DWORD output prefix on increment (%QD3 -> %QD4)', () => {
+    const existing = [makeVariable('Var1', 'REAL', '%QD3')]
+    const variable = makeVariable('NewVar', 'REAL', '%QD3')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QD4')
+  })
+
   // -- LWORD location increment (LINT, ULINT, LREAL, LWORD) --
   it('increments LINT memory location', () => {
     const existing = [makeVariable('Var1', 'LINT', '%ML0')]
@@ -303,6 +317,20 @@ describe('createVariableValidation', () => {
     expect(result.location).toBe('%ML10')
   })
 
+  it('preserves LWORD input prefix on increment (%IL2 -> %IL3)', () => {
+    const existing = [makeVariable('Var1', 'LREAL', '%IL2')]
+    const variable = makeVariable('NewVar', 'LREAL', '%IL2')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%IL3')
+  })
+
+  it('preserves LWORD output prefix on increment (%QL0 -> %QL1)', () => {
+    const existing = [makeVariable('Var1', 'LREAL', '%QL0')]
+    const variable = makeVariable('NewVar', 'LREAL', '%QL0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QL1')
+  })
+
   // -- Default case (unknown type) --
   it('does not change location for unknown type', () => {
     const existing = [makeVariable('Var1', 'STRING', '%MD0')]
@@ -310,6 +338,54 @@ describe('createVariableValidation', () => {
     const result = createVariableValidation(existing, variable)
     // default case is a no-op, location stays as found
     expect(result.location).toBe('%MD0')
+  })
+
+  // -- Multi-collision walk (regression for forum bug: contiguous "+" clicks
+  //    across a row with a variable already further down) --
+  it('walks past intervening claimed locations until it finds a free slot (BOOL)', () => {
+    // Existing rows occupy %IX0.0..%IX0.4 and %IX0.5 — user "+"-clicks the row
+    // at %IX0.4.  Single-step increment would land on %IX0.5 and collide; the
+    // validator must walk to %IX0.6.
+    const existing = [
+      makeVariable('I1', 'BOOL', '%IX0.0'),
+      makeVariable('I1_0', 'BOOL', '%IX0.1'),
+      makeVariable('I1_1', 'BOOL', '%IX0.2'),
+      makeVariable('I1_2', 'BOOL', '%IX0.3'),
+      makeVariable('I1_3', 'BOOL', '%IX0.4'),
+      makeVariable('I2', 'BOOL', '%IX0.5'),
+    ]
+    const variable = makeVariable('NewVar', 'BOOL', '%IX0.4')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%IX0.6')
+  })
+
+  it('walks past multiple consecutive claimed locations (WORD)', () => {
+    const existing = [
+      makeVariable('A', 'INT', '%QW5'),
+      makeVariable('B', 'INT', '%QW6'),
+      makeVariable('C', 'INT', '%QW7'),
+    ]
+    const variable = makeVariable('NewVar', 'INT', '%QW5')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QW8')
+  })
+
+  it('wraps past a full BOOL byte when every bit and the next byte are taken', () => {
+    // %QX0.0..%QX0.7 claimed plus %QX1.0 — must land at %QX1.1.
+    const existing = [
+      makeVariable('B0', 'BOOL', '%QX0.0'),
+      makeVariable('B1', 'BOOL', '%QX0.1'),
+      makeVariable('B2', 'BOOL', '%QX0.2'),
+      makeVariable('B3', 'BOOL', '%QX0.3'),
+      makeVariable('B4', 'BOOL', '%QX0.4'),
+      makeVariable('B5', 'BOOL', '%QX0.5'),
+      makeVariable('B6', 'BOOL', '%QX0.6'),
+      makeVariable('B7', 'BOOL', '%QX0.7'),
+      makeVariable('B8', 'BOOL', '%QX1.0'),
+    ]
+    const variable = makeVariable('NewVar', 'BOOL', '%QX0.0')
+    const result = createVariableValidation(existing, variable)
+    expect(result.location).toBe('%QX1.1')
   })
 
   // -- Edge case: location exists but not found in variables (defensive) --
@@ -369,6 +445,17 @@ describe('updateVariableValidation', () => {
     const result = updateVariableValidation(existingVars, { location: '%QW0' }, existingVars[1])
     expect(result.ok).toBe(false)
     expect(result.title).toContain('Location already exists')
+  })
+
+  it('does not flag self-collision when re-setting a variable to its current location', () => {
+    // Regression guard: the user re-picks the same address from the
+    // location dropdown to refresh a renamed alias.  The uniqueness
+    // check must exclude the variable being updated; otherwise the
+    // re-pick would be rejected against the variable's own existing
+    // location entry.  Pairs with the alias-refresh path in the
+    // editable-cell `onBlur` handler.
+    const result = updateVariableValidation(existingVars, { location: existingVars[0].location }, existingVars[0])
+    expect(result.ok).toBe(true)
   })
 
   it('returns error when location format is invalid for variable type', () => {

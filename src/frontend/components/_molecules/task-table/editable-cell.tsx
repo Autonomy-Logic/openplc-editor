@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
-import { cn } from '../../../utils/cn'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { InputWithRef } from '../../_atoms/input'
 import { useToast } from '../../_features/[app]/toast/use-toast'
@@ -18,9 +17,9 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCTask, unknown> & { editable?: boolean }
+type IEditableCellProps = CellContext<PLCTask, unknown>
 
-const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
 
@@ -40,11 +39,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
 
-  const handleStartEditing = () => {
-    if (!editable) return
-    setIsEditing(true)
-  }
-
   useEffect(() => {
     setCellValue(initialValue)
   }, [initialValue])
@@ -54,15 +48,10 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !editable,
-      })}
+      className='flex w-full flex-1 bg-transparent p-2 text-center outline-none'
     />
   ) : (
-    <div
-      onClick={handleStartEditing}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
-    >
+    <div onClick={() => setIsEditing(true)} className='flex w-full flex-1 bg-transparent p-2 text-center'>
       <HighlightedText
         text={cellValue}
         searchQuery={searchQuery}
@@ -72,13 +61,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   )
 }
 
-const EditablePriorityCell = ({
-  getValue,
-  row: { index },
-  column: { id },
-  table,
-  editable = true,
-}: IEditableCellProps) => {
+const EditablePriorityCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
   const initialValue = getValue<number>()
   const [cellValue, setCellValue] = useState<number>(initialValue)
   const [isFocused, setIsFocused] = useState(false)
@@ -127,9 +110,7 @@ const EditablePriorityCell = ({
         onChange={handleChange}
         onBlur={onBlur}
         onFocus={onFocus}
-        className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-          'pointer-events-none': !editable,
-        })}
+        className='flex w-full flex-1 bg-transparent p-2 text-center outline-none'
       />
       {isFocused && (
         <div className='absolute right-2' onMouseDown={preventBlurOnButtonClick}>

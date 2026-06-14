@@ -9,6 +9,7 @@ import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
+import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
 import { ServerIcon } from '../../../assets/icons/project/Server'
@@ -123,6 +124,22 @@ const Breadcrumbs = () => {
         </li>
         <li>
           <BreadcrumbItem Icon={Icon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  // Library Manifest — library projects have no Resource/POU
+  // hierarchy, just the manifest at the root.  Two-segment trail:
+  // <ProjectName> > Manifest.
+  if (editor.type === 'plc-library-manifest') {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={LibraryManifestIcon} text='Manifest' isLast />
         </li>
       </ol>
     )

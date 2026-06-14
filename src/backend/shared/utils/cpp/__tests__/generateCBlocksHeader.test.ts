@@ -34,6 +34,17 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('#endif // C_BLOCKS_H')
   })
 
+  it('pulls in the strucpp wrapper headers so `strucpp::IEC_*` qualifications resolve', () => {
+    // Every struct field this header emits is fully qualified as
+    // `strucpp::IEC_*` (numeric, bit-string, STRING, WSTRING). Without
+    // these includes, a TU that does `#include "c_blocks.h"` without
+    // first pulling in the strucpp runtime would fail with
+    // `'IEC_STRING' does not name a type`.
+    const result = generateCBlocksHeader([])
+    expect(result).toContain('#include "iec_var.hpp"')
+    expect(result).toContain('#include "iec_string.hpp"')
+  })
+
   it('generates struct and function declarations for a pou with scalar variables', () => {
     const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
 
@@ -41,11 +52,11 @@ describe('generateCBlocksHeader', () => {
 
     expect(result).toContain('//definition of external blocks - MYBLOCK')
     expect(result).toContain('typedef struct {')
-    expect(result).toContain('  IEC_INT *SPEED;')
-    expect(result).toContain('  IEC_REAL *RESULT;')
+    expect(result).toContain('  strucpp::IEC_INT *SPEED;')
+    expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
     expect(result).toContain('} MYBLOCK_VARS;')
-    expect(result).toContain('void myblock_setup(MYBLOCK_VARS *vars);')
-    expect(result).toContain('void myblock_loop(MYBLOCK_VARS *vars);')
+    expect(result).toContain('extern "C" void myblock_setup(MYBLOCK_VARS *vars);')
+    expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
   })
 
   it('includes only input and output variables in the struct', () => {
@@ -64,8 +75,8 @@ describe('generateCBlocksHeader', () => {
 
     const result = generateCBlocksHeader([{ name: 'test', variables }])
 
-    expect(result).toContain('IEC_INT *INVAR;')
-    expect(result).toContain('IEC_BOOL *OUTVAR;')
+    expect(result).toContain('strucpp::IEC_INT *INVAR;')
+    expect(result).toContain('strucpp::IEC_BOOL *OUTVAR;')
     expect(result).not.toContain('LOCALVAR')
   })
 
@@ -88,8 +99,8 @@ describe('generateCBlocksHeader', () => {
 
     expect(result).toContain('typedef struct {')
     expect(result).toContain('} EMPTY_VARS;')
-    expect(result).toContain('void empty_setup(EMPTY_VARS *vars);')
-    expect(result).toContain('void empty_loop(EMPTY_VARS *vars);')
+    expect(result).toContain('extern "C" void empty_setup(EMPTY_VARS *vars);')
+    expect(result).toContain('extern "C" void empty_loop(EMPTY_VARS *vars);')
   })
 
   it('generates pointer members for array variables', () => {
@@ -97,6 +108,6 @@ describe('generateCBlocksHeader', () => {
 
     const result = generateCBlocksHeader([{ name: 'ArrBlock', variables }])
 
-    expect(result).toContain('IEC_REAL *TEMPS;')
+    expect(result).toContain('strucpp::IEC_REAL *TEMPS;')
   })
 })

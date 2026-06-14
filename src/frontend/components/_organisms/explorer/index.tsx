@@ -1,7 +1,9 @@
-import { LegacyRef, ReactElement, useState } from 'react'
+import { LegacyRef, ReactElement, useMemo, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { useOpenPLCStore } from '../../../store'
+import type { BlockVariant } from '../../_atoms/graphical-editor/types/block'
+import { getBlockDocumentation } from '../../_atoms/graphical-editor/utils'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
 import { Info } from './info'
 import { Library } from './library'
@@ -20,6 +22,12 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
     },
     libraries: { system, user },
   } = useOpenPLCStore()
+  // Project enablement: bundled libs (canonical) are always-on; opt-in
+  // libs only surface when the project enables them.  Joined here so
+  // every consumer below (the filtered list, the documentation
+  // lookup) sees the same scoped pool.
+  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
+  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
@@ -46,17 +54,46 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
     return userLibrary.name !== editor.meta.name
   })
 
-  // System Libraries filtering with type and text filter
-  const filteredLibraries = system.filter((library) =>
+  // System Libraries filtering — restrict to bundled (canonical) +
+  // project-enabled, then apply the text/POU-type filter.  Bundled
+  // libs are always-on regardless of project enablement.
+  const visiblePool = system.filter(
+    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
+  )
+  const filteredLibraries = visiblePool.filter((library) =>
     pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
 
-  const selectedPouDocumentation =
-    system
-      .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
-      .find((pou) => pou.name === selectedFileKey)?.documentation || null
+  // Help text for the selected library block — rendered in the bottom
+  // Info panel.  Mirrors the graphical-editor tooltip exactly by routing
+  // through `getBlockDocumentation` (documentation + INPUT/OUTPUT list),
+  // so a block with no prose doc still shows its I/O signature instead of
+  // falling back to "No file selected".  System library blocks carry
+  // their own `variables`; user-library blocks are project POUs, so we
+  // resolve those from `pous` (interface variables + documentation).
+  const selectedPouDocumentation = useMemo<string | null>(() => {
+    if (!selectedFileKey) return null
+
+    const systemPou = system.flatMap((library) => library.pous).find((pou) => pou.name === selectedFileKey)
+    if (systemPou) {
+      return getBlockDocumentation({
+        documentation: systemPou.documentation,
+        variables: systemPou.variables,
+      } as unknown as BlockVariant)
+    }
+
+    const projectPou = pous.find((pou) => pou.name === selectedFileKey)
+    if (projectPou) {
+      return getBlockDocumentation({
+        documentation: projectPou.documentation ?? '',
+        variables: projectPou.interface?.variables ?? [],
+      } as unknown as BlockVariant)
+    }
+
+    return null
+  }, [selectedFileKey, system, pous])
 
   return (
     <ResizablePanel

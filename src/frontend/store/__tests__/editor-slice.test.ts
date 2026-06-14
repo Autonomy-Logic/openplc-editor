@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla'
 
 import { createEditorSlice } from '../slices/editor/slice'
 import type { EditorModel, EditorSlice } from '../slices/editor/types'
+import { selectEditorForPou } from '../slices/editor/utils'
 
 type TextualEditor = Extract<EditorModel, { type: 'plc-textual' }>
 type GraphicalEditor = Extract<EditorModel, { type: 'plc-graphical' }>
@@ -500,33 +501,53 @@ describe('editor slice', () => {
     expect(store.getState().editor.type).toBe('available')
   })
 
-  describe('saveEditorViewState', () => {
-    it('saves cursor, scroll, fbd positions', () => {
+  describe('setEditorCursor', () => {
+    it('writes the cursor to the editors-array entry AND the active editor', () => {
+      // The active-editor write is what makes the Monaco reactive
+      // useEffect fire — without it the line-highlight on click-to-
+      // error would silently no-op for the already-active POU.
       const { editorActions: a } = store.getState()
       const txt = makeTextual('M')
       a.addModel(txt)
       a.setEditor(txt)
-      a.saveEditorViewState({
-        prevEditorName: 'M',
-        cursorPosition: { lineNumber: 10, column: 5, offset: 100 },
-        scrollPosition: { top: 200, left: 0 },
-        fbdPosition: { x: 50, y: 50, zoom: 1.5 },
-      })
+      a.setEditorCursor('M', { lineNumber: 7, column: 5, offset: 0 })
+
       expect(store.getState().editors.find((e) => e.meta.name === 'M')?.cursorPosition).toEqual({
-        lineNumber: 10,
+        lineNumber: 7,
         column: 5,
-        offset: 100,
+        offset: 0,
+      })
+      expect(store.getState().editor.cursorPosition).toEqual({
+        lineNumber: 7,
+        column: 5,
+        offset: 0,
       })
     })
 
-    it('no-op for available editor or missing name', () => {
+    it('updates only the editors-array entry when navigating into a non-active editor', () => {
+      // Open M as active, then navigate into N (which is in the array
+      // but not active).  The active editor's cursor should NOT change
+      // — only N's stored cursor is touched.
       const { editorActions: a } = store.getState()
-      a.saveEditorViewState({ prevEditorName: 'X', cursorPosition: { lineNumber: 1, column: 1, offset: 0 } })
-      expect(store.getState().editors).toEqual([])
-
       a.addModel(makeTextual('M'))
+      a.addModel(makeTextual('N'))
       a.setEditor(makeTextual('M'))
-      a.saveEditorViewState({ prevEditorName: 'NotFound', cursorPosition: { lineNumber: 1, column: 1, offset: 0 } })
+      a.setEditorCursor('N', { lineNumber: 4, column: 1, offset: 0 })
+
+      expect(store.getState().editors.find((e) => e.meta.name === 'N')?.cursorPosition).toEqual({
+        lineNumber: 4,
+        column: 1,
+        offset: 0,
+      })
+      expect(store.getState().editor.meta.name).toBe('M')
+      expect(store.getState().editor.cursorPosition).toBeUndefined()
+    })
+
+    it('is a no-op when the editor is not in the array', () => {
+      const { editorActions: a } = store.getState()
+      a.setEditorCursor('Missing', { lineNumber: 1, column: 1, offset: 0 })
+      expect(store.getState().editors).toEqual([])
+      expect(store.getState().editor.type).toBe('available')
     })
   })
 
@@ -551,5 +572,45 @@ describe('editor slice', () => {
     expect(store.getState().isMonacoFocused).toBe(true)
     a.setMonacoFocused(false)
     expect(store.getState().isMonacoFocused).toBe(false)
+  })
+
+  describe('selectEditorForPou', () => {
+    // Cross-mount selector shared by `useBoundEditorModel()` (graphical
+    // editors) and `<VariablesEditor>`.  Three branches: matches
+    // active editor → return it, found in editors[] → return snapshot,
+    // not found / missing name → fall back to active editor.
+    it('returns the active editor when its name matches', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), 'Main')
+      expect(result).toBe(store.getState().editor)
+    })
+
+    it('returns the snapshot from editors[] for a hidden POU', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('A'))
+      a.addModel(makeTextual('B'))
+      a.setEditor(makeTextual('A'))
+      const result = selectEditorForPou(store.getState(), 'B')
+      expect(result.meta.name).toBe('B')
+      expect(result).not.toBe(store.getState().editor)
+    })
+
+    it('falls back to the active editor when pouName is not found', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), 'DoesNotExist')
+      expect(result).toBe(store.getState().editor)
+    })
+
+    it('falls back to the active editor when pouName is undefined', () => {
+      const { editorActions: a } = store.getState()
+      a.addModel(makeTextual('Main'))
+      a.setEditor(makeTextual('Main'))
+      const result = selectEditorForPou(store.getState(), undefined)
+      expect(result).toBe(store.getState().editor)
+    })
   })
 })

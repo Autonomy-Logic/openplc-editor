@@ -1,6 +1,8 @@
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
 import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
+import { useOpenPLCStore } from '@root/frontend/store'
 import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
@@ -10,6 +12,13 @@ import type {
   EtherCATSlaveConfig,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import {
+  buildAddressPool,
+  buildAliasRegistry,
+  describeSource,
+  validateAliasEdit,
+} from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 type UseDeviceConfigurationParams = {
@@ -106,10 +115,65 @@ export function useDeviceConfiguration({
   const handleAliasChange = useCallback(
     (channelId: string, alias: string) => {
       if (!device) return
+
+      // Resolve the bus owning this slave so we can construct a
+      // `SourceRef` whose `ref` matches the format used by the
+      // address pool (`${busName}:${slaveName}:${channelId}` — see
+      // `address-pool.ts:243`).  Without this, `validateAliasEdit`'s
+      // "ignoring" comparison wouldn't recognise a no-op self-rename
+      // and would spuriously reject it.
+      const state = useOpenPLCStore.getState()
+      const owningBus = state.project.data.remoteDevices?.find((d) =>
+        d.ethercatConfig?.devices?.some((s) => s.name === device.name),
+      )
+      const busName = owningBus?.name ?? ''
+      const sourceRef = { kind: 'ethercat' as const, ref: `${busName}:${device.name}:${channelId}` }
+
+      // Phase 1 — write-time uniqueness gate (global across all
+      // producers).  Build a fresh registry from the live state and
+      // reject the edit on collision.  See
+      // `module-slots-layout.tsx::handleAliasChange` for the longer
+      // rationale.
+      const board = state.deviceDefinitions.configuration.deviceBoard ?? ''
+      const boardInfo = state.deviceAvailableOptions.availableBoards.get(board)
+      const ioMapping =
+        (
+          state.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
+      const pool = buildAddressPool(
+        {
+          pinMapping: { pins: state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: state.project.data.remoteDevices,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+      const registry = buildAliasRegistry(pool)
+      const validation = validateAliasEdit(registry, alias, sourceRef)
+      if (!validation.ok) {
+        toast({
+          title: 'Alias already in use',
+          description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      // Phase 2 — cascade rename onto bound variables BEFORE
+      // writing the new alias so the downstream sync sees variables
+      // pointing at the new name and refreshes locations rather
+      // than orphaning them.
+      const oldAlias = device.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
+      if (oldAlias) {
+        useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+      }
+
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },
-    [device?.channelMappings],
+    [device?.channelMappings, device?.name],
   )
 
   const updateConfig = useCallback(

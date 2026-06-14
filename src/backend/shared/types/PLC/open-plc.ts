@@ -1,29 +1,19 @@
 import { z } from 'zod'
 
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
-
-const baseTypeSchema = z.enum([
-  'bool',
-  'sint',
-  'int',
-  'dint',
-  'lint',
-  'usint',
-  'uint',
-  'udint',
-  'ulint',
-  'real',
-  'lreal',
-  'time',
-  'date',
-  'tod',
-  'dt',
-  'string',
-  'byte',
-  'word',
-  'dword',
-  'lword',
-])
+// One source of truth for the IEC base-type list: the canonical
+// schema lives in `middleware/shared/ports/plc-schemas` and is
+// derived from strucpp's `iec-types.json`.  It accepts any case on
+// input and normalises to the canonical uppercase form, which is
+// what makes load / save round-trips case-insensitive (legacy
+// `'real'` files keep loading, modern `'REAL'` files too).
+//
+// Re-importing here — rather than redefining the list — guarantees
+// the save / load schemas stay in sync with the runtime UI's idea
+// of "what's an IEC base type."  The previous local lowercase enum
+// drifted from the runtime uppercase one and caused projects to
+// fail validation on open.
+import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -151,6 +141,14 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
+  /** Stable alias name the variable is bound to, when present. Looked
+   *  up in the alias registry to refresh `location` whenever the
+   *  underlying producer reassigns the address. Variable cells show
+   *  `alias` when set, falling back to the raw `location` otherwise.
+   *  When the alias goes missing from the registry, the variable is
+   *  "orphaned" — last-known `location` is kept, the cell flags it
+   *  for the user. */
+  alias: z.string().optional(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean().optional(),
@@ -165,8 +163,6 @@ const PLCTaskSchema = z.object({
   triggering: z.enum(['Cyclic', 'Interrupt']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
   priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
-  isSystemTask: z.boolean().optional(),
-  associatedDevice: z.string().optional(),
 })
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
@@ -470,17 +466,21 @@ interface OpcUaFieldConfig {
   displayName: string
   /** Data type of the field. Optional for backward compatibility with existing projects. */
   datatype?: string
-  initialValue: boolean | number | string
   permissions: OpcUaPermissions
   /** Nested fields for complex types (FB instances, nested structs). Undefined or empty for leaf fields. */
   fields?: OpcUaFieldConfig[]
 }
+// `initialValue` was removed in the OPC-UA STruC++ migration — the
+// plugin reads the program's actual value via debug_read at server
+// startup, so no per-variable default is configured anymore. The
+// schema accepts (and silently drops) unknown keys via Zod's default
+// passthrough behaviour, so projects saved before the removal still
+// load cleanly without a migration step.
 const OpcUaFieldConfigSchema: z.ZodType<OpcUaFieldConfig> = z.lazy(() =>
   z.object({
     fieldPath: z.string(),
     displayName: z.string(),
-    datatype: z.string().optional(), // Optional for backward compatibility
-    initialValue: z.union([z.boolean(), z.number(), z.string()]),
+    datatype: z.string().optional(),
     permissions: OpcUaPermissionsSchema,
     fields: z.array(OpcUaFieldConfigSchema).optional(),
   }),
@@ -496,7 +496,6 @@ const OpcUaNodeConfigSchema = z.object({
   browseName: z.string(),
   displayName: z.string(),
   description: z.string(),
-  initialValue: z.union([z.boolean(), z.number(), z.string()]),
   permissions: OpcUaPermissionsSchema,
   nodeType: z.enum(['variable', 'structure', 'array']),
   fields: z.array(OpcUaFieldConfigSchema).optional(),
@@ -616,7 +615,10 @@ type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
 const EtherCATChannelMappingSchema = z.object({
   channelId: z.string(),
   iecLocation: z.string(),
-  userEdited: z.boolean(),
+  /* `userEdited` was carried here historically; addresses are always
+   * editor-allocated, so the flag was dead. Accepted but ignored on
+   * load (via Zod's stripping unknown keys) to keep legacy projects
+   * compatible. */
   alias: z.string().optional(),
 })
 
@@ -758,12 +760,52 @@ const PLCDebugVariablesSchema = z
 
 type PLCDebugVariables = z.infer<typeof PLCDebugVariablesSchema>
 
+/**
+ * One row of the project's per-project library enablement.  Records
+ * the subset of the system-wide library pool the project pulls into
+ * its compile + UI surfaces.
+ *
+ * `name` matches the strucpp manifest identifier used by
+ * LibraryManagerModule (the same value `InstalledLibrary.name`
+ * carries), so project ↔ system pool joins are O(1) on a Map.
+ *
+ * `version` is informational on load — name-only match against the
+ * pool is the contract today; a soft warning surfaces when the
+ * installed version differs.  Strict version pinning is a future
+ * feature.
+ *
+ * Bundled / canonical libraries (every .stlib strucpp ships) are
+ * always-on regardless of this field — they can't be disabled and
+ * do not need to be listed here.  Only opt-in libraries belong in
+ * this array.
+ */
+const PLCProjectLibraryRefSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+})
+type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
   remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
+  /**
+   * Opt-in libraries enabled for this project.  Defaults to `[]`
+   * (legacy projects load with bundled-only — those are always-on
+   * regardless of this field).  Order is alphabetical-by-name on
+   * save for stable diffs.
+   */
+  libraries: z.array(PLCProjectLibraryRefSchema).default([]),
+  /** Raw bytes of the library project's `library.json` manifest.
+   *  Lives in-memory exactly like POU bodies (`pous[i].body.value`)
+   *  — set for library projects when the project opens, serialised
+   *  out to `library.json` by the save pipeline, NEVER embedded in
+   *  the on-disk `project.json` (the save serialiser drops it the
+   *  same way it drops POU bodies, which write to their own
+   *  `.st`/`.il`/etc. files).  Optional / undefined for PLC projects. */
+  libraryManifest: z.string().optional(),
   debugVariables: PLCDebugVariablesSchema,
   deletedPous: z
     .array(
@@ -848,6 +890,7 @@ export {
   PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCProjectLibraryRefSchema,
   PLCProjectMetaSchema,
   PLCProjectSchema,
   PLCRemoteDeviceProtocolSchema,
@@ -911,6 +954,7 @@ export type {
   PLCProgram,
   PLCProject,
   PLCProjectData,
+  PLCProjectLibraryRef,
   PLCProjectMeta,
   PLCRemoteDevice,
   PLCRemoteDeviceProtocol,

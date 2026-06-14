@@ -14,9 +14,9 @@ type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
-import type { RungLadderState } from '../../../../middleware/shared/ports/types'
+import type { HandleBranch, RungLadderState } from '../../../../middleware/shared/ports/types'
 
-export type { RungLadderState }
+export type { HandleBranch, RungLadderState }
 
 /**
  * Types used at the slice
@@ -36,6 +36,19 @@ type LadderFlowActions = {
   clearLadderFlows: () => void
   addLadderFlow: (flow: LadderFlowType) => void
   removeLadderFlow: (flowId: string) => void
+  /**
+   * Rekey the ladder-flow entry from `oldName` → `newName`.
+   *
+   * Called when a POU is renamed.  The ladder editor looks up its
+   * rungs by `flow.name === editorName`, so without this rekey a
+   * renamed LD POU's editor would show an empty canvas — and worse,
+   * any subsequent rung edits would seed a fresh flow entry under
+   * the new name, leaving the original rungs orphaned in the
+   * `ladderFlows` array (they'd persist in memory but never reach
+   * the editor surface, and on save the empty new flow would
+   * overwrite the on-disk rungs).
+   */
+  renameLadderFlow: (oldName: string, newName: string) => void
 
   /**
    * Control the rungs of the flow
@@ -108,6 +121,16 @@ type LadderFlowActions = {
     editorName: string
   }) => void
   addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
+
+  setHandleBranches: ({
+    handleBranches,
+    rungId,
+    editorName,
+  }: {
+    handleBranches: HandleBranch[]
+    rungId: string
+    editorName: string
+  }) => void
 
   /**
    * Control the flow viewport of the rung

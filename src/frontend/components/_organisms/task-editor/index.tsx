@@ -164,12 +164,11 @@ const TaskEditor = () => {
     }
 
     const taskNames = filteredTasks.map((t) => t.name)
-    const { isSystemTask: _, associatedDevice: __, ...baseTask } = task
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createTask({
         data: {
-          ...baseTask,
+          ...task,
           name: getNextName(task.name, taskNames),
         },
       })
@@ -181,7 +180,7 @@ const TaskEditor = () => {
       return
     }
 
-    createTask({ data: { ...baseTask, name: getNextName(task.name, taskNames) }, rowToInsert: selectedRow + 1 })
+    createTask({ data: { ...task, name: getNextName(task.name, taskNames) }, rowToInsert: selectedRow + 1 })
     updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,
@@ -250,9 +249,6 @@ const TaskEditor = () => {
     }
   }
 
-  const selectedRowIndex = 'selectedRow' in editorTasks ? parseInt(editorTasks.selectedRow) : -1
-  const isSelectedTaskSystem = selectedRowIndex >= 0 && taskData[selectedRowIndex]?.isSystemTask === true
-
   const isInstanceInCode = 'instance' in editor && editor.instance?.display === 'code'
 
   if (isInstanceInCode) return null
@@ -283,10 +279,7 @@ const TaskEditor = () => {
                   {
                     ariaLabel: 'Remove Tasks table row button',
                     onClick: handleDeleteTask,
-                    disabled:
-                      isDebuggerVisible ||
-                      parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
-                      isSelectedTaskSystem,
+                    disabled: isDebuggerVisible || parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-task-button',
                   },
@@ -296,8 +289,7 @@ const TaskEditor = () => {
                     disabled:
                       isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
-                      parseInt(editorTasks.selectedRow) === 0 ||
-                      isSelectedTaskSystem,
+                      parseInt(editorTasks.selectedRow) === 0,
                     icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
                     id: 'move-task-up-button',
                   },
@@ -307,8 +299,7 @@ const TaskEditor = () => {
                     disabled:
                       isDebuggerVisible ||
                       parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
-                      parseInt(editorTasks.selectedRow) === taskData.length - 1 ||
-                      isSelectedTaskSystem,
+                      parseInt(editorTasks.selectedRow) === taskData.length - 1,
                     icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
                     id: 'move-task-down-button',
                   },

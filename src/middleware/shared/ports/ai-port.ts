@@ -5,7 +5,7 @@
  * implementations that handle HTTP streaming, SSE parsing, and API authentication.
  */
 
-import type { AIFeatureConfig } from './types'
+import type { AIEntitlements, AIFeatureConfig, AIUsage } from './types'
 
 // ---------------------------------------------------------------------------
 // Parameter & result types
@@ -35,7 +35,13 @@ export interface AIChatParams {
   model?: 'haiku' | 'sonnet'
 }
 
-/** Credit status returned by fetchCredits. */
+/**
+ * Credit status returned by `fetchCredits`.
+ *
+ * @deprecated Use `AIEntitlements` + `AIUsage` (via the new `fetchEntitlements`
+ * / `fetchUsage` port methods). Retained for one release while UI call sites
+ * migrate to the ACU-based billing surface.
+ */
 export interface AICreditStatus {
   credits_used: number
   credits_total: number
@@ -57,6 +63,16 @@ export type AITelemetryEventName =
   | 'conversation_loaded'
   | 'conversation_renamed'
   | 'conversation_deleted'
+  /**
+   * Fired when `AcuExhaustionModal` opens (transition from `null` to a
+   * billing block on the slice). Data: `{ source: 'usage_limit'|'subscription', planSlug, remaining }`.
+   */
+  | 'acu_exhausted'
+  /**
+   * Fired when the user clicks the upgrade / reactivate CTA in the
+   * exhaustion modal. Data: `{ source: 'modal' }`.
+   */
+  | 'upgrade_cta_clicked'
 
 // ---------------------------------------------------------------------------
 // Port interface
@@ -76,7 +92,22 @@ export interface AIPort extends AIFeatureConfig {
   streamChat(params: AIChatParams, signal?: AbortSignal): AsyncGenerator<string, void, unknown>
 
   /**
+   * Fetch the user's resolved entitlements (plan limits, ACU cap, feature flags).
+   * Backed by `GET /me/entitlements` on the Edge API billing chassis.
+   */
+  fetchEntitlements(signal?: AbortSignal): Promise<AIEntitlements>
+
+  /**
+   * Fetch the user's current usage (resource counters + ACU consumption).
+   * Backed by `GET /me/usage` on the Edge API billing chassis.
+   */
+  fetchUsage(signal?: AbortSignal): Promise<AIUsage>
+
+  /**
    * Fetch current AI credit status.
+   *
+   * @deprecated Use `fetchEntitlements` + `fetchUsage` instead. Kept for one
+   * release as a fallback while UI call sites migrate to the new shape.
    */
   fetchCredits(signal?: AbortSignal): Promise<AICreditStatus>
 

@@ -11,7 +11,17 @@
     "buildResources": "assets",
     "output": "release/build"
   },
-  "extraResources": ["./assets/**"],
+  "extraResources": [
+    "./assets/**",
+    {
+      "from": "./node_modules/strucpp/src/runtime/include",
+      "to": "./strucpp/runtime/include"
+    },
+    {
+      "from": "./node_modules/strucpp/libs",
+      "to": "./strucpp/libs"
+    }
+  ],
   "mac": {
     "extraResources": [
       {

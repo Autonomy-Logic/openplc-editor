@@ -25,6 +25,7 @@ export const GenericComboboxCell = ({
   selected = true,
   openOnSelectedOption = false,
   canAddACustomOption = false,
+  displayLabel,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -32,6 +33,11 @@ export const GenericComboboxCell = ({
   selected?: boolean
   openOnSelectedOption?: boolean
   canAddACustomOption?: boolean
+  /** Visible text in the closed-state trigger. When omitted, the
+   *  trigger shows `value` verbatim (the original behavior). Used by
+   *  variable cells to render `alias (address)` so the bound alias
+   *  stays visible alongside the raw address the combobox edits. */
+  displayLabel?: string
 }) => {
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
@@ -208,7 +214,7 @@ export const GenericComboboxCell = ({
           { 'pointer-events-none': !selected },
         )}
       >
-        {value || ''}
+        {displayLabel ?? value ?? ''}
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Content
         sideOffset={12}

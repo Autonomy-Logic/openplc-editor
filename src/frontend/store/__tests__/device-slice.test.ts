@@ -1,17 +1,46 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { EtherCATRuntimeStatusResponse } from '../../../middleware/shared/ports/runtime-port'
+import type { EtherCATRuntimeStatusResponse } from '../../../middleware/shared/ports/ethercat-types'
 import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../../../middleware/shared/ports/types'
+import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
 import * as pinsValidation from '../slices/device/validation/pins'
+import { createEditorSlice } from '../slices/editor'
+import { createLibrarySlice } from '../slices/library'
+import { createProjectSlice } from '../slices/project/slice'
+import type { ProjectSliceRoot } from '../slices/project/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeStore() {
-  return createStore<DeviceSlice>()(createDeviceSlice)
+  // The device slice reads from project + console (alias-sync trigger
+  // inside setAvailableOptions); the project slice in turn now needs
+  // editor + library state for its variables-text reconcile helpers.
+  // Use ProjectSliceRoot (the most expansive of the cross-slice
+  // unions) as the store type so every composed slice creator's
+  // `getState()` resolves.
+  return createStore<ProjectSliceRoot>()((...args) => ({
+    ...createDeviceSlice(...args),
+    ...createProjectSlice(...args),
+    ...createConsoleSlice(...args),
+    ...createEditorSlice(...args),
+    ...createLibrarySlice(...args),
+  }))
+}
+
+/**
+ * Returns the active board's pin array — the post-refactor shape
+ * keys pins by `configuration.deviceBoard`, so tests that used to
+ * read `pinMapping.pins` directly look up the active bucket here.
+ * Defaults the empty array so tests against a fresh store (where
+ * no actions have created the bucket yet) still get `[]`.
+ */
+function activePins(state: { deviceDefinitions: DeviceSlice['deviceDefinitions'] }): DevicePin[] {
+  const board = state.deviceDefinitions.configuration.deviceBoard
+  return state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
 }
 
 function makePin(overrides?: Partial<DevicePin>): DevicePin {
@@ -19,23 +48,29 @@ function makePin(overrides?: Partial<DevicePin>): DevicePin {
     pin: overrides?.pin ?? '',
     pinType: overrides?.pinType ?? 'digitalInput',
     address: overrides?.address ?? '%IX0.0',
-    name: overrides?.name ?? '',
+    alias: overrides?.alias ?? '',
   }
 }
 
 function makeTimingStats(overrides?: Partial<TimingStats>): TimingStats {
   return {
-    scan_count: overrides?.scan_count ?? 100,
-    scan_time_min: overrides?.scan_time_min ?? 1,
-    scan_time_max: overrides?.scan_time_max ?? 10,
-    scan_time_avg: overrides?.scan_time_avg ?? 5,
-    cycle_time_min: overrides?.cycle_time_min ?? 2,
-    cycle_time_max: overrides?.cycle_time_max ?? 8,
-    cycle_time_avg: overrides?.cycle_time_avg ?? 4,
-    cycle_latency_min: overrides?.cycle_latency_min ?? 0,
-    cycle_latency_max: overrides?.cycle_latency_max ?? 3,
-    cycle_latency_avg: overrides?.cycle_latency_avg ?? 1,
-    overruns: overrides?.overruns ?? 0,
+    tasks: overrides?.tasks ?? [
+      {
+        name: 'plc-task-0',
+        scan_count: 100,
+        scan_time_min: 1,
+        scan_time_max: 10,
+        scan_time_avg: 5,
+        cycle_time_min: 2,
+        cycle_time_max: 8,
+        cycle_time_avg: 4,
+        cycle_latency_min: 0,
+        cycle_latency_max: 3,
+        cycle_latency_avg: 1,
+        overruns: 0,
+      },
+    ],
+    ...(overrides?.plugin_stats ? { plugin_stats: overrides.plugin_stats } : {}),
   }
 }
 
@@ -52,8 +87,16 @@ function makeEthercatStatus(overrides?: Partial<EtherCATRuntimeStatusResponse>):
           cycle_count: 1000,
           wkc_error_count: 0,
           avg_cycle_us: 800,
+          min_cycle_us: 600,
           max_cycle_us: 1200,
+          min_exchange_us: 400,
           max_exchange_us: 600,
+          avg_period_us: 1000,
+          min_period_us: 900,
+          max_period_us: 1100,
+          avg_latency_us: 50,
+          min_latency_us: 20,
+          max_latency_us: 100,
           consecutive_wkc_errors: 0,
           recovery_attempts: 0,
         },
@@ -77,23 +120,13 @@ describe('createDeviceSlice', () => {
       expect(s.deviceAvailableOptions.availableBoards).toBeInstanceOf(Map)
       expect(s.deviceAvailableOptions.availableBoards.size).toBe(0)
       expect(s.deviceAvailableOptions.availableCommunicationPorts).toEqual([])
-      expect(s.deviceAvailableOptions.availableRTUInterfaces).toEqual(['Serial', 'Serial1', 'Serial2', 'Serial3'])
-      expect(s.deviceAvailableOptions.availableRTUBaudRates).toEqual([
-        '9600',
-        '14400',
-        '19200',
-        '38400',
-        '57600',
-        '115200',
-      ])
-      expect(s.deviceAvailableOptions.availableTCPInterfaces).toEqual(['Ethernet', 'Wi-Fi'])
     })
 
     it('has default device definitions', () => {
       const store = makeStore()
       const s = store.getState()
       expect(s.deviceDefinitions.configuration).toEqual(defaultDeviceConfiguration)
-      expect(s.deviceDefinitions.pinMapping.pins).toEqual([])
+      expect(activePins(s)).toEqual([])
       expect(s.deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -175,83 +208,20 @@ describe('createDeviceSlice', () => {
     it('merges partial configuration with defaults', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({
-        configuration: { deviceBoard: 'Mega', compileOnly: true },
+        configuration: { deviceBoard: 'Mega', communicationPort: 'COM3' },
       })
       const cfg = store.getState().deviceDefinitions.configuration
       expect(cfg.deviceBoard).toBe('Mega')
-      expect(cfg.compileOnly).toBe(true)
+      expect(cfg.communicationPort).toBe('COM3')
       // defaults preserved
-      expect(cfg.communicationConfiguration.modbusRTU.rtuInterface).toBe('Serial')
-      expect(cfg.communicationConfiguration.modbusTCP.tcpInterface).toBe('Ethernet')
-    })
-
-    it('merges modbusRTU partially', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceDefinitions({
-        configuration: {
-          communicationConfiguration: {
-            modbusRTU: { rtuInterface: 'Serial2', rtuBaudRate: '9600', rtuSlaveId: 5, rtuRS485ENPin: null },
-            modbusTCP: defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
-            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
-          },
-        },
-      })
-      const rtu = store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU
-      expect(rtu.rtuInterface).toBe('Serial2')
-      expect(rtu.rtuBaudRate).toBe('9600')
-    })
-
-    it('uses default modbusTCP when provided modbusTCP has no tcpInterface', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceDefinitions({
-        configuration: {
-          communicationConfiguration: {
-            modbusRTU: defaultDeviceConfiguration.communicationConfiguration.modbusRTU,
-            modbusTCP: {
-              tcpMacAddress: 'AA:BB:CC:DD:EE:FF',
-              tcpStaticHostConfiguration: { ipAddress: '', dns: '', gateway: '', subnet: '' },
-            } as Partial<
-              typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP
-            > as typeof defaultDeviceConfiguration.communicationConfiguration.modbusTCP,
-            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
-          },
-        },
-      })
-      const tcp = store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-      expect(tcp.tcpInterface).toBe('Ethernet')
-      expect(tcp.tcpMacAddress).toBe('DE:AD:BE:EF:DE:AD')
-    })
-
-    it('uses provided modbusTCP when tcpInterface is present', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceDefinitions({
-        configuration: {
-          communicationConfiguration: {
-            modbusRTU: defaultDeviceConfiguration.communicationConfiguration.modbusRTU,
-            modbusTCP: {
-              tcpInterface: 'Wi-Fi',
-              tcpMacAddress: '11:22:33:44:55:66',
-              tcpStaticHostConfiguration: {
-                ipAddress: '10.0.0.1',
-                dns: '8.8.8.8',
-                gateway: '10.0.0.1',
-                subnet: '255.255.255.0',
-              },
-            },
-            communicationPreferences: defaultDeviceConfiguration.communicationConfiguration.communicationPreferences,
-          },
-        },
-      })
-      const tcp = store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP
-      expect(tcp.tcpInterface).toBe('Wi-Fi')
-      expect(tcp.tcpMacAddress).toBe('11:22:33:44:55:66')
+      expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
     })
 
     it('sets pinMapping', () => {
       const store = makeStore()
-      const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', name: 'sensor' })]
+      const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' })]
       store.getState().deviceActions.setDeviceDefinitions({ pinMapping: pins })
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual(pins)
+      expect(activePins(store.getState())).toEqual(pins)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -274,11 +244,11 @@ describe('createDeviceSlice', () => {
 
     it('handles call with neither configuration nor pinMapping', () => {
       const store = makeStore()
-      const before = store.getState().deviceDefinitions
+      const beforePins = activePins(store.getState())
       store.getState().deviceActions.setDeviceDefinitions({})
-      const after = store.getState().deviceDefinitions
-      expect(after.configuration).toEqual(before.configuration)
-      expect(after.pinMapping.pins).toEqual(before.pinMapping.pins)
+      const afterPins = activePins(store.getState())
+      expect(store.getState().deviceDefinitions.configuration).toEqual(defaultDeviceConfiguration)
+      expect(afterPins).toEqual(beforePins)
     })
   })
 
@@ -299,7 +269,7 @@ describe('createDeviceSlice', () => {
         pinMapping: [makePin()],
       })
       store.getState().deviceActions.clearDeviceDefinitions()
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toEqual([])
+      expect(activePins(store.getState())).toEqual([])
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -374,7 +344,8 @@ describe('createDeviceSlice', () => {
     it('creates a pin in empty table', () => {
       const store = makeStore()
       store.getState().deviceActions.createNewPin()
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(1)
       expect(pins[0].pinType).toBe('digitalInput')
       expect(pins[0].address).toBe('%IX0.0')
@@ -386,12 +357,13 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       // Seed with a pin and select it
       store.getState().deviceActions.setDeviceDefinitions({
-        pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', name: 'pin0' })],
+        pinMapping: [makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0', alias: 'pin0' })],
       })
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       expect(pins[1].address).toBe('%IX0.1')
       expect(pins[1].pinType).toBe('digitalInput')
@@ -411,7 +383,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.createNewPin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(3)
       // New pin should be after the highest address (%IX0.1) -> %IX0.2
       expect(pins[2].address).toBe('%IX0.2')
@@ -426,7 +399,7 @@ describe('createDeviceSlice', () => {
       // Keep selection at -1
       store.getState().deviceActions.createNewPin()
 
-      const { pins } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
       // It should be pushed to end, using the highest existing + 1
       expect(pins[1].address).toBe('%IX0.1')
@@ -444,7 +417,7 @@ describe('createDeviceSlice', () => {
       })
       // row is -1 by default from setDeviceDefinitions
       store.getState().deviceActions.removePin()
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(1)
+      expect(activePins(store.getState())).toHaveLength(1)
     })
 
     it('removes the selected pin and decrements higher addresses', () => {
@@ -459,7 +432,8 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.removePin()
 
-      const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+      const pins = activePins(store.getState())
+      const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
       expect(pins).toHaveLength(2)
       // Addresses shifted down
       expect(pins[0].address).toBe('%IX0.0')
@@ -476,7 +450,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0)
       store.getState().deviceActions.removePin()
 
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(0)
+      expect(activePins(store.getState())).toHaveLength(0)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
     })
 
@@ -491,7 +465,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(1) // last row
       store.getState().deviceActions.removePin()
 
-      expect(store.getState().deviceDefinitions.pinMapping.pins).toHaveLength(1)
+      expect(activePins(store.getState())).toHaveLength(1)
       expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(0)
     })
 
@@ -507,7 +481,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.selectPinTableRow(0) // remove D0
       store.getState().deviceActions.removePin()
 
-      const pins = store.getState().deviceDefinitions.pinMapping.pins
+      const pins = activePins(store.getState())
       expect(pins).toHaveLength(2)
       // analog should be untouched
       const analog = pins.find((p) => p.pinType === 'analogInput')
@@ -539,7 +513,7 @@ describe('createDeviceSlice', () => {
         const result = store.getState().deviceActions.updatePin({ pin: 'D3' })
         expect(result.ok).toBe(true)
         expect(result.data?.pin).toBe('D3')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].pin).toBe('D3')
+        expect(activePins(store.getState())[0].pin).toBe('D3')
       })
 
       it('returns error for empty pin', () => {
@@ -594,7 +568,8 @@ describe('createDeviceSlice', () => {
         expect(result.message).toContain('Pin type changed')
 
         // Verify sorting and current selection
-        const { pins, currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
+        const pins = activePins(store.getState())
+        const { currentSelectedPinTableRow } = store.getState().deviceDefinitions.pinMapping
         const movedPin = pins.find((p) => p.pin === 'D0')
         expect(movedPin?.pinType).toBe('analogInput')
         expect(movedPin?.address).toBe('%IW1')
@@ -613,7 +588,7 @@ describe('createDeviceSlice', () => {
         store.getState().deviceActions.selectPinTableRow(0) // move D0 to analog
         store.getState().deviceActions.updatePin({ pinType: 'analogInput' })
 
-        const pins = store.getState().deviceDefinitions.pinMapping.pins
+        const pins = activePins(store.getState())
         const digitalPins = pins.filter((p) => p.pinType === 'digitalInput')
         // After removing D0 (%IX0.0), D1 should be %IX0.0, D2 should be %IX0.1
         expect(digitalPins[0].address).toBe('%IX0.0')
@@ -650,13 +625,13 @@ describe('createDeviceSlice', () => {
       it('updates pin name', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
-          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', name: '' })],
+          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', alias: '' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: 'Sensor1' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'Sensor1' })
         expect(result.ok).toBe(true)
-        expect(result.data?.name).toBe('Sensor1')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].name).toBe('Sensor1')
+        expect(result.data?.alias).toBe('Sensor1')
+        expect(activePins(store.getState())[0].alias).toBe('Sensor1')
       })
 
       it('returns error for empty name', () => {
@@ -665,23 +640,23 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: '' })
+        const result = store.getState().deviceActions.updatePin({ alias: '' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Invalid Pin Name')
+        expect(result.title).toBe('Invalid Pin Alias')
       })
 
       it('returns error for duplicate name', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
           pinMapping: [
-            makePin({ pin: 'D0', address: '%IX0.0', name: 'Motor' }),
-            makePin({ pin: 'D1', address: '%IX0.1', name: '' }),
+            makePin({ pin: 'D0', address: '%IX0.0', alias: 'Motor' }),
+            makePin({ pin: 'D1', address: '%IX0.1', alias: '' }),
           ],
         })
         store.getState().deviceActions.selectPinTableRow(1)
-        const result = store.getState().deviceActions.updatePin({ name: 'Motor' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'Motor' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Pin Name Already Exists')
+        expect(result.title).toBe('Pin Alias Already Exists')
       })
 
       it('returns error for invalid name characters', () => {
@@ -690,9 +665,9 @@ describe('createDeviceSlice', () => {
           pinMapping: [makePin({ pin: 'D0', address: '%IX0.0' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
-        const result = store.getState().deviceActions.updatePin({ name: 'invalid name' })
+        const result = store.getState().deviceActions.updatePin({ alias: 'invalid name' })
         expect(result.ok).toBe(false)
-        expect(result.title).toBe('Invalid Pin Name')
+        expect(result.title).toBe('Invalid Pin Alias')
       })
     })
 
@@ -713,27 +688,27 @@ describe('createDeviceSlice', () => {
         const result = store.getState().deviceActions.updatePin({ pin: undefined })
         expect(result.ok).toBe(true)
         expect(result.data?.pin).toBe('')
-        expect(store.getState().deviceDefinitions.pinMapping.pins[0].pin).toBe('')
+        expect(activePins(store.getState())[0].pin).toBe('')
         spy.mockRestore()
       })
     })
 
     describe('name field fallback branch', () => {
-      it('falls back to empty string when updatedData.name is undefined and validation is bypassed', () => {
+      it('falls back to empty string when updatedData.alias is undefined and validation is bypassed', () => {
         const store = makeStore()
         store.getState().deviceActions.setDeviceDefinitions({
-          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', name: 'Sensor' })],
+          pinMapping: [makePin({ pin: 'D0', address: '%IX0.0', alias: 'Sensor' })],
         })
         store.getState().deviceActions.selectPinTableRow(0)
 
-        const spy = vi.spyOn(pinsValidation, 'checkIfPinNameIsValid').mockReturnValueOnce({
+        const spy = vi.spyOn(pinsValidation, 'checkIfPinAliasIsValid').mockReturnValueOnce({
           ok: true,
-          title: 'Valid Pin Name',
-          message: 'Pin name is valid.',
+          title: 'Valid Pin Alias',
+          message: 'Pin alias is valid.',
         })
-        const result = store.getState().deviceActions.updatePin({ name: undefined })
+        const result = store.getState().deviceActions.updatePin({ alias: undefined })
         expect(result.ok).toBe(true)
-        expect(result.data?.name).toBe('')
+        expect(result.data?.alias).toBe('')
         spy.mockRestore()
       })
     })
@@ -773,6 +748,278 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('Arduino Mega')
       expect(store.getState().deviceUpdated.updated).toBe(true)
     })
+
+    it('clears selectedPlatformOptions when the board actually changes', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+
+      store.getState().deviceActions.setDeviceBoard('Arduino Mega')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({})
+    })
+
+    it('preserves selectedPlatformOptions when setDeviceBoard is called with the same board', () => {
+      // No-op board reassignment shouldn't trash user's option picks.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+
+      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Per-target pin scoping — regression for the SLM-RP4 → Mega → MKR
+  // → Mega chain. Each target has its own pinout (a Mega's pin 13
+  // doesn't exist on a MKR), so pins must NEVER leak between boards.
+  // Per-board persistence is the chosen contract: a user's work on
+  // board A survives a switch to board B and reappears when they
+  // come back to A.
+  // -----------------------------------------------------------------------
+  describe('per-target pin-mapping scoping', () => {
+    it('isolates pin entries across boards: pin 13 defined on Mega does NOT appear on MKR', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+      expect(activePins(store.getState())).toHaveLength(1)
+      expect(activePins(store.getState())[0].pin).toBe('13')
+
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(activePins(store.getState())).toHaveLength(0)
+    })
+
+    it('preserves each board’s pins across a board switch: Mega → MKR → back to Mega restores pin 13', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led-13' })],
+      })
+
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(activePins(store.getState())).toHaveLength(0)
+      // Adding a pin on MKR mutates MKR's bucket only.
+      actions.createNewPin()
+      expect(activePins(store.getState())).toHaveLength(1)
+
+      // Back to Mega — pin 13 with its alias must be intact.
+      actions.setDeviceBoard('Arduino Mega')
+      const megaPins = activePins(store.getState())
+      expect(megaPins).toHaveLength(1)
+      expect(megaPins[0].pin).toBe('13')
+      expect(megaPins[0].alias).toBe('led-13')
+      // And MKR's bucket still carries its own pin (untouched by the
+      // Mega-side mutations).
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(1)
+    })
+
+    it('resets the selected-row pointer when the board changes so the new board’s table starts unselected', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+      actions.selectPinTableRow(0)
+      expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(0)
+
+      // Switching boards must clear the row pointer — the new board's
+      // bucket may be empty or have a different row count, and a
+      // dangling pointer would crash the table's "currently selected
+      // pin" rendering.
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      expect(store.getState().deviceDefinitions.pinMapping.currentSelectedPinTableRow).toBe(-1)
+    })
+
+    it('createNewPin / removePin / updatePin all mutate only the active board’s bucket', () => {
+      const store = makeStore()
+      const actions = store.getState().deviceActions
+
+      // Seed Mega with one pin so it's identifiable.
+      actions.setDeviceBoard('Arduino Mega')
+      actions.setDeviceDefinitions({
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led-13' })],
+      })
+
+      // Switch to MKR and drive a representative mutating action.
+      actions.setDeviceBoard('Arduino MKR WiFi 1010')
+      actions.createNewPin()
+      actions.selectPinTableRow(0)
+      actions.updatePin({ pin: 'A0' })
+
+      // Mega's bucket is unchanged by the MKR-side mutation.
+      const megaBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']
+      expect(megaBucket).toHaveLength(1)
+      expect(megaBucket[0].pin).toBe('13')
+      expect(megaBucket[0].alias).toBe('led-13')
+
+      // MKR's bucket has the new pin under its own key.
+      const mkrBucket = store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']
+      expect(mkrBucket).toHaveLength(1)
+      expect(mkrBucket[0].pin).toBe('A0')
+
+      // Removing the MKR pin doesn't touch Mega.
+      actions.removePin()
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino MKR WiFi 1010']).toHaveLength(0)
+      expect(store.getState().deviceDefinitions.pinMapping.pinsByBoard['Arduino Mega']).toHaveLength(1)
+    })
+
+    it('migrates a legacy flat-array `pinMapping` to the active board’s bucket on load', () => {
+      // Projects saved before per-board scoping wrote a flat array.
+      // The store-side action keys that array under whatever board
+      // the accompanying configuration names — so a legacy project
+      // continues to work without manual migration.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'Arduino Mega' },
+        pinMapping: [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+      })
+
+      const byBoard = store.getState().deviceDefinitions.pinMapping.pinsByBoard
+      expect(Object.keys(byBoard)).toEqual(['Arduino Mega'])
+      expect(byBoard['Arduino Mega']).toHaveLength(1)
+      expect(byBoard['Arduino Mega'][0].pin).toBe('13')
+    })
+
+    it('accepts the canonical per-board dict shape verbatim', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'Arduino Mega' },
+        pinMapping: {
+          'Arduino Mega': [makePin({ pin: '13', pinType: 'digitalOutput', address: '%QX0.0' })],
+          'Arduino MKR WiFi 1010': [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0' })],
+        },
+      })
+
+      const byBoard = store.getState().deviceDefinitions.pinMapping.pinsByBoard
+      expect(byBoard['Arduino Mega']).toHaveLength(1)
+      expect(byBoard['Arduino MKR WiFi 1010']).toHaveLength(1)
+    })
+  })
+
+  describe('setSelectedPlatformOption', () => {
+    it('stores a single key/value and marks updated', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+      expect(store.getState().deviceUpdated.updated).toBe(true)
+    })
+
+    it('merges multiple keys without clobbering siblings', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      store.getState().deviceActions.setSelectedPlatformOption('upload_speed', '57600')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+        upload_speed: '57600',
+      })
+    })
+
+    it('overwrites the value when called twice with the same key', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328')
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({
+        cpu: 'atmega328old',
+      })
+    })
+  })
+
+  describe('clearSelectedPlatformOptions', () => {
+    it('wipes the record and marks updated', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedPlatformOption('cpu', 'atmega328old')
+      store.getState().deviceActions.setSelectedPlatformOption('upload_speed', '57600')
+      store.getState().deviceActions.clearSelectedPlatformOptions()
+      expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({})
+      expect(store.getState().deviceUpdated.updated).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // restoreVendorScreenSlice — revert path for vendor-screen tabs
+  // -----------------------------------------------------------------------
+  describe('restoreVendorScreenSlice', () => {
+    // The snapshot-vs-current model: the tab captures `vendorScreenData`
+    // at open / last-save time, and clicking "Don't save" replays the
+    // snapshot over only the keys the tab owns.  Other tabs' keys must
+    // stay untouched so unrelated edits on the device editor don't get
+    // rolled back at the same time.
+
+    it('restores values for keys present in the snapshot', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true, baud: '115200' })
+      // Capture snapshot AFTER the first edit, simulating "tab opened
+      // with these values".
+      const snapshot = { modbus_rtu: { enabled: true, baud: '115200' } }
+      // User then edits — flip a value the snapshot will revert.
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: false, baud: '57600' })
+
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], snapshot)
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: true,
+        baud: '115200',
+      })
+    })
+
+    it('deletes owned keys that the snapshot does NOT contain', () => {
+      // Snapshot represents the pre-tab-open state; if the user added a
+      // brand-new key during the tab session, "Don't save" must drop it.
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
+      const snapshot: Record<string, unknown> = {}
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], snapshot)
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toBeUndefined()
+    })
+
+    it('leaves keys outside ownedKeys untouched', () => {
+      // The whole point of the ownedKeys list: other vendor-screen tabs
+      // (or the device editor itself) may have written to vendorScreenData
+      // in this same session.  The revert must be tab-scoped.
+      const store = makeStore()
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
+      store.getState().deviceActions.setVendorScreenData('io-mapping', { rows: ['from-other-tab'] })
+
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
+
+      // modbus_rtu was reverted to snapshot…
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: false,
+      })
+      // …but io-mapping (out of scope) is preserved.
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toEqual({
+        rows: ['from-other-tab'],
+      })
+    })
+
+    it('initializes vendorScreenData when the store has no prior key', () => {
+      // Edge: a freshly loaded device with no vendor-screen edits yet.
+      // The restore path must still produce a valid object so subsequent
+      // edits don't NPE.
+      const store = makeStore()
+      // Make sure vendorScreenData starts absent.
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(
+        defaultDeviceConfiguration.vendorScreenData,
+      )
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.modbus_rtu).toEqual({
+        enabled: false,
+      })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -784,227 +1031,6 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
       expect(store.getState().deviceDefinitions.configuration.communicationPort).toBe('/dev/ttyUSB0')
       expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setCommunicationPreferences
-  // -----------------------------------------------------------------------
-  describe('setCommunicationPreferences', () => {
-    it('sets enableRTU', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCommunicationPreferences({ enableRTU: true })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU,
-      ).toBe(true)
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets enableTCP', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCommunicationPreferences({ enableTCP: true })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledTCP,
-      ).toBe(true)
-    })
-
-    it('sets enableDHCP', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCommunicationPreferences({ enableDHCP: false })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
-          .enabledDHCP,
-      ).toBe(false)
-    })
-
-    it('does partial updates without touching other preferences', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCommunicationPreferences({ enableRTU: true })
-      store.getState().deviceActions.setCommunicationPreferences({ enableTCP: true })
-      const prefs = store.getState().deviceDefinitions.configuration.communicationConfiguration.communicationPreferences
-      expect(prefs.enabledRTU).toBe(true)
-      expect(prefs.enabledTCP).toBe(true)
-      expect(prefs.enabledDHCP).toBe(true) // default
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setRTUConfig
-  // -----------------------------------------------------------------------
-  describe('setRTUConfig', () => {
-    it('sets rtuInterface', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuInterface', value: 'Serial3' })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface).toBe(
-        'Serial3',
-      )
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets rtuBaudRate', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuBaudRate', value: '9600' })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate).toBe(
-        '9600',
-      )
-    })
-
-    it('sets rtuSlaveId', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuSlaveId', value: 10 })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId).toBe(10)
-    })
-
-    it('sets rtuRS485ENPin', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: 'D4' })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin).toBe(
-        'D4',
-      )
-    })
-
-    it('sets rtuRS485ENPin to null', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: null })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin,
-      ).toBeNull()
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setTCPConfig
-  // -----------------------------------------------------------------------
-  describe('setTCPConfig', () => {
-    it('sets tcpInterface', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setTCPConfig({ tcpConfig: 'tcpInterface', value: 'Wi-Fi' })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface).toBe(
-        'Wi-Fi',
-      )
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets tcpMacAddress', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setTCPConfig({
-        tcpConfig: 'tcpMacAddress',
-        value: 'AA:BB:CC:DD:EE:FF',
-      })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress).toBe(
-        'AA:BB:CC:DD:EE:FF',
-      )
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setWifiConfig
-  // -----------------------------------------------------------------------
-  describe('setWifiConfig', () => {
-    it('sets wifi SSID when tcpInterface is Wi-Fi', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setTCPConfig({ tcpConfig: 'tcpInterface', value: 'Wi-Fi' })
-      store.getState().deviceActions.setWifiConfig({ tcpWifiSSID: 'MyNetwork' })
-      expect(store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID).toBe(
-        'MyNetwork',
-      )
-    })
-
-    it('sets wifi password when tcpInterface is Wi-Fi', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setTCPConfig({ tcpConfig: 'tcpInterface', value: 'Wi-Fi' })
-      store.getState().deviceActions.setWifiConfig({ tcpWifiPassword: 'secret123' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword,
-      ).toBe('secret123')
-    })
-
-    it('does not set wifi config when tcpInterface is Ethernet', () => {
-      const store = makeStore()
-      // default tcpInterface is 'Ethernet'
-      store.getState().deviceActions.setWifiConfig({ tcpWifiSSID: 'MyNetwork' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID,
-      ).toBeUndefined()
-    })
-
-    it('marks deviceUpdated regardless of tcpInterface', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setWifiConfig({ tcpWifiSSID: 'MyNetwork' })
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setStaticHostConfiguration
-  // -----------------------------------------------------------------------
-  describe('setStaticHostConfiguration', () => {
-    it('sets ipAddress', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setStaticHostConfiguration({ ipAddress: '192.168.1.100' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
-          .ipAddress,
-      ).toBe('192.168.1.100')
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets dns', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setStaticHostConfiguration({ dns: '8.8.8.8' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
-          .dns,
-      ).toBe('8.8.8.8')
-    })
-
-    it('sets gateway', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setStaticHostConfiguration({ gateway: '192.168.1.1' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
-          .gateway,
-      ).toBe('192.168.1.1')
-    })
-
-    it('sets subnet', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setStaticHostConfiguration({ subnet: '255.255.255.0' })
-      expect(
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
-          .subnet,
-      ).toBe('255.255.255.0')
-    })
-
-    it('does partial updates', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setStaticHostConfiguration({ ipAddress: '10.0.0.1' })
-      store.getState().deviceActions.setStaticHostConfiguration({ dns: '1.1.1.1' })
-      const hostCfg =
-        store.getState().deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration
-      expect(hostCfg.ipAddress).toBe('10.0.0.1')
-      expect(hostCfg.dns).toBe('1.1.1.1')
-      expect(hostCfg.gateway).toBe('') // default
-      expect(hostCfg.subnet).toBe('') // default
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setCompileOnly
-  // -----------------------------------------------------------------------
-  describe('setCompileOnly', () => {
-    it('sets compileOnly to true', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(true)
-      expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('sets compileOnly to false', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCompileOnly(true)
-      store.getState().deviceActions.setCompileOnly(false)
-      expect(store.getState().deviceDefinitions.configuration.compileOnly).toBe(false)
     })
   })
 
