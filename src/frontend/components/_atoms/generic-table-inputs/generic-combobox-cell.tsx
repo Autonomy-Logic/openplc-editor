@@ -25,6 +25,7 @@ export const GenericComboboxCell = ({
   selected = true,
   openOnSelectedOption = false,
   canAddACustomOption = false,
+  allowClearWhenEmpty = false,
   displayLabel,
 }: {
   value: string
@@ -33,6 +34,11 @@ export const GenericComboboxCell = ({
   selected?: boolean
   openOnSelectedOption?: boolean
   canAddACustomOption?: boolean
+  /** Keep the "Clear" affordance enabled even when `value` is empty.
+   *  Used by the variable location cell for orphaned aliases: sync blanks
+   *  the location (so it's empty) but a stale alias label remains, and the
+   *  user must still be able to clear it — sending '' drops the stale alias. */
+  allowClearWhenEmpty?: boolean
   /** Visible text in the closed-state trigger. When omitted, the
    *  trigger shows `value` verbatim (the original behavior). Used by
    *  variable cells to render `alias (address)` so the bound alias
@@ -87,7 +93,7 @@ export const GenericComboboxCell = ({
         : item.value === inputValue.trim(),
     )
 
-  const isClearButtonDisabled = !value.trim()
+  const isClearButtonDisabled = !value.trim() && !allowClearWhenEmpty
 
   const handleOnOpenChange = (open: boolean) => {
     setSelectIsOpen(open)

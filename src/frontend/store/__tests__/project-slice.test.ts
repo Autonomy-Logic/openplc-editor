@@ -782,6 +782,32 @@ describe('createProjectSlice', () => {
       })
       expect(result.ok).toBe(false)
     })
+
+    it('clearing the location drops a stale alias', () => {
+      // Reproduces the orphaned-alias case: a variable that carries a
+      // location plus an alias no longer backed by any producer (target
+      // changed / device removed). Clearing the location (location: '')
+      // must succeed AND drop the stale alias.
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
+      store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: '%QW0' } })
+      // Attach a stale alias (no producer declares it).
+      store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
+      let v = store.getState().project.data.configurations.resource.globalVariables[0]
+      expect(v.location).toBe('%QW0')
+      expect(v.alias).toBe('StaleAlias')
+
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'gx',
+        data: { location: '' },
+      })
+      expect(result.ok).toBe(true)
+      v = store.getState().project.data.configurations.resource.globalVariables[0]
+      expect(v.location).toBe('')
+      expect(v.alias ?? '').toBe('')
+    })
   })
 
   describe('getVariable', () => {
