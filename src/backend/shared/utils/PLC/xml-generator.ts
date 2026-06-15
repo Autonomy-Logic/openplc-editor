@@ -3,6 +3,7 @@ import { BaseXml as codeSysBaseXml } from '@root/middleware/shared/ports/xml-typ
 import { BaseXml as oldBaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 import { create } from 'xmlbuilder2'
 
+import { collectLibraryBlocks } from './collect-library-blocks'
 import {
   codeSysInstanceToXml,
   codeSysParseDataTypesToXML,
@@ -67,6 +68,17 @@ const XmlGenerator = (
      */
     const configuration = projectToGenerateXML.configuration
     xmlResult = codeSysInstanceToXml(csXml, configuration)
+  }
+
+  /**
+   * Embed the signatures of every library block the project uses, so xml2st
+   * can type the temporaries it generates for FUNCTION outputs without
+   * carrying a block library of its own.  Added last so it serialises after
+   * <instances>, as the PLCopen schema requires for <addData>.
+   */
+  const libraryBlocks = collectLibraryBlocks(projectToGenerateXML)
+  if (libraryBlocks) {
+    ;(xmlResult as unknown as { project: Record<string, unknown> }).project.addData = libraryBlocks
   }
 
   const doc = create(xmlResult)
