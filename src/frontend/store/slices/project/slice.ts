@@ -1472,8 +1472,18 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
           if (!device?.modbusTcpConfig) return
+          // Transport selector + TCP fields
+          if (config.transport !== undefined) device.modbusTcpConfig.transport = config.transport
           if (config.host !== undefined) device.modbusTcpConfig.host = config.host
           if (config.port !== undefined) device.modbusTcpConfig.port = config.port
+          // RTU (serial) fields — previously dropped, so editing an RTU remote
+          // device silently lost its serial settings on save.
+          if (config.serialPort !== undefined) device.modbusTcpConfig.serialPort = config.serialPort
+          if (config.baudRate !== undefined) device.modbusTcpConfig.baudRate = config.baudRate
+          if (config.parity !== undefined) device.modbusTcpConfig.parity = config.parity
+          if (config.stopBits !== undefined) device.modbusTcpConfig.stopBits = config.stopBits
+          if (config.dataBits !== undefined) device.modbusTcpConfig.dataBits = config.dataBits
+          // Common fields
           if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
           if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
         }),
