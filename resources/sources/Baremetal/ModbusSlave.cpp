@@ -1342,11 +1342,18 @@ void debugGetMd5(void * /*endianness*/)
         mb_frame[md5_len + 3] = md5[md5_len];
     }
 
-    // Native-order store of the endianness sentinel.  The reinterpret_cast
-    // is intentional: it preserves the target's byte ordering in the
-    // emitted bytes, which is exactly the signal the editor uses to choose
-    // its swap behaviour.
-    *reinterpret_cast<uint16_t *>(&mb_frame[md5_len + 3]) = 0xDEAD;
+    // Native-order store of the endianness sentinel.  Written byte-wise
+    // (not via `*reinterpret_cast<uint16_t*>`) because `md5_len + 3` is an
+    // odd offset for a 32-char MD5, and a typed 16-bit store there is an
+    // unaligned access that HardFaults on Cortex-M0+ (SAMD21: MKR Zero /
+    // P1AM-100) — hanging the device on the first debugger request. Copying
+    // the two bytes of a native-order uint16_t preserves the target's byte
+    // ordering (the signal the editor uses to choose its swap behaviour)
+    // while keeping every access byte-aligned.
+    const uint16_t endian_sentinel = 0xDEAD;
+    const uint8_t *sentinel_bytes = reinterpret_cast<const uint8_t *>(&endian_sentinel);
+    mb_frame[md5_len + 3] = sentinel_bytes[0];
+    mb_frame[md5_len + 4] = sentinel_bytes[1];
     mb_frame_len = md5_len + 5;
 }
 
