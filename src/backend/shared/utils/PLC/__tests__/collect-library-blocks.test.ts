@@ -33,6 +33,25 @@ function fbdProject(nodes: unknown[], extraPous: unknown[] = []): PLCProjectData
   } as unknown as PLCProjectData
 }
 
+/** Build a project with a single Ladder program; blocks live in rungs[].nodes. */
+function ldProject(nodesByRung: unknown[][]): PLCProjectData {
+  return {
+    dataTypes: [],
+    pous: [
+      {
+        type: 'program',
+        data: {
+          name: 'main',
+          language: 'ld',
+          variables: [],
+          documentation: '',
+          body: { language: 'ld', value: { name: 'main', rungs: nodesByRung.map((nodes) => ({ nodes })) } },
+        },
+      },
+    ],
+  } as unknown as PLCProjectData
+}
+
 describe('collectLibraryBlocks', () => {
   it('returns null when there are no graphical blocks', () => {
     const project = {
@@ -133,5 +152,34 @@ describe('collectLibraryBlocks', () => {
 
     const pous = (collectLibraryBlocks(project) as any).data.libraryBlocks.pou
     expect(pous.map((p: any) => p['@name'])).toEqual(['ADD'])
+  })
+
+  it('collects blocks from Ladder rungs (the common case)', () => {
+    const project = ldProject([
+      [
+        blockNode({
+          name: 'TON',
+          type: 'function-block',
+          variables: [
+            { name: 'IN', class: 'input', type: baseType('BOOL') },
+            { name: 'PT', class: 'input', type: baseType('TIME') },
+            { name: 'Q', class: 'output', type: baseType('BOOL') },
+          ],
+        }),
+      ],
+      [
+        blockNode({
+          name: 'CURRENT_DT',
+          type: 'function',
+          variables: [{ name: 'OUT', class: 'output', type: baseType('DT') }],
+        }),
+      ],
+    ])
+
+    const pous = (collectLibraryBlocks(project) as any).data.libraryBlocks.pou
+    // blocks gathered across both rungs, sorted by name
+    expect(pous.map((p: any) => p['@name'])).toEqual(['CURRENT_DT', 'TON'])
+    expect(pous.find((p: any) => p['@name'] === 'TON')['@pouType']).toBe('functionBlock')
+    expect(pous.find((p: any) => p['@name'] === 'CURRENT_DT').interface.returnType).toEqual({ DT: '' })
   })
 })
