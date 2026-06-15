@@ -791,7 +791,9 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
       store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: '%QW0' } })
       // Attach a stale alias (no producer declares it).
-      store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
+      store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
       let v = store.getState().project.data.configurations.resource.globalVariables[0]
       expect(v.location).toBe('%QW0')
       expect(v.alias).toBe('StaleAlias')
@@ -2080,6 +2082,28 @@ describe('createProjectSlice', () => {
       expect(cfg.port).toBe(503)
       expect(cfg.slaveId).toBe(2)
       expect(cfg.timeout).toBe(2000)
+    })
+
+    it('persists RTU (serial) fields and the transport selector', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      const result = store.getState().projectActions.updateRemoteDeviceConfig('Dev1', {
+        transport: 'rtu',
+        serialPort: '/dev/ttyUSB0',
+        baudRate: 19200,
+        parity: 'E',
+        stopBits: 2,
+        dataBits: 7,
+        slaveId: 7,
+      })
+      expect(result.ok).toBe(true)
+      const cfg = store.getState().project.data.remoteDevices![0].modbusTcpConfig!
+      expect(cfg.transport).toBe('rtu')
+      expect(cfg.serialPort).toBe('/dev/ttyUSB0')
+      expect(cfg.baudRate).toBe(19200)
+      expect(cfg.parity).toBe('E')
+      expect(cfg.stopBits).toBe(2)
+      expect(cfg.dataBits).toBe(7)
+      expect(cfg.slaveId).toBe(7)
     })
 
     it('does nothing when device has no modbusTcpConfig', () => {

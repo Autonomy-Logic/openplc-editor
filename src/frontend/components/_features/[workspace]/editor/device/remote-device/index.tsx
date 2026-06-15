@@ -44,6 +44,12 @@ const TRANSPORT_OPTIONS = [
   { value: 'rtu', label: 'RTU (Serial)' },
 ]
 
+// Default serial port for RTU devices.  Pre-filled as a real value (not
+// just the combobox placeholder) so it is persisted to the device config
+// and reaches the compiler — an empty serial port makes the runtime drop
+// the Modbus master plugin entirely.
+const DEFAULT_SERIAL_PORT = '/dev/ttyUSB0'
+
 // RTU configuration options
 const BAUD_RATE_OPTIONS = [
   { value: '9600', label: '9600' },
@@ -632,8 +638,9 @@ const RemoteDeviceEditor = () => {
       // TCP fields
       setHost(config.host ?? '127.0.0.1')
       setPort((config.port ?? 502).toString())
-      // RTU fields
-      setSerialPort(config.serialPort ?? '')
+      // RTU fields — show the default serial port as a real value when
+      // none is stored (the self-heal effect below persists it).
+      setSerialPort(config.serialPort || DEFAULT_SERIAL_PORT)
       setBaudRate((config.baudRate ?? 9600).toString())
       setParity(config.parity ?? 'N')
       setStopBits((config.stopBits ?? 1).toString())
@@ -645,7 +652,7 @@ const RemoteDeviceEditor = () => {
       setTransport('tcp')
       setHost('127.0.0.1')
       setPort('502')
-      setSerialPort('')
+      setSerialPort(DEFAULT_SERIAL_PORT)
       setBaudRate('9600')
       setParity('N')
       setStopBits('1')
@@ -654,6 +661,19 @@ const RemoteDeviceEditor = () => {
       setSlaveId('1')
     }
   }, [remoteDevice])
+
+  // Self-heal: an RTU device must carry a concrete serial port, otherwise
+  // the compiler silently drops it from the Modbus master config.  The UI
+  // shows DEFAULT_SERIAL_PORT as a real value, so persist it whenever the
+  // stored config has none — keeping disk in sync with what's displayed
+  // and fixing projects saved before the serial port was pre-filled.
+  useEffect(() => {
+    const config = remoteDevice?.modbusTcpConfig
+    if (config && (config.transport ?? 'tcp') === 'rtu' && !config.serialPort) {
+      projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: DEFAULT_SERIAL_PORT })
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
+    }
+  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions])
 
   const ioGroups = useMemo(
     () => remoteDevice?.modbusTcpConfig?.ioGroups || [],
