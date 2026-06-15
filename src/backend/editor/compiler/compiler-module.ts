@@ -100,7 +100,10 @@ import {
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
-import { buildModuleConfigEntries, generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import {
+  buildModuleConfigEntries,
+  generateVendorPluginConfig,
+} from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
