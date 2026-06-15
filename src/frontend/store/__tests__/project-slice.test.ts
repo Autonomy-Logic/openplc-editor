@@ -791,7 +791,9 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
       store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: '%QW0' } })
       // Attach a stale alias (no producer declares it).
-      store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
+      store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
       let v = store.getState().project.data.configurations.resource.globalVariables[0]
       expect(v.location).toBe('%QW0')
       expect(v.alias).toBe('StaleAlias')
