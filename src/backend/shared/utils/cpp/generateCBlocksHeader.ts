@@ -1,4 +1,5 @@
-import { getExposedCppVariables } from '../../../../frontend/utils/cpp/shared'
+import { getExposedCppVariables } from '@root/frontend/utils/cpp/shared'
+
 import { generateStructMember } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 

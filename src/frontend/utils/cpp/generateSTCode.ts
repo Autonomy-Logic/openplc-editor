@@ -1,6 +1,7 @@
+import { getExposedCppVariables } from '@root/frontend/utils/cpp/shared'
+
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayStartIndex, isArrayVariable } from '../PLC/array-codegen-helpers'
-import { getExposedCppVariables } from './shared'
 
 type STCodeGenerationParams = {
   pouName: string

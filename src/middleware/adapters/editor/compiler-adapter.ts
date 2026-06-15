@@ -311,12 +311,18 @@ export function createEditorCompilerAdapter(): CompilerPort {
       return new Promise<DebugCompileResult>((resolve) => {
         let hasError = false
         let lastError = ''
+        let settled = false
 
         window.bridge.runDebugCompilation(
           [args.projectPath, args.boardTarget, ipcData as never],
           (data: Record<string, unknown>) => {
+            if (settled) return
+
             if (data.closePort) {
-              onProgress({ stage: 'done', message: 'Debug compilation complete' })
+              settled = true
+              if (!hasError) {
+                onProgress({ stage: 'done', message: 'Debug compilation complete' })
+              }
               resolve(hasError ? { success: false, error: lastError } : { success: true })
               return
             }

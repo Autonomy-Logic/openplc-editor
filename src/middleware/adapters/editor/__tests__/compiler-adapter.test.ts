@@ -410,13 +410,14 @@ describe('createEditorCompilerAdapter', () => {
     })
 
     it('returns error when compilation fails', async () => {
+      const progressEvents: CompileProgressEvent[] = []
       const promise = adapter.compileForDebug(
         {
           projectData: mockProjectData,
           boardTarget: 'Arduino Mega',
           projectPath: '/path',
         },
-        () => {},
+        (event) => progressEvents.push(event),
       )
 
       await flushMicrotasks()
@@ -425,6 +426,28 @@ describe('createEditorCompilerAdapter', () => {
 
       const result = await promise
       expect(result).toEqual({ success: false, error: 'iec2c: syntax error' })
+      expect(progressEvents.some((event) => event.stage === 'error')).toBe(true)
+      expect(progressEvents.some((event) => event.stage === 'done')).toBe(false)
+    })
+
+    it('ignores late debug compiler callbacks after the port closes', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileForDebug(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: '/path',
+        },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      debugCallback!({ message: 'Debug compilation failed', logLevel: 'error' })
+      debugCallback!({ closePort: true })
+      debugCallback!({ message: 'late duplicate error', logLevel: 'error' })
+
+      await expect(promise).resolves.toEqual({ success: false, error: 'Debug compilation failed' })
+      expect(progressEvents.map((event) => event.message)).not.toContain('late duplicate error')
     })
 
     it('handles multiple error messages and uses the last one', async () => {
