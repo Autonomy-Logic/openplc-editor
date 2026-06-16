@@ -69,7 +69,8 @@ function mapIecBaseTypeToPython(value: string): string | null {
     upper === 'BYTE' ||
     upper === 'WORD' ||
     upper === 'DWORD' ||
-    upper === 'LWORD'
+    upper === 'LWORD' ||
+    upper === '__XWORD'
   ) {
     return 'int'
   }

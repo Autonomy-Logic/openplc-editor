@@ -15,6 +15,7 @@ import {
   oldEditorParseDataTypesToXML,
   oldEditorParsePousToXML,
 } from '../../../../frontend/utils/PLC/xml-generator/old-editor'
+import { collectLibraryBlocks } from './collect-library-blocks'
 
 const XmlGenerator = (
   projectToGenerateXML: PLCProjectData,
@@ -67,6 +68,17 @@ const XmlGenerator = (
      */
     const configuration = projectToGenerateXML.configuration
     xmlResult = codeSysInstanceToXml(csXml, configuration)
+  }
+
+  /**
+   * Embed the signatures of every library block the project uses, so xml2st
+   * can type the temporaries it generates for FUNCTION outputs without
+   * carrying a block library of its own.  Added last so it serialises after
+   * <instances>, as the PLCopen schema requires for <addData>.
+   */
+  const libraryBlocks = collectLibraryBlocks(projectToGenerateXML)
+  if (libraryBlocks) {
+    ;(xmlResult as unknown as { project: Record<string, unknown> }).project.addData = libraryBlocks
   }
 
   const doc = create(xmlResult)
