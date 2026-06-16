@@ -74,7 +74,7 @@ export interface GenerateConfsInput {
    *  via this; error logs go here too before the relevant errors
    *  are rethrown.  Each adapter wires its native log channel
    *  through this callback. */
-  log: (message: string, level: 'info' | 'error') => void
+  log: (message: string, level: 'info' | 'warning' | 'error') => void
 }
 
 /**
@@ -112,13 +112,18 @@ export interface GenerateConfsOutput {
 export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOutput {
   const { servers, remoteDevices, instances, debugMapContent, log } = input
 
-  // Modbus slave / master / S7Comm: pure helpers, no I/O.  Each
-  // returns `null` when the project has no config of that type.
+  // Modbus slave / master / S7Comm: pure helpers.  Each returns `null`
+  // when the project has no config of that type.  Master also forwards
+  // non-fatal skip diagnostics (e.g. an RTU device missing a serial
+  // port) through `log` so they reach the build console.
   // Type assertions match the editor's call sites — the generators
   // accept a narrower shape than `PLCServer[]` / `PLCRemoteDevice[]`
   // but the runtime values are compatible.
   const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0])
-  const modbusMaster = generateModbusMasterConfig(remoteDevices as Parameters<typeof generateModbusMasterConfig>[0])
+  const modbusMaster = generateModbusMasterConfig(
+    remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
+    (msg) => log(msg, 'warning'),
+  )
   const s7Comm = generateS7CommConfig(servers)
 
   // OPC-UA: throws `OpcUaConfigError` on invalid project state.
