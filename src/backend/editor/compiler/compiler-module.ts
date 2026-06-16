@@ -1496,11 +1496,7 @@ class CompilerModule {
       `-I${srcDir}`,
       `-I${baremetalDir}`,
     ]
-    // STruC++ runtime headers use exceptions for invalid generated/runtime
-    // states (for example iec_located.hpp::parse_area). Several Arduino
-    // cores bake `-fno-exceptions` into recipe.cpp.o.pattern, so force the
-    // matching precompile surface back on as the final flag.
-    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags, '-fexceptions']
+    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 
     const execMaxBuffer = 16 * 1024 * 1024
 

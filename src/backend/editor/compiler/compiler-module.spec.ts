@@ -787,30 +787,6 @@ describe('CompilerModule', () => {
       expect(stdPos).toBeGreaterThan(sourcePos)
     })
 
-    it('forces exceptions after core and VPP flags for STruC++ runtime headers', async () => {
-      extractSpy.mockResolvedValue({
-        ...cannedProps,
-        recipeCpp: 'avr-g++ -c -fno-exceptions {source_file} {includes} -o {object_file}',
-      } as unknown as ToolchainProperties)
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        extraCxxFlags: ['-fno-exceptions'],
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
-      expect(compileCmd.lastIndexOf('-fexceptions')).toBeGreaterThan(compileCmd.lastIndexOf('-fno-exceptions'))
-    })
-
     it('hard-fails with an actionable error when build.core.path is missing from --show-properties', async () => {
       extractSpy.mockResolvedValue({
         ...cannedProps,
