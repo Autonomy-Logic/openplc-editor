@@ -20,6 +20,21 @@
 #include "debug_dispatch.hpp"
 
 // ---------------------------------------------------------------------------
+// Runtime fault hook
+// ---------------------------------------------------------------------------
+// Weak default for strucpp::iec_runtime_fault (declared in iec_fault.hpp).
+// On MCU firmware (compiled -fno-exceptions) the runtime calls this instead
+// of throwing on an unrecoverable fault (null deref, array OOB, bad located
+// address). Default behaviour: halt. A VPP HAL may provide a STRONG override
+// to signal the fault its own way — blink a status LED, sound an alarm,
+// reboot, etc. Kept free of <Arduino.h> so this TU stays macro-clean.
+__attribute__((weak)) void strucpp::iec_runtime_fault(strucpp::IecFault /*reason*/,
+                                                       const char* /*context*/) noexcept {
+    for (;;) {
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
 strucpp::Configuration_CONFIG0 g_config;
