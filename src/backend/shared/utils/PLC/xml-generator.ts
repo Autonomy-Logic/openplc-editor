@@ -3,7 +3,6 @@ import { BaseXml as codeSysBaseXml } from '@root/middleware/shared/ports/xml-typ
 import { BaseXml as oldBaseXml } from '@root/middleware/shared/ports/xml-types/old-editor'
 import { create } from 'xmlbuilder2'
 
-import { collectLibraryBlocks } from './collect-library-blocks'
 import {
   codeSysInstanceToXml,
   codeSysParseDataTypesToXML,
@@ -16,6 +15,7 @@ import {
   oldEditorParseDataTypesToXML,
   oldEditorParsePousToXML,
 } from '../../../../frontend/utils/PLC/xml-generator/old-editor'
+import { collectLibraryBlocks } from './collect-library-blocks'
 
 const XmlGenerator = (
   projectToGenerateXML: PLCProjectData,
