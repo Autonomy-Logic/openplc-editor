@@ -5,6 +5,7 @@ import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
+import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
 import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
@@ -565,16 +566,38 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // path see no change in behaviour; projects with the legacy
       // drift auto-recover on first open.
       const pous = data.projectData.pous
+
+      // Refresh placed library-block variant types from the current libraries
+      // before the flows enter the store, so existing projects pick up library
+      // type changes (e.g. ADR: ULINT -> __XWORD). Blocks backed by a
+      // user-defined POU are skipped — the project owns their interface. A
+      // no-op when the libraries haven't loaded yet or nothing is stale.
+      const systemLibraries = getState().libraries.system
+      const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
+      let restampedCount = 0
+
       pous.forEach((pou) => {
         if (pou.body.language === 'ld') {
-          const bodyValue = pou.body.value as LadderFlowType
+          // The loaded project data is frozen, so clone before re-stamping
+          // (which mutates variant types in place) and hand the store the copy.
+          const bodyValue = structuredClone(pou.body.value) as LadderFlowType
+          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
           getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
-          const bodyValue = pou.body.value as FBDFlowType
+          const bodyValue = structuredClone(pou.body.value) as FBDFlowType
+          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
           getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
         }
       })
+
+      if (restampedCount > 0) {
+        getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
+        })
+      }
 
       // Register user-defined functions/function-blocks in the library
       pous.forEach((pou) => {
