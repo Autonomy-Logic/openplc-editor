@@ -143,8 +143,16 @@ describe('collectLibraryBlocks', () => {
     }
     const project = fbdProject(
       [
-        blockNode({ name: 'ADD', type: 'function', variables: [{ name: 'OUT', class: 'output', type: genericType('ANY_NUM') }] }),
-        blockNode({ name: 'ADD', type: 'function', variables: [{ name: 'OUT', class: 'output', type: genericType('ANY_NUM') }] }),
+        blockNode({
+          name: 'ADD',
+          type: 'function',
+          variables: [{ name: 'OUT', class: 'output', type: genericType('ANY_NUM') }],
+        }),
+        blockNode({
+          name: 'ADD',
+          type: 'function',
+          variables: [{ name: 'OUT', class: 'output', type: genericType('ANY_NUM') }],
+        }),
         blockNode({ name: 'MyFB', type: 'function-block', variables: [] }),
       ],
       [userFb],
