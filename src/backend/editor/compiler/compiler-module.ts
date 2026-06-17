@@ -1800,6 +1800,13 @@ class CompilerModule {
       ...cxxFlagsArg,
       '--library',
       precompiledLibDir,
+      // Prebuilt arduino-hal (mixed): the vendor's precompiled library. The
+      // open hal.source layer (renamed to arduino.cpp, compiled here alongside
+      // the sketch — NOT in the precompile pass) does `#include "p1am_vendor.h"`,
+      // so arduino-cli needs the lib's src/ on the include path. Passing it as a
+      // 2nd --library both resolves the boundary header and auto-links the
+      // src/<build.mcu>/lib*.a archive (the lib ships precompiled=full).
+      ...(info.precompiledLibraryDir ? ['--library', info.precompiledLibraryDir] : []),
       '--build-property',
       `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
