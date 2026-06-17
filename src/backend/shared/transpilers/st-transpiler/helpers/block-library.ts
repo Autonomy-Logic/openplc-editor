@@ -51,6 +51,11 @@ const CATALOG: ReadonlyMap<string, readonly CatalogEntry[]> = (() => {
   return map
 })()
 
+/** All catalog overloads for a name, signatures intact (GetBlockType needs them). */
+export function blockOverloads(typename: string): readonly BlockInfos[] {
+  return (CATALOG.get(typename) ?? []).map((e) => cloneBlockInfos(e.infos))
+}
+
 /**
  * Look the block name up in the standard catalog.  Single match →
  * return its infos.  Multiple matches → return the first entry with

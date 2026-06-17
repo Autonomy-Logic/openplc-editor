@@ -10,11 +10,13 @@
  */
 
 import { PLC_BASE_TYPES } from '../helpers/base-types'
-import { resolveBlockType } from '../helpers/block-library'
+import { type BlockInfos, blockOverloads } from '../helpers/block-library'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
+import { isOfType } from '../helpers/type-hierarchy'
 import { varTypeNames } from '../helpers/type-text'
 import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
+import type { TypeContext } from '../walker/connection-types'
 import { emitFbdBody } from '../walker/fbd'
 import type { SyntheticVar } from '../walker/ld'
 import { emitLdBody } from '../walker/ld'
@@ -24,39 +26,8 @@ import { computeValue } from './value'
 interface InterfaceEntry {
   keyword: string
   vars: TranspileVariable[]
+  located?: boolean
 }
-
-/**
- * Destination types of the IEC 61131-3 polymorphic conversion family
- * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …).  Hard-coded here rather than
- * derived at runtime from the catalog so any future addition is visible
- * in code review.  Kept in sync with `data/std_block_catalog.json` — any
- * `<SRC>_TO_<X>` entry in the catalog implies `TO_<X>` is a valid
- * polymorphic conversion target.
- */
-const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
-  'BCD',
-  'BOOL',
-  'BYTE',
-  'DATE',
-  'DINT',
-  'DT',
-  'DWORD',
-  'INT',
-  'LINT',
-  'LREAL',
-  'LWORD',
-  'REAL',
-  'SINT',
-  'STRING',
-  'TIME',
-  'TOD',
-  'UDINT',
-  'UINT',
-  'ULINT',
-  'USINT',
-  'WORD',
-])
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
@@ -78,7 +49,9 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
   if (pou.body.language !== 'ld' && pou.body.language !== 'fbd') {
     throw new Error(`generateGraphicalPou called with non-graphical body: ${pou.body.language}`)
   }
-  const emitted = pou.body.language === 'ld' ? emitLdBody(pou.body.value) : emitFbdBody(pou.body.value)
+  const typeContext = buildTypeContext(pou, project)
+  const emitted =
+    pou.body.language === 'ld' ? emitLdBody(pou.body.value, typeContext) : emitFbdBody(pou.body.value, typeContext)
 
   // Compose the final POU chunk stream now that the walker has
   // emitted the body bytes + any synthetic vars.
@@ -92,45 +65,7 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
   }
   program.push(['\n', []])
 
-  // Resolve `ANY` placeholders in the synthesised function-output
-  // temps:
-  //   1. User-defined project functions → declared `interface.returnType`.
-  //   2. Standard catalog functions (ADD, MUL, NOT, AND, …) → catalog's
-  //      formal output `type`.  Generic groups (`ANY_BIT`, `ANY_NUM`,
-  //      …) collapse to `BOOL`, which matches the corpus where these
-  //      operators are always Boolean rung logic.  A future
-  //      computeConnectionTypes port will narrow these properly.
-  //   3. Polymorphic IEC 61131-3 type-conversion functions of the
-  //      form `TO_<TYPE>` (TO_INT, TO_UINT, TO_REAL, …) — the
-  //      catalog enumerates the source-specific variants
-  //      (`BOOL_TO_UINT`, `INT_TO_UINT`, …) but NOT the generic
-  //      `TO_<TYPE>` family, so resolveBlockType returns null for
-  //      them.  Without this case the synthetic var stayed at
-  //      `ANY` and strucpp rejected the program with
-  //      "Undefined type 'ANY' in PROGRAM" — fixed here by reading
-  //      the destination type directly from the function name.
-  const resolvedSyntheticVars = emitted.syntheticVars.map<SyntheticVar>((sv) => {
-    if (sv.type !== 'ANY' || sv.originBlockTypeName === undefined) return sv
-    const referenced = project.pous.find((p) => p.name === sv.originBlockTypeName)
-    if (referenced && referenced.pouType === 'function' && referenced.interface.returnType) {
-      return { ...sv, type: referenced.interface.returnType }
-    }
-    const stdResolved = resolveBlockType(sv.originBlockTypeName)
-    if (stdResolved) {
-      const outPort = stdResolved.infos.outputs.find((o) => o.name === sv.originFormalParameter)
-      if (outPort) {
-        const collapsed = outPort.type.startsWith('ANY') ? 'BOOL' : outPort.type
-        return { ...sv, type: collapsed }
-      }
-    }
-    const polymorphicMatch = sv.originBlockTypeName.match(/^TO_([A-Z]+)$/)
-    if (polymorphicMatch && TO_CONVERSION_TARGETS.has(polymorphicMatch[1])) {
-      return { ...sv, type: polymorphicMatch[1] }
-    }
-    return sv
-  })
-
-  const iface = computeInterface(pou.interface?.variables ?? [], resolvedSyntheticVars)
+  const iface = computeInterface(pou.interface?.variables ?? [], emitted.syntheticVars)
   for (const entry of iface) {
     const variableType = locationCategory(entry.keyword)
     program.push([`  ${entry.keyword}`, []])
@@ -166,6 +101,118 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
 
 /* ────────────────────────── helpers ─────────────────────────────────────── */
 
+// GetVariableType + GetBlockType ports (PLCGenerator.py:786-817, PLCControler.py:1288-1335)
+function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeContext {
+  const interfaceTypes = new Map<string, string>()
+  for (const v of pou.interface?.variables ?? []) {
+    interfaceTypes.set(v.name, getTypeAsText(v))
+  }
+
+  const normalizeReturnType = (rt: string): string => (PLC_BASE_TYPES.has(rt.toUpperCase()) ? rt.toUpperCase() : rt)
+
+  const projectBlockInfos = (typeName: string): BlockInfos | null => {
+    const p = project.pous.find((x) => x.name === typeName)
+    if (p === undefined) return null
+    const inputs: BlockInfos['inputs'] = []
+    const outputs: BlockInfos['outputs'] = []
+    for (const v of p.interface?.variables ?? []) {
+      const io = { name: v.name, type: getTypeAsText(v), qualifier: 'none' as const }
+      if (v.class === 'input' || v.class === 'inOut') inputs.push(io)
+      if (v.class === 'output' || v.class === 'inOut') outputs.push(io)
+    }
+    if (p.pouType === 'function') {
+      outputs.push({
+        name: 'OUT',
+        type: normalizeReturnType(p.interface.returnType ?? 'BOOL'),
+        qualifier: 'none',
+      })
+    }
+    return {
+      name: typeName,
+      type: p.pouType === 'function' ? 'function' : 'functionBlock',
+      extensible: false,
+      inputs,
+      outputs,
+      comment: '',
+      usage: '',
+    }
+  }
+
+  const resolveBlock: TypeContext['resolveBlock'] = (typeName, inputs) => {
+    const entries = blockOverloads(typeName)
+    if (inputs === 'undefined') {
+      if (entries.length > 1) return null
+      if (entries.length === 1) return entries[0]
+    } else {
+      for (const entry of entries) {
+        const formals = entry.inputs.map((i) => i.type)
+        const n = Math.min(inputs.length, formals.length)
+        let ok = true
+        for (let i = 0; i < n; i++) {
+          if (inputs[i] !== 'ANY' && !isOfType(inputs[i], formals[i])) {
+            ok = false
+            break
+          }
+        }
+        if (ok) return entry
+      }
+    }
+    const projectInfos = projectBlockInfos(typeName)
+    if (projectInfos === null) return null
+    if (inputs === 'undefined') return projectInfos
+    const declared = projectInfos.inputs.map((i) => i.type)
+    return inputs.length === declared.length && inputs.every((t, i) => t === declared[i]) ? projectInfos : null
+  }
+
+  // member lookup uses the first overload even when ambiguous (python inputs=None branch)
+  const memberBlockInfos = (typeName: string): BlockInfos | null => {
+    const entries = blockOverloads(typeName)
+    if (entries.length > 0) return entries[0]
+    return projectBlockInfos(typeName)
+  }
+
+  const variableType: TypeContext['variableType'] = (expression) => {
+    const parts = expression.split('.')
+    let name = parts.shift() ?? ''
+    let current: string | null = null
+    if (pou.pouType === 'function' && name === pou.name && pou.interface.returnType !== undefined) {
+      current = normalizeReturnType(pou.interface.returnType)
+    } else {
+      current = interfaceTypes.get(name) ?? null
+    }
+    while (current !== null && parts.length > 0) {
+      const block = memberBlockInfos(current)
+      if (block !== null) {
+        name = parts.shift() ?? ''
+        current = null
+        for (const io of [...block.inputs, ...block.outputs]) {
+          if (io.name === name) {
+            current = io.type
+            break
+          }
+        }
+      } else {
+        const dt = project.dataTypes.find((d) => d.name === current)
+        if (dt !== undefined && dt.derivation === 'structure') {
+          name = parts.shift() ?? ''
+          current = null
+          for (const el of dt.variable) {
+            if (el.name === name) {
+              current = getTypeAsText(el)
+              break
+            }
+          }
+        } else {
+          break
+        }
+      }
+    }
+    return current
+  }
+
+  return { variableType, resolveBlock }
+}
+
 function computeInterface(variables: TranspileVariable[], syntheticVars: SyntheticVar[]): InterfaceEntry[] {
   const classToKeyword: Record<TranspileVariableClass, string> = {
     input: varTypeNames.inputVars,
@@ -183,27 +230,32 @@ function computeInterface(variables: TranspileVariable[], syntheticVars: Synthet
     bucket.push(v)
     grouped.set(keyword, bucket)
   }
-  // Append synthesised trigger vars + function-call output temps to
-  // the trailing VAR (local) bucket so they appear after the user's
-  // declared locals — same order the python oracle produces.
+  // python splits each varlist into an unlocated block then a located one (DIV-03)
+  const out: InterfaceEntry[] = []
+  for (const [keyword, vars] of grouped) {
+    const unlocated = vars.filter((v) => !v.location)
+    const located = vars.filter((v) => v.location)
+    if (unlocated.length > 0) out.push({ keyword, vars: unlocated })
+    if (located.length > 0) out.push({ keyword, vars: located, located: true })
+  }
   if (syntheticVars.length > 0) {
-    const localKeyword = varTypeNames.localVars
-    const localBucket = grouped.get(localKeyword) ?? []
-    for (const sv of syntheticVars) {
+    const synth: TranspileVariable[] = syntheticVars.map((sv) => {
       const isElementary = PLC_BASE_TYPES.has(sv.type.toUpperCase())
-      localBucket.push({
+      return {
         name: sv.name,
         type: isElementary
           ? { definition: 'base-type', value: sv.type.toUpperCase() }
           : { definition: 'derived', value: sv.type },
         class: 'local',
-      })
+      }
+    })
+    const last = out[out.length - 1]
+    // python reuses the trailing block only when it is a plain unlocated VAR (DIV-16)
+    if (last !== undefined && last.keyword === varTypeNames.localVars && !last.located) {
+      last.vars.push(...synth)
+    } else {
+      out.push({ keyword: varTypeNames.localVars, vars: synth })
     }
-    grouped.set(localKeyword, localBucket)
-  }
-  const out: InterfaceEntry[] = []
-  for (const [keyword, vars] of grouped) {
-    out.push({ keyword, vars })
   }
   return out
 }

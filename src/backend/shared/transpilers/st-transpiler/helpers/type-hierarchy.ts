@@ -59,3 +59,14 @@ export const TypeHierarchy: Readonly<Record<string, string | null>> = {
   LWORD: 'ANY_NBIT',
   // WSTRING intentionally absent — matches Python's `# TODO` comment.
 }
+
+// IsOfType (structures.py:36-48): soft-false for unknown/user types (DIVERGENCES.md D3)
+export function isOfType(child: string, ancestor: string): boolean {
+  if (child === ancestor) return true
+  let current = TypeHierarchy[child]
+  while (current !== undefined && current !== null) {
+    if (current === ancestor) return true
+    current = TypeHierarchy[current]
+  }
+  return false
+}

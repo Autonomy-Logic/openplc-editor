@@ -25,6 +25,7 @@ import {
   type ProgramChunk,
   TRUE_NODE,
 } from '../core/path-tree'
+import { computeConnectionTypes, pinOut, type TypeContext } from './connection-types'
 import {
   asBlockData,
   asCoilData,
@@ -102,6 +103,8 @@ interface WalkerState {
    *  in the same coordinate space the python oracle sees. */
   yOffset: Map<string, number>
   warnings: string[]
+  /** Pin types from computeConnectionTypes; empty without a TypeContext. */
+  connTypes: Map<string, string>
 }
 
 function rungHeight(rung: RFRung): number {
@@ -152,7 +155,7 @@ function isVariableNode(node: RFNode): boolean {
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
-export function emitLdBody(body: RFBody): EmitResult {
+export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult {
   // POU name doesn't influence body emission today (it's only the
   // first element of the `Location` tuples used for source-map back-
   // references).  Hard-code a sentinel; the orchestrator can pass a
@@ -172,6 +175,7 @@ export function emitLdBody(body: RFBody): EmitResult {
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
+    connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map(),
   }
 
   // Index every node + edge from every rung up front.  Sinks are then
@@ -678,7 +682,8 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
 
   const info: Location = [state.tagName, 'block', locId(node)]
   const wiredInputs = data.inputs.filter((name) => firstIncomingForHandle(state, node.id, name) !== undefined)
-  const allInputConnected = wiredInputs.length === data.inputs.length
+  // python only ever sees wired pins for extensible blocks (DIV-18)
+  const allInputConnected = data.extensible || wiredInputs.length === data.inputs.length
   const useNamedArgs = data.outputs.length > 1 || !allInputConnected
 
   const recurseOrdered = data.executionOrder > 0
@@ -692,7 +697,7 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   for (let i = 0; i < data.outputs.length; i++) {
     const out = data.outputs[i]
     const tempName = `_TMP_${data.typeName}${data.numericId}_${out}`
-    const tempType = out === 'ENO' ? 'BOOL' : 'ANY'
+    const tempType = state.connTypes.get(pinOut(node.id, out)) ?? (out === 'ENO' ? 'BOOL' : 'ANY')
     state.functionTempVars.push({
       name: tempName,
       type: tempType,
