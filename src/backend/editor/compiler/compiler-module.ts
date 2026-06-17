@@ -82,6 +82,7 @@ type ProjectDataWithCppPous = PLCProjectData & {
 const POST_BUILD_START_TIMEOUT_MS = 5000
 const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
+import { compareTranspilerOutput } from '@root/backend/editor/services/transpiler-comparison/compare-transpiler-output'
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
@@ -2882,55 +2883,24 @@ class CompilerModule {
       return
     }
 
-    if (isNewTranspilerEnabled()) {
-      // JSON → ST in-process via `st-transpiler`.  Mirrors what
-      // `editor-compiler-platform-port.transpileToSt` does for the
-      // shared pipeline path, scoped down to the debug compile here.
-      try {
-        const ir = fromSchemaShape(projectData as unknown as SchemaProjectData)
-        const result = runJsonTranspiler(ir)
-        if (result.programSt === null || result.errors.length > 0) {
-          const message = result.errors.join('\n') || 'Failed to generate Structured Text'
-          _mainProcessPort.postMessage({
-            logLevel: 'error',
-            message: `${message}\nStopping debug compilation process.`,
-          })
-          _mainProcessPort.close()
-          return
-        }
-        for (const warning of result.warnings) {
-          _mainProcessPort.postMessage({ logLevel: 'info', message: warning })
-        }
-        await mkdir(sourceTargetFolderPath, { recursive: true })
-        const programStPath = join(sourceTargetFolderPath, 'program.st')
-        await writeFile(programStPath, result.programSt, 'utf-8')
-        _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Error transpiling JSON to ST: ${getErrorMessage(error)}\nStopping debug compilation process.`,
-        })
-        _mainProcessPort.close()
-        return
-      }
-    } else {
+    // Project -> ST. Run BOTH engines on every debug compile so their
+    // outputs can be compared while the new in-process TS transpiler is
+    // validated against the legacy xml2st subprocess. The OLD engine is
+    // authoritative unless OPENPLC_USE_NEW_TRANSPILER flips it; the
+    // comparison verdict is posted either way. Only the legacy path writes
+    // files, so running them in parallel is safe — the authoritative ST is
+    // written to program.st last so downstream STruC++ reads the chosen
+    // output.
+    type DebugStResult = { ok: true; programSt: string } | { ok: false; programSt?: undefined; error: string }
+
+    const runDebugLegacy = async (): Promise<DebugStResult> => {
       try {
         const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
         _mainProcessPort.postMessage({
           logLevel: 'info',
           message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
         })
-      } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Error generating XML from JSON: ${error as string}\nStopping debug compilation process.`,
-        })
-        _mainProcessPort.close()
-        return
-      }
-
-      const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
-      try {
+        const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
         await this.handleTranspileXMLtoST(
           generatedXMLFilePath,
           (data, logLevel) => {
@@ -2938,15 +2908,50 @@ class CompilerModule {
           },
           ['--keep-structs'],
         )
+        const programSt = await readFile(join(sourceTargetFolderPath, 'program.st'), 'utf-8')
+        return { ok: true, programSt }
       } catch (error) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Error transpiling XML to ST: ${error as string}\nStopping debug compilation process.`,
-        })
-        _mainProcessPort.close()
-        return
+        return { ok: false, error: `xml2st failed: ${getErrorMessage(error)}` }
       }
     }
+
+    const runDebugInProcess = (): DebugStResult => {
+      try {
+        const ir = fromSchemaShape(projectData as unknown as SchemaProjectData)
+        const result = runJsonTranspiler(ir)
+        if (result.programSt === null || result.errors.length > 0) {
+          return { ok: false, error: result.errors.join('\n') || 'Failed to generate Structured Text' }
+        }
+        return { ok: true, programSt: result.programSt }
+      } catch (error) {
+        return { ok: false, error: `st-transpiler failed: ${getErrorMessage(error)}` }
+      }
+    }
+
+    await mkdir(sourceTargetFolderPath, { recursive: true })
+    const [oldStResult, newStResult] = await Promise.all([runDebugLegacy(), Promise.resolve(runDebugInProcess())])
+
+    const debugComparison = compareTranspilerOutput(
+      oldStResult.ok ? oldStResult.programSt : undefined,
+      newStResult.ok ? newStResult.programSt : undefined,
+    )
+    _mainProcessPort.postMessage({
+      logLevel: debugComparison.status === 'identical' ? 'info' : 'warning',
+      message: `Transpiler comparison: ${debugComparison.message}`,
+    })
+
+    const authoritativeSt = isNewTranspilerEnabled() ? newStResult : oldStResult
+    if (!authoritativeSt.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${authoritativeSt.error}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+    const programStPath = join(sourceTargetFolderPath, 'program.st')
+    await writeFile(programStPath, authoritativeSt.programSt, 'utf-8')
+    _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
       await this.copyStaticFiles(compilationPath, boardRuntime)
