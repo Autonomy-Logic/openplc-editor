@@ -738,6 +738,13 @@ export interface PackageManifest {
        * manifest.schema.json for the canonical field documentation.
        */
       platformOptions?: PlatformOption[]
+      /**
+       * Exact Arduino core version a prebuilt arduino-hal library was compiled
+       * against (arduino-cli targets with hal.provisioning="prebuilt"). The
+       * editor installs/verifies this version before linking, since the
+       * precompiled .a is ABI-locked to it.
+       */
+      coreVersion?: string
     }
     specs?: Record<string, string>
     hal: {
@@ -754,6 +761,12 @@ export interface PackageManifest {
       configTemplate?: string
       requirements?: string
       source?: string
+      /**
+       * Prebuilt arduino-hal (provisioning="prebuilt") precompiled Arduino
+       * library directory. Linked via --library alongside the source
+       * integration layer (hal.source).
+       */
+      precompiledLibrary?: string
       compilerFlags?: {
         c_flags?: string[]
         cxx_flags?: string[]

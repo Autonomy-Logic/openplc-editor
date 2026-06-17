@@ -212,6 +212,11 @@ export interface InstallArduinoCoreArgs {
   /** Core identifier (e.g. `arduino:avr`).  Editor invokes
    *  `arduino-cli core install <id>`. */
   coreId: string
+  /** Optional exact core version (e.g. `1.8.8`).  When set, the editor
+   *  installs `<id>@<version>` and verifies the installed version matches —
+   *  required for prebuilt arduino-hal boards whose precompiled `.a` is
+   *  ABI-locked to that core version. */
+  coreVersion?: string
 }
 
 /** Arduino-CLI library install (editor-only.  Same no-op

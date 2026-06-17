@@ -1036,13 +1036,23 @@ class CompilerModule {
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    coreVersion?: string,
   ) {
     if (boardCore === null) return
 
     const isCoreInstalled = Object.keys(await this.getArduinoInstalledCores()).some((core) => core === boardCore)
-    if (isCoreInstalled) {
+    // Without a pinned version, any installed version is fine — skip the install.
+    // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
+    // always run `core install <id>@<version>`: arduino-cli installs exactly that
+    // version (and fails if it does not exist), which both pins and verifies it.
+    if (!coreVersion && isCoreInstalled) {
       handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
+    }
+
+    const coreRef = coreVersion ? `${boardCore}@${coreVersion}` : boardCore
+    if (coreVersion) {
+      handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
     }
 
     let binaryPath = this.arduinoCliBinaryPath
@@ -1052,7 +1062,7 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, ...this.arduinoCliBaseParameters])
+      const executeCommand = spawn(binaryPath, ['core', 'install', coreRef, ...this.arduinoCliBaseParameters])
 
       let stderrData = ''
 
