@@ -10,16 +10,16 @@
  */
 
 import { PLC_BASE_TYPES } from '../helpers/base-types'
-import { type BlockInfos, blockOverloads } from '../helpers/block-library'
+import { type BlockInfos, blockInfosFromVariant } from '../helpers/block-library'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
-import { isOfType } from '../helpers/type-hierarchy'
 import { varTypeNames } from '../helpers/type-text'
 import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
 import type { TypeContext } from '../walker/connection-types'
-import { emitFbdBody } from '../walker/fbd'
+import { emitFbdBody, type RFFbdBody } from '../walker/fbd'
 import type { SyntheticVar } from '../walker/ld'
 import { emitLdBody } from '../walker/ld'
+import type { RFBody } from '../walker/types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
 
@@ -101,6 +101,35 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
 
 /* ────────────────────────── helpers ─────────────────────────────────────── */
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+// Block signatures from every graphical block instance's variant — the
+// co-located equivalent of xml2st's embedded <libraryBlocks> payload. Deduped
+// by name; user POUs are excluded (they resolve from their own interface).
+function collectBlockSignatures(project: TranspileProject): Map<string, BlockInfos> {
+  const userPouNames = new Set(project.pous.map((p) => p.name))
+  const registry = new Map<string, BlockInfos>()
+  const visit = (nodes: unknown): void => {
+    if (!Array.isArray(nodes)) return
+    for (const node of nodes) {
+      if (!isRecord(node) || node.type !== 'block' || !isRecord(node.data)) continue
+      const infos = blockInfosFromVariant(node.data.variant)
+      if (infos === null || userPouNames.has(infos.name) || registry.has(infos.name)) continue
+      registry.set(infos.name, infos)
+    }
+  }
+  for (const pou of project.pous) {
+    if (pou.body.language === 'ld') {
+      for (const rung of (pou.body.value as RFBody).rungs) visit(rung.nodes)
+    } else if (pou.body.language === 'fbd') {
+      visit((pou.body.value as RFFbdBody).rung.nodes)
+    }
+  }
+  return registry
+}
+
 // GetVariableType + GetBlockType ports (PLCGenerator.py:786-817, PLCControler.py:1288-1335)
 function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeContext {
   const interfaceTypes = new Map<string, string>()
@@ -138,38 +167,15 @@ function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeCon
     }
   }
 
-  const resolveBlock: TypeContext['resolveBlock'] = (typeName, inputs) => {
-    const entries = blockOverloads(typeName)
-    if (inputs === 'undefined') {
-      if (entries.length > 1) return null
-      if (entries.length === 1) return entries[0]
-    } else {
-      for (const entry of entries) {
-        const formals = entry.inputs.map((i) => i.type)
-        const n = Math.min(inputs.length, formals.length)
-        let ok = true
-        for (let i = 0; i < n; i++) {
-          if (inputs[i] !== 'ANY' && !isOfType(inputs[i], formals[i])) {
-            ok = false
-            break
-          }
-        }
-        if (ok) return entry
-      }
-    }
-    const projectInfos = projectBlockInfos(typeName)
-    if (projectInfos === null) return null
-    if (inputs === 'undefined') return projectInfos
-    const declared = projectInfos.inputs.map((i) => i.type)
-    return inputs.length === declared.length && inputs.every((t, i) => t === declared[i]) ? projectInfos : null
-  }
+  const libraryBlocks = collectBlockSignatures(project)
 
-  // member lookup uses the first overload even when ambiguous (python inputs=None branch)
-  const memberBlockInfos = (typeName: string): BlockInfos | null => {
-    const entries = blockOverloads(typeName)
-    if (entries.length > 0) return entries[0]
-    return projectBlockInfos(typeName)
-  }
+  // Library blocks (single generic signature each) resolve from the project's
+  // own variants; user-defined POUs resolve from their interface. Generic
+  // types stay verbatim — connection-type unification concretizes them.
+  const resolveBlock = (typeName: string): BlockInfos | null =>
+    libraryBlocks.get(typeName) ?? projectBlockInfos(typeName)
+
+  const memberBlockInfos = resolveBlock
 
   const variableType: TypeContext['variableType'] = (expression) => {
     const parts = expression.split('.')

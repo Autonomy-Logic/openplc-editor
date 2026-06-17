@@ -57,6 +57,9 @@ export const TypeHierarchy: Readonly<Record<string, string | null>> = {
   WORD: 'ANY_NBIT',
   DWORD: 'ANY_NBIT',
   LWORD: 'ANY_NBIT',
+  // Platform-width address type (strucpp/CODESYS parity); strucpp resolves the
+  // concrete width per target.
+  __XWORD: 'ANY_NBIT',
   // WSTRING intentionally absent — matches Python's `# TODO` comment.
 }
 

@@ -26,8 +26,8 @@ import type { RFBody, RFEdge, RFNode } from './types'
 export interface TypeContext {
   /** Declared/dot-path/literal type of an expression, or null. */
   variableType(expression: string): string | null
-  /** GetBlockType port: 'undefined' = unambiguous-only lookup. */
-  resolveBlock(typeName: string, inputs: readonly string[] | 'undefined'): BlockInfos | null
+  /** Block signature by type name (single generic signature), or null. */
+  resolveBlock(typeName: string): BlockInfos | null
 }
 
 export function pinIn(nodeId: string, handle = ''): string {
@@ -169,7 +169,7 @@ export function computeConnectionTypes(body: RFBody, ctx: TypeContext): Map<stri
       case 'block': {
         const data = asBlockData(node.data)
         if (data === null) break
-        const infos = ctx.resolveBlock(data.typeName, 'undefined')
+        const infos = ctx.resolveBlock(data.typeName)
         if (infos !== null) {
           computeBlockInputTypes(graph, pt, node, data, infos)
         } else {
@@ -194,10 +194,7 @@ export function computeConnectionTypes(body: RFBody, ctx: TypeContext): Map<stri
   }
 
   for (const { node, data } of deferred) {
-    const inputs = wiredInputHandles(graph, node, data)
-      .filter((h) => h !== 'EN')
-      .map((h) => pt.types.get(pinIn(node.id, h)) ?? 'ANY')
-    const infos = ctx.resolveBlock(data.typeName, inputs) ?? synthesizePermissiveBlockInfos(graph, node, data)
+    const infos = ctx.resolveBlock(data.typeName) ?? synthesizePermissiveBlockInfos(graph, node, data)
     computeBlockInputTypes(graph, pt, node, data, infos)
   }
 

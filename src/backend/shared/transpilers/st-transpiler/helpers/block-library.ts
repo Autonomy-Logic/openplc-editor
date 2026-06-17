@@ -1,21 +1,15 @@
 /**
- * Standard block-library resolution against the pre-built catalog.
+ * Block-library signatures, sourced from the project's own block variants.
  *
- * The full python pipeline resolves block types from three sources —
- * TC6 function-block library XMLs, `iec_std.csv` overloads, and
- * project-local POUs.  The first two are baked into
- * `data/std_block_catalog.json` at build time
- * (`tools/build_std_catalog.py`); the third is intentionally dropped
- * here because the only caller (`emit/pou-graphical.ts`) resolves
- * project POUs separately via `project.pous.find(...)`.
- *
- * Overload behaviour mirrors the python oracle's display mode: when
- * a name has multiple catalog entries (ADD, GT, …), the result has
- * all I/O collapsed to `'ANY'`.  The wrap then narrows via its own
- * type-resolution pass.
+ * openplc-web is co-located with strucpp and the user's installed libraries,
+ * so every placed block already carries its full typed signature in
+ * `node.data.variant` (the editor stamps it from the library on placement and
+ * `restamp-library-variants` keeps it fresh). The transpiler resolves block
+ * types from those variants — the same source `collect-library-blocks.ts`
+ * feeds the Python oracle as the embedded `<libraryBlocks>` payload — instead
+ * of bundling a separate catalog. Unknown blocks degrade to permissive
+ * synthesis in `connection-types.ts`.
  */
-
-import stdCatalog from '../data/std_block_catalog.json'
 
 export interface BlockIO {
   name: string
@@ -33,61 +27,48 @@ export interface BlockInfos {
   usage: string
 }
 
-export interface BlockResolution {
-  source: 'standard'
-  infos: BlockInfos
-}
-
-interface CatalogEntry {
-  section: string
-  infos: BlockInfos
-}
-
-const CATALOG: ReadonlyMap<string, readonly CatalogEntry[]> = (() => {
-  const map = new Map<string, CatalogEntry[]>()
-  for (const [name, entries] of Object.entries(stdCatalog as Record<string, CatalogEntry[]>)) {
-    map.set(name, entries)
-  }
-  return map
-})()
-
-/** All catalog overloads for a name, signatures intact (GetBlockType needs them). */
-export function blockOverloads(typename: string): readonly BlockInfos[] {
-  return (CATALOG.get(typename) ?? []).map((e) => cloneBlockInfos(e.infos))
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
 /**
- * Look the block name up in the standard catalog.  Single match →
- * return its infos.  Multiple matches → return the first entry with
- * all I/O types collapsed to `'ANY'` (the wrap re-narrows).  No
- * match → `null`.
+ * Build a block signature from a placed block's `node.data.variant`.
+ *
+ * Mirrors `collect-library-blocks.ts` / xml2st's `_pou_to_block_infos`:
+ * EN/ENO are implicit control pins (dropped); inOut params appear on both
+ * sides; a function's return is already a class-`output` variable named `OUT`.
+ * Generic IEC meta-types (`ANY`, `ANY_NUM`, …) are kept verbatim and resolved
+ * from the wired connections during type inference.
  */
-export function resolveBlockType(typename: string): BlockResolution | null {
-  const entries = CATALOG.get(typename) ?? []
-  let result: BlockInfos | null = null
-  for (const entry of entries) {
-    if (result !== null) return { source: 'standard', infos: collapseToAny(result) }
-    result = cloneBlockInfos(entry.infos)
-  }
-  return result === null ? null : { source: 'standard', infos: result }
-}
+export function blockInfosFromVariant(variant: unknown): BlockInfos | null {
+  if (!isRecord(variant)) return null
+  const name = typeof variant.name === 'string' ? variant.name : null
+  if (name === null) return null
 
-function cloneBlockInfos(infos: BlockInfos): BlockInfos {
-  return {
-    name: infos.name,
-    type: infos.type,
-    extensible: infos.extensible,
-    inputs: infos.inputs.map((i) => ({ ...i })),
-    outputs: infos.outputs.map((o) => ({ ...o })),
-    comment: infos.comment,
-    usage: infos.usage,
+  const inputs: BlockIO[] = []
+  const outputs: BlockIO[] = []
+  const variables = Array.isArray(variant.variables) ? variant.variables : []
+  for (const v of variables) {
+    if (!isRecord(v)) continue
+    const vName = typeof v.name === 'string' ? v.name : null
+    if (vName === null || vName === 'EN' || vName === 'ENO') continue
+    const type = isRecord(v.type) && typeof v.type.value === 'string' ? v.type.value : 'ANY'
+    const io: BlockIO = { name: vName, type, qualifier: 'none' }
+    if (v.class === 'input') inputs.push(io)
+    else if (v.class === 'output') outputs.push(io)
+    else if (v.class === 'inOut' || v.class === 'inout') {
+      inputs.push(io)
+      outputs.push(io)
+    }
   }
-}
 
-function collapseToAny(infos: BlockInfos): BlockInfos {
   return {
-    ...infos,
-    inputs: infos.inputs.map((i) => ({ ...i, type: 'ANY' })),
-    outputs: infos.outputs.map((o) => ({ ...o, type: 'ANY' })),
+    name,
+    type: variant.type === 'function-block' ? 'functionBlock' : 'function',
+    extensible: variant.extensible === true,
+    inputs,
+    outputs,
+    comment: '',
+    usage: '',
   }
 }
