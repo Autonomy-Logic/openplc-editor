@@ -108,7 +108,9 @@ describe('handleCoreInstallation (prebuilt core pin = exact manifest version)', 
     jest.mocked(spawn).mockReturnValue(fakeChild(1) as unknown as ReturnType<typeof spawn>)
     jest.spyOn(compilerModule, 'getArduinoInstalledCores').mockResolvedValue({} as InstalledCores)
 
-    await expect(compilerModule.handleCoreInstallation('FACTS:samd', log, '9.9.9')).rejects.toThrow(/exited with code 1/)
+    await expect(compilerModule.handleCoreInstallation('FACTS:samd', log, '9.9.9')).rejects.toThrow(
+      /exited with code 1/,
+    )
   })
 
   it('skips install (no spawn) only when the core is present AND no version is pinned', async () => {
