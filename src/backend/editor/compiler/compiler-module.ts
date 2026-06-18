@@ -1044,7 +1044,8 @@ class CompilerModule {
     // Without a pinned version, any installed version is fine — skip the install.
     // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
     // always run `core install <id>@<version>`: arduino-cli installs exactly that
-    // version (and fails if it does not exist), which both pins and verifies it.
+    // version and fails if it does not exist, pinning the core to the version
+    // the precompiled library was built against.
     if (!coreVersion && isCoreInstalled) {
       handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
