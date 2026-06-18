@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 
 import { CompilerModule } from '../compiler-module'
 
@@ -17,9 +18,9 @@ jest.mock('electron/main', () => ({}), { virtual: true })
 
 // compiler-module pulls in recipe-exec, which calls promisify(execFile) at
 // module load, so the mock must expose exec/execFile (with promisify.custom)
-// alongside spawn. handleCoreInstallation only ever reaches spawn, and only
-// on the install path; the relaxed-pin tests assert it is NOT spawned when the
-// same core is already present, so a bare jest.fn() for spawn suffices.
+// alongside spawn. handleCoreInstallation reaches spawn only on the install
+// path (core absent OR a pinned version is requested); the skip-path tests
+// assert spawn is NOT called.
 jest.mock('node:child_process', () => {
   const { promisify } = jest.requireActual('node:util') as typeof import('node:util')
   const noop = async () => ({ stdout: '', stderr: '' })
@@ -48,12 +49,23 @@ jest.mock('node:child_process', () => {
 
 type InstalledCores = Awaited<ReturnType<CompilerModule['getArduinoInstalledCores']>>
 
-describe('handleCoreInstallation (prebuilt core pin relaxed)', () => {
+// A fake ChildProcess that satisfies handleCoreInstallation's wiring
+// (stdout/stderr `.on`, plus a `close` event) and reports the given exit code
+// on the next tick so the `.on('close')` handler is registered first.
+function fakeChild(exitCode = 0) {
+  const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter }
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  setImmediate(() => child.emit('close', exitCode))
+  return child
+}
+
+describe('handleCoreInstallation (prebuilt core pin = exact manifest version)', () => {
   let compilerModule: CompilerModule
 
   beforeEach(() => {
     compilerModule = new CompilerModule()
-    jest.mocked(spawn).mockClear()
+    jest.mocked(spawn).mockReset()
   })
 
   it('does nothing when boardCore is null', async () => {
@@ -65,22 +77,41 @@ describe('handleCoreInstallation (prebuilt core pin relaxed)', () => {
     expect(log).not.toHaveBeenCalled()
   })
 
-  it('skips install (no spawn) when the same core is present, even with a divergent pinned version', async () => {
+  it('installs the EXACT pinned version even when a different version is already present', async () => {
     const log = jest.fn()
+    jest.mocked(spawn).mockReturnValue(fakeChild(0) as unknown as ReturnType<typeof spawn>)
     jest
       .spyOn(compilerModule, 'getArduinoInstalledCores')
       .mockResolvedValue({ 'FACTS:samd': { version: '1.7.99' } } as unknown as InstalledCores)
 
-    // Pinned 1.7.13, but 1.7.99 is installed: the relaxed policy accepts it.
     await compilerModule.handleCoreInstallation('FACTS:samd', log, '1.7.13')
 
-    expect(spawn).not.toHaveBeenCalled()
-    const message = log.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(message).toMatch(/already installed/)
-    expect(message).toMatch(/1\.7\.13 not enforced/)
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const [, argv] = jest.mocked(spawn).mock.calls[0]
+    expect(argv).toEqual(expect.arrayContaining(['core', 'install', 'FACTS:samd@1.7.13']))
   })
 
-  it('skips install when the core is present and no version is pinned', async () => {
+  it('installs the pinned version when the core is absent', async () => {
+    const log = jest.fn()
+    jest.mocked(spawn).mockReturnValue(fakeChild(0) as unknown as ReturnType<typeof spawn>)
+    jest.spyOn(compilerModule, 'getArduinoInstalledCores').mockResolvedValue({} as InstalledCores)
+
+    await compilerModule.handleCoreInstallation('FACTS:samd', log, '1.7.13')
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const [, argv] = jest.mocked(spawn).mock.calls[0]
+    expect(argv).toEqual(expect.arrayContaining(['core', 'install', 'FACTS:samd@1.7.13']))
+  })
+
+  it('rejects when the pinned version install fails (non-zero exit)', async () => {
+    const log = jest.fn()
+    jest.mocked(spawn).mockReturnValue(fakeChild(1) as unknown as ReturnType<typeof spawn>)
+    jest.spyOn(compilerModule, 'getArduinoInstalledCores').mockResolvedValue({} as InstalledCores)
+
+    await expect(compilerModule.handleCoreInstallation('FACTS:samd', log, '9.9.9')).rejects.toThrow(/exited with code 1/)
+  })
+
+  it('skips install (no spawn) only when the core is present AND no version is pinned', async () => {
     const log = jest.fn()
     jest
       .spyOn(compilerModule, 'getArduinoInstalledCores')
@@ -91,6 +122,5 @@ describe('handleCoreInstallation (prebuilt core pin relaxed)', () => {
     expect(spawn).not.toHaveBeenCalled()
     const message = log.mock.calls.map((c) => String(c[0])).join('\n')
     expect(message).toMatch(/already installed/)
-    expect(message).not.toMatch(/not enforced/)
   })
 })

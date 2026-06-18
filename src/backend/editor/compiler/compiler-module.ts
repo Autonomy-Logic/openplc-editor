@@ -1041,22 +1041,12 @@ class CompilerModule {
     if (boardCore === null) return
 
     const isCoreInstalled = Object.keys(await this.getArduinoInstalledCores()).some((core) => core === boardCore)
-    // TEMPORARY: the strict ABI version pin is relaxed for now. Prebuilt arduino
-    // libraries are technically ABI-locked to target.coreVersion, so a divergent
-    // installed version could break the link; until the team finalizes that
-    // policy we only require the SAME core to be present, not the exact pinned
-    // version. Any already-installed version of the core is accepted, and the
-    // pinned version is only used to choose what to install when the core is
-    // absent (below).
-    // TODO: re-introduce exact-version verification (install <id>@<version> and
-    // assert the installed version matches) once the ABI-pin policy is decided.
-    if (isCoreInstalled) {
-      handleOutputData(
-        coreVersion
-          ? `Core ${boardCore} is already installed (pinned ${coreVersion} not enforced for now).`
-          : `Core ${boardCore} is already installed.`,
-        'info',
-      )
+    // Without a pinned version, any installed version is fine — skip the install.
+    // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
+    // always run `core install <id>@<version>`: arduino-cli installs exactly that
+    // version (and fails if it does not exist), which both pins and verifies it.
+    if (!coreVersion && isCoreInstalled) {
+      handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
     }
 
