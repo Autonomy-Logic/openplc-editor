@@ -95,7 +95,9 @@ describe('resolveVariableAddress', () => {
 
   it('resolves an instance variable', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'MOTOR_SPEED' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.MOTOR_SPEED', 0, 11]), [inst('INSTANCE0', 'MAIN')])).toMatchObject({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.MOTOR_SPEED', 0, 11]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 11,
     })
@@ -103,7 +105,9 @@ describe('resolveVariableAddress', () => {
 
   it('resolves a nested-path instance variable (struct/FB field)', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'SENSOR.VALUE' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.SENSOR.VALUE', 0, 25]), [inst('INSTANCE0', 'MAIN')])).toMatchObject({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.SENSOR.VALUE', 0, 25]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 25,
     })
@@ -111,7 +115,9 @@ describe('resolveVariableAddress', () => {
 
   it('preserves array brackets in path segments', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'PROFILES[3]' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.PROFILES[3]', 0, 30]), [inst('INSTANCE0', 'MAIN')])).toMatchObject({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.PROFILES[3]', 0, 30]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 30,
     })
@@ -165,7 +171,9 @@ describe('resolveStructureAddresses', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'X', datatype: 'INT' })],
     })
-    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.X', 0, 3, 'REAL', 4]), [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.X', 0, 3, 'REAL', 4]), [
+      inst('INSTANCE0', 'MAIN'),
+    ])
     expect(result[0]).toMatchObject({ name: 'X', datatype: 'REAL', size: 4, arr: 0, elem: 3 })
   })
 
@@ -268,7 +276,9 @@ describe('resolveStructureAddresses', () => {
 describe('resolveArrayAddress', () => {
   it('resolves the first element of an instance array', () => {
     const node = makeNode({ nodeType: 'array', variablePath: 'PROFILE', arrayLength: 5 })
-    expect(resolveArrayAddress(node, pmap(['INSTANCE0.PROFILE[0]', 0, 100]), [inst('INSTANCE0', 'MAIN')])).toMatchObject({
+    expect(
+      resolveArrayAddress(node, pmap(['INSTANCE0.PROFILE[0]', 0, 100]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 100,
     })
