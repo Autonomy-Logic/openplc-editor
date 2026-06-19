@@ -1,6 +1,6 @@
 import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '@root/middleware/shared/ports/open-plc-types'
 
-import { packDebugAddr } from '../../debug-parser'
+import type { DebugLeafInfo } from '../../debug-parser'
 import {
   OpcUaConfigError,
   resolveArrayAddress,
@@ -32,13 +32,17 @@ const makeField = (overrides: Partial<OpcUaFieldConfig> = {}): OpcUaFieldConfig 
   ...overrides,
 })
 
-// Build the uppercase-path → packed-addr Map the resolver consumes.
-// Same shape buildLeafPathMap produces from a real debug-map.json,
-// so tests exercise the production lookup path verbatim.
-const pmap = (...entries: Array<[path: string, arr: number, elem: number]>): Map<string, number> => {
-  const out = new Map<string, number>()
-  for (const [path, arr, elem] of entries) {
-    out.set(path.toUpperCase(), packDebugAddr({ arrayIdx: arr, elemIdx: elem }))
+// Build the uppercase-path → DebugLeafInfo Map the resolver consumes.
+// Same shape buildLeafInfoMap produces from a real debug-map.json, so
+// tests exercise the production lookup path verbatim. type/size default
+// to INT/2; pass them explicitly to exercise canonical-type emission or
+// the empty-type fallback.
+const pmap = (
+  ...entries: Array<[path: string, arr: number, elem: number, type?: string, size?: number]>
+): Map<string, DebugLeafInfo> => {
+  const out = new Map<string, DebugLeafInfo>()
+  for (const [path, arr, elem, type = 'INT', size = 2] of entries) {
+    out.set(path.toUpperCase(), { arr, elem, type, size })
   }
   return out
 }
@@ -59,17 +63,29 @@ describe('OpcUaConfigError', () => {
 describe('resolveVariableAddress', () => {
   it('resolves a global variable (GVL)', () => {
     const node = makeNode({ pouName: 'GVL', variablePath: 'SPEED' })
-    expect(resolveVariableAddress(node, pmap(['SPEED', 0, 5]), [])).toEqual({ arr: 0, elem: 5 })
+    expect(resolveVariableAddress(node, pmap(['SPEED', 0, 5]), [])).toMatchObject({ arr: 0, elem: 5 })
+  })
+
+  it('returns the canonical type and size from the debug map (not the stored type)', () => {
+    // node.variableType is INT, but the compiler says LREAL/8 — the
+    // canonical map wins so the runtime encodes the right width.
+    const node = makeNode({ pouName: 'GVL', variablePath: 'TEMP', variableType: 'INT' })
+    expect(resolveVariableAddress(node, pmap(['TEMP', 2, 9, 'LREAL', 8]), [])).toEqual({
+      arr: 2,
+      elem: 9,
+      type: 'LREAL',
+      size: 8,
+    })
   })
 
   it('resolves a global variable (CONFIG)', () => {
     const node = makeNode({ pouName: 'CONFIG', variablePath: 'TEMP' })
-    expect(resolveVariableAddress(node, pmap(['TEMP', 1, 12]), [])).toEqual({ arr: 1, elem: 12 })
+    expect(resolveVariableAddress(node, pmap(['TEMP', 1, 12]), [])).toMatchObject({ arr: 1, elem: 12 })
   })
 
   it('matches case-insensitively', () => {
     const node = makeNode({ pouName: 'gvl', variablePath: 'b' })
-    expect(resolveVariableAddress(node, pmap(['B', 0, 7]), [])).toEqual({ arr: 0, elem: 7 })
+    expect(resolveVariableAddress(node, pmap(['B', 0, 7]), [])).toMatchObject({ arr: 0, elem: 7 })
   })
 
   it('throws when global variable not found', () => {
@@ -79,7 +95,9 @@ describe('resolveVariableAddress', () => {
 
   it('resolves an instance variable', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'MOTOR_SPEED' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.MOTOR_SPEED', 0, 11]), [inst('INSTANCE0', 'MAIN')])).toEqual({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.MOTOR_SPEED', 0, 11]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 11,
     })
@@ -87,7 +105,9 @@ describe('resolveVariableAddress', () => {
 
   it('resolves a nested-path instance variable (struct/FB field)', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'SENSOR.VALUE' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.SENSOR.VALUE', 0, 25]), [inst('INSTANCE0', 'MAIN')])).toEqual({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.SENSOR.VALUE', 0, 25]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 25,
     })
@@ -95,7 +115,9 @@ describe('resolveVariableAddress', () => {
 
   it('preserves array brackets in path segments', () => {
     const node = makeNode({ pouName: 'MAIN', variablePath: 'PROFILES[3]' })
-    expect(resolveVariableAddress(node, pmap(['INSTANCE0.PROFILES[3]', 0, 30]), [inst('INSTANCE0', 'MAIN')])).toEqual({
+    expect(
+      resolveVariableAddress(node, pmap(['INSTANCE0.PROFILES[3]', 0, 30]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 30,
     })
@@ -119,7 +141,7 @@ describe('resolveStructureAddresses', () => {
     const node = makeNode({ nodeType: 'structure', variablePath: 'STRUCT' })
     const result = resolveStructureAddresses(node, pmap(['INSTANCE0.STRUCT', 0, 9]), [inst('INSTANCE0', 'MAIN')])
     expect(result).toHaveLength(1)
-    expect(result[0]).toEqual({ name: 'STRUCT', datatype: 'INT', arr: 0, elem: 9, permissions: perm })
+    expect(result[0]).toMatchObject({ name: 'STRUCT', datatype: 'INT', arr: 0, elem: 9, permissions: perm })
   })
 
   it('throws when instance not found and fields are present', () => {
@@ -133,12 +155,26 @@ describe('resolveStructureAddresses', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'X', datatype: 'INT' }), makeField({ fieldPath: 'Y', datatype: 'REAL' })],
     })
-    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.X', 0, 3], ['INSTANCE0.S.Y', 0, 4]), [
-      inst('INSTANCE0', 'MAIN'),
-    ])
+    const result = resolveStructureAddresses(
+      node,
+      pmap(['INSTANCE0.S.X', 0, 3, 'INT', 2], ['INSTANCE0.S.Y', 0, 4, 'REAL', 4]),
+      [inst('INSTANCE0', 'MAIN')],
+    )
     expect(result).toHaveLength(2)
     expect(result[0]).toMatchObject({ name: 'X', arr: 0, elem: 3, datatype: 'INT' })
     expect(result[1]).toMatchObject({ name: 'Y', arr: 0, elem: 4, datatype: 'REAL' })
+  })
+
+  it('emits canonical type and size on leaf fields (debug map wins over stored datatype)', () => {
+    const node = makeNode({
+      nodeType: 'structure',
+      variablePath: 'S',
+      fields: [makeField({ fieldPath: 'X', datatype: 'INT' })],
+    })
+    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.X', 0, 3, 'REAL', 4]), [
+      inst('INSTANCE0', 'MAIN'),
+    ])
+    expect(result[0]).toMatchObject({ name: 'X', datatype: 'REAL', size: 4, arr: 0, elem: 3 })
   })
 
   it('resolves nested fields recursively (FB inside FB)', () => {
@@ -155,7 +191,7 @@ describe('resolveStructureAddresses', () => {
     })
     const result = resolveStructureAddresses(
       node,
-      pmap(['INSTANCE0.MY_FB.TON0.IN', 0, 10], ['INSTANCE0.MY_FB.TON0.ET', 0, 11]),
+      pmap(['INSTANCE0.MY_FB.TON0.IN', 0, 10, 'BOOL', 1], ['INSTANCE0.MY_FB.TON0.ET', 0, 11, 'TIME', 8]),
       [inst('INSTANCE0', 'MAIN')],
     )
     expect(result).toHaveLength(1)
@@ -211,7 +247,7 @@ describe('resolveStructureAddresses', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'B', datatype: 'REAL' })],
     })
-    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.B', 0, 60]), [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.B', 0, 60, '']), [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('REAL')
   })
 
@@ -221,7 +257,7 @@ describe('resolveStructureAddresses', () => {
       variablePath: 'S',
       fields: [makeField({ fieldPath: 'C' })],
     })
-    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.C', 0, 61]), [inst('INSTANCE0', 'MAIN')])
+    const result = resolveStructureAddresses(node, pmap(['INSTANCE0.S.C', 0, 61, '']), [inst('INSTANCE0', 'MAIN')])
     expect(result[0].datatype).toBe('UNKNOWN')
   })
 
@@ -240,15 +276,27 @@ describe('resolveStructureAddresses', () => {
 describe('resolveArrayAddress', () => {
   it('resolves the first element of an instance array', () => {
     const node = makeNode({ nodeType: 'array', variablePath: 'PROFILE', arrayLength: 5 })
-    expect(resolveArrayAddress(node, pmap(['INSTANCE0.PROFILE[0]', 0, 100]), [inst('INSTANCE0', 'MAIN')])).toEqual({
+    expect(
+      resolveArrayAddress(node, pmap(['INSTANCE0.PROFILE[0]', 0, 100]), [inst('INSTANCE0', 'MAIN')]),
+    ).toMatchObject({
       arr: 0,
       elem: 100,
     })
   })
 
+  it('returns the canonical element type and size from the debug map', () => {
+    const node = makeNode({ nodeType: 'array', pouName: 'GVL', variablePath: 'TBL', arrayLength: 3 })
+    expect(resolveArrayAddress(node, pmap(['TBL[0]', 0, 5, 'DINT', 4]), [])).toEqual({
+      arr: 0,
+      elem: 5,
+      type: 'DINT',
+      size: 4,
+    })
+  })
+
   it('resolves the first element of a global array', () => {
     const node = makeNode({ nodeType: 'array', pouName: 'GVL', variablePath: 'TABLE', arrayLength: 4 })
-    expect(resolveArrayAddress(node, pmap(['TABLE[0]', 1, 7]), [])).toEqual({ arr: 1, elem: 7 })
+    expect(resolveArrayAddress(node, pmap(['TABLE[0]', 1, 7]), [])).toMatchObject({ arr: 1, elem: 7 })
   })
 
   it('throws when instance not found', () => {
@@ -274,7 +322,7 @@ describe('resolveArrayAddress', () => {
       ['INSTANCE0.MY_ARRAY[2]', 0, 31],
       ['INSTANCE0.MY_ARRAY[3]', 0, 32],
     )
-    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toEqual({ arr: 0, elem: 30 })
+    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toMatchObject({ arr: 0, elem: 30 })
   })
 
   it('resolves an array with negative lower bound (ARRAY[-2..2])', () => {
@@ -287,7 +335,7 @@ describe('resolveArrayAddress', () => {
       ['INSTANCE0.SIGNED_ARR[-1]', 0, 11],
       ['INSTANCE0.SIGNED_ARR[0]', 0, 12],
     )
-    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toEqual({ arr: 0, elem: 10 })
+    expect(resolveArrayAddress(node, leaves, [inst('INSTANCE0', 'MAIN')])).toMatchObject({ arr: 0, elem: 10 })
   })
 
   it('does not match sub-elements of an array of structs as the array base', () => {

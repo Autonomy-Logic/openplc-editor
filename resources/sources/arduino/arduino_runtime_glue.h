@@ -42,6 +42,14 @@ void runtime_discover_tasks();
 // Per-cycle helpers (call once per scan cycle from scheduler()/loop()).
 void runtime_plc_cycle();
 
+// Re-impose forced located variables' values onto their raw storage. Call
+// after any code path that writes the image pointers directly (HAL input
+// refresh, Modbus reverse-copy) so a debugger force is not clobbered. Cheap
+// no-op when nothing is forced. runtime_plc_cycle() already calls it after
+// the input refresh; the sketch must also call it after modbusTask()'s
+// reverse-copy.
+void runtime_apply_located_forces();
+
 // ---------------------------------------------------------------------------
 // Debug dispatch shims — extern "C" wrappers around strucpp::debug::handle_*.
 //
