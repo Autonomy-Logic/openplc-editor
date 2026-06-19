@@ -133,6 +133,37 @@ describe('buildArduinoCliCompileArgs', () => {
     expect(args.some((a) => a.startsWith('upload.maximum_data_size='))).toBe(false)
   })
 
+  it('appends a 2nd --library for the prebuilt vendor lib, right after the main one', () => {
+    const args = buildArduinoCliCompileArgs(
+      { platform: 'FACTS:samd:P1AM-200', core: 'FACTS:samd' },
+      {
+        sketchPath: '/work/examples/Baremetal/Baremetal.ino',
+        libraryPath: '/work/src',
+        prebuiltLibraryPath: '/packages/p1am/hal/arduino/lib',
+        parallel: false,
+      },
+    )
+    const firstLib = args.indexOf('--library')
+    // Two --library flags: the main src/ then the prebuilt vendor lib.
+    expect(args.filter((a) => a === '--library')).toHaveLength(2)
+    expect(args.slice(firstLib, firstLib + 4)).toEqual([
+      '--library',
+      '/work/src',
+      '--library',
+      '/packages/p1am/hal/arduino/lib',
+    ])
+    // The vendor lib still precedes --export-binaries / -b / sketch.
+    expect(args.indexOf('/packages/p1am/hal/arduino/lib')).toBeLessThan(args.indexOf('--export-binaries'))
+  })
+
+  it('emits a single --library when prebuiltLibraryPath is absent', () => {
+    const args = buildArduinoCliCompileArgs(
+      { platform: 'arduino:avr:mega' },
+      { sketchPath: 'a.ino', libraryPath: 'src', parallel: false },
+    )
+    expect(args.filter((a) => a === '--library')).toHaveLength(1)
+  })
+
   it('appends trailingArgs after the sketch path', () => {
     const args = buildArduinoCliCompileArgs(
       { platform: 'arduino:avr:mega' },

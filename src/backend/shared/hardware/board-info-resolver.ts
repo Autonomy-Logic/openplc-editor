@@ -156,6 +156,13 @@ export interface BoardBuildInfo {
   extraArduinoLibraries?: string[]
   /** Opaque key for a package-supplied `libraries/` folder. */
   localLibrariesDir?: string
+  /** Prebuilt arduino-hal (provisioning="prebuilt"): the precompiled Arduino
+   *  library dir, linked via a 2nd `--library`. Its presence marks an arduino
+   *  prebuilt board (the source HAL still compiles as the integration layer). */
+  precompiledLibraryDir?: string
+  /** Exact Arduino core version to install/verify before linking a prebuilt
+   *  arduino library (ABI-locked). From `target.coreVersion`. */
+  coreVersion?: string
   /** Per-board capability overrides.  Merged by
    *  `resolveTargetCapabilities` on top of the compiler preset.
    *  Sourced from `hals.json` `capabilities` (static boards) or VPP
@@ -278,6 +285,7 @@ export class BoardInfoResolver {
     if (device.target.platformOptions && device.target.platformOptions.length > 0) {
       info.platformOptions = device.target.platformOptions
     }
+    if (device.target.coreVersion) info.coreVersion = device.target.coreVersion
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)
@@ -285,6 +293,7 @@ export class BoardInfoResolver {
     if (device.hal.configTemplate) info.configTemplate = resolveRel(pkg.path, device.hal.configTemplate)
     if (device.hal.requirements) info.requirements = resolveRel(pkg.path, device.hal.requirements)
     if (device.hal.libraries) info.localLibrariesDir = resolveRel(pkg.path, device.hal.libraries)
+    if (device.hal.precompiledLibrary) info.precompiledLibraryDir = resolveRel(pkg.path, device.hal.precompiledLibrary)
 
     const flags = this.#collectFlags(
       device.hal.compilerFlags?.c_flags,

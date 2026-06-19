@@ -104,6 +104,14 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  install fires only when that board is selected.  Boards that
    *  don't need a specific library never download it. */
   extra_libraries?: string[]
+  /** Prebuilt arduino-hal (provisioning="prebuilt"): the precompiled Arduino
+   *  library dir, linked via a 2nd `--library`. Present only for arduino
+   *  prebuilt boards (the `source` HAL still compiles as the integration layer).
+   *  Sourced from the VPP manifest `device.hal.precompiledLibrary`. */
+  precompiledLibraryDir?: string
+  /** Exact Arduino core version to install/verify before linking a prebuilt
+   *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
+  coreVersion?: string
   /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
    *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
    *  preset lookup — without this the resolver can't pick the right
@@ -643,7 +651,11 @@ async function runCompilePipelineInner(
   // ---------------------------------------------------------------------
   emit({ stage: 'core-install', message: 'Installing Arduino core...', level: 'info' })
   const coreInstall = await port.installArduinoCore(
-    { coreId: typeof boardEntry.platform === 'string' ? deriveArduinoCoreFromPlatform(boardEntry.platform) : '' },
+    {
+      coreId: typeof boardEntry.platform === 'string' ? deriveArduinoCoreFromPlatform(boardEntry.platform) : '',
+      // Pin the exact core version for prebuilt arduino libraries (ABI-locked).
+      ...(boardEntry.coreVersion ? { coreVersion: boardEntry.coreVersion } : {}),
+    },
     makePlatformLog(emit, 'core-install'),
   )
   if (!coreInstall.ok) {
@@ -721,6 +733,9 @@ async function runCompilePipelineInner(
     libraryPath: 'src',
     avrLibStdCppInclude,
     parallel: arduinoCliParallel,
+    // Prebuilt arduino-hal: link the precompiled vendor library alongside the
+    // source integration layer. arduino-cli accepts a 2nd --library.
+    ...(boardEntry.precompiledLibraryDir ? { prebuiltLibraryPath: boardEntry.precompiledLibraryDir } : {}),
   })
 
   // Run arduino-cli compile.  Editor: spawns the binary.  Web: HTTP

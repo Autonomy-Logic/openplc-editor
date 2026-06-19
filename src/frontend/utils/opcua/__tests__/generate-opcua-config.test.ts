@@ -6,7 +6,7 @@ import type {
   PLCServer,
 } from '@root/middleware/shared/ports/open-plc-types'
 
-import { generateOpcUaConfig, validateOpcUaConfig } from '../generate-opcua-config'
+import { generateOpcUaConfig, OPCUA_CONFIG_FORMAT_VERSION, validateOpcUaConfig } from '../generate-opcua-config'
 import { OpcUaConfigError } from '../resolve-indices'
 import * as resolveIndices from '../resolve-indices'
 import type { PLCInstanceInfo } from '../types'
@@ -145,6 +145,35 @@ describe('generateOpcUaConfig', () => {
     const parsed = JSON.parse(json) as Array<{ config: { server: { endpoint_url: string; application_uri: string } } }>
     expect(parsed[0].config.server.endpoint_url).toBe('opc.tcp://0.0.0.0:4840/openplc')
     expect(parsed[0].config.server.application_uri).toBe('urn:test:server')
+  })
+
+  it('stamps the contract format_version so the runtime can gate old configs', () => {
+    const cfg = baseServerConfig()
+    const json = generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), [])!
+    const parsed = JSON.parse(json) as Array<{ config: { format_version: number } }>
+    expect(parsed[0].config.format_version).toBe(OPCUA_CONFIG_FORMAT_VERSION)
+  })
+
+  it('emits canonical datatype + size for a simple variable from the debug map (not the stored type)', () => {
+    const cfg = baseServerConfig()
+    // Stored variableType is INT, but the compiler says the leaf is a
+    // 4-byte DINT — the runtime must encode 4 bytes, so the emitted
+    // datatype/size come from the debug map, not the stored type.
+    cfg.addressSpace.nodes = [makeNode({ pouName: 'GVL', variablePath: 'COUNTER', variableType: 'INT' })]
+    const json = generateOpcUaConfig(
+      [makePLCServer(cfg)],
+      debugMapJson([{ path: 'COUNTER', type: 'DINT', arr: 0, elem: 1, size: 4 }]),
+      [],
+    )!
+    const parsed = JSON.parse(json) as Array<{
+      config: { address_space: { variables: Array<{ datatype: string; size: number; arr: number; elem: number }> } }
+    }>
+    expect(parsed[0].config.address_space.variables[0]).toMatchObject({
+      datatype: 'DINT',
+      size: 4,
+      arr: 0,
+      elem: 1,
+    })
   })
 
   it('filters disabled security profiles', () => {
@@ -347,28 +376,28 @@ describe('generateOpcUaConfig', () => {
     expect(parsed[0].config.address_space.arrays[0].datatype).toBe('REAL')
   })
 
-  it('returns original variableType when no OF pattern found', () => {
+  it('uses the canonical element type/size from the debug map, ignoring the stored variableType', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [
       makeNode({
         nodeType: 'array',
         variablePath: 'WEIRD',
-        variableType: 'WEIRD_TYPE',
+        variableType: 'WEIRD_TYPE', // stored type is bogus — must be ignored
         arrayLength: 1,
       }),
     ]
     const json = generateOpcUaConfig(
       [makePLCServer(cfg)],
-      debugMapJson([{ path: 'INSTANCE0.WEIRD[0]', type: 'INT', arr: 0, elem: 1 }]),
+      debugMapJson([{ path: 'INSTANCE0.WEIRD[0]', type: 'DINT', arr: 0, elem: 1, size: 4 }]),
       instances,
     )!
     const parsed = JSON.parse(json) as Array<{
-      config: { address_space: { arrays: Array<{ datatype: string }> } }
+      config: { address_space: { arrays: Array<{ datatype: string; size: number }> } }
     }>
-    expect(parsed[0].config.address_space.arrays[0].datatype).toBe('WEIRD_TYPE')
+    expect(parsed[0].config.address_space.arrays[0]).toMatchObject({ datatype: 'DINT', size: 4 })
   })
 
-  it('uses UNKNOWN when no elementType and variableType is empty', () => {
+  it('uses the canonical element type even when the stored variableType is empty', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [
       makeNode({
@@ -380,13 +409,13 @@ describe('generateOpcUaConfig', () => {
     ]
     const json = generateOpcUaConfig(
       [makePLCServer(cfg)],
-      debugMapJson([{ path: 'INSTANCE0.A[0]', type: 'INT', arr: 0, elem: 0 }]),
+      debugMapJson([{ path: 'INSTANCE0.A[0]', type: 'INT', arr: 0, elem: 0, size: 2 }]),
       instances,
     )!
     const parsed = JSON.parse(json) as Array<{
-      config: { address_space: { arrays: Array<{ datatype: string }> } }
+      config: { address_space: { arrays: Array<{ datatype: string; size: number }> } }
     }>
-    expect(parsed[0].config.address_space.arrays[0].datatype).toBe('UNKNOWN')
+    expect(parsed[0].config.address_space.arrays[0]).toMatchObject({ datatype: 'INT', size: 2 })
   })
 
   it('defaults arrayLength to 1 when not set', () => {

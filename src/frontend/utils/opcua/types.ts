@@ -30,7 +30,12 @@ export interface PLCInstanceInfo {
  */
 export interface ResolvedField {
   name: string
+  /** Canonical IEC type from the compiler's debug map for leaves; the
+   *  stored container type (FB/struct name) for complex parents. */
   datatype: string
+  /** Canonical byte width from the compiler — null for complex parents
+   *  (no leaf of their own; only their child leaves carry a size). */
+  size: number | null
   /** Address of the leaf — null for complex types whose own address
    *  doesn't make sense (only their child leaves do). */
   arr: number | null

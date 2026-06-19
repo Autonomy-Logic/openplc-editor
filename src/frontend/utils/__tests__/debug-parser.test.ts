@@ -1,4 +1,11 @@
-import { buildLeafPathMap, type DebugMap, packDebugAddr, parseDebugMap, unpackDebugAddr } from '../debug-parser'
+import {
+  buildLeafInfoMap,
+  buildLeafPathMap,
+  type DebugMap,
+  packDebugAddr,
+  parseDebugMap,
+  unpackDebugAddr,
+} from '../debug-parser'
 
 describe('packDebugAddr / unpackDebugAddr', () => {
   it('packs (0, 0) as 0', () => {
@@ -149,5 +156,45 @@ describe('buildLeafPathMap', () => {
     const out = buildLeafPathMap(map)
     expect(out.size).toBe(1)
     expect(unpackDebugAddr(out.get('PRG.X')!)).toEqual({ arrayIdx: 0, elemIdx: 1 })
+  })
+})
+
+describe('buildLeafInfoMap', () => {
+  it('returns an empty map for a debug map with no leaves', () => {
+    const map: DebugMap = { version: 2, md5: 'x', typeTags: {}, arrays: [], leaves: [] }
+    expect(buildLeafInfoMap(map).size).toBe(0)
+  })
+
+  it('keys by uppercase path and retains canonical arr/elem/type/size', () => {
+    const map: DebugMap = {
+      version: 2,
+      md5: 'x',
+      typeTags: {},
+      arrays: [{ index: 0, count: 2 }],
+      leaves: [
+        { arrayIdx: 0, elemIdx: 1, path: 'cfg.g_b', type: 'DINT', size: 4 },
+        { arrayIdx: 5, elemIdx: 0, path: 'IH1.X', type: 'LREAL', size: 8 },
+      ],
+    }
+    const out = buildLeafInfoMap(map)
+    expect(out.get('CFG.G_B')).toEqual({ arr: 0, elem: 1, type: 'DINT', size: 4 })
+    expect(out.get('IH1.X')).toEqual({ arr: 5, elem: 0, type: 'LREAL', size: 8 })
+    expect(out.has('cfg.g_b')).toBe(false)
+  })
+
+  it('overwrites duplicate paths (last writer wins)', () => {
+    const map: DebugMap = {
+      version: 2,
+      md5: 'x',
+      typeTags: {},
+      arrays: [{ index: 0, count: 2 }],
+      leaves: [
+        { arrayIdx: 0, elemIdx: 0, path: 'PRG.X', type: 'INT', size: 2 },
+        { arrayIdx: 0, elemIdx: 1, path: 'PRG.X', type: 'REAL', size: 4 }, // dup
+      ],
+    }
+    const out = buildLeafInfoMap(map)
+    expect(out.size).toBe(1)
+    expect(out.get('PRG.X')).toEqual({ arr: 0, elem: 1, type: 'REAL', size: 4 })
   })
 })
