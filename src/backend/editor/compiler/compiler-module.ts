@@ -1036,13 +1036,24 @@ class CompilerModule {
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    coreVersion?: string,
   ) {
     if (boardCore === null) return
 
     const isCoreInstalled = Object.keys(await this.getArduinoInstalledCores()).some((core) => core === boardCore)
-    if (isCoreInstalled) {
+    // Without a pinned version, any installed version is fine — skip the install.
+    // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
+    // always run `core install <id>@<version>`: arduino-cli installs exactly that
+    // version and fails if it does not exist, pinning the core to the version
+    // the precompiled library was built against.
+    if (!coreVersion && isCoreInstalled) {
       handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
+    }
+
+    const coreRef = coreVersion ? `${boardCore}@${coreVersion}` : boardCore
+    if (coreVersion) {
+      handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
     }
 
     let binaryPath = this.arduinoCliBinaryPath
@@ -1052,7 +1063,7 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, ...this.arduinoCliBaseParameters])
+      const executeCommand = spawn(binaryPath, ['core', 'install', coreRef, ...this.arduinoCliBaseParameters])
 
       let stderrData = ''
 
@@ -1790,6 +1801,13 @@ class CompilerModule {
       ...cxxFlagsArg,
       '--library',
       precompiledLibDir,
+      // Prebuilt arduino-hal (mixed): the vendor's precompiled library. The
+      // open hal.source layer (renamed to arduino.cpp, compiled here alongside
+      // the sketch — NOT in the precompile pass) does `#include "p1am_vendor.h"`,
+      // so arduino-cli needs the lib's src/ on the include path. Passing it as a
+      // 2nd --library both resolves the boundary header and auto-links the
+      // src/<build.mcu>/lib*.a archive (the lib ships precompiled=full).
+      ...(info.precompiledLibraryDir ? ['--library', info.precompiledLibraryDir] : []),
       '--build-property',
       `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
@@ -2243,19 +2261,24 @@ class CompilerModule {
         handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
       }
 
-      // --- Step 2: Copy plugin source + generate checksum ---
+      // --- Step 2: Copy plugin payload + generate checksum ---
       const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
       if (!pluginEntryRelPath) {
         handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
         return
       }
 
-      // The plugin source directory is the parent directory of pluginEntry.
+      // Resolve the plugin directory. In "source" mode (default) pluginEntry is
+      // the entry source file, so the dir is its parent. In "prebuilt" mode
+      // (provisioning === 'prebuilt') pluginEntry is the directory itself,
+      // holding the precompiled .o objects plus the link-only Makefile.
       // pluginEntryRelPath is supplied by the package manifest; without
       // containment, an entry like `../../../etc` would resolve outside
       // matchingPackagePath and the recursive-copy below would slurp
       // arbitrary host files into the build's vpp_plugin directory.
-      const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
+      const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
+      const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
       try {
         assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
       } catch (err) {
@@ -2346,7 +2369,7 @@ class CompilerModule {
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
       handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
+        `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
     } catch (error) {
