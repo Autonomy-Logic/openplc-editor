@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
-import { useCapabilities } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
   ProjectTreeBranch,
@@ -17,12 +18,32 @@ import {
 
 type PouLeafLang = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
+// Mirror the backend's RenameProjectDto rules so we can reject obviously
+// invalid names before the round-trip and give immediate feedback. The
+// backend (`project-input.constants.ts`) is still the source of truth — long
+// dashes break git refs / S3 paths handled by the git-worker.
+const PROJECT_NAME_MIN = 2
+const PROJECT_NAME_MAX = 100
+const DASH_FREE_PATTERN = /^[^—–―]*$/
+
+function validateProjectName(value: string): string | null {
+  if (value.length < PROJECT_NAME_MIN || value.length > PROJECT_NAME_MAX) {
+    return `Project name must be between ${PROJECT_NAME_MIN} and ${PROJECT_NAME_MAX} characters.`
+  }
+  if (!DASH_FREE_PATTERN.test(value)) {
+    return 'Dash characters like "—" are not allowed. Use a regular hyphen "-" instead.'
+  }
+  return null
+}
+
 const Project = () => {
   const capabilities = useCapabilities()
+  const projectPort = useProject()
+  const { toast } = useToast()
   const {
     project: {
       data: { pous, dataTypes, configurations, servers, remoteDevices },
-      meta: { name, type: projectType },
+      meta: { name, type: projectType, path: projectPath },
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
@@ -30,6 +51,10 @@ const Project = () => {
     workspaceActions: { setSelectedProjectTreeLeaf },
     searchQuery,
   } = useOpenPLCStore()
+
+  // Read-only / forked projects can't be renamed — the backend rename
+  // endpoint requires edit access, so gate the affordance here too.
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -60,13 +85,45 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
 
-  const handleBlur = () => {
+  const handleBlur = async () => {
     setIsEditing(false)
-    if (inputValue !== name) {
-      updateMetaName(inputValue)
+    const trimmed = inputValue.trim()
+
+    // No-op when unchanged — reset the field to drop any stray whitespace.
+    if (trimmed === name) {
+      setInputValue(name)
+      return
     }
+
+    const validationError = validateProjectName(trimmed)
+    if (validationError) {
+      toast({ title: 'Invalid project name', description: validationError, variant: 'warn' })
+      setInputValue(name)
+      return
+    }
+
+    // Persist the rename to the backend FIRST (it updates the canonical DB
+    // name, moves the S3 folder and realigns gitPath). Only mirror it into
+    // the in-memory meta.name on success, so a rejected rename never leaves
+    // the UI showing a name the backend didn't accept.
+    setIsRenaming(true)
+    const result = await projectPort.renameProject(projectPath, trimmed)
+    setIsRenaming(false)
+
+    if (!result.success) {
+      toast({
+        title: 'Failed to rename project',
+        description: result.error ?? 'The project could not be renamed.',
+        variant: 'fail',
+      })
+      setInputValue(name)
+      return
+    }
+
+    updateMetaName(result.name ?? trimmed)
   }
 
   useEffect(() => {
@@ -81,7 +138,9 @@ const Project = () => {
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
-          onClick={() => setIsEditing(true)}
+          onClick={() => {
+            if (canEdit && !isRenaming) setIsEditing(true)
+          }}
         >
           <div className='flex-shrink-0'>
             <FolderIcon size='sm' className='h-5 w-5' style={{ minWidth: '16px', minHeight: '16px' }} />
@@ -93,7 +152,7 @@ const Project = () => {
                 className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value as unknown as string)}
-                onBlur={handleBlur}
+                onBlur={() => void handleBlur()}
                 autoFocus
               />
             </div>

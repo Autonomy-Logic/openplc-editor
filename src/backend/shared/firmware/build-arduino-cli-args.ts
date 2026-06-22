@@ -31,6 +31,14 @@ export interface BuildArduinoCliCompileArgsOptions {
   /** Directory passed via `--library` (contains generated.cpp, runtime headers, etc.). */
   libraryPath: string
   /**
+   * Optional 2nd `--library`: a prebuilt arduino-hal's precompiled Arduino
+   * library (provisioning="prebuilt"). arduino-cli accepts multiple --library
+   * and links the precompiled `.a` (library.properties precompiled=true) found
+   * under it. The source integration layer (hal.source) is compiled from the
+   * main libraryPath as usual.
+   */
+  prebuiltLibraryPath?: string
+  /**
    * Filesystem path to the avr-libstdcpp include directory.  Appended
    * as `-I<path>` onto `compiler.cpp.extra_flags` when the board's
    * `core` starts with `arduino:avr`.  Required there because the AVR
@@ -93,7 +101,11 @@ export function buildArduinoCliCompileArgs(
     args.push('--build-property', `upload.maximum_data_size=${entry.max_data_size}`)
   }
 
-  args.push('--library', options.libraryPath, '--export-binaries', '-b', entry.platform, options.sketchPath)
+  args.push('--library', options.libraryPath)
+  if (options.prebuiltLibraryPath) {
+    args.push('--library', options.prebuiltLibraryPath)
+  }
+  args.push('--export-binaries', '-b', entry.platform, options.sketchPath)
 
   if (options.trailingArgs && options.trailingArgs.length > 0) {
     args.push(...options.trailingArgs)

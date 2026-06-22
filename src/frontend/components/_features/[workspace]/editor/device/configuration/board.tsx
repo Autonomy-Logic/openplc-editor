@@ -74,6 +74,11 @@ const Board = memo(function () {
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
+  // Human-readable label of the function-block kind(s) the target can't
+  // host (e.g. "Python", "C/C++", "C/C++ and Python") — drives the
+  // warning modal's copy so the same dialog serves Arduino (Python only)
+  // and Runtime v3 (neither C/C++ nor Python).
+  const [unsupportedBlocksLabel, setUnsupportedBlocksLabel] = useState('Python')
   const [showV4FeaturesWarning, setShowV4FeaturesWarning] = useState(false)
   const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{ hasServers: boolean; hasRemoteDevices: boolean }>({
     hasServers: false,
@@ -286,8 +291,23 @@ const Board = memo(function () {
       const hasPythonFunctionBlocks = pous.some(
         (pou) => pou.pouType === 'function-block' && pou.body.language === 'python',
       )
+      const hasCppFunctionBlocks = pous.some((pou) => pou.pouType === 'function-block' && pou.body.language === 'cpp')
 
-      if (!targetCaps.pythonFunctionBlocks && hasPythonFunctionBlocks) {
+      // OpenPLC Runtime v3 can host neither C/C++ nor Python function
+      // blocks: both lower to strucpp `{external ...}` inline-C that v3's
+      // MatIEC toolchain can't compile.  Other targets are gated per
+      // capability (Arduino: no Python; v4 / simulator: both fine).  Warn
+      // on switch — same soft prompt Arduino shows for Python — and let
+      // the user proceed (compilation will fail on the device if they do).
+      const isRuntimeV3Target = normalizedBoard === 'OpenPLC Runtime v3'
+      const pythonUnsupported = (!targetCaps.pythonFunctionBlocks || isRuntimeV3Target) && hasPythonFunctionBlocks
+      const cppUnsupported = isRuntimeV3Target && hasCppFunctionBlocks
+
+      if (pythonUnsupported || cppUnsupported) {
+        const label = [cppUnsupported ? 'C/C++' : null, pythonUnsupported ? 'Python' : null]
+          .filter(Boolean)
+          .join(' and ')
+        setUnsupportedBlocksLabel(label)
         setPendingBoardChange({ board: normalizedBoard, formattedBoard: board })
         setShowPythonWarning(true)
         return
@@ -735,15 +755,17 @@ const Board = memo(function () {
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>
-            <ModalTitle>Python Function Blocks Not Supported</ModalTitle>
+            <ModalTitle>{unsupportedBlocksLabel} Function Blocks Not Supported</ModalTitle>
           </ModalHeader>
           <div className='flex flex-col gap-4'>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              The selected target ({pendingBoardChange?.formattedBoard}) does not support Python Function Blocks.
+              The selected target ({pendingBoardChange?.formattedBoard}) does not support {unsupportedBlocksLabel}{' '}
+              Function Blocks.
             </p>
             <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              Your project contains Python Function Blocks that will cause compilation to fail on this target. To use
-              this target, you must remove all Python Function Blocks from your project.
+              Your project contains {unsupportedBlocksLabel} Function Blocks that will cause compilation to fail on this
+              target. To use this target, you must remove all {unsupportedBlocksLabel} Function Blocks from your
+              project.
             </p>
           </div>
           <ModalFooter className='flex justify-end gap-2'>

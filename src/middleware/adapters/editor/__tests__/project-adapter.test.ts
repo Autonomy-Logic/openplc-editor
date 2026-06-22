@@ -491,6 +491,13 @@ describe('createEditorProjectAdapter', () => {
     })
   })
 
+  describe('renameProject', () => {
+    it('no-ops over IPC and echoes the requested name', async () => {
+      const result = await adapter.renameProject('proj-1', 'New Name')
+      expect(result).toEqual({ success: true, name: 'New Name' })
+    })
+  })
+
   describe('pickPath', () => {
     it('delegates to window.bridge.pathPicker', async () => {
       const result = await adapter.pickPath()

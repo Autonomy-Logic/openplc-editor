@@ -1,7 +1,9 @@
-import { LegacyRef, ReactElement, useState } from 'react'
+import { LegacyRef, ReactElement, useMemo, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { useOpenPLCStore } from '../../../store'
+import type { BlockVariant } from '../../_atoms/graphical-editor/types/block'
+import { getBlockDocumentation } from '../../_atoms/graphical-editor/utils'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
 import { Info } from './info'
 import { Library } from './library'
@@ -64,10 +66,34 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
 
-  const selectedPouDocumentation =
-    system
-      .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
-      .find((pou) => pou.name === selectedFileKey)?.documentation || null
+  // Help text for the selected library block — rendered in the bottom
+  // Info panel.  Mirrors the graphical-editor tooltip exactly by routing
+  // through `getBlockDocumentation` (documentation + INPUT/OUTPUT list),
+  // so a block with no prose doc still shows its I/O signature instead of
+  // falling back to "No file selected".  System library blocks carry
+  // their own `variables`; user-library blocks are project POUs, so we
+  // resolve those from `pous` (interface variables + documentation).
+  const selectedPouDocumentation = useMemo<string | null>(() => {
+    if (!selectedFileKey) return null
+
+    const systemPou = system.flatMap((library) => library.pous).find((pou) => pou.name === selectedFileKey)
+    if (systemPou) {
+      return getBlockDocumentation({
+        documentation: systemPou.documentation,
+        variables: systemPou.variables,
+      } as unknown as BlockVariant)
+    }
+
+    const projectPou = pous.find((pou) => pou.name === selectedFileKey)
+    if (projectPou) {
+      return getBlockDocumentation({
+        documentation: projectPou.documentation ?? '',
+        variables: projectPou.interface?.variables ?? [],
+      } as unknown as BlockVariant)
+    }
+
+    return null
+  }, [selectedFileKey, system, pous])
 
   return (
     <ResizablePanel

@@ -20,6 +20,21 @@
 #include "debug_dispatch.hpp"
 
 // ---------------------------------------------------------------------------
+// Runtime fault hook
+// ---------------------------------------------------------------------------
+// Weak default for strucpp::iec_runtime_fault (declared in iec_fault.hpp).
+// On MCU firmware (compiled -fno-exceptions) the runtime calls this instead
+// of throwing on an unrecoverable fault (null deref, array OOB, bad located
+// address). Default behaviour: halt. A VPP HAL may provide a STRONG override
+// to signal the fault its own way — blink a status LED, sound an alarm,
+// reboot, etc. Kept free of <Arduino.h> so this TU stays macro-clean.
+__attribute__((weak)) void strucpp::iec_runtime_fault(strucpp::IecFault /*reason*/,
+                                                       const char* /*context*/) noexcept {
+    for (;;) {
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
 strucpp::Configuration_CONFIG0 g_config;
@@ -171,12 +186,63 @@ void runtime_discover_tasks()
 }
 
 // ---------------------------------------------------------------------------
+// Force re-imposition for located variables.
+//
+// On bare-metal the image table aliases the IECVar's storage: a located var's
+// image slot pointer (bool_output[..], int_input[..], …) IS its raw_ptr()
+// (&value_). The program body can't defeat a force — IECVar::set() is a no-op
+// while forced_ — but DIRECT writes through the image pointer bypass set():
+//   - updateInputBuffers() writes *bool_input[..] = digitalRead(...)
+//   - the Modbus reverse-copy writes *bool_output[..] = COILS[..]
+// Either clobbers a forced located variable's storage. (This is the bug the
+// open PR #719 chases by DELETING the digital-output reverse-copy — which also
+// breaks Modbus coil mirroring into mapped outputs. We instead KEEP the
+// reverse-copy and re-impose the force right after each direct-write batch, so
+// both forcing AND Modbus mirroring work.)
+//
+// re-impose = restore value_ from forced_value_ for every forced located var.
+// locatedVars[i].pointer is the IECVar's raw_ptr() = &value_, and IECVar is
+// standard-layout with value_ as its first member, so the slot pointer is
+// pointer-interconvertible with the IECVar itself. The cast is by located
+// SIZE only; signed/unsigned/REAL of the same width share IECVar layout and
+// the restore is a width-correct value copy, so a single unsigned alias per
+// width is correct for all of them.
+template <typename T>
+static inline void reimpose_if_forced(void* p)
+{
+    if (!p) return;
+    auto* v = reinterpret_cast<strucpp::IECVar<T>*>(p);
+    if (v->is_forced()) {
+        *v->raw_ptr() = v->get_forced_value();
+    }
+}
+
+void runtime_apply_located_forces()
+{
+    using namespace strucpp;
+    for (uint32_t i = 0; i < locatedVarsCount; ++i) {
+        LocatedVar& lv = locatedVars[i];
+        if (!lv.pointer) continue;
+        switch (lv.size) {
+        case LocatedSize::Bit:   reimpose_if_forced<BOOL_t>(lv.pointer);  break;
+        case LocatedSize::Byte:  reimpose_if_forced<BYTE_t>(lv.pointer);  break;
+        case LocatedSize::Word:  reimpose_if_forced<WORD_t>(lv.pointer);  break;
+        case LocatedSize::DWord: reimpose_if_forced<DWORD_t>(lv.pointer); break;
+        case LocatedSize::LWord: reimpose_if_forced<LWORD_t>(lv.pointer); break;
+        default: break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // One scan cycle: copy inputs → run scheduled programs → copy outputs →
 // advance IEC TIME() so TON/TOF/TP can progress.
 // ---------------------------------------------------------------------------
 void runtime_plc_cycle()
 {
     updateInputBuffers();
+    // HAL just wrote raw input storage directly — re-impose any forced input.
+    runtime_apply_located_forces();
 
     for (size_t i = 0; i < total_programs; ++i) {
         if (task_divisors[i] == 0 || (scan_counter % task_divisors[i]) == 0) {

@@ -100,7 +100,10 @@ import {
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
-import { generateVendorPluginConfig } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import {
+  buildModuleConfigEntries,
+  generateVendorPluginConfig,
+} from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
@@ -1033,13 +1036,24 @@ class CompilerModule {
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+    coreVersion?: string,
   ) {
     if (boardCore === null) return
 
     const isCoreInstalled = Object.keys(await this.getArduinoInstalledCores()).some((core) => core === boardCore)
-    if (isCoreInstalled) {
+    // Without a pinned version, any installed version is fine — skip the install.
+    // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
+    // always run `core install <id>@<version>`: arduino-cli installs exactly that
+    // version and fails if it does not exist, pinning the core to the version
+    // the precompiled library was built against.
+    if (!coreVersion && isCoreInstalled) {
       handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
+    }
+
+    const coreRef = coreVersion ? `${boardCore}@${coreVersion}` : boardCore
+    if (coreVersion) {
+      handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
     }
 
     let binaryPath = this.arduinoCliBinaryPath
@@ -1049,7 +1063,7 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, ...this.arduinoCliBaseParameters])
+      const executeCommand = spawn(binaryPath, ['core', 'install', coreRef, ...this.arduinoCliBaseParameters])
 
       let stderrData = ''
 
@@ -1787,6 +1801,13 @@ class CompilerModule {
       ...cxxFlagsArg,
       '--library',
       precompiledLibDir,
+      // Prebuilt arduino-hal (mixed): the vendor's precompiled library. The
+      // open hal.source layer (renamed to arduino.cpp, compiled here alongside
+      // the sketch — NOT in the precompile pass) does `#include "p1am_vendor.h"`,
+      // so arduino-cli needs the lib's src/ on the include path. Passing it as a
+      // 2nd --library both resolves the boundary header and auto-links the
+      // src/<build.mcu>/lib*.a archive (the lib ships precompiled=full).
+      ...(info.precompiledLibraryDir ? ['--library', info.precompiledLibraryDir] : []),
       '--build-property',
       `compiler.libraries.ldflags=-L${precompiledArchDir} -lOpenPLCUserLib`,
       ...this.arduinoCliBaseParameters,
@@ -2240,19 +2261,24 @@ class CompilerModule {
         handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
       }
 
-      // --- Step 2: Copy plugin source + generate checksum ---
+      // --- Step 2: Copy plugin payload + generate checksum ---
       const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
       if (!pluginEntryRelPath) {
         handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
         return
       }
 
-      // The plugin source directory is the parent directory of pluginEntry.
+      // Resolve the plugin directory. In "source" mode (default) pluginEntry is
+      // the entry source file, so the dir is its parent. In "prebuilt" mode
+      // (provisioning === 'prebuilt') pluginEntry is the directory itself,
+      // holding the precompiled .o objects plus the link-only Makefile.
       // pluginEntryRelPath is supplied by the package manifest; without
       // containment, an entry like `../../../etc` would resolve outside
       // matchingPackagePath and the recursive-copy below would slurp
       // arbitrary host files into the build's vpp_plugin directory.
-      const pluginSourceDir = join(matchingPackagePath, path.dirname(pluginEntryRelPath))
+      const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
+      const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
+      const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
       try {
         assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
       } catch (err) {
@@ -2343,12 +2369,77 @@ class CompilerModule {
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
       handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin source file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
+        `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
+    }
+  }
+
+  /**
+   * Compute per-slot module-configuration bytes for an Arduino VPP
+   * target with a modular backplane.
+   *
+   * Microcontroller boards have no runtime JSON, so per-module config
+   * (analog ranges, thermocouple types, ...) must be baked into the
+   * firmware. This resolves the installed VPP device for `boardTarget`,
+   * loads each module's configScreen, and encodes the same bytes the
+   * runtime-v4 plugin path would — keyed by 1-based slot. The caller
+   * injects them into `vendorScreenData` under a synthetic
+   * `module-config` key so the `vpp_config.h` generator emits
+   * `VPP_MODULE_CONFIG_ENTRIES_*` macros for the HAL.
+   *
+   * Returns [] for non-modular / non-VPP boards. Never throws.
+   */
+  async buildVppArduinoModuleConfig(
+    boardTarget: string,
+    vendorScreenData: Record<string, unknown>,
+  ): Promise<Array<{ slot: number; bytes: number[] }>> {
+    try {
+      const packageManager = new PackageManagerModule()
+      const installed = packageManager.listInstalled()
+
+      let matchingPackagePath: string | null = null
+      let matchingDevice: PackageManifest['devices'][number] | null = null
+      for (const pkg of installed) {
+        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
+        if (!manifest) continue
+        const device = manifest.devices.find((d) => d.name === boardTarget)
+        if (device) {
+          matchingPackagePath = pkg.path
+          matchingDevice = device
+          break
+        }
+      }
+
+      const rawModules = matchingDevice?.moduleSystem?.modules
+      if (!matchingDevice || !matchingPackagePath || !rawModules || rawModules.length === 0) return []
+
+      const pkgPath = matchingPackagePath
+      const modules = await Promise.all(
+        rawModules.map(async (m) => {
+          let configScreenDefinition: unknown
+          const rel = (m as { configScreen?: string }).configScreen
+          if (rel) {
+            try {
+              const raw = await readFile(join(pkgPath, rel), 'utf-8')
+              configScreenDefinition = JSON.parse(raw)
+            } catch {
+              // Missing/invalid configScreen — module contributes no bytes.
+            }
+          }
+          return { ...m, configScreenDefinition }
+        }),
+      )
+
+      return buildModuleConfigEntries(
+        vendorScreenData as Parameters<typeof buildModuleConfigEntries>[0],
+        modules as Parameters<typeof buildModuleConfigEntries>[1],
+      )
+    } catch {
+      return []
     }
   }
 
@@ -2660,6 +2751,20 @@ class CompilerModule {
       }
     }
 
+    // For Arduino VPP targets with a modular backplane, bake the
+    // per-slot module-configuration bytes into vpp_config.h (the MCU
+    // has no runtime JSON to load them from). The synthetic
+    // `module-config` key flows through the generic vpp_config.h walker
+    // as VPP_MODULE_CONFIG_ENTRIES_* macros. No-op for non-modular /
+    // non-VPP / runtime-v4 / simulator targets.
+    let effectiveVendorScreenData = vendorScreenData
+    if (!isRuntimeV4 && !isSimulator) {
+      const moduleConfigEntries = await this.buildVppArduinoModuleConfig(boardTarget, vendorScreenData ?? {})
+      if (moduleConfigEntries.length > 0) {
+        effectiveVendorScreenData = { ...(vendorScreenData ?? {}), 'module-config': { entries: moduleConfigEntries } }
+      }
+    }
+
     // --- Run the shared pipeline ---
     const result = await runCompilePipeline(
       {
@@ -2685,7 +2790,7 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
-        vendorScreenData,
+        vendorScreenData: effectiveVendorScreenData,
       },
       platformPort,
       (event) => {

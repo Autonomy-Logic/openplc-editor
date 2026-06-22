@@ -398,71 +398,143 @@ void handle_tcp()
 #endif
 
 #ifdef MBSERIAL
+// Inter-frame idle, in milliseconds, used ONLY to abandon a frame whose
+// remainder never arrives. Modbus RTU was defined for RS485, where bytes of a
+// frame are ~one character time apart (T1.5/T3.5, tens of microseconds at
+// 115200) and the byte cadence delimits frames. That assumption is INVALID on
+// USB-CDC (and any store-and-forward link): a single request is split into
+// 64-byte USB packets separated by USB-frame-scale gaps far longer than T1.5,
+// so cadence framing tears requests apart (the bug that made the P1AM-100 /
+// SAMD21 debugger crawl). We therefore frame by the request's DECLARED length
+// (derived from the function code) and fall back to this idle only to drop a
+// truncated partial. It must exceed any intra-frame USB gap yet stay well below
+// a master's request timeout.
+#define MB_RTU_FRAME_GAP_MS 8
+
+// Persistent RX-assembly state. handle_serial() is called every scan cycle and
+// never blocks; a request whose bytes straddle several calls is carried across
+// them in mb_frame[0..mb_rx_len). (This shares mb_frame with handle_tcp, which
+// is safe because an OpenPLC board is configured for a single Modbus transport;
+// the two are not driven mid-frame at the same time.)
+static uint16_t mb_rx_len = 0;
+static uint32_t mb_rx_last_ms = 0;
+
+// Total on-wire length (slave id + PDU + 2 CRC bytes) of the request whose
+// first `n` bytes are in `f`. Returns >0 for a known length, 0 when more header
+// bytes are needed to size it, and -1 for a function code we do not serve (so
+// the byte cannot be a frame head). Length is implicit in Modbus RTU — derived
+// per function code, exactly as `process_mbpacket()` later parses the fields.
+static int32_t mb_rtu_frame_len(const uint8_t *f, uint16_t n)
+{
+    if (n < 2) return 0;                                // need at least id + FC
+    switch (f[1])
+    {
+        case MB_FC_READ_COILS:
+        case MB_FC_READ_INPUT_STAT:
+        case MB_FC_READ_REGS:
+        case MB_FC_READ_INPUT_REGS:
+        case MB_FC_WRITE_COIL:
+        case MB_FC_WRITE_REG:
+            return 8;                                   // [id][fc][a:2][b:2][crc:2]
+        case MB_FC_WRITE_COILS:
+        case MB_FC_WRITE_REGS:
+            if (n < 7) return 0;                        // byte count lives at f[6]
+            return 9 + (int32_t)f[6];                   // + [bc:1][data:bc][crc:2]
+        case MB_FC_DEBUG_INFO:
+            return 4;                                   // [id][fc][crc:2]
+        case MB_FC_DEBUG_GET:
+            return 9;                                   // [id][fc][arr:1][s:2][e:2][crc:2]
+        case MB_FC_DEBUG_GET_LIST:
+            if (n < 4) return 0;                        // count lives at f[2..3]
+            return 6 + 3 * (int32_t)(((uint16_t)f[2] << 8) | f[3]);
+        case MB_FC_DEBUG_SET:
+            if (n < 8) return 0;                         // value len lives at f[6..7]
+            return 10 + (int32_t)(((uint16_t)f[6] << 8) | f[7]);
+        case MB_FC_DEBUG_GET_MD5:
+            return 8;                                   // [id][fc][endian:2][00:2][crc:2]
+        default:
+            return -1;                                  // not one of our function codes
+    }
+}
+
+// Drop the first `k` bytes of the assembly buffer, keeping the remainder. Used
+// for one-byte realignment on a bad/foreign frame head — NEVER a blind flush —
+// so a genuine frame head sitting further into the buffer always survives and
+// is eventually found (guarantees resync convergence; no "discard every frame"
+// loop). Slides only run on the error path, so the O(n) cost is irrelevant.
+static void mb_rtu_drop_front(uint16_t k)
+{
+    if (k >= mb_rx_len) { mb_rx_len = 0; return; }
+    for (uint16_t i = k; i < mb_rx_len; i++)
+        mb_frame[i - k] = mb_frame[i];
+    mb_rx_len = (uint16_t)(mb_rx_len - k);
+}
+
 void handle_serial()
 {
-    mb_frame_len = 0;
-
-    if ((*mb_serialport).available() == 0)
-        return;
-
-    while ((*mb_serialport).available() > mb_frame_len)
-    {
-        mb_frame_len = (*mb_serialport).available();
-        delayMicroseconds(mb_t15);
-    }
-
-    //Check if packet is too big or too small
-    if ((*mb_serialport).available() > MAX_MB_FRAME || (*mb_serialport).available() < 6)
-    {
-        //(*mb_serialport).println("Packet too big");
-        //(*mb_serialport).flush();
-        return;
-    }
-
-    //Read packet
-    for (uint16_t i = 0; i < mb_frame_len; i++)
-    {
-        mb_frame[i] = (*mb_serialport).read();
-    }
-
-    //Validate crc
     uint16_t packet_crc;
-    //Ignore CRC errors when using debugger functions
-    if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
+
+    // 1) Drain the RX buffer without blocking. One frame's bytes may arrive
+    //    across several calls; the scan cycle is never stalled waiting on them.
+    while ((*mb_serialport).available() > 0)
     {
-        packet_crc = ((mb_frame[mb_frame_len - 2] << 8) | mb_frame[mb_frame_len - 1]);
-        if (packet_crc != calcCrc())
+        if (mb_rx_len >= MAX_MB_FRAME) break;           // full — let the parser drain it
+        mb_frame[mb_rx_len++] = (uint8_t)(*mb_serialport).read();
+        mb_rx_last_ms = millis();
+    }
+
+    // 2) Extract every complete frame in the buffer. Each iteration either
+    //    consumes/realigns by >=1 byte or returns to await more data, so the
+    //    loop always terminates.
+    for (;;)
+    {
+        if (mb_rx_len == 0)
+            return;
+
+        // Header byte-alignment: the first byte must be OUR slave id. This is
+        // the cheap framing check, and it is the ONLY validation applied to
+        // debugger frames (CRC is deliberately skipped on debug FCs for
+        // performance — those function codes are private and well-formed).
+        if (mb_frame[0] != modbus.slaveid)
         {
-        /* DEBUG
-	    char buffer[100];
-            (*mb_serialport).println("Invalid CRC for packet: ");
-            int offset = 0; // Initialize offset for buffer
-            for (int i = 0; i < mb_frame_len; i++)
-            {
-                offset += sprintf(buffer + offset, "%02X ", mb_frame[i]);
-            }
-            (*mb_serialport).println(buffer);
-            (*mb_serialport).print("Packet_crc: ");
-            (*mb_serialport).println(packet_crc);
-            (*mb_serialport).print("Calc CRC: ");
-            (*mb_serialport).println(calcCrc());
-            (*mb_serialport).flush();
-        */
-	    return;
+            mb_rtu_drop_front(1);                       // foreign/garbage head — slide
+            continue;
         }
-    }
 
-    //Validate SlaveID
-    if (mb_frame[0] != modbus.slaveid)
-    {
-        (*mb_serialport).flush();
-        return;
-    }
+        int32_t expected = mb_rtu_frame_len(mb_frame, mb_rx_len);
 
-    //Remove CRC (must do that before processing packet)
-    mb_frame_len -= 2;
+        if (expected < 0 || expected > MAX_MB_FRAME)
+        {
+            mb_rtu_drop_front(1);                       // illegal FC / impossible length
+            continue;
+        }
+        if (expected == 0 || mb_rx_len < (uint16_t)expected)
+        {
+            // Header incomplete, or the frame's tail has not arrived yet. Wait
+            // for it; abandon the partial only if its remainder never comes.
+            if ((uint32_t)(millis() - mb_rx_last_ms) > MB_RTU_FRAME_GAP_MS)
+                mb_rx_len = 0;
+            return;
+        }
 
-    //Process packet and write back
+        // 3) A full candidate frame occupies mb_frame[0 .. expected).
+        //    Standard FCs are validated by CRC (the arbiter that makes resync
+        //    trustworthy); a mismatch means corruption or misalignment, so we
+        //    slide one byte and retry instead of discarding the whole buffer.
+        if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
+        {
+            mb_frame_len = (uint16_t)expected;
+            packet_crc = ((mb_frame[expected - 2] << 8) | mb_frame[expected - 1]);
+            if (packet_crc != calcCrc())
+            {
+                mb_rtu_drop_front(1);
+                continue;
+            }
+        }
+
+        // 4) Accepted. Hand the PDU (CRC stripped) to the shared processor,
+        //    which builds the response back into mb_frame.
+        mb_frame_len = (uint16_t)expected - 2;
     process_mbpacket();
 
     //Add CRC
@@ -505,6 +577,16 @@ void handle_serial()
             digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, LOW);
         }
     #endif
+
+        // 5) The request — and the response built over it — consumed the whole
+        //    assembly buffer. Modbus RTU is turn-taking: the master waits for
+        //    this reply before sending its next request, so no following frame
+        //    can already be buffered. Reset for the next request. A
+        //    non-conformant pipelining master simply retransmits after its
+        //    timeout, and the gap/realignment logic above recovers cleanly.
+        mb_rx_len = 0;
+        return;
+    }
 }
 #endif
 
@@ -1342,11 +1424,18 @@ void debugGetMd5(void * /*endianness*/)
         mb_frame[md5_len + 3] = md5[md5_len];
     }
 
-    // Native-order store of the endianness sentinel.  The reinterpret_cast
-    // is intentional: it preserves the target's byte ordering in the
-    // emitted bytes, which is exactly the signal the editor uses to choose
-    // its swap behaviour.
-    *reinterpret_cast<uint16_t *>(&mb_frame[md5_len + 3]) = 0xDEAD;
+    // Native-order store of the endianness sentinel.  Written byte-wise
+    // (not via `*reinterpret_cast<uint16_t*>`) because `md5_len + 3` is an
+    // odd offset for a 32-char MD5, and a typed 16-bit store there is an
+    // unaligned access that HardFaults on Cortex-M0+ (SAMD21: MKR Zero /
+    // P1AM-100) — hanging the device on the first debugger request. Copying
+    // the two bytes of a native-order uint16_t preserves the target's byte
+    // ordering (the signal the editor uses to choose its swap behaviour)
+    // while keeping every access byte-aligned.
+    const uint16_t endian_sentinel = 0xDEAD;
+    const uint8_t *sentinel_bytes = reinterpret_cast<const uint8_t *>(&endian_sentinel);
+    mb_frame[md5_len + 3] = sentinel_bytes[0];
+    mb_frame[md5_len + 4] = sentinel_bytes[1];
     mb_frame_len = md5_len + 5;
 }
 

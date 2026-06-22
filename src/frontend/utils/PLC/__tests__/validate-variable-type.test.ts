@@ -81,6 +81,31 @@ describe('validateVariableType', () => {
     })
   })
 
+  describe('pointer / address-word compatibility (ADR block)', () => {
+    // ADR() returns a pointer-width address typed as ULINT (CODESYS __XWORD).
+    // A POINTER TO <T> variable holds such an address, so the two must be
+    // interchangeable at a block pin, independently of <T> and direction.
+    it('accepts a POINTER TO <T> variable on a ULINT pin', () => {
+      expect(validateVariableType('POINTER TO INT', 'ULINT').isValid).toBe(true)
+      expect(validateVariableType('POINTER TO REAL', 'ULINT').isValid).toBe(true)
+      expect(validateVariableType('pointer to int', 'ulint').isValid).toBe(true)
+    })
+
+    it('accepts a ULINT variable on a POINTER TO <T> pin (reverse direction)', () => {
+      expect(validateVariableType('ULINT', 'POINTER TO INT').isValid).toBe(true)
+    })
+
+    it('does not treat other integer words as pointer-compatible', () => {
+      expect(validateVariableType('POINTER TO INT', 'UDINT').isValid).toBe(false)
+      expect(validateVariableType('POINTER TO INT', 'DWORD').isValid).toBe(false)
+      expect(validateVariableType('POINTER TO INT', 'INT').isValid).toBe(false)
+    })
+
+    it('still rejects a plain INT on a ULINT pin', () => {
+      expect(validateVariableType('INT', 'ULINT').isValid).toBe(false)
+    })
+  })
+
   it('returns a non-empty error message when validation fails', () => {
     const result = validateVariableType('BOOL', 'ANY_REAL')
     expect(result.isValid).toBe(false)

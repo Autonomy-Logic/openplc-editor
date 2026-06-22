@@ -55,6 +55,12 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
       const newItems: ESIRepositoryItemLight[] = []
       const errors: Array<{ filename: string; error: string }> = []
+      // A dedup-after-retry result means the file was persisted on the backend
+      // but its row was missing from the upload response (and the adapter's own
+      // recovery lookup also failed). Honor the EsiPort contract by re-listing
+      // the repository after the batch so the file appears instead of silently
+      // vanishing — see EsiPort.parseAndSaveFile (`dedupAfterRetry`).
+      let needsRepositoryRefresh = false
 
       const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 
@@ -84,8 +90,13 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
           if (result.success && result.item) {
             newItems.push(result.item)
+          } else if (result.success && result.dedupAfterRetry) {
+            // Uploaded but absent from the response: a transient-failure retry
+            // hit the backend dedup and the adapter couldn't recover the row.
+            // Flag a repository refresh so the file surfaces after the batch.
+            needsRepositoryRefresh = true
           } else if (result.success) {
-            // Duplicate content already in the repository — skip silently.
+            // Real duplicate — content already in the repository. Skip silently.
             // See EsiPort.parseAndSaveFile for the duplicate-handling contract.
           } else {
             errors.push({ filename: file.name, error: result.error ?? 'Parse failed' })
@@ -102,7 +113,28 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
         percentage: 100,
       })
 
-      onFilesLoaded([...repository, ...newItems], errors.length > 0 ? errors : undefined)
+      // A recovered-but-unlisted upload (dedupAfterRetry) is on the backend yet
+      // missing from `newItems`. Re-list the repository so it shows up; fall
+      // back to the locally accumulated list if the refresh itself fails.
+      if (needsRepositoryRefresh) {
+        const refreshed = await esi!.loadRepositoryLight()
+        if (refreshed.success && refreshed.items) {
+          onFilesLoaded(refreshed.items, errors.length > 0 ? errors : undefined)
+          return
+        }
+      }
+
+      // A recovered add (item + dedupAfterRetry) can return a row that already
+      // exists in `repository` — the retry hit the backend dedup against a
+      // pre-existing entry. Dedup the merged list by id (repository wins) so the
+      // same row isn't rendered twice or assigned a duplicate React key.
+      const mergedById = new Map<ESIRepositoryItemLight['id'], ESIRepositoryItemLight>()
+      for (const item of [...repository, ...newItems]) {
+        if (!mergedById.has(item.id)) {
+          mergedById.set(item.id, item)
+        }
+      }
+      onFilesLoaded([...mergedById.values()], errors.length > 0 ? errors : undefined)
     },
     [onFilesLoaded, repository, esi],
   )

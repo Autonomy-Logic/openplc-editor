@@ -1,5 +1,4 @@
-import Editor from '@monaco-editor/react'
-import { File, Folder, FolderOpen, X } from 'lucide-react'
+import { File, Folder, FolderOpen } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PendingChange } from '../../../../../middleware/shared/ports/version-control-port'
@@ -36,68 +35,6 @@ const STATUS_TOOLTIP: Record<PendingChangeStatus, string> = {
   modified: 'Modified -- File has been changed since last commit',
   added: 'Added -- New file not in previous commit',
   deleted: 'Deleted -- File has been removed',
-}
-
-// ---------------------------------------------------------------------------
-// File content resolution & preview
-// ---------------------------------------------------------------------------
-
-function getLanguageFromPath(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase()
-  switch (ext) {
-    case 'json':
-      return 'json'
-    case 'st':
-    case 'il':
-    case 'ld':
-    case 'fbd':
-      return 'st'
-    case 'py':
-      return 'python'
-    case 'cpp':
-      return 'cpp'
-    default:
-      return 'plaintext'
-  }
-}
-
-function FilePreviewModal({ filePath, content, onClose }: { filePath: string; content: string; onClose: () => void }) {
-  const isDark = document.documentElement.classList.contains('dark')
-
-  return (
-    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50' onClick={onClose}>
-      <div
-        className='flex h-[70vh] w-[90vw] max-w-3xl flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950'
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className='flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900'>
-          <span className='truncate font-mono text-xs text-neutral-600 dark:text-neutral-400'>{filePath}</span>
-          <button
-            onClick={onClose}
-            className='rounded p-0.5 transition-colors hover:bg-neutral-200 dark:hover:bg-neutral-700'
-          >
-            <X className='h-3.5 w-3.5 text-neutral-500' />
-          </button>
-        </div>
-        <div className='min-h-0 flex-1'>
-          <Editor
-            value={content}
-            language={getLanguageFromPath(filePath)}
-            theme={isDark ? 'vs-dark' : 'vs'}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              fontSize: 12,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
-              domReadOnly: true,
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -280,13 +217,10 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const {
     versionControlActions,
     sharedWorkspaceActions,
-    project,
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
-
-  const pous = project.data.pous
 
   // System files (e.g. legacy `git-data.tar.gz` from migration) ride along on
   // commits silently — they're never shown, never selectable, never discardable.
@@ -308,7 +242,6 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   const [showStashModal, setShowStashModal] = useState(false)
   const [isStashing, setIsStashing] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [previewFile, setPreviewFile] = useState<{ path: string; content: string } | null>(null)
 
   const tree = useMemo(() => buildChangesTree(visibleFiles), [visibleFiles])
 
@@ -420,51 +353,28 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
     })
   }
 
+  // Clicking any changed file opens a read-only diff tab in the editor area
+  // (Working Tree ↔ HEAD), reusing the same diff view as the history page.
+  // The tab name is namespaced with `Diff: ` so it never collides with the
+  // editable POU tab of the same POU.
   const handleFileClick = useCallback(
     (filePath: string) => {
-      // POU files open in the editor
-      if (filePath.startsWith('pous/')) {
-        const filename = filePath.split('/').pop() ?? ''
-        const dotIndex = filename.lastIndexOf('.')
-        if (dotIndex === -1) return
-        const pouName = filename.substring(0, dotIndex)
+      const tab: TabsProps = {
+        name: `Diff: ${filePath}`,
+        elementType: { type: 'diff-viewer', filePath },
+      }
 
-        const pou = pous.find((p) => p.name === pouName)
-        if (!pou) return
-
-        const tabToBeCreated = {
-          name: pou.name,
-          path: `/pous/${pou.pouType}s/${pou.name}`,
-          elementType: { type: pou.pouType, language: pou.body.language },
-        } as TabsProps
-
-        updateTabs(tabToBeCreated)
-        const editorObj = getEditorFromEditors(pouName)
-        if (!editorObj) {
-          const model = CreateEditorObjectFromTab(tabToBeCreated)
-          addModel(model)
-          setEditor(model)
-          return
-        }
-        addModel(editorObj)
-        setEditor(editorObj)
+      updateTabs(tab)
+      const existing = getEditorFromEditors(tab.name)
+      if (existing) {
+        setEditor(existing)
         return
       }
-
-      // Non-POU files: resolve content via the same canonical serializer
-      // the save flow uses. Building ad-hoc shapes here previously made the
-      // preview diverge from what got committed (e.g. `project.json` showed
-      // {name,type,path} while save wrote {meta,data,...}).
-      try {
-        const content = buildAllProjectFileContentsPure()[filePath]
-        if (content !== undefined) {
-          setPreviewFile({ path: filePath, content })
-        }
-      } catch {
-        // Serialization failed — ignore
-      }
+      const model = CreateEditorObjectFromTab(tab)
+      addModel(model)
+      setEditor(model)
     },
-    [pous, updateTabs, getEditorFromEditors, addModel, setEditor],
+    [updateTabs, getEditorFromEditors, addModel, setEditor],
   )
 
   const hasChanges = visibleFiles.length > 0
@@ -773,14 +683,6 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
         onConfirm={(stashMessage) => void handleStash(stashMessage)}
         onCancel={() => setShowStashModal(false)}
       />
-
-      {previewFile && (
-        <FilePreviewModal
-          filePath={previewFile.path}
-          content={previewFile.content}
-          onClose={() => setPreviewFile(null)}
-        />
-      )}
     </div>
   )
 }

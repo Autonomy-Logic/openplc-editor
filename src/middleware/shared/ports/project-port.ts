@@ -207,6 +207,21 @@ export interface ProjectPort {
   renamePou(params: RenamePouParams): Promise<{ success: boolean; data?: unknown; error?: string }>
 
   /**
+   * Rename the project itself (its display name).
+   *
+   * Web: calls the Edge API's `PATCH /projects/:id/rename`, which is
+   * the canonical rename — it updates the DB `name` (the name shown in
+   * the dashboard / project listing / `GET /details`), moves the S3
+   * folder, and realigns `gitPath`. Without this call a rename only
+   * mutates `project.json`'s `meta.name`, leaving the canonical name
+   * stale. The resolved name is echoed back so the caller can sync the
+   * in-memory `meta.name` (the backend trims/sanitises the input).
+   * Editor: no-op success — on desktop `project.json`'s `meta.name`
+   * IS the canonical name and is already persisted by the save flow.
+   */
+  renameProject(projectId: string, newName: string): Promise<{ success: boolean; name?: string; error?: string }>
+
+  /**
    * Pick a filesystem path (for project location).
    * Editor: shows native directory picker dialog.
    * Web: may not be applicable (returns pre-configured path).

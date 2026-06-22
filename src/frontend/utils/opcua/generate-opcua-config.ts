@@ -8,7 +8,7 @@ import type {
   PLCServer,
 } from '@root/middleware/shared/ports/open-plc-types'
 
-import { buildLeafPathMap, parseDebugMap as parseDebugMapJson } from '../debug-parser'
+import { buildLeafInfoMap, type DebugLeafInfo, parseDebugMap as parseDebugMapJson } from '../debug-parser'
 import { getErrorMessage } from '../get-error-message'
 import {
   OpcUaConfigError,
@@ -17,6 +17,16 @@ import {
   resolveVariableAddress,
 } from './resolve-indices'
 import type { PLCInstanceInfo } from './types'
+
+/**
+ * opcua.json contract version. Bump when the per-variable schema changes
+ * in a way the runtime must detect. v2 introduced compiler-canonical
+ * `datatype` + `size` per leaf (sourced from debug-map.json) so the
+ * runtime never re-derives byte widths from a drift-prone project-model
+ * datatype. A runtime that requires >= 2 gracefully refuses an older
+ * (unversioned) config instead of writing the wrong number of bytes.
+ */
+export const OPCUA_CONFIG_FORMAT_VERSION = 2
 
 /**
  * Runtime configuration interfaces
@@ -71,6 +81,8 @@ interface RuntimeVariable {
   browse_name: string
   display_name: string
   datatype: string
+  /** Canonical byte width from the compiler's debug map. */
+  size: number
   description: string
   arr: number
   elem: number
@@ -80,6 +92,9 @@ interface RuntimeVariable {
 interface RuntimeStructureField {
   name: string
   datatype: string
+  // Canonical byte width from the compiler; null for complex parents
+  // (containers with nested fields) which have no leaf of their own.
+  size: number | null
   // null for complex types that have nested fields
   arr: number | null
   elem: number | null
@@ -100,6 +115,8 @@ interface RuntimeArray {
   browse_name: string
   display_name: string
   datatype: string
+  /** Canonical byte width of one element from the compiler's debug map. */
+  size: number
   length: number
   arr: number
   elem: number
@@ -114,6 +131,8 @@ interface RuntimeAddressSpace {
 }
 
 interface RuntimePluginConfig {
+  /** opcua.json contract version — see OPCUA_CONFIG_FORMAT_VERSION. */
+  format_version: number
   server: RuntimeServerConfig
   security: RuntimeSecurityConfig
   users: RuntimeUser[]
@@ -197,7 +216,7 @@ const convertPermissions = (permissions: OpcUaPermissions): RuntimeVariablePermi
  */
 const resolveVariable = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
 ): RuntimeVariable => {
   const addr = resolveVariableAddress(node, pathToAddr, instances)
@@ -206,7 +225,10 @@ const resolveVariable = (
     node_id: node.nodeId,
     browse_name: node.browseName,
     display_name: node.displayName,
-    datatype: node.variableType,
+    // datatype/size from the compiler's debug map, NOT node.variableType
+    // (the stored project-model type can drift from the compiled layout).
+    datatype: addr.type,
+    size: addr.size,
     description: node.description,
     arr: addr.arr,
     elem: addr.elem,
@@ -220,6 +242,7 @@ const resolveVariable = (
 const convertResolvedFieldToRuntime = (field: {
   name: string
   datatype: string
+  size: number | null
   arr: number | null
   elem: number | null
   permissions: { viewer: 'r' | 'w' | 'rw'; operator: 'r' | 'w' | 'rw'; engineer: 'r' | 'w' | 'rw' }
@@ -228,6 +251,7 @@ const convertResolvedFieldToRuntime = (field: {
   const runtimeField: RuntimeStructureField = {
     name: field.name,
     datatype: field.datatype,
+    size: field.size,
     arr: field.arr,
     elem: field.elem,
     permissions: convertPermissions(field.permissions),
@@ -247,7 +271,7 @@ const convertResolvedFieldToRuntime = (field: {
  */
 const resolveStructure = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
 ): RuntimeStructure | null => {
@@ -265,36 +289,24 @@ const resolveStructure = (
 }
 
 /**
- * Extract the element type from an array type string like "ARRAY[1..10] OF INT"
- * Returns the element type (e.g., "INT") or the original string if parsing fails.
- */
-const extractArrayElementType = (arrayTypeStr: string): string => {
-  const match = arrayTypeStr.match(/\bOF\s+([A-Za-z0-9_:.]+)\s*$/i)
-  return match ? match[1].toUpperCase() : arrayTypeStr
-}
-
-/**
  * Resolve an array and build runtime format
  */
 const resolveArray = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
 ): RuntimeArray => {
   const addr = resolveArrayAddress(node, pathToAddr, instances)
 
-  // Get the element type - prefer explicit elementType, otherwise extract from variableType
-  let datatype = node.elementType
-  if (!datatype && node.variableType) {
-    datatype = extractArrayElementType(node.variableType)
-  }
-  datatype = datatype || 'UNKNOWN'
-
+  // Element datatype/size from the compiler's debug map (the resolved
+  // leaf is the array's first element — all elements share the type),
+  // NOT the stored element type which can drift from the compiled layout.
   return {
     node_id: node.nodeId,
     browse_name: node.browseName,
     display_name: node.displayName,
-    datatype,
+    datatype: addr.type,
+    size: addr.size,
     length: node.arrayLength || 1,
     arr: addr.arr,
     elem: addr.elem,
@@ -307,7 +319,7 @@ const resolveArray = (
  */
 const buildAddressSpace = (
   config: OpcUaServerConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
 ): RuntimeAddressSpace => {
@@ -382,10 +394,10 @@ const buildAddressSpace = (
  * `addressSpace.nodes.length > 0 && map.size === 0` to distinguish
  * "no program loaded yet" from "config has no nodes".
  */
-const parseDebugMapToPathMap = (content: string): Map<string, number> => {
+const parseDebugMapToInfoMap = (content: string): Map<string, DebugLeafInfo> => {
   const map = parseDebugMapJson(content)
   if (!map) return new Map()
-  return buildLeafPathMap(map)
+  return buildLeafInfoMap(map)
 }
 
 /**
@@ -426,7 +438,7 @@ export const generateOpcUaConfig = (
 
   // 2. Parse debug-map.json into the same uppercase-path → packed-addr
   //    Map the debugger uses. One source of truth for resolution.
-  const pathToAddr = parseDebugMapToPathMap(debugMapContent)
+  const pathToAddr = parseDebugMapToInfoMap(debugMapContent)
 
   if (pathToAddr.size === 0 && config.addressSpace.nodes.length > 0) {
     throw new OpcUaConfigError(
@@ -460,6 +472,7 @@ export const generateOpcUaConfig = (
     name: 'opcua_server',
     protocol: 'OPC-UA',
     config: {
+      format_version: OPCUA_CONFIG_FORMAT_VERSION,
       server: buildServerConfig(config),
       security: buildSecurityConfig(config),
       users: buildUsersConfig(config),
@@ -496,7 +509,7 @@ export const validateOpcUaConfig = (
   }
 
   // Try to resolve all variables
-  const pathToAddr = parseDebugMapToPathMap(debugMapContent)
+  const pathToAddr = parseDebugMapToInfoMap(debugMapContent)
 
   for (const node of config.addressSpace.nodes) {
     try {

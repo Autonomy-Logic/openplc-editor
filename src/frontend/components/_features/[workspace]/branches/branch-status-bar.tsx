@@ -4,6 +4,8 @@ import type { Branch } from '../../../../../middleware/shared/ports/version-cont
 import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
 import { useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
+import { useOpenPLCStore } from '../../../../store'
+import { toast } from '../../../../utils/toast'
 import { BranchSwitcherPopover } from './branch-switcher-popover'
 import { DeleteBranchModal } from './delete-branch-modal'
 import type { CarryCheckState } from './unsaved-changes-warning-modal'
@@ -17,6 +19,8 @@ type BranchStatusBarProps = {
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
   const versionControl = useVersionControl()
   const navigation = useNavigation()
+  const checkIfAllFilesAreSaved = useOpenPLCStore((s) => s.fileActions.checkIfAllFilesAreSaved)
+  const pendingChangesCount = useOpenPLCStore((s) => s.versionControl.pendingChangesCount)
   const [activeBranchName, setActiveBranch] = useActiveBranch(projectId)
   const branchButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -52,42 +56,66 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       if (branch.name === activeBranchName) return
       if (!versionControl) return
 
-      // Check for unsaved changes before switching
+      // Block the switch when the editor has unsaved (not-yet-persisted) edits.
+      // The switch reloads the project from the server (handleBranchSwitch ->
+      // openProjectByPath), which would silently wipe in-memory editor state.
+      // `getChanges` below only sees server-side working-tree changes and can't
+      // detect these, so we guard here and let the user decide what to do with
+      // them (save via Ctrl+S, or discard) rather than persisting on their
+      // behalf — they may not want to keep these edits.
+      if (!checkIfAllFilesAreSaved()) {
+        toast({
+          title: 'Unsaved changes',
+          description: 'Save or discard your changes before switching branches.',
+          variant: 'warn',
+        })
+        setShowSwitcher(false)
+        return
+      }
+
+      // Warn before switching if there are uncommitted changes. The store's
+      // pendingChangesCount (the same signal the source-control panel shows) is
+      // the primary trigger: the live getChanges round-trip is best-effort and
+      // the backend returns an empty list on any error, so relying on it alone
+      // would let us switch silently over pending work the user can see.
+      let hasUncommittedChanges = pendingChangesCount > 0
       try {
         const { changes } = await versionControl.getChanges(projectId, activeBranchName)
-        if (changes.length > 0) {
-          setPendingBranchSwitch(branch)
-          setShowSwitcher(false)
-          setCarryCheckState('loading')
-          setConflictedFiles([])
-          setShowUnsavedWarning(true)
-
-          // Fire the pre-check in parallel so the modal opens immediately
-          // and updates as soon as the dry-run lands.
-          void versionControl
-            .previewSwitchCarry(projectId, branch.name)
-            .then((result) => {
-              if (result.conflicts.length > 0) {
-                setCarryCheckState('conflict')
-                setConflictedFiles(result.conflicts)
-              } else {
-                setCarryCheckState('available')
-                setConflictedFiles([])
-              }
-            })
-            .catch((err) => {
-              console.error('Failed to preview carry:', err)
-              setCarryCheckState('error')
-            })
-          return
-        }
+        if (changes.length > 0) hasUncommittedChanges = true
       } catch {
-        // If we can't check, proceed with switch
+        // Live check failed — fall back to the store signal above.
+      }
+
+      if (hasUncommittedChanges) {
+        setPendingBranchSwitch(branch)
+        setShowSwitcher(false)
+        setCarryCheckState('loading')
+        setConflictedFiles([])
+        setShowUnsavedWarning(true)
+
+        // Fire the pre-check in parallel so the modal opens immediately
+        // and updates as soon as the dry-run lands.
+        void versionControl
+          .previewSwitchCarry(projectId, branch.name)
+          .then((result) => {
+            if (result.conflicts.length > 0) {
+              setCarryCheckState('conflict')
+              setConflictedFiles(result.conflicts)
+            } else {
+              setCarryCheckState('available')
+              setConflictedFiles([])
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to preview carry:', err)
+            setCarryCheckState('error')
+          })
+        return
       }
 
       doSwitch(branch)
     },
-    [activeBranchName, projectId, versionControl, doSwitch],
+    [activeBranchName, projectId, versionControl, doSwitch, checkIfAllFilesAreSaved, pendingChangesCount],
   )
 
   const handleDiscardAndSwitch = useCallback(async () => {

@@ -283,6 +283,18 @@ export function createEditorProjectAdapter(): ProjectPort {
       return { success: true, data: response.data }
     },
 
+    async renameProject(
+      _projectId: string,
+      newName: string,
+    ): Promise<{ success: boolean; name?: string; error?: string }> {
+      // Desktop has no separate canonical name store: `project.json`'s
+      // `meta.name` IS the project name, and the existing rename flow
+      // (updateMetaName + project save) already persists it to disk.
+      // Nothing to do over IPC — succeed with the requested name so the
+      // shared explorer logic mirrors it into `meta.name`.
+      return { success: true, name: newName }
+    },
+
     async pickPath(): Promise<{ success: boolean; path?: string; error?: { title: string; description: string } }> {
       return window.bridge.pathPicker()
     },
