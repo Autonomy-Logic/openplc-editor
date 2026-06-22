@@ -266,6 +266,31 @@ describe('createLadderFlowSlice', () => {
     expect(ladderFlows[0].rungs).toHaveLength(2)
   })
 
+  it('startLadderRung inserts rung at specific index when insertAtIndex is provided', () => {
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      defaultBounds: [800, 200],
+    })
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-2',
+      defaultBounds: [800, 200],
+    })
+    store.getState().ladderFlowActions.startLadderRung({
+      editorName: 'editor-1',
+      rungId: 'rung-3',
+      defaultBounds: [800, 200],
+      insertAtIndex: 1,
+    })
+
+    const { ladderFlows } = store.getState()
+    expect(ladderFlows[0].rungs).toHaveLength(3)
+    expect(ladderFlows[0].rungs[0].id).toBe('rung-1')
+    expect(ladderFlows[0].rungs[1].id).toBe('rung-3')
+    expect(ladderFlows[0].rungs[2].id).toBe('rung-2')
+  })
+
   // -------------------------------------------------------------------------
   // setRungs
   // -------------------------------------------------------------------------
