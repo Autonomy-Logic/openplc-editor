@@ -541,9 +541,7 @@ export const updateDiagramElementsPosition = (
             getDefaultNodeStyle({ node: refNode }).verticalGap -
             getDefaultNodeStyle({ node }).handle.y
           const newHandleY =
-            refNode.position.y +
-            objectParallel.height +
-            getDefaultNodeStyle({ node: refNode }).verticalGap
+            refNode.position.y + objectParallel.height + getDefaultNodeStyle({ node: refNode }).verticalGap
           newNodePosition = {
             ...newNodePosition,
             posY: newPosY,

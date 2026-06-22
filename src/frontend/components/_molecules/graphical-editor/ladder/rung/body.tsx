@@ -74,7 +74,12 @@ type RungBodyProps = {
 const EDGE_COLOR_TRUE = '#00FF00'
 const EMPTY_ARRAY: string[] = []
 
-export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDebuggerActive = false }: RungBodyProps) => {
+export const RungBody = ({
+  rung,
+  className,
+  nodeDivergences = EMPTY_ARRAY,
+  isDebuggerActive = false,
+}: RungBodyProps) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const {
@@ -109,9 +114,7 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
       rungId: rung.id,
       nodes: [],
     })
-    const updatedEdges = rungLocal.edges.map((e) =>
-      e.selected ? { ...e, selected: false } : e
-    )
+    const updatedEdges = rungLocal.edges.map((e) => (e.selected ? { ...e, selected: false } : e))
     ladderFlowActions.setEdges({
       editorName: pouName,
       rungId: rung.id,
@@ -938,99 +941,104 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
   const selectedNode = useMemo(() => rungLocal.nodes.find((n) => n.selected), [rungLocal.nodes])
   const selectedEdge = useMemo(() => rungLocal.edges.find((e) => e.selected), [rungLocal.edges])
 
-  const selectNode = useCallback((node: FlowNode) => {
-    ladderFlowActions.setSelectedNodes({
-      editorName: pouName,
-      rungId: rung.id,
-      nodes: [node],
-    })
-    const updatedEdges = rungLocal.edges.map((e) =>
-      e.selected ? { ...e, selected: false } : e
-    )
-    ladderFlowActions.setEdges({
-      editorName: pouName,
-      rungId: rung.id,
-      edges: updatedEdges,
-    })
-  }, [pouName, rung.id, rungLocal.edges, ladderFlowActions])
-
-  const selectEdge = useCallback((edgeId: string) => {
-    ladderFlowActions.setSelectedNodes({
-      editorName: pouName,
-      rungId: rung.id,
-      nodes: [],
-    })
-    const updatedEdges = rungLocal.edges.map((e) => ({
-      ...e,
-      selected: e.id === edgeId,
-    }))
-    ladderFlowActions.setEdges({
-      editorName: pouName,
-      rungId: rung.id,
-      edges: updatedEdges,
-    })
-  }, [pouName, rung.id, rungLocal.edges, ladderFlowActions])
-
-
-
-  const handleAddElementAtEdge = useCallback((elementType: string) => {
-    if (!selectedEdge) return
-
-    const targetNode = rungLocal.nodes.find((n) => n.id === selectedEdge.target)
-    if (!targetNode) return
-
-    const tempPlaceholderId = `placeholder_temp_${uuidv4()}`
-    const targetIndex = rungLocal.nodes.findIndex((n) => n.id === targetNode.id)
-    if (targetIndex === -1) return
-
-    const tempPlaceholderNode = nodesBuilder.placeholder({
-      id: tempPlaceholderId,
-      type: 'default',
-      relatedNode: targetNode,
-      position: 'left',
-      ...getPlaceholderPositionBasedOnNode(targetNode, 'left'),
-    })
-    tempPlaceholderNode.selected = true
-    tempPlaceholderNode.data = {
-      ...tempPlaceholderNode.data,
-      edgeSourceId: selectedEdge.source,
-      selectedEdgeId: selectedEdge.id,
-    }
-
-    const modifiedNodes = [
-      ...rungLocal.nodes.slice(0, targetIndex),
-      tempPlaceholderNode,
-      ...rungLocal.nodes.slice(targetIndex),
-    ]
-
-    const { nodes, edges, newNode, handleBranches } = addNewElement(
-      {
-        ...rungLocal,
-        nodes: modifiedNodes,
-      },
-      { elementType },
-    )
-
-    captureAndPush(pouName)
-
-    ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes })
-    ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges })
-    if (handleBranches) {
-      ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
-    }
-
-    if (newNode) {
+  const selectNode = useCallback(
+    (node: FlowNode) => {
       ladderFlowActions.setSelectedNodes({
         editorName: pouName,
-        rungId: rungLocal.id,
-        nodes: [newNode],
+        rungId: rung.id,
+        nodes: [node],
       })
-    }
+      const updatedEdges = rungLocal.edges.map((e) => (e.selected ? { ...e, selected: false } : e))
+      ladderFlowActions.setEdges({
+        editorName: pouName,
+        rungId: rung.id,
+        edges: updatedEdges,
+      })
+    },
+    [pouName, rung.id, rungLocal.edges, ladderFlowActions],
+  )
 
-    if (pouRef) {
-      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
-    }
-  }, [selectedEdge, rungLocal, pouName, ladderFlowActions, captureAndPush, pouRef, ladderFlows])
+  const selectEdge = useCallback(
+    (edgeId: string) => {
+      ladderFlowActions.setSelectedNodes({
+        editorName: pouName,
+        rungId: rung.id,
+        nodes: [],
+      })
+      const updatedEdges = rungLocal.edges.map((e) => ({
+        ...e,
+        selected: e.id === edgeId,
+      }))
+      ladderFlowActions.setEdges({
+        editorName: pouName,
+        rungId: rung.id,
+        edges: updatedEdges,
+      })
+    },
+    [pouName, rung.id, rungLocal.edges, ladderFlowActions],
+  )
+
+  const handleAddElementAtEdge = useCallback(
+    (elementType: string) => {
+      if (!selectedEdge) return
+
+      const targetNode = rungLocal.nodes.find((n) => n.id === selectedEdge.target)
+      if (!targetNode) return
+
+      const tempPlaceholderId = `placeholder_temp_${uuidv4()}`
+      const targetIndex = rungLocal.nodes.findIndex((n) => n.id === targetNode.id)
+      if (targetIndex === -1) return
+
+      const tempPlaceholderNode = nodesBuilder.placeholder({
+        id: tempPlaceholderId,
+        type: 'default',
+        relatedNode: targetNode,
+        position: 'left',
+        ...getPlaceholderPositionBasedOnNode(targetNode, 'left'),
+      })
+      tempPlaceholderNode.selected = true
+      tempPlaceholderNode.data = {
+        ...tempPlaceholderNode.data,
+        edgeSourceId: selectedEdge.source,
+        selectedEdgeId: selectedEdge.id,
+      }
+
+      const modifiedNodes = [
+        ...rungLocal.nodes.slice(0, targetIndex),
+        tempPlaceholderNode,
+        ...rungLocal.nodes.slice(targetIndex),
+      ]
+
+      const { nodes, edges, newNode, handleBranches } = addNewElement(
+        {
+          ...rungLocal,
+          nodes: modifiedNodes,
+        },
+        { elementType },
+      )
+
+      captureAndPush(pouName)
+
+      ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes })
+      ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges })
+      if (handleBranches) {
+        ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
+      }
+
+      if (newNode) {
+        ladderFlowActions.setSelectedNodes({
+          editorName: pouName,
+          rungId: rungLocal.id,
+          nodes: [newNode],
+        })
+      }
+
+      if (pouRef) {
+        syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
+      }
+    },
+    [selectedEdge, rungLocal, pouName, ladderFlowActions, captureAndPush, pouRef, ladderFlows],
+  )
 
   const handleAddBranchAtNode = useCallback(() => {
     if (!selectedNode) return
@@ -1049,9 +1057,7 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
 
     let hasBranchUnderneath = false
     for (const openParallel of openParallels) {
-      const closeParallel = rungLocal.nodes.find(
-        (n) => n.id === openParallel.data.parallelCloseReference,
-      )
+      const closeParallel = rungLocal.nodes.find((n) => n.id === openParallel.data.parallelCloseReference)
       if (!closeParallel) continue
       const { serial } = getNodesInsideParallel(rungLocal, closeParallel)
       if (serial.some((n) => n.id === selectedNode.id)) {
@@ -1122,17 +1128,15 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
       if (isDebuggerActive) return
 
       const target = e.target as HTMLElement
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return
       }
 
       const isShiftE = e.key.toLowerCase() === 'e' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
-      const isShiftArrow = (e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
-      const isCtrlArrow = (e.key === 'ArrowDown' || e.key === 'ArrowUp') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey
+      const isShiftArrow =
+        (e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
+      const isCtrlArrow =
+        (e.key === 'ArrowDown' || e.key === 'ArrowUp') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey
 
       if (!isShiftE && !isShiftArrow && !isCtrlArrow && (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey)) {
         return
@@ -1255,8 +1259,7 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         if (selectedEdge) {
           const siblings = rungLocal.edges.filter(
-            (edge) =>
-              edge.source === selectedEdge.source || edge.target === selectedEdge.target,
+            (edge) => edge.source === selectedEdge.source || edge.target === selectedEdge.target,
           )
           if (siblings.length > 1) {
             const getEdgeY = (edge: Edge) => {
@@ -1277,10 +1280,7 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
         } else if (selectedNode) {
           const selectedNodeX = selectedNode.position.x
           const verticalSiblings = rungLocal.nodes.filter(
-            (n) =>
-              n.id !== selectedNode.id &&
-              n.type !== 'powerRail' &&
-              Math.abs(n.position.x - selectedNodeX) < 50,
+            (n) => n.id !== selectedNode.id && n.type !== 'powerRail' && Math.abs(n.position.x - selectedNodeX) < 50,
           )
           if (verticalSiblings.length > 0) {
             const sortedNodes = [selectedNode, ...verticalSiblings].sort((a, b) => a.position.y - b.position.y)
