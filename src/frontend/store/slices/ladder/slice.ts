@@ -155,8 +155,14 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
             selectedNodes: [],
           }
 
-          if (typeof insertAtIndex === 'number') {
-            flow.rungs.splice(insertAtIndex, 0, newRung)
+          // Clamp to a valid range so NaN/negative/out-of-bounds indices can't place the rung wrong.
+          const normalizedInsertAtIndex =
+            typeof insertAtIndex === 'number' && Number.isFinite(insertAtIndex)
+              ? Math.min(Math.max(Math.trunc(insertAtIndex), 0), flow.rungs.length)
+              : undefined
+
+          if (normalizedInsertAtIndex !== undefined) {
+            flow.rungs.splice(normalizedInsertAtIndex, 0, newRung)
           } else {
             flow.rungs.push(newRung)
           }

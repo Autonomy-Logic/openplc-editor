@@ -42,19 +42,25 @@ export const connectNodes = (
 ): Edge[] => {
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
-  const sourceEdge = options?.selectedEdgeId
-    ? rung.edges.find((edge) => edge.id === options.selectedEdgeId)
-    : rung.edges.find((edge) => {
-        return (
-          edge.source === sourceNodeId &&
-          (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
-            ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
-            : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
-              ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
-                edge.sourceHandle === (sourceNode as ParallelNode).data.outputConnector?.id
-              : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
-        )
-      })
+  // When a specific edge was selected (keyboard edge insertion), only honor it if it
+  // actually belongs to sourceNodeId; otherwise fall back to the normal source-edge lookup
+  // so we never rewire the wrong edge path.
+  const selectedSourceEdge = options?.selectedEdgeId
+    ? rung.edges.find((edge) => edge.id === options.selectedEdgeId && edge.source === sourceNodeId)
+    : undefined
+  const sourceEdge =
+    selectedSourceEdge ??
+    rung.edges.find((edge) => {
+      return (
+        edge.source === sourceNodeId &&
+        (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
+          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+          : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
+            ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
+              edge.sourceHandle === (sourceNode as ParallelNode).data.outputConnector?.id
+            : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
+      )
+    })
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
