@@ -15,7 +15,7 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -77,7 +77,6 @@ export default function LadderEditor() {
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
-  const nodeDivergences = getLibraryDivergences()
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -206,7 +205,7 @@ export default function LadderEditor() {
     closeModal()
   }
 
-  function getLibraryDivergences() {
+  const nodeDivergences = useMemo<string[]>(() => {
     if (!flow) return []
 
     const divergences = []
@@ -261,7 +260,7 @@ export default function LadderEditor() {
     }
 
     return divergences
-  }
+  }, [flow, userLibraries, pous])
 
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>

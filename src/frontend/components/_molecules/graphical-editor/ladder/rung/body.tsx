@@ -28,7 +28,7 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
-import { getNodesInsideParallel,getPlaceholderPositionBasedOnNode } from './ladder-utils/elements/utils'
+import { getNodesInsideParallel, getPlaceholderPositionBasedOnNode } from './ladder-utils/elements/utils'
 import { findNode } from './ladder-utils/nodes'
 
 /**
@@ -121,6 +121,22 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
+
+  // Id of a rung that was just created via keyboard and still needs to receive focus.
+  // Focus happens in an effect once the rung is committed to the DOM (see below),
+  // instead of guessing a render delay with setTimeout.
+  const pendingFocusRungIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const pendingId = pendingFocusRungIdRef.current
+    if (!pendingId) return
+    const newRungElement = document.getElementById(pendingId)
+    const focusable = newRungElement?.querySelector('div[tabindex="0"]') as unknown as HTMLDivElement | null
+    if (focusable) {
+      focusable.focus()
+      pendingFocusRungIdRef.current = null
+    }
+  }, [rungs])
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -1159,11 +1175,8 @@ export const RungBody = ({ rung, className, nodeDivergences = EMPTY_ARRAY, isDeb
           })
           updateModelLadder({ openRung: { rungId: rungIdToBeAdded, open: true } })
 
-          setTimeout(() => {
-            const newRungElement = document.getElementById(rungIdToBeAdded)
-            const focusable = newRungElement?.querySelector('div[tabindex="0"]') as unknown as HTMLDivElement | null
-            focusable?.focus()
-          }, 100)
+          // Defer focus until the new rung is actually rendered (see the effect keyed on `rungs`).
+          pendingFocusRungIdRef.current = rungIdToBeAdded
 
           e.preventDefault()
         }
