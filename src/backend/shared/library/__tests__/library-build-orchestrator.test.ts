@@ -70,9 +70,9 @@ function makePort(): PortHarness {
       // distinguishable.
       return `md5-${input.length}-${input.charCodeAt(0) ?? 0}`
     },
-    async transpileXmlToSt({ xml }) {
-      if (harness.throwOn.transpileXmlToSt) throw harness.throwOn.transpileXmlToSt
-      return { ok: true, programSt: `PROGRAM main\n(* from xml: ${xml.length} bytes *)\nEND_PROGRAM\n` }
+    async transpileToSt() {
+      if (harness.throwOn.transpileToSt) throw harness.throwOn.transpileToSt
+      return { ok: true, programSt: `PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n` }
     },
     async readBuildFile(_projectPath: string, relPath: string) {
       if (harness.throwOn.readBuildFile) throw harness.throwOn.readBuildFile
@@ -165,7 +165,7 @@ describe('runLibraryBuildPipeline', () => {
       expect.arrayContaining([
         'Starting library build...',
         'Manifest OK — building "lib" v0.1.0.',
-        'Compiling file plc.xml',
+        'Transpiling project to Structured Text',
         'Verifying with OpenPLC Simulator (avr-gcc)...',
         'Compiling library archive...',
         'Library built successfully: build/lib.stlib',
@@ -247,7 +247,7 @@ describe('runLibraryBuildPipeline', () => {
     expect(aux.dependencyRefs).toEqual([{ name: 'oscat-basic', version: '1.0.0' }])
   })
 
-  it('aborts before xml2st when the project enables an unresolved library', async () => {
+  it('aborts before transpilation when the project enables an unresolved library', async () => {
     const harness = makePort()
     harness.missing = ['ghost-lib']
     const { events, emit } = captureEvents()
@@ -277,8 +277,8 @@ describe('runLibraryBuildPipeline', () => {
     const harness = makePort()
     // Pre-seed the cache.  computeMd5 in the harness is deterministic
     // off program.st length + first char; the orchestrator's value
-    // will match this when the same xml2st output replays.
-    const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
+    // will match this when the same transpiler output replays.
+    const programSt = `PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n`
     const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
     harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { events, emit } = captureEvents()
@@ -300,7 +300,7 @@ describe('runLibraryBuildPipeline', () => {
 
   it('cleanBuild forces a fresh verification regardless of cache', async () => {
     const harness = makePort()
-    const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
+    const programSt = `PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n`
     const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
     harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { emit } = captureEvents()

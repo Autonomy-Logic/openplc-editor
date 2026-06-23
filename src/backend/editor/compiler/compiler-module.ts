@@ -82,10 +82,8 @@ type ProjectDataWithCppPous = PLCProjectData & {
 const POST_BUILD_START_TIMEOUT_MS = 5000
 const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
-import { compareTranspilerOutput } from '@root/backend/editor/services/transpiler-comparison/compare-transpiler-output'
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
-import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
 import { mergeStrucppRuntimeIntoSkeleton } from '@root/backend/shared/compile/steps/merge-strucpp-runtime-into-skeleton'
 import { readHalsFile } from '@root/backend/shared/firmware/hals-loader'
@@ -169,8 +167,6 @@ class CompilerModule {
   arduinoCliConfigurationFilePath: string
   arduinoCliBaseParameters: string[]
 
-  xml2stBinaryPath: string
-
   strucppRuntimeDir: string
 
   // Memoised arduino-cli `--show-properties=expanded` output keyed by FQBN.
@@ -224,8 +220,6 @@ class CompilerModule {
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
     // INFO: We use this approach because some commands can receive additional parameters as a string array.
     this.arduinoCliBaseParameters = ['--config-file', this.arduinoCliConfigurationFilePath]
-
-    this.xml2stBinaryPath = this.#constructXml2stBinaryPath()
 
     this.strucppRuntimeDir = this.#constructStrucppRuntimeDir()
   }
@@ -353,10 +347,6 @@ class CompilerModule {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
 
-  #constructXml2stBinaryPath(): string {
-    return join(this.binaryDirectoryPath, 'xml2st', CompilerModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '')
-  }
-
   #constructStrucppRuntimeDir(): string {
     // strucpp's runtime headers (`src/runtime/include/`) live in two
     // places depending on whether we're running dev or a packaged app:
@@ -433,14 +423,6 @@ class CompilerModule {
       arduinoCliBinaryPath += '.exe'
     }
     return spawn(arduinoCliBinaryPath, args)
-  }
-
-  #executeXml2st(args: string[]) {
-    let xml2stBinaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      xml2stBinaryPath += '.exe'
-    }
-    return spawn(xml2stBinaryPath, args)
   }
 
   // ############################################################################
@@ -843,64 +825,6 @@ class CompilerModule {
   }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
-
-  async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: PLCProjectData) {
-    return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
-      const { data: xmlData } = XmlGenerator(jsonData as Parameters<typeof XmlGenerator>[0], 'old-editor')
-      if (typeof xmlData !== 'string') {
-        reject(new Error('XML data is not a string'))
-        return
-      }
-
-      const xmlCreationResult = CreateXMLFile(sourceTargetFolderPath, xmlData, 'plc')
-
-      if (xmlCreationResult.success) {
-        resolve({ success: true, data: { xmlPath: sourceTargetFolderPath, xmlContent: xmlData } })
-      } else {
-        reject(new Error('Failed to create XML file'))
-      }
-    })
-  }
-
-  async handleTranspileXMLtoST(
-    generatedXMLFilePath: string,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-    extraXml2stArgs: readonly string[],
-  ) {
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      // `extraXml2stArgs` comes from the shared pipeline's
-      // `TranspileXmlToStArgs.xml2stArgs` — the single source of truth
-      // for xml2st flag semantics across editor and web.  Editor passes
-      // them through verbatim (trusted local binary); web's adapter
-      // filters against its known-args allowlist before sending to the
-      // compile-service.  Strucpp targets currently pass
-      // `['--keep-structs']` (native STRUCT declarations vs matiec's
-      // legacy struct→FB rewrite); future flags appear here as the
-      // pipeline opts into them.
-      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath, ...extraXml2stArgs])
-
-      let stderrData = ''
-
-      // INFO: We use the xml2st command to transpile the XML file to ST.
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          handleOutputData(`ST file generated at: ${generatedXMLFilePath.replace('plc.xml', 'program.st')}`, 'info')
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
-        }
-      })
-    })
-  }
 
   async handleCompileSTtoCpp(
     sourceTargetFolderPath: string,
@@ -2671,7 +2595,6 @@ class CompilerModule {
     // --- Build the editor's CompilerPlatformPort implementation ---
     const platformPort = createEditorCompilerPlatformPort(
       {
-        handleTranspileXMLtoST: this.handleTranspileXMLtoST.bind(this),
         handleCompileArduinoProgram: this.handleCompileArduinoProgram.bind(this),
         handleUploadProgram: this.handleUploadProgram.bind(this),
         handleCoreInstallation: this.handleCoreInstallation.bind(this),
@@ -2883,37 +2806,9 @@ class CompilerModule {
       return
     }
 
-    // Project -> ST. Run BOTH engines on every debug compile so their
-    // outputs can be compared while the new in-process TS transpiler is
-    // validated against the legacy xml2st subprocess. The OLD engine is
-    // authoritative unless OPENPLC_USE_NEW_TRANSPILER flips it; the
-    // comparison verdict is posted either way. Only the legacy path writes
-    // files, so running them in parallel is safe — the authoritative ST is
-    // written to program.st last so downstream STruC++ reads the chosen
-    // output.
+    // Project -> ST via the in-process transpiler. The resulting program.st
+    // is what STruC++ reads downstream.
     type DebugStResult = { ok: true; programSt: string } | { ok: false; programSt?: undefined; error: string }
-
-    const runDebugLegacy = async (): Promise<DebugStResult> => {
-      try {
-        const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
-        _mainProcessPort.postMessage({
-          logLevel: 'info',
-          message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
-        })
-        const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml')
-        await this.handleTranspileXMLtoST(
-          generatedXMLFilePath,
-          (data, logLevel) => {
-            _mainProcessPort.postMessage({ logLevel, message: data })
-          },
-          ['--keep-structs'],
-        )
-        const programSt = await readFile(join(sourceTargetFolderPath, 'program.st'), 'utf-8')
-        return { ok: true, programSt }
-      } catch (error) {
-        return { ok: false, error: `xml2st failed: ${getErrorMessage(error)}` }
-      }
-    }
 
     const runDebugInProcess = (): DebugStResult => {
       try {
@@ -2929,28 +2824,17 @@ class CompilerModule {
     }
 
     await mkdir(sourceTargetFolderPath, { recursive: true })
-    const [oldStResult, newStResult] = await Promise.all([runDebugLegacy(), Promise.resolve(runDebugInProcess())])
-
-    const debugComparison = compareTranspilerOutput(
-      oldStResult.ok ? oldStResult.programSt : undefined,
-      newStResult.ok ? newStResult.programSt : undefined,
-    )
-    _mainProcessPort.postMessage({
-      logLevel: debugComparison.status === 'identical' ? 'info' : 'warning',
-      message: `Transpiler comparison: ${debugComparison.message}`,
-    })
-
-    const authoritativeSt = isNewTranspilerEnabled() ? newStResult : oldStResult
-    if (!authoritativeSt.ok) {
+    const stResult = runDebugInProcess()
+    if (!stResult.ok) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `${authoritativeSt.error}\nStopping debug compilation process.`,
+        message: `${stResult.error}\nStopping debug compilation process.`,
       })
       _mainProcessPort.close()
       return
     }
     const programStPath = join(sourceTargetFolderPath, 'program.st')
-    await writeFile(programStPath, authoritativeSt.programSt, 'utf-8')
+    await writeFile(programStPath, stResult.programSt, 'utf-8')
     _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
@@ -3058,15 +2942,10 @@ class CompilerModule {
    *   1. Read `<projectPath>/library.json` from disk (the manifest
    *      tab's surgical save has already written the live buffer
    *      ahead of this call — Phase 5).
-   *   2. `prepareXmlForLibraryBuild` validates the manifest and
-   *      emits the XML xml2st consumes.  Manifest errors fail fast
-   *      here without spawning xml2st.
-   *   3. Persist plc.xml under `<projectPath>/build/library/src/`
-   *      and run the existing `handleTranspileXMLtoST` helper so
-   *      this path shares the xml2st spawn / error-handling code
-   *      the program build already uses.
-   *   4. Read xml2st's program.st back and hand it +
-   *      knownPous + manifest to `libraryBuildFromTranspiledSt`,
+   *   2. Validate the manifest.  Manifest errors fail fast here.
+   *   3-4. Transpile the library's POUs to ST via the in-process
+   *      transpiler (through the desktop library build port) and hand
+   *      the ST + knownPous + manifest to `libraryBuildFromTranspiledSt`,
    *      which drops the synthetic stub and calls strucpp's
    *      `compileStlib`.
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
@@ -3103,7 +2982,6 @@ class CompilerModule {
     // glue the library build needs — every stage decision lives in
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
-      transpileXmlToSt: (xmlPath, log, extraArgs) => this.handleTranspileXMLtoST(xmlPath, log, extraArgs),
       loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
       runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
         this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>

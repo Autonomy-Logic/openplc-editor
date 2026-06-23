@@ -16,26 +16,14 @@
  *   - Translates the handler's return value back into the port's
  *     canonical result shape
  *
- * `transpileToSt` selects between two backends at runtime via
- * `isNewTranspilerEnabled()` (env: `OPENPLC_USE_NEW_TRANSPILER`):
- * the in-process JSON-fed transpiler
- * (`backend/shared/transpilers/st-transpiler/`) when the flag is on,
- * or the bundled `xml2st` subprocess (default) — serialising the
- * project IR via `XmlGenerator` and running it through
- * `handleTranspileXMLtoST` on disk, the same way the editor handled
- * compilation before Phase 2.
+ * `transpileToSt` runs the in-process JSON-fed transpiler
+ * (`backend/shared/transpilers/st-transpiler/`).
  *
  * This module is editor-only (lives under `backend/editor/`); the
  * web platform implements the same port interface separately under
  * `middleware/adapters/web/`.
  */
 
-import {
-  compareTranspilerOutput,
-  TRANSPILER_LABEL_NEW,
-  TRANSPILER_LABEL_OLD,
-} from '@root/backend/editor/services/transpiler-comparison/compare-transpiler-output'
-import { isNewTranspilerEnabled } from '@root/backend/editor/utils/transpiler-mode'
 import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
@@ -43,7 +31,6 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
-import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -76,7 +63,6 @@ import type { CompilerModule } from './compiler-module'
  * file-watching, etc.).
  */
 export interface EditorCompilerHandlers {
-  handleTranspileXMLtoST: CompilerModule['handleTranspileXMLtoST']
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
   handleCoreInstallation: CompilerModule['handleCoreInstallation']
@@ -152,74 +138,15 @@ export interface EditorCompilerPlatformPortContext {
  * arrays, device context) and shims them onto the existing
  * handlers' filesystem-and-subprocess shape.
  */
-/**
- * Log how the old and new transpiler outputs compare. Emits a single
- * info line when they match and a warning when they differ or when either
- * engine failed (which makes a content comparison impossible).
- */
-function logEditorTranspilerComparison(
-  oldResult: TranspileToStResult,
-  newResult: TranspileToStResult,
-  log: PlatformLog,
-): void {
-  const oldSt = oldResult.ok ? oldResult.programSt : undefined
-  const newSt = newResult.ok ? newResult.programSt : undefined
-  const comparison = compareTranspilerOutput(oldSt, newSt)
-
-  log(`Transpiler comparison: ${comparison.message}`, comparison.status === 'identical' ? 'info' : 'warning')
-
-  if (comparison.status === 'incomparable') {
-    if (typeof oldSt !== 'string' && oldResult.errors?.length) {
-      log(`Transpiler comparison: ${TRANSPILER_LABEL_OLD} errors: ${oldResult.errors.map((e) => e.message).join('; ')}`, 'warning')
-    }
-    if (typeof newSt !== 'string' && newResult.errors?.length) {
-      log(`Transpiler comparison: ${TRANSPILER_LABEL_NEW} errors: ${newResult.errors.map((e) => e.message).join('; ')}`, 'warning')
-    }
-  }
-}
-
 export function createEditorCompilerPlatformPort(
   handlers: EditorCompilerHandlers,
   context: EditorCompilerPlatformPortContext,
 ): CompilerPlatformPort {
   /**
-   * Legacy transpile: serialise the project to IEC 61131-3 XML, write it
-   * to `<sourceTargetFolder>/plc.xml`, run the bundled `xml2st` subprocess,
-   * then read `program.st` back. Streams the subprocess's own output to
-   * `log`; folds failures into the result so the caller can run it
-   * alongside the in-process engine for comparison.
-   */
-  const runLegacyTranspile = async (args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> => {
-    const xmlResult = XmlGenerator(args.projectData as never, 'old-editor')
-    if (!xmlResult.ok || !xmlResult.data) {
-      return { ok: false, errors: [{ message: `XML generation failed: ${xmlResult.message}`, line: 0, column: 0, severity: 'error' }] }
-    }
-    const xmlPath = join(context.sourceTargetFolderPath, 'plc.xml')
-    try {
-      await fs.mkdir(dirname(xmlPath), { recursive: true })
-      await fs.writeFile(xmlPath, xmlResult.data, 'utf-8')
-      await handlers.handleTranspileXMLtoST(
-        xmlPath,
-        (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        },
-        ['--keep-structs'],
-      )
-      const programStPath = join(context.sourceTargetFolderPath, 'program.st')
-      const programSt = await fs.readFile(programStPath, 'utf-8')
-      return { ok: true, programSt }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, errors: [{ message: `xml2st failed: ${message}`, line: 0, column: 0, severity: 'error' }] }
-    }
-  }
-
-  /**
-   * New transpile: project the schema-shape payload via `fromSchemaShape`
-   * and run the in-process JSON transpiler. Folds failures into the result
-   * (see `runLegacyTranspile`). The editor's IPC payload is schema-shape;
-   * the double cast bridges the declared-vs-runtime mismatch.
+   * Transpile: project the schema-shape payload via `fromSchemaShape`
+   * and run the in-process JSON transpiler. Folds failures into the result.
+   * The editor's IPC payload is schema-shape; the double cast bridges the
+   * declared-vs-runtime mismatch.
    */
   const runInProcessTranspile = (args: TranspileToStArgs): TranspileToStResult => {
     try {
@@ -248,36 +175,16 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Transpile the project IR to Structured Text. Runs BOTH engines on
-     * every call so their outputs can be compared while the new in-process
-     * TS transpiler is validated against the legacy `xml2st` subprocess:
-     *
-     *   - old: serialise to IEC 61131-3 XML via `XmlGenerator`, write it to
-     *     `<sourceTargetFolder>/plc.xml`, run the bundled `xml2st` binary,
-     *     read `program.st` back.
-     *   - new: run the in-process JSON transpiler
-     *     (`backend/shared/transpilers/st-transpiler/`).
-     *
-     * The comparison verdict is logged on every compile. The OLD engine is
-     * authoritative unless `OPENPLC_USE_NEW_TRANSPILER` flips authority to
-     * the new one; the non-authoritative engine's failures are non-fatal and
-     * downgraded to comparison warnings.
+     * Transpile the project IR to Structured Text via the in-process JSON
+     * transpiler (`backend/shared/transpilers/st-transpiler/`).
      */
     async transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> {
-      const useNew = isNewTranspilerEnabled()
-      const [oldResult, newResult] = await Promise.all([
-        runLegacyTranspile(args, log),
-        Promise.resolve(runInProcessTranspile(args)),
-      ])
-
-      logEditorTranspilerComparison(oldResult, newResult, log)
-
-      const authoritative = useNew ? newResult : oldResult
-      if (!authoritative.ok) {
-        const message = authoritative.errors?.map((e) => e.message).join('\n') || 'Failed to generate Structured Text'
+      const result = runInProcessTranspile(args)
+      if (!result.ok) {
+        const message = result.errors?.map((e) => e.message).join('\n') || 'Failed to generate Structured Text'
         log(message, 'error')
       }
-      return authoritative
+      return result
     },
 
     /**

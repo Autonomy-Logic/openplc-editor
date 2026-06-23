@@ -205,12 +205,17 @@ Flow state is stored per-POU in dedicated slices (`ladder`, `fbd`). Flows must b
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):
 
 ```
-PLCProjectData -> Preprocess POUs -> XML Generation -> xml2st -> iec2c -> C code
+PLCProjectData -> Preprocess POUs -> ST transpiler (in-process) -> strucpp -> C++ code
                                                                            |
                                                     defines.h (pins, Modbus, MD5)
                                                                            |
                                                     Arduino CLI / openplc-compiler -> firmware
 ```
+
+Structured Text is generated in-process by the TS transpiler
+(`src/backend/shared/transpilers/st-transpiler/`) on both editor and web — the
+legacy `xml2st` binary path has been retired. `XmlGenerator` is kept only for
+the "Export Project as XML" feature.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `/resources/sources/boards/hals.json`.
 

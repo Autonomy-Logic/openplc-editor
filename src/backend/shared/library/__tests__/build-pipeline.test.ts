@@ -299,33 +299,10 @@ describe('prepareXmlForLibraryBuild', () => {
     expect(bulletCount).toBeGreaterThanOrEqual(3)
   })
 
-  it('returns a structured error when XML generation fails', () => {
-    mockXmlGenerator.mockReturnValue({ ok: false, message: 'no main pou', data: undefined })
+  it('returns projectData + knownPous (including stub) + parsed manifest on success', () => {
     const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('error' in result).toBe(true)
-    if (!('error' in result)) return
-    expect(result.error).toContain('no main pou')
-  })
-
-  it('falls back to "unknown error" when XmlGenerator omits a message', () => {
-    mockXmlGenerator.mockReturnValue({ ok: false, data: undefined })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    if (!('error' in result)) throw new Error('expected error')
-    expect(result.error).toContain('unknown error')
-  })
-
-  it('treats ok=true but empty data as an error', () => {
-    mockXmlGenerator.mockReturnValue({ ok: true, message: 'XML generated', data: '' })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('error' in result).toBe(true)
-  })
-
-  it('returns xml + knownPous (including stub) + parsed manifest on success', () => {
-    mockXmlGenerator.mockReturnValue({ ok: true, message: 'XML generated', data: '<plc/>' })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('xml' in result).toBe(true)
-    if (!('xml' in result)) return
-    expect(result.xml).toBe('<plc/>')
+    expect('error' in result).toBe(false)
+    if ('error' in result) return
     expect(result.manifest.name).toBe('demo_lib')
 
     // POUs from the project + the stub program

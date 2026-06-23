@@ -32,6 +32,11 @@ export function generateConfigurations(project: TranspileProject): ProgramChunk[
 
   const out: ProgramChunk[] = []
 
+  // Tasks emit in ascending-priority order (stable), matching the old
+  // editor XML generator's `[...tasks].sort((a,b)=>a.priority-b.priority)`.
+  // Instance (PROGRAM) lines are grouped by this same task order below.
+  const sortedTasks = [...project.configuration.tasks].sort((a, b) => a.priority - b.priority)
+
   out.push(['\nCONFIGURATION ', []])
   out.push([CONFIG_NAME, [configTagname, 'name']])
   out.push(['\n', []])
@@ -57,7 +62,7 @@ export function generateConfigurations(project: TranspileProject): ProgramChunk[
   // current shape.
 
   // Tasks.
-  project.configuration.tasks.forEach((task, taskNumber) => {
+  sortedTasks.forEach((task, taskNumber) => {
     out.push(['    TASK ', []])
     out.push([task.name, [resourceTagname, 'task', taskNumber, 'name']])
     out.push(['(', []])
@@ -90,7 +95,7 @@ export function generateConfigurations(project: TranspileProject): ProgramChunk[
   // iteration order, then instance order within each task), then the
   // task-less instances directly under the resource.
   let instanceNumber = 0
-  for (const task of project.configuration.tasks) {
+  for (const task of sortedTasks) {
     for (const instance of project.configuration.instances) {
       if (instance.task !== task.name) continue
       out.push(['    PROGRAM ', []])
