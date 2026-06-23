@@ -4,6 +4,9 @@ import { StateCreator } from 'zustand'
 
 import type {
   ModbusIOPoint,
+  OpcUaClientConfig,
+  OpcUaClientMapping,
+  OpcUaClientSecurity,
   OpcUaServerConfig,
   PLCServer,
   PLCVariable,
@@ -92,6 +95,24 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
     namespaceUri: 'urn:openplc:opcua:namespace',
     nodes: [],
   },
+}
+
+const DEFAULT_OPCUA_CLIENT_CONFIG: OpcUaClientConfig = {
+  enabled: false,
+  endpointUrl: 'opc.tcp://127.0.0.1:4840',
+  sessionTimeoutMs: 60000,
+  reconnect: true,
+  security: {
+    securityPolicy: 'None',
+    securityMode: 'None',
+    authMode: 'anonymous',
+    username: null,
+    password: null,
+    clientCertPem: null,
+    clientKeyPem: null,
+    serverCertPem: null,
+  },
+  mappings: [],
 }
 
 function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
@@ -1429,6 +1450,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (device.protocol === 'modbus-tcp' && !device.modbusTcpConfig) {
             device.modbusTcpConfig = { host: '127.0.0.1', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] }
           }
+          if (device.protocol === 'opc-ua-client' && !device.opcuaClientConfig) {
+            device.opcuaClientConfig = {
+              ...DEFAULT_OPCUA_CLIENT_CONFIG,
+              security: { ...DEFAULT_OPCUA_CLIENT_CONFIG.security },
+              mappings: [],
+            }
+          }
           slice.project.data.remoteDevices.push(device)
 
           // EtherCAT bus is driven by a dedicated thread inside the
@@ -1486,6 +1514,64 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // Common fields
           if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
           if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
+        }),
+      )
+      return ok()
+    },
+    updateOpcUaClientConnection: (name, config) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
+          if (!device?.opcuaClientConfig) return
+          const c = device.opcuaClientConfig
+          if (config.enabled !== undefined) c.enabled = config.enabled
+          if (config.endpointUrl !== undefined) c.endpointUrl = config.endpointUrl
+          if (config.sessionTimeoutMs !== undefined) c.sessionTimeoutMs = config.sessionTimeoutMs
+          if (config.reconnect !== undefined) c.reconnect = config.reconnect
+        }),
+      )
+      return ok()
+    },
+    updateOpcUaClientSecurity: (name, security) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
+          if (!device?.opcuaClientConfig) return
+          device.opcuaClientConfig.security = { ...device.opcuaClientConfig.security, ...security }
+        }),
+      )
+      return ok()
+    },
+    addOpcUaClientMapping: (name, mapping) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
+          if (!device?.opcuaClientConfig) return
+          device.opcuaClientConfig.mappings.push(mapping)
+        }),
+      )
+      return ok()
+    },
+    updateOpcUaClientMapping: (name, mappingId, mapping) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
+          if (!device?.opcuaClientConfig) return
+          const existing = device.opcuaClientConfig.mappings.find((m) => m.id === mappingId)
+          if (!existing) return
+          Object.assign(existing, mapping)
+        }),
+      )
+      return ok()
+    },
+    removeOpcUaClientMapping: (name, mappingId) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
+          if (!device?.opcuaClientConfig) return
+          device.opcuaClientConfig.mappings = device.opcuaClientConfig.mappings.filter(
+            (m) => m.id !== mappingId,
+          )
         }),
       )
       return ok()

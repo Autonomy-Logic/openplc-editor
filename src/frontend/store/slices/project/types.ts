@@ -2,6 +2,9 @@ import type {
   EthercatConfig,
   ModbusBufferMapping,
   ModbusIOGroup,
+  OpcUaClientConfig,
+  OpcUaClientMapping,
+  OpcUaClientSecurity,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaTrustedCertificate,
@@ -290,6 +293,20 @@ export type ProjectActions = {
   deleteIOGroup: (deviceName: string, groupId: string) => ProjectResponse
   updateIOPointAlias: (deviceName: string, groupId: string, pointId: string, alias: string) => ProjectResponse
   updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig) => ProjectResponse
+
+  // OPC-UA Client (remote device)
+  updateOpcUaClientConnection: (
+    name: string,
+    config: Partial<Pick<OpcUaClientConfig, 'enabled' | 'endpointUrl' | 'sessionTimeoutMs' | 'reconnect'>>,
+  ) => ProjectResponse
+  updateOpcUaClientSecurity: (name: string, security: Partial<OpcUaClientSecurity>) => ProjectResponse
+  addOpcUaClientMapping: (name: string, mapping: OpcUaClientMapping) => ProjectResponse
+  updateOpcUaClientMapping: (
+    name: string,
+    mappingId: string,
+    mapping: Partial<OpcUaClientMapping>,
+  ) => ProjectResponse
+  removeOpcUaClientMapping: (name: string, mappingId: string) => ProjectResponse
 }
 
 // ---------------------------------------------------------------------------
