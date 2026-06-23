@@ -16,10 +16,9 @@ import { computePouName } from '../helpers/text-helpers'
 import { varTypeNames } from '../helpers/type-text'
 import type { TranspilePou, TranspileProject, TranspileVariable, TranspileVariableClass } from '../types'
 import type { TypeContext } from '../walker/connection-types'
-import { emitFbdBody, type RFFbdBody } from '../walker/fbd'
+import { emitFbdBody } from '../walker/fbd'
 import type { SyntheticVar } from '../walker/ld'
 import { emitLdBody } from '../walker/ld'
-import type { RFBody } from '../walker/types'
 import { declaredTypeName, getTypeAsText } from './type-text'
 import { computeValue } from './value'
 
@@ -122,9 +121,9 @@ function collectBlockSignatures(project: TranspileProject): Map<string, BlockInf
   }
   for (const pou of project.pous) {
     if (pou.body.language === 'ld') {
-      for (const rung of (pou.body.value as RFBody).rungs) visit(rung.nodes)
+      for (const rung of pou.body.value.rungs) visit(rung.nodes)
     } else if (pou.body.language === 'fbd') {
-      visit((pou.body.value as RFFbdBody).rung.nodes)
+      visit(pou.body.value.rung.nodes)
     }
   }
   return registry
