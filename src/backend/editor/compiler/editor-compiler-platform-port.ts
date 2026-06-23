@@ -159,7 +159,10 @@ export function createEditorCompilerPlatformPort(
       return { ok: true, programSt: result.programSt }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, errors: [{ message: `st-transpiler failed: ${message}`, line: 0, column: 0, severity: 'error' }] }
+      return {
+        ok: false,
+        errors: [{ message: `st-transpiler failed: ${message}`, line: 0, column: 0, severity: 'error' }],
+      }
     }
   }
 
