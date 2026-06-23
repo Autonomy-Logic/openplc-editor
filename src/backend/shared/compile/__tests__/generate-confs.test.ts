@@ -49,6 +49,7 @@ jest.mock('../../../../frontend/utils/opcua', () => {
   }
   return {
     generateOpcUaConfig: jest.fn(),
+    generateOpcUaClientConfig: jest.fn(() => null),
     OpcUaConfigError,
   }
 })
@@ -111,6 +112,7 @@ describe('generateRuntimeConfs — happy path', () => {
       modbusMaster: '{"modbus_master":{}}',
       s7Comm: '{"s7":{}}',
       opcUa: '{"opcua":{}}',
+      opcUaClient: null,
       ethercat: '{"ethercat":{}}',
     })
   })
@@ -158,6 +160,7 @@ describe('generateRuntimeConfs — happy path', () => {
       modbusMaster: null,
       s7Comm: null,
       opcUa: null,
+      opcUaClient: null,
       ethercat: null,
     })
   })

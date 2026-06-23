@@ -163,7 +163,7 @@ export interface PLCGlobalVariable extends Omit<PLCVariable, 'class'> {
 // ---------------------------------------------------------------------------
 
 export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
-export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
+export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' | 'opc-ua-client'
 
 // Modbus
 export interface ModbusSlaveConfig {
@@ -387,6 +387,57 @@ export interface OpcUaServerConfig {
   addressSpace: OpcUaAddressSpaceConfig
 }
 
+// OPC-UA Client (remote device — the runtime connects OUT to a remote
+// OPC-UA server and bridges nodes to local PLC variables). One client
+// remote device == one remote endpoint; the editor aggregates all of
+// them into a single conf/opcua_client.json (servers[]) at compile time.
+
+// Security policies the runtime's OPC-UA client supports (must match the
+// keys of SECURITY_POLICY_MAPPING in the runtime's shared.opcua_common).
+export type OpcUaClientSecurityPolicy =
+  | 'None'
+  | 'Basic256Sha256'
+  | 'Aes128_Sha256_RsaOaep'
+  | 'Aes256_Sha256_RsaPss'
+
+export type OpcUaClientAuthMode = 'anonymous' | 'username' | 'certificate'
+
+// Mapping direction relative to the PLC.
+export type OpcUaClientDirection = 'remote_to_plc' | 'plc_to_remote'
+
+export interface OpcUaClientSecurity {
+  securityPolicy: OpcUaClientSecurityPolicy
+  securityMode: OpcUaSecurityModeType
+  authMode: OpcUaClientAuthMode
+  username: string | null
+  password: string | null
+  clientCertPem: string | null
+  clientKeyPem: string | null
+  serverCertPem: string | null
+}
+
+export interface OpcUaClientMapping {
+  id: string
+  // Local PLC variable. arr/elem/size/datatype are resolved from the
+  // compiler's debug map at build time (same resolution as the server).
+  pouName: string
+  variablePath: string
+  variableType: string
+  // Remote OPC-UA NodeId string, entered by the user (e.g. "ns=2;s=Tag").
+  remoteNodeId: string
+  direction: OpcUaClientDirection
+  cycleTimeMs: number
+}
+
+export interface OpcUaClientConfig {
+  enabled: boolean
+  endpointUrl: string
+  sessionTimeoutMs: number
+  reconnect: boolean
+  security: OpcUaClientSecurity
+  mappings: OpcUaClientMapping[]
+}
+
 // PLCServer
 export interface PLCServer {
   name: string
@@ -416,6 +467,7 @@ export interface PLCRemoteDevice {
   protocol: RemoteDeviceProtocol
   modbusTcpConfig?: ModbusRemoteTcpConfig
   ethercatConfig?: EthercatConfig
+  opcuaClientConfig?: OpcUaClientConfig
 }
 
 // ---------------------------------------------------------------------------

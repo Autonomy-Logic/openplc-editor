@@ -21,6 +21,18 @@ export type {
   RuntimeVariablePermissions,
 } from './generate-opcua-config'
 export { generateOpcUaConfig, validateOpcUaConfig } from './generate-opcua-config'
+export type {
+  RuntimeClientConfig,
+  RuntimeClientMapping,
+  RuntimeClientPluginConfig,
+  RuntimeClientSecurity,
+  RuntimeClientServer,
+} from './generate-opcua-client-config'
+export {
+  generateOpcUaClientConfig,
+  OPCUA_CLIENT_CONFIG_FORMAT_VERSION,
+  validateOpcUaClientConfig,
+} from './generate-opcua-client-config'
 export {
   type LeafAddress,
   OpcUaConfigError,
