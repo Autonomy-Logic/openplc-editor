@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
+import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import {
   Modal,
@@ -20,21 +21,41 @@ import {
 } from '../../../../../_molecules/modal'
 import { useProjectVariables, type VariableTreeNode } from '../../server/opcua-server/hooks/use-project-variables'
 
+// Shared field styles — matched to the OPC-UA Server editor.
 const inputStyles =
   'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+const selectTriggerStyles =
+  'flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+const selectContentStyles =
+  'h-fit max-h-[240px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+const selectItemStyles = cn(
+  'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+  'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+)
+const selectItemTextStyles =
+  'text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'
+const labelStyles = 'w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
 
-const SECURITY_POLICIES: OpcUaClientConfig['security']['securityPolicy'][] = [
+const SECURITY_POLICIES: OpcUaClientSecurity['securityPolicy'][] = [
   'None',
   'Basic256Sha256',
   'Aes128_Sha256_RsaOaep',
   'Aes256_Sha256_RsaPss',
 ]
 const SECURITY_MODES: OpcUaClientSecurity['securityMode'][] = ['None', 'Sign', 'SignAndEncrypt']
-const AUTH_MODES: OpcUaClientSecurity['authMode'][] = ['anonymous', 'username', 'certificate']
+const AUTH_MODES: { value: OpcUaClientSecurity['authMode']; label: string }[] = [
+  { value: 'anonymous', label: 'Anonymous' },
+  { value: 'username', label: 'Username / Password' },
+  { value: 'certificate', label: 'Certificate' },
+]
 const DIRECTIONS: { value: OpcUaClientDirection; label: string }[] = [
   { value: 'remote_to_plc', label: 'Remote -> PLC (read)' },
   { value: 'plc_to_remote', label: 'PLC -> Remote (write)' },
 ]
+
+// ---------------------------------------------------------------------------
+// Layout primitives (mirror the OPC-UA Server editor)
+// ---------------------------------------------------------------------------
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -52,10 +73,88 @@ const TabItem = ({ value, label, isActive }: { value: string; label: string; isA
   </Tabs.Trigger>
 )
 
-const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-  <label className='mb-1 block font-caption text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+const SectionCard = ({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+}) => (
+  <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+    <h3 className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
+    {description && <p className='text-xs text-neutral-600 dark:text-neutral-400'>{description}</p>}
     {children}
-  </label>
+  </div>
+)
+
+const Row = ({
+  label,
+  hint,
+  fieldClassName = 'w-64',
+  children,
+}: {
+  label: string
+  hint?: string
+  fieldClassName?: string
+  children: React.ReactNode
+}) => (
+  <div className='flex items-center gap-4'>
+    <Label className={labelStyles}>{label}</Label>
+    <div className={fieldClassName}>{children}</div>
+    {hint && <span className='text-xs text-neutral-500 dark:text-neutral-400'>{hint}</span>}
+  </div>
+)
+
+const Toggle = ({
+  label,
+  checked,
+  status,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  status: string
+  onChange: (checked: boolean) => void
+}) => (
+  <div className='flex items-center gap-4'>
+    <Label className={labelStyles}>{label}</Label>
+    <label className='relative inline-flex cursor-pointer items-center'>
+      <input type='checkbox' checked={checked} onChange={(e) => onChange(e.target.checked)} className='peer sr-only' />
+      <div
+        className={cn(
+          'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+          'peer-checked:bg-brand peer-checked:after:translate-x-full',
+          'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+        )}
+      />
+    </label>
+    <span className='text-xs text-neutral-600 dark:text-neutral-400'>{status}</span>
+  </div>
+)
+
+const SimpleSelect = ({
+  value,
+  placeholder,
+  options,
+  onValueChange,
+}: {
+  value: string
+  placeholder: string
+  options: { value: string; label: string }[]
+  onValueChange: (value: string) => void
+}) => (
+  <Select value={value} onValueChange={onValueChange}>
+    <SelectTrigger withIndicator placeholder={placeholder} className={selectTriggerStyles} />
+    <SelectContent className={selectContentStyles}>
+      {options.map((o) => (
+        <SelectItem key={o.value} value={o.value} className={selectItemStyles}>
+          <span className={selectItemTextStyles}>{o.label}</span>
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 )
 
 /** Flatten the project variable tree to its selectable leaves. */
@@ -95,7 +194,6 @@ const MappingModal = ({ open, onClose, onSave, variables, existing }: MappingMod
     () => variables.find((v) => `${v.pouName}:${v.variablePath}` === variableKey),
     [variables, variableKey],
   )
-
   const isValid = Boolean(selected) && remoteNodeId.trim().length > 0 && cycleTimeMs > 0
 
   const handleSave = () => {
@@ -112,6 +210,11 @@ const MappingModal = ({ open, onClose, onSave, variables, existing }: MappingMod
     onClose()
   }
 
+  const variableOptions = variables.map((v) => ({
+    value: `${v.pouName}:${v.variablePath}`,
+    label: `${v.pouName}.${v.variablePath}${v.variableType ? ` (${v.variableType})` : ''}`,
+  }))
+
   return (
     <Modal open={open} onOpenChange={(o) => !o && onClose()}>
       <ModalContent className='h-auto max-h-[90vh] w-[560px]' onClose={onClose}>
@@ -120,25 +223,18 @@ const MappingModal = ({ open, onClose, onSave, variables, existing }: MappingMod
         </ModalHeader>
 
         <div className='flex flex-1 flex-col gap-3 overflow-y-auto py-2'>
-          <div>
-            <FieldLabel>Local PLC variable</FieldLabel>
-            <Select value={variableKey} onValueChange={setVariableKey}>
-              <SelectTrigger className={inputStyles} placeholder='Select a variable' />
-              <SelectContent className='max-h-[260px] overflow-y-auto'>
-                {variables.map((v) => {
-                  const key = `${v.pouName}:${v.variablePath}`
-                  return (
-                    <SelectItem key={key} value={key}>
-                      {`${v.pouName}.${v.variablePath}${v.variableType ? ` (${v.variableType})` : ''}`}
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
+          <div className='flex flex-col gap-1'>
+            <Label className='text-xs text-neutral-950 dark:text-white'>Local PLC variable</Label>
+            <SimpleSelect
+              value={variableKey}
+              placeholder='Select a variable'
+              options={variableOptions}
+              onValueChange={setVariableKey}
+            />
           </div>
 
-          <div>
-            <FieldLabel>Remote NodeId</FieldLabel>
+          <div className='flex flex-col gap-1'>
+            <Label className='text-xs text-neutral-950 dark:text-white'>Remote NodeId</Label>
             <InputWithRef
               className={inputStyles}
               placeholder='e.g. ns=2;s=Tag or ns=2;i=5'
@@ -147,22 +243,18 @@ const MappingModal = ({ open, onClose, onSave, variables, existing }: MappingMod
             />
           </div>
 
-          <div>
-            <FieldLabel>Direction</FieldLabel>
-            <Select value={direction} onValueChange={(v) => setDirection(v as OpcUaClientDirection)}>
-              <SelectTrigger className={inputStyles} placeholder='Select direction' />
-              <SelectContent>
-                {DIRECTIONS.map((d) => (
-                  <SelectItem key={d.value} value={d.value}>
-                    {d.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className='flex flex-col gap-1'>
+            <Label className='text-xs text-neutral-950 dark:text-white'>Direction</Label>
+            <SimpleSelect
+              value={direction}
+              placeholder='Select direction'
+              options={DIRECTIONS}
+              onValueChange={(v) => setDirection(v as OpcUaClientDirection)}
+            />
           </div>
 
-          <div>
-            <FieldLabel>Cycle time (ms)</FieldLabel>
+          <div className='flex flex-col gap-1'>
+            <Label className='text-xs text-neutral-950 dark:text-white'>Cycle time (ms)</Label>
             <InputWithRef
               className={inputStyles}
               type='number'
@@ -226,6 +318,14 @@ export const OpcUaClientEditor = () => {
   const selectableVariables = useMemo(() => flattenSelectable(allVariables), [allVariables])
 
   const touch = () => handleFileAndWorkspaceSavedState(deviceName)
+  const setConn = (updates: Partial<OpcUaClientConfig>) => {
+    updateOpcUaClientConnection(deviceName, updates)
+    touch()
+  }
+  const setSec = (updates: Partial<OpcUaClientSecurity>) => {
+    updateOpcUaClientSecurity(deviceName, updates)
+    touch()
+  }
 
   if (!config) {
     return (
@@ -240,9 +340,7 @@ export const OpcUaClientEditor = () => {
   return (
     <div aria-label='OPC-UA client container' className='flex h-full w-full flex-col overflow-hidden p-4'>
       <div className='mb-4'>
-        <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>
-          OPC-UA Client: {deviceName}
-        </h2>
+        <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>OPC-UA Client: {deviceName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>Connects to a remote OPC-UA server</p>
       </div>
 
@@ -254,255 +352,226 @@ export const OpcUaClientEditor = () => {
         </Tabs.List>
 
         {/* Connection */}
-        <Tabs.Content value='connection' className='min-h-0 flex-1 overflow-auto pt-4 data-[state=inactive]:hidden'>
-          <div className='flex max-w-xl flex-col gap-3'>
-            <label className='flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-              <input
-                type='checkbox'
-                checked={config.enabled}
-                onChange={(e) => {
-                  updateOpcUaClientConnection(deviceName, { enabled: e.target.checked })
-                  touch()
-                }}
-              />
-              Enabled
-            </label>
-            <div>
-              <FieldLabel>Endpoint URL</FieldLabel>
-              <InputWithRef
-                className={inputStyles}
-                placeholder='opc.tcp://host:4840/path'
-                value={config.endpointUrl}
-                onChange={(e) => {
-                  updateOpcUaClientConnection(deviceName, { endpointUrl: e.target.value })
-                  touch()
-                }}
-              />
+        <Tabs.Content
+          value='connection'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+            <div className='flex flex-col gap-6'>
+              <SectionCard title='Connection'>
+                <Toggle
+                  label='Enable Client'
+                  checked={config.enabled}
+                  status={config.enabled ? 'Client will connect when PLC runs' : 'Client is disabled'}
+                  onChange={(enabled) => setConn({ enabled })}
+                />
+                <Row label='Endpoint URL' fieldClassName='w-96'>
+                  <InputWithRef
+                    className={inputStyles}
+                    placeholder='opc.tcp://host:4840/path'
+                    value={config.endpointUrl}
+                    onChange={(e) => setConn({ endpointUrl: e.target.value })}
+                  />
+                </Row>
+                <Row label='Session timeout' hint='milliseconds (default: 60000)'>
+                  <InputWithRef
+                    className={inputStyles}
+                    type='number'
+                    min={0}
+                    value={String(config.sessionTimeoutMs)}
+                    onChange={(e) => setConn({ sessionTimeoutMs: Number(e.target.value) })}
+                  />
+                </Row>
+                <Toggle
+                  label='Auto-reconnect'
+                  checked={config.reconnect}
+                  status={config.reconnect ? 'Reconnects if the server drops' : 'Reconnect disabled'}
+                  onChange={(reconnect) => setConn({ reconnect })}
+                />
+              </SectionCard>
             </div>
-            <div>
-              <FieldLabel>Session timeout (ms)</FieldLabel>
-              <InputWithRef
-                className={inputStyles}
-                type='number'
-                min={0}
-                value={String(config.sessionTimeoutMs)}
-                onChange={(e) => {
-                  updateOpcUaClientConnection(deviceName, { sessionTimeoutMs: Number(e.target.value) })
-                  touch()
-                }}
-              />
-            </div>
-            <label className='flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-              <input
-                type='checkbox'
-                checked={config.reconnect}
-                onChange={(e) => {
-                  updateOpcUaClientConnection(deviceName, { reconnect: e.target.checked })
-                  touch()
-                }}
-              />
-              Reconnect automatically
-            </label>
           </div>
         </Tabs.Content>
 
         {/* Security */}
-        <Tabs.Content value='security' className='min-h-0 flex-1 overflow-auto pt-4 data-[state=inactive]:hidden'>
-          <div className='flex max-w-xl flex-col gap-3'>
-            <div>
-              <FieldLabel>Security policy</FieldLabel>
-              <Select
-                value={sec.securityPolicy}
-                onValueChange={(v) => {
-                  updateOpcUaClientSecurity(deviceName, {
-                    securityPolicy: v as OpcUaClientSecurity['securityPolicy'],
-                  })
-                  touch()
-                }}
+        <Tabs.Content
+          value='security'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+            <div className='flex flex-col gap-6'>
+              <SectionCard
+                title='Secure Channel'
+                description='How the client secures the connection to the remote server.'
               >
-                <SelectTrigger className={inputStyles} placeholder='Policy' />
-                <SelectContent>
-                  {SECURITY_POLICIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <FieldLabel>Security mode</FieldLabel>
-              <Select
-                value={sec.securityMode}
-                onValueChange={(v) => {
-                  updateOpcUaClientSecurity(deviceName, { securityMode: v as OpcUaClientSecurity['securityMode'] })
-                  touch()
-                }}
+                <Row label='Security Policy'>
+                  <SimpleSelect
+                    value={sec.securityPolicy}
+                    placeholder='Policy'
+                    options={SECURITY_POLICIES.map((p) => ({ value: p, label: p }))}
+                    onValueChange={(v) => setSec({ securityPolicy: v as OpcUaClientSecurity['securityPolicy'] })}
+                  />
+                </Row>
+                <Row label='Security Mode'>
+                  <SimpleSelect
+                    value={sec.securityMode}
+                    placeholder='Mode'
+                    options={SECURITY_MODES.map((m) => ({ value: m, label: m }))}
+                    onValueChange={(v) => setSec({ securityMode: v as OpcUaClientSecurity['securityMode'] })}
+                  />
+                </Row>
+              </SectionCard>
+
+              <SectionCard
+                title='Authentication'
+                description='How the client identifies itself to the remote server.'
               >
-                <SelectTrigger className={inputStyles} placeholder='Mode' />
-                <SelectContent>
-                  {SECURITY_MODES.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <Row label='Auth Method'>
+                  <SimpleSelect
+                    value={sec.authMode}
+                    placeholder='Auth method'
+                    options={AUTH_MODES}
+                    onValueChange={(v) => setSec({ authMode: v as OpcUaClientSecurity['authMode'] })}
+                  />
+                </Row>
+
+                {sec.authMode === 'username' && (
+                  <>
+                    <Row label='Username'>
+                      <InputWithRef
+                        className={inputStyles}
+                        value={sec.username ?? ''}
+                        onChange={(e) => setSec({ username: e.target.value || null })}
+                      />
+                    </Row>
+                    <Row label='Password'>
+                      <InputWithRef
+                        className={inputStyles}
+                        type='password'
+                        value={sec.password ?? ''}
+                        onChange={(e) => setSec({ password: e.target.value || null })}
+                      />
+                    </Row>
+                  </>
+                )}
+
+                {sec.authMode === 'certificate' && (
+                  <>
+                    <div className='flex items-start gap-4'>
+                      <Label className={cn(labelStyles, 'pt-2')}>Client Certificate</Label>
+                      <textarea
+                        className={cn(inputStyles, 'h-24 w-96 py-2 font-mono')}
+                        placeholder='-----BEGIN CERTIFICATE-----'
+                        value={sec.clientCertPem ?? ''}
+                        onChange={(e) => setSec({ clientCertPem: e.target.value || null })}
+                      />
+                    </div>
+                    <div className='flex items-start gap-4'>
+                      <Label className={cn(labelStyles, 'pt-2')}>Client Private Key</Label>
+                      <textarea
+                        className={cn(inputStyles, 'h-24 w-96 py-2 font-mono')}
+                        placeholder='-----BEGIN PRIVATE KEY-----'
+                        value={sec.clientKeyPem ?? ''}
+                        onChange={(e) => setSec({ clientKeyPem: e.target.value || null })}
+                      />
+                    </div>
+                  </>
+                )}
+              </SectionCard>
+
+              {sec.securityMode !== 'None' && (
+                <SectionCard
+                  title='Server Certificate'
+                  description='Optional. The remote server certificate to trust for Sign / SignAndEncrypt.'
+                >
+                  <div className='flex items-start gap-4'>
+                    <Label className={cn(labelStyles, 'pt-2')}>Server Certificate</Label>
+                    <textarea
+                      className={cn(inputStyles, 'h-24 w-96 py-2 font-mono')}
+                      placeholder='-----BEGIN CERTIFICATE-----'
+                      value={sec.serverCertPem ?? ''}
+                      onChange={(e) => setSec({ serverCertPem: e.target.value || null })}
+                    />
+                  </div>
+                </SectionCard>
+              )}
             </div>
-            <div>
-              <FieldLabel>Authentication</FieldLabel>
-              <Select
-                value={sec.authMode}
-                onValueChange={(v) => {
-                  updateOpcUaClientSecurity(deviceName, { authMode: v as OpcUaClientSecurity['authMode'] })
-                  touch()
-                }}
-              >
-                <SelectTrigger className={inputStyles} placeholder='Auth mode' />
-                <SelectContent>
-                  {AUTH_MODES.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {sec.authMode === 'username' && (
-              <>
-                <div>
-                  <FieldLabel>Username</FieldLabel>
-                  <InputWithRef
-                    className={inputStyles}
-                    value={sec.username ?? ''}
-                    onChange={(e) => {
-                      updateOpcUaClientSecurity(deviceName, { username: e.target.value || null })
-                      touch()
-                    }}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Password</FieldLabel>
-                  <InputWithRef
-                    className={inputStyles}
-                    type='password'
-                    value={sec.password ?? ''}
-                    onChange={(e) => {
-                      updateOpcUaClientSecurity(deviceName, { password: e.target.value || null })
-                      touch()
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {sec.authMode === 'certificate' && (
-              <>
-                <div>
-                  <FieldLabel>Client certificate (PEM)</FieldLabel>
-                  <textarea
-                    className={cn(inputStyles, 'h-24 py-2 font-mono')}
-                    value={sec.clientCertPem ?? ''}
-                    onChange={(e) => {
-                      updateOpcUaClientSecurity(deviceName, { clientCertPem: e.target.value || null })
-                      touch()
-                    }}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>Client private key (PEM)</FieldLabel>
-                  <textarea
-                    className={cn(inputStyles, 'h-24 py-2 font-mono')}
-                    value={sec.clientKeyPem ?? ''}
-                    onChange={(e) => {
-                      updateOpcUaClientSecurity(deviceName, { clientKeyPem: e.target.value || null })
-                      touch()
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {sec.securityMode !== 'None' && (
-              <div>
-                <FieldLabel>Server certificate (PEM, optional)</FieldLabel>
-                <textarea
-                  className={cn(inputStyles, 'h-24 py-2 font-mono')}
-                  value={sec.serverCertPem ?? ''}
-                  onChange={(e) => {
-                    updateOpcUaClientSecurity(deviceName, { serverCertPem: e.target.value || null })
-                    touch()
-                  }}
-                />
-              </div>
-            )}
           </div>
         </Tabs.Content>
 
         {/* Mappings */}
-        <Tabs.Content value='mappings' className='min-h-0 flex-1 overflow-auto pt-4 data-[state=inactive]:hidden'>
-          <div className='mb-3 flex justify-end'>
-            <button
-              onClick={() => {
-                setEditingMapping(null)
-                setModalOpen(true)
-              }}
-              className='rounded-md bg-brand px-3 py-1 text-xs font-medium text-white'
+        <Tabs.Content
+          value='mappings'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
+        >
+          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+            <SectionCard
+              title='Variable Mappings'
+              description='Bind a remote OPC-UA node to a local PLC variable. Direction sets read (remote to PLC) or write (PLC to remote).'
             >
-              Add Mapping
-            </button>
-          </div>
+              <div className='flex justify-end'>
+                <button
+                  onClick={() => {
+                    setEditingMapping(null)
+                    setModalOpen(true)
+                  }}
+                  className='rounded-md bg-brand px-3 py-1 text-xs font-medium text-white'
+                >
+                  Add Mapping
+                </button>
+              </div>
 
-          {config.mappings.length === 0 ? (
-            <p className='py-8 text-center text-xs text-neutral-500 dark:text-neutral-400'>
-              No mappings yet. Add one to bridge a remote node to a local PLC variable.
-            </p>
-          ) : (
-            <table className='w-full text-xs'>
-              <thead>
-                <tr className='border-b border-neutral-200 text-left dark:border-neutral-700'>
-                  <th className='px-2 py-1 font-medium'>Local variable</th>
-                  <th className='px-2 py-1 font-medium'>Remote NodeId</th>
-                  <th className='px-2 py-1 font-medium'>Direction</th>
-                  <th className='px-2 py-1 font-medium'>Cycle (ms)</th>
-                  <th className='px-2 py-1' />
-                </tr>
-              </thead>
-              <tbody>
-                {config.mappings.map((m) => (
-                  <tr key={m.id} className='border-b border-neutral-100 dark:border-neutral-800'>
-                    <td className='px-2 py-1'>{`${m.pouName}.${m.variablePath}`}</td>
-                    <td className='px-2 py-1 font-mono'>{m.remoteNodeId}</td>
-                    <td className='px-2 py-1'>
-                      {m.direction === 'remote_to_plc' ? 'Remote -> PLC' : 'PLC -> Remote'}
-                    </td>
-                    <td className='px-2 py-1'>{m.cycleTimeMs}</td>
-                    <td className='px-2 py-1 text-right'>
-                      <button
-                        className='mr-2 text-brand-medium hover:underline dark:text-brand-light'
-                        onClick={() => {
-                          setEditingMapping(m)
-                          setModalOpen(true)
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className='text-red-500 hover:underline'
-                        onClick={() => {
-                          removeOpcUaClientMapping(deviceName, m.id)
-                          touch()
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              {config.mappings.length === 0 ? (
+                <p className='py-8 text-center text-xs text-neutral-500 dark:text-neutral-400'>
+                  No mappings yet. Add one to bridge a remote node to a local PLC variable.
+                </p>
+              ) : (
+                <table className='w-full text-xs'>
+                  <thead>
+                    <tr className='border-b border-neutral-200 text-left text-neutral-600 dark:border-neutral-700 dark:text-neutral-400'>
+                      <th className='px-2 py-1 font-medium'>Local variable</th>
+                      <th className='px-2 py-1 font-medium'>Remote NodeId</th>
+                      <th className='px-2 py-1 font-medium'>Direction</th>
+                      <th className='px-2 py-1 font-medium'>Cycle (ms)</th>
+                      <th className='px-2 py-1' />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {config.mappings.map((m) => (
+                      <tr key={m.id} className='border-b border-neutral-100 dark:border-neutral-800'>
+                        <td className='px-2 py-1 text-neutral-950 dark:text-white'>{`${m.pouName}.${m.variablePath}`}</td>
+                        <td className='px-2 py-1 font-mono text-neutral-700 dark:text-neutral-300'>{m.remoteNodeId}</td>
+                        <td className='px-2 py-1 text-neutral-700 dark:text-neutral-300'>
+                          {m.direction === 'remote_to_plc' ? 'Remote -> PLC' : 'PLC -> Remote'}
+                        </td>
+                        <td className='px-2 py-1 text-neutral-700 dark:text-neutral-300'>{m.cycleTimeMs}</td>
+                        <td className='px-2 py-1 text-right'>
+                          <button
+                            className='mr-2 text-brand-medium hover:underline dark:text-brand-light'
+                            onClick={() => {
+                              setEditingMapping(m)
+                              setModalOpen(true)
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className='text-red-500 hover:underline'
+                            onClick={() => {
+                              removeOpcUaClientMapping(deviceName, m.id)
+                              touch()
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </SectionCard>
+          </div>
         </Tabs.Content>
       </Tabs.Root>
 
