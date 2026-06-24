@@ -57,10 +57,7 @@ export const appendSerialConnection = <T>(
   /**
    * Get the previous node
    */
-  let previousNode = getPreviousElement(
-    { ...rung, nodes: newNodes, edges: newEdges },
-    newNodes.findIndex((n) => n.id === newElement.id),
-  )
+  let previousNode = getPreviousElement({ ...rung, nodes: newNodes, edges: newEdges }, newElement.id)
 
   /**
    * If the related node is a parallel, check if it is an open or close parallel
