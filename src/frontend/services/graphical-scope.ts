@@ -53,10 +53,7 @@ export interface ScopeCompletion {
  *     in scope — the box is invalid.
  *   - `resolved`: the expression resolves to `type`.
  */
-export type ScopeTypeResult =
-  | { status: 'unavailable' }
-  | { status: 'unknown' }
-  | { status: 'resolved'; type: string }
+export type ScopeTypeResult = { status: 'unavailable' } | { status: 'unknown' } | { status: 'resolved'; type: string }
 
 /** Split `value` into the completion anchor (up to and including the last `.`) and the trailing segment. */
 function splitExpression(value: string): { anchor: string; segment: string } {
@@ -95,9 +92,7 @@ export async function getScopeCompletions(
   const { anchor, segment } = splitExpression(value)
   const items = await api.completeInScope(pouName, anchor)
   const needle = segment.toLowerCase()
-  const matching = items.filter(
-    (item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase().includes(needle),
-  )
+  const matching = items.filter((item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase().includes(needle))
 
   const direct = matching
     .filter((item) => {
@@ -151,9 +146,7 @@ export async function resolveScopeExpressionType(pouName: string, expression: st
   if (items.length === 0) return { status: 'unavailable' }
 
   const { name, indexed } = stripSubscript(segment)
-  const match = items.find(
-    (item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase() === name.toLowerCase(),
-  )
+  const match = items.find((item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase() === name.toLowerCase())
   if (!match || !match.type) return { status: 'unknown' }
 
   if (indexed) {

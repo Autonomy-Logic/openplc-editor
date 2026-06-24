@@ -431,8 +431,9 @@ const VariableElement = (block: VariableProps) => {
     // type) when it's a plain local/array reference, otherwise store the raw
     // name (e.g. an instance member like `TON0.Q`). The validation effect
     // resolves and type-checks it against the full project scope.
-    const variable: PLCVariable | { name: string } =
-      (pou.interface?.variables ?? []).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
+    const variable: PLCVariable | { name: string } = (pou.interface?.variables ?? []).find(
+      (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
+    ) ||
       resolveArrayVariableByName(pou.interface?.variables ?? [], variableNameToSubmit) || {
         name: variableNameToSubmit,
       }

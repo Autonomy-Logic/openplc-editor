@@ -243,9 +243,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     return result
   }
 
-  function normalizeCompletionItems(
-    result: CompletionList | LspCompletionItem[] | null,
-  ): ScopedCompletionItem[] {
+  function normalizeCompletionItems(result: CompletionList | LspCompletionItem[] | null): ScopedCompletionItem[] {
     if (!result) return []
     const items = Array.isArray(result) ? result : result.items
     return items.map((item) => {
