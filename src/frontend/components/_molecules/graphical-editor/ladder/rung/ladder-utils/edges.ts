@@ -7,6 +7,7 @@ import { isNodeOfType } from './nodes'
 type ConnectionOptions = {
   sourceHandle?: string
   targetHandle?: string
+  selectedEdgeId?: string
 }
 
 export const checkIfConnectedInParallel = (
@@ -41,17 +42,25 @@ export const connectNodes = (
 ): Edge[] => {
   // Find the source edge
   const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
-  const sourceEdge = rung.edges.find((edge) => {
-    return (
-      edge.source === sourceNodeId &&
-      (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
-        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
-        : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
-          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
-            edge.sourceHandle === (sourceNode as ParallelNode).data.outputConnector?.id
-          : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
-    )
-  })
+  // When a specific edge was selected (keyboard edge insertion), only honor it if it
+  // actually belongs to sourceNodeId; otherwise fall back to the normal source-edge lookup
+  // so we never rewire the wrong edge path.
+  const selectedSourceEdge = options?.selectedEdgeId
+    ? rung.edges.find((edge) => edge.id === options.selectedEdgeId && edge.source === sourceNodeId)
+    : undefined
+  const sourceEdge =
+    selectedSourceEdge ??
+    rung.edges.find((edge) => {
+      return (
+        edge.source === sourceNodeId &&
+        (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
+          ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+          : isNodeOfType(sourceNode, 'parallel') && sourceNode.data.type === 'close'
+            ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id ||
+              edge.sourceHandle === (sourceNode as ParallelNode).data.outputConnector?.id
+            : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id)
+      )
+    })
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
@@ -60,8 +69,8 @@ export const connectNodes = (
    * targetHandle: where the the sourceEdge connects to targetNode
    * sourceHandle: where the targetNode connects to the previous sourceEdge target
    */
-  const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
-  const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
+  const targetHandle = options?.targetHandle ?? targetNodeData.inputConnector?.id
+  const sourceHandle = options?.sourceHandle ?? targetNodeData.outputConnector?.id
 
   // If the source edge is found, update the target
   if (sourceEdge) {
@@ -70,7 +79,7 @@ export const connectNodes = (
 
     // If source node is a parallel and the operation type is serial, lets check if we need to update the source handle
     let newSourceHandle = sourceEdge.sourceHandle ?? undefined
-    if (type === 'serial' && isNodeOfType(sourceNode, 'parallel')) {
+    if (!options?.selectedEdgeId && type === 'serial' && isNodeOfType(sourceNode, 'parallel')) {
       newSourceHandle = (sourceNode as ParallelNode).data.outputConnector?.id
     }
 

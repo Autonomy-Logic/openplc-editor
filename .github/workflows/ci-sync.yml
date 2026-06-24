@@ -34,7 +34,7 @@ jobs:
           cd editor
           git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
           CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
-          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/frontend/|src/middleware/shared/|src/backend/shared/|src/__architecture__/|resources/sources/(arduino|Baremetal|hal)/)'; then
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
             echo "shared=false" >> "$GITHUB_OUTPUT"

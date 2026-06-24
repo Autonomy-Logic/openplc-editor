@@ -23,7 +23,8 @@ export const isNodeOfType = (node: Node, nodeType: string): boolean => {
 }
 
 export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
-  return defaultCustomNodesStyles[node?.type ?? nodeType ?? 'mockNode']
+  const type = node?.type ?? nodeType ?? 'mockNode'
+  return defaultCustomNodesStyles[type] ?? defaultCustomNodesStyles['mockNode']
 }
 
 export const buildGenericNode = <T>({
