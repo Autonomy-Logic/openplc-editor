@@ -127,12 +127,7 @@ export type ParallelBuilderProps = BuilderBasicProps & { type: 'open' | 'close' 
 // placeholder
 
 export type PlaceholderNode = Node<
-  BasicNodeData & {
-    relatedNode: Node | undefined
-    position: 'left' | 'right' | 'bottom'
-    edgeSourceId?: string
-    selectedEdgeId?: string
-  }
+  BasicNodeData & { relatedNode: Node | undefined; position: 'left' | 'right' | 'bottom' }
 >
 export type PlaceholderProps = NodeProps<PlaceholderNode>
 export type PlaceholderBuilderProps = BuilderBasicProps & {

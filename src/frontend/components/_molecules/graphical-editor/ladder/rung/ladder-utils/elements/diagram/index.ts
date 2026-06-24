@@ -534,14 +534,15 @@ export const updateDiagramElementsPosition = (
         const objectParallel = parallel[object]
         if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
           foundInParallel = true
-          const refNode = objectParallel.highestNode ?? objectParallel.parallels.open
           const newPosY =
-            refNode.position.y +
+            objectParallel.highestNode.position.y +
             objectParallel.height +
-            getDefaultNodeStyle({ node: refNode }).verticalGap -
+            getDefaultNodeStyle({ node: objectParallel.highestNode }).verticalGap -
             getDefaultNodeStyle({ node }).handle.y
           const newHandleY =
-            refNode.position.y + objectParallel.height + getDefaultNodeStyle({ node: refNode }).verticalGap
+            objectParallel.highestNode.position.y +
+            objectParallel.height +
+            getDefaultNodeStyle({ node: objectParallel.highestNode }).verticalGap
           newNodePosition = {
             ...newNodePosition,
             posY: newPosY,
@@ -657,7 +658,7 @@ export const updateDiagramElementsPosition = (
             const nodeIndex = objectParallel.nodes.serial.findIndex((n) => n.id === node.id)
             parallelsDepth[index][object].nodes.serial.splice(nodeIndex, 1, newNode)
           }
-          if (objectParallel.highestNode?.id === node.id) {
+          if (objectParallel.highestNode.id === node.id) {
             parallelsDepth[index][object].highestNode = newNode
           }
           if (objectParallel.parallels.open.id === node.id) {
