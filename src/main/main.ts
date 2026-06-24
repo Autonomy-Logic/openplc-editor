@@ -18,6 +18,7 @@ import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
 import { HardwareModule } from '../backend/editor/hardware'
+import { PackageManagerModule } from '../backend/editor/package-manager'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
@@ -403,6 +404,17 @@ app.on('second-instance', () => {
 app
   .whenReady()
   .then(() => {
+    // Re-verify installed VPP package signatures once per launch, before the
+    // first window reads them; removes any package whose signature no longer
+    // validates.
+    try {
+      const removed = new PackageManagerModule().verifyInstalledSignatures()
+      if (removed.length > 0) {
+        logger.warn(`Removed ${removed.length} untrusted VPP package(s) at startup: ${removed.join(', ')}`)
+      }
+    } catch (err) {
+      logger.error('VPP package signature sweep failed: ' + getErrorMessage(err))
+    }
     void createMainWindow()
     // Handle the app activation event;
     app.on('activate', () => {
