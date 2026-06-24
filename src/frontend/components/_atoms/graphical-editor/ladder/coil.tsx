@@ -280,7 +280,7 @@ export const Coil = (block: CoilProps) => {
               })
               return
             }}
-            onBlur={(e) => {
+            onBlur={() => {
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
@@ -294,10 +294,6 @@ export const Coil = (block: CoilProps) => {
                   draggable: node.data.draggable as boolean,
                 },
               })
-              const container = e.currentTarget.closest('div[tabindex="0"]') as unknown as HTMLDivElement | null
-              if (container) {
-                container.focus()
-              }
               return
             }}
             onChange={onChangeHandler}

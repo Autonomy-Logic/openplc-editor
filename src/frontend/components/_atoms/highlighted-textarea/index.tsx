@@ -128,7 +128,6 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           />
         </div>
         <textarea
-          id={props.id}
           value={textAreaValue}
           onChange={onChangeHandler}
           placeholder={placeholder ?? '???'}

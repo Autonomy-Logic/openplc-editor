@@ -101,7 +101,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
     /**
      * Control the rungs of the flow
      */
-    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport, insertAtIndex }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           if (!ladderFlows.find((flow) => flow.name === editorName)) {
@@ -135,7 +135,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               handleY: defaultBounds[1] / 2,
             }),
           ]
-          const newRung = {
+          flow.rungs.push({
             id: rungId,
             comment: '',
             defaultBounds,
@@ -153,20 +153,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               },
             ],
             selectedNodes: [],
-          }
-
-          // Clamp to a valid range so NaN/negative/out-of-bounds indices can't place the rung wrong.
-          const normalizedInsertAtIndex =
-            typeof insertAtIndex === 'number' && Number.isFinite(insertAtIndex)
-              ? Math.min(Math.max(Math.trunc(insertAtIndex), 0), flow.rungs.length)
-              : undefined
-
-          if (normalizedInsertAtIndex !== undefined) {
-            flow.rungs.splice(normalizedInsertAtIndex, 0, newRung)
-          } else {
-            flow.rungs.push(newRung)
-          }
-          flow.updated = true
+          })
         }),
       )
     },

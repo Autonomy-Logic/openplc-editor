@@ -255,7 +255,7 @@ export const findAllParallelsDepthAndNodes = (
       }
       depth: number
       height: number
-      highestNode: Node | undefined
+      highestNode: Node
       nodes: {
         serial: Node[]
         parallel: Node[]
@@ -268,8 +268,8 @@ export const findAllParallelsDepthAndNodes = (
 
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
-  let highestNode: Node | undefined = serialNodes[0]
-  let serialHeight = highestNode ? (highestNode.height ?? 0) : 0
+  let highestNode = serialNodes[0]
+  let serialHeight = highestNode.height ?? 0
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively

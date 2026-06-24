@@ -55,19 +55,12 @@ export const appendSerialConnection = <T>(
   if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
 
   /**
-   * Get the previous node.
-   * If the placeholder specifies edgeSourceId (from keyboard edge selection), use it.
+   * Get the previous node
    */
-  let previousNode: Node | undefined
-  if (placeholder.selected.data.edgeSourceId) {
-    previousNode = newNodes.find((n) => n.id === placeholder.selected.data.edgeSourceId)
-  }
-  if (!previousNode) {
-    previousNode = getPreviousElement(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      newNodes.findIndex((n) => n.id === newElement.id),
-    )
-  }
+  let previousNode = getPreviousElement(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    newNodes.findIndex((n) => n.id === newElement.id),
+  )
 
   /**
    * If the related node is a parallel, check if it is an open or close parallel
@@ -76,7 +69,6 @@ export const appendSerialConnection = <T>(
    * If it is not a parallel, connect the new element to the previous node
    */
   if (
-    !placeholder.selected.data.edgeSourceId &&
     // Check if there is serial previous nodes
     relatedNodePreviousNodes.serial.length > 0 &&
     // Check if the node is a open parallel node
@@ -91,15 +83,7 @@ export const appendSerialConnection = <T>(
     previousNode = relatedNodePreviousNodes.serial[0]
     newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'parallel')
   } else {
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      previousNode.id,
-      newElement.id,
-      'serial',
-      placeholder.selected.data.selectedEdgeId
-        ? { selectedEdgeId: placeholder.selected.data.selectedEdgeId }
-        : undefined,
-    )
+    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'serial')
   }
 
   return { nodes: newNodes, edges: newEdges, newNode: newElement }
