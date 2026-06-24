@@ -250,8 +250,8 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
   ordered.sort((a, b) => nodeExecutionOrder(a) - nodeExecutionOrder(b))
   others.sort((a, b) => compareNodePosition(state, a, b))
 
-  for (const sink of ordered) emitSink(state, sink)
-  for (const sink of others) emitSink(state, sink)
+  emitSinksWithCoilGrouping(state, ordered)
+  emitSinksWithCoilGrouping(state, others)
 
   const bodySt = '\n' + state.program.map((c) => c[0]).join('')
   const syntheticVars: SyntheticVar[] = [
@@ -297,7 +297,86 @@ function emitSink(state: WalkerState, node: RFNode): void {
   if (node.type === 'connector') return emitConnectorNode(state, node)
 }
 
+/**
+ * Emit sinks in order, but collapse a run of consecutive SET/RESET
+ * coils that branch off the SAME upstream source into a single `IF`.
+ * Parallel coils share one energization path, so the rung condition
+ * must be evaluated ONCE and applied to every branch — emitting a
+ * separate `IF` per coil re-evaluates the condition between
+ * assignments, which is wrong when the condition reads a coil an
+ * earlier branch just set (e.g. `IF NOT(coils1)... coils1 := TRUE`).
+ */
+function emitSinksWithCoilGrouping(state: WalkerState, sinks: RFNode[]): void {
+  let i = 0
+  while (i < sinks.length) {
+    const key = setResetCoilGroupKey(state, sinks[i])
+    if (key === null) {
+      emitSink(state, sinks[i])
+      i++
+      continue
+    }
+    let j = i + 1
+    while (j < sinks.length && setResetCoilGroupKey(state, sinks[j]) === key) j++
+    if (j - i === 1) emitCoilNode(state, sinks[i])
+    else emitCoilGroup(state, sinks.slice(i, j))
+    i = j
+  }
+}
+
+/**
+ * Group identity for a SET/RESET coil: the sorted set of its upstream
+ * source node ids.  Two coils with the same key branch off the same
+ * point (parallel rails) and therefore share a condition.  Returns
+ * null for anything not groupable (non-coils, plain/negated/edge
+ * coils, or an unconnected coil).
+ */
+function setResetCoilGroupKey(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil') return null
+  const data = asCoilData(node.data)
+  if (data === null || (data.variant !== 'set' && data.variant !== 'reset')) return null
+  const sources = (state.incoming.get(node.id) ?? []).map((e) => e.source).sort()
+  if (sources.length === 0) return null
+  return sources.join('|')
+}
+
 /* ─────────────────────────── coil emission ──────────────────────────────── */
+
+/**
+ * Emit a group of parallel SET/RESET coils under one shared `IF`.
+ * The condition is computed once from the first coil's upstream (all
+ * coils in the group share it by construction), then each branch's
+ * assignment is written inside the single `THEN` body.
+ */
+function emitCoilGroup(state: WalkerState, coils: RFNode[]): void {
+  const first = coils[0]
+  const paths = pathsFromIncoming(state, first.id, /*order=*/ false)
+  if (paths.length === 0) {
+    // Shared upstream resolved to nothing — fall back to per-coil
+    // emission so each surfaces its own "must be connected" warning.
+    for (const coil of coils) emitCoilNode(state, coil)
+    return
+  }
+  const expr = pathsToChunks(paths)
+  const firstData = asCoilData(first.data)
+  const firstInfo: Location = [state.tagName, 'coil', locId(first)]
+
+  state.program.push([`${state.currentIndent}IF `, [...firstInfo, firstData?.variant ?? 'set']])
+  for (const chunk of expr) state.program.push(chunk)
+  state.program.push([' THEN\n', []])
+
+  const inner = state.currentIndent + '  '
+  for (const coil of coils) {
+    const data = asCoilData(coil.data)
+    if (data === null) continue
+    const storage = data.variant === 'reset' ? 'reset' : 'set'
+    const value = storage === 'set' ? 'TRUE' : 'FALSE'
+    const info: Location = [state.tagName, 'coil', locId(coil)]
+    state.program.push([inner, []])
+    state.program.push([data.variable, [...info, 'reference']])
+    state.program.push([` := ${value}; (*${storage}*)\n`, []])
+  }
+  state.program.push([`${state.currentIndent}END_IF;\n`, []])
+}
 
 function emitCoilNode(state: WalkerState, node: RFNode): void {
   const data = asCoilData(node.data)
