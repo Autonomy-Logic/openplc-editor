@@ -90,6 +90,20 @@ const findConnections = (
 ) => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
+  // Resolve the formal parameter (block output pin) for a source node that
+  // feeds into a parallel chain. A block's `outputConnector` only records its
+  // PRIMARY output (e.g. QU on a CTUD_DINT), so reading it directly maps EVERY
+  // branch back to that one pin — which is why coils wired to a secondary
+  // output (QD) were serialized as connected to QU. Instead, use the handle of
+  // the edge that actually leaves the node into the parallel chain (QU vs QD).
+  // Falls back to the default output connector for single-output elements;
+  // 'OUT' (the unnamed function return) maps to an empty formal parameter.
+  const formalParameterFromParallel = (srcNode: Node<BasicNodeData>, parallelChain: ParallelNode[]): string => {
+    const edge = rungEdges.find((e) => e.source === srcNode.id && parallelChain.some((p) => p.id === e.target))
+    const handle = edge?.sourceHandle ?? srcNode.data.outputConnector?.id ?? ''
+    return handle === 'OUT' ? '' : handle
+  }
+
   const connectedEdges = rungEdges.filter(
     (edge) => edge.target === node.id && (targetHandle === undefined || edge.targetHandle === targetHandle),
   )
@@ -148,7 +162,7 @@ const findConnections = (
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
+          '@formalParameter': formalParameterFromParallel(node, parallels),
           position:
             index === 0
               ? [
@@ -220,7 +234,7 @@ const findConnections = (
       return nodes.map((node) => {
         return {
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
+          '@formalParameter': formalParameterFromParallel(node, parallels),
           position: [
             // Final edge destination
             {
@@ -255,7 +269,7 @@ const findConnections = (
     const closeConnections = nodes.map((node, index) => {
       return {
         '@refLocalId': node.data.numericId,
-        '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
+        '@formalParameter': formalParameterFromParallel(node, parallels),
         position:
           index === 0
             ? [
