@@ -26,6 +26,7 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
+import { ModuleCombobox } from './module-combobox'
 
 // Same help glyph the HAL Settings form-layout uses, so per-field
 // explanations live in a tooltip instead of cluttering the row.
@@ -802,47 +803,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                         <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>
                           Module
                         </Label>
-                        <Select
-                          value={selectedModule ? selectedModule.id : '__empty__'}
-                          onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
+                        <ModuleCombobox
+                          modules={dropdownModules}
+                          value={selectedModule ? selectedModule.id : ''}
+                          onChange={(v) => handleSlotChange(selectedSlot, v)}
                           disabled={locked}
-                        >
-                          <SelectTrigger
-                            aria-label={`Module for slot ${selectedSlot + 1}`}
-                            placeholder='-- Empty --'
-                            withIndicator
-                            className='flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[disabled]:cursor-not-allowed data-[state=open]:border-brand-medium-dark data-[disabled]:opacity-60 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                          />
-                          <SelectContent
-                            className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                            sideOffset={5}
-                            position='popper'
-                            align='center'
-                            side='bottom'
-                          >
-                            {!stackable && !locked && (
-                              <SelectItem
-                                value='__empty__'
-                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                              >
-                                <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
-                                  -- Empty --
-                                </span>
-                              </SelectItem>
-                            )}
-                            {dropdownModules.map((mod) => (
-                              <SelectItem
-                                key={mod.id}
-                                value={mod.id}
-                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                              >
-                                <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                  {mod.name}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          allowEmpty={!stackable && !locked}
+                          ariaLabel={`Module for slot ${selectedSlot + 1}`}
+                        />
                         {stackable && selectedModule && !locked && (
                           <button
                             type='button'
