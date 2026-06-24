@@ -77,7 +77,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     project: { data: projectData, meta: projectMeta },
     deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
-    consoleActions: { addLog },
+    consoleActions: { addLog, requestConsoleFollow },
   } = useOpenPLCStore()
 
   // Project-type capability matrix.  Drives which set of action
@@ -155,6 +155,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuild = useCallback(
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
       if (isCompiling) return
+
+      // Reveal the console and re-attach it to the tail so build output is
+      // visible from the first line, even if the console was collapsed or the
+      // user had scrolled up. One-shot — it won't fight a later manual scroll.
+      requestConsoleFollow()
 
       // Always save the full project before building. The compile
       // pipeline reads source from disk (project.json, devices/*.json,
@@ -323,6 +328,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       canEdit,
       jwtToken,
       runtime,
+      requestConsoleFollow,
     ],
   )
 
@@ -336,6 +342,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuildLibrary = useCallback(
     async (overrides?: { cleanBuild?: boolean }) => {
       if (isCompiling) return
+
+      // Reveal the console and re-attach to the tail (see handleBuild).
+      requestConsoleFollow()
 
       // Always save before building.  The manifest tab and any POU
       // bodies may have edits the workspace-level `editingState`
@@ -401,7 +410,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         setIsCompiling(false)
       }
     },
-    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave],
+    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave, requestConsoleFollow],
   )
 
   // ---------------------------------------------------------------------------
