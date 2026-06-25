@@ -134,10 +134,22 @@ class PackageManagerModule {
 
   listInstalled(): InstalledPackage[] {
     const registry = this.readRegistry()
-    return Object.entries(registry.packages).map(([packageId, info]) => ({
-      packageId,
-      ...info,
-    }))
+    // Only surface packages that still pass signature verification on disk.
+    // The registry is not a trust anchor (it lives in user-writable userData),
+    // so a tampered or manually-dropped package must not appear as installed.
+    return Object.entries(registry.packages)
+      .filter(([, info]) => {
+        try {
+          assertPathContained(this.packagesDir, info.path, 'registry package path')
+        } catch {
+          return false
+        }
+        return this.isInstalledPackageTrusted(info.path)
+      })
+      .map(([packageId, info]) => ({
+        packageId,
+        ...info,
+      }))
   }
 
   uninstall(packageId: string): { success: boolean; error?: string } {
@@ -191,6 +203,12 @@ class PackageManagerModule {
       return null
     }
 
+    // Re-verify the signature against the on-disk bytes before trusting the
+    // manifest. This is the trust boundary for consumption (the compiler reads
+    // hal.source / hal.pluginEntry / screen paths from here); the import-time
+    // check does not cover packages placed directly under packagesDir.
+    if (!this.isInstalledPackageTrusted(pkg.path)) return null
+
     const manifestPath = join(pkg.path, 'manifest.json')
     if (!existsSync(manifestPath)) return null
 
@@ -208,6 +226,26 @@ class PackageManagerModule {
     const registry = this.readRegistry()
     const pkg = registry.packages[packageId]
     return pkg?.path ?? null
+  }
+
+  /**
+   * Re-verify an installed package's signature against the bytes currently on
+   * disk. `importFromFile` only proves the package was signed WHEN IT ARRIVED;
+   * the extracted package then lives under the user-writable
+   * `userData/packages` dir, and `registry.json` is editor-owned but also
+   * user-writable. So anything that reads a package back must re-verify before
+   * trusting it — otherwise dropping files into the packages dir plus a
+   * registry entry bypasses signing entirely (verify-on-import was never
+   * verify-on-use). Honours REQUIRE_SIGNATURE so the local/offline unsigned
+   * dev workflow still works.
+   */
+  private isInstalledPackageTrusted(packagePath: string): boolean {
+    if (!REQUIRE_SIGNATURE) return true
+    try {
+      return verifyPackageSignature(packagePath, TRUSTED_PACKAGE_KEYS).valid
+    } catch {
+      return false
+    }
   }
 
   private readRegistry(): PackageRegistry {
