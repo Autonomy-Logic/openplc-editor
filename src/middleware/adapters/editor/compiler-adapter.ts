@@ -204,6 +204,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         let hasError = false
         let lastError = ''
         let hexPath: string | undefined
+        let settled = false
 
         window.bridge.runCompileProgram(
           [
@@ -233,7 +234,11 @@ export function createEditorCompilerAdapter(): CompilerPort {
             }
 
             if (data.closePort) {
-              onProgress({ stage: 'done', message: 'Compilation complete' })
+              if (settled) return
+              settled = true
+              if (!hasError) {
+                onProgress({ stage: 'done', message: 'Compilation complete' })
+              }
               resolve(
                 hasError
                   ? { success: false, error: lastError }

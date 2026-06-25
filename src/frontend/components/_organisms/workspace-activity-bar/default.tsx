@@ -244,6 +244,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const freshProjectData = useOpenPLCStore.getState().project.data
 
       try {
+        // Track whether the compile stream already surfaced an error so we
+        // don't log a second, generic "Compilation failed" after a failed
+        // build (the stream already reported the real error).
+        let streamedError = false
         const result = await compiler.compileProgram(
           {
             projectData: freshProjectData,
@@ -276,6 +280,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 .getState()
                 .deviceActions.setPlcRuntimeStatus(event.plcStatus as NonNullable<RuntimeConnection['plcStatus']>)
             }
+            if (event.level === 'error' || event.stage === 'error') {
+              streamedError = true
+            }
             logCompilerEvent(event, addLog)
             if (event.firmwarePath && isSimulatorBoard) {
               void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
@@ -305,7 +312,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           },
         )
 
-        if (!result.success) {
+        if (!result.success && !streamedError) {
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
       } catch (err: unknown) {
