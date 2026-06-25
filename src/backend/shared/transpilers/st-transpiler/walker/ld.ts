@@ -298,28 +298,41 @@ function emitSink(state: WalkerState, node: RFNode): void {
 }
 
 /**
- * Emit sinks in order, but collapse a run of consecutive SET/RESET
- * coils that branch off the SAME upstream source into a single `IF`.
- * Parallel coils share one energization path, so the rung condition
- * must be evaluated ONCE and applied to every branch — emitting a
- * separate `IF` per coil re-evaluates the condition between
- * assignments, which is wrong when the condition reads a coil an
- * earlier branch just set (e.g. `IF NOT(coils1)... coils1 := TRUE`).
+ * Emit sinks in order, collapsing SET/RESET coils that branch off the
+ * SAME upstream source into a single `IF`.  Parallel coils share one
+ * energization path, so the rung condition must be evaluated ONCE and
+ * applied to every branch — emitting a separate `IF` per coil
+ * re-evaluates the condition between assignments, which is wrong when
+ * the condition reads a coil an earlier branch just set
+ * (e.g. `IF NOT(coils1)... coils1 := TRUE`).
+ *
+ * Same-source coils are gathered even when they are NOT adjacent in
+ * emission order: a coil fed by their merge (so it shares neither
+ * source) can sort between two parallel branches by position, yet the
+ * branches must still collapse into one `IF`.  The group is emitted at
+ * the first branch's slot; the intervening sink (and any other
+ * downstream work) follows after — which is also its dataflow order,
+ * since a merge-fed sink is downstream of the branches it consumes.
  */
 function emitSinksWithCoilGrouping(state: WalkerState, sinks: RFNode[]): void {
-  let i = 0
-  while (i < sinks.length) {
+  const consumed = new Set<number>()
+  for (let i = 0; i < sinks.length; i++) {
+    if (consumed.has(i)) continue
     const key = setResetCoilGroupKey(state, sinks[i])
     if (key === null) {
       emitSink(state, sinks[i])
-      i++
       continue
     }
-    let j = i + 1
-    while (j < sinks.length && setResetCoilGroupKey(state, sinks[j]) === key) j++
-    if (j - i === 1) emitCoilNode(state, sinks[i])
-    else emitCoilGroup(state, sinks.slice(i, j))
-    i = j
+    const group: RFNode[] = [sinks[i]]
+    for (let j = i + 1; j < sinks.length; j++) {
+      if (consumed.has(j)) continue
+      if (setResetCoilGroupKey(state, sinks[j]) === key) {
+        group.push(sinks[j])
+        consumed.add(j)
+      }
+    }
+    if (group.length === 1) emitCoilNode(state, sinks[i])
+    else emitCoilGroup(state, group)
   }
 }
 
