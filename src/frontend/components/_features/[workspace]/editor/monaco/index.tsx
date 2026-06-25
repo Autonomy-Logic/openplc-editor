@@ -17,6 +17,7 @@ import { parseHybridPouFromString, parseTextualPouFromString } from '../../../..
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
 import { renderDiffReview } from './ai-diff-review'
+import { type AiLspCoexistenceController, installAiLspCoexistenceKeybindings } from './ai-lsp-coexistence'
 import {
   arduinoApiCompletion,
   cppSignatureHelp,
@@ -127,6 +128,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
+  const coexistenceRef = useRef<AiLspCoexistenceController | null>(null)
   const [editorMounted, setEditorMounted] = useState(false)
   const [modelVersion, setModelVersion] = useState(0)
   const isSyncingModelRef = useRef(false)
@@ -986,6 +988,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       )
     }
 
+    // Tab/Enter split so AI ghost text and the LSP dropdown can coexist. The
+    // overrides are gated on a context key we drive from `inlineCompletionsActive`
+    // (see the effect below), so they're inert while AI is off.
+    coexistenceRef.current = installAiLspCoexistenceKeybindings(editorInstance, monacoInstance)
+    coexistenceRef.current.setActive(inlineCompletionsActive)
+
     // Manual trigger suggest
     const handleKeyUp = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -1220,13 +1228,13 @@ void loop()
   // Editor options
   // -----------------------------------------------------------------------
 
-  // Inline AI completions take over the suggest widget only while they are
-  // actually active (same gate as the provider registration above). When the
-  // user turns inline completions off, fall back to Monaco's normal quick
-  // suggestions (the auto-dropdown). Ctrl+Space still triggers the suggest
-  // widget manually in both modes — `quickSuggestions` only governs the
-  // automatic popup, and `suppressSuggestions` only suppresses the auto popup
-  // while an inline suggestion is showing.
+  // AI inline completions and the STruC++ LSP suggest widget COEXIST: the
+  // LSP dropdown still auto-opens (fast, deterministic, great for variables and
+  // struct members) while the AI ghost text renders alongside it. Acceptance is
+  // split by key — Enter/arrows accept the LSP dropdown, Tab commits the AI
+  // suggestion (see `installAiLspCoexistenceKeybindings`). `suppressSuggestions`
+  // is therefore false so the dropdown is NOT hidden while ghost text shows.
+  // Ctrl+Space still triggers the suggest widget manually in both modes.
   const inlineCompletionsActive =
     capabilities.hasAIAssistant &&
     aiState.isEnabled &&
@@ -1249,7 +1257,9 @@ void loop()
     tabSize: 4,
     insertSpaces: true,
     detectIndentation: false,
-    quickSuggestions: inlineCompletionsActive ? false : undefined,
+    // Let the LSP dropdown auto-open in both modes — even with AI on, we want
+    // the fast LSP completions visible (the user accepts them with Enter/arrows).
+    quickSuggestions: undefined,
     // Pinned for cross-platform consistency with the variables-code-editor.
     // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
     // without this both surfaces would mismatch on Linux/Windows even
@@ -1274,10 +1284,19 @@ void loop()
     ...(inlineCompletionsActive && {
       inlineSuggest: {
         enabled: true,
-        suppressSuggestions: true,
+        // Keep the LSP dropdown visible alongside the AI ghost text instead of
+        // suppressing it — coexistence is the whole point here.
+        suppressSuggestions: false,
       },
     }),
   }
+
+  // Keep the coexistence Tab overrides in sync with AI state so toggling AI on/off
+  // takes effect without remounting the editor. `editorInstanceId` re-asserts it
+  // after a remount (the mount handler also sets it, this is belt-and-braces).
+  useEffect(() => {
+    coexistenceRef.current?.setActive(inlineCompletionsActive)
+  }, [inlineCompletionsActive, editorInstanceId])
 
   // -----------------------------------------------------------------------
   // Drag-and-drop

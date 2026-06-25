@@ -49,7 +49,7 @@ const genericTypeSchema = z.object({
     z.literal('ANY_ELEMENTARY'),
   ]),
   ANY_INT: baseTypeEnum.extract(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT']),
-  ANY_BIT: baseTypeEnum.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD']),
+  ANY_BIT: baseTypeEnum.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD', '__XWORD']),
   ANY_STRING: baseTypeEnum.extract(['STRING']),
   ANY_REAL: baseTypeEnum.extract(['REAL', 'LREAL']),
   ANY_DATE: baseTypeEnum.extract(['TIME', 'DATE', 'TOD', 'DT']),

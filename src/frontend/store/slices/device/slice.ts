@@ -386,6 +386,15 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
             deviceDefinitions.configuration.selectedPlatformOptions = {}
             deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+            // Vendor-screen data is board-specific (a backplane configured for
+            // one target is meaningless on another). Stash the outgoing board's
+            // data into its bucket, then swap the active view to the incoming
+            // board's bucket (empty when it was never configured) — the
+            // previous board's modules are preserved for when the user returns,
+            // and the new board starts clean instead of inheriting stale slots.
+            const cfg = deviceDefinitions.configuration
+            syncActiveBoardVendorBucket(cfg)
+            cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
           }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
@@ -523,6 +532,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             deviceDefinitions.configuration.vendorScreenData = {}
           }
           deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+          syncActiveBoardVendorBucket(deviceDefinitions.configuration)
         }),
       )
     },
@@ -550,21 +560,72 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
               delete target[key]
             }
           }
+          syncActiveBoardVendorBucket(deviceDefinitions.configuration)
         }),
       )
     },
   },
 })
 
+/**
+ * Keep the active board's bucket in `vendorScreenDataByBoard` in lock-step
+ * with the flat `vendorScreenData` view. Called from every vendor-data
+ * mutation so the per-board archive is always current for the active board —
+ * which in turn lets board-switch and save treat the archive as authoritative
+ * without a separate "flush" step.
+ */
+function syncActiveBoardVendorBucket(configuration: DeviceConfiguration): void {
+  if (!configuration.vendorScreenDataByBoard) {
+    configuration.vendorScreenDataByBoard = {}
+  }
+  configuration.vendorScreenDataByBoard[configuration.deviceBoard] = { ...(configuration.vendorScreenData ?? {}) }
+}
+
+/**
+ * Resolve the vendor-screen data for a freshly-loaded project into the
+ * flat-view + per-board-archive pair the store expects.
+ *
+ * - When a project already carries `vendorScreenDataByBoard`, it wins: the
+ *   active view is that board's bucket (falling back to any flat blob), and
+ *   the bucket is ensured present so the active view and archive agree.
+ * - Legacy projects only have the flat `vendorScreenData`. It's attributed to
+ *   the board the project was saved with, so other boards start clean instead
+ *   of inheriting it. Mirrors the `pinsByBoard` migration.
+ */
+function migrateVendorScreenData(
+  provided: Partial<DeviceConfiguration>,
+  deviceBoard: string,
+): Pick<DeviceConfiguration, 'vendorScreenData' | 'vendorScreenDataByBoard'> {
+  const flat = provided.vendorScreenData
+  const archive = provided.vendorScreenDataByBoard
+
+  if (archive && Object.keys(archive).length > 0) {
+    const active = archive[deviceBoard] ?? flat
+    return {
+      vendorScreenData: active,
+      vendorScreenDataByBoard: active !== undefined ? { ...archive, [deviceBoard]: active } : { ...archive },
+    }
+  }
+
+  if (flat !== undefined) {
+    return { vendorScreenData: flat, vendorScreenDataByBoard: { [deviceBoard]: flat } }
+  }
+
+  return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
+}
+
 function mergeDeviceConfigWithDefaults(
   provided: Partial<DeviceConfiguration>,
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
+  const deviceBoard = provided.deviceBoard || defaults.deviceBoard
+  const { vendorScreenData, vendorScreenDataByBoard } = migrateVendorScreenData(provided, deviceBoard)
   return {
-    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
-    vendorScreenData: provided.vendorScreenData ?? defaults.vendorScreenData,
+    vendorScreenData,
+    vendorScreenDataByBoard,
     // Must merge — otherwise loading a project whose configuration.json
     // predates platformOptions leaves the field undefined in the store, and
     // every selector falling back to `?? {}` returns a fresh literal that

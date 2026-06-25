@@ -53,6 +53,7 @@ const BASE_TYPES = [
   'WORD',
   'DWORD',
   'LWORD',
+  '__XWORD',
 ]
 
 /**

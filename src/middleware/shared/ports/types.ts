@@ -738,15 +738,35 @@ export interface PackageManifest {
        * manifest.schema.json for the canonical field documentation.
        */
       platformOptions?: PlatformOption[]
+      /**
+       * Exact Arduino core version a prebuilt arduino-hal library was compiled
+       * against (arduino-cli targets with hal.provisioning="prebuilt"). The
+       * editor installs/verifies this version before linking, since the
+       * precompiled .a is ABI-locked to it.
+       */
+      coreVersion?: string
     }
     specs?: Record<string, string>
     hal: {
       type: string
       pluginType?: string
+      /**
+       * Native runtime-v4 plugin provisioning. "source" (default when absent):
+       * pluginEntry is the entry source file and its directory is compiled on
+       * the runtime. "prebuilt": pluginEntry is the directory holding the
+       * precompiled .o objects plus a link-only Makefile; the runtime only links.
+       */
+      provisioning?: string
       pluginEntry?: string
       configTemplate?: string
       requirements?: string
       source?: string
+      /**
+       * Prebuilt arduino-hal (provisioning="prebuilt") precompiled Arduino
+       * library directory. Linked via --library alongside the source
+       * integration layer (hal.source).
+       */
+      precompiledLibrary?: string
       compilerFlags?: {
         c_flags?: string[]
         cxx_flags?: string[]
@@ -901,7 +921,21 @@ export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
+  /**
+   * Active board's VPP vendor-screen data (backplane modules, IO mappings,
+   * Modbus tables, …). This is the flat view every consumer and the compile
+   * pipeline read — it always mirrors `vendorScreenDataByBoard[deviceBoard]`.
+   */
   vendorScreenData?: Record<string, unknown>
+  /**
+   * Per-board archive of vendor-screen data. VPP screens are board-specific —
+   * a backplane configured for one target makes no sense on another — so each
+   * board keeps its own bucket here and switching boards swaps the active
+   * `vendorScreenData` instead of carrying stale modules across targets.
+   * Legacy projects (flat `vendorScreenData` only) are migrated on load by
+   * attributing the blob to the board the project was saved with.
+   */
+  vendorScreenDataByBoard?: Record<string, Record<string, unknown>>
   /**
    * User's choices for the board's `target.platformOptions` (VPP-declared
    * FQBN sub-options like processor variant, USB type, clock speed).

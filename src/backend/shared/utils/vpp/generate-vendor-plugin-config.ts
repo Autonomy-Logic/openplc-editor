@@ -301,6 +301,44 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
 }
 
 /**
+ * Build the per-slot module-configuration byte entries for an Arduino
+ * (microcontroller) VPP target.
+ *
+ * The runtime-v4 path serialises module config bytes into the plugin's
+ * JSON (see `buildSlots` -> `module_config`). Arduino targets have no
+ * runtime JSON: every byte must be baked into flash through
+ * `vpp_config.h`. This helper produces the same encoded bytes, keyed by
+ * 1-based slot, so the caller can inject them into `vendorScreenData`
+ * under a synthetic `module-config` key — the generic `vpp_config.h`
+ * walker then emits them as `VPP_MODULE_CONFIG_ENTRIES_*` macros that
+ * the HAL feeds to `P1.configureModule()` (or equivalent) at boot.
+ *
+ * Only slots whose module declared a configScreen and resolved to a
+ * non-empty byte array are returned; everything else is omitted (the
+ * module library's factory defaults apply).
+ */
+export function buildModuleConfigEntries(
+  vendorScreenData: VendorScreenData,
+  modules: VppModuleDefinition[],
+): Array<{ slot: number; bytes: number[] }> {
+  const moduleConfig = (vendorScreenData['module-configuration'] as ModuleConfiguration | undefined) ?? {}
+  const slotAssignments = moduleConfig.slots ?? []
+  const slotsConfigBag = moduleConfig.slotsConfig ?? {}
+
+  const entries: Array<{ slot: number; bytes: number[] }> = []
+  for (let slotIndex = 0; slotIndex < slotAssignments.length; slotIndex++) {
+    const moduleId = slotAssignments[slotIndex]
+    if (!moduleId) continue
+    const moduleDef = modules.find((m) => m.id === moduleId)
+    if (!moduleDef) continue
+    const slotNumber = slotIndex + 1
+    const bytes = encodeModuleConfig(moduleDef.configScreenDefinition, slotsConfigBag[String(slotNumber)] ?? {})
+    if (bytes && bytes.length > 0) entries.push({ slot: slotNumber, bytes })
+  }
+  return entries
+}
+
+/**
  * Build the `pins` array for a pin-based plugin from the editor's GPIO
  * pin-mapping table.
  *

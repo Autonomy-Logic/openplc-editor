@@ -116,6 +116,7 @@ const keywords = [
   'WORD',
   'DWORD',
   'LWORD',
+  '__XWORD',
   'REAL',
   'LREAL',
   'TIME',

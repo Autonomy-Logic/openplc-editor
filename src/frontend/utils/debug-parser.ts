@@ -92,3 +92,39 @@ export function buildLeafPathMap(map: DebugMap): Map<string, number> {
   }
   return out
 }
+
+/**
+ * Canonical per-leaf info: address PLUS the compiler-authoritative
+ * `type`/`size`. Consumers that emit a variable's datatype or byte
+ * width to another component (notably the OPC-UA config generator)
+ * MUST source them from here — i.e. from the same STruC++ compile that
+ * builds the .so — rather than from the stored project-model datatype,
+ * which can drift from the compiled layout (a stale datatype/size is
+ * what lets a plugin write the wrong number of bytes to a variable).
+ */
+export interface DebugLeafInfo {
+  arr: number
+  elem: number
+  /** Canonical IEC type name straight from the compiler (e.g. "DINT"). */
+  type: string
+  /** Canonical byte width straight from the compiler (sizeof the leaf). */
+  size: number
+}
+
+/**
+ * Build an uppercase-path → {arr, elem, type, size} lookup over every
+ * leaf. Same path keys as buildLeafPathMap, but retains the canonical
+ * type/size so callers don't re-derive them from a drift-prone source.
+ */
+export function buildLeafInfoMap(map: DebugMap): Map<string, DebugLeafInfo> {
+  const out = new Map<string, DebugLeafInfo>()
+  for (const leaf of map.leaves) {
+    out.set(leaf.path.toUpperCase(), {
+      arr: leaf.arrayIdx,
+      elem: leaf.elemIdx,
+      type: leaf.type,
+      size: leaf.size,
+    })
+  }
+  return out
+}

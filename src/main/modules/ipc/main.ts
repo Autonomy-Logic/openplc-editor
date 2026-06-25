@@ -1240,7 +1240,14 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort, this)
+    void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
+      mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${getErrorMessage(error)}\nStopping compilation process.`,
+      })
+      mainProcessPort.postMessage({ closePort: true })
+      mainProcessPort.close()
+    })
   }
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {

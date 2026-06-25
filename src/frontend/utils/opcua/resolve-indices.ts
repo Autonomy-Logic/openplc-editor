@@ -21,7 +21,7 @@
 
 import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/open-plc-types'
 
-import { unpackDebugAddr } from '../debug-parser'
+import type { DebugLeafInfo } from '../debug-parser'
 import {
   buildDebugPath,
   buildGlobalDebugPath,
@@ -33,6 +33,11 @@ import type { PLCInstanceInfo, ResolvedField } from './types'
 export interface LeafAddress {
   arr: number
   elem: number
+  /** Canonical IEC type from the compiler's debug map (single source of
+   *  truth — never the stored project-model datatype). */
+  type: string
+  /** Canonical byte width from the compiler's debug map. */
+  size: number
 }
 
 export class OpcUaConfigError extends Error {
@@ -53,11 +58,10 @@ const toInstanceMapping = (instances: PLCInstanceInfo[]): PLCInstanceMapping[] =
  * Look up a STruC++ debug path in the shared leaf map and return the
  * (arr, elem) address. Returns null on miss. Wraps unpackDebugAddr.
  */
-const lookup = (path: string, pathToAddr: Map<string, number>): LeafAddress | null => {
-  const packed = pathToAddr.get(path.toUpperCase())
-  if (packed === undefined) return null
-  const { arrayIdx, elemIdx } = unpackDebugAddr(packed)
-  return { arr: arrayIdx, elem: elemIdx }
+const lookup = (path: string, pathToAddr: Map<string, DebugLeafInfo>): LeafAddress | null => {
+  const info = pathToAddr.get(path.toUpperCase())
+  if (info === undefined) return null
+  return { arr: info.arr, elem: info.elem, type: info.type, size: info.size }
 }
 
 /**
@@ -95,7 +99,7 @@ const pathForNode = (
  */
 export const resolveVariableAddress = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
 ): LeafAddress => {
   const result = pathForNode(node.pouName, node.variablePath, instances)
@@ -128,7 +132,7 @@ const resolveFieldRecursively = (
   field: OpcUaFieldConfig,
   parentPath: string,
   pouName: string,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instanceName: string | null,
   droppedPaths: string[],
 ): ResolvedField | null => {
@@ -149,6 +153,7 @@ const resolveFieldRecursively = (
     return {
       name: field.fieldPath,
       datatype: field.datatype || 'UNKNOWN',
+      size: null,
       arr: null,
       elem: null,
       permissions: field.permissions,
@@ -156,7 +161,9 @@ const resolveFieldRecursively = (
     }
   }
 
-  // Leaf field.
+  // Leaf field. datatype/size come from the compiler's debug map (the
+  // canonical source), not the stored field.datatype — the runtime
+  // encodes/decodes this leaf by exactly these.
   const debugPath =
     pouName === 'GVL' || pouName === 'CONFIG'
       ? buildGlobalDebugPath(fullFieldPath)
@@ -169,7 +176,10 @@ const resolveFieldRecursively = (
 
   return {
     name: field.fieldPath,
-    datatype: field.datatype || 'UNKNOWN',
+    // Canonical type wins; fall back to the stored field datatype only if
+    // the debug map somehow carries no type (malformed/old map).
+    datatype: addr.type || field.datatype || 'UNKNOWN',
+    size: addr.size,
     arr: addr.arr,
     elem: addr.elem,
     permissions: field.permissions,
@@ -182,7 +192,7 @@ const resolveFieldRecursively = (
  */
 export const resolveStructureAddresses = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[] = [],
 ): ResolvedField[] => {
@@ -191,7 +201,8 @@ export const resolveStructureAddresses = (
     return [
       {
         name: node.variablePath,
-        datatype: node.variableType,
+        datatype: addr.type,
+        size: addr.size,
         arr: addr.arr,
         elem: addr.elem,
         permissions: node.permissions,
@@ -231,7 +242,7 @@ export const resolveStructureAddresses = (
  */
 export const resolveArrayAddress = (
   node: OpcUaNodeConfig,
-  pathToAddr: Map<string, number>,
+  pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
 ): LeafAddress => {
   const result = pathForNode(node.pouName, node.variablePath, instances)
@@ -239,7 +250,7 @@ export const resolveArrayAddress = (
 
   const upperPrefix = `${result.path.toUpperCase()}[`
   let best: { addr: LeafAddress; idx: number } | null = null
-  for (const [path, packed] of pathToAddr) {
+  for (const [path, info] of pathToAddr) {
     if (!path.startsWith(upperPrefix)) continue
     const close = path.indexOf(']', upperPrefix.length)
     // Reject array-of-struct sub-elements: `FOO[1].FIELD` matches
@@ -248,8 +259,7 @@ export const resolveArrayAddress = (
     const idx = Number(path.slice(upperPrefix.length, close))
     if (!Number.isFinite(idx)) continue
     if (best === null || idx < best.idx) {
-      const { arrayIdx, elemIdx } = unpackDebugAddr(packed)
-      best = { addr: { arr: arrayIdx, elem: elemIdx }, idx }
+      best = { addr: { arr: info.arr, elem: info.elem, type: info.type, size: info.size }, idx }
     }
   }
   if (best) return best.addr

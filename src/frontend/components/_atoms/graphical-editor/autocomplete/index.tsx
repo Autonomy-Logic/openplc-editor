@@ -260,6 +260,11 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                               'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
                           )}
+                          // Keep the editor textarea focused through the click: some
+                          // consumers (LD contact/coil) refocus their container on the
+                          // textarea's blur, which would close this popover before the
+                          // click resolves and swallow the selection.
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             submitAutocompletion({
                               variable: {
@@ -292,6 +297,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                         'rounded-lg': !variables || variables.length === 0,
                       },
                     )}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() =>
                       submitAutocompletion({
                         variable: newBlock.canCreate
@@ -317,6 +323,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                       'rounded-lg': !variables || variables.length === 0,
                     },
                   )}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     if (newBlock.options) {
                       submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })

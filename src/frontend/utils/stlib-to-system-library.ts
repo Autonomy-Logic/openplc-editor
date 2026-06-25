@@ -66,6 +66,7 @@ const BASE_TYPE_NAMES = new Set([
   'WORD',
   'DWORD',
   'LWORD',
+  '__XWORD',
   'SINT',
   'INT',
   'DINT',

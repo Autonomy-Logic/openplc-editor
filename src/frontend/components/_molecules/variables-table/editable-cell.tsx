@@ -560,6 +560,10 @@ const EditableLocationCell = ({
       selected={selected}
       openOnSelectedOption
       canAddACustomOption
+      // Orphaned/mismatched aliases blank the location (sync clears it for
+      // compilation) but leave a stale alias label. Keep "Clear" enabled even
+      // when the location is empty so the user can drop the stale alias.
+      allowClearWhenEmpty={id === 'location' && (isOrphaned || isMismatched)}
     />
   ) : (
     <div
