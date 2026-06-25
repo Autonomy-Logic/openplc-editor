@@ -1555,15 +1555,18 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  private async readTargetMd5(client: ModbusTcpClient | ModbusRtuClient | WebSocketDebugTransport): Promise<{
-    targetMd5: string
-    targetEndian: 'le' | 'be'
-    unavailableResult?: never
-  } | {
-    targetMd5?: never
-    targetEndian?: never
-    unavailableResult: DebuggerMd5VerificationResult
-  }> {
+  private async readTargetMd5(client: ModbusTcpClient | ModbusRtuClient | WebSocketDebugTransport): Promise<
+    | {
+        targetMd5: string
+        targetEndian: 'le' | 'be'
+        unavailableResult?: never
+      }
+    | {
+        targetMd5?: never
+        targetEndian?: never
+        unavailableResult: DebuggerMd5VerificationResult
+      }
+  > {
     try {
       const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
       return { targetMd5, targetEndian }

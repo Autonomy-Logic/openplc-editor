@@ -10,7 +10,9 @@ describe('md5-verification helpers', () => {
   })
 
   it('does not hide unrelated connection errors', () => {
-    expect(isRecoverableMd5ReadError(new Error('Port, baud rate, and slave ID are required for RTU connection'))).toBe(false)
+    expect(isRecoverableMd5ReadError(new Error('Port, baud rate, and slave ID are required for RTU connection'))).toBe(
+      false,
+    )
   })
 
   it('treats target error status responses as recoverable missing-md5 cases', () => {
@@ -22,7 +24,8 @@ describe('md5-verification helpers', () => {
       success: true,
       match: false,
       targetMd5Unavailable: true,
-      error: 'Target did not provide a program MD5. This usually means the device has not been flashed with an OpenPLC program yet.',
+      error:
+        'Target did not provide a program MD5. This usually means the device has not been flashed with an OpenPLC program yet.',
     })
   })
 })

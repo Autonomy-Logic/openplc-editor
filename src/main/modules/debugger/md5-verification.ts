@@ -54,7 +54,12 @@ function collectErrorMessages(error: unknown): string[] {
       break
     }
 
-    if (typeof current === 'object' && current !== null && 'message' in current && typeof current.message === 'string') {
+    if (
+      typeof current === 'object' &&
+      current !== null &&
+      'message' in current &&
+      typeof current.message === 'string'
+    ) {
       messages.push(current.message)
     }
 
