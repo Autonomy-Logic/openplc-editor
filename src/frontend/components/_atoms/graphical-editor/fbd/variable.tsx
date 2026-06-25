@@ -6,6 +6,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
+import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
@@ -18,6 +19,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
@@ -38,13 +40,13 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     editorActions: { updateModelFBD },
     fbdFlows,
     fbdFlowActions: { updateNode },
     project: {
-      data: { pous, dataTypes },
+      data: { pous },
     },
   } = useOpenPLCStore()
 
@@ -85,7 +87,7 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Get the connection type
    */
-  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === editor.meta.name), [fbdFlows, editor])
+  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === pouName), [fbdFlows, pouName])
 
   const connections = useMemo(() => {
     const rung = flow?.rung
@@ -210,80 +212,72 @@ const VariableElement = (block: VariableProps) => {
   }, [data.variable?.name])
 
   /**
-   * Update inputError state when the table of variables is updated
+   * Validate the variable node against its connected block pins via the
+   * STruC++ LSP. The typed value may be an instance member or struct/array
+   * access the local interface list can't resolve; `isAVariable` (yellow)
+   * means "not a known symbol", `inputError` (red) means "known but
+   * incompatible with a connection". Re-runs when the project variables or
+   * the node's own variable name change.
    */
   useEffect(() => {
-    const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: id,
-      variableName: variableValue,
-    })
-    if (!variableNode) return
-
-    const variable = variables.selected
-    if (!variable || !inputVariableRef) {
+    const name = data.variable?.name?.trim() ?? ''
+    if (!name) {
       setIsAVariable(false)
-    } else {
-      if (variable.name.toLowerCase() !== (variableNode as VariableNode).data.variable.name.toLowerCase()) {
-        updateNode({
-          editorName: editor.meta.name,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
+      setInputError(false)
+      setErrorDescription('')
+      return
+    }
+    let cancelled = false
+    void resolveScopeExpressionType(pouName, name).then((res) => {
+      if (cancelled) return
+      // Leave state untouched while the LSP warms so we never flash a false flag.
+      if (res.status === 'unavailable') return
+      if (res.status === 'unknown') {
+        setIsAVariable(false)
+        setInputError(false)
+        setErrorDescription('')
+        return
+      }
+      setIsAVariable(true)
+
+      // No connections → nothing to type-check against.
+      if (!connections.length) {
+        setInputError(false)
+        setErrorDescription('')
+        return
       }
 
-      let isValid = allConnectionsType.every(
-        (connection) => validateVariableType(variable.type.value, connection.variable).isValid,
+      const resolvedType = res.type
+      const isValid = allConnectionsType.every(
+        (connection) => validateVariableType(resolvedType, connection.variable).isValid,
       )
-
-      if (!isValid && dataTypes.length > 0) {
-        const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        isValid = userDataTypes.includes(variable.type.value)
-      }
-
+      setInputError(!isValid)
       if (!isValid) {
-        const validWithPrimaryConnection = validateVariableType(
-          variable.type.value,
-          primaryConnectionType.variable,
-        ).isValid
-
-        if (!validWithPrimaryConnection) {
-          setErrorDescription(
-            `Variable type ${variable.type.value} is not compatible with ${primaryConnectionType.variable.name}`,
-          )
-        } else {
-          setErrorDescription(
-            `Variable type ${variable.type.value} is not compatible with one or more connections: ${allConnectionsType
-              .map((connection) => connection.variable.name)
-              .join(', ')}`,
-          )
-        }
+        const validWithPrimaryConnection = validateVariableType(resolvedType, primaryConnectionType.variable).isValid
+        setErrorDescription(
+          validWithPrimaryConnection
+            ? `Variable type ${resolvedType} is not compatible with one or more connections: ${allConnectionsType
+                .map((connection) => connection.variable.name)
+                .join(', ')}`
+            : `Variable type ${resolvedType} is not compatible with ${primaryConnectionType.variable.name}`,
+        )
       } else {
         setErrorDescription('')
       }
-
-      if (!inputVariableRef.current?.isFocused) {
-        setVariableValue(variable.name)
-      }
-      setInputError(!isValid)
-      setIsAVariable(true)
+    })
+    return () => {
+      cancelled = true
     }
-
-    if (!connections.length) {
-      setErrorDescription('')
-      setInputError(false)
-      return
-    }
-  }, [pous])
+    // `connections`/`allConnectionsType`/`primaryConnectionType` are read from
+    // the latest render via closure; keeping them out of the dep array avoids
+    // re-run storms from their changing object identity (which would flood the
+    // single-threaded LSP worker).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pous, pouName, data.variable?.name])
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, { nodeId: id })
+    const { pou } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, { nodeId: id })
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v: PLCVariable) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -392,7 +386,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, varType)
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -427,26 +421,25 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
 
-    // For variable nodes, allow all types including derived (user-defined types)
-    // Don't use getVariableByName here as it filters out derived types
-    let variable: PLCVariable | { name: string } | undefined =
-      (pou.interface?.variables ?? []).find((v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase()) ||
-      resolveArrayVariableByName(pou.interface?.variables ?? [], variableNameToSubmit)
-    if (!variable) {
-      setIsAVariable(false)
-      variable = { name: variableNameToSubmit }
-    } else {
-      setIsAVariable(true)
-    }
+    // Persist the typed value: enrich with the local variable (carrying its
+    // type) when it's a plain local/array reference, otherwise store the raw
+    // name (e.g. an instance member like `TON0.Q`). The validation effect
+    // resolves and type-checks it against the full project scope.
+    const variable: PLCVariable | { name: string } = (pou.interface?.variables ?? []).find(
+      (v) => v.name.toLowerCase() === variableNameToSubmit.toLowerCase(),
+    ) ||
+      resolveArrayVariableByName(pou.interface?.variables ?? [], variableNameToSubmit) || {
+        name: variableNameToSubmit,
+      }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodeId: variableNode.id,
       node: {
         ...variableNode,
@@ -456,8 +449,6 @@ const VariableElement = (block: VariableProps) => {
         },
       },
     })
-
-    setInputError(false)
   }
 
   const onChangeHandler = () => {

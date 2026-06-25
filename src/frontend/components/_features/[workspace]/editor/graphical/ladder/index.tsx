@@ -30,14 +30,18 @@ import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/conta
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { CreateRung } from '../../../../../_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '../../../../../_organisms/graphical-editor/ladder/rung'
+import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
 
 export default function LadderEditor() {
+  // Bound POU comes from the `GraphicalEditorActiveProvider` set up
+  // in the wrapper one level up.  Mirrors `FbdEditor` — see that
+  // file for the multi-mount rationale.
+  const pouName = useBoundPou()
   const {
     ladderFlows,
-    editor,
     ladderFlowActions,
     searchNodePosition,
     modals,
@@ -45,7 +49,6 @@ export default function LadderEditor() {
       data: { pous },
     },
     projectActions: { updatePou },
-    editorActions: { saveEditorViewState },
     modalActions: { closeModal },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
@@ -68,7 +71,7 @@ export default function LadderEditor() {
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
+  const flow = ladderFlows.find((flow) => flow.name === pouName)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated || false
 
@@ -97,48 +100,19 @@ export default function LadderEditor() {
     if (!flowSchema.success) return
 
     updatePou({
-      name: editor.meta.name,
+      name: pouName,
       content: {
         language: 'ld',
         value: flowSchema.data,
       },
     })
 
-    ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
 
     if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(editor.meta.name)
+      handleFileAndWorkspaceSavedState(pouName)
     }
   }, [flowUpdated])
-
-  /**
-   * Editor state management for scroll position
-   */
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !scrollableRef.current) return
-        const scrollTop = scrollableRef.current.scrollTop
-        saveEditorViewState({
-          prevEditorName,
-          scrollPosition: { top: scrollTop, left: 0 },
-        })
-      },
-    )
-    return () => unsub()
-  }, [])
-  useEffect(() => {
-    const scrollable = scrollableRef.current
-    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
-
-    if (scrollable && scrollData) {
-      scrollable.scrollTop = scrollData.top
-      requestAnimationFrame(() => {
-        scrollable.scrollTop = scrollData.top
-      })
-    }
-  }, [scrollableRef.current, editor.meta.name])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
@@ -153,15 +127,15 @@ export default function LadderEditor() {
   const handleAddNewRung = () => {
     if (isDebuggerVisible) return
 
-    const snapshot = captureSnapshot(editor.meta.name)
-    if (snapshot) pushToHistory(editor.meta.name, snapshot)
+    const snapshot = captureSnapshot(pouName)
+    if (snapshot) pushToHistory(pouName, snapshot)
 
     const defaultViewport: [number, number] = [300, 100]
 
-    const rungIdToBeAdded = `rung_${editor.meta.name}_${uuidv4()}`
+    const rungIdToBeAdded = `rung_${pouName}_${uuidv4()}`
 
     ladderFlowActions.startLadderRung({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rungIdToBeAdded,
       defaultBounds: defaultViewport,
       reactFlowViewport: defaultViewport,
@@ -213,13 +187,13 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      const snapshot = captureSnapshot(editor.meta.name)
-      if (snapshot) pushToHistory(editor.meta.name, snapshot)
-      ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
+      const snapshot = captureSnapshot(pouName)
+      if (snapshot) pushToHistory(pouName, snapshot)
+      ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
       // Recover the original state
-      ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: originalRungs })
+      ladderFlowActions.setRungs({ editorName: pouName, rungs: originalRungs })
       // Notify the user
       console.error('Failed to reorder rungs. The operation has been reverted.')
     }
@@ -231,36 +205,6 @@ export default function LadderEditor() {
   const handleModalClose = () => {
     closeModal()
   }
-
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !scrollableRef.current) return
-
-        const scrollTop = scrollableRef.current.scrollTop
-
-        saveEditorViewState({
-          prevEditorName,
-          scrollPosition: { top: scrollTop, left: 0 },
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [])
-
-  useEffect(() => {
-    const scrollable = scrollableRef.current
-    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
-
-    if (scrollable && scrollData) {
-      scrollable.scrollTop = scrollData.top
-      requestAnimationFrame(() => {
-        scrollable.scrollTop = scrollData.top
-      })
-    }
-  }, [scrollableRef.current, editor.meta.name])
 
   function getLibraryDivergences() {
     if (!flow) return []

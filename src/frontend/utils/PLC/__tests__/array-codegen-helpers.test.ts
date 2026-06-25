@@ -270,13 +270,27 @@ describe('getArrayStartIndex', () => {
 // generateStructMember
 // ---------------------------------------------------------------------------
 describe('generateStructMember', () => {
-  it('generates a pointer member for scalar variables', () => {
+  // Numeric/time/bit base types resolve to strucpp's IECVar wrapper —
+  // the c_blocks_code.cpp baseline keeps file-scope raw typedefs for
+  // user locals; the auto-generated struct uses `strucpp::IEC_*` so
+  // user writes via the macro route through `IECVar::operator=` and
+  // respect forcing.
+  it('generates a strucpp-qualified pointer member for scalar variables', () => {
     const result = generateStructMember(makeScalarVar('myVar', 'int'))
-    expect(result).toBe('  IEC_INT *MYVAR;\n')
+    expect(result).toBe('  strucpp::IEC_INT *MYVAR;\n')
   })
 
-  it('generates a pointer member for array variables', () => {
+  it('generates a strucpp-qualified pointer member for array variables', () => {
     const result = generateStructMember(makeArrayVar('sensors', 'base-type', 'real', ['0..5']))
-    expect(result).toBe('  IEC_REAL *SENSORS;\n')
+    expect(result).toBe('  strucpp::IEC_REAL *SENSORS;\n')
+  })
+
+  // STRING / WSTRING use the same `strucpp::` qualification as every
+  // other elementary type — the field is a pointer to
+  // `IECStringVar<254>`, identical to the wrapper every numeric pin
+  // uses.  No raw POD shape, no scan-boundary stub.
+  it('generates a strucpp-qualified pointer member for STRING', () => {
+    const result = generateStructMember(makeScalarVar('msg', 'string'))
+    expect(result).toBe('  strucpp::IEC_STRING *MSG;\n')
   })
 })

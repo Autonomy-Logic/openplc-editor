@@ -29,6 +29,8 @@ import type { ModalSlice } from './slices/modal'
 import { createModalSlice } from './slices/modal'
 import type { ProjectSlice } from './slices/project'
 import { createProjectSlice } from './slices/project'
+import type { ReadmeSlice } from './slices/readme'
+import { createReadmeSlice } from './slices/readme'
 import type { SearchSlice } from './slices/search'
 import { createSearchSlice } from './slices/search'
 import type { SharedSlice } from './slices/shared'
@@ -53,6 +55,7 @@ export type RootState = AISlice &
   LibrarySlice &
   ModalSlice &
   ProjectSlice &
+  ReadmeSlice &
   SearchSlice &
   SharedSlice &
   TabsSlice &
@@ -83,6 +86,7 @@ export function createOpenPLCStore(config: StoreConfig = {}) {
       ...createLibrarySlice(...a),
       ...createModalSlice(...a),
       ...createProjectSlice(...a),
+      ...createReadmeSlice(...a),
       ...createSearchSlice(...a),
       ...createSharedSlice(...a),
       ...createTabsSlice(...a),

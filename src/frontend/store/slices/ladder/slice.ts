@@ -9,6 +9,7 @@ import {
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
+import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
 
@@ -56,9 +57,20 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               }))
             : flow.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
 
+          // handleBranches (the index of contacts/coils wired to a block's
+          // secondary handles, e.g. CTUD CD/QD) is runtime-only state — it is
+          // NOT persisted in the .ld. Without rebuilding it on load, a project
+          // containing handle branches comes back with an empty index and the
+          // first branch-aware edit (e.g. deleting a coil on a block output)
+          // corrupts the diagram. Reconstruct it from the graph here.
+          const rungsWithBranches = rungs.map((rung) => ({
+            ...rung,
+            handleBranches: deriveHandleBranches(rung),
+          }))
+
           // Reset updated to false on load — the flow is being loaded from a saved project.
           // Only mark as updated if legacy data was migrated so the next save writes the new format.
-          const newFlow = { ...flow, rungs, updated: needsMigration }
+          const newFlow = { ...flow, rungs: rungsWithBranches, updated: needsMigration }
 
           if (flowIndex === -1) {
             ladderFlows.push(newFlow)
@@ -75,6 +87,25 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (flowIndex === -1) return
 
           ladderFlows.splice(flowIndex, 1)
+        }),
+      )
+    },
+    renameLadderFlow: (oldName, newName) => {
+      if (oldName === newName) return
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((f) => f.name === oldName)
+          if (!flow) return
+          // Defensive: if a flow already exists under `newName` (e.g.
+          // because the editor cold-seeded an empty one before this
+          // rename ran), drop the empty placeholder so the original
+          // rungs survive.  The shared rename path validates name
+          // uniqueness on the POU side, so by the time we get here
+          // `newName` is guaranteed unique on the project — any
+          // pre-existing flow under that name is stale.
+          const existingIndex = ladderFlows.findIndex((f) => f.name === newName)
+          if (existingIndex !== -1) ladderFlows.splice(existingIndex, 1)
+          flow.name = newName
         }),
       )
     },
@@ -316,9 +347,10 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements(rung, nodes)
           rung.nodes = newNodes
           rung.edges = newEdges
+          if (handleBranches) rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )
@@ -432,6 +464,21 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           rung.edges.push(edge)
+          flow.updated = true
+        }),
+      )
+    },
+
+    setHandleBranches({ handleBranches, editorName, rungId }) {
+      setState(
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.handleBranches = handleBranches
           flow.updated = true
         }),
       )

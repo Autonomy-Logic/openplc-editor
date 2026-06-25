@@ -111,6 +111,12 @@ const configuration: webpack.Configuration = {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
         type: 'asset/resource',
       },
+      // Static JS assets — used by the STruC++ LSP worker.  See
+      // webpack.config.renderer.prod.ts for the same rule + rationale.
+      {
+        resourceQuery: /^\?url$/,
+        type: 'asset/resource',
+      },
       // Images
       {
         test: /\.(png|jpg|jpeg|gif)$/i,
@@ -160,6 +166,13 @@ const configuration: webpack.Configuration = {
 
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
+      // Override for the editor's VPP catalog backend host.  Falsy
+      // (empty string) when the dev shell doesn't set it — the
+      // adapter (`package-adapter.ts`) then falls back to the
+      // production default hardcoded there.  Set the env BEFORE
+      // `npm run dev` to point at staging or localhost:
+      //   `VPP_CATALOG_URL=http://localhost:3333 npm run dev`
+      VPP_CATALOG_URL: '',
     }),
 
     new webpack.DefinePlugin({
@@ -188,7 +201,12 @@ const configuration: webpack.Configuration = {
     }),
 
     new MonacoEditorWebpackPlugin({
-      languages: ['python'],
+      // `python` covers the Python POU editor; `json` covers the
+      // Library Project's manifest tab (`library.json`).  Without
+      // `json` here, opening the manifest tab spawns a worker with
+      // no asset registered, which surfaces as an unhandled Worker
+      // `error` event in the renderer console.
+      languages: ['python', 'json'],
     }),
   ],
 

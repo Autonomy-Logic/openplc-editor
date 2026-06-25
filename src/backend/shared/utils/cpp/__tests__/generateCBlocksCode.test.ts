@@ -32,17 +32,62 @@ describe('generateCBlocksCode', () => {
     expect(result).toBe('')
   })
 
+  it('emits the c_blocks baseline (strucpp includes + raw IEC typedefs) before per-POU code', () => {
+    const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
+    const code = 'void setup() { }\nvoid loop() { }'
+    const result = generateCBlocksCode([{ name: 'B', code, variables }])
+
+    // Baseline: strucpp wrappers visible to the auto-generated struct
+    // — covers numeric AND STRING pins now (every pin field qualifies
+    // as `strucpp::IEC_*`).
+    expect(result).toContain('#include "iec_var.hpp"')
+    expect(result).toContain('#include "iec_string.hpp"')
+    // Baseline: raw file-scope typedefs for user-local variables.
+    expect(result).toContain('typedef int16_t   IEC_INT;')
+    expect(result).toContain('typedef float    IEC_REAL;')
+    // STRING no longer has a raw POD typedef.  The historical
+    // `{ __strlen_t len; uint8_t body[]; }` struct is gone — STRING
+    // pins and locals both use `strucpp::IEC_STRING` (= IECStringVar
+    // <254>) from `iec_string.hpp`.  Pin the regression so a future
+    // edit can't quietly re-introduce the raw shape.
+    expect(result).not.toContain('__strlen_t')
+    expect(result).not.toContain('STR_MAX_LEN')
+    expect(result).not.toMatch(/typedef\s+struct\s+\{[\s\S]*?body\[[\s\S]*?\]\s*;[\s\S]*?\}\s+IEC_STRING;/)
+  })
+
+  it("undefines Arduino.h's min/max macros before pulling in strucpp/std headers", () => {
+    // Regression guard: Arduino.h defines `min` / `max` as preprocessor
+    // macros that wreck `<algorithm>` / `<limits>` (both transitively
+    // included via iec_string.hpp). Order must be:
+    //   include <Arduino.h>  ->  #undef min/max  ->  #include "iec_string.hpp"
+    const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
+    const code = 'void setup() { }\nvoid loop() { }'
+    const result = generateCBlocksCode([{ name: 'B', code, variables }])
+
+    const arduinoIdx = result.indexOf('#include <Arduino.h>')
+    const undefMinIdx = result.indexOf('#undef min')
+    const undefMaxIdx = result.indexOf('#undef max')
+    const iecStringIdx = result.indexOf('#include "iec_string.hpp"')
+
+    expect(arduinoIdx).toBeGreaterThan(-1)
+    expect(undefMinIdx).toBeGreaterThan(arduinoIdx)
+    expect(undefMaxIdx).toBeGreaterThan(arduinoIdx)
+    expect(iecStringIdx).toBeGreaterThan(undefMinIdx)
+    expect(iecStringIdx).toBeGreaterThan(undefMaxIdx)
+  })
+
   it('generates struct, extern declarations, defines, code, and undefs for a pou', () => {
     const variables: PLCVariable[] = [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('result', 'output', 'REAL')]
     const code = 'void setup() { }\nvoid loop() { }'
 
     const result = generateCBlocksCode([{ name: 'MyBlock', code, variables }])
 
-    // Struct definition
+    // Struct definition — fields are strucpp::IEC_* so user writes
+    // route through IECVar::operator= (force-respect).
     expect(result).toContain('//definition of external blocks - MYBLOCK')
     expect(result).toContain('typedef struct {')
-    expect(result).toContain('  IEC_INT *SPEED;')
-    expect(result).toContain('  IEC_REAL *RESULT;')
+    expect(result).toContain('  strucpp::IEC_INT *SPEED;')
+    expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
     expect(result).toContain('} MYBLOCK_VARS;')
 
     // Extern declarations
@@ -82,9 +127,13 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('typedef struct {')
     expect(result).toContain('} EMPTY_VARS;')
-    // No defines or undefs for variables
-    expect(result).not.toContain('#define')
-    expect(result).not.toContain('#undef')
+    // No #define / #undef for variables (the only `#define`s in the
+    // baseline now are the Arduino min/max macro guards).
+    expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
+    // Strip the baseline's `#undef min` / `#undef max` (Arduino.h macro
+    // scrubbing — see baseline) before asserting no per-variable undefs.
+    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max)\s*$/gm, '')
+    expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 
   it('processes multiple pous', () => {

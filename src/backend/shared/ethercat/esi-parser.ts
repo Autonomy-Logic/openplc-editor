@@ -307,7 +307,6 @@ export function generateDefaultChannelMappings(
       mappings.push({
         channelId: channel.id,
         iecLocation: candidate,
-        userEdited: false,
         alias: '',
       })
 

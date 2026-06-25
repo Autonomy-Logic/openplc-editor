@@ -15,6 +15,9 @@
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
   CompilationStatusResult,
+  DiscoverDevicesOptions,
+  DiscoverDevicesResult,
+  DiscoveredRuntimeDevice,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,
@@ -190,6 +193,21 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
+    },
+
+    // --- LAN discovery ---
+
+    async discoverDevices(opts?: DiscoverDevicesOptions): Promise<DiscoverDevicesResult> {
+      try {
+        return await window.bridge.runtimeDiscoverDevices(opts)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    onDeviceDiscovered(callback: (device: DiscoveredRuntimeDevice) => void): Unsubscribe {
+      const handler = (_event: unknown, device: DiscoveredRuntimeDevice) => callback(device)
+      return window.bridge.onRuntimeDeviceDiscovered(handler)
     },
   }
 }

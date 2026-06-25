@@ -96,6 +96,33 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       submit({ variable })
     }
 
+    /**
+     * Resolve what to submit when the user presses Enter/Tab without
+     * arrowing down to a row.  Previously this always sent the "Add
+     * variable" option, so typing the exact name of an existing
+     * variable and hitting Return would create a brand-new variable
+     * with a name-collision-resolved suffix (forum bug, v4.2.0).
+     *
+     * Exact case-insensitive match against the visible `variables`
+     * list takes precedence — the dropdown was already showing that
+     * variable, so the user clearly meant to bind to it.  Only when
+     * no match exists do we fall through to "Add variable".
+     */
+    const resolveImplicitSubmitOption = () => {
+      const trimmed = searchValue.trim().toLowerCase()
+      if (trimmed) {
+        const exactMatch = variables?.find((v) => v.name.toLowerCase() === trimmed)
+        if (exactMatch) {
+          return {
+            id: exactMatch.id ?? '',
+            name: exactMatch.name,
+          }
+        }
+      }
+      const addVariableOption = selectableValues.find((item) => item.type === 'add')
+      return addVariableOption ? addVariableOption.variable : null
+    }
+
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
       return {
@@ -111,9 +138,9 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
          */
         triggerSubmit: () => {
           if (selectedVariable.positionInArray === -1) {
-            const addVariableOption = selectableValues.find((item) => item.type === 'add')
-            if (addVariableOption) {
-              submitAutocompletion({ variable: addVariableOption.variable })
+            const implicit = resolveImplicitSubmitOption()
+            if (implicit) {
+              submitAutocompletion({ variable: implicit })
             } else {
               closeModal()
             }
@@ -122,7 +149,16 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
           }
         },
       }
-    }, [selectedVariable, selectableValues, popoverRef, autocompleteFocus, submitAutocompletion, closeModal])
+    }, [
+      selectedVariable,
+      selectableValues,
+      variables,
+      searchValue,
+      popoverRef,
+      autocompleteFocus,
+      submitAutocompletion,
+      closeModal,
+    ])
 
     useEffect(() => {
       switch (keyDown) {
@@ -152,13 +188,13 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
           break
         case 'Tab':
         case 'Enter':
-          // If nothing is selected (positionInArray === -1), find the "Add variable" option
           if (selectedVariable.positionInArray === -1) {
-            const addVariableOption = selectableValues.find((item) => item.type === 'add')
-            if (addVariableOption) {
-              submitAutocompletion({ variable: addVariableOption.variable })
+            const implicit = resolveImplicitSubmitOption()
+            if (implicit) {
+              submitAutocompletion({ variable: implicit })
             } else {
-              // No 'add' option available; close the autocomplete to provide clear feedback
+              // Nothing matched and no 'add' option available; close
+              // the autocomplete to give the user clear feedback.
               closeModal()
             }
           } else {
@@ -224,6 +260,11 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                               'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
                           )}
+                          // Keep the editor textarea focused through the click: some
+                          // consumers (LD contact/coil) refocus their container on the
+                          // textarea's blur, which would close this popover before the
+                          // click resolves and swallow the selection.
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             submitAutocompletion({
                               variable: {
@@ -256,6 +297,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                         'rounded-lg': !variables || variables.length === 0,
                       },
                     )}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() =>
                       submitAutocompletion({
                         variable: newBlock.canCreate
@@ -281,6 +323,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                       'rounded-lg': !variables || variables.length === 0,
                     },
                   )}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     if (newBlock.options) {
                       submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })

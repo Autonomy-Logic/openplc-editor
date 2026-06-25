@@ -3,10 +3,11 @@
  */
 
 /**
- * Application version from package.json
- * @example "4.1.1"
+ * Per-app product name (e.g. "OpenPLC Editor"), injected per build. The
+ * shared About modal reads this; the app version itself is now imported from
+ * src/frontend/data/constants/app-version.ts, not injected as a global.
  */
-declare const APP_VERSION: string
+declare const APP_NAME: string
 
 /**
  * Build date in YYYY-MM-DD format
@@ -21,3 +22,14 @@ declare const BUILD_DATE: string
  */
 
 declare const vi: typeof jest
+
+/**
+ * PNG asset imports resolve to the emitted asset URL (webpack asset/resource).
+ * Declared here because the renderer's tsconfig only includes `src/`, so the
+ * root `assets/assets.d.ts` declaration isn't visible to shared `src/frontend`
+ * code (e.g. the retro theme icons).
+ */
+declare module '*.png' {
+  const content: string
+  export default content
+}

@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 // Disable PWM logs from the PWM Controller lib
 #define _PWM_LOGLEVEL_       0

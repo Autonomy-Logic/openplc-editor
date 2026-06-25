@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useOpenPLCStore } from '../../../../store'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { toast } from '../../../../utils/toast'
 
 type DeleteBranchModalProps = {
@@ -14,6 +16,7 @@ type DeleteBranchModalProps = {
 
 export function DeleteBranchModal({ isOpen, projectId, branch, onClose, onDeleted }: DeleteBranchModalProps) {
   const versionControl = useVersionControl()
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
@@ -29,6 +32,11 @@ export function DeleteBranchModal({ isOpen, projectId, branch, onClose, onDelete
 
   const handleDelete = () => {
     if (!versionControl) return
+    // No write permission ⇒ skip the doomed backend write and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('delete branches in')
+      return
+    }
 
     setIsPending(true)
     versionControl

@@ -1,11 +1,13 @@
+import { iterateWriteProjectFiles } from '@root/backend/shared/project/iterate-write-project-files'
+import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/project-files-schema'
 import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
+import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
   IProjectServiceResponse,
 } from '@root/types/IPC/project-service'
-import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service/project-files-schema'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { dirname, join, normalize } from 'path'
@@ -121,6 +123,61 @@ class ProjectService {
   }
 
   /**
+   * Recursively delete a project directory from disk and drop its entry
+   * from the recent-projects history. Used by the start screen's "Delete
+   * project" 3-dot-menu action.
+   *
+   * Safety gate: refuses to delete a directory that doesn't contain a
+   * top-level `project.json`. Without this, a corrupt history file
+   * pointing at an arbitrary path (e.g. `/Users/foo/Documents`) would
+   * silently `rm -rf` it. The gate makes the operation no-op against
+   * any path that isn't an OpenPLC project root.
+   *
+   * Returns `{ success: true }` on actual deletion; `{ success: false,
+   * error }` when the gate trips or fs.rm fails. The history entry is
+   * dropped on either success OR a `project.json`-missing error
+   * (renderer-side: a missing project.json means the project is gone
+   * already; keeping the stale entry in the recent list serves no
+   * one), but NOT on other fs errors (permission denied, etc.) so the
+   * user can retry after fixing the cause.
+   */
+  async deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
+    const directoryPath = projectPath.endsWith('/project.json')
+      ? projectPath.slice(0, -'/project.json'.length)
+      : projectPath
+    const projectJsonPath = join(directoryPath, 'project.json')
+
+    let projectJsonExists = false
+    try {
+      const stat = await promises.stat(projectJsonPath)
+      projectJsonExists = stat.isFile()
+    } catch {
+      projectJsonExists = false
+    }
+
+    if (!projectJsonExists) {
+      // Stale entry — wipe from history but don't touch disk.
+      await this.removeProjectFromHistory(directoryPath)
+      return {
+        success: false,
+        error: `Path "${directoryPath}" does not contain a project.json. Removed the entry from the recent list.`,
+      }
+    }
+
+    try {
+      await promises.rm(directoryPath, { recursive: true, force: true })
+    } catch (err) {
+      return {
+        success: false,
+        error: `Failed to delete project directory: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    }
+
+    await this.removeProjectFromHistory(directoryPath)
+    return { success: true }
+  }
+
+  /**
    * Read all project files as raw strings — no parsing, no transformation.
    * The frontend is responsible for parsing the returned content.
    */
@@ -131,6 +188,7 @@ class ProjectService {
       projectJson: string
       deviceConfig: string
       pinMapping: string
+      libraryManifest: string
       pouFiles: Array<{ relativePath: string; content: string }>
       serverFiles: Array<{ relativePath: string; content: string }>
       remoteDeviceFiles: Array<{ relativePath: string; content: string }>
@@ -227,6 +285,20 @@ class ProjectService {
       const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
       const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
 
+      // Library projects own a `library.json` at the project root.
+      // Read it as a plain string (parsing happens upstream in the
+      // build pipeline + manifest editor — same convention POUs use:
+      // raw bytes here, structure upstream).  Empty string for PLC
+      // projects and for libraries whose disk shape is missing the
+      // file; the manifest editor seeds a template on first save.
+      let libraryManifest = ''
+      try {
+        libraryManifest = await promises.readFile(join(projectPath, 'library.json'), 'utf-8')
+      } catch {
+        // No library.json on disk — not a library, or a library
+        // whose manifest was never persisted.  Leave empty.
+      }
+
       return {
         success: true,
         data: {
@@ -234,6 +306,7 @@ class ProjectService {
           projectJson,
           deviceConfig,
           pinMapping,
+          libraryManifest,
           pouFiles,
           serverFiles,
           remoteDeviceFiles,
@@ -361,19 +434,15 @@ class ProjectService {
   /**
    * Write pre-serialized project files to disk.
    * The frontend handles all serialization — this method is a dumb batch file writer.
+   *
+   * The "which files exist in a save" enumeration lives in the
+   * shared `iterateWriteProjectFiles` so the web adapter's API
+   * envelope packer walks the same category list — no more
+   * hand-maintained twin lists drifting when a new file category
+   * (like `library.json`) gets added.
    */
-  async writeProjectFiles(files: {
-    projectPath: string
-    projectJson: string
-    deviceConfig: string
-    pinMapping: string
-    pouFiles: Array<{ relativePath: string; content: string }>
-    serverFiles: Array<{ relativePath: string; content: string }>
-    remoteDeviceFiles: Array<{ relativePath: string; content: string }>
-    deletions: string[]
-  }): Promise<IProjectServiceResponse> {
-    const { projectPath, projectJson, deviceConfig, pinMapping, pouFiles, serverFiles, remoteDeviceFiles, deletions } =
-      files
+  async writeProjectFiles(files: WriteProjectFiles): Promise<IProjectServiceResponse> {
+    const { projectPath, deletions } = files
 
     if (!projectPath) {
       return {
@@ -386,36 +455,27 @@ class ProjectService {
     const dir = normalized.endsWith('/project.json') ? normalized.slice(0, -'/project.json'.length) : normalized
 
     try {
-      // Ensure standard directories exist
+      // Defensive mkdir for the project's canonical directory shape.
+      // Keeps these paths present even when the corresponding file
+      // arrays are empty (e.g. fresh library with no servers yet),
+      // so callers can rely on them existing.
       await Promise.all(
         ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote'].map((d) =>
           promises.mkdir(join(dir, d), { recursive: true }),
         ),
       )
 
-      // Write config files
-      await Promise.all([
-        promises.writeFile(join(dir, 'project.json'), projectJson, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/configuration.json'), deviceConfig, 'utf-8'),
-        promises.writeFile(join(dir, 'devices/pin-mapping.json'), pinMapping, 'utf-8'),
-      ])
-
-      // Write POU files
-      for (const file of pouFiles) {
-        const filePath = join(dir, file.relativePath)
-        await promises.mkdir(dirname(filePath), { recursive: true })
-        await promises.writeFile(filePath, file.content, 'utf-8')
-      }
-
-      // Write server files
-      for (const file of serverFiles) {
-        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
-      }
-
-      // Write remote device files
-      for (const file of remoteDeviceFiles) {
-        await promises.writeFile(join(dir, file.relativePath), file.content, 'utf-8')
-      }
+      // Single source of truth for the file shape lives in the
+      // shared iterator.  Each yielded entry is one independent
+      // file write; the batch fans out in parallel since paths
+      // are distinct and mkdir(recursive) is idempotent.
+      await Promise.all(
+        Array.from(iterateWriteProjectFiles(files), async (entry) => {
+          const filePath = join(dir, entry.relativePath)
+          await promises.mkdir(dirname(filePath), { recursive: true })
+          await promises.writeFile(filePath, entry.content, 'utf-8')
+        }),
+      )
 
       // Process deletions
       for (const relativePath of deletions) {

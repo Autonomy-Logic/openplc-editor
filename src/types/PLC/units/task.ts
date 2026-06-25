@@ -6,8 +6,6 @@ const PLCTaskSchema = z.object({
   triggering: z.enum(['CYCLIC', 'INTERRUPT']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
   priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
-  isSystemTask: z.boolean().optional(),
-  associatedDevice: z.string().optional(),
 })
 
 type PLCTask = z.infer<typeof PLCTaskSchema>

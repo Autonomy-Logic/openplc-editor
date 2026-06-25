@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useOpenPLCStore } from '../../../../store'
+import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 
 type CreateBranchModalProps = {
   isOpen: boolean
@@ -11,6 +13,7 @@ type CreateBranchModalProps = {
 
 export function CreateBranchModal({ isOpen, projectId, onClose, onCreated }: CreateBranchModalProps) {
   const versionControl = useVersionControl()
+  const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [isPending, setIsPending] = useState(false)
@@ -35,6 +38,13 @@ export function CreateBranchModal({ isOpen, projectId, onClose, onCreated }: Cre
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // No write permission ⇒ skip the doomed backend write and warn.
+    if (!canEdit) {
+      notifyNoWritePermission('create branches in')
+      return
+    }
+
     const trimmed = name.trim()
 
     if (!trimmed) {

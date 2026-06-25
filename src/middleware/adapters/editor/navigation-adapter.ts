@@ -31,5 +31,11 @@ export function createEditorNavigationAdapter(): NavigationPort {
     openInNewWindow(path: string, search?: NavigationSearch): void {
       window.open(buildNavigationUrl(path, search), '_blank')
     },
+
+    exitToHost(): void {
+      // The editor has no host to return to — the start screen appears
+      // automatically once `clearStatesOnCloseProject` has reset project
+      // state, so this is intentionally a no-op.
+    },
   }
 }

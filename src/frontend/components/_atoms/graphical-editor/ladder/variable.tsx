@@ -6,6 +6,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
+import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
 import { cn } from '../../../../utils/cn'
@@ -19,6 +20,7 @@ import {
   parseStringValue,
   stringToBuffer,
 } from '../../../../utils/variable-types'
+import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
@@ -31,10 +33,10 @@ import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNod
 
 const VariableElement = (block: VariableProps) => {
   const { id, data } = block
+  const pouName = useBoundPou()
   const {
-    editor,
     project: {
-      data: { pous, dataTypes },
+      data: { pous },
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
@@ -96,7 +98,7 @@ const VariableElement = (block: VariableProps) => {
     ]
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: relatedBlock.id,
       node: {
@@ -125,81 +127,72 @@ const VariableElement = (block: VariableProps) => {
   }, [data.variable?.name])
 
   /**
-   * Update inputError state when the table of variables is updated
+   * Validate the variable node against the block pin's expected type via the
+   * STruC++ LSP. The pin type may be a generic (ANY_NUM, …) and the typed
+   * value may be an instance member or struct/array access the local
+   * interface list can't resolve. `isAVariable` (yellow) means "not a known
+   * symbol"; `inputError` (red) means "known but type-incompatible".
    */
   useEffect(() => {
-    const {
-      node: variableNode,
-      rung,
-      variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-      variableName: data.variable?.name,
-    })
-    if (!rung || !variableNode) return
-
-    // Use the selected variable from getLadderPouVariablesRungNodeAndEdges which properly
-    // handles derived types for 'variable' node types (block pin variables)
-    const variable = variables.selected
-
-    if (!variable || !inputVariableRef) {
+    const name = data.variable?.name?.trim() ?? ''
+    if (!name) {
       setIsAVariable(false)
-    } else {
-      const nodeVariableName = (variableNode as VariableNode).data.variable.name
-
-      const namesMatchCI = variable.name.toLowerCase() === nodeVariableName.toLowerCase()
-      const caseDiffers = variable.name !== nodeVariableName
-
-      if (!namesMatchCI || caseDiffers) {
-        updateNode({
-          editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
-        updateRelatedNode(rung, variableNode as VariableNode, variable)
-      }
-
-      const validation = validateVariableType(variable.type.value, data.block.variableType)
-      if (!validation.isValid && dataTypes.length > 0) {
-        const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        validation.isValid = userDataTypes.includes(variable.type.value)
-        validation.error = undefined
-      }
-      // Only sync variableValue when not actively editing (autocomplete closed)
-      if (!openAutocomplete) {
-        setVariableValue(variable.name)
-      }
-      setInputError(!validation.isValid)
-      setIsAVariable(true)
-    }
-
-    if (!rung) return
-
-    const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
+      setInputError(false)
       return
     }
-  }, [pous, data.variable?.name])
+    let cancelled = false
+    void resolveScopeExpressionType(pouName, name).then((res) => {
+      if (cancelled) return
+      // Leave the current state untouched while the LSP is still warming so
+      // we never flash a false error/warning during boot.
+      if (res.status === 'unavailable') return
+      if (res.status === 'unknown') {
+        setIsAVariable(false)
+        setInputError(false)
+        return
+      }
+      setIsAVariable(true)
+      setInputError(!validateVariableType(res.type, data.block.variableType).isValid)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pous, pouName, data.variable?.name, data.block.variableType.type.value])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || variableValue
+  const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
+    const variableNameToSubmit = currentValue ?? variableValue
 
-    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
+
+    // Allow clearing a variable from a block handle by submitting an empty name.
+    // This resets the variable node so a branch (contacts/coils) can be placed instead.
+    if (!variableNameToSubmit.trim()) {
+      const emptyVariable = { id: '', name: '' }
+      setVariableValue('')
+      setIsAVariable(false)
+      setInputError(false)
+      updateNode({
+        editorName: pouName,
+        rungId: rung.id,
+        nodeId: variableNode.id,
+        node: {
+          ...variableNode,
+          data: {
+            ...variableNode.data,
+            variable: emptyVariable,
+          },
+        },
+      })
+      updateRelatedNode(rung, variableNode, emptyVariable as PLCVariable)
+      return
+    }
 
     // For variable nodes (block pins), allow all types including derived (user-defined types)
     // Don't use getVariableByName here as it filters out derived types
@@ -222,7 +215,7 @@ const VariableElement = (block: VariableProps) => {
     }
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: variableNode.id,
       node: {
@@ -245,7 +238,7 @@ const VariableElement = (block: VariableProps) => {
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
+    const { pou } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, { nodeId: id })
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -344,7 +337,7 @@ const VariableElement = (block: VariableProps) => {
       forcedValueForState = parsedIntValue >= BigInt(0)
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState)
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, variableType)
 
     setForceValueModalOpen(false)
     setForceValue('')

@@ -11,7 +11,7 @@
 
 import { bytesToHex, hexToBytes } from '../../../frontend/utils/hex'
 import { simulatorService } from '../simulator'
-import type { DebugSetResult, DebugTransport, DebugTransportResult } from './types'
+import type { DebugSetResult, DebugTransport, DebugTransportResult, Md5ProbeResult } from './types'
 
 export class ModbusRtuTransport implements DebugTransport {
   async connect(): Promise<void> {
@@ -22,8 +22,13 @@ export class ModbusRtuTransport implements DebugTransport {
     simulatorService.disconnectDebugger()
   }
 
-  async getMd5Hash(): Promise<string> {
-    return simulatorService.getMd5Hash()
+  async getMd5Hash(): Promise<Md5ProbeResult> {
+    // The web simulator path reads its MD5 from the built artifact
+    // (deterministic, no transport involved), so byte-order detection
+    // doesn't have a wire signal to read.  The emulated AVR is
+    // always little-endian, so hard-coding `'le'` is correct here.
+    const md5 = await simulatorService.getMd5Hash()
+    return { md5, targetEndian: 'le' }
   }
 
   async getVariablesList(indexes: number[]): Promise<DebugTransportResult> {

@@ -2,7 +2,10 @@ import { Edge, Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { nodesBuilder } from '../../../../components/_atoms/graphical-editor/ladder/node-builders'
-import type { LadderBlockConnectedVariables } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
+import type {
+  BasicNodeData,
+  LadderBlockConnectedVariables,
+} from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import type {
   BlockNode,
   BlockVariant,
@@ -12,6 +15,7 @@ import type {
   PowerRailNode,
   VariableNode,
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
+import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { RungLadderState } from '../types'
@@ -28,14 +32,25 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     {} as { [key: string]: Node },
   )
 
+  // Build mapping for branch handle IDs (old → new) based on block ID remapping
+  const branchHandleMap: Record<string, string> = {}
+  if (rung.handleBranches) {
+    for (const branch of rung.handleBranches) {
+      const newBlockId = nodeMaps[branch.blockId]?.id ?? branch.blockId
+      branchHandleMap[`branch_${branch.blockId}_${branch.handleId}`] = `branch_${newBlockId}_${branch.handleId}`
+    }
+  }
+
   const edgeMaps: { [key: string]: Edge } = rung.edges.reduce(
     (acc, edge) => {
+      const newSourceHandle = branchHandleMap[edge.sourceHandle ?? ''] ?? edge.sourceHandle
+      const newTargetHandle = branchHandleMap[edge.targetHandle ?? ''] ?? edge.targetHandle
       acc[edge.id] = {
-        id: `e_${nodeMaps[edge.source].id}_${nodeMaps[edge.target].id}__${edge.sourceHandle}_${edge.targetHandle}`,
+        id: `e_${nodeMaps[edge.source].id}_${nodeMaps[edge.target].id}__${newSourceHandle}_${newTargetHandle}`,
         source: nodeMaps[edge.source].id,
         target: nodeMaps[edge.target].id,
-        sourceHandle: edge.sourceHandle,
-        targetHandle: edge.targetHandle,
+        sourceHandle: newSourceHandle,
+        targetHandle: newTargetHandle,
       }
       return acc
     },
@@ -75,11 +90,18 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
           handleY: (node as CoilNode).data.inputConnector?.glbPosition.y ?? 0,
           variant: (node as CoilNode).data.variant,
         })
+        const coilData = node.data as BasicNodeData
         return {
           ...newCoil,
           data: {
             ...newCoil.data,
             variable: (node as CoilNode).data.variable,
+            ...(coilData.branchContext && {
+              branchContext: {
+                ...coilData.branchContext,
+                blockId: nodeMaps[coilData.branchContext.blockId]?.id ?? coilData.branchContext.blockId,
+              },
+            }),
           },
         } as CoilNode
       }
@@ -92,15 +114,23 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
           handleY: (node as ContactNode).data.inputConnector?.glbPosition.y ?? 0,
           variant: (node as ContactNode).data.variant,
         })
+        const contactData = node.data as BasicNodeData
         return {
           ...newContact,
           data: {
             ...newContact.data,
             variable: (node as ContactNode).data.variable,
+            ...(contactData.branchContext && {
+              branchContext: {
+                ...contactData.branchContext,
+                blockId: nodeMaps[contactData.branchContext.blockId]?.id ?? contactData.branchContext.blockId,
+              },
+            }),
           },
         } as ContactNode
       }
       case 'parallel': {
+        const parallelData = node.data as BasicNodeData
         return {
           ...node,
           id: nodeMaps[node.id].id,
@@ -113,16 +143,34 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
             parallelOpenReference: (node as ParallelNode).data.parallelOpenReference
               ? nodeMaps[(node as ParallelNode).data.parallelOpenReference ?? ''].id
               : undefined,
+            // Branch parallel nodes (a parallel inside a handle branch) carry a
+            // branchContext whose blockId must be remapped to the duplicated
+            // block — same as coils/contacts. Without this the copy's parallel
+            // nodes point at the original block id, breaking branch operations.
+            ...(parallelData.branchContext && {
+              branchContext: {
+                ...parallelData.branchContext,
+                blockId: nodeMaps[parallelData.branchContext.blockId]?.id ?? parallelData.branchContext.blockId,
+              },
+            }),
           },
         } as ParallelNode
       }
       case 'powerRail': {
+        const railData = node.data as BasicNodeData
+        const remappedHandles = railData.handles.map((h) => {
+          const newId = branchHandleMap[h.id as string] ?? h.id
+          return { ...h, id: newId }
+        })
         return {
           ...node,
           id: nodeMaps[node.id].id,
           data: {
-            ...node.data,
+            ...railData,
             numericId: generateNumericUUID(),
+            handles: remappedHandles,
+            inputHandles: remappedHandles.filter((h) => h.type === 'target'),
+            outputHandles: remappedHandles.filter((h) => h.type === 'source'),
           },
         } as PowerRailNode
       }
@@ -151,6 +199,8 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     id: edgeMaps[edge.id].id,
     source: edgeMaps[edge.id].source,
     target: edgeMaps[edge.id].target,
+    sourceHandle: edgeMaps[edge.id].sourceHandle,
+    targetHandle: edgeMaps[edge.id].targetHandle,
   }))
 
   const newRung = {
@@ -161,9 +211,24 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     selectedNodes: [],
     nodes: newNodes,
     edges: newEdges,
+    ...(rung.handleBranches && {
+      handleBranches: rung.handleBranches.map((branch) => ({
+        ...branch,
+        blockId: nodeMaps[branch.blockId]?.id ?? branch.blockId,
+        nodeIds: branch.nodeIds.map((id) => nodeMaps[id]?.id ?? id),
+      })),
+    }),
   }
 
-  return newRung
+  // Blocks/coils/contacts are rebuilt at their DEFAULT dimensions by
+  // nodesBuilder, so a block that was branch-expanded in the source rung comes
+  // back compact while its branch elements keep the expanded positions —
+  // leaving the duplicated diagram visually broken. Re-run the (branch-aware)
+  // layout solver so the block re-expands and every element is repositioned
+  // against the actual node set.
+  const laidOut = updateDiagramElementsPosition(newRung, newRung.defaultBounds as [number, number])
+
+  return { ...newRung, nodes: laidOut.nodes, edges: laidOut.edges }
 }
 
 /**

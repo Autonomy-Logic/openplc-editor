@@ -2,16 +2,14 @@
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
-import { useProject } from '../../../../../../middleware/shared/providers'
 import { TimerIcon } from '../../../../../assets/icons/interface/Timer'
 import { PouLanguageSources } from '../../../../../data/sources/POU'
-import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
-import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../store'
+import { useCreateProjectSubmit } from '../use-create-project-submit'
 {
   /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
 }
@@ -33,55 +31,23 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
     time: string
   }
-  const { toast } = useToast()
   const { handleSubmit, control, watch } = useForm<FormData>()
   const language = watch('language')
-  const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
-  const projectPort = useProject()
-  const {
-    sharedWorkspaceActions: { handleOpenProjectResponse },
-  } = useOpenPLCStore()
+  const submitCreate = useCreateProjectSubmit()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
-    const allData = {
-      ...projectData,
-      language: data.language,
-      time: intervalValue,
-    }
-
-    handleUpdateForm(allData)
-    try {
-      const result = await projectPort.createProject({
-        name: allData.name,
-        type: allData.type as 'plc-project' | 'plc-library',
-        path: allData.path,
-        language: allData.language,
-        time: allData.time,
-      })
-
-      if (!result.success || !result.data) {
-        toast({
-          title: 'Cannot create a project!',
-          description: result.error?.description ?? 'Failed to create the project.',
-          variant: 'fail',
-        })
-        return
-      }
-
-      handleOpenProjectResponse(result.data)
-    } catch (_error) {
-      toast({
-        title: 'Cannot create a project!',
-        description: 'Failed to create the project.',
-        variant: 'fail',
-      })
-    } finally {
-      onClose()
-      onFinish()
-    }
+    await submitCreate(
+      { ...projectData, language: data.language, time: intervalValue },
+      {
+        onSuccess: () => {
+          onClose()
+          onFinish()
+        },
+      },
+    )
   }
 
   return (

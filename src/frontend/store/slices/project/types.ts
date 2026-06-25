@@ -97,6 +97,13 @@ export type ProjectActions = {
   updateMetaName: (name: string) => void
   updateMetaPath: (path: string) => void
 
+  /** Replace the in-memory `library.json` content.  Library projects
+   *  only — POU bodies use `updatePou` for the same flow.  The
+   *  manifest editor calls this on every Monaco edit; the save
+   *  pipeline serialises it to `library.json` via the standard
+   *  iterator (no separate save path). */
+  updateLibraryManifest: (content: string) => void
+
   // POU
   createPou: (dto: PouDTO) => ProjectResponse
   updatePou: (args: { name: string; content: PLCBody }) => void
@@ -138,6 +145,48 @@ export type ProjectActions = {
     variableId?: string
     newIndex: number
   }) => void
+
+  /**
+   * Re-sync every located variable (POU-local + globals) against the
+   * current alias registry. Variables auto-adopt new aliases, follow
+   * existing ones to refreshed addresses, and surface orphans (alias
+   * the registry no longer knows about). Called from every site that
+   * mutates an alias-producing source (VPP slot edits, Modbus / EtherCAT
+   * alias edits, pin renames, target switch, pre-compile) and from
+   * `deviceActions.setAvailableOptions` once the workspace screen
+   * finishes board discovery — that's the project-load sync point.
+   *
+   * Returns a combined sync report so the caller can log a one-liner
+   * summary ("Adopted N aliases, refreshed M, K orphaned").
+   */
+  syncVariableAliases: () => {
+    adopted: number
+    refreshed: number
+    orphaned: number
+  }
+
+  /**
+   * Cascade-rename every variable's `.alias` field from `oldAlias` to
+   * `newAlias` across all POU-local and global variables.  Used by
+   * the IO-mapping screens (pin-mapping, VPP modules, VPP io-table,
+   * Modbus TCP remote, EtherCAT) when the user renames the alias on
+   * a producer channel — the rename cascades to bound variables so
+   * they don't become orphaned just because the alias text moved.
+   *
+   * Empty `oldAlias` (channel previously had no alias) is a no-op.
+   * Empty `newAlias` (user clearing the alias) causes the matching
+   * variables to drop their alias too; `syncVariableAliases` will
+   * then re-evaluate them against the live registry (auto-adopt by
+   * raw location when applicable, otherwise alias-less binding).
+   *
+   * Case-insensitive matching to align with the rest of the IEC
+   * identifier handling.  Callers should follow this with a
+   * `syncVariableAliases()` to refresh `.location` against the now-
+   * renamed alias's address.
+   *
+   * Returns the number of variables actually mutated.
+   */
+  renameAlias: (oldAlias: string, newAlias: string) => { renamed: number }
 
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
@@ -253,3 +302,22 @@ export type ProjectSlice = {
   pendingDeletions: string[]
   projectActions: ProjectActions
 }
+
+/**
+ * Cross-slice root-state view the project slice needs at runtime —
+ * `setDeviceDefinitions` / `setVendorScreenData` lives in the device
+ * slice, `addLog` lives in the console slice, both consumed by the
+ * alias-sync flow. Keeps the slice creator's `getState()` typed
+ * properly instead of relying on `as unknown as { ... }` casts.
+ *
+ * Slice types are imported via dynamic `type-only` style — declared
+ * up here in `types.ts` rather than `slice.ts` so the project slice
+ * has a single source of truth for cross-slice shape without
+ * circular module deps.
+ */
+import type { ConsoleSlice } from '../console'
+import type { DeviceSlice } from '../device'
+import type { EditorSlice } from '../editor/types'
+import type { LibrarySlice } from '../library/types'
+
+export type ProjectSliceRoot = ProjectSlice & DeviceSlice & ConsoleSlice & EditorSlice & LibrarySlice

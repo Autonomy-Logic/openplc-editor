@@ -5,6 +5,7 @@ import { ContactNode } from '../../../../../../../_atoms/graphical-editor/ladder
 import { DEFAULT_CONTACT_TYPES } from '../../../../../../../_atoms/graphical-editor/ladder/utils/constants'
 import { getLadderPouVariablesRungNodeAndEdges } from '../../../../../../../_atoms/graphical-editor/ladder/utils/utils'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
+import { useBoundPou } from '../../../active-context'
 
 type ContactElementProps = {
   isOpen: boolean
@@ -13,8 +14,8 @@ type ContactElementProps = {
 }
 
 const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
+  const pouName = useBoundPou()
   const {
-    editor,
     ladderFlows,
     project: {
       data: { pous },
@@ -41,13 +42,13 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return
 
     updateNode({
-      editorName: editor.meta.name,
+      editorName: pouName,
       rungId: rung.id,
       nodeId: node.id,
       node: {

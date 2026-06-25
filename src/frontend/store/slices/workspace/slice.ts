@@ -53,9 +53,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugGraphList: [],
     debugDataStale: false,
     debugMd5Mismatch: null,
+    debugConnectionType: null,
+    debugTargetEndian: 'le',
     // Project loading state
     isProjectLoading: false,
     projectLoadingMessage: '',
+    // Persist-permission flag (backend write access on the open project)
+    canEdit: true,
   },
 
   workspaceActions: {
@@ -169,6 +173,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugGraphList = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
+          workspace.debugConnectionType = null
+          workspace.debugTargetEndian = 'le'
           workspace.isPlcLogsVisible = false
           workspace.plcLogs = ''
           workspace.plcLogsLastId = null
@@ -179,6 +185,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           }
           workspace.isProjectLoading = false
           workspace.projectLoadingMessage = ''
+          workspace.canEdit = true
         }),
       )
     },
@@ -372,6 +379,20 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugConnectionType: (connectionType) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugConnectionType = connectionType
+        }),
+      )
+    },
+    setDebugTargetEndian: (endian) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugTargetEndian = endian
+        }),
+      )
+    },
     clearDebugState: () => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -391,6 +412,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugGraphList = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
+          workspace.debugConnectionType = null
+          workspace.debugTargetEndian = 'le'
         }),
       )
     },
@@ -419,6 +442,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.isProjectLoading = isLoading
           workspace.projectLoadingMessage = message ?? ''
+        }),
+      )
+    },
+    setCanEdit: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.canEdit = value
         }),
       )
     },

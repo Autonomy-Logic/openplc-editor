@@ -1,14 +1,15 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
-import { pinSelectors, remoteDeviceSelectors } from '../../../hooks/use-store-selectors'
+import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import { buildRemoteDeviceOptionGroups } from '../../../utils/remote-device-options'
+import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -275,7 +276,7 @@ const EditableInitialValueCell = ({
 
 const EditableLocationCell = ({
   getValue,
-  row: { index },
+  row: { index, original },
   column: { id },
   table,
   editable = true,
@@ -286,11 +287,29 @@ const EditableLocationCell = ({
   const { searchQuery } = useOpenPLCStore()
   const existingPins = pinSelectors.usePins()
   const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
+  const vendorIoEntries = vendorIoSelectors.useVendorIoEntries()
 
   const [cellValue, setCellValue] = useState(initialValue ?? '')
 
+  // Alias staleness checks.  See the local variables-table cell
+  // (`_molecules/variables-table/editable-cell.tsx`) for the longer
+  // explanation — same two flavours of staleness, same exception
+  // semantics on the location-column short-circuit.
+  const variableAlias = original?.alias
+  const variableLocation = original?.location ?? ''
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variableAlias && !aliasRegistry.byAlias.has(variableAlias)
+  const isMismatched =
+    !!variableAlias && aliasRegistry.byAlias.has(variableAlias)
+      ? aliasRegistry.byAlias.get(variableAlias)?.address !== variableLocation
+      : false
+
   const onBlur = (value: string) => {
-    if (value === initialValue) return
+    // Short-circuit unchanged-value blurs unless the variable's alias
+    // is orphaned or mismatched (alias points at a different address
+    // than the variable's location) — in either case re-picking the
+    // same address is the user's signal to refresh the alias.
+    if (value === initialValue && !(isOrphaned || isMismatched)) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -310,14 +329,14 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
     const aoutPins = existingPins
       .filter((pin) => pin.pinType === 'analogOutput')
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const dinPins = existingPins
@@ -325,7 +344,7 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const doutPins = existingPins
@@ -333,10 +352,11 @@ const EditableLocationCell = ({
       .map((pin) => ({
         id: `${id}-${pin.pin}`,
         value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
+        label: `${pin.address} ${pin.alias ? `(${pin.alias})` : ''}`,
       }))
 
     const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
+    const vendorGroups = buildVendorIoOptionGroups(id, vendorIoEntries)
 
     return [
       { label: 'Analog Inputs', options: ainPins },
@@ -344,12 +364,23 @@ const EditableLocationCell = ({
       { label: 'Digital Inputs', options: dinPins },
       { label: 'Digital Outputs', options: doutPins },
       ...remoteGroups,
+      ...vendorGroups,
     ]
-  }, [id, existingPins, remoteIOPoints])
+  }, [id, existingPins, remoteIOPoints, vendorIoEntries])
+
+  // Combined display: "alias (address)" stays consistent across
+  // editable and read-only states so the cell doesn't flip on row
+  // select.  `variableAlias` + `isOrphaned` are defined above the
+  // `onBlur` so the short-circuit can read them.
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variableAlias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+  const combinedLabel = variableAlias ? `${variableAlias} (${cellValue})` : cellValue
 
   return editable ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -360,14 +391,27 @@ const EditableLocationCell = ({
     />
   ) : (
     <div
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !editable,
-      })}
+      title={orphanTooltip ?? (variableAlias ? `${variableAlias} -> ${cellValue}` : undefined)}
+      className={cn(
+        'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
+        {
+          'pointer-events-none': !editable,
+        },
+      )}
     >
+      {isOrphaned && (
+        <span aria-label='Orphaned alias' className='text-amber-500 dark:text-amber-400'>
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
-        text={cellValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )

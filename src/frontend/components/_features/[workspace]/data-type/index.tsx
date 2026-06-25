@@ -52,7 +52,12 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value } = e.target
     if (dataTypeName !== value) {
-      updateDatatype(dataTypeName, { derivation: editorContent?.derivation, name: value } as PLCDataType)
+      // `updateDatatype` is a full replace.  Spread the current
+      // entry so the rename only changes `name` — without this the
+      // entry would lose every other field (variable / values /
+      // dimensions / baseType / initialValue).
+      if (!editorContent) return
+      updateDatatype(dataTypeName, { ...editorContent, name: value })
       updateEditorModel(dataTypeName, value)
       updateTabName(dataTypeName, value)
       setIsEditing(false)
