@@ -24,6 +24,12 @@ beforeEach(() => {
     onRuntimeTokenRefreshed: jest.fn().mockImplementation(() => jest.fn()),
     runtimeDiscoverDevices: jest.fn().mockResolvedValue({ success: true, devices: [] }),
     onRuntimeDeviceDiscovered: jest.fn().mockImplementation(() => jest.fn()),
+    etherCATGetInterfaces: jest.fn().mockResolvedValue({ success: true, data: [] }),
+    etherCATGetStatus: jest.fn().mockResolvedValue({ success: true, data: {} }),
+    etherCATScan: jest.fn().mockResolvedValue({ success: true, data: {} }),
+    etherCATTest: jest.fn().mockResolvedValue({ success: true, data: {} }),
+    etherCATValidate: jest.fn().mockResolvedValue({ success: true, data: {} }),
+    etherCATGetRuntimeStatus: jest.fn().mockResolvedValue({ success: true, data: {} }),
   } as unknown as typeof window.bridge
 
   adapter = createEditorRuntimeAdapter(() => mockIpAddress)
@@ -41,20 +47,19 @@ describe('login', () => {
     expect(result).toEqual({ success: true, accessToken: 'jwt-token-123' })
   })
 
-  it('stores JWT token internally on success', async () => {
+  it('marks the session active on success (token lives in main)', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
-
-    // Subsequent calls should use the stored token
+    // The renderer no longer passes a token; main owns it. Login flips the
+    // session-active flag the debugger readiness check relies on.
+    expect(adapter.isReadyForDebug!()).toBe(true)
     await adapter.getStatus()
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123', undefined)
+    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', undefined)
   })
 
-  it('does not store token on failure', async () => {
+  it('does not mark the session active on failure', async () => {
     ;(window.bridge.runtimeLogin as jest.Mock).mockResolvedValue({ success: false, error: 'Bad password' })
     await adapter.login({ username: 'admin', password: 'wrong' })
-
-    await adapter.getStatus()
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', '', undefined)
+    expect(adapter.isReadyForDebug!()).toBe(false)
   })
 
   it('returns error when no IP configured', async () => {
@@ -136,14 +141,14 @@ describe('getStatus', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.getStatus(true)
 
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123', true)
+    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', true)
     expect(result).toEqual({ success: true, status: 'RUNNING' })
   })
 
   it('passes undefined for includeStats when omitted', async () => {
     await adapter.getStatus()
 
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', '', undefined)
+    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', undefined)
   })
 
   it('returns error when no IP configured', async () => {
@@ -170,7 +175,7 @@ describe('startPlc', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.startPlc()
 
-    expect(window.bridge.runtimeStartPlc).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123')
+    expect(window.bridge.runtimeStartPlc).toHaveBeenCalledWith('192.168.1.100')
     expect(result).toEqual({ success: true })
   })
 
@@ -198,7 +203,7 @@ describe('stopPlc', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.stopPlc()
 
-    expect(window.bridge.runtimeStopPlc).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123')
+    expect(window.bridge.runtimeStopPlc).toHaveBeenCalledWith('192.168.1.100')
     expect(result).toEqual({ success: true })
   })
 
@@ -226,14 +231,14 @@ describe('getLogs', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.getLogs(42)
 
-    expect(window.bridge.runtimeGetLogs).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123', 42)
+    expect(window.bridge.runtimeGetLogs).toHaveBeenCalledWith('192.168.1.100', 42)
     expect(result).toEqual({ success: true, logs: [] })
   })
 
   it('passes undefined minId when omitted', async () => {
     await adapter.getLogs()
 
-    expect(window.bridge.runtimeGetLogs).toHaveBeenCalledWith('192.168.1.100', '', undefined)
+    expect(window.bridge.runtimeGetLogs).toHaveBeenCalledWith('192.168.1.100', undefined)
   })
 
   it('returns error when no IP configured', async () => {
@@ -263,7 +268,7 @@ describe('getSerialPorts', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.getSerialPorts()
 
-    expect(window.bridge.runtimeGetSerialPorts).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123')
+    expect(window.bridge.runtimeGetSerialPorts).toHaveBeenCalledWith('192.168.1.100')
     expect(result).toEqual({ success: true, ports })
   })
 
@@ -291,7 +296,7 @@ describe('getCompilationStatus', () => {
     await adapter.login({ username: 'admin', password: 'secret' })
     const result = await adapter.getCompilationStatus()
 
-    expect(window.bridge.runtimeGetCompilationStatus).toHaveBeenCalledWith('192.168.1.100', 'jwt-token-123')
+    expect(window.bridge.runtimeGetCompilationStatus).toHaveBeenCalledWith('192.168.1.100')
     expect(result).toEqual({ success: true, data: { status: 'SUCCESS', logs: [], exit_code: 0 } })
   })
 
@@ -324,7 +329,7 @@ describe('clearCredentials', () => {
 
     // Subsequent calls should use empty token
     await adapter.getStatus()
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', '', undefined)
+    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', undefined)
   })
 })
 
@@ -344,7 +349,9 @@ describe('onTokenRefreshed', () => {
     expect(unsub).toBe(unsubscribe)
   })
 
-  it('updates internal JWT when token is refreshed', async () => {
+  it('forwards the refreshed token from main to the callback', () => {
+    // The token lives in the main process now; the adapter only relays the
+    // refresh notification so the renderer store flag can track it.
     let bridgeHandler: ((_event: unknown, newToken: string) => void) | null = null
     ;(window.bridge.onRuntimeTokenRefreshed as jest.Mock).mockImplementation(
       (handler: (_event: unknown, newToken: string) => void) => {
@@ -356,14 +363,9 @@ describe('onTokenRefreshed', () => {
     const callback = jest.fn()
     adapter.onTokenRefreshed!(callback)
 
-    // Simulate token refresh from main process
     bridgeHandler!({}, 'new-token-456')
 
     expect(callback).toHaveBeenCalledWith('new-token-456')
-
-    // Subsequent calls should use the refreshed token
-    await adapter.getStatus()
-    expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', 'new-token-456', undefined)
   })
 })
 
@@ -433,6 +435,67 @@ describe('onDeviceDiscovered', () => {
 
     expect(callback).toHaveBeenCalledWith(device)
     expect(unsub).toBe(unsubscribe)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// EtherCAT discovery methods — thin bridge delegators (no token; main owns it)
+// ---------------------------------------------------------------------------
+
+describe('EtherCAT discovery methods', () => {
+  const cases: Array<{
+    name: string
+    bridge: keyof typeof window.bridge
+    invoke: (a: RuntimePort) => Promise<unknown>
+    expectArgs: unknown[]
+  }> = [
+    {
+      name: 'getNetworkInterfaces',
+      bridge: 'etherCATGetInterfaces',
+      invoke: (a) => a.getNetworkInterfaces!(),
+      expectArgs: ['192.168.1.100'],
+    },
+    {
+      name: 'getEthercatServiceStatus',
+      bridge: 'etherCATGetStatus',
+      invoke: (a) => a.getEthercatServiceStatus!(),
+      expectArgs: ['192.168.1.100'],
+    },
+    {
+      name: 'scanEthercatDevices',
+      bridge: 'etherCATScan',
+      invoke: (a) => a.scanEthercatDevices!({ interface: 'eth0' } as never),
+      expectArgs: ['192.168.1.100', { interface: 'eth0' }],
+    },
+    {
+      name: 'testEthercatConnection',
+      bridge: 'etherCATTest',
+      invoke: (a) => a.testEthercatConnection!({ slave: 1 } as never),
+      expectArgs: ['192.168.1.100', { slave: 1 }],
+    },
+    {
+      name: 'validateEthercatConfig',
+      bridge: 'etherCATValidate',
+      invoke: (a) => a.validateEthercatConfig!({ config: {} } as never),
+      expectArgs: ['192.168.1.100', { config: {} }],
+    },
+    {
+      name: 'getEthercatRuntimeStatus',
+      bridge: 'etherCATGetRuntimeStatus',
+      invoke: (a) => a.getEthercatRuntimeStatus!(),
+      expectArgs: ['192.168.1.100'],
+    },
+  ]
+
+  it.each(cases)('$name delegates to the bridge without a token', async ({ bridge, invoke, expectArgs }) => {
+    await invoke(adapter)
+    expect(window.bridge[bridge]).toHaveBeenCalledWith(...expectArgs)
+  })
+
+  it.each(cases)('$name surfaces a bridge error', async ({ bridge, invoke }) => {
+    ;(window.bridge[bridge] as jest.Mock).mockRejectedValueOnce(new Error('boom'))
+    const result = (await invoke(adapter)) as { success: boolean; error?: string }
+    expect(result).toEqual({ success: false, error: 'boom' })
   })
 })
 

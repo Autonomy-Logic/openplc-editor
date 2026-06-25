@@ -106,7 +106,6 @@ export interface EditorCompilerPlatformPortContext {
   mainProcessBridge: {
     makeRuntimeApiRequest: <T = void>(
       ipAddress: string,
-      jwtToken: string,
       endpoint: string,
       responseParser?: (data: string) => T,
     ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
@@ -403,7 +402,7 @@ export function createEditorCompilerPlatformPort(
               status: string
               logs: string[]
               exit_code: number | null
-            }>(deviceContext.ip, deviceContext.jwt, '/api/compilation-status', (data: string) => {
+            }>(deviceContext.ip, '/api/compilation-status', (data: string) => {
               return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
             })
             if (!result.success) return { success: false, error: result.error }
@@ -412,7 +411,6 @@ export function createEditorCompilerPlatformPort(
           fetchStartResponse: async () => {
             const result = await context.mainProcessBridge.makeRuntimeApiRequest<string>(
               deviceContext.ip,
-              deviceContext.jwt,
               '/api/start-plc',
               (data: string) => {
                 const parsed = JSON.parse(data) as { status?: string }
@@ -504,7 +502,7 @@ export function createEditorCompilerPlatformPort(
               status: string
               logs: string[]
               exit_code: number | null
-            }>(deviceContext.ip, deviceContext.jwt, '/api/compilation-status', (data: string) => {
+            }>(deviceContext.ip, '/api/compilation-status', (data: string) => {
               return JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
             })
             if (!result.success) return { success: false, error: result.error }
@@ -513,7 +511,6 @@ export function createEditorCompilerPlatformPort(
           fetchStartResponse: async () => {
             const result = await context.mainProcessBridge.makeRuntimeApiRequest<string>(
               deviceContext.ip,
-              deviceContext.jwt,
               '/api/start-plc',
               (data: string) => {
                 const parsed = JSON.parse(data) as { status?: string }
@@ -553,7 +550,6 @@ export function createEditorCompilerPlatformPort(
         fetchVersion: async () => {
           const result = await context.mainProcessBridge.makeRuntimeApiRequest<{ version: string }>(
             deviceContext.ip,
-            '', // unauthenticated probe
             '/api/version',
             (data: string) => JSON.parse(data) as { version: string },
           )

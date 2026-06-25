@@ -50,7 +50,6 @@ import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 type LibraryCompileBridge = {
   makeRuntimeApiRequest: <T = void>(
     ipAddress: string,
-    jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
@@ -2402,7 +2401,6 @@ class CompilerModule {
     mainProcessBridge: {
       makeRuntimeApiRequest: <T = void>(
         ipAddress: string,
-        jwtToken: string,
         endpoint: string,
         responseParser?: (data: string) => T,
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>

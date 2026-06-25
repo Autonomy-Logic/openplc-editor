@@ -290,13 +290,10 @@ class MainProcessBridge implements MainIpcModule {
 
   async makeRuntimeApiRequest<T = void>(
     ipAddress: string,
-    _jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    // The token authority owns the live token + refresh; the legacy `_jwtToken`
-    // arg from the renderer is ignored (kept for signature compatibility and
-    // removed in the follow-up cleanup).
+    // The token authority owns the live token + refresh.
     type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
     const url = this.runtimeUrl(ipAddress, endpoint)
     const result = await this.tokens.withAuth<Raw>(
@@ -330,13 +327,12 @@ class MainProcessBridge implements MainIpcModule {
    */
   makeRuntimeApiPostRequest<T>(
     ipAddress: string,
-    _jwtToken: string,
     endpoint: string,
     body: string,
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    // Token + refresh owned by the authority; `_jwtToken` is ignored.
+    // Token + refresh owned by the authority.
     type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
 
     const doRequest = (token: string): Promise<PostResult> => {
@@ -476,12 +472,7 @@ class MainProcessBridge implements MainIpcModule {
       })
   }
 
-  handleRuntimeGetStatus = async (
-    _event: IpcMainInvokeEvent,
-    ipAddress: string,
-    jwtToken: string,
-    includeStats?: boolean,
-  ) => {
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, includeStats?: boolean) => {
     try {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
@@ -517,7 +508,7 @@ class MainProcessBridge implements MainIpcModule {
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: TimingStatsResponse
-      }>(ipAddress, jwtToken, endpoint, (data: string) => {
+      }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
@@ -554,7 +545,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
       // Parse the body so the renderer can drive a retry-on-BUSY
       // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
@@ -562,7 +553,6 @@ class MainProcessBridge implements MainIpcModule {
       // upload).  See `backend/shared/library/start-plc-after-build.ts`.
       const result = await this.makeRuntimeApiRequest<{ status?: string }>(
         ipAddress,
-        jwtToken,
         '/api/start-plc',
         (data: string) => JSON.parse(data) as { status?: string },
       )
@@ -574,19 +564,18 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
-      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+      return await this.makeRuntimeApiRequest(ipAddress, '/api/stop-plc')
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
-  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
       const result = await this.makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
         ipAddress,
-        jwtToken,
         '/api/compilation-status',
         (data: string) => {
           const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
@@ -599,12 +588,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string, minId?: number) => {
+  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, minId?: number) => {
     try {
       const endpoint = minId !== undefined ? `/api/runtime-logs?id=${minId}` : '/api/runtime-logs'
       const result = await this.makeRuntimeApiRequest<string | RuntimeLogEntry[]>(
         ipAddress,
-        jwtToken,
         endpoint,
         (data: string) => {
           const response = JSON.parse(data) as { 'runtime-logs': string | RuntimeLogEntry[] }
@@ -768,12 +756,10 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeGetSerialPorts = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<{ ports: Array<{ device: string; description?: string }> }>(
         ipAddress,
-        jwtToken,
         '/api/serial-ports',
         (data: string) => {
           const response = JSON.parse(data) as {
@@ -1976,12 +1962,10 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetInterfaces = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<{ interfaces: NetworkInterface[] }>(
         ipAddress,
-        jwtToken,
         '/api/discovery/interfaces',
         (data: string) => {
           const response = JSON.parse(data) as { status: string; interfaces: NetworkInterface[] }
@@ -2001,12 +1985,10 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetStatus = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<EtherCATServiceStatusResponse>(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/status',
         (data: string) => {
           const parsed = JSON.parse(data) as unknown
@@ -2034,7 +2016,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATScan = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     scanRequest: EtherCATScanRequest,
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> => {
     try {
@@ -2047,7 +2028,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/plugin-command',
         postData,
         (data: string) => {
@@ -2076,7 +2056,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATTest = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     testRequest: EtherCATTestRequest,
   ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> => {
     try {
@@ -2085,7 +2064,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/test',
         postData,
         (data: string) => JSON.parse(data) as EtherCATTestResponse,
@@ -2104,7 +2082,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATValidate = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     validateRequest: EtherCATValidateRequest,
   ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> => {
     try {
@@ -2112,7 +2089,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/validate',
         postData,
         (data: string) => JSON.parse(data) as EtherCATValidateResponse,
@@ -2130,7 +2106,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetRuntimeStatus = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> => {
     try {
       const postData = JSON.stringify({
@@ -2140,7 +2115,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/plugin-command',
         postData,
         (data: string) => {
