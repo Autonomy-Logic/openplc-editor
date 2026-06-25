@@ -93,6 +93,13 @@ interface WalkerState {
     originFormalParameter: string
   }[]
   emittedBlocks: Set<string>
+  /** Output-write sinks (coil / output / inOut variable) keyed by the
+   *  block that feeds them — emitted right after the block's call so a
+   *  downstream block reads the written value, not a stale one (#830). */
+  consumersByBlock: Map<string, RFNode[]>
+  /** Sinks already emitted — by block coupling or the main sweep — so
+   *  the other path skips them. */
+  emittedSinks: Set<string>
   /** Connector expressions cached by name, consumed by continuation
    *  visits later in the same rung (FBD-only). */
   connectorExprs: Map<string, ProgramChunk[]>
@@ -172,6 +179,8 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
     triggerVars: [],
     functionTempVars: [],
     emittedBlocks: new Set(),
+    consumersByBlock: new Map(),
+    emittedSinks: new Set(),
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
@@ -250,6 +259,22 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
   ordered.sort((a, b) => nodeExecutionOrder(a) - nodeExecutionOrder(b))
   others.sort((a, b) => compareNodePosition(state, a, b))
 
+  // Index each block's output-write sinks (coils / output / inOut
+  // variables fed solely by that block).  These are emitted right after
+  // the block's call by `emitBlockConsumers` — wherever the call lands,
+  // eager or lazy — and skipped in the sweep below.  Otherwise a block
+  // numbered ahead of its output variable (write left at
+  // executionOrderId 0) emits its call in the ordered pass while the
+  // assignment waits for the unordered pass, so a later block in the
+  // rung reads the variable before it is written (#830).
+  for (const node of [...ordered, ...others]) {
+    const blockId = blockFedSink(state, node)
+    if (blockId === null) continue
+    const list = state.consumersByBlock.get(blockId) ?? []
+    list.push(node)
+    state.consumersByBlock.set(blockId, list)
+  }
+
   emitSinksWithCoilGrouping(state, ordered)
   emitSinksWithCoilGrouping(state, others)
 
@@ -277,6 +302,23 @@ function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
   const by = Math.trunc(b.position.y + bOff)
   if (Math.abs(ay - by) >= 10) return ay - by
   return ax - bx
+}
+
+/**
+ * If `node` is an output-write sink (coil / output- or inOut-variable)
+ * whose value comes solely from a single block, return that block's id.
+ * Such a sink is the block's output binding — it must emit right after
+ * the block's call so downstream blocks read the written value, not a
+ * stale one (#830).  Returns null for anything else (multi-source
+ * sinks, non-block sources, blocks, connectors).
+ */
+function blockFedSink(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil' && !isVariableNode(node)) return null
+  const edges = state.incoming.get(node.id) ?? []
+  if (edges.length !== 1) return null
+  const src = state.byId.get(edges[0].source)
+  if (src === undefined || src.type !== 'block') return null
+  return src.id
 }
 
 function emitSink(state: WalkerState, node: RFNode): void {
@@ -315,25 +357,36 @@ function emitSink(state: WalkerState, node: RFNode): void {
  * since a merge-fed sink is downstream of the branches it consumes.
  */
 function emitSinksWithCoilGrouping(state: WalkerState, sinks: RFNode[]): void {
-  const consumed = new Set<number>()
   for (let i = 0; i < sinks.length; i++) {
-    if (consumed.has(i)) continue
+    if (state.emittedSinks.has(sinks[i].id)) continue
     const key = setResetCoilGroupKey(state, sinks[i])
     if (key === null) {
+      state.emittedSinks.add(sinks[i].id)
       emitSink(state, sinks[i])
       continue
     }
     const group: RFNode[] = [sinks[i]]
     for (let j = i + 1; j < sinks.length; j++) {
-      if (consumed.has(j)) continue
-      if (setResetCoilGroupKey(state, sinks[j]) === key) {
-        group.push(sinks[j])
-        consumed.add(j)
-      }
+      if (state.emittedSinks.has(sinks[j].id)) continue
+      if (setResetCoilGroupKey(state, sinks[j]) === key) group.push(sinks[j])
     }
+    for (const g of group) state.emittedSinks.add(g.id)
     if (group.length === 1) emitCoilNode(state, sinks[i])
     else emitCoilGroup(state, group)
   }
+}
+
+/**
+ * Emit a block's output-write sinks (coils / output / inOut variables
+ * fed solely by it) right after its call — wherever that call lands.
+ * Reuses the coil-grouping sweep so parallel SET/RESET coils off the
+ * same block still collapse into one `IF`.  Idempotent via
+ * `state.emittedSinks`, so the main sweep skips what is emitted here.
+ */
+function emitBlockConsumers(state: WalkerState, blockId: string): void {
+  const consumers = state.consumersByBlock.get(blockId)
+  if (consumers === undefined) return
+  emitSinksWithCoilGrouping(state, consumers)
 }
 
 /**
@@ -766,6 +819,7 @@ function emitFunctionBlockCall(state: WalkerState, node: RFNode, data: BlockData
     for (const chunk of parts[i]) state.program.push(chunk)
   }
   state.program.push([');\n', []])
+  emitBlockConsumers(state, node.id)
 }
 
 function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): void {
@@ -820,6 +874,7 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   }
   state.program.push([');\n', []])
   void primaryFormal
+  emitBlockConsumers(state, node.id)
 }
 
 function buildInputArgs(
