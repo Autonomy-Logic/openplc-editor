@@ -1326,3 +1326,37 @@ export function reconcileBranchNodeIds(rung: RungLadderState, branch: HandleBran
 
   return nodeIds
 }
+
+/**
+ * Rebuild the handle-branch index from a rung's graph.
+ *
+ * `handleBranches` is runtime-only state — it is NOT persisted in the .ld file,
+ * so a project loaded from disk that contains handle branches (contacts/coils
+ * wired to a block's secondary input/output handles, e.g. CTUD CD/QD) comes
+ * back with an empty index. Branch-aware operations (deletion cleanup,
+ * `getBranch`, nodeId reconciliation) then can't find those branches and
+ * corrupt the diagram on the first edit. We reconstruct the index from the
+ * `branchContext` stamped on each branch node plus the block's handle
+ * directions, deriving the ordered nodeIds via `reconcileBranchNodeIds`.
+ */
+export function deriveHandleBranches(rung: RungLadderState): HandleBranch[] {
+  const seen = new Map<string, { blockId: string; handleId: string }>()
+  for (const node of rung.nodes) {
+    const ctx = (node.data as BasicNodeData).branchContext
+    if (ctx?.blockId && ctx?.handleId) {
+      seen.set(`${ctx.blockId}::${ctx.handleId}`, { blockId: ctx.blockId, handleId: ctx.handleId })
+    }
+  }
+
+  const branches: HandleBranch[] = []
+  for (const { blockId, handleId } of seen.values()) {
+    const block = rung.nodes.find((n) => n.id === blockId)
+    if (!block) continue
+    const data = block.data as BasicNodeData
+    const isOutput = (data.outputHandles ?? []).some((h) => h.id === handleId)
+    const direction: 'input' | 'output' = isOutput ? 'output' : 'input'
+    const nodeIds = reconcileBranchNodeIds(rung, { blockId, handleId, direction, nodeIds: [] })
+    if (nodeIds.length > 0) branches.push({ blockId, handleId, direction, nodeIds })
+  }
+  return branches
+}

@@ -1,12 +1,11 @@
 import { useUpdateNodeInternals } from '@xyflow/react'
 import { useEffect, useMemo } from 'react'
 
-import { cn } from '../../../../utils/cn'
 import { CustomHandle } from './handle'
 import { DEFAULT_POWER_RAIL_HEIGHT, DEFAULT_POWER_RAIL_WIDTH } from './utils/constants'
 import { PowerRailProps } from './utils/types'
 
-export const PowerRail = ({ id, data, selected }: PowerRailProps) => {
+export const PowerRail = ({ id, data }: PowerRailProps) => {
   const updateNodeInternals = useUpdateNodeInternals()
 
   // Calculate dynamic height to cover all handles (including branch handles)
@@ -36,13 +35,7 @@ export const PowerRail = ({ id, data, selected }: PowerRailProps) => {
   return (
     <>
       <svg width={DEFAULT_POWER_RAIL_WIDTH} height={railHeight} xmlns='http://www.w3.org/2000/svg'>
-        <rect
-          width={DEFAULT_POWER_RAIL_WIDTH}
-          height={railHeight}
-          className={cn('fill-neutral-500 transition-colors', {
-            'fill-brand': selected,
-          })}
-        />
+        <rect width={DEFAULT_POWER_RAIL_WIDTH} height={railHeight} className='fill-neutral-500' />
       </svg>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

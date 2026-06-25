@@ -25,9 +25,17 @@
  * disposed only at shutdown.
  */
 
-import type { Diagnostic, Location as LspLocation, MessageConnection } from 'vscode-languageserver-protocol'
+import {
+  type CompletionItem as LspCompletionItem,
+  type CompletionList,
+  CompletionRequest,
+  type Diagnostic,
+  type Location as LspLocation,
+  type MessageConnection,
+} from 'vscode-languageserver-protocol'
 
 import { openPLCStoreBase } from '../../store'
+import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
   getBodyLineOffset,
   type LanguageService,
@@ -36,8 +44,10 @@ import {
   startLanguageService,
   suppressNoDefinitionFound,
 } from '../lsp-shared'
+import { parseScopedCompletionType } from './completion-type'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
 import {
   parsePouUri,
   parsePouVarsUri,
@@ -184,6 +194,176 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     ...(onCrash ? { onCrash } : {}),
   })
 
+  // ---------------------------------------------------------------------------
+  // Scoped completion for the graphical (LD/FBD) editors.
+  //
+  // Synthesize a throwaway ST doc that puts `prefix` in the POU's scope,
+  // ask strucpp for completions there, and return candidates carrying
+  // their resolved IEC type. A fresh URI per call avoids races between
+  // concurrent queries (many variable boxes validate at once).
+  // ---------------------------------------------------------------------------
+  const SCOPE_QUERY_MAX_ATTEMPTS = 2
+  const SCOPE_QUERY_RETRY_MS = 120
+  const SCOPE_QUERY_TIMEOUT_MS = 3000
+  const SCOPE_QUERY_DEFERRED_CLOSE_MS = 8000
+  const SCOPE_QUERY_TIMEOUT = Symbol('scope-query-timeout')
+  const SCOPE_WARMUP_POLL_MS = 500
+  const SCOPE_WARMUP_MAX_POLLS = 60
+  // Delay the first warm-up probe so the project-sync didOpen flood (every POU
+  // stub at boot) settles first — probing the worker while it's churning those
+  // is what wedges it.
+  const SCOPE_WARMUP_INITIAL_DELAY_MS = 3500
+  let scopeQuerySeq = 0
+
+  // Firing a scope query while the worker is still doing its initial project
+  // analysis (cold) wedges it permanently. So we gate all component-driven
+  // queries behind a warm-up: a single background prober (sequential, the only
+  // querier while cold) keeps trying until the worker returns results, then
+  // resolves `scopeWarmReady`. `completeInScope` awaits that before touching
+  // the worker, so a screenful of boxes mounting cold just parks until warm
+  // instead of stampeding the cold worker.
+  let resolveScopeWarmReady: () => void = () => undefined
+  const scopeWarmReady = new Promise<void>((resolve) => {
+    resolveScopeWarmReady = resolve
+  })
+
+  // Opening a graphical editor mounts many variable boxes that each query at
+  // once. The worker is single-threaded, so we (a) coalesce identical
+  // in-flight queries and (b) serialize execution to one request at a time —
+  // without this, a screenful of boxes floods the worker and stalls it.
+  const inFlightScopeQueries = new Map<string, Promise<ScopedCompletionItem[]>>()
+  let scopeQueryTail: Promise<unknown> = Promise.resolve()
+
+  function runScopeQuerySerialized<T>(task: () => Promise<T>): Promise<T> {
+    const result = scopeQueryTail.then(task, task)
+    scopeQueryTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
+  function normalizeCompletionItems(result: CompletionList | LspCompletionItem[] | null): ScopedCompletionItem[] {
+    if (!result) return []
+    const items = Array.isArray(result) ? result : result.items
+    return items.map((item) => {
+      const insertText =
+        item.textEdit && 'newText' in item.textEdit ? item.textEdit.newText : (item.insertText ?? item.label)
+      return {
+        label: item.label,
+        insertText,
+        ...(parseScopedCompletionType(item.detail) !== undefined
+          ? { type: parseScopedCompletionType(item.detail) }
+          : {}),
+        ...(item.kind !== undefined ? { kind: item.kind } : {}),
+        ...(item.detail !== undefined ? { detail: item.detail } : {}),
+      }
+    })
+  }
+
+  async function requestOnce(
+    connection: MessageConnection,
+    uri: string,
+    text: string,
+    position: { line: number; character: number },
+  ): Promise<ScopedCompletionItem[]> {
+    sharedService.openDocument(uri, text)
+    try {
+      // Race against a timeout so a stalled worker request can never freeze
+      // the caller (validation runs in component effects).
+      const result = await Promise.race([
+        connection.sendRequest(CompletionRequest.type, { textDocument: { uri }, position }),
+        new Promise<typeof SCOPE_QUERY_TIMEOUT>((resolve) =>
+          setTimeout(() => resolve(SCOPE_QUERY_TIMEOUT), SCOPE_QUERY_TIMEOUT_MS),
+        ),
+      ])
+      if (result === SCOPE_QUERY_TIMEOUT) {
+        // The worker is still analysing this doc — closing it now (mid-analysis)
+        // wedges the worker. Defer the close until analysis has surely finished.
+        setTimeout(() => sharedService.closeDocument(uri), SCOPE_QUERY_DEFERRED_CLOSE_MS)
+        return []
+      }
+      // Completion returned → analysis settled → safe to close immediately.
+      sharedService.closeDocument(uri)
+      return normalizeCompletionItems(result)
+    } catch {
+      sharedService.closeDocument(uri)
+      return []
+    }
+  }
+
+  async function runScopeQuery(pouName: string, prefix: string): Promise<ScopedCompletionItem[]> {
+    // Park until the worker is warm — querying it cold wedges it permanently.
+    await scopeWarmReady
+    const connection = serviceConnection
+    if (!connection) return []
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === pouName)
+    if (!pou) return []
+
+    // Once warm, fresh per-query docs resolve instantly; a single short retry
+    // covers a rare transient miss. Each attempt uses a unique URI + unique
+    // synthetic POU name so docs never collide.
+    for (let attempt = 0; attempt < SCOPE_QUERY_MAX_ATTEMPTS; attempt += 1) {
+      const id = (scopeQuerySeq += 1)
+      const { text, position } = serializePouScopeForQuery(pou, prefix, id)
+      const uri = `inmemory://scopequery/${id}.st`
+      const items = await requestOnce(connection, uri, text, position)
+      if (items.length > 0) return items
+      if (attempt < SCOPE_QUERY_MAX_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, SCOPE_QUERY_RETRY_MS))
+      }
+    }
+    return []
+  }
+
+  function completeInScope(pouName: string, prefix: string): Promise<ScopedCompletionItem[]> {
+    const key = `${pouName} ${prefix}`
+    const existing = inFlightScopeQueries.get(key)
+    if (existing) return existing
+    const query = runScopeQuerySerialized(() => runScopeQuery(pouName, prefix)).finally(() => {
+      inFlightScopeQueries.delete(key)
+    })
+    inFlightScopeQueries.set(key, query)
+    return query
+  }
+
+  // Background warm-up: the ONLY querier while the worker is cold. Probes a
+  // real POU sequentially until it returns results, then unblocks every parked
+  // component query. Resolves anyway after a bounded number of polls so the
+  // feature degrades to best-effort rather than hanging forever.
+  async function warmUpScopeWorker(): Promise<void> {
+    try {
+      await sharedService.ready
+    } catch {
+      resolveScopeWarmReady()
+      return
+    }
+    const connection = serviceConnection
+    if (!connection) {
+      resolveScopeWarmReady()
+      return
+    }
+    await new Promise((r) => setTimeout(r, SCOPE_WARMUP_INITIAL_DELAY_MS))
+    for (let poll = 0; poll < SCOPE_WARMUP_MAX_POLLS; poll += 1) {
+      const pou = openPLCStoreBase.getState().project.data.pous[0]
+      if (pou) {
+        const id = (scopeQuerySeq += 1)
+        const { text, position } = serializePouScopeForQuery(pou, '', id)
+        const uri = `inmemory://scopequery/warmup-${id}.st`
+        const items = await requestOnce(connection, uri, text, position)
+        if (items.length > 0) {
+          resolveScopeWarmReady()
+          return
+        }
+      }
+      await new Promise((r) => setTimeout(r, SCOPE_WARMUP_POLL_MS))
+    }
+    resolveScopeWarmReady()
+  }
+
+  registerScopedQueryApi({ completeInScope })
+  void warmUpScopeWorker()
+
   async function pushAllStlibs(connection: MessageConnection): Promise<void> {
     const sources = await stlibSource.listStlibs()
     // Honor the project's enabled-library set, plus the always-on
@@ -248,10 +428,12 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     },
 
     dispose() {
+      registerScopedQueryApi(null)
       sharedService.dispose()
     },
   }
 }
 
+export { getScopedQueryApi, type ScopedCompletionItem, type ScopedQueryApi } from './scoped-query'
 export type { StLspService, StLspStartOptions } from './types'
 export { parsePouUri, POU_URI_SCHEME, pouUri, stubUri } from './types'

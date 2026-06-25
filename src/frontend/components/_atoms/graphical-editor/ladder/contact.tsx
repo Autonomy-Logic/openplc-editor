@@ -5,6 +5,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
+import { isExpressionValidForType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
@@ -13,7 +14,7 @@ import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { DEFAULT_CONTACT_BLOCK_HEIGHT, DEFAULT_CONTACT_BLOCK_WIDTH, DEFAULT_CONTACT_TYPES } from './utils/constants'
-import type { BasicNodeData, ContactProps } from './utils/types'
+import type { ContactProps } from './utils/types'
 
 export type { ContactNode } from './utils/types'
 
@@ -84,53 +85,22 @@ export const Contact = (block: ContactProps) => {
   }, [])
 
   /**
-   * Update wrongVariable state when the table of variables is updated
+   * Validate the contact's variable against the full project scope via the
+   * STruC++ LSP: a contact accepts any BOOL expression, including instance
+   * members (`TON0.Q`) and struct/array members the local interface list
+   * can't see. Re-runs when the project variables change or the contact's
+   * own variable name changes.
    */
   useEffect(() => {
-    const {
-      node: contactNode,
-      rung,
-      variables,
-    } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-      nodeId: id,
+    const name = data.variable?.name?.trim() ?? ''
+    let cancelled = false
+    void isExpressionValidForType(pouName, name, 'BOOL').then((valid) => {
+      if (!cancelled) setWrongVariable(!valid)
     })
-    if (!rung || !contactNode) return
-
-    const canonicalVariableName = (contactNode.data as BasicNodeData).variable?.name?.trim() ?? ''
-
-    const variable = variables.all.find(
-      (v) => v.name.toLowerCase() === canonicalVariableName.toLowerCase() && v.type.definition !== 'derived',
-    )
-
-    if (!variable) {
-      setWrongVariable(true)
-      return
+    return () => {
+      cancelled = true
     }
-    if (variable && (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL')) {
-      setWrongVariable(true)
-      return
-    }
-
-    if ((contactNode.data as BasicNodeData).variable.name.toLowerCase() !== variable.name.toLowerCase()) {
-      updateNode({
-        editorName: pouName,
-        rungId: rung.id,
-        nodeId: contactNode.id,
-        node: {
-          ...contactNode,
-          data: {
-            ...contactNode.data,
-            variable,
-          },
-        },
-      })
-      setContactVariableValue(variable.name)
-      setWrongVariable(false)
-      return
-    }
-
-    setWrongVariable(false)
-  }, [pous])
+  }, [pous, pouName, data.variable.name])
 
   const debuggerStrokeColor = (() => {
     if (!isDebuggerVisible || !data.variable.name || wrongVariable) return undefined
@@ -180,35 +150,14 @@ export const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+    const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
     if (!rung || !node) return
 
-    const variable = variables.selected
-    if (
-      !variable ||
-      variable.name !== variableNameToSubmit ||
-      variable.type.definition !== 'base-type' ||
-      variable.type.value.toUpperCase() !== 'BOOL'
-    ) {
-      updateNode({
-        editorName: pouName,
-        rungId: rung.id,
-        nodeId: node.id,
-        node: {
-          ...node,
-          data: {
-            ...node.data,
-            variable: { name: variableNameToSubmit },
-          },
-        },
-      })
-      setWrongVariable(true)
-      return
-    }
-
+    // Persist whatever the user typed; the validation effect resolves and
+    // type-checks it against the full project scope and drives the red state.
     updateNode({
       editorName: pouName,
       rungId: rung.id,
@@ -217,11 +166,10 @@ export const Contact = (block: ContactProps) => {
         ...node,
         data: {
           ...node.data,
-          variable,
+          variable: { name: variableNameToSubmit },
         },
       },
     })
-    setWrongVariable(false)
   }
 
   const onChangeHandler = () => {
@@ -279,7 +227,7 @@ export const Contact = (block: ContactProps) => {
               })
               return
             }}
-            onBlur={(e) => {
+            onBlur={() => {
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
@@ -293,10 +241,6 @@ export const Contact = (block: ContactProps) => {
                   draggable: node.data.draggable as boolean,
                 },
               })
-              const container = e.currentTarget.closest('div[tabindex="0"]') as unknown as HTMLDivElement | null
-              if (container) {
-                container.focus()
-              }
               return
             }}
             onChange={onChangeHandler}

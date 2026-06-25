@@ -278,6 +278,29 @@ describe('createEditorCompilerAdapter', () => {
 
       expect(result).toEqual({ success: false, error: 'Compilation failed: missing file' })
       expect(progressEvents.some((e) => e.stage === 'error')).toBe(true)
+      expect(progressEvents.some((e) => e.stage === 'done' && e.message === 'Compilation complete')).toBe(false)
+    })
+
+    it('ignores duplicate closePort events after an error', async () => {
+      const progressEvents: CompileProgressEvent[] = []
+      const promise = adapter.compileProgram(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: '/path',
+        },
+        (event) => progressEvents.push(event),
+      )
+
+      await flushMicrotasks()
+      compileCallback!({ message: 'Board not found', logLevel: 'error' })
+      compileCallback!({ closePort: true })
+      compileCallback!({ closePort: true })
+
+      const result = await promise
+
+      expect(result).toEqual({ success: false, error: 'Board not found' })
+      expect(progressEvents).toEqual([{ stage: 'error', message: 'Board not found', level: 'error' }])
     })
 
     it('captures simulatorFirmwarePath as hexPath', async () => {

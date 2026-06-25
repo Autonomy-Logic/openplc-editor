@@ -65,19 +65,36 @@ export const getPreviousElementsByEdge = (
 }
 
 /**
- * Get the previous node when adding a new element
- * It works when removing the placeholder and variables elements
+ * Get the previous main-line element when adding a new serial element.
+ *
+ * Walks the rung's node list skipping placeholders, variables and branch
+ * elements, then returns the element immediately before the just-inserted one.
+ *
+ * Branch elements (contacts/coils wired to a block's secondary handles, e.g. a
+ * contact on a counter's R input) are interleaved in the node array between the
+ * block and the right rail, but they are NOT part of the serial spine. A plain
+ * index walk that included them would treat such a branch element as the serial
+ * predecessor of a main-line element — so a coil added to a block's primary
+ * output (whose placeholder sits after the branch element in the array) would be
+ * wired into the branch edge instead, dropping the coil and breaking the branch.
+ * Skipping branchContext nodes here mirrors getPreviousElementsByEdge. Keying off
+ * the element id (rather than an externally-computed index) keeps the lookup
+ * consistent with this filtered spine.
  *
  * @param rung: RungLadderState
- * @param nodeIndex: number
+ * @param newElementId: string
  *
  * @returns Node
  */
-export const getPreviousElement = (rung: RungLadderState, nodeIndex: number): Node => {
-  const nodesWithNoPlaceholderAndVariables = rung.nodes.filter(
-    (n) => n.type !== 'placeholder' && n.type !== 'parallelPlaceholder' && n.type !== 'variable',
+export const getPreviousElement = (rung: RungLadderState, newElementId: string): Node => {
+  const serialSpine = rung.nodes.filter(
+    (n) =>
+      n.type !== 'placeholder' &&
+      n.type !== 'parallelPlaceholder' &&
+      n.type !== 'variable' &&
+      !(n.data as BasicNodeData).branchContext,
   )
-  return nodesWithNoPlaceholderAndVariables[nodeIndex - 1]
+  return serialSpine[serialSpine.findIndex((n) => n.id === newElementId) - 1]
 }
 
 /**
@@ -255,7 +272,7 @@ export const findAllParallelsDepthAndNodes = (
       }
       depth: number
       height: number
-      highestNode: Node | undefined
+      highestNode: Node
       nodes: {
         serial: Node[]
         parallel: Node[]
@@ -268,8 +285,8 @@ export const findAllParallelsDepthAndNodes = (
 
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
-  let highestNode: Node | undefined = serialNodes[0]
-  let serialHeight = highestNode ? (highestNode.height ?? 0) : 0
+  let highestNode = serialNodes[0]
+  let serialHeight = highestNode.height ?? 0
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively

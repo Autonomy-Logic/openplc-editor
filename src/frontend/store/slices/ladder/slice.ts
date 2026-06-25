@@ -9,6 +9,7 @@ import {
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
+import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
 
@@ -56,9 +57,20 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               }))
             : flow.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
 
+          // handleBranches (the index of contacts/coils wired to a block's
+          // secondary handles, e.g. CTUD CD/QD) is runtime-only state — it is
+          // NOT persisted in the .ld. Without rebuilding it on load, a project
+          // containing handle branches comes back with an empty index and the
+          // first branch-aware edit (e.g. deleting a coil on a block output)
+          // corrupts the diagram. Reconstruct it from the graph here.
+          const rungsWithBranches = rungs.map((rung) => ({
+            ...rung,
+            handleBranches: deriveHandleBranches(rung),
+          }))
+
           // Reset updated to false on load — the flow is being loaded from a saved project.
           // Only mark as updated if legacy data was migrated so the next save writes the new format.
-          const newFlow = { ...flow, rungs, updated: needsMigration }
+          const newFlow = { ...flow, rungs: rungsWithBranches, updated: needsMigration }
 
           if (flowIndex === -1) {
             ladderFlows.push(newFlow)
@@ -101,7 +113,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
     /**
      * Control the rungs of the flow
      */
-    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport, insertAtIndex }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           if (!ladderFlows.find((flow) => flow.name === editorName)) {
@@ -135,7 +147,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               handleY: defaultBounds[1] / 2,
             }),
           ]
-          const newRung = {
+          flow.rungs.push({
             id: rungId,
             comment: '',
             defaultBounds,
@@ -153,20 +165,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               },
             ],
             selectedNodes: [],
-          }
-
-          // Clamp to a valid range so NaN/negative/out-of-bounds indices can't place the rung wrong.
-          const normalizedInsertAtIndex =
-            typeof insertAtIndex === 'number' && Number.isFinite(insertAtIndex)
-              ? Math.min(Math.max(Math.trunc(insertAtIndex), 0), flow.rungs.length)
-              : undefined
-
-          if (normalizedInsertAtIndex !== undefined) {
-            flow.rungs.splice(normalizedInsertAtIndex, 0, newRung)
-          } else {
-            flow.rungs.push(newRung)
-          }
-          flow.updated = true
+          })
         }),
       )
     },

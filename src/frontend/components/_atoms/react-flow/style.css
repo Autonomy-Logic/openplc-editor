@@ -32,9 +32,3 @@ html:not(.dark) .react-flow {
 .react-flow__controls-button {
   border-radius: 25%;
 }
-
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: #0464fb !important;
-  stroke-width: 3px !important;
-  filter: drop-shadow(0px 0px 4px rgba(4, 100, 251, 0.5));
-}

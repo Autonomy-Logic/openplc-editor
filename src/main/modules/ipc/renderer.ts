@@ -20,6 +20,7 @@ import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-serv
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import type { DebuggerMd5VerificationResult } from '../debugger/md5-verification'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
 /** Data posted through the MessagePort by the compiler module.
@@ -396,7 +397,7 @@ const rendererProcessBridge = {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
+  ): Promise<DebuggerMd5VerificationResult> =>
     ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
 
   debuggerReadProgramStMd5: (

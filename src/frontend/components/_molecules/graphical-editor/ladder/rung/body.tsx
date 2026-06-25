@@ -1,8 +1,7 @@
-import type { CoordinateExtent, Edge, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
+import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
@@ -15,8 +14,7 @@ import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/grap
 import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
-import { nodesBuilder } from '../../../../_atoms/graphical-editor/ladder/node-builders'
-import type { BasicNodeData, ParallelNode } from '../../../../_atoms/graphical-editor/ladder/utils/types'
+import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
@@ -28,7 +26,6 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
-import { getNodesInsideParallel, getPlaceholderPositionBasedOnNode } from './ladder-utils/elements/utils'
 import { findNode } from './ladder-utils/nodes'
 
 /**
@@ -72,21 +69,15 @@ type RungBodyProps = {
 }
 
 const EDGE_COLOR_TRUE = '#00FF00'
-const EMPTY_ARRAY: string[] = []
 
-export const RungBody = ({
-  rung,
-  className,
-  nodeDivergences = EMPTY_ARRAY,
-  isDebuggerActive = false,
-}: RungBodyProps) => {
+export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const {
     ladderFlowActions,
     ladderFlows,
     libraries,
-    editorActions: { updateModelVariables, updateModelLadder },
+    editorActions: { updateModelVariables },
     project,
     projectActions: { deleteVariable },
     modalActions: { openModal },
@@ -105,41 +96,8 @@ export const RungBody = ({
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
 
-  const flow = useMemo(() => ladderFlows.find((f) => f.name === pouName), [ladderFlows, pouName])
-  const rungs = useMemo(() => flow?.rungs || [], [flow])
-
-  const clearLocalSelection = useCallback(() => {
-    ladderFlowActions.setSelectedNodes({
-      editorName: pouName,
-      rungId: rung.id,
-      nodes: [],
-    })
-    const updatedEdges = rungLocal.edges.map((e) => (e.selected ? { ...e, selected: false } : e))
-    ladderFlowActions.setEdges({
-      editorName: pouName,
-      rungId: rung.id,
-      edges: updatedEdges,
-    })
-  }, [pouName, rung.id, rungLocal.edges, ladderFlowActions])
-
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
-
-  // Id of a rung that was just created via keyboard and still needs to receive focus.
-  // Focus happens in an effect once the rung is committed to the DOM (see below),
-  // instead of guessing a render delay with setTimeout.
-  const pendingFocusRungIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    const pendingId = pendingFocusRungIdRef.current
-    if (!pendingId) return
-    const newRungElement = document.getElementById(pendingId)
-    const focusable = newRungElement?.querySelector('div[tabindex="0"]') as unknown as HTMLDivElement | null
-    if (focusable) {
-      focusable.focus()
-      pendingFocusRungIdRef.current = null
-    }
-  }, [rungs])
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -171,22 +129,15 @@ export const RungBody = ({
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
     if (bounds.height < defaultHeight) bounds.height = defaultHeight
 
-    const nextWidth = bounds.width
-    const nextHeight = bounds.height + 20
-
     setReactFlowPanelExtent([
       [0, 0],
-      [nextWidth, nextHeight],
+      [bounds.width, bounds.height + 20],
     ])
-
-    const [currentWidth, currentHeight] = rung.reactFlowViewport ?? [0, 0]
-    if (currentWidth !== nextWidth || currentHeight !== nextHeight) {
-      ladderFlowActions.updateReactFlowViewport({
-        editorName: pouName,
-        rungId: rung.id,
-        reactFlowViewport: [nextWidth, nextHeight],
-      })
-    }
+    ladderFlowActions.updateReactFlowViewport({
+      editorName: pouName,
+      rungId: rungLocal.id,
+      reactFlowViewport: [bounds.width, bounds.height + 20],
+    })
   }
 
   // --- Debug edge coloring and node lockdown ---
@@ -417,7 +368,7 @@ export const RungBody = ({
       })),
     })
     updateReactFlowPanelExtent(rung)
-  }, [rung.nodes, rung.edges, rung.selectedNodes, rung.handleBranches, rung.id, nodeDivergences])
+  }, [rung.nodes])
 
   /**
    *  Update the local rung state when the rung state changes
@@ -736,14 +687,12 @@ export const RungBody = ({
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
       let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
-      let hasNewSelection = false
       changes.forEach((change) => {
         switch (change.type) {
           case 'select': {
             const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
             if (change.selected) {
               selectedNodes.push(node)
-              hasNewSelection = true
               return
             }
 
@@ -766,16 +715,8 @@ export const RungBody = ({
         nodes: applyNodeChanges(changes, rungLocal.nodes),
         selectedNodes: selectedNodes,
       }))
-
-      if (hasNewSelection && rungLocal.edges.some((e) => e.selected)) {
-        ladderFlowActions.setEdges({
-          editorName: pouName,
-          rungId: rung.id,
-          edges: rungLocal.edges.map((e) => ({ ...e, selected: false })),
-        })
-      }
     },
-    [rungLocal, rung, dragging, pouName, ladderFlowActions],
+    [rungLocal, rung, dragging],
   )
 
   /**
@@ -938,459 +879,11 @@ export const RungBody = ({
     ],
   )
 
-  const selectedNode = useMemo(() => rungLocal.nodes.find((n) => n.selected), [rungLocal.nodes])
-  const selectedEdge = useMemo(() => rungLocal.edges.find((e) => e.selected), [rungLocal.edges])
-
-  const selectNode = useCallback(
-    (node: FlowNode) => {
-      ladderFlowActions.setSelectedNodes({
-        editorName: pouName,
-        rungId: rung.id,
-        nodes: [node],
-      })
-      const updatedEdges = rungLocal.edges.map((e) => (e.selected ? { ...e, selected: false } : e))
-      ladderFlowActions.setEdges({
-        editorName: pouName,
-        rungId: rung.id,
-        edges: updatedEdges,
-      })
-    },
-    [pouName, rung.id, rungLocal.edges, ladderFlowActions],
-  )
-
-  const selectEdge = useCallback(
-    (edgeId: string) => {
-      ladderFlowActions.setSelectedNodes({
-        editorName: pouName,
-        rungId: rung.id,
-        nodes: [],
-      })
-      const updatedEdges = rungLocal.edges.map((e) => ({
-        ...e,
-        selected: e.id === edgeId,
-      }))
-      ladderFlowActions.setEdges({
-        editorName: pouName,
-        rungId: rung.id,
-        edges: updatedEdges,
-      })
-    },
-    [pouName, rung.id, rungLocal.edges, ladderFlowActions],
-  )
-
-  const handleAddElementAtEdge = useCallback(
-    (elementType: string) => {
-      if (!selectedEdge) return
-
-      const targetNode = rungLocal.nodes.find((n) => n.id === selectedEdge.target)
-      if (!targetNode) return
-
-      const tempPlaceholderId = `placeholder_temp_${uuidv4()}`
-      const targetIndex = rungLocal.nodes.findIndex((n) => n.id === targetNode.id)
-      if (targetIndex === -1) return
-
-      const tempPlaceholderNode = nodesBuilder.placeholder({
-        id: tempPlaceholderId,
-        type: 'default',
-        relatedNode: targetNode,
-        position: 'left',
-        ...getPlaceholderPositionBasedOnNode(targetNode, 'left'),
-      })
-      tempPlaceholderNode.selected = true
-      tempPlaceholderNode.data = {
-        ...tempPlaceholderNode.data,
-        edgeSourceId: selectedEdge.source,
-        selectedEdgeId: selectedEdge.id,
-      }
-
-      const modifiedNodes = [
-        ...rungLocal.nodes.slice(0, targetIndex),
-        tempPlaceholderNode,
-        ...rungLocal.nodes.slice(targetIndex),
-      ]
-
-      const { nodes, edges, newNode, handleBranches } = addNewElement(
-        {
-          ...rungLocal,
-          nodes: modifiedNodes,
-        },
-        { elementType },
-      )
-
-      captureAndPush(pouName)
-
-      ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes })
-      ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges })
-      if (handleBranches) {
-        ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
-      }
-
-      if (newNode) {
-        ladderFlowActions.setSelectedNodes({
-          editorName: pouName,
-          rungId: rungLocal.id,
-          nodes: [newNode],
-        })
-      }
-
-      if (pouRef) {
-        syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
-      }
-    },
-    [selectedEdge, rungLocal, pouName, ladderFlowActions, captureAndPush, pouRef, ladderFlows],
-  )
-
-  const handleAddBranchAtNode = useCallback(() => {
-    if (!selectedNode) return
-    if (selectedNode.type === 'powerRail' || selectedNode.type === 'parallel') {
-      toast({
-        variant: 'warn',
-        title: 'Action not supported',
-        description: 'Cannot add a branch on a rail or parallel junction.',
-      })
-      return
-    }
-
-    const openParallels = rungLocal.nodes.filter(
-      (n) => n.type === 'parallel' && (n as ParallelNode).data.type === 'open',
-    ) as ParallelNode[]
-
-    let hasBranchUnderneath = false
-    for (const openParallel of openParallels) {
-      const closeParallel = rungLocal.nodes.find((n) => n.id === openParallel.data.parallelCloseReference)
-      if (!closeParallel) continue
-      const { serial } = getNodesInsideParallel(rungLocal, closeParallel)
-      if (serial.some((n) => n.id === selectedNode.id)) {
-        hasBranchUnderneath = true
-        break
-      }
-    }
-
-    if (hasBranchUnderneath) {
-      toast({
-        variant: 'warn',
-        title: 'Action not supported',
-        description: 'Cannot add a branch when there is already a branch underneath the contact.',
-      })
-      return
-    }
-
-    const selectedNodeIndex = rungLocal.nodes.findIndex((n) => n.id === selectedNode.id)
-    if (selectedNodeIndex === -1) return
-
-    const tempPlaceholderId = `parallelPlaceholder_${selectedNode.id}_${uuidv4()}`
-    const tempPlaceholderNode = nodesBuilder.placeholder({
-      id: tempPlaceholderId,
-      type: 'parallel',
-      relatedNode: selectedNode,
-      position: 'bottom',
-      ...getPlaceholderPositionBasedOnNode(selectedNode, 'bottom'),
-    })
-    tempPlaceholderNode.selected = true
-
-    const modifiedNodes = [
-      ...rungLocal.nodes.slice(0, selectedNodeIndex + 1),
-      tempPlaceholderNode,
-      ...rungLocal.nodes.slice(selectedNodeIndex + 1),
-    ]
-
-    const { nodes, edges, newNode, handleBranches } = addNewElement(
-      {
-        ...rungLocal,
-        nodes: modifiedNodes,
-      },
-      { elementType: 'contact' },
-    )
-
-    captureAndPush(pouName)
-
-    ladderFlowActions.setNodes({ editorName: pouName, rungId: rungLocal.id, nodes })
-    ladderFlowActions.setEdges({ editorName: pouName, rungId: rungLocal.id, edges })
-    if (handleBranches) {
-      ladderFlowActions.setHandleBranches({ editorName: pouName, rungId: rungLocal.id, handleBranches })
-    }
-
-    if (newNode) {
-      ladderFlowActions.setSelectedNodes({
-        editorName: pouName,
-        rungId: rungLocal.id,
-        nodes: [newNode],
-      })
-    }
-
-    if (pouRef) {
-      syncNodesWithVariables(pouRef.interface?.variables ?? [], ladderFlows, ladderFlowActions.updateNode, pouName)
-    }
-  }, [selectedNode, rungLocal, pouName, ladderFlowActions, captureAndPush, pouRef, ladderFlows])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (isDebuggerActive) return
-
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      const isShiftE = e.key.toLowerCase() === 'e' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
-      const isShiftArrow =
-        (e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
-      const isCtrlArrow =
-        (e.key === 'ArrowDown' || e.key === 'ArrowUp') && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey
-
-      if (!isShiftE && !isShiftArrow && !isCtrlArrow && (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey)) {
-        return
-      }
-
-      if (isShiftArrow) {
-        const currentRungContainer = e.currentTarget.closest('[aria-label="Rung container"]')
-        const targetRungContainer =
-          e.key === 'ArrowDown'
-            ? currentRungContainer?.nextElementSibling
-            : currentRungContainer?.previousElementSibling
-
-        if (targetRungContainer) {
-          clearLocalSelection()
-          const focusable = targetRungContainer.querySelector('div[tabindex="0"]') as unknown as HTMLDivElement | null
-          focusable?.focus()
-          e.preventDefault()
-        }
-        return
-      }
-
-      if (isCtrlArrow) {
-        const currentRungIndex = rungs.findIndex((r) => r.id === rung.id)
-        if (currentRungIndex !== -1) {
-          const insertBelow = e.key === 'ArrowDown'
-          const insertAtIndex = insertBelow ? currentRungIndex + 1 : currentRungIndex
-          const rungIdToBeAdded = `rung_${pouName}_${uuidv4()}`
-          const defaultViewport: [number, number] = [300, 100]
-
-          clearLocalSelection()
-
-          captureAndPush(pouName)
-
-          ladderFlowActions.startLadderRung({
-            editorName: pouName,
-            rungId: rungIdToBeAdded,
-            defaultBounds: defaultViewport,
-            reactFlowViewport: defaultViewport,
-            insertAtIndex,
-          })
-          updateModelLadder({ openRung: { rungId: rungIdToBeAdded, open: true } })
-
-          // Defer focus until the new rung is actually rendered (see the effect keyed on `rungs`).
-          pendingFocusRungIdRef.current = rungIdToBeAdded
-
-          e.preventDefault()
-        }
-        return
-      }
-
-      if (e.key === 'Enter') {
-        if (selectedNode) {
-          let inputEl: HTMLElement | null = null
-          if (selectedNode.type === 'contact') {
-            inputEl = document.getElementById(`contact-variable-input-${selectedNode.id}`)
-          } else if (selectedNode.type === 'coil') {
-            inputEl = document.getElementById(`coil-variable-input-${selectedNode.id}`)
-          }
-
-          if (inputEl) {
-            inputEl.focus()
-            if (inputEl instanceof HTMLTextAreaElement || inputEl instanceof HTMLInputElement) {
-              inputEl.select()
-            }
-            e.preventDefault()
-            return
-          }
-        }
-      }
-
-      if (!selectedNode && !selectedEdge) {
-        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-          const firstEdge = rungLocal.edges.find((edge) => edge.source.startsWith('left-rail'))
-          if (firstEdge) {
-            selectEdge(firstEdge.id)
-            e.preventDefault()
-          }
-        }
-        return
-      }
-
-      if (e.key === 'ArrowRight') {
-        if (selectedNode) {
-          const outgoingEdges = rungLocal.edges.filter((edge) => edge.source === selectedNode.id)
-          if (outgoingEdges.length > 0) {
-            const sortedEdges = [...outgoingEdges].sort((a, b) => {
-              const nodeA = rungLocal.nodes.find((n) => n.id === a.target)
-              const nodeB = rungLocal.nodes.find((n) => n.id === b.target)
-              return (nodeA?.position?.y ?? 0) - (nodeB?.position?.y ?? 0)
-            })
-            selectEdge(sortedEdges[0].id)
-            e.preventDefault()
-          }
-        } else if (selectedEdge) {
-          const targetNode = rungLocal.nodes.find((n) => n.id === selectedEdge.target)
-          if (targetNode) {
-            selectNode(targetNode)
-            e.preventDefault()
-          }
-        }
-      } else if (e.key === 'ArrowLeft') {
-        if (selectedNode) {
-          const incomingEdges = rungLocal.edges.filter((edge) => edge.target === selectedNode.id)
-          if (incomingEdges.length > 0) {
-            const sortedEdges = [...incomingEdges].sort((a, b) => {
-              const nodeA = rungLocal.nodes.find((n) => n.id === a.source)
-              const nodeB = rungLocal.nodes.find((n) => n.id === b.source)
-              return (nodeA?.position?.y ?? 0) - (nodeB?.position?.y ?? 0)
-            })
-            selectEdge(sortedEdges[0].id)
-            e.preventDefault()
-          }
-        } else if (selectedEdge) {
-          const sourceNode = rungLocal.nodes.find((n) => n.id === selectedEdge.source)
-          if (sourceNode) {
-            selectNode(sourceNode)
-            e.preventDefault()
-          }
-        }
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        if (selectedEdge) {
-          const siblings = rungLocal.edges.filter(
-            (edge) => edge.source === selectedEdge.source || edge.target === selectedEdge.target,
-          )
-          if (siblings.length > 1) {
-            const getEdgeY = (edge: Edge) => {
-              const src = rungLocal.nodes.find((n) => n.id === edge.source)
-              const tgt = rungLocal.nodes.find((n) => n.id === edge.target)
-              return ((src?.position?.y ?? 0) + (tgt?.position?.y ?? 0)) / 2
-            }
-            const sortedSiblings = [...siblings].sort((a, b) => getEdgeY(a) - getEdgeY(b))
-            const currentIndex = sortedSiblings.findIndex((s) => s.id === selectedEdge.id)
-            if (e.key === 'ArrowDown' && currentIndex < sortedSiblings.length - 1) {
-              selectEdge(sortedSiblings[currentIndex + 1].id)
-              e.preventDefault()
-            } else if (e.key === 'ArrowUp' && currentIndex > 0) {
-              selectEdge(sortedSiblings[currentIndex - 1].id)
-              e.preventDefault()
-            }
-          }
-        } else if (selectedNode) {
-          const selectedNodeX = selectedNode.position.x
-          const verticalSiblings = rungLocal.nodes.filter(
-            (n) => n.id !== selectedNode.id && n.type !== 'powerRail' && Math.abs(n.position.x - selectedNodeX) < 50,
-          )
-          if (verticalSiblings.length > 0) {
-            const sortedNodes = [selectedNode, ...verticalSiblings].sort((a, b) => a.position.y - b.position.y)
-            const currentIndex = sortedNodes.findIndex((n) => n.id === selectedNode.id)
-            if (e.key === 'ArrowDown' && currentIndex < sortedNodes.length - 1) {
-              selectNode(sortedNodes[currentIndex + 1])
-              e.preventDefault()
-            } else if (e.key === 'ArrowUp' && currentIndex > 0) {
-              selectNode(sortedNodes[currentIndex - 1])
-              e.preventDefault()
-            }
-          }
-        }
-      } else if (e.key.toLowerCase() === 'c') {
-        if (selectedEdge) {
-          handleAddElementAtEdge('contact')
-          e.preventDefault()
-        }
-      } else if (e.key.toLowerCase() === 'q') {
-        if (selectedEdge) {
-          handleAddElementAtEdge('coil')
-          e.preventDefault()
-        }
-      } else if (e.key.toLowerCase() === 'f') {
-        if (selectedEdge) {
-          handleAddElementAtEdge('block')
-          e.preventDefault()
-        }
-      } else if (e.key.toLowerCase() === 'b') {
-        if (selectedNode) {
-          handleAddBranchAtNode()
-          e.preventDefault()
-        }
-      } else if (e.key.toLowerCase() === 'e' && e.shiftKey) {
-        if (selectedNode) {
-          if (selectedNode.type === 'contact') {
-            const contactVariants = ['default', 'negated', 'risingEdge', 'fallingEdge']
-            const currentVariant = (selectedNode.data.variant as string) || 'default'
-            const currentIndex = contactVariants.indexOf(currentVariant)
-            const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % contactVariants.length
-            const nextVariant = contactVariants[nextIndex]
-
-            captureAndPush(pouName)
-            ladderFlowActions.updateNode({
-              editorName: pouName,
-              rungId: rungLocal.id,
-              nodeId: selectedNode.id,
-              node: {
-                ...selectedNode,
-                data: {
-                  ...selectedNode.data,
-                  variant: nextVariant,
-                },
-              },
-            })
-            e.preventDefault()
-          } else if (selectedNode.type === 'coil') {
-            const coilVariants = ['default', 'set', 'reset', 'negated', 'risingEdge', 'fallingEdge']
-            const currentVariant = (selectedNode.data.variant as string) || 'default'
-            const currentIndex = coilVariants.indexOf(currentVariant)
-            const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % coilVariants.length
-            const nextVariant = coilVariants[nextIndex]
-
-            captureAndPush(pouName)
-            ladderFlowActions.updateNode({
-              editorName: pouName,
-              rungId: rungLocal.id,
-              nodeId: selectedNode.id,
-              node: {
-                ...selectedNode,
-                data: {
-                  ...selectedNode.data,
-                  variant: nextVariant,
-                },
-              },
-            })
-            e.preventDefault()
-          } else if (selectedNode.type === 'block') {
-            openModal('block-ladder-element', selectedNode)
-            e.preventDefault()
-          }
-        }
-      }
-    },
-    [
-      isDebuggerActive,
-      selectedNode,
-      selectedEdge,
-      rungLocal,
-      selectEdge,
-      selectNode,
-      handleAddElementAtEdge,
-      handleAddBranchAtNode,
-      captureAndPush,
-      pouName,
-      ladderFlowActions,
-      openModal,
-      clearLocalSelection,
-      updateModelLadder,
-      rungs,
-      rung,
-    ],
-  )
-
   return (
     <div
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
       className={cn(
-        'relative h-fit w-full p-1 outline-none focus-within:ring-1 focus-within:ring-brand focus-within:ring-offset-1 dark:focus-within:ring-offset-neutral-900',
+        'relative h-fit w-full p-1',
+        // 'rounded-b-lg border border-t-0 dark:border-neutral-800',
         className,
       )}
     >
@@ -1407,29 +900,14 @@ export const RungBody = ({
               nodes: styledNodes,
               edges: styledEdges,
               nodesFocusable: false,
-              edgesFocusable: true,
+              edgesFocusable: false,
               elementsSelectable: true,
               nodesDraggable: !isDebuggerActive,
               nodesConnectable: !isDebuggerActive,
               defaultEdgeOptions: {
                 deletable: false,
-                selectable: !isDebuggerActive,
+                selectable: false,
                 type: 'smoothstep',
-              },
-              onEdgesChange: (changes) => {
-                const isEdgeSelecting = changes.some((c) => c.type === 'select' && c.selected)
-                if (isEdgeSelecting) {
-                  ladderFlowActions.setSelectedNodes({
-                    editorName: pouName,
-                    rungId: rungLocal.id,
-                    nodes: [],
-                  })
-                }
-                ladderFlowActions.onEdgesChange({
-                  changes,
-                  rungId: rungLocal.id,
-                  editorName: pouName,
-                })
               },
 
               onInit: setReactFlowInstance,

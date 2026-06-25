@@ -373,15 +373,7 @@ export const BlockNodeElement = <T extends object>({
         className='w-full bg-transparent p-1 text-center text-xs outline-none'
         disabled={disabled}
         onFocus={handleFocusInput}
-        onBlur={(e) => {
-          if (inputNameFocus) {
-            handleNameInputOnBlur()
-            const container = e.currentTarget.closest('div[tabindex="0"]') as unknown as HTMLDivElement | null
-            if (container) {
-              container.focus()
-            }
-          }
-        }}
+        onBlur={() => inputNameFocus && handleNameInputOnBlur()}
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
@@ -892,7 +884,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               })
               return
             }}
-            onBlur={(e) => {
+            onBlur={() => {
               if (!node || !rung) return
               updateNode({
                 editorName: pouName,
@@ -903,10 +895,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                   draggable: node.data.draggable as boolean,
                 },
               })
-              const container = e.currentTarget.closest('div[tabindex="0"]') as unknown as HTMLDivElement | null
-              if (container) {
-                container.focus()
-              }
               return
             }}
             inputHeight={{

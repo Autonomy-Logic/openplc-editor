@@ -100,4 +100,52 @@ export function serializePouSignatureToSTWithBodyOffset(pou: PLCPou): {
   }
 }
 
-export { OPAQUE_BODY_PLACEHOLDER }
+/**
+ * Synthesize a self-contained ST document that places `bodyExpr` in the
+ * scope of `pou`'s declarations, for driving strucpp completion / type
+ * resolution programmatically from the graphical (LD/FBD) editors.
+ *
+ * The POU is always emitted as a `PROGRAM` under a throwaway name —
+ * the POU kind and return type are irrelevant to in-scope variable /
+ * member resolution, and a throwaway name avoids colliding with the
+ * POU's real stub document (`stub://<name>.st`) which is open at the
+ * same time. All the POU's VAR blocks are inlined verbatim so instance
+ * members (`TON0.Q`), struct/enum members and array elements resolve
+ * exactly as they would inside a real ST POU. `bodyExpr` is the partial
+ * expression the user is typing (e.g. `TON0.` or `my_struct.value.`);
+ * the returned `position` is the 0-indexed LSP cursor at its end.
+ *
+ * `bodyExpr` MUST be a single line (no newlines) — the position math
+ * assumes the expression occupies one body line.
+ */
+const SCOPE_QUERY_POU_NAME = '__openplc_scope_query__'
+
+export function serializePouScopeForQuery(
+  pou: PLCPou,
+  bodyExpr: string,
+  uniqueId?: number | string,
+): { text: string; position: { line: number; character: number } } {
+  // Emit with the POU's REAL kind + return type so the VAR sections stay
+  // legal (e.g. VAR_IN_OUT is only valid in FUNCTION_BLOCK/FUNCTION — a
+  // PROGRAM wrapper makes strucpp choke). The name is swapped to a
+  // throwaway so it can't collide with the POU's real stub document; a
+  // per-query `uniqueId` further guarantees no two in-flight query docs
+  // ever declare the same symbol (a duplicate definition stalls the
+  // worker if an open laps the previous doc's close).
+  const name = uniqueId === undefined ? SCOPE_QUERY_POU_NAME : `${SCOPE_QUERY_POU_NAME}${uniqueId}__`
+  const startKeyword = getStartKeyword(pou.pouType)
+  const endKeyword = getEndKeyword(pou.pouType)
+  const declaration =
+    pou.pouType === 'function' && pou.interface?.returnType
+      ? `${startKeyword} ${name} : ${pou.interface.returnType}`
+      : `${startKeyword} ${name}`
+  const variables = generateIecVariablesToString(pou.interface?.variables ?? [])
+  const prefix = `${declaration}\n${variables}\n`
+  // `prefix` ends with '\n', so split length - 1 is the 0-indexed line
+  // the body expression sits on.
+  const bodyLine = prefix.split('\n').length - 1
+  const text = `${prefix}${bodyExpr}\n${endKeyword}`
+  return { text, position: { line: bodyLine, character: bodyExpr.length } }
+}
+
+export { OPAQUE_BODY_PLACEHOLDER, SCOPE_QUERY_POU_NAME }
