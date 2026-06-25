@@ -110,24 +110,23 @@ export interface EditorCompilerPlatformPortContext {
       endpoint: string,
       responseParser?: (data: string) => T,
     ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+    /** Upload the runtime-v4 program bundle. Owns token refresh internally
+     *  (via the token authority), so the upload self-heals on expiry like every
+     *  other runtime call. */
+    makeRuntimeApiUpload: (opts: {
+      ipAddress: string
+      fileBuffer: Buffer
+      filename: string
+      contentType: string
+      cleanBuild: boolean
+      onUploadAccepted?: (responseBody: string) => void
+    }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   }
   /** Compress the source folder into the runtime v4 upload zip.
    *  Delegated through context so the port adapter doesn't pull
    *  in the `archiver`-dependent compressSourceFolder method (which
    *  has its own private state on CompilerModule). */
   compressSourceFolder: (folderPath: string) => Promise<Buffer>
-  /** Send the upload request to a runtime device.  Wraps
-   *  CompilerModule.sendRuntimeUpload with the right multipart
-   *  payload structure. */
-  sendRuntimeUpload: (opts: {
-    hostname: string
-    jwtToken: string
-    filename: string
-    contentType: string
-    fileBuffer: Buffer
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }) => Promise<{ success: boolean; error?: string }>
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -384,9 +383,8 @@ export function createEditorCompilerPlatformPort(
 
         const deployOutcome = await deployRuntimeProgram({
           uploadProgram: () =>
-            context.sendRuntimeUpload({
-              hostname: deviceContext.ip,
-              jwtToken: deviceContext.jwt,
+            context.mainProcessBridge.makeRuntimeApiUpload({
+              ipAddress: deviceContext.ip,
               filename: 'program.zip',
               contentType: 'application/zip',
               fileBuffer,
@@ -486,9 +484,8 @@ export function createEditorCompilerPlatformPort(
         const fileBuffer = Buffer.from(args.programSt, 'utf-8')
         const deployOutcome = await deployRuntimeProgram({
           uploadProgram: () =>
-            context.sendRuntimeUpload({
-              hostname: deviceContext.ip,
-              jwtToken: deviceContext.jwt,
+            context.mainProcessBridge.makeRuntimeApiUpload({
+              ipAddress: deviceContext.ip,
               filename: 'program.st',
               contentType: 'text/plain',
               fileBuffer,

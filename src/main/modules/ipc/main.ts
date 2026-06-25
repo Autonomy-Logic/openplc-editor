@@ -21,6 +21,7 @@ import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -65,8 +66,20 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
-  private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
-  private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
+  // Address of the runtime this session is authenticated against. Captured at
+  // login so the token authority can re-authenticate against the same device.
+  private runtimeIp: string | null = null
+  // Single token authority for the editor: owns the access token + credentials
+  // and the refresh/retry-on-401 logic, shared byte-for-byte with the web app.
+  // Every runtime HTTP call (GET, POST, and the project upload) goes through it,
+  // so they all self-heal identically when the 15-min JWT expires.
+  private tokens = createRuntimeTokenManager({
+    login: async (credentials) => {
+      if (!this.runtimeIp) return { success: false, error: 'No runtime address configured' }
+      const result = await this.performAuthentication(this.runtimeIp, credentials.username, credentials.password)
+      return { success: result.success, token: result.accessToken, error: result.error }
+    },
+  })
   // Current project root path used to validate file-watcher IPC calls
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
@@ -103,6 +116,12 @@ class MainProcessBridge implements MainIpcModule {
     this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+
+    // When the token authority transparently refreshes an expired token, push
+    // the fresh token to the renderer so its store connection flag tracks it.
+    this.tokens.onTokenChanged((newToken) => {
+      this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
+    })
   }
 
   // ===================== RUNTIME API HANDLERS =====================
@@ -234,27 +253,12 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
     const result = await this.performAuthentication(ipAddress, username, password)
     if (result.success && result.accessToken) {
-      this.runtimeCredentials = { ipAddress, username, password }
+      // Hand the session to the token authority so it can transparently
+      // re-authenticate against this device when the token expires.
+      this.runtimeIp = ipAddress
+      this.tokens.setSession(result.accessToken, { username, password })
     }
     return result
-  }
-
-  private async attemptTokenRefresh(): Promise<{ success: boolean; accessToken?: string; error?: string }> {
-    if (this.tokenRefreshInFlight) {
-      return this.tokenRefreshInFlight
-    }
-
-    if (!this.runtimeCredentials) {
-      return { success: false, error: 'No stored credentials available for token refresh' }
-    }
-
-    const { ipAddress, username, password } = this.runtimeCredentials
-
-    this.tokenRefreshInFlight = this.performAuthentication(ipAddress, username, password).finally(() => {
-      this.tokenRefreshInFlight = null
-    })
-
-    return this.tokenRefreshInFlight
   }
 
   private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
@@ -286,50 +290,28 @@ class MainProcessBridge implements MainIpcModule {
 
   async makeRuntimeApiRequest<T = void>(
     ipAddress: string,
-    jwtToken: string,
+    _jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    try {
-      const url = this.runtimeUrl(ipAddress, endpoint)
-      const res = await this.httpRequest({
-        method: 'GET',
-        url,
-        headers: { Authorization: `Bearer ${jwtToken}` },
-      })
-
-      if (res.statusCode === 200) {
-        return this.parseApiResponse(res.data, responseParser)
-      }
-
-      if (!this.isTokenExpiredError(res.statusCode, res.data)) {
-        return { success: false, error: res.data }
-      }
-
-      // Attempt token refresh and retry
-      const refreshResult = await this.attemptTokenRefresh()
-      if (!refreshResult.success || !refreshResult.accessToken) {
-        return {
-          success: false,
-          error: refreshResult.error ? `Token refresh failed: ${refreshResult.error}` : res.data,
+    // The token authority owns the live token + refresh; the legacy `_jwtToken`
+    // arg from the renderer is ignored (kept for signature compatibility and
+    // removed in the follow-up cleanup).
+    type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
+    const url = this.runtimeUrl(ipAddress, endpoint)
+    const result = await this.tokens.withAuth<Raw>(
+      async (token) => {
+        try {
+          const res = await this.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${token}` } })
+          if (res.statusCode === 200) return this.parseApiResponse(res.data, responseParser)
+          return { success: false, error: res.data, statusCode: res.statusCode }
+        } catch (error) {
+          return { success: false, error: getErrorMessage(error) }
         }
-      }
-
-      this.mainWindow?.webContents?.send('runtime:token-refreshed', refreshResult.accessToken)
-
-      const retryRes = await this.httpRequest({
-        method: 'GET',
-        url,
-        headers: { Authorization: `Bearer ${refreshResult.accessToken}` },
-      })
-
-      if (retryRes.statusCode === 200) {
-        return this.parseApiResponse(retryRes.data, responseParser)
-      }
-      return { success: false, error: retryRes.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
+      },
+      (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+    )
+    return result.success ? result : { success: false, error: result.error }
   }
 
   /**
@@ -348,12 +330,13 @@ class MainProcessBridge implements MainIpcModule {
    */
   makeRuntimeApiPostRequest<T>(
     ipAddress: string,
-    jwtToken: string,
+    _jwtToken: string,
     endpoint: string,
     body: string,
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
+    // Token + refresh owned by the authority; `_jwtToken` is ignored.
     type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
 
     const doRequest = (token: string): Promise<PostResult> => {
@@ -410,21 +393,87 @@ class MainProcessBridge implements MainIpcModule {
     const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
       r.success ? r : { success: false, error: r.error }
 
-    return doRequest(jwtToken).then((result) => {
-      const statusCode = !result.success ? result.statusCode : undefined
-      if (!result.success && this.isTokenExpiredError(statusCode, result.error)) {
-        return this.attemptTokenRefresh().then((refreshResult) => {
-          if (refreshResult.success && refreshResult.accessToken) {
-            if (this.mainWindow && this.mainWindow.webContents) {
-              this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
-            }
-            return doRequest(refreshResult.accessToken).then(stripStatus)
-          }
-          return { success: false as const, error: `Token refresh failed: ${refreshResult.error || 'Unknown error'}` }
+    return this.tokens
+      .withAuth<PostResult>(
+        (token) => doRequest(token),
+        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+      )
+      .then(stripStatus)
+  }
+
+  /**
+   * Upload a compiled program (multipart) to the runtime, going through the
+   * token authority so an expired token is transparently refreshed and the
+   * upload retried — the same self-healing every other runtime call gets. This
+   * is the path that previously had no refresh, so a long session's upload 401'd
+   * while status polling kept working.
+   */
+  makeRuntimeApiUpload(opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }): Promise<{ success: true; data: string } | { success: false; error: string }> {
+    type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
+    const header = Buffer.from(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
+        `Content-Type: ${opts.contentType}\r\n\r\n`,
+    )
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
+    const reqBody = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+    const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
+
+    const doRequest = (token: string): Promise<UploadResult> =>
+      new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: opts.ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path,
+            method: 'POST',
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': reqBody.length,
+              Authorization: `Bearer ${token}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          } as https.RequestOptions,
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) resolve({ success: true, data })
+              else resolve({ success: false, error: data || `HTTP ${res.statusCode}`, statusCode: res.statusCode })
+            })
+          },
+        )
+        req.setTimeout(300_000, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
         })
-      }
-      return stripStatus(result)
-    })
+        req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
+        req.write(reqBody)
+        req.end()
+      })
+
+    return this.tokens
+      .withAuth<UploadResult>(
+        (token) => doRequest(token),
+        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+      )
+      .then((result) => {
+        if (result.success) {
+          opts.onUploadAccepted?.(result.data)
+          return { success: true as const, data: result.data }
+        }
+        return { success: false as const, error: result.error }
+      })
   }
 
   handleRuntimeGetStatus = async (
@@ -573,7 +622,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
-    this.runtimeCredentials = null
+    this.tokens.clear()
+    this.runtimeIp = null
     return { success: true }
   }
 
