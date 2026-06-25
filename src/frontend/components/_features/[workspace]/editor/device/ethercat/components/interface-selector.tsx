@@ -44,14 +44,10 @@ const InterfaceSelector = ({
     [interfaces],
   )
 
-  // Filter options based on input
-  const filteredOptions = useMemo(() => {
-    if (!inputValue.trim()) return options
-    const lowerInput = inputValue.toLowerCase()
-    return options.filter(
-      (opt) => opt.value.toLowerCase().includes(lowerInput) || opt.label.toLowerCase().includes(lowerInput),
-    )
-  }, [options, inputValue])
+  // No typed-text filtering: the scan returns the full set of adapters the
+  // runtime can see, and that list should always be shown in full. The input
+  // is for entering a custom interface name (e.g. one not yet up), not for
+  // narrowing the discovered list — narrowing only hid valid choices.
 
   // Focus input and select all text when dropdown opens
   useEffect(() => {
@@ -67,10 +63,10 @@ const InterfaceSelector = ({
 
   // Scroll highlighted option into view
   useEffect(() => {
-    if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length && optionRefs.current[highlightedIndex]) {
+    if (highlightedIndex >= 0 && highlightedIndex < options.length && optionRefs.current[highlightedIndex]) {
       optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
     }
-  }, [highlightedIndex, filteredOptions.length])
+  }, [highlightedIndex, options.length])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
@@ -95,14 +91,14 @@ const InterfaceSelector = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setHighlightedIndex((prev) => (prev < filteredOptions.length - 1 ? prev + 1 : 0))
+      setHighlightedIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredOptions.length - 1))
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-        handleSelectOption(filteredOptions[highlightedIndex].value)
+      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+        handleSelectOption(options[highlightedIndex].value)
       } else if (inputValue.trim()) {
         onSelectInterface(inputValue.trim())
         setIsOpen(false)
@@ -156,8 +152,8 @@ const InterfaceSelector = ({
                 <div className='flex items-center justify-center py-2 text-xs text-neutral-500'>
                   Loading interfaces...
                 </div>
-              ) : filteredOptions.length > 0 ? (
-                filteredOptions.map((option, index) => (
+              ) : options.length > 0 ? (
+                options.map((option, index) => (
                   <div
                     key={option.value}
                     ref={(el) => (optionRefs.current[index] = el)}
@@ -183,13 +179,11 @@ const InterfaceSelector = ({
                 ))
               ) : (
                 <div className='px-2 py-2 text-center text-xs text-neutral-500'>
-                  {options.length === 0
-                    ? 'No interfaces available. Type a custom value.'
-                    : 'No matches. Type a custom value.'}
+                  No interfaces available. Type a custom value.
                 </div>
               )}
             </div>
-            {inputValue.trim() && !filteredOptions.some((opt) => opt.value === inputValue.trim()) && (
+            {inputValue.trim() && !options.some((opt) => opt.value === inputValue.trim()) && (
               <div
                 className='flex cursor-pointer items-center gap-2 border-t border-neutral-200 px-2 py-1 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'
                 onClick={() => handleSelectOption(inputValue.trim())}
