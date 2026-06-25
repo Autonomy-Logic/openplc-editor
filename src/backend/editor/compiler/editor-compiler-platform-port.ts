@@ -173,21 +173,21 @@ export function createEditorCompilerPlatformPort(
      * adapter computes the same hash via `spark-md5`; both outputs
      * are byte-identical.
      */
-    async computeMd5(input: string): Promise<string> {
-      return createHash('md5').update(input).digest('hex')
+    computeMd5(input: string): Promise<string> {
+      return Promise.resolve(createHash('md5').update(input).digest('hex'))
     },
 
     /**
      * Transpile the project IR to Structured Text via the in-process JSON
      * transpiler (`backend/shared/transpilers/st-transpiler/`).
      */
-    async transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> {
+    transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult> {
       const result = runInProcessTranspile(args)
       if (!result.ok) {
         const message = result.errors?.map((e) => e.message).join('\n') || 'Failed to generate Structured Text'
         log(message, 'error')
       }
-      return result
+      return Promise.resolve(result)
     },
 
     /**

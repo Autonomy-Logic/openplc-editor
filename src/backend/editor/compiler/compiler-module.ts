@@ -2846,18 +2846,27 @@ class CompilerModule {
       }
     }
 
-    await mkdir(sourceTargetFolderPath, { recursive: true })
-    const stResult = runDebugInProcess()
-    if (!stResult.ok) {
+    const programStPath = join(sourceTargetFolderPath, 'program.st')
+    try {
+      await mkdir(sourceTargetFolderPath, { recursive: true })
+      const stResult = runDebugInProcess()
+      if (!stResult.ok) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `${stResult.error}\nStopping debug compilation process.`,
+        })
+        _mainProcessPort.close()
+        return
+      }
+      await writeFile(programStPath, stResult.programSt, 'utf-8')
+    } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `${stResult.error}\nStopping debug compilation process.`,
+        message: `Error writing ST file: ${getErrorMessage(error)}\nStopping debug compilation process.`,
       })
       _mainProcessPort.close()
       return
     }
-    const programStPath = join(sourceTargetFolderPath, 'program.st')
-    await writeFile(programStPath, stResult.programSt, 'utf-8')
     _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
