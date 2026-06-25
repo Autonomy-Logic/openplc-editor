@@ -563,6 +563,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
+      if (verifyResult.targetMd5Unavailable) {
+        consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message:
+            verifyResult.error ??
+            'Target did not provide a program MD5. Treating target as uninitialized and offering upload.',
+        })
+      }
+
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
         // Surface the active transport in the store so transport-specific
@@ -583,13 +593,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         consoleActions.addLog({
           id: crypto.randomUUID(),
-          level: 'warning',
-          message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
+          level: verifyResult.targetMd5Unavailable ? 'info' : 'warning',
+          message: verifyResult.targetMd5Unavailable
+            ? `Target program MD5 is unavailable. Expected: ${md5Result.md5}`
+            : `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
         const response = await showDebuggerMessage(
           'warning',
-          'Program Mismatch',
-          'The program on the target does not match. Upload the current project?',
+          verifyResult.targetMd5Unavailable ? 'Program Not Found' : 'Program Mismatch',
+          verifyResult.targetMd5Unavailable
+            ? 'The target did not report any OpenPLC program MD5. This usually happens on a new device before the first upload. Would you like to upload the current project to the target?'
+            : 'The program on the target does not match. Upload the current project?',
           ['Yes', 'No'],
         )
         if (response === 0) {
