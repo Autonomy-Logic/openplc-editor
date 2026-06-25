@@ -83,10 +83,31 @@ const findNodesBasedOnParallelClose = (
   return findNodesBasedOnParallelClose(bottomNode as ParallelNode, rung, path)
 }
 
-const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offsetY: number = 0) => {
+const findConnections = (
+  node: Node<BasicNodeData>,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  targetHandle?: string,
+) => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
-  const connectedEdges = rungEdges.filter((edge) => edge.target === node.id)
+  // Resolve the formal parameter (block output pin) for a source node that
+  // feeds into a parallel chain. A block's `outputConnector` only records its
+  // PRIMARY output (e.g. QU on a CTUD_DINT), so reading it directly maps EVERY
+  // branch back to that one pin — which is why coils wired to a secondary
+  // output (QD) were serialized as connected to QU. Instead, use the handle of
+  // the edge that actually leaves the node into the parallel chain (QU vs QD).
+  // Falls back to the default output connector for single-output elements;
+  // 'OUT' (the unnamed function return) maps to an empty formal parameter.
+  const formalParameterFromParallel = (srcNode: Node<BasicNodeData>, parallelChain: ParallelNode[]): string => {
+    const edge = rungEdges.find((e) => e.source === srcNode.id && parallelChain.some((p) => p.id === e.target))
+    const handle = edge?.sourceHandle ?? srcNode.data.outputConnector?.id ?? ''
+    return handle === 'OUT' ? '' : handle
+  }
+
+  const connectedEdges = rungEdges.filter(
+    (edge) => edge.target === node.id && (targetHandle === undefined || edge.targetHandle === targetHandle),
+  )
   if (!connectedEdges.length) return []
 
   const connections = connectedEdges.map((edge) => {
@@ -96,9 +117,10 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
 
     // Node is not a parallel node
     if (sourceNode.type !== 'parallel') {
+      const sourceHandle = edge.sourceHandle ?? sourceNode.data.outputConnector?.id ?? ''
       return {
         '@refLocalId': sourceNode.data.numericId,
-        '@formalParameter': sourceNode.data.outputConnector?.id,
+        '@formalParameter': sourceHandle === 'OUT' ? '' : sourceHandle,
         position: [
           // Final edge destination
           {
@@ -141,7 +163,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === actualNode.id) {
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id,
+          '@formalParameter': formalParameterFromParallel(node, parallels),
           position:
             index === 0
               ? [
@@ -184,7 +206,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       return nodes.map((node) => {
         return {
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id,
+          '@formalParameter': formalParameterFromParallel(node, parallels),
           position: [
             // Final edge destination
             {
@@ -219,7 +241,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
     const closeConnections = nodes.map((node, index) => {
       return {
         '@refLocalId': node.data.numericId,
-        '@formalParameter': node.data.outputConnector?.id,
+        '@formalParameter': formalParameterFromParallel(node, parallels),
         position:
           index === 0
             ? [
@@ -383,11 +405,10 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): 
 }
 
 const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
-  const connections = findConnections(block, rung, offsetY)
   const inputVariables = block.data.inputHandles.map((handle) => {
-    // Only the input of the block contains connections from other blocks
-    // The other handles are connected to variables
+    // Main input connector: connections from other elements on the main rail
     if (handle.id === block.data.inputConnector?.id) {
+      const connections = findConnections(block, rung, offsetY, handle.id)
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
@@ -407,34 +428,54 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
         (node as VariableNode).data.block.id === block.id &&
         (node as VariableNode).data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
-    if (!variableNode) return undefined
 
-    return {
-      '@formalParameter': handle.id || '',
-      connectionPointIn: {
-        relPosition: {
-          '@x': handle.relPosition.x || 0,
-          '@y': handle.relPosition.y || 0,
-        },
-        connection: [
-          {
-            '@refLocalId': variableNode.data.numericId,
-            position: [
-              // Connection at the block
-              {
-                '@x': handle.glbPosition.x || 0,
-                '@y': (handle.glbPosition.y || 0) + offsetY,
-              },
-              // Start the edge connecting the variable
-              {
-                '@x': variableNode.data.outputConnector?.glbPosition.x || 0,
-                '@y': (variableNode.data.outputConnector?.glbPosition.y || 0) + offsetY,
-              },
-            ],
+    if (variableNode) {
+      return {
+        '@formalParameter': handle.id || '',
+        connectionPointIn: {
+          relPosition: {
+            '@x': handle.relPosition.x || 0,
+            '@y': handle.relPosition.y || 0,
           },
-        ],
-      },
+          connection: [
+            {
+              '@refLocalId': variableNode.data.numericId,
+              position: [
+                // Connection at the block
+                {
+                  '@x': handle.glbPosition.x || 0,
+                  '@y': (handle.glbPosition.y || 0) + offsetY,
+                },
+                // Start the edge connecting the variable
+                {
+                  '@x': variableNode.data.outputConnector?.glbPosition.x || 0,
+                  '@y': (variableNode.data.outputConnector?.glbPosition.y || 0) + offsetY,
+                },
+              ],
+            },
+          ],
+        },
+      }
     }
+
+    // No variable node — check if there's a branch (contacts/coils) connected to this handle.
+    // Reuse findConnections with a handle filter to trace the branch elements,
+    // including any parallels within the branch.
+    const handleConnections = findConnections(block, rung, offsetY, handle.id)
+    if (handleConnections.length > 0) {
+      return {
+        '@formalParameter': handle.id || '',
+        connectionPointIn: {
+          relPosition: {
+            '@x': handle.relPosition.x || 0,
+            '@y': handle.relPosition.y || 0,
+          },
+          connection: handleConnections,
+        },
+      }
+    }
+
+    return undefined
   })
 
   const outputVariable = block.data.outputHandles.map((handle) => {

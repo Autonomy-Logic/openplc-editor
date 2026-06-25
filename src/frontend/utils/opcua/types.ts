@@ -1,14 +1,22 @@
 /**
  * OPC-UA Configuration Types
- * Types used for OPC-UA config generation and index resolution.
+ * Types used for OPC-UA config generation and address resolution.
+ *
+ * Variable identity / debug-path resolution piggybacks on the
+ * debugger's shared types (debug-parser.ts + debug-variable-finder.ts).
+ * The debugger maps user variable paths to (arr, elem) addresses on
+ * the debug Entry tables; OPC-UA does exactly the same lookup, so
+ * there's a single source of truth for both.
  */
 
 /**
  * Represents a PLC instance (program instantiation in Resources).
- * Used to look up the instance name for a given program POU.
+ * Mirrors the debugger's PLCInstanceMapping but adds the `task` field
+ * the OPC-UA config flow plumbs through.
  */
 export interface PLCInstanceInfo {
-  /** Instance name (e.g., "INSTANCE0") - this appears in debug.c */
+  /** Instance name (e.g., "INSTANCE0") - the prefix STruC++ uses
+   *  for leaf paths in debug-map.json. */
   name: string
   /** Task name this instance runs under */
   task: string
@@ -17,27 +25,21 @@ export interface PLCInstanceInfo {
 }
 
 /**
- * Represents a debug variable parsed from debug.c
- */
-export interface DebugVariable {
-  /** Full variable path (e.g., "RES0__INSTANCE0.MOTOR_SPEED") */
-  name: string
-  /** IEC type (e.g., "INT", "BOOL", "REAL") */
-  type: string
-  /** Index in the debug_vars array */
-  index: number
-}
-
-/**
  * Resolved field information for structures.
  * Supports nested fields for complex types (FBs, structs within structs).
  */
 export interface ResolvedField {
   name: string
+  /** Canonical IEC type from the compiler's debug map for leaves; the
+   *  stored container type (FB/struct name) for complex parents. */
   datatype: string
-  initialValue: boolean | number | string
-  /** Index in debug_vars array. Null for complex types that have nested fields. */
-  index: number | null
+  /** Canonical byte width from the compiler — null for complex parents
+   *  (no leaf of their own; only their child leaves carry a size). */
+  size: number | null
+  /** Address of the leaf — null for complex types whose own address
+   *  doesn't make sense (only their child leaves do). */
+  arr: number | null
+  elem: number | null
   permissions: {
     viewer: 'r' | 'w' | 'rw'
     operator: 'r' | 'w' | 'rw'

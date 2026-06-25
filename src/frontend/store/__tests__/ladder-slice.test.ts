@@ -166,6 +166,59 @@ describe('createLadderFlowSlice', () => {
   })
 
   // -------------------------------------------------------------------------
+  // renameLadderFlow — data-loss regression: renaming a POU must
+  // carry its rungs over to the new key, not orphan them.
+  // -------------------------------------------------------------------------
+
+  it('renameLadderFlow rekeys an existing flow without losing rungs', () => {
+    const rung = makeRung()
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({ name: 'main', rungs: [rung] }))
+
+    store.getState().ladderFlowActions.renameLadderFlow('main', 'PLC_PRG')
+
+    const flows = store.getState().ladderFlows
+    expect(flows).toHaveLength(1)
+    expect(flows[0].name).toBe('PLC_PRG')
+    expect(flows[0].rungs).toHaveLength(1)
+  })
+
+  it('renameLadderFlow drops a stale empty placeholder under the new name', () => {
+    // If the editor cold-seeded an empty flow under `newName`
+    // between the POU rename and this rekey, we must drop that
+    // placeholder so the original rungs survive — not the other
+    // way around.
+    const rung = makeRung()
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({ name: 'main', rungs: [rung] }))
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({ name: 'PLC_PRG', rungs: [] }))
+
+    store.getState().ladderFlowActions.renameLadderFlow('main', 'PLC_PRG')
+
+    const flows = store.getState().ladderFlows
+    expect(flows).toHaveLength(1)
+    expect(flows[0].name).toBe('PLC_PRG')
+    expect(flows[0].rungs).toHaveLength(1)
+  })
+
+  it('renameLadderFlow is a no-op when oldName equals newName', () => {
+    const rung = makeRung()
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({ name: 'main', rungs: [rung] }))
+
+    store.getState().ladderFlowActions.renameLadderFlow('main', 'main')
+
+    expect(store.getState().ladderFlows).toHaveLength(1)
+    expect(store.getState().ladderFlows[0].rungs).toHaveLength(1)
+  })
+
+  it('renameLadderFlow is a no-op when the oldName does not exist', () => {
+    store.getState().ladderFlowActions.addLadderFlow(makeFlow({ name: 'main' }))
+
+    store.getState().ladderFlowActions.renameLadderFlow('missing', 'whatever')
+
+    expect(store.getState().ladderFlows).toHaveLength(1)
+    expect(store.getState().ladderFlows[0].name).toBe('main')
+  })
+
+  // -------------------------------------------------------------------------
   // startLadderRung
   // -------------------------------------------------------------------------
   it('startLadderRung creates a flow and adds the rung', () => {

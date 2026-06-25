@@ -5,7 +5,7 @@ extern "C" {
 #include "Arduino.h"
 #include <Arduino_MachineControl.h>
 #include "Wire.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 using namespace machinecontrol;
 

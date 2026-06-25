@@ -1,6 +1,6 @@
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
@@ -34,22 +34,30 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const { captureAndPush } = usePouSnapshot()
 
-  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const baseTypes = baseTypeEnum.options.filter((type) => type?.toUpperCase() !== 'ARRAY')
+  // Filter to defined string names before deref'ing `.toUpperCase()` —
+  // a malformed data-type / library entry (missing or null `name`)
+  // would otherwise crash the whole editor on every render.
   const userDataTypes = dataTypes
     .map((type) => type.name)
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
     .filter((name) => name !== editor.meta.name && name.toUpperCase() !== 'ARRAY')
 
   const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
-    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+    (lib.pous ?? [])
+      .filter((pou) => pou?.type === 'function-block' && typeof pou.name === 'string')
+      .map((pou) => pou.name.toUpperCase()),
   )
 
-  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
-    'pous' in userLib && Array.isArray(userLib.pous)
-      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
-      : (userLib as UserLibFunctionBlock).type === 'function-block'
-        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
-        : [],
-  )
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+    if ('pous' in userLib && Array.isArray(userLib.pous)) {
+      return userLib.pous
+        .filter((pou) => pou?.type === 'function-block' && typeof pou.name === 'string')
+        .map((pou) => pou.name.toUpperCase())
+    }
+    const fb = userLib as UserLibFunctionBlock
+    return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+  })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
@@ -97,6 +105,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     } as PLCArrayDatatype)
   }
 
+  // `updateDatatype` is a full replace — never pass a partial object,
+  // or the rest of the datatype (`name`, `derivation`, `baseType`, …)
+  // gets stripped and downstream selectors lose the entry.
+  const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
+    updateDatatype(data.name, { ...data, dimensions: newRows })
+  }
+
   const addNewRow = () => {
     setTableData((prevRows) => {
       const isFirst = prevRows.length === 0
@@ -107,7 +122,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       }
 
       setArrayTable({ selectedRow: newRows.length - 1 })
-      updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
+      writeDimensions(newRows)
       return newRows
     })
   }
@@ -122,12 +137,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows
@@ -147,12 +157,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow - 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows
@@ -172,12 +177,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         const newFocusIndex = arrayTable.selectedRow + 1
         setArrayTable({ selectedRow: newFocusIndex })
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
-          }
-          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
-        })
+        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
         prevRows = newRows
       }
       return prevRows

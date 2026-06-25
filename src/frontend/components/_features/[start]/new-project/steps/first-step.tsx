@@ -76,18 +76,17 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
               <FolderIcon className='mr-2' /> PLC Project
             </button>
 
-            <div className='group relative'>
-              <button
-                type='button'
-                className='flex h-10 w-40 cursor-not-allowed items-center justify-center rounded-md border-2 border-transparent bg-gray-200 text-black opacity-50'
-                disabled
-              >
-                <BookIcon className='mr-2' /> Library
-              </button>
-              <span className='absolute bottom-12 left-1/2 mb-1 hidden w-40 -translate-x-1/2 rounded bg-gray-800 p-2 text-center text-xs text-white opacity-0 group-hover:block group-hover:opacity-100'>
-                Feature in development
-              </span>
-            </div>
+            <button
+              type='button'
+              className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
+                selected === 'plc-library'
+                  ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
+                  : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
+              }`}
+              onClick={() => handleSelectType('plc-library')}
+            >
+              <BookIcon className='mr-2' /> Library
+            </button>
           </div>
         </div>
 

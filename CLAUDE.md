@@ -288,6 +288,37 @@ When adding new code to covered directories, you must add corresponding tests to
 3. Relink variables after variable table changes
 4. Node IDs must be unique per flow
 
+### IEC address allocation + alias registry
+
+Located in `src/backend/shared/utils/iec-address/` (byte-identical on
+openplc-web). Pure functions, no IPC, no electron coupling.
+
+- **Address pool** (`address-pool.ts`): producer-only, target-scoped
+  view of every claimed IEC address. Producers = pin mapping, VPP
+  module slots, Modbus TCP remote IO points, EtherCAT channel
+  mappings. Capability scoping comes from `target-capabilities` —
+  switching targets activates / deactivates entire producers.
+  - Reservation pass: pin-mapping (Arduino-style fixed addresses).
+  - Allocation pass: every other producer in deterministic order.
+  - `nextFreeAddress(pool, prefix, isBit, startFrom?, alsoUsed?)`
+    replaces the old `generateIecAddress` helper. Pass `alsoUsed` for
+    in-flight allocations within a batch.
+- **Alias registry** (`alias-registry.ts`): derived index on top of
+  the pool. `byAlias` / `byAddress` maps plus `duplicateAliases`
+  (first-wins). Pure function — rebuild on demand, cost is
+  O(producers).
+- **Variable sync** (`sync-variable-aliases.ts`): pure function that
+  walks variables and either adopts (no alias bound but address
+  matches), refreshes (alias address moved), or orphans (alias gone).
+  Called from every producer-mutation site, target switch,
+  project load, and pre-compile via the
+  `projectActions.syncVariableAliases()` store action.
+
+The variable cell renders `alias ?? location` and shows an amber
+warning glyph + tooltip when the alias is orphaned. Aliases are
+intended to be unique system-wide; the registry's
+`isAliasNameAvailable(name, ignoring?)` is the system-wide validator.
+
 ## Environment
 
 - **Node.js:** >= 20.x < 24

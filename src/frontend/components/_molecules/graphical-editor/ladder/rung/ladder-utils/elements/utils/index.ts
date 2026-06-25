@@ -35,9 +35,12 @@ export const getPreviousElementsByEdge = (
     const n = rung.nodes.find((n) => n.id === e.source)
 
     /**
-     * If the node is undefined or an variable, skip it
+     * If the node is undefined, a variable, or a branch element, skip it.
+     * Branch elements connect to block handles but are not serial predecessors
+     * — they are positioned in a post-pass and must not affect the main layout.
      */
     if (!n || n.type === 'variable') return
+    if ((n.data as BasicNodeData).branchContext) return
 
     /**
      * If there is a parallel node, check if it is an open or close parallel
@@ -54,26 +57,44 @@ export const getPreviousElementsByEdge = (
 
     lastNodes.nodes.serial.push({ ...n })
   })
-  lastNodes.edges = connectedEdges
   lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
+  const allNodeIds = new Set(lastNodes.nodes.all.map((n) => n.id))
+  lastNodes.edges = connectedEdges.filter((e) => allNodeIds.has(e.source))
 
   return lastNodes
 }
 
 /**
- * Get the previous node when adding a new element
- * It works when removing the placeholder and variables elements
+ * Get the previous main-line element when adding a new serial element.
+ *
+ * Walks the rung's node list skipping placeholders, variables and branch
+ * elements, then returns the element immediately before the just-inserted one.
+ *
+ * Branch elements (contacts/coils wired to a block's secondary handles, e.g. a
+ * contact on a counter's R input) are interleaved in the node array between the
+ * block and the right rail, but they are NOT part of the serial spine. A plain
+ * index walk that included them would treat such a branch element as the serial
+ * predecessor of a main-line element — so a coil added to a block's primary
+ * output (whose placeholder sits after the branch element in the array) would be
+ * wired into the branch edge instead, dropping the coil and breaking the branch.
+ * Skipping branchContext nodes here mirrors getPreviousElementsByEdge. Keying off
+ * the element id (rather than an externally-computed index) keeps the lookup
+ * consistent with this filtered spine.
  *
  * @param rung: RungLadderState
- * @param nodeIndex: number
+ * @param newElementId: string
  *
  * @returns Node
  */
-export const getPreviousElement = (rung: RungLadderState, nodeIndex: number): Node => {
-  const nodesWithNoPlaceholderAndVariables = rung.nodes.filter(
-    (n) => n.type !== 'placeholder' && n.type !== 'parallelPlaceholder' && n.type !== 'variable',
+export const getPreviousElement = (rung: RungLadderState, newElementId: string): Node => {
+  const serialSpine = rung.nodes.filter(
+    (n) =>
+      n.type !== 'placeholder' &&
+      n.type !== 'parallelPlaceholder' &&
+      n.type !== 'variable' &&
+      !(n.data as BasicNodeData).branchContext,
   )
-  return nodesWithNoPlaceholderAndVariables[nodeIndex - 1]
+  return serialSpine[serialSpine.findIndex((n) => n.id === newElementId) - 1]
 }
 
 /**
@@ -377,7 +398,7 @@ export const getNodesInsideParallel = (
     let nextEdge = parallelEdge
     while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) continue
+      if (!node) break // Broken chain — bail out (continue would infinite-loop without advancing)
       nextEdge = rung.edges.find(
         (edge) =>
           edge.source === nextEdge.target && edge.sourceHandle === (node.data as BasicNodeData).outputConnector?.id,

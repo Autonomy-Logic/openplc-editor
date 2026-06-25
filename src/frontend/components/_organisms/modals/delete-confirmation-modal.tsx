@@ -1,5 +1,5 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { useProject } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
@@ -68,6 +68,7 @@ function resolveDeleteTarget(
 const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteElementProps) => {
   const store = useOpenPLCStore()
   const projectPort = useProject()
+  const capabilities = useCapabilities()
   const {
     editor,
     project: {
@@ -223,7 +224,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
     // local UI state had been updated. executeSaveProject surfaces its own
     // success/failure toasts.
     if (needsPersist) {
-      await executeSaveProject(projectPort)
+      await executeSaveProject(projectPort, capabilities)
     }
   }
 

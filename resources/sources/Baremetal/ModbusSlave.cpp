@@ -4,6 +4,13 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"
+// Debug surface comes via the extern "C" shims in arduino_runtime_glue.h
+// (openplc_debug_*) so this TU stays free of strucpp template-heavy headers
+// and compiles cleanly in arduino-cli's path with the core's default C++
+// standard (gnu++14 on mbed and others). The shims forward to
+// strucpp::debug::handle_* inside arduino_runtime_glue.cpp, which is part
+// of the precompiled OpenPLCUserLib archive built with -std=gnu++17.
+#include "arduino_runtime_glue.h"
 
 //Global Modbus vars
 struct MBinfo modbus;
@@ -391,71 +398,143 @@ void handle_tcp()
 #endif
 
 #ifdef MBSERIAL
+// Inter-frame idle, in milliseconds, used ONLY to abandon a frame whose
+// remainder never arrives. Modbus RTU was defined for RS485, where bytes of a
+// frame are ~one character time apart (T1.5/T3.5, tens of microseconds at
+// 115200) and the byte cadence delimits frames. That assumption is INVALID on
+// USB-CDC (and any store-and-forward link): a single request is split into
+// 64-byte USB packets separated by USB-frame-scale gaps far longer than T1.5,
+// so cadence framing tears requests apart (the bug that made the P1AM-100 /
+// SAMD21 debugger crawl). We therefore frame by the request's DECLARED length
+// (derived from the function code) and fall back to this idle only to drop a
+// truncated partial. It must exceed any intra-frame USB gap yet stay well below
+// a master's request timeout.
+#define MB_RTU_FRAME_GAP_MS 8
+
+// Persistent RX-assembly state. handle_serial() is called every scan cycle and
+// never blocks; a request whose bytes straddle several calls is carried across
+// them in mb_frame[0..mb_rx_len). (This shares mb_frame with handle_tcp, which
+// is safe because an OpenPLC board is configured for a single Modbus transport;
+// the two are not driven mid-frame at the same time.)
+static uint16_t mb_rx_len = 0;
+static uint32_t mb_rx_last_ms = 0;
+
+// Total on-wire length (slave id + PDU + 2 CRC bytes) of the request whose
+// first `n` bytes are in `f`. Returns >0 for a known length, 0 when more header
+// bytes are needed to size it, and -1 for a function code we do not serve (so
+// the byte cannot be a frame head). Length is implicit in Modbus RTU — derived
+// per function code, exactly as `process_mbpacket()` later parses the fields.
+static int32_t mb_rtu_frame_len(const uint8_t *f, uint16_t n)
+{
+    if (n < 2) return 0;                                // need at least id + FC
+    switch (f[1])
+    {
+        case MB_FC_READ_COILS:
+        case MB_FC_READ_INPUT_STAT:
+        case MB_FC_READ_REGS:
+        case MB_FC_READ_INPUT_REGS:
+        case MB_FC_WRITE_COIL:
+        case MB_FC_WRITE_REG:
+            return 8;                                   // [id][fc][a:2][b:2][crc:2]
+        case MB_FC_WRITE_COILS:
+        case MB_FC_WRITE_REGS:
+            if (n < 7) return 0;                        // byte count lives at f[6]
+            return 9 + (int32_t)f[6];                   // + [bc:1][data:bc][crc:2]
+        case MB_FC_DEBUG_INFO:
+            return 4;                                   // [id][fc][crc:2]
+        case MB_FC_DEBUG_GET:
+            return 9;                                   // [id][fc][arr:1][s:2][e:2][crc:2]
+        case MB_FC_DEBUG_GET_LIST:
+            if (n < 4) return 0;                        // count lives at f[2..3]
+            return 6 + 3 * (int32_t)(((uint16_t)f[2] << 8) | f[3]);
+        case MB_FC_DEBUG_SET:
+            if (n < 8) return 0;                         // value len lives at f[6..7]
+            return 10 + (int32_t)(((uint16_t)f[6] << 8) | f[7]);
+        case MB_FC_DEBUG_GET_MD5:
+            return 8;                                   // [id][fc][endian:2][00:2][crc:2]
+        default:
+            return -1;                                  // not one of our function codes
+    }
+}
+
+// Drop the first `k` bytes of the assembly buffer, keeping the remainder. Used
+// for one-byte realignment on a bad/foreign frame head — NEVER a blind flush —
+// so a genuine frame head sitting further into the buffer always survives and
+// is eventually found (guarantees resync convergence; no "discard every frame"
+// loop). Slides only run on the error path, so the O(n) cost is irrelevant.
+static void mb_rtu_drop_front(uint16_t k)
+{
+    if (k >= mb_rx_len) { mb_rx_len = 0; return; }
+    for (uint16_t i = k; i < mb_rx_len; i++)
+        mb_frame[i - k] = mb_frame[i];
+    mb_rx_len = (uint16_t)(mb_rx_len - k);
+}
+
 void handle_serial()
 {
-    mb_frame_len = 0;
-
-    if ((*mb_serialport).available() == 0)
-        return;
-
-    while ((*mb_serialport).available() > mb_frame_len)
-    {
-        mb_frame_len = (*mb_serialport).available();
-        delayMicroseconds(mb_t15);
-    }
-
-    //Check if packet is too big or too small
-    if ((*mb_serialport).available() > MAX_MB_FRAME || (*mb_serialport).available() < 6)
-    {
-        //(*mb_serialport).println("Packet too big");
-        //(*mb_serialport).flush();
-        return;
-    }
-
-    //Read packet
-    for (uint16_t i = 0; i < mb_frame_len; i++)
-    {
-        mb_frame[i] = (*mb_serialport).read();
-    }
-
-    //Validate crc
     uint16_t packet_crc;
-    //Ignore CRC errors when using debugger functions
-    if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
+
+    // 1) Drain the RX buffer without blocking. One frame's bytes may arrive
+    //    across several calls; the scan cycle is never stalled waiting on them.
+    while ((*mb_serialport).available() > 0)
     {
-        packet_crc = ((mb_frame[mb_frame_len - 2] << 8) | mb_frame[mb_frame_len - 1]);
-        if (packet_crc != calcCrc())
+        if (mb_rx_len >= MAX_MB_FRAME) break;           // full — let the parser drain it
+        mb_frame[mb_rx_len++] = (uint8_t)(*mb_serialport).read();
+        mb_rx_last_ms = millis();
+    }
+
+    // 2) Extract every complete frame in the buffer. Each iteration either
+    //    consumes/realigns by >=1 byte or returns to await more data, so the
+    //    loop always terminates.
+    for (;;)
+    {
+        if (mb_rx_len == 0)
+            return;
+
+        // Header byte-alignment: the first byte must be OUR slave id. This is
+        // the cheap framing check, and it is the ONLY validation applied to
+        // debugger frames (CRC is deliberately skipped on debug FCs for
+        // performance — those function codes are private and well-formed).
+        if (mb_frame[0] != modbus.slaveid)
         {
-        /* DEBUG
-	    char buffer[100];
-            (*mb_serialport).println("Invalid CRC for packet: ");
-            int offset = 0; // Initialize offset for buffer
-            for (int i = 0; i < mb_frame_len; i++)
-            {
-                offset += sprintf(buffer + offset, "%02X ", mb_frame[i]);
-            }
-            (*mb_serialport).println(buffer);
-            (*mb_serialport).print("Packet_crc: ");
-            (*mb_serialport).println(packet_crc);
-            (*mb_serialport).print("Calc CRC: ");
-            (*mb_serialport).println(calcCrc());
-            (*mb_serialport).flush();
-        */
-	    return;
+            mb_rtu_drop_front(1);                       // foreign/garbage head — slide
+            continue;
         }
-    }
 
-    //Validate SlaveID
-    if (mb_frame[0] != modbus.slaveid)
-    {
-        (*mb_serialport).flush();
-        return;
-    }
+        int32_t expected = mb_rtu_frame_len(mb_frame, mb_rx_len);
 
-    //Remove CRC (must do that before processing packet)
-    mb_frame_len -= 2;
+        if (expected < 0 || expected > MAX_MB_FRAME)
+        {
+            mb_rtu_drop_front(1);                       // illegal FC / impossible length
+            continue;
+        }
+        if (expected == 0 || mb_rx_len < (uint16_t)expected)
+        {
+            // Header incomplete, or the frame's tail has not arrived yet. Wait
+            // for it; abandon the partial only if its remainder never comes.
+            if ((uint32_t)(millis() - mb_rx_last_ms) > MB_RTU_FRAME_GAP_MS)
+                mb_rx_len = 0;
+            return;
+        }
 
-    //Process packet and write back
+        // 3) A full candidate frame occupies mb_frame[0 .. expected).
+        //    Standard FCs are validated by CRC (the arbiter that makes resync
+        //    trustworthy); a mismatch means corruption or misalignment, so we
+        //    slide one byte and retry instead of discarding the whole buffer.
+        if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
+        {
+            mb_frame_len = (uint16_t)expected;
+            packet_crc = ((mb_frame[expected - 2] << 8) | mb_frame[expected - 1]);
+            if (packet_crc != calcCrc())
+            {
+                mb_rtu_drop_front(1);
+                continue;
+            }
+        }
+
+        // 4) Accepted. Hand the PDU (CRC stripped) to the shared processor,
+        //    which builds the response back into mb_frame.
+        mb_frame_len = (uint16_t)expected - 2;
     process_mbpacket();
 
     //Add CRC
@@ -498,6 +577,16 @@ void handle_serial()
             digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, LOW);
         }
     #endif
+
+        // 5) The request — and the response built over it — consumed the whole
+        //    assembly buffer. Modbus RTU is turn-taking: the master waits for
+        //    this reply before sending its next request, so no following frame
+        //    can already be buffered. Reset for the next request. A
+        //    non-conformant pipelining master simply retransmits after its
+        //    timeout, and the gap/realignment logic above recovers cleanly.
+        mb_rx_len = 0;
+        return;
+    }
 }
 #endif
 
@@ -505,11 +594,9 @@ void handle_serial()
 void process_mbpacket()
 {
     uint8_t fcode  = mb_frame[1];
+    // Standard Modbus fields — preserved for the non-debug FCs.
     uint16_t field1 = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
     uint16_t field2 = (uint16_t)mb_frame[4] << 8 | (uint16_t)mb_frame[5];
-    uint8_t flag = mb_frame[4];
-    uint16_t len = (uint16_t)mb_frame[5] << 8 | (uint16_t)mb_frame[6];
-    void *value = &mb_frame[7];
     void *endianness_check = &mb_frame[2];
 
     switch (fcode)
@@ -559,18 +646,33 @@ void process_mbpacket()
         break;
 
         case MB_FC_DEBUG_GET:
-            //field1 = startidx, field2 = endidx
-            debugGetTrace(field1, field2);
+        {
+            // PDU: [FC:1][arr:u8][start_elem:u16][end_elem:u16]
+            uint8_t arr       = mb_frame[2];
+            uint16_t startIdx = (uint16_t)mb_frame[3] << 8 | (uint16_t)mb_frame[4];
+            uint16_t endIdx   = (uint16_t)mb_frame[5] << 8 | (uint16_t)mb_frame[6];
+            debugGetTrace(arr, startIdx, endIdx);
+        }
         break;
 
         case MB_FC_DEBUG_GET_LIST:
-            //field1 = numIndexes
-            debugGetTraceList(field1, &mb_frame[4]);
+        {
+            // PDU: [FC:1][count:u16][(arr:u8, elem:u16)×count]
+            uint16_t numIndexes = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
+            debugGetTraceList(numIndexes, &mb_frame[4]);
+        }
         break;
 
         case MB_FC_DEBUG_SET:
-            //field1 = varidx
-            debugSetTrace(field1, flag, len, value);
+        {
+            // PDU: [FC:1][arr:u8][elem:u16][force:u8][len:u16][value...]
+            uint8_t arr   = mb_frame[2];
+            uint16_t elem = (uint16_t)mb_frame[3] << 8 | (uint16_t)mb_frame[4];
+            uint8_t flag  = mb_frame[5];
+            uint16_t len  = (uint16_t)mb_frame[6] << 8 | (uint16_t)mb_frame[7];
+            void *value   = &mb_frame[8];
+            debugSetTrace(arr, elem, flag, len, value);
+        }
         break;
 
         case MB_FC_DEBUG_GET_MD5:
@@ -1051,13 +1153,32 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
  *
  * @return void
  */
+// Phase 4 PDU:
+// +-----+-------+------+-----------+-----------+-----------+
+// | FC  | arrs  | stat | count_0   | count_1   | ...       |
+// |0x41 | (u8)  | (u8) | (u16 BE)  | (u16 BE)  |           |
+// +-----+-------+------+-----------+-----------+-----------+
+// Response: [FC, arrCount, STATUS_OK, (count×arrCount as u16 BE)]
 void debugInfo()
 {
-    uint16_t variableCount = get_var_count();
-    mb_frame_len = 4;
+    uint8_t arrCount = openplc_debug_array_count();
+
+    // Cap at what the Modbus frame can hold: 3 header bytes + 2 bytes/array.
+    // Realistic projects have <=10 arrays, so this is never a real limit.
+    uint8_t maxArrs = (MAX_MB_FRAME - 3) / 2;
+    if (arrCount > maxArrs) arrCount = maxArrs;
+
     mb_frame[1] = MB_FC_DEBUG_INFO;
-    mb_frame[2] = (uint8_t)(variableCount >> 8); // High byte
-    mb_frame[3] = (uint8_t)(variableCount & 0xFF); // Low byte
+    mb_frame[2] = arrCount;
+    mb_frame[3] = MB_DEBUG_SUCCESS;
+    uint16_t pos = 4;
+    for (uint8_t i = 0; i < arrCount; i++)
+    {
+        uint16_t c = openplc_debug_elem_count(i);
+        mb_frame[pos++] = (uint8_t)(c >> 8);
+        mb_frame[pos++] = (uint8_t)(c & 0xFF);
+    }
+    mb_frame_len = pos;
 }
 
 /**
@@ -1082,25 +1203,25 @@ void debugInfo()
  *
  * @return void
  */
-void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
+// Phase 4 PDU: [FC, arr, elem_hi, elem_lo, force, len_hi, len_lo, value...]
+// Response:    [FC, STATUS]
+void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
+                   uint16_t len, void *value)
 {
-    uint16_t variableCount = get_var_count();
-    if (varidx >= variableCount || len > (MAX_MB_FRAME - 7))
+    if (len > (MAX_MB_FRAME - 8))
     {
-        // Respond with an error indicating that the index is out of range
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_SET;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
         return;
     }
 
-    // Execute set trace command
-    set_trace((size_t)varidx, (bool)flag, value);
+    uint8_t status = openplc_debug_set(
+        arr, elem, (uint8_t)flag, (const uint8_t *)value, len);
 
-    // Response
     mb_frame_len = 3;
     mb_frame[1] = MB_FC_DEBUG_SET;
-    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[2] = status;
 }
 
 /**
@@ -1123,58 +1244,58 @@ void debugSetTrace(uint16_t varidx, uint8_t flag, uint16_t len, void *value)
  *
  * @return void
  */
-void debugGetTrace(uint16_t startidx, uint16_t endidx)
+// Phase 4 PDU: [FC, arr, start_hi, start_lo, end_hi, end_lo]
+// Response: [FC, STATUS, last_elem_hi, last_elem_lo,
+//            tick_hi, tick_mh, tick_ml, tick_lo,
+//            size_hi, size_lo, data...]
+void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
 {
-    uint16_t variableCount = get_var_count();
-    // Verify that startidx and endidx fall within the valid range of variables
-    if (startidx >= variableCount || endidx >= variableCount || startidx > endidx)
+    uint16_t arrCount = openplc_debug_elem_count(arr);
+    if (arrCount == 0 || startidx >= arrCount ||
+        endidx >= arrCount || startidx > endidx)
     {
-        // Respond with an error indicating that the indices are out of range
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_GET;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
         return;
     }
 
-    uint16_t lastVarIdx = startidx;
-    size_t responseSize = 0;
-    uint8_t *responsePtr = &(mb_frame[11]); // Start of response data
+    uint16_t lastElemIdx = startidx;
+    uint16_t responseSize = 0;
+    uint8_t *responsePtr = &(mb_frame[11]);
 
-    for (uint16_t varidx = startidx; varidx <= endidx; varidx++)
+    for (uint16_t elem = startidx; elem <= endidx; elem++)
     {
-        size_t varSize = get_var_size(varidx);
-        if ((responseSize + 11) + varSize <= MAX_MB_FRAME) // Make sure the response fits
-        {
-            void *varAddr = get_var_addr(varidx);
-
-            // Copy the variable value to the response buffer
-            memcpy(responsePtr, varAddr, varSize);
-
-            // Update response pointer and size
-            responsePtr += varSize;
-            responseSize += varSize;
-
-            // Update the lastVarIdx
-            lastVarIdx = varidx;
+        uint16_t varSize = openplc_debug_size(arr, elem);
+        // Bounds check — stop packing if this one won't fit.
+        if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
+        if (varSize == 0) {
+            // Entry has no readable bytes (string stub / out-of-bounds)
+            // — skip gracefully to keep the scan progressing.
+            lastElemIdx = elem;
+            continue;
         }
-        else
-        {
-            // Response buffer is full, break the loop
-            break;
+        uint16_t n = openplc_debug_read(arr, elem, responsePtr);
+        if (n == 0) {
+            lastElemIdx = elem;
+            continue;
         }
+        responsePtr += n;
+        responseSize += n;
+        lastElemIdx = elem;
     }
 
-    mb_frame_len = 7 + responseSize; // Update response length
+    mb_frame_len = 11 + responseSize;
     mb_frame[1] = MB_FC_DEBUG_GET;
     mb_frame[2] = MB_DEBUG_SUCCESS;
-    mb_frame[3] = (uint8_t)(lastVarIdx >> 8); // High byte
-    mb_frame[4] = (uint8_t)(lastVarIdx & 0xFF); // Low byte
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF); // Highest byte
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF); // Second highest byte
-    mb_frame[7] = (uint8_t)((__tick >> 8) & 0xFF);  // Second lowest byte
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);         // Lowest byte
-    mb_frame[9] = (uint8_t)(responseSize >> 8); // High byte
-    mb_frame[10] = (uint8_t)(responseSize & 0xFF); // Low byte
+    mb_frame[3] = (uint8_t)(lastElemIdx >> 8);
+    mb_frame[4] = (uint8_t)(lastElemIdx & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
+    mb_frame[9]  = (uint8_t)(responseSize >> 8);
+    mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }
 
 /**
@@ -1197,12 +1318,17 @@ void debugGetTrace(uint16_t startidx, uint16_t endidx)
  *
  * @return void
  */
+// Phase 4 PDU: [FC, count_hi, count_lo, (arr:u8, elem_hi, elem_lo)×count]
+// Response: [FC, STATUS, last_idx_hi, last_idx_lo,
+//            tick_hi, tick_mh, tick_ml, tick_lo,
+//            size_hi, size_lo, data...]
+// last_idx is the index *into the request list* that was last successfully
+// included — the editor uses it to retry from the next item on overflow.
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
 {
-    uint16_t response_idx = 11;  // Start of response data in the response buffer
+    uint16_t response_idx = 11;
     uint16_t responseSize = 0;
-    uint16_t lastVarIdx = 0;
-    uint16_t variableCount = get_var_count();
+    uint16_t lastReqIdx = 0;
 
     #ifdef MBSERIAL
         #define VARIDX_SIZE 20
@@ -1210,98 +1336,87 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
         #define VARIDX_SIZE 60
     #endif
 
-    uint16_t varidx_array[VARIDX_SIZE];
-
-    // Validate if buffer has space for all indexes
     if (numIndexes > VARIDX_SIZE)
     {
-        // Respond with a memory error
         mb_frame_len = 3;
         mb_frame[1] = MB_FC_DEBUG_GET_LIST;
         mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_MEMORY;
         return;
     }
 
-    // Copy all indexes to array
-    for (uint16_t i = 0; i < numIndexes; i++)
-    {
-        varidx_array[i] = (uint16_t)indexArray[i * 2] << 8 | indexArray[i * 2 + 1];
+    // The request indexArray (at mb_frame[4..]) and the response buffer
+    // (mb_frame[11..]) overlap. Once handle_read writes the first response
+    // byte, later index entries inside mb_frame are clobbered. Snapshot the
+    // request first.
+    uint8_t localIndex[VARIDX_SIZE * 3];
+    for (uint16_t i = 0; i < numIndexes * 3; i++) {
+        localIndex[i] = indexArray[i];
     }
 
-    // Validate if all requested indexes are in range
+    // Each address pair is 3 bytes: [arr:u8, elem_hi, elem_lo]
     for (uint16_t i = 0; i < numIndexes; i++)
     {
-        if (varidx_array[i] >= variableCount)
-        {
-            // Respond with an error indicating that the index is out of range
-            mb_frame_len = 3;
-            mb_frame[1] = MB_FC_DEBUG_GET_LIST;
-            mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
-            return;
-        }
+        uint8_t  arr  = localIndex[i * 3];
+        uint16_t elem = (uint16_t)localIndex[i * 3 + 1] << 8 |
+                         (uint16_t)localIndex[i * 3 + 2];
 
-        // Add requested indexes and their traces to the response buffer
-        size_t varSize = get_var_size(varidx_array[i]);
-
-        // Make sure there is enough space in the response buffer
-        if (response_idx + varSize <= MAX_MB_FRAME)
+        uint16_t varSize = openplc_debug_size(arr, elem);
+        if (varSize == 0)
         {
-            // Add variable data to the response buffer
-            void *varAddr = get_var_addr(varidx_array[i]);
-            memcpy(&mb_frame[response_idx], varAddr, varSize);
-            response_idx += varSize;
-            responseSize += varSize;
+            // Out-of-bounds or string stub — skip gracefully.
+            lastReqIdx = i;
+            continue;
+        }
+        if ((response_idx + varSize) > MAX_MB_FRAME) break;
 
-            // Update the lastVarIdx
-            lastVarIdx = varidx_array[i];
-        }
-        else
+        uint16_t n = openplc_debug_read(arr, elem, &mb_frame[response_idx]);
+        if (n == 0)
         {
-            // Response buffer is full, break the loop
-            break;
+            lastReqIdx = i;
+            continue;
         }
+        response_idx += n;
+        responseSize += n;
+        lastReqIdx = i;
     }
 
-    // Update response length, lastVarIdx, and response size
     mb_frame_len = response_idx;
     mb_frame[1] = MB_FC_DEBUG_GET_LIST;
     mb_frame[2] = MB_DEBUG_SUCCESS;
-    mb_frame[3] = (uint8_t)(lastVarIdx >> 8); // High byte
-    mb_frame[4] = (uint8_t)(lastVarIdx & 0xFF); // Low byte
-    mb_frame[5] = (uint8_t)((__tick >> 24) & 0xFF); // Highest byte
-    mb_frame[6] = (uint8_t)((__tick >> 16) & 0xFF); // Second highest byte
-    mb_frame[7] = (uint8_t)((__tick >> 8) & 0xFF);  // Second lowest byte
-    mb_frame[8] = (uint8_t)(__tick & 0xFF);         // Lowest byte
-    mb_frame[9] = (uint8_t)(responseSize >> 8); // High byte
-    mb_frame[10] = (uint8_t)(responseSize & 0xFF); // Low byte
+    mb_frame[3] = (uint8_t)(lastReqIdx >> 8);
+    mb_frame[4] = (uint8_t)(lastReqIdx & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[7] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[8] = (uint8_t)(scan_counter & 0xFF);
+    mb_frame[9]  = (uint8_t)(responseSize >> 8);
+    mb_frame[10] = (uint8_t)(responseSize & 0xFF);
 }
 
-void debugGetMd5(void *endianness)
+// PDU request:  [FC, endian_check_hi, endian_check_lo]
+// PDU response: [FC, STATUS, md5_ascii..., endian_marker_hi, endian_marker_lo]
+//
+// The target always writes variable data in native byte order — STruC++ does
+// no server-side byte-order adaptation, force/read is pure memcpy.  To let
+// the editor detect what "native" means here, the MD5 response trailer
+// writes the literal value 0xDEAD via a native `uint16_t*` store.  The
+// bytes that land in the response are therefore in the target's native
+// byte order:
+//
+//     LE target  →  trailer bytes = [0xAD, 0xDE]
+//     BE target  →  trailer bytes = [0xDE, 0xAD]
+//
+// The editor inspects those two bytes after MD5 verification and decides
+// whether subsequent force/read traffic needs byte-swapping at its end.
+//
+// The probe bytes the editor sends are intentionally ignored — the trailer
+// is a runtime-driven sentinel, not an echo.  The argument stays in the
+// signature for ABI compatibility with the dispatcher.
+void debugGetMd5(void * /*endianness*/)
 {
-    // Check endianness
-    uint16_t endian_check = 0;
-    memcpy(&endian_check, endianness, 2);
-    if (endian_check == 0xDEAD)
-    {
-        set_endianness(SAME_ENDIANNESS);
-    }
-    else if (endian_check == 0xADDE)
-    {
-        set_endianness(REVERSE_ENDIANNESS);
-    }
-    else
-    {
-        // Respond with an error indicating that the argument is wrong
-        mb_frame_len = 3;
-        mb_frame[1] = MB_FC_DEBUG_GET_MD5;
-        mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
-        //return;
-    }
-
     mb_frame[1] = MB_FC_DEBUG_GET_MD5;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    // Copy MD5 string byte by byte to mb_frame starting from index 3
     const char md5[] = PROGRAM_MD5;
     int md5_len = 0;
     for (md5_len = 0; md5[md5_len] != '\0'; md5_len++)
@@ -1309,8 +1424,19 @@ void debugGetMd5(void *endianness)
         mb_frame[md5_len + 3] = md5[md5_len];
     }
 
-    // Calculate mb_frame_len (MD5 string length + 3)
-    mb_frame_len = md5_len + 3;
+    // Native-order store of the endianness sentinel.  Written byte-wise
+    // (not via `*reinterpret_cast<uint16_t*>`) because `md5_len + 3` is an
+    // odd offset for a 32-char MD5, and a typed 16-bit store there is an
+    // unaligned access that HardFaults on Cortex-M0+ (SAMD21: MKR Zero /
+    // P1AM-100) — hanging the device on the first debugger request. Copying
+    // the two bytes of a native-order uint16_t preserves the target's byte
+    // ordering (the signal the editor uses to choose its swap behaviour)
+    // while keeping every access byte-aligned.
+    const uint16_t endian_sentinel = 0xDEAD;
+    const uint8_t *sentinel_bytes = reinterpret_cast<const uint8_t *>(&endian_sentinel);
+    mb_frame[md5_len + 3] = sentinel_bytes[0];
+    mb_frame[md5_len + 4] = sentinel_bytes[1];
+    mb_frame_len = md5_len + 5;
 }
 
 uint16_t calcCrc()

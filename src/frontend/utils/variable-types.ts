@@ -81,7 +81,13 @@ export const integerToBuffer = (value: bigint, byteSize: number, signed: boolean
     workingValue = maxUnsigned + value
   }
 
-  for (let i = byteSize - 1; i >= 0; i--) {
+  // Little-endian: matches what the runtime memcpy's into the IEC
+  // integer variable on every supported target.  The previous
+  // descending-index loop emitted big-endian bytes, which is why
+  // forcing a DINT to e.g. 0x12345678 ended up stored as 0x78563412.
+  // BOOL forcing didn't hit this because it bypasses this helper
+  // (single-byte inline `new Uint8Array([1])`).
+  for (let i = 0; i < byteSize; i++) {
     buffer[i] = Number(workingValue & BigInt(0xff))
     workingValue = workingValue >> BigInt(8)
   }
@@ -112,10 +118,17 @@ export const floatToBuffer = (value: number, byteSize: number): Uint8Array => {
   const buffer = new Uint8Array(byteSize)
   const dataView = new DataView(buffer.buffer)
 
+  // Little-endian: the runtime memcpy's these bytes straight into a
+  // `float`/`double`, and every supported target (AVR, ARM Cortex-M,
+  // x86_64) stores IEEE 754 little-endian.  The READ decoder in
+  // `variable-sizes.ts` and the parallel encoder in
+  // `encodeForceValue` both already use `true` here — this writer
+  // used to disagree, which made forcing a REAL to 123.4 store the
+  // byte-swapped value (e.g. -429836352).
   if (byteSize === 4) {
-    dataView.setFloat32(0, value, false)
+    dataView.setFloat32(0, value, true)
   } else if (byteSize === 8) {
-    dataView.setFloat64(0, value, false)
+    dataView.setFloat64(0, value, true)
   }
 
   return buffer

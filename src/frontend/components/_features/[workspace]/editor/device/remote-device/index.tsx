@@ -1,7 +1,6 @@
-import * as Popover from '@radix-ui/react-popover'
 import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
@@ -10,12 +9,12 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
+import { GenericComboboxCell } from '../../../../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import ScrollAreaComponent from '../../../../../ui/scroll-area'
 
 type FunctionCodeOption = {
   value: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'
@@ -43,6 +42,12 @@ const TRANSPORT_OPTIONS = [
   { value: 'tcp', label: 'TCP/IP' },
   { value: 'rtu', label: 'RTU (Serial)' },
 ]
+
+// Default serial port for RTU devices.  Pre-filled as a real value (not
+// just the combobox placeholder) so it is persisted to the device config
+// and reaches the compiler — an empty serial port makes the runtime drop
+// the Modbus master plugin entirely.
+const DEFAULT_SERIAL_PORT = '/dev/ttyUSB0'
 
 // RTU configuration options
 const BAUD_RATE_OPTIONS = [
@@ -86,12 +91,19 @@ type SerialPortComboboxProps = {
   options: SerialPortOption[]
   isLoading?: boolean
   placeholder?: string
-  className?: string
 }
 
+// Field-style trigger (bordered, chevron) matching the other RTU config fields.
+const SERIAL_PORT_TRIGGER_CLASS =
+  'flex h-[30px] w-full max-w-[200px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-normal text-neutral-700 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-100'
+
 /**
- * Editable combobox for serial port selection.
- * Shows a dropdown with available ports from runtime, but also allows typing custom values.
+ * Editable serial-port picker for RTU devices.
+ *
+ * A thin wrapper over the shared GenericComboboxCell — the single combobox in the
+ * app. Runtime-discovered ports populate the list (filterable, case-insensitive),
+ * and the user can still type a custom device path (`canAddACustomOption`) that
+ * propagates verbatim through onValueChange to the device config.
  */
 const SerialPortCombobox = ({
   value,
@@ -100,176 +112,34 @@ const SerialPortCombobox = ({
   isLoading = false,
   placeholder = '/dev/ttyUSB0',
 }: SerialPortComboboxProps) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const [inputValue, setInputValue] = useState(value)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const optionRefs = useRef<Array<HTMLDivElement | null>>([])
-  const [highlightedIndex, setHighlightedIndex] = useState(-1)
-
-  // Sync input value with external value changes
-  useEffect(() => {
-    setInputValue(value)
-  }, [value])
-
-  // Filter options based on input
-  const filteredOptions = useMemo(() => {
-    if (!inputValue.trim()) return options
-    const lowerInput = inputValue.toLowerCase()
-    return options.filter(
-      (opt) => opt.value.toLowerCase().includes(lowerInput) || opt.label.toLowerCase().includes(lowerInput),
-    )
-  }, [options, inputValue])
-
-  // Focus input when dropdown opens
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        inputRef.current?.focus()
-        // Find and highlight current value in list
-        const currentIndex = filteredOptions.findIndex((opt) => opt.value === value)
-        setHighlightedIndex(currentIndex >= 0 ? currentIndex : -1)
-      }, 0)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
-
-  // Scroll highlighted option into view
-  useEffect(() => {
-    if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length && optionRefs.current[highlightedIndex]) {
-      optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlightedIndex, filteredOptions.length])
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value)
-    setHighlightedIndex(-1)
-  }
-
-  const handleInputBlur = () => {
-    // Commit the value on blur if it changed
-    if (inputValue !== value) {
-      onValueChange(inputValue)
-    }
-  }
-
-  const handleSelectOption = (optionValue: string) => {
-    setInputValue(optionValue)
-    onValueChange(optionValue)
-    setIsOpen(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => (prev < filteredOptions.length - 1 ? prev + 1 : 0))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredOptions.length - 1))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
-        handleSelectOption(filteredOptions[highlightedIndex].value)
-      } else if (inputValue.trim()) {
-        onValueChange(inputValue.trim())
-        setIsOpen(false)
-      }
-    } else if (e.key === 'Escape') {
-      setIsOpen(false)
-    }
-  }
-
-  // Handle popover open/close - commit pending value when closing
-  const handleOpenChange = (open: boolean) => {
-    // When closing, commit any pending value before the input unmounts
-    // This handles the case where user types a value and clicks outside
-    if (!open && inputValue.trim() !== value) {
-      onValueChange(inputValue.trim())
-    }
-    setIsOpen(open)
-  }
+  // Map runtime ports to options. The device path is the value that propagates;
+  // the human description (when distinct) is appended to the visible label.
+  const selectValues = useMemo(
+    () =>
+      isLoading
+        ? []
+        : options.map((opt) => ({
+            id: opt.value,
+            value: opt.value,
+            label: opt.label && opt.label !== opt.value ? `${opt.value} — ${opt.label}` : opt.value,
+          })),
+    [options, isLoading],
+  )
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={handleOpenChange}>
-      <Popover.Trigger asChild>
-        <button
-          type='button'
-          className='flex h-[30px] w-full max-w-[200px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-        >
-          <span className='truncate text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-            {value || placeholder}
-          </span>
-          <ArrowIcon size='sm' className={cn('rotate-270 stroke-brand transition-all', isOpen && 'rotate-90')} />
-        </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          sideOffset={5}
-          align='start'
-          className='z-50 w-[--radix-popover-trigger-width] min-w-[200px] rounded-lg border border-neutral-300 bg-white shadow-lg outline-none dark:border-brand-medium-dark dark:bg-neutral-950'
-        >
-          <div className='p-2'>
-            <InputWithRef
-              ref={inputRef}
-              value={inputValue}
-              onChange={handleInputChange}
-              onBlur={handleInputBlur}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              className='h-[28px] w-full rounded-md border border-neutral-200 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
-            />
-          </div>
-          <ScrollAreaComponent.Root type='always'>
-            <ScrollAreaComponent.Viewport className='max-h-[200px]'>
-              {isLoading ? (
-                <div className='flex items-center justify-center py-2 text-xs text-neutral-500'>Loading ports...</div>
-              ) : filteredOptions.length > 0 ? (
-                filteredOptions.map((option, index) => (
-                  <div
-                    key={option.value}
-                    ref={(el) => (optionRefs.current[index] = el)}
-                    className={cn(
-                      'flex w-full cursor-pointer flex-col px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                      (value === option.value || highlightedIndex === index) && 'bg-neutral-100 dark:bg-neutral-800',
-                    )}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    onClick={() => handleSelectOption(option.value)}
-                    role='option'
-                    aria-selected={highlightedIndex === index}
-                  >
-                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      {option.value}
-                    </span>
-                    {option.label !== option.value && (
-                      <span className='text-start font-caption text-[10px] font-normal text-neutral-500 dark:text-neutral-400'>
-                        {option.label}
-                      </span>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className='px-2 py-2 text-center text-xs text-neutral-500'>
-                  {options.length === 0
-                    ? 'No ports available. Type a custom value.'
-                    : 'No matches. Type a custom value.'}
-                </div>
-              )}
-            </ScrollAreaComponent.Viewport>
-            <ScrollAreaComponent.ScrollBar />
-          </ScrollAreaComponent.Root>
-          {inputValue.trim() && !filteredOptions.some((opt) => opt.value === inputValue.trim()) && (
-            <div
-              className='flex cursor-pointer items-center gap-2 border-t border-neutral-200 px-2 py-1 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'
-              onClick={() => handleSelectOption(inputValue.trim())}
-            >
-              <PlusIcon className='h-3 w-3 stroke-brand' />
-              <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                Use "{inputValue.trim()}"
-              </span>
-            </div>
-          )}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <GenericComboboxCell
+      value={value}
+      onValueChange={onValueChange}
+      selectValues={selectValues}
+      displayLabel={value || placeholder}
+      canAddACustomOption
+      showClearOption={false}
+      showChevron
+      triggerClassName={SERIAL_PORT_TRIGGER_CLASS}
+      placeholder={placeholder}
+      customValueLabel='Use custom port'
+      emptyMessage={isLoading ? 'Loading ports...' : 'No ports available. Type a custom value.'}
+    />
   )
 }
 
@@ -632,8 +502,9 @@ const RemoteDeviceEditor = () => {
       // TCP fields
       setHost(config.host ?? '127.0.0.1')
       setPort((config.port ?? 502).toString())
-      // RTU fields
-      setSerialPort(config.serialPort ?? '')
+      // RTU fields — show the default serial port as a real value when
+      // none is stored (the self-heal effect below persists it).
+      setSerialPort(config.serialPort || DEFAULT_SERIAL_PORT)
       setBaudRate((config.baudRate ?? 9600).toString())
       setParity(config.parity ?? 'N')
       setStopBits((config.stopBits ?? 1).toString())
@@ -645,7 +516,7 @@ const RemoteDeviceEditor = () => {
       setTransport('tcp')
       setHost('127.0.0.1')
       setPort('502')
-      setSerialPort('')
+      setSerialPort(DEFAULT_SERIAL_PORT)
       setBaudRate('9600')
       setParity('N')
       setStopBits('1')
@@ -654,6 +525,19 @@ const RemoteDeviceEditor = () => {
       setSlaveId('1')
     }
   }, [remoteDevice])
+
+  // Self-heal: an RTU device must carry a concrete serial port, otherwise
+  // the compiler silently drops it from the Modbus master config.  The UI
+  // shows DEFAULT_SERIAL_PORT as a real value, so persist it whenever the
+  // stored config has none — keeping disk in sync with what's displayed
+  // and fixing projects saved before the serial port was pre-filled.
+  useEffect(() => {
+    const config = remoteDevice?.modbusTcpConfig
+    if (config && (config.transport ?? 'tcp') === 'rtu' && !config.serialPort) {
+      projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: DEFAULT_SERIAL_PORT })
+      sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
+    }
+  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions])
 
   const ioGroups = useMemo(
     () => remoteDevice?.modbusTcpConfig?.ioGroups || [],

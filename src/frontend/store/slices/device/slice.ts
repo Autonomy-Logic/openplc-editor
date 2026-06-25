@@ -3,27 +3,43 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/types'
-import type { DeviceSlice, PinUpdateResponse } from './types'
+import type { DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import {
+  checkIfPinAliasIsValid,
   checkIfPinIsValid,
-  checkIfPinNameIsValid,
   createNewAddress,
   getHighestPinAddress,
   removeAddressPrefix,
 } from './validation/pins'
 
-const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
+/**
+ * Lazily resolve the active board's pin array on an Immer draft,
+ * creating the entry the first time a board claims pins. Returns a
+ * reference that's safe to mutate (push / splice / index-assign) —
+ * the surrounding `produce()` call captures the changes.
+ *
+ * Centralising this keeps every action's "operate on the current
+ * board's pins" intent obvious and prevents a stale write when the
+ * dict didn't yet have a key for the active board (which would
+ * otherwise crash with `Cannot read properties of undefined`).
+ */
+function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
+  const board = draft.deviceDefinitions.configuration.deviceBoard
+  if (!draft.deviceDefinitions.pinMapping.pinsByBoard[board]) {
+    draft.deviceDefinitions.pinMapping.pinsByBoard[board] = []
+  }
+  return draft.deviceDefinitions.pinMapping.pinsByBoard[board]
+}
+
+const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
-    availableRTUInterfaces: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
-    availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
-    availableTCPInterfaces: ['Ethernet', 'Wi-Fi'],
   },
   deviceDefinitions: {
     configuration: defaultDeviceConfiguration,
     pinMapping: {
-      pins: [],
+      pinsByBoard: {},
       currentSelectedPinTableRow: -1,
     },
   },
@@ -55,6 +71,28 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           }
         }),
       )
+
+      // availableBoards drives target-capability resolution, which the
+      // alias registry depends on. This action is the project-load
+      // sync point: the workspace screen calls us once it finishes
+      // board discovery, so by the time we run, the active target's
+      // capabilities resolve correctly. Re-syncing on every subsequent
+      // boards refresh (e.g. VPP package install) catches capability
+      // shifts for the active board.
+      //
+      // We only sync when `availableBoards` was actually provided —
+      // ports-only updates (e.g. board.tsx refresh-ports) don't affect
+      // capabilities and shouldn't churn the alias registry.
+      if (availableBoards) {
+        const syncReport = getState().projectActions.syncVariableAliases()
+        if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
+          getState().consoleActions.addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: `Alias sync: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
+          })
+        }
+      }
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(
@@ -66,7 +104,18 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             }
           }
           if (pinMapping) {
-            deviceDefinitions.pinMapping.pins = pinMapping
+            // Two shapes are accepted by design — see DeviceActions.setDeviceDefinitions.
+            // Legacy flat array attaches to whatever board the
+            // accompanying configuration names (or the current
+            // store value if no configuration was passed). This
+            // is the migration path for projects saved before
+            // per-board scoping landed.
+            if (Array.isArray(pinMapping)) {
+              const targetBoard = deviceDefinitions.configuration.deviceBoard
+              deviceDefinitions.pinMapping.pinsByBoard = targetBoard ? { [targetBoard]: pinMapping } : {}
+            } else {
+              deviceDefinitions.pinMapping.pinsByBoard = { ...pinMapping }
+            }
             deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
           }
         }),
@@ -77,7 +126,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
-            pins: [],
+            pinsByBoard: {},
             currentSelectedPinTableRow: -1,
           }
           runtimeConnection.jwtToken = null
@@ -110,64 +159,68 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
     createNewPin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
 
-          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const referencePin = pins[pinMapping.currentSelectedPinTableRow]
           const defaultPinType = 'digitalInput'
-          const nextHighestPinAddress = getHighestPinAddress(pinMapping.pins, defaultPinType)
+          const nextHighestPinAddress = getHighestPinAddress(pins, defaultPinType)
           const nextAddress = createNewAddress('INCREMENT', nextHighestPinAddress)
 
           let newPin: DevicePin = {
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: '',
+            alias: '',
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
-            pinMapping.pins.push(newPin)
-            pinMapping.currentSelectedPinTableRow = pinMapping.pins.length - 1
+            pins.push(newPin)
+            pinMapping.currentSelectedPinTableRow = pins.length - 1
             return
           }
 
           const newAddress = createNewAddress('INCREMENT', referencePin.address)
-          const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
+          const pinExists = pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: '' }
-            pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, alias: '' }
+            pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
           }
 
-          const highestPinAddress = getHighestPinAddress(pinMapping.pins, pinExists.pinType)
-          const indexOfHighestPinAddress = pinMapping.pins.findIndex((pin) => pin.address === highestPinAddress)
+          const highestPinAddress = getHighestPinAddress(pins, pinExists.pinType)
+          const indexOfHighestPinAddress = pins.findIndex((pin) => pin.address === highestPinAddress)
           const newAddressForHighestPinAddress = createNewAddress('INCREMENT', highestPinAddress)
           const newPinForHighestPinAddress = {
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
-            name: '',
+            alias: '',
           }
 
-          pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
+          pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
           pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
         }),
       )
     },
     removePin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
 
-          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const referencePin = pins[pinMapping.currentSelectedPinTableRow]
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) return
 
           const referencePinType = referencePin.pinType
           const referencePinAddressPosition = Number(removeAddressPrefix(referencePin.address))
 
-          pinMapping.pins.forEach((pin) => {
+          pins.forEach((pin) => {
             if (
               pin.pinType === referencePinType &&
               Number(removeAddressPrefix(pin.address)) > referencePinAddressPosition
@@ -177,13 +230,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           })
 
           const selectedRow =
-            pinMapping.pins.length - 1 > 0
-              ? pinMapping.pins.length - 1 === pinMapping.currentSelectedPinTableRow
+            pins.length - 1 > 0
+              ? pins.length - 1 === pinMapping.currentSelectedPinTableRow
                 ? Math.max(pinMapping.currentSelectedPinTableRow - 1, 0)
                 : pinMapping.currentSelectedPinTableRow
               : -1
 
-          pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
+          pins.splice(pinMapping.currentSelectedPinTableRow, 1)
           pinMapping.currentSelectedPinTableRow = selectedRow
         }),
       )
@@ -193,13 +246,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         ok: true,
         title: '',
         message: '',
-        data: { pin: '', pinType: '', address: '', name: '' },
+        data: { pin: '', pinType: '', address: '', alias: '' },
       }
       setState(
-        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
+        produce((draft: DeviceSlice) => {
+          draft.deviceUpdated.updated = true
+          const pins = getActivePinsDraft(draft)
+          const { pinMapping } = draft.deviceDefinitions
+          const activeBoard = draft.deviceDefinitions.configuration.deviceBoard
 
-          const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const currentPin = pins[pinMapping.currentSelectedPinTableRow]
 
           if (!currentPin) {
             returnMessage.ok = false
@@ -211,7 +267,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           for (const key in updatedData) {
             switch (key) {
               case 'pin': {
-                const validation = checkIfPinIsValid(pinMapping.pins, updatedData.pin)
+                const validation = checkIfPinIsValid(pins, updatedData.pin)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
@@ -232,7 +288,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                   const originalIndex = pinMapping.currentSelectedPinTableRow
 
-                  const newPinsArray = pinMapping.pins
+                  const newPinsArray = pins
                     .filter((_, index) => index !== originalIndex)
                     .map((p) => {
                       if (p.pinType === oldPinType && Number(removeAddressPrefix(p.address)) > oldAddressPosition) {
@@ -265,9 +321,11 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
                     return Number(removeAddressPrefix(a.address)) - Number(removeAddressPrefix(b.address))
                   })
 
-                  pinMapping.pins = newPinsArray
-
-                  pinMapping.currentSelectedPinTableRow = pinMapping.pins.findIndex((p) => p === currentPin)
+                  // Replace the active board's bucket with the
+                  // re-sorted array. Re-resolve currentPin's index
+                  // by identity — the sort moved it.
+                  pinMapping.pinsByBoard[activeBoard] = newPinsArray
+                  pinMapping.currentSelectedPinTableRow = newPinsArray.findIndex((p) => p === currentPin)
 
                   returnMessage.data!.pinType = newPinType
                   returnMessage.data!.address = finalAddress
@@ -288,16 +346,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                 break
 
-              case 'name': {
-                const validation = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+              case 'alias': {
+                const validation = checkIfPinAliasIsValid(pins, updatedData.alias)
                 if (!validation.ok) {
                   returnMessage.ok = false
                   returnMessage.title = validation.title
                   returnMessage.message = validation.message
                   return
                 }
-                currentPin.name = updatedData.name
-                returnMessage.data!.name = updatedData.name || ''
+                currentPin.alias = updatedData.alias
+                returnMessage.data!.alias = updatedData.alias || ''
                 return
               }
 
@@ -313,7 +371,54 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
+          // Wipe platformOption selections when the board changes — they're
+          // declared per-board in the VPP manifest, so a `cpu=atmega328old`
+          // choice from a previous Nano session shouldn't bleed into a fresh
+          // Mega/Opta/etc. setup. Compile-time code falls back to each
+          // manifest's `default` when the record is empty.
+          //
+          // Pin mappings on the other hand stay on disk per-board (the
+          // `pinsByBoard` dict), so switching here just changes which
+          // bucket the active selector pulls from — the previous board's
+          // pins are preserved for when the user switches back. The
+          // selected-row pointer is reset because the new board's
+          // bucket has its own row count.
+          if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+            deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+            // Vendor-screen data is board-specific (a backplane configured for
+            // one target is meaningless on another). Stash the outgoing board's
+            // data into its bucket, then swap the active view to the incoming
+            // board's bucket (empty when it was never configured) — the
+            // previous board's modules are preserved for when the user returns,
+            // and the new board starts clean instead of inheriting stale slots.
+            const cfg = deviceDefinitions.configuration
+            syncActiveBoardVendorBucket(cfg)
+            cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
+          }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
+        }),
+      )
+    },
+    setSelectedPlatformOption: (key, value): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          /* istanbul ignore if -- selectedPlatformOptions is always initialized to {} on
+             store creation (defaults + the merge in normalizeConfigurationForLoad), so this
+             defensive guard only fires if the store is ever migrated from an older shape */
+          if (!deviceDefinitions.configuration.selectedPlatformOptions) {
+            deviceDefinitions.configuration.selectedPlatformOptions = {}
+          }
+          deviceDefinitions.configuration.selectedPlatformOptions[key] = value
+        }),
+      )
+    },
+    clearSelectedPlatformOptions: (): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          deviceDefinitions.configuration.selectedPlatformOptions = {}
         }),
       )
     },
@@ -322,101 +427,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
           deviceDefinitions.configuration.communicationPort = communicationPort
-        }),
-      )
-    },
-    setCommunicationPreferences: (preferences) => {
-      setState(
-        produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (preferences.enableRTU !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
-          }
-          if (preferences.enableTCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
-          }
-          if (preferences.enableDHCP !== undefined) {
-            configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
-          }
-        }),
-      )
-    },
-    setRTUConfig: (rtuConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { rtuConfig, value } = rtuConfigOption
-          switch (rtuConfig) {
-            case 'rtuBaudRate':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate = value
-              break
-            case 'rtuInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface = value
-              break
-            case 'rtuSlaveId':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId = value
-              break
-            case 'rtuRS485ENPin':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin = value
-              break
-          }
-        }),
-      )
-    },
-    setTCPConfig: (tcpConfigOption): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          const { tcpConfig, value } = tcpConfigOption
-          switch (tcpConfig) {
-            case 'tcpInterface':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface = value
-              break
-            case 'tcpMacAddress':
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress = value
-              break
-          }
-        }),
-      )
-    },
-    setWifiConfig: (wifiConfig): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
-            if (wifiConfig.tcpWifiSSID)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
-            if (wifiConfig.tcpWifiPassword)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword =
-                wifiConfig.tcpWifiPassword
-          }
-        }),
-      )
-    },
-    setStaticHostConfiguration: (staticHostConfiguration): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          if (staticHostConfiguration.ipAddress !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
-              staticHostConfiguration.ipAddress
-          if (staticHostConfiguration.dns !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.dns =
-              staticHostConfiguration.dns
-          if (staticHostConfiguration.gateway !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.gateway =
-              staticHostConfiguration.gateway
-          if (staticHostConfiguration.subnet !== undefined)
-            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
-              staticHostConfiguration.subnet
-        }),
-      )
-    },
-    setCompileOnly: (compileOnly): void => {
-      setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true
-          deviceDefinitions.configuration.compileOnly = compileOnly
         }),
       )
     },
@@ -514,31 +524,113 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setVendorScreenData: (persistenceKey, data): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+          syncActiveBoardVendorBucket(deviceDefinitions.configuration)
+        }),
+      )
+    },
+    /**
+     * Restore a contiguous slice of `vendorScreenData` from a snapshot.
+     * Used by the vendor-screen tab's "Don't save" revert path: the
+     * snapshot was captured when the tab opened (or on last save),
+     * and applying it back means deleting any keys the user added in
+     * this session and putting the rest back to their original
+     * values.  Keys outside `ownedKeys` are left untouched so other
+     * vendor-screen tabs and the device editor don't see unrelated
+     * mutations.
+     */
+    restoreVendorScreenSlice: (ownedKeys, snapshot): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          const target = deviceDefinitions.configuration.vendorScreenData
+          for (const key of ownedKeys) {
+            if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+              target[key] = snapshot[key]
+            } else {
+              delete target[key]
+            }
+          }
+          syncActiveBoardVendorBucket(deviceDefinitions.configuration)
+        }),
+      )
+    },
   },
 })
+
+/**
+ * Keep the active board's bucket in `vendorScreenDataByBoard` in lock-step
+ * with the flat `vendorScreenData` view. Called from every vendor-data
+ * mutation so the per-board archive is always current for the active board —
+ * which in turn lets board-switch and save treat the archive as authoritative
+ * without a separate "flush" step.
+ */
+function syncActiveBoardVendorBucket(configuration: DeviceConfiguration): void {
+  if (!configuration.vendorScreenDataByBoard) {
+    configuration.vendorScreenDataByBoard = {}
+  }
+  configuration.vendorScreenDataByBoard[configuration.deviceBoard] = { ...(configuration.vendorScreenData ?? {}) }
+}
+
+/**
+ * Resolve the vendor-screen data for a freshly-loaded project into the
+ * flat-view + per-board-archive pair the store expects.
+ *
+ * - When a project already carries `vendorScreenDataByBoard`, it wins: the
+ *   active view is that board's bucket (falling back to any flat blob), and
+ *   the bucket is ensured present so the active view and archive agree.
+ * - Legacy projects only have the flat `vendorScreenData`. It's attributed to
+ *   the board the project was saved with, so other boards start clean instead
+ *   of inheriting it. Mirrors the `pinsByBoard` migration.
+ */
+function migrateVendorScreenData(
+  provided: Partial<DeviceConfiguration>,
+  deviceBoard: string,
+): Pick<DeviceConfiguration, 'vendorScreenData' | 'vendorScreenDataByBoard'> {
+  const flat = provided.vendorScreenData
+  const archive = provided.vendorScreenDataByBoard
+
+  if (archive && Object.keys(archive).length > 0) {
+    const active = archive[deviceBoard] ?? flat
+    return {
+      vendorScreenData: active,
+      vendorScreenDataByBoard: active !== undefined ? { ...archive, [deviceBoard]: active } : { ...archive },
+    }
+  }
+
+  if (flat !== undefined) {
+    return { vendorScreenData: flat, vendorScreenDataByBoard: { [deviceBoard]: flat } }
+  }
+
+  return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
+}
 
 function mergeDeviceConfigWithDefaults(
   provided: Partial<DeviceConfiguration>,
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
+  const deviceBoard = provided.deviceBoard || defaults.deviceBoard
+  const { vendorScreenData, vendorScreenDataByBoard } = migrateVendorScreenData(provided, deviceBoard)
   return {
-    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
-    compileOnly: provided.compileOnly ?? defaults.compileOnly,
-    communicationConfiguration: {
-      modbusRTU: {
-        ...defaults.communicationConfiguration.modbusRTU,
-        ...(provided.communicationConfiguration?.modbusRTU || {}),
-      },
-      modbusTCP: provided.communicationConfiguration?.modbusTCP?.tcpInterface
-        ? provided.communicationConfiguration.modbusTCP
-        : defaults.communicationConfiguration.modbusTCP,
-      communicationPreferences: {
-        ...defaults.communicationConfiguration.communicationPreferences,
-        ...(provided.communicationConfiguration?.communicationPreferences || {}),
-      },
-    },
+    vendorScreenData,
+    vendorScreenDataByBoard,
+    // Must merge — otherwise loading a project whose configuration.json
+    // predates platformOptions leaves the field undefined in the store, and
+    // every selector falling back to `?? {}` returns a fresh literal that
+    // triggers an infinite Zustand re-render loop (blank device screen).
+    selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
   }
 }
 

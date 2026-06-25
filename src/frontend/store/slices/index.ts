@@ -1,6 +1,5 @@
 export type { AISlice } from './ai'
 export { createAISlice, createAISliceFactory } from './ai'
-export { MAX_CONVERSATION_MESSAGES } from './ai'
 export type { ConsoleSlice } from './console'
 export { createConsoleSlice } from './console'
 export type { DeviceSlice } from './device'

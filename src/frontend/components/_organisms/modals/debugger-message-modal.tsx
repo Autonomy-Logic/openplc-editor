@@ -1,3 +1,4 @@
+import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -10,6 +11,13 @@ const DebuggerMessageModal = () => {
     message: string
     buttons: string[]
     onResponse: (buttonIndex: number) => void
+    // Optional layout overrides. By default the FIRST button is the primary
+    // (brand) action and dismissing the modal (Escape / click-away) resolves to
+    // the LAST button. Usages where the affirmative action isn't first — e.g. a
+    // [Cancel, Proceed] layout — set primaryButtonIndex to brand-style the right
+    // button and dismissButtonIndex so Escape routes to Cancel.
+    primaryButtonIndex?: number
+    dismissButtonIndex?: number
   } | null
 
   const handleButtonClick = (index: number) => {
@@ -25,20 +33,6 @@ const DebuggerMessageModal = () => {
 
   if (!modalData) return null
 
-  const getIcon = () => {
-    switch (modalData.type) {
-      case 'error':
-        return '❌'
-      case 'warning':
-        return '⚠️'
-      case 'question':
-        return '❓'
-      case 'info':
-      default:
-        return 'ℹ️'
-    }
-  }
-
   return (
     <Modal
       open={isOpen}
@@ -47,18 +41,21 @@ const DebuggerMessageModal = () => {
           // Capture callback and button count before closing (closeModal clears data)
           const onResponse = modalData?.onResponse
           const lastButtonIndex = modalData?.buttons?.length ? modalData.buttons.length - 1 : 0
+          const dismissButtonIndex = modalData?.dismissButtonIndex ?? lastButtonIndex
           // Close modal first, then call callback to avoid race condition
           // when callback opens another modal
           modalActions.closeModal()
           if (onResponse) {
-            onResponse(lastButtonIndex)
+            onResponse(dismissButtonIndex)
           }
         }
         modalActions.onOpenChange('debugger-message', open)
       }}
     >
       <ModalContent className='flex min-h-[200px] w-[450px] select-none flex-col items-center justify-start rounded-lg p-6'>
-        <div className='mb-4 text-4xl'>{getIcon()}</div>
+        <div className='mb-4'>
+          <WarningIcon size='lg' className='h-12 w-12' />
+        </div>
         <ModalTitle className='mb-4 text-xl font-semibold'>{modalData.title}</ModalTitle>
         <p className='mb-6 text-center text-sm text-neutral-700 dark:text-neutral-300'>{modalData.message}</p>
         <div className='mt-4 flex w-full gap-3'>
@@ -67,7 +64,7 @@ const DebuggerMessageModal = () => {
               key={index}
               onClick={() => handleButtonClick(index)}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${
-                index === 0
+                index === (modalData.primaryButtonIndex ?? 0)
                   ? 'bg-brand text-white hover:bg-brand-medium-dark'
                   : 'bg-neutral-100 text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100'
               }`}

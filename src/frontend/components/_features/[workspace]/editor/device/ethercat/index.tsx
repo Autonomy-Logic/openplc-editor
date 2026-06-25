@@ -1,5 +1,4 @@
 import * as Tabs from '@radix-ui/react-tabs'
-import { collectUsedIecAddresses } from '@root/backend/shared/ethercat/collect-used-iec-addresses'
 import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-config-defaults'
 import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
@@ -7,6 +6,8 @@ import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-p
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
@@ -16,6 +17,8 @@ import type {
 } from '@root/middleware/shared/ports/esi-types'
 import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -24,6 +27,43 @@ import { RepositoryTab } from './components/repository-tab'
 import { ScanBusTab } from './components/scan-bus-tab'
 
 type EditorTab = 'scan-bus' | 'repository' | 'advanced'
+
+/**
+ * Build the set of every IEC address currently claimed by a producer
+ * that's active on the user's target. Used by EtherCAT device-enrich
+ * flows to pick fresh addresses that won't collide with anything else
+ * on the runtime image table.
+ *
+ * Inline rather than a shared helper because the pool's `PoolInputs`
+ * is naturally store-driven and the two callers here both live in
+ * this file; lifting to a util buys nothing.
+ */
+function buildClaimedAddressSet(
+  remoteDevices: ReturnType<typeof useOpenPLCStore.getState>['project']['data']['remoteDevices'],
+  vendorScreenData: ReturnType<
+    typeof useOpenPLCStore.getState
+  >['deviceDefinitions']['configuration']['vendorScreenData'],
+): Set<string> {
+  const state = useOpenPLCStore.getState()
+  const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
+  const ioMapping =
+    (
+      vendorScreenData?.['io-mapping'] as
+        | { entries?: { iecAddress: string; alias?: string; slot: number; channelName: string }[] }
+        | undefined
+    )?.entries ?? []
+  const activePins =
+    state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? []
+  const pool = buildAddressPool(
+    {
+      pinMapping: { pins: activePins },
+      vendorIoMapping: { entries: ioMapping },
+      remoteDevices,
+    },
+    resolveTargetCapabilities(boardInfo),
+  )
+  return new Set(pool.byAddress.keys())
+}
 
 const TabItem = ({
   value,
@@ -73,6 +113,7 @@ const EtherCATEditor = () => {
     sharedWorkspaceActions,
     editorActions,
   } = useOpenPLCStore()
+  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const runtime = useRuntime()
   const esi = useEsi()
 
@@ -378,7 +419,10 @@ const EtherCATEditor = () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
     const unmatched: ScannedDeviceMatch['device'][] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
-    const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+    const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
+    // Names already taken across every master — extended as we add each
+    // device so the batch can't collide with itself either.
+    const takenNames = collectAllSlaveNames(project.data.remoteDevices)
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -406,10 +450,14 @@ const EtherCATEditor = () => {
         for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
+      const baseName = getShortDeviceName(bestMatch.esiDevice)
+      const uniqueName = generateUniqueSlaveName(baseName, takenNames)
+      takenNames.add(uniqueName)
+
       newDevices.push({
         id: uuidv4(),
         position: match.device.position,
-        name: bestMatch.esiDevice.name || match.device.name,
+        name: uniqueName,
         esiDeviceRef: {
           repositoryItemId: bestMatch.repositoryItemId,
           deviceIndex: bestMatch.deviceIndex,
@@ -453,6 +501,8 @@ const EtherCATEditor = () => {
     syncDevicesToStore,
     projectPath,
     project.data.remoteDevices,
+    vendorScreenData,
+    esi,
   ])
 
   const handleRetryRepository = useCallback(() => {
@@ -466,17 +516,20 @@ const EtherCATEditor = () => {
       let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
       const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
       if (result.success && result.device) {
-        const usedAddresses = collectUsedIecAddresses(project.data.remoteDevices)
+        const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
         enriched = enrichDeviceData(result.device, usedAddresses)
       }
 
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
 
+      const baseName = getShortDeviceName(device)
+      const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
+
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),
         position: nextPosition,
-        name: device.name,
+        name: uniqueName,
         esiDeviceRef: ref,
         vendorId: repoItem.vendor.id,
         productCode: device.type.productCode,
@@ -493,7 +546,7 @@ const EtherCATEditor = () => {
       const { fileActions } = useOpenPLCStore.getState()
       fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
     },
-    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices],
+    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices, vendorScreenData, esi],
   )
 
   const handleRemoveDevice = useCallback(

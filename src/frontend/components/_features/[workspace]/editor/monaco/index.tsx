@@ -1,14 +1,15 @@
 import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
+import { pouUri } from '../../../../../services/st-lsp'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
@@ -16,6 +17,7 @@ import { parseHybridPouFromString, parseTextualPouFromString } from '../../../..
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
 import { toast } from '../../../[app]/toast/use-toast'
 import { renderDiffReview } from './ai-diff-review'
+import { type AiLspCoexistenceController, installAiLspCoexistenceKeybindings } from './ai-lsp-coexistence'
 import {
   arduinoApiCompletion,
   cppSignatureHelp,
@@ -23,25 +25,27 @@ import {
   cppStandardLibraryCompletion,
   keywordsCompletion,
   libraryCompletion,
-  snippetsSTCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
-import { dataTypeCompletion } from './completion/datatype.completion'
-import { fbCompletion } from './completion/fb.completion'
-import {
-  updateDataTypeVariablesInTokenizer,
-  updateEnumValuesInTokenizer,
-  updateLocalVariablesInTokenizer,
-} from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
-import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor } from './python-lsp'
+import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor, updatePythonLspContext } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
 
 type monacoEditorProps = {
   path: string
   name: string
   language: 'il' | 'st' | 'python' | 'cpp'
+  /**
+   * Whether this editor is the active (visible) tab.  Multi-mount
+   * keeps every open POU's MonacoEditor alive simultaneously; this
+   * flag gates user-visible side effects (debug badges, search
+   * reveal, animation loops) so background editors don't waste work
+   * decorating or animating their hidden DOM.  Defaults to `true`
+   * for safety — pre-refactor callers that don't pass it keep the
+   * old behaviour.
+   */
+  isActive?: boolean
 }
 
 type PouToText = {
@@ -120,10 +124,11 @@ let didApplyInitialTheme = false
 // ---------------------------------------------------------------------------
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
-  const { language, path, name } = props
+  const { language, path, name, isActive = true } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const focusDisposables = useRef<{ onFocus?: monaco.IDisposable; onBlur?: monaco.IDisposable }>({})
+  const coexistenceRef = useRef<AiLspCoexistenceController | null>(null)
   const [editorMounted, setEditorMounted] = useState(false)
   const [modelVersion, setModelVersion] = useState(0)
   const isSyncingModelRef = useRef(false)
@@ -150,14 +155,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         configurations: {
           resource: { globalVariables },
         },
-        dataTypes,
       },
     },
     deviceDefinitions: {
       configuration: { deviceBoard },
     },
     libraries: sliceLibraries,
-    editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
     snapshotActions: { pushToHistory },
@@ -169,6 +172,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
+
+  // ST POUs use the STruC++ LSP — Monaco's model URI must match the
+  // URI the LSP service opens documents under (`inmemory://pou/<name>.st`),
+  // otherwise completion/hover/definition queries arrive with a URI
+  // the worker doesn't know and silently return empty.  Other languages
+  // keep the project-scoped filesystem path so model caching still
+  // isolates between projects.
+  const editorModelPath = language === 'st' ? pouUri(name) : uniqueMonacoPath
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
@@ -290,21 +301,26 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     updatePendingDiffAcceptedHunks,
   ])
 
+  // Global search-and-replace targets exactly the visible editor —
+  // every multi-mounted MonacoEditor subscribes to `searchQuery`, but
+  // only the active tab should reveal a match.
   useEffect(() => {
+    if (!isActive) return
     if (editorRef.current && searchQuery) {
       moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
     }
-  }, [searchQuery, sensitiveCase, regularExpression])
+  }, [searchQuery, sensitiveCase, regularExpression, isActive])
 
+  // Monaco's layout is measured at mount time and on container resize.
+  // When a hidden editor (`display: none`) becomes the active tab and
+  // gets shown again, the dimensions it captured while hidden are stale
+  // (often zero), so the editor renders with zero height until something
+  // resizes the container.  Re-measuring on every `isActive` flip avoids
+  // that initial blank frame.
   useEffect(() => {
-    if (language === 'st' && pouVariables.length > 0) {
-      const variableNames = pouVariables
-        .filter((variable) => variable.name && variable.name.trim() !== '')
-        .map((variable) => variable.name)
-
-      updateLocalVariablesInTokenizer(variableNames)
-    }
-  }, [pouVariables, language])
+    if (!isActive) return
+    editorRef.current?.layout()
+  }, [isActive])
 
   // Template injection when POU changes (for already mounted editors)
   useEffect(() => {
@@ -316,6 +332,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou])
 
+  // Keep the Python LSP's per-POU preamble (IEC variables → Pyright
+  // globals) in sync with the variables table.  Re-pushes the
+  // augmented document to Pyright whenever a variable is added /
+  // renamed / type-changed / deleted so the LSP stops complaining
+  // about names it just learned (or starts complaining about names
+  // the user just removed).  Gated on hasPythonLSP because the web
+  // build before its Pyright wire-up shouldn't pay the cost.
+  useEffect(() => {
+    if (!capabilities.hasPythonLSP) return
+    if (language !== 'python') return
+    updatePythonLspContext(name, pouVariables)
+  }, [capabilities.hasPythonLSP, language, name, pouVariables])
+
   useEffect(() => {
     return () => {
       setTemplatesInjected((prev) => {
@@ -325,17 +354,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
 
       if (capabilities.hasPythonLSP && language === 'python') {
-        cleanupPythonLSP()
+        cleanupPythonLSP(name)
       }
     }
   }, [name, language])
-
-  useEffect(() => {
-    if (language === 'st' && dataTypes.length > 0) {
-      updateDataTypeVariablesInTokenizer(dataTypes)
-      updateEnumValuesInTokenizer(dataTypes)
-    }
-  }, [dataTypes, language])
 
   // -----------------------------------------------------------------------
   // File watching for external changes (editor-only, gated by hasFileWatcher)
@@ -413,6 +435,67 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
   }, [isDebuggerVisible])
 
+  // Apply programmatic cursor jumps (e.g. clicking a compile error in
+  // the console) to an already-mounted editor.  The onMount path
+  // handles the initial position; without this effect, navigating to
+  // an error in the POU that's currently active would silently no-op
+  // because the editor instance is already up.
+  //
+  // The user's own cursor movements don't feed back here — the
+  // editor's onCursorPositionChanged event isn't wired to update
+  // `editor.cursorPosition` (that only happens on tab switch via the
+  // subscribeToTabSwitch above), so applying the prop value is safe
+  // and won't loop.  The position-equality guard avoids redundant
+  // reveal animations when the prop happens to match where the
+  // editor already is.
+  useEffect(() => {
+    if (!editorMounted) return
+    // Multi-mount: every open POU's MonacoEditor subscribes to
+    // `state.editor.cursorPosition`, but the jump is only meaningful
+    // for the visible editor — when state.editor swaps to a different
+    // POU during Go to Definition / compile-error click, hidden
+    // editors must NOT also apply that POU's cursor onto themselves.
+    if (!isActive) return
+    const ed = editorRef.current
+    const monacoInst = monacoRef.current
+    const target = editor.cursorPosition
+    if (!ed || !monacoInst || !target) return
+    // Cursor jumps tagged for the variables panel belong to the
+    // variables-code-editor, not the body.  Ignore them here so a
+    // Go-to-definition redirect that lands on a VAR declaration
+    // doesn't also re-highlight a line in the body.
+    if (target.target === 'variables') return
+    const current = ed.getPosition()
+    if (current && current.lineNumber === target.lineNumber && current.column === target.column) {
+      return
+    }
+    // Select the entire target line so the user gets visible feedback
+    // (the same shape Search uses via `moveToMatch`).  The cursor
+    // lands at the start of the line as a side effect of `setSelection`,
+    // which is good enough for the click-to-error UX — when strucpp
+    // doesn't carry an end-column we'd rather show "this whole line
+    // is the problem" than land an invisible caret somewhere mid-line.
+    const model = ed.getModel()
+    // Clamp to the model's valid line range.  `getLineMaxColumn` and
+    // `Range` both throw `BugIndicatingError: Illegal value for
+    // lineNumber` when lineNumber < 1 or > getLineCount(), and a
+    // compile-error click for a POU whose Monaco model is empty
+    // (freshly opened tab) or whose body line count is smaller than
+    // strucpp's reported line would otherwise propagate that throw
+    // through React's commit phase and unmount the editor.
+    const safeLine = model ? Math.max(1, Math.min(model.getLineCount(), target.lineNumber)) : target.lineNumber
+    if (model && safeLine !== target.lineNumber) {
+      console.warn(
+        `[monaco] cursor target line ${target.lineNumber} out of range (model has ${model.getLineCount()} lines); clamped to ${safeLine}`,
+      )
+    }
+    const lineLength = model ? model.getLineMaxColumn(safeLine) : target.column
+    const range = new monacoInst.Range(safeLine, 1, safeLine, lineLength)
+    ed.setSelection(range)
+    ed.revealRangeInCenter(range)
+    ed.focus()
+  }, [editor.cursorPosition, editorMounted, isActive])
+
   // -----------------------------------------------------------------------
   // Debug variable inline values (editor-only debugger feature)
   // -----------------------------------------------------------------------
@@ -434,6 +517,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [debugBoolValues, debugNonBoolValues])
 
   const debugVarPositions = useMemo(() => {
+    // Inline debug badges are an active-tab-only affordance.  Without
+    // this guard, every multi-mounted MonacoEditor would re-scan its
+    // model for debug-variable occurrences on every poll cycle, then
+    // try to apply decorations to a hidden editor that the user can't
+    // see.  Wasted CPU during debug, especially with many open tabs.
+    if (!isActive) return null
     if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
       return null
 
@@ -442,7 +531,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     // Guard: ensure the model matches the current POU. During tab switches the memo may
     // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
-    const expectedUri = monacoRef.current.Uri.file(uniqueMonacoPath).toString()
+    // ST models live under `inmemory://pou/<name>.st` (the LSP scheme); other languages
+    // keep their project-scoped filesystem URI.
+    const expectedUri = language === 'st' ? editorModelPath : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
     if (model.uri.toString() !== expectedUri) return null
 
     const prefix = fbInstanceContext
@@ -488,7 +579,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     return { prefix, positions }
-  }, [isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
+  }, [isActive, isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
 
   useEffect(() => {
     if (!debugVarPositions || !editorRef.current) return
@@ -553,128 +644,32 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     [sliceLibraries],
   )
 
-  const fbSuggestions = useCallback(
-    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
-      const customFBs = pous.filter((p) => p.pouType === 'function-block')
-
-      const suggestions = fbCompletion({
-        model,
-        position,
-        range,
-        pouVariables,
-        customFBs,
-        editorName: name,
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [pouVariables, pous],
-  )
-
-  const dataTypeSuggestions = useCallback(
-    (range: monaco.IRange, model: monaco.editor.ITextModel, position: monaco.IPosition) => {
-      const suggestions = dataTypeCompletion({
-        model,
-        position,
-        range,
-        pouVariables,
-        customDataTypes: dataTypes,
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [dataTypes, pouVariables],
-  )
-
-  const keywordsSuggestions = useCallback(
-    (range: monaco.IRange) => {
-      const allSuggestions = keywordsCompletion({
-        range,
-        language: language as 'st' | 'il',
-      }).suggestions
-
-      let filteredSuggestions = allSuggestions
-      let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
-      let uniqueSuggestions = allSuggestions
-
-      if (language === 'st') {
-        const stSnippetLabels = [
-          'if',
-          'ifelse',
-          'ifelseif',
-          'for',
-          'while',
-          'repeat',
-          'case',
-          'program',
-          'function',
-          'function_block',
-          'var',
-          'var_input',
-          'var_output',
-          'array',
-          'struct',
-          'comment_block',
-        ]
-
-        filteredSuggestions = allSuggestions.filter(
-          (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
-        )
-
-        uniqueSuggestions = Array.from(new Map(filteredSuggestions.map((s) => [s.label, s])).values())
-        filteredLabels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      }
-
-      return { suggestions: uniqueSuggestions, labels: filteredLabels }
-    },
-    [language],
-  )
-
-  const snippetsSTSuggestions = useCallback(
-    (range: monaco.IRange) => {
-      const suggestions = snippetsSTCompletion({
-        range,
-        language: language as 'st' | 'il',
-      }).suggestions
-      const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-      const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
-      return { suggestions: uniqueSuggestions, labels }
-    },
-    [language],
-  )
+  const keywordsSuggestions = useCallback((range: monaco.IRange) => {
+    const allSuggestions = keywordsCompletion({
+      range,
+      language: 'il',
+    }).suggestions
+    const uniqueSuggestions = Array.from(new Map(allSuggestions.map((s) => [s.label, s])).values())
+    const labels = uniqueSuggestions.map((suggestion) => suggestion.label)
+    return { suggestions: uniqueSuggestions, labels }
+  }, [])
 
   // -----------------------------------------------------------------------
-  // ST/IL completion provider
+  // IL completion provider
+  //
+  // ST is intentionally absent — the strucpp LSP worker (booted
+  // from src/App.tsx) registers its own completion provider for
+  // language id `st` and supersedes everything this useEffect used
+  // to do.  IL keeps the hand-written keyword + variable + library
+  // path because strucpp's LSP doesn't cover IL syntax; the trivial
+  // mnemonic-completion is enough for what little IL gets written.
   // -----------------------------------------------------------------------
-
   useEffect(() => {
-    if (language === 'python' || language === 'cpp') {
-      return
-    }
+    if (language !== 'il') return
 
-    const disposable = monaco.languages.registerCompletionItemProvider(language, {
+    const disposable = monaco.languages.registerCompletionItemProvider('il', {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
-        const textUntilPosition = model.getValueInRange({
-          startLineNumber: position.lineNumber,
-          startColumn: 1,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column,
-        })
-
-        const dotAccessMatch = textUntilPosition.match(/(\w+)\.$/)
-        if (dotAccessMatch) {
-          const variableName = dotAccessMatch[1]
-          const primitiveTypes: string[] = baseTypeSchema.options
-          const allVariables = [...pouVariables, ...(globalVariables ?? [])]
-          const variable = allVariables.find((v) => v.name === variableName)
-          if (variable && primitiveTypes.includes(variable.type.value)) {
-            return { suggestions: [] }
-          }
-        }
-
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
@@ -682,60 +677,18 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           startColumn: word.startColumn,
           endColumn: word.endColumn,
         }
-
-        const linesContent: Array<string[]> = []
-        model.getLinesContent().forEach((line) => {
-          linesContent.push(line.trim().split(' '))
-        })
-
-        const identifierTokens = linesContent.flat().flatMap((token) => {
-          return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
-        })
-
-        const identifiers = Array.from(
-          new Set(
-            identifierTokens
-              .map((token) => {
-                if (
-                  snippetsSTSuggestions(range).labels.includes(token) ||
-                  variablesSuggestions(range).labels.includes(token) ||
-                  globalVariablesSuggestions(range).labels.includes(token) ||
-                  librarySuggestions(range).labels.includes(token) ||
-                  keywordsSuggestions(range).labels.includes(token) ||
-                  fbSuggestions(range, model, position).labels.includes(token) ||
-                  dataTypeSuggestions(range, model, position).labels.includes(token)
-                ) {
-                  return null
-                }
-                return token
-              })
-              .filter((suggestion) => suggestion !== null),
-          ),
-        )
-        const identifiersSuggestions = identifiers.map((identifier) => ({
-          label: identifier,
-          kind: monaco.languages.CompletionItemKind.Text,
-          insertText: identifier,
-          range,
-        }))
-
         const suggestions = [
-          ...fbSuggestions(range, model, position).suggestions,
-          ...dataTypeSuggestions(range, model, position).suggestions,
-          ...snippetsSTSuggestions(range).suggestions,
           ...variablesSuggestions(range).suggestions,
           ...globalVariablesSuggestions(range).suggestions,
           ...librarySuggestions(range).suggestions,
           ...keywordsSuggestions(range).suggestions,
-          ...identifiersSuggestions,
         ]
         const uniqueSuggestions = Array.from(new Map(suggestions.map((s) => [s.label, s])).values())
-
         return { suggestions: uniqueSuggestions }
       },
     })
     return () => disposable.dispose()
-  }, [pouVariables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
+  }, [pouVariables, globalVariables, sliceLibraries, language])
 
   // -----------------------------------------------------------------------
   // C/C++ completion provider
@@ -797,17 +750,20 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
         const snippetSuggestions = cppSnippetsCompletion({ range }).suggestions
 
-        const isArduinoTarget = deviceBoard && !deviceBoard.includes('OpenPLC Runtime')
-        const arduinoSuggestions = isArduinoTarget ? arduinoApiCompletion({ range }).suggestions : []
+        const boardInfo = openPLCStoreBase.getState().deviceAvailableOptions.availableBoards.get(deviceBoard)
+        const offerArduinoApi = resolveTargetCapabilities(boardInfo).arduinoApiCompletions
+        const arduinoSuggestions = offerArduinoApi ? arduinoApiCompletion({ range }).suggestions : []
 
         const code = model.getValue()
         const variableSuggestions = parseCppVariables(code, range)
+        const tableVariableSuggestions = tableVariablesCompletion({ range, variables: pouVariables }).suggestions
 
         const suggestions: monaco.languages.CompletionItem[] = [
           ...stdLibSuggestions,
           ...snippetSuggestions,
           ...arduinoSuggestions,
           ...variableSuggestions,
+          ...tableVariableSuggestions,
         ]
 
         return { suggestions }
@@ -820,7 +776,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard])
+  }, [language, deviceBoard, pouVariables])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)
@@ -960,21 +916,41 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
 
-    if (editor.cursorPosition) {
-      editorInstance.setPosition(editor.cursorPosition)
-      editorInstance.revealPositionInCenter(editor.cursorPosition)
-    }
-
-    if (editor.scrollPosition) {
-      editorInstance.setScrollTop(editor.scrollPosition.top)
-      editorInstance.setScrollLeft(editor.scrollPosition.left)
+    if (editor.cursorPosition && editor.cursorPosition.target !== 'variables') {
+      // Apply a pending programmatic cursor jump (e.g. a Go to
+      // Definition or compile-error click that fired before this
+      // editor's mount completed).  The reactive useEffect above
+      // handles subsequent jumps on the already-mounted editor.
+      // Same clamp as the reactive path — see the comment there.
+      const monacoInst = monacoInstance
+      const model = editorInstance.getModel()
+      const targetLine = editor.cursorPosition.lineNumber
+      const safeLine = model ? Math.max(1, Math.min(model.getLineCount(), targetLine)) : targetLine
+      if (model && safeLine !== targetLine) {
+        console.warn(
+          `[monaco-mount] cursor target line ${targetLine} out of range (model has ${model.getLineCount()} lines); clamped to ${safeLine}`,
+        )
+      }
+      const lineLength = model ? model.getLineMaxColumn(safeLine) : editor.cursorPosition.column
+      const range = new monacoInst.Range(safeLine, 1, safeLine, lineLength)
+      editorInstance.setSelection(range)
+      editorInstance.revealRangeInCenter(range)
     }
 
     // Python LSP (gated)
     if (capabilities.hasPythonLSP && language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
+      // Hand the LSP the POU's variables-table state so it can build
+      // the preamble of module-level globals the compiler injects at
+      // build time.  Without this, Pyright flags every IEC input/
+      // output reference as "undefined" (see `python-lsp/index.ts`).
       initPythonLSP(monacoInstance)
-        .then(() => setupPythonLSPForEditor(editorInstance))
+        .then(() =>
+          setupPythonLSPForEditor(editorInstance, {
+            pouName: name,
+            variables: pou.interface?.variables ?? [],
+          }),
+        )
         .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
     } else if (language === 'python' && pou) {
       // Web: no LSP but still inject template
@@ -988,7 +964,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // Keyboard shortcuts: Ctrl+S (save active file), Ctrl+Shift+S (save entire project)
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
-        void executeSaveActiveFile(projectPort)
+        void executeSaveActiveFile(projectPort, capabilities)
       }
     })
 
@@ -996,7 +972,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyS,
       () => {
         if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
-          void executeSaveProject(projectPort)
+          void executeSaveProject(projectPort, capabilities)
         }
       },
     )
@@ -1011,6 +987,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         },
       )
     }
+
+    // Tab/Enter split so AI ghost text and the LSP dropdown can coexist. The
+    // overrides are gated on a context key we drive from `inlineCompletionsActive`
+    // (see the effect below), so they're inert while AI is off.
+    coexistenceRef.current = installAiLspCoexistenceKeybindings(editorInstance, monacoInstance)
+    coexistenceRef.current.setActive(inlineCompletionsActive)
 
     // Manual trigger suggest
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -1246,18 +1228,75 @@ void loop()
   // Editor options
   // -----------------------------------------------------------------------
 
+  // AI inline completions and the STruC++ LSP suggest widget COEXIST: the
+  // LSP dropdown still auto-opens (fast, deterministic, great for variables and
+  // struct members) while the AI ghost text renders alongside it. Acceptance is
+  // split by key — Enter/arrows accept the LSP dropdown, Tab commits the AI
+  // suggestion (see `installAiLspCoexistenceKeybindings`). `suppressSuggestions`
+  // is therefore false so the dropdown is NOT hidden while ghost text shows.
+  // Ctrl+Space still triggers the suggest widget manually in both modes.
+  const inlineCompletionsActive =
+    capabilities.hasAIAssistant &&
+    aiState.isEnabled &&
+    aiState.hasConsented &&
+    aiState.preferences.inlineCompletionsEnabled
+
   const monacoEditorUserOptions: monacoEditorOptionsType = {
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
-    quickSuggestions: capabilities.hasAIAssistant ? false : undefined,
-    ...(capabilities.hasAIAssistant && {
+    // Lock indentation to 4 spaces across every language Monaco
+    // hosts (ST / IL / Python / C++).  Without this Monaco's
+    // `detectIndentation` heuristic kicks in on the existing model
+    // content and can settle on 2 spaces for Python POUs whose
+    // bodies happen to mix indent widths — surprising users who
+    // expect consistent 4-space behaviour across all editor
+    // surfaces.  `detectIndentation: false` disables that
+    // heuristic; `tabSize` + `insertSpaces` set the canonical
+    // width and ban literal tab characters.
+    tabSize: 4,
+    insertSpaces: true,
+    detectIndentation: false,
+    // Let the LSP dropdown auto-open in both modes — even with AI on, we want
+    // the fast LSP completions visible (the user accepts them with Enter/arrows).
+    quickSuggestions: undefined,
+    // Pinned for cross-platform consistency with the variables-code-editor.
+    // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
+    // without this both surfaces would mismatch on Linux/Windows even
+    // if Mac happens to look right by accident.
+    fontSize: 12,
+    // Monaco's standalone themes default `semanticHighlighting=false`,
+    // so without this flag the STruC++ LSP's semantic-tokens response
+    // is silently dropped — `isSemanticColoringEnabled()` short-circuits
+    // before the provider's result is ever consumed.  Forcing it on
+    // unblocks variable/function/parameter/type coloring on ST POUs.
+    'semanticHighlighting.enabled': true,
+    // Hover / suggest / signature-help / parameter-hints widgets
+    // normally render absolutely-positioned inside Monaco's own
+    // `.overflowingContentWidgets` container.  In this editor the
+    // Monaco panel sits below the variables table, and that table
+    // visually clips any hover anchored on the first few lines —
+    // Monaco's own "flip direction" logic can't see past its own
+    // bounds.  `fixedOverflowWidgets` re-parents those overlays to
+    // `document.body` with `position: fixed`, so they escape both
+    // the editor container and the variables table above it.
+    fixedOverflowWidgets: true,
+    ...(inlineCompletionsActive && {
       inlineSuggest: {
         enabled: true,
-        suppressSuggestions: true,
+        // Keep the LSP dropdown visible alongside the AI ghost text instead of
+        // suppressing it — coexistence is the whole point here.
+        suppressSuggestions: false,
       },
     }),
   }
+
+  // Keep the coexistence Tab overrides in sync with AI state so toggling AI on/off
+  // takes effect without remounting the editor. `editorInstanceId` re-asserts it
+  // after a remount (the mount handler also sets it, this is belt-and-braces).
+  useEffect(() => {
+    coexistenceRef.current?.setActive(inlineCompletionsActive)
+  }, [inlineCompletionsActive, editorInstanceId])
 
   // -----------------------------------------------------------------------
   // Drag-and-drop
@@ -1381,48 +1420,38 @@ void loop()
   }
 
   // -----------------------------------------------------------------------
-  // Save editor view state on tab switch
-  // -----------------------------------------------------------------------
-
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (nextName, prevEditorName) => {
-        if (nextName === prevEditorName || !editorRef.current) return
-
-        const ed = editorRef.current
-        const model = ed.getModel()
-        const pos = ed.getPosition()
-        const offset = pos && model?.getOffsetAt(pos)
-
-        const cursorPosition = pos && offset ? { lineNumber: pos.lineNumber, column: pos.column, offset } : undefined
-
-        const scrollPosition = {
-          top: ed.getScrollTop(),
-          left: ed.getScrollLeft(),
-        }
-
-        saveEditorViewState({ prevEditorName, cursorPosition, scrollPosition })
-      },
-    )
-
-    return () => unsub()
-  }, [])
-
-  // -----------------------------------------------------------------------
-  // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
 
   return (
     <>
-      <div id='editor drop handler' className='oplc-monaco-wrapper relative h-full w-full' onDrop={handleDrop}>
+      {/* `nokey` opts every keystroke inside this Monaco editor out of
+       *  @xyflow/react's global window-level `keydown` listener
+       *  (`downHandler` in @xyflow_react.js — tracks Space as a
+       *  pan-modifier for the diagram canvas and `preventDefault`s
+       *  it).  xyflow's `isInputDOMNode` guard bails out for
+       *  `<input>` / `<textarea>` / `[contenteditable]` targets, but
+       *  Monaco's new EditContext-API surface renders as a plain
+       *  `<div class="native-edit-context">` with NO `contenteditable`
+       *  attribute (the EditContext API replaces the legacy textarea
+       *  entirely), so xyflow doesn't recognise it as input —
+       *  preventDefault then swallows Space before the browser can
+       *  commit text to the EditContext, and `onWillType` /
+       *  `onDidType` never fire.  The `.nokey` class is xyflow's
+       *  documented escape hatch (`target.closest(".nokey")` in the
+       *  same guard); marking this wrapper opts every keystroke
+       *  inside the editor out cleanly, without leaking a global
+       *  keybinding into other Monaco instances on the page.  See
+       *  @xyflow/react `node_modules/.vite/deps/@xyflow_react.js`
+       *  around the `downHandler` definition (currently ~line 6080)
+       *  and `isInputDOMNode` (~line 3759). */}
+      <div id='editor drop handler' className='oplc-monaco-wrapper nokey relative h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
-          key={capabilities.hasLocalFilesystem ? undefined : path}
+          key={capabilities.hasLocalFilesystem ? undefined : editorModelPath}
           options={monacoEditorUserOptions}
           height='100%'
           width='100%'
-          path={uniqueMonacoPath}
+          path={editorModelPath}
           language={language}
           defaultValue={''}
           value={localText}

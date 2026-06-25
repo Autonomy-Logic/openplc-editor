@@ -1,6 +1,6 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useCapabilities, useProject, useSystem } from '../../../middleware/shared/providers'
+import { useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import { cn } from '../../utils/cn'
@@ -8,9 +8,15 @@ import { ResolutionWarning } from '../_atoms/resolution-warning-message'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
-import { RuntimeCreateUserModal, RuntimeLoginModal } from '../_organisms/modals'
+import AboutModal from '../_organisms/about-modal'
+import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal } from '../_organisms/modals'
+import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
+import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
+import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
+import { ProjectReadmeModal } from '../_organisms/modals/project-readme-modal'
+import { PublicCatalogBrowserModal } from '../_organisms/modals/public-catalog-browser-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
 import { RuntimeConnectionLostModal } from '../_organisms/modals/runtime-connection-lost-modal'
 import type { SaveChangesFileModalData } from '../_organisms/modals/save-changes-file-modal'
@@ -31,14 +37,14 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
-  // Theme initialization - applies dark class before DisplayMenu mounts
+  // Theme initialization - the theme port adapter owns reading the stored
+  // preference (cross-app cookie → localStorage → OS) and applying the
+  // <html> class; here we only seed the Monaco light/dark flag. The retro
+  // 'nineties' skin is light-based, so shouldUseDarkMode stays false for it.
+  const themePort = useTheme()
   useEffect(() => {
-    const stored = localStorage.getItem('theme')
-    const prefersDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
-    document.documentElement.classList.toggle('dark', prefersDark)
-    document.documentElement.classList.toggle('light', !prefersDark)
-    setSystemConfigs({ shouldUseDarkMode: prefersDark })
-  }, [setSystemConfigs])
+    setSystemConfigs({ shouldUseDarkMode: themePort.getCurrentTheme() === 'dark' })
+  }, [themePort, setSystemConfigs])
 
   // System initialization
   useEffect(() => {
@@ -108,6 +114,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
               rung={modals['confirm-delete-element'].data as RungLadderState}
             />
           )}
+          {modals?.['confirm-delete-project']?.open === true && (
+            <ConfirmDeleteProjectModal isOpen={modals['confirm-delete-project'].open} />
+          )}
           {modals?.['quit-application']?.open === true && (
             <QuitApplicationModal isOpen={modals['quit-application'].open} />
           )}
@@ -116,9 +125,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           )}
           {modals?.['runtime-connection-lost']?.open === true && <RuntimeConnectionLostModal />}
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
+          {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
+          {modals?.['public-catalog-browser']?.open === true && <PublicCatalogBrowserModal />}
+          {modals?.['confirm-install-libraries']?.open === true && <ConfirmInstallLibrariesModal />}
+          {modals?.['project-readme']?.open === true && <ProjectReadmeModal />}
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
+          {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
+          <AboutModal />
           <AcceleratorHandler />
         </main>
       </div>

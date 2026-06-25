@@ -1,14 +1,16 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
+import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { pinSelectors, remoteDeviceSelectors } from '../../../hooks/use-store-selectors'
+import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import { ProjectResponse } from '../../../store/slices/project'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
-import { buildRemoteDeviceOptionGroups } from '../../../utils/remote-device-options'
+import { buildLocationDropdownOptions } from '../../../utils/location-dropdown-options'
 import {
   findAllReferencesToVariable,
   propagateVariableRename,
@@ -439,6 +441,17 @@ const EditableLocationCell = ({
   } = useOpenPLCStore()
   const existingPins = pinSelectors.usePins()
   const remoteIOPoints = remoteDeviceSelectors.useRemoteDeviceIOPoints()
+  const vendorIoEntries = vendorIoSelectors.useVendorIoEntries()
+  // Target-capability gate: the project file can carry persisted state
+  // from previously-active targets (e.g. SLM-RP4 VPP-module entries
+  // left over from a project authored against runtime v4, kept on
+  // disk so switching back doesn't lose work). The address pool
+  // already scopes claims by `caps.<producer>`; mirror that here so
+  // the dropdown only surfaces addresses the active target can
+  // actually drive. Without this filter, switching SLM-RP4 → Arduino
+  // Mega leaves both `%QX0.0` rows (Arduino pin + stale VPP slot 1)
+  // in the picker.
+  const capabilities = useTargetCapabilities()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -458,9 +471,37 @@ const EditableLocationCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
+  // Alias staleness checks.  Lifted above `onBlur` so the short-
+  // circuit can take them into account.  Two flavours of staleness
+  // both demand that the location-pick re-fires `updateVariable`
+  // even when the picked value matches the cell's current address:
+  //
+  //   - `isOrphaned`: the variable's stored alias is no longer in the
+  //     registry's `byAlias` (producer renamed/removed it).
+  //     Re-picking the same address re-runs the auto-adopt and
+  //     refreshes the alias against the live registry.
+  //   - `isMismatched`: the variable carries an alias that points at
+  //     a *different* address than its current location.  Happens when
+  //     legacy projects authored before `createVariable`'s auto-adopt
+  //     fix carried a stale alias from one row to the next through the
+  //     "+ button" template spread.  Without this exception, clicking
+  //     on the right alias for the current address would no-op because
+  //     the address itself isn't changing — the user would have to
+  //     pick a DIFFERENT alias first, then return to the desired one,
+  //     to force the alias write through.
+  const aliasRegistry = useAliasRegistry()
+  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
+  const isMismatched =
+    !!variable?.alias && aliasRegistry.byAlias.has(variable.alias)
+      ? aliasRegistry.byAlias.get(variable.alias)?.address !== variable.location
+      : false
+
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
-    if (value === initialValue) return
+    // Short-circuit unchanged-value blurs so re-focus doesn't fire a
+    // gratuitous state update.  Exceptions for the location column,
+    // see the `isOrphaned` / `isMismatched` block above.
+    if (value === initialValue && !(id === 'location' && (isOrphaned || isMismatched))) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -485,52 +526,33 @@ const EditableLocationCell = ({
     )
   }, [editor.meta.name, index, table.options.data, scope, getVariable])
 
-  const selectableValues = useCallback(() => {
-    const ainPins = existingPins
-      .filter((pin) => pin.pinType === 'analogInput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
-      }))
-    const aoutPins = existingPins
-      .filter((pin) => pin.pinType === 'analogOutput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
-      }))
+  const selectableValues = useCallback(
+    () =>
+      buildLocationDropdownOptions({
+        cellId: id,
+        pins: existingPins,
+        remoteIOPoints,
+        vendorIoEntries,
+        capabilities,
+      }),
+    [id, existingPins, remoteIOPoints, vendorIoEntries, capabilities],
+  )
 
-    const dinPins = existingPins
-      .filter((pin) => pin.pinType === 'digitalInput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
-      }))
-
-    const doutPins = existingPins
-      .filter((pin) => pin.pinType === 'digitalOutput')
-      .map((pin) => ({
-        id: `${id}-${pin.pin}`,
-        value: pin.address,
-        label: `${pin.address} ${pin.name ? `(${pin.name})` : ''}`,
-      }))
-
-    const remoteGroups = buildRemoteDeviceOptionGroups(id, remoteIOPoints)
-
-    return [
-      { label: 'Analog Inputs', options: ainPins },
-      { label: 'Analog Outputs', options: aoutPins },
-      { label: 'Digital Inputs', options: dinPins },
-      { label: 'Digital Outputs', options: doutPins },
-      ...remoteGroups,
-    ]
-  }, [id, existingPins, remoteIOPoints])
+  // Combined display: when the variable carries an alias, show it
+  // alongside the raw address as "alias (address)" — same shape
+  // across selected and unselected states so clicking a row doesn't
+  // flip the cell's appearance. When there's no alias, only the
+  // address shows. The combobox `value` stays as the raw address so
+  // typing / picking still operates on the canonical form.
+  const orphanTooltip = isOrphaned
+    ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
+    : undefined
+  const combinedLabel = variable?.alias ? `${variable.alias} (${cellValue})` : cellValue
 
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
+      displayLabel={combinedLabel}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -538,18 +560,39 @@ const EditableLocationCell = ({
       selected={selected}
       openOnSelectedOption
       canAddACustomOption
+      // Orphaned/mismatched aliases blank the location (sync clears it for
+      // compilation) but leave a stale alias label. Keep "Clear" enabled even
+      // when the location is empty so the user can drop the stale alias.
+      allowClearWhenEmpty={id === 'location' && (isOrphaned || isMismatched)}
     />
   ) : (
     <div
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !selected,
-        'cursor-not-allowed': !isEditable(),
-      })}
+      title={orphanTooltip ?? (variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined)}
+      className={cn(
+        'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
+        {
+          'pointer-events-none': !selected,
+          'cursor-not-allowed': !isEditable(),
+        },
+      )}
     >
+      {isOrphaned && (
+        <span
+          aria-label='Orphaned alias'
+          className='text-amber-500 dark:text-amber-400'
+          /* small inline-svg keeps the cell self-contained */
+        >
+          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
+            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
+          </svg>
+        </span>
+      )}
       <HighlightedText
-        text={cellValue}
+        text={combinedLabel}
         searchQuery={searchQuery}
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
+          'text-amber-600 dark:text-amber-400': isOrphaned,
+        })}
       />
     </div>
   )

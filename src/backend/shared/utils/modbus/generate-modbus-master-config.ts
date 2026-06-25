@@ -45,6 +45,14 @@ interface ModbusMasterDevice {
 type ModbusMasterConfig = ModbusMasterDevice[]
 
 /**
+ * Sink for non-fatal diagnostics emitted while building the config
+ * (e.g. an RTU device dropped for a missing serial port).  The compile
+ * pipeline wires this to the build console so the skip is visible to
+ * the user instead of vanishing into `console.warn`.
+ */
+type ModbusMasterConfigLog = (message: string) => void
+
+/**
  * Formats an offset value as a hexadecimal string.
  * If the offset is already in hex format (starts with 0x), returns it as-is.
  * Otherwise, converts the decimal number to hex format.
@@ -82,7 +90,10 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
  * Converts a PLCRemoteDevice with Modbus configuration to a ModbusMasterDevice
  * for the runtime configuration. Supports both TCP and RTU transports.
  */
-const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMasterDevice | null => {
+const convertRemoteDeviceToModbusMaster = (
+  device: PLCRemoteDevice,
+  log?: ModbusMasterConfigLog,
+): ModbusMasterDevice | null => {
   /* istanbul ignore next -- defensive: callers pre-filter to modbus-tcp with config */
   if (device.protocol !== 'modbus-tcp' || !device.modbusTcpConfig) {
     return null
@@ -103,8 +114,10 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
   if (transport === 'rtu') {
     // RTU configuration
     if (!modbusTcpConfig.serialPort) {
-      // RTU requires a serial port
-      console.warn(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
+      // RTU requires a serial port.  Route the skip through the caller's
+      // log so it lands in the build console — otherwise the device is
+      // dropped silently and the runtime just reports "no config found".
+      log?.(`Modbus RTU device "${device.name}" is missing a serial port configuration and will be skipped.`)
       return null
     }
 
@@ -147,9 +160,14 @@ const convertRemoteDeviceToModbusMaster = (device: PLCRemoteDevice): ModbusMaste
  * Returns null if there are no Modbus TCP devices configured.
  *
  * @param remoteDevices - Array of PLCRemoteDevice from the project data
+ * @param log - Optional sink for non-fatal skip diagnostics (e.g. an RTU
+ *   device dropped for a missing serial port). Wired to the build console.
  * @returns The Modbus Master configuration as a JSON string, or null if no devices are configured
  */
-export const generateModbusMasterConfig = (remoteDevices: PLCRemoteDevice[] | undefined): string | null => {
+export const generateModbusMasterConfig = (
+  remoteDevices: PLCRemoteDevice[] | undefined,
+  log?: ModbusMasterConfigLog,
+): string | null => {
   if (!remoteDevices || remoteDevices.length === 0) {
     return null
   }
@@ -161,7 +179,7 @@ export const generateModbusMasterConfig = (remoteDevices: PLCRemoteDevice[] | un
   }
 
   const config: ModbusMasterConfig = modbusTcpDevices
-    .map(convertRemoteDeviceToModbusMaster)
+    .map((device) => convertRemoteDeviceToModbusMaster(device, log))
     .filter((device): device is ModbusMasterDevice => device !== null)
 
   if (config.length === 0) {

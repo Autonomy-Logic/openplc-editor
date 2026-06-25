@@ -1,6 +1,5 @@
 import * as Switch from '@radix-ui/react-switch'
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { EditorModel } from '@root/frontend/store/slices/editor'
 import type { LibraryState } from '@root/frontend/store/slices/library'
 import { cn } from '@root/frontend/utils/cn'
 import {
@@ -24,6 +23,7 @@ import { BlockVariant } from '../../../../../../../_atoms/graphical-editor/types
 import { getBlockDocumentation, getVariableRestrictionType } from '../../../../../../../_atoms/graphical-editor/utils'
 import { InputWithRef } from '../../../../../../../_atoms/input'
 import { Modal, ModalContent, ModalTitle } from '../../../../../../../_molecules/modal'
+import { useBoundEditorModel, useBoundPou } from '../../../active-context'
 import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
@@ -33,16 +33,19 @@ type BlockElementProps<T> = {
   selectedNode: BlockNode<T>
 }
 
+// `boundPouName` is the editor's bound POU (from `useBoundPou()`);
+// the filter narrows the library list to functions only when the
+// host POU itself is a function (functions can only call functions).
 const searchLibraryByPouName = (
   libraries: LibraryState['libraries'],
-  editor: EditorModel,
+  boundPouName: string,
   pous: PLCPou[],
   pouName: string,
 ) => {
   let libraryBlock: unknown = undefined
 
   const filteredLibraries = libraries.system.filter((library) =>
-    pous.find((pou) => pou.name === editor.meta.name)?.pouType === 'function'
+    pous.find((pou) => pou.name === boundPouName)?.pouType === 'function'
       ? library.pous.some((pou) => pou.type === 'function')
       : true,
   )
@@ -59,8 +62,9 @@ const searchLibraryByPouName = (
 }
 
 const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: BlockElementProps<T>) => {
+  const pouName = useBoundPou()
+  const editor = useBoundEditorModel()
   const {
-    editor,
     editorActions: { updateModelVariables },
     fbdFlows,
     fbdFlowActions: { setNodes, setEdges },
@@ -200,7 +204,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleNameInputSubmit = () => {
-    const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
+    const libraryBlock = searchLibraryByPouName(libraries, pouName, pous, formState.name)
     if (libraryBlock) {
       setSelectedFile(libraryBlock as BlockVariant)
     }
@@ -358,7 +362,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { rung, edges, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return
@@ -368,7 +372,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         deleteVariable({
           rowId: variables.all.indexOf(variables.selected),
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         if (
           editor.type === 'plc-graphical' &&
@@ -388,7 +392,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           },
           rowId: variables.all.indexOf(variables.selected),
           scope: 'local',
-          associatedPou: editor.meta.name,
+          associatedPou: pouName,
         })
         newNode.data = { ...newNode.data, variable: variables.selected }
       }
@@ -419,11 +423,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     })
 
     setNodes({
-      editorName: editor.meta.name,
+      editorName: pouName,
       nodes: newNodes,
     })
     setEdges({
-      editorName: editor.meta.name,
+      editorName: pouName,
       edges: newEdges,
     })
 

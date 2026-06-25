@@ -1,19 +1,22 @@
 import { Node } from '@xyflow/react'
-import { isArray } from 'lodash'
-import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
+import { ComponentPropsWithRef, forwardRef, useEffect, useMemo, useState } from 'react'
 
 import { PLCVariable } from '../../../../../../middleware/shared/ports/types'
+import {
+  getScopeCompletions,
+  newVariableTypeForExpected,
+  type ScopeCompletion,
+  scopeCompletionToVariable,
+} from '../../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../../store'
-import { extractNumberAtEnd } from '../../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../../utils/cn'
 import { getLiteralType } from '../../../../../utils/keywords'
-import { expandArrayVariables } from '../../../../../utils/PLC/array-variable-utils'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
+import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { BlockVariant } from '../../types/block'
-import { getVariableRestrictionType } from '../../utils'
-import { CustomFbdNodeTypes, customNodeTypes } from '..'
+import { CustomFbdNodeTypes } from '..'
 import { BasicNodeData } from '../utils'
 import { getFBDPouVariablesRungNodeAndEdges } from '../utils/utils'
 
@@ -27,8 +30,8 @@ type FBDBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 
 const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProps>(
   ({ block: unknownBlock, isOpen, setIsOpen, keyPressed, valueToSearch }: FBDBlockAutoCompleteProps, ref) => {
+    const pouName = useBoundPou()
     const {
-      editor,
       project: {
         data: { pous },
       },
@@ -38,99 +41,78 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
     } = useOpenPLCStore()
 
     const block = unknownBlock as Node<BasicNodeData> & { positionAbsoluteX?: number; positionAbsoluteY?: number }
-    const { edges, pou, variables, rung } = useMemo(() => {
-      return getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { edges, rung } = useMemo(() => {
+      return getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
-    }, [pous, fbdFlows, editor, block.id])
+    }, [pous, fbdFlows, pouName, block.id])
 
-    const variableRestrictions = useMemo(() => {
-      switch (block.type as keyof typeof customNodeTypes) {
-        case 'input-variable':
-        case 'output-variable': {
-          const connections = block.type === 'input-variable' ? edges.source : edges.target
-          const restrictions: {
-            values: string[]
-            definition: string[]
-          } = {
-            values: [],
-            definition: [],
-          }
-          connections?.forEach((edge) => {
-            const connectedNode = rung?.nodes.find(
-              (node) => node.id === (block.type === 'input-variable' ? edge.target : edge.source),
-            )
-            if (!connectedNode || !(connectedNode.data.variant as BlockVariant).variables) return
+    const isVariableBox = block.type === 'input-variable' || block.type === 'output-variable'
+    const isConnectionBox = block.type === 'connector' || block.type === 'continuation'
 
-            const variableType = (connectedNode.data.variant as BlockVariant).variables.find(
-              (variable) => variable.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
-            )?.type.value
-            if (!variableType) return
-
-            const restriction = getVariableRestrictionType(variableType)
-            restrictions.values = Array.from(
-              new Set([
-                ...restrictions.values,
-                ...(restriction.values
-                  ? isArray(restriction.values)
-                    ? restriction.values
-                    : [restriction.values]
-                  : []),
-              ]),
-            )
-            restrictions.definition = Array.from(
-              new Set([...restrictions.definition, restriction.definition ?? undefined].filter((v) => v !== undefined)),
-            )
-          })
-
-          return {
-            values: restrictions.values.length > 0 ? restrictions.values : undefined,
-            definition: restrictions.definition.length > 0 ? restrictions.definition : undefined,
-          }
-        }
-        default:
-          return {
-            values: undefined,
-            definition: undefined,
-          }
+    /**
+     * The IEC type the connected block pin expects. Drives both the LSP
+     * type filter and the type of any newly-created variable. `undefined`
+     * when the box isn't wired to a pin (no filter — suggest everything).
+     */
+    const expectedType = useMemo<string | undefined>(() => {
+      if (!isVariableBox) return undefined
+      const connections = block.type === 'input-variable' ? edges.source : edges.target
+      for (const edge of connections ?? []) {
+        const connectedNode = rung?.nodes.find(
+          (node) => node.id === (block.type === 'input-variable' ? edge.target : edge.source),
+        )
+        const variableType = (connectedNode?.data.variant as BlockVariant | undefined)?.variables?.find(
+          (variable) => variable.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
+        )?.type.value
+        if (variableType) return variableType
       }
-    }, [pou])
+      return undefined
+    }, [isVariableBox, block.type, edges, rung])
 
-    const expandedVariables = expandArrayVariables(variables.all)
+    // Variable boxes: LSP-backed candidates (variables + instance/struct
+    // members in scope) filtered by the connected pin's type.
+    const [variableCandidates, setVariableCandidates] = useState<ScopeCompletion[]>([])
+    useEffect(() => {
+      if (!isVariableBox) {
+        setVariableCandidates([])
+        return
+      }
+      let cancelled = false
+      void getScopeCompletions(pouName, valueToSearch, expectedType).then((items) => {
+        if (!cancelled) setVariableCandidates(items)
+      })
+      return () => {
+        cancelled = true
+      }
+    }, [isVariableBox, pouName, valueToSearch, expectedType, pous])
 
-    const filteredVariables = block.type?.includes('variable')
-      ? expandedVariables
-          .filter(
-            (variable) =>
-              variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
-              (variableRestrictions.values === undefined ||
-                variableRestrictions.values.map((v) => v.toLowerCase()).includes(variable.type.value.toLowerCase())),
-          )
-          .sort((a, b) => {
-            const aNumber = extractNumberAtEnd(a.name).number
-            const bNumber = extractNumberAtEnd(b.name).number
-            if (aNumber === bNumber) {
-              return a.name.localeCompare(b.name)
-            }
-            return aNumber - bNumber
-          })
-      : block.type === 'connector' || block.type === 'continuation'
-        ? (rung?.nodes
-            .filter((node) => (block.type === 'connector' ? node.type === 'continuation' : node.type === 'connector'))
-            .map((node) => {
-              return node.data.variable as PLCVariable
-            })
-            .filter((variable) => variable.name !== '') ?? ([] as PLCVariable[]))
-        : ([] as PLCVariable[])
+    // Connector/continuation boxes suggest the matching pair's labels — a
+    // graph-topology concern, unrelated to variable scope, kept as-is.
+    const connectionCandidates = useMemo<PLCVariable[]>(() => {
+      if (!isConnectionBox) return []
+      return (
+        rung?.nodes
+          .filter((node) => (block.type === 'connector' ? node.type === 'continuation' : node.type === 'connector'))
+          .map((node) => node.data.variable as PLCVariable)
+          .filter((variable) => variable.name !== '') ?? []
+      )
+    }, [isConnectionBox, rung, block.type])
+
+    const displayVariables = isVariableBox
+      ? variableCandidates.map((c) => ({ id: c.insertText, name: c.insertText }))
+      : isConnectionBox
+        ? connectionCandidates.map((v) => ({ id: v.id ?? '', name: v.name }))
+        : []
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      const { rung: freshRung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
-      if (!rung || !variableNode) return
+      if (!freshRung || !variableNode) return
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: variableNode.id,
         node: {
           ...variableNode,
@@ -152,51 +134,20 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
 
-      const { rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      const { rung: freshRung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
         nodeId: block.id,
       })
-      if (!rung || !node) return
+      if (!freshRung || !node) return
 
-      // If there is more than one variable definition, we can't create a variable
-      if (
-        !variableRestrictions.definition ||
-        variableRestrictions.definition.length === 0 ||
-        variableRestrictions.definition.length > 1
-      ) {
-        toast({
-          title: 'Error',
-          description: 'Cannot create a variable with multiple definitions',
-          variant: 'fail',
-        })
-        return
-      }
-
-      const variableTypeRestriction = {
-        definition: variableRestrictions.definition[0] || 'base-type',
-        value: variableRestrictions.values
-          ? Array.isArray(variableRestrictions.values)
-            ? variableRestrictions.values[0]
-            : variableRestrictions.values
-          : 'dint',
-      }
-
-      // If there is no type restriction, we can't create a variable
-      if (!variableTypeRestriction.value) {
-        toast({
-          title: 'Error',
-          description: 'Cannot create a variable with no type',
-          variant: 'fail',
-        })
-        return
-      }
+      const variableType = newVariableTypeForExpected(expectedType)
 
       const res = createVariable({
         data: {
           id: crypto.randomUUID(),
           name: variableName,
           type: {
-            definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
-            value: variableTypeRestriction.value,
+            definition: variableType.definition,
+            value: variableType.value,
           },
           class: 'local',
           location: '',
@@ -204,14 +155,17 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           debug: false,
         },
         scope: 'local',
-        associatedPou: editor.meta.name,
+        associatedPou: pouName,
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        toast({ title: res.title, description: res.message, variant: 'fail' })
+        return
+      }
 
       const variable = res.data as PLCVariable | undefined
 
       updateNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         nodeId: node.id,
         node: {
           ...node,
@@ -236,15 +190,14 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       if (!newBlock) return
 
       addNode({
-        editorName: editor.meta.name,
+        editorName: pouName,
         node: newBlock,
       })
     }
 
     const submit = ({ variable }: { variable: { id: string; name: string } }) => {
       if (variable.id === 'add') {
-        // Check if the input is a literal value (e.g., 2.0, TRUE, 'hello')
-        // Literals should be submitted directly to the block, not created as variables
+        // A literal value (e.g. 2.0, TRUE, 'hello') binds directly to the block.
         if (getLiteralType(valueToSearch)) {
           submitVariableToBlock({ name: valueToSearch } as PLCVariable)
           return
@@ -258,17 +211,27 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
 
-      // Look up by name to ensure correct selection for continuation/connector blocks
-      // (all connection nodes share the same ID, so ID lookup would always match the first item)
-      const selectedVariable = filteredVariables.find(
-        (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
-      )
-      if (!selectedVariable) {
+      if (isVariableBox) {
+        // Dropdown items are LSP candidates keyed by their full insert text
+        // (e.g. `TON0.Q`); bind the node to the chosen one, carrying its type.
+        const candidate = variableCandidates.find((c) => c.insertText.toLowerCase() === variable.name.toLowerCase())
+        if (candidate) {
+          submitVariableToBlock(scopeCompletionToVariable(candidate))
+          return
+        }
         submitAddVariable({ variableName: valueToSearch })
         return
       }
 
-      submitVariableToBlock(selectedVariable)
+      // Connector/continuation: bind to the matching node label.
+      const selected = connectionCandidates.find(
+        (variableItem) => variableItem.name.toLowerCase() === variable.name.toLowerCase(),
+      )
+      if (!selected) {
+        submitAddVariable({ variableName: valueToSearch })
+        return
+      }
+      submitVariableToBlock(selected)
     }
 
     return (
@@ -277,9 +240,9 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         className={cn('h-[200px] w-[200px] overflow-auto', isOpen ? 'block' : 'hidden')}
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        canCreateNewVariable={!(block.type === 'connector' || block.type === 'continuation')}
+        canCreateNewVariable={!isConnectionBox}
         newBlock={{
-          canCreate: block.type === 'connector' || block.type === 'continuation',
+          canCreate: isConnectionBox,
           options: {
             label: `Add ${block.type === 'connector' ? 'continuation' : 'connector'}`,
             block: {
@@ -289,7 +252,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         }}
         keyPressed={keyPressed}
         searchValue={valueToSearch}
-        variables={filteredVariables}
+        variables={displayVariables}
         submit={submit}
       />
     )

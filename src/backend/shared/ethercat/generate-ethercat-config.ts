@@ -6,8 +6,6 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 
-import { ethercatTaskName } from './ethercat-task-helpers'
-
 // Runtime JSON interfaces (snake_case for plugin consumption)
 
 interface RuntimePdoEntry {
@@ -94,8 +92,9 @@ interface RuntimeMaster {
   interface: string
   cycle_time_us: number
   watchdog_timeout_cycles: number
-  task_name?: string
-  task_cycle_time_us?: number
+  /** SCHED_FIFO priority (1-99) the bus thread runs at. The runtime
+   *  defaults to 90 if absent so existing configs keep working. */
+  task_priority?: number
 }
 
 interface RuntimeDiagnostics {
@@ -320,14 +319,13 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
     if (slaves.length === 0) continue
 
     const cycleTimeUs = remoteDevice.ethercatConfig?.masterConfig?.cycleTimeUs ?? 1000
-    const taskName = ethercatTaskName(remoteDevice.name)
+    const taskPriority = remoteDevice.ethercatConfig?.masterConfig?.taskPriority ?? 90
 
     const master: RuntimeMaster = {
       interface: remoteDevice.ethercatConfig?.masterConfig?.networkInterface || 'eth0',
       cycle_time_us: cycleTimeUs,
       watchdog_timeout_cycles: remoteDevice.ethercatConfig?.masterConfig?.watchdogTimeoutCycles ?? 3,
-      task_name: taskName,
-      task_cycle_time_us: cycleTimeUs,
+      task_priority: taskPriority,
     }
 
     rootEntries.push({

@@ -72,10 +72,13 @@ describe('ModbusRtuTransport', () => {
   // getMd5Hash
   // -----------------------------------------------------------------------
   describe('getMd5Hash', () => {
-    it('delegates to simulatorService.getMd5Hash', async () => {
+    it('delegates to simulatorService.getMd5Hash and reports LE byte order', async () => {
+      // The web simulator path reads MD5 from the built artifact
+      // (deterministic, no wire) and the emulated AVR is always LE,
+      // so the transport hard-codes `targetEndian: 'le'` here.
       mockGetMd5Hash.mockResolvedValue('abc123')
       const result = await transport.getMd5Hash()
-      expect(result).toBe('abc123')
+      expect(result).toEqual({ md5: 'abc123', targetEndian: 'le' })
       expect(mockGetMd5Hash).toHaveBeenCalledTimes(1)
     })
   })

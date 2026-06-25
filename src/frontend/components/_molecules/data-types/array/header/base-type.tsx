@@ -1,8 +1,8 @@
-import { baseTypeSchema } from '../../../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../../../middleware/shared/ports/plc-schemas'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 
 const DTBaseTypeContainer = () => {
-  const baseTypes = baseTypeSchema.options
+  const baseTypes = baseTypeEnum.options
   return (
     <div aria-label='Array base type content' className='flex h-fit w-full items-center justify-between'>
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>

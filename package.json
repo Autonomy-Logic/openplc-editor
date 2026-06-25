@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.1.1",
+  "version": "4.2.7",
   "license": "GPL-3.0",
   "author": {
     "name": "Autonomy Logic"
@@ -59,6 +59,7 @@
     "auto-zustand-selectors-hook": "^2.0.0",
     "avr8js": "0.20.0",
     "axios": "^1.13.6",
+    "browser-basedpyright": "^1.39.6",
     "clsx": "^2.1.1",
     "cva": "npm:class-variance-authority@^0.7.0",
     "diff": "^9.0.0",
@@ -68,6 +69,7 @@
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
+    "extract-zip": "^2.0.1",
     "fast-xml-parser": "^5.6.0",
     "i18next": "^24.2.2",
     "immer": "^10.1.1",
@@ -75,7 +77,6 @@
     "lucide-react": "^0.563.0",
     "monaco-editor": "^0.54.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
-    "monaco-pyright-lsp": "^0.1.7",
     "path-browserify": "^1.0.1",
     "react": "^18.3.1",
     "react-apexcharts": "^1.7.0",
@@ -86,11 +87,14 @@
     "react-icons": "^4.11.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.7",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.1.0",
     "url": "^0.11.3",
     "uuid": "^11.1.0",
+    "vscode-jsonrpc": "^8.2.0",
     "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5",
     "winston": "^3.17.0",
     "xmlbuilder2": "^3.1.1",
     "yaml": "^2.8.1",
@@ -175,7 +179,7 @@
     "webpack-merge": "^6.0.1"
   },
   "engines": {
-    "node": ">=20.x <24",
+    "node": ">=22.x <24",
     "npm": ">=10.x"
   },
   "electronmon": {

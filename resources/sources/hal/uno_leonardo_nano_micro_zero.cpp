@@ -3,7 +3,7 @@ extern "C" {
 #include "openplc.h"
 }
 #include "Arduino.h"
-#include "../examples/Baremetal/defines.h"
+#include "defines.h"
 
 #if defined(__SAM3X8E__) || defined(__SAMD21G18A__)
     #include "SAMD_PWM.h"

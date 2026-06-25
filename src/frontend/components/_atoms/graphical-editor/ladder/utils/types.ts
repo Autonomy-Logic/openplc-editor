@@ -2,7 +2,13 @@ import type { Node, NodeProps } from '@xyflow/react'
 import { ReactNode } from 'react'
 
 import { PLCVariable } from '../../../../../../middleware/shared/ports'
+import type { HandleBranch } from '../../../../../../middleware/shared/ports/types'
 import { CustomHandleProps } from '../handle'
+
+// HandleBranch is defined in the ports layer (where RungLadderState lives) so
+// the rung type can reference it without violating layer rules. Re-export it
+// here so component code can import it from a single nearby location.
+export type { HandleBranch }
 
 export type BuilderBasicProps = {
   id: string
@@ -24,6 +30,21 @@ export type BasicNodeData = {
   draggable: boolean
   selectable: boolean
   deletable: boolean
+  /** Marks this node as part of a handle branch (contact/coil on a block input/output) */
+  branchContext?: {
+    blockId: string
+    handleId: string
+    direction: 'input' | 'output'
+  }
+  /** Set on placeholders to indicate dropping here creates a handle branch */
+  handleBranchTarget?: {
+    blockId: string
+    handleId: string
+    direction: 'input' | 'output'
+    handlePosition: { x: number; y: number }
+    /** When set, insert into existing branch at this position in nodeIds. When undefined, create new branch. */
+    insertIndex?: number
+  }
 }
 
 // block

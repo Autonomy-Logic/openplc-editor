@@ -1,8 +1,8 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { useProject } from '../../../../middleware/shared/providers'
+import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
-import { executeSaveFile, reloadPouFromDisk } from '../../../services/save-actions'
+import { executeSaveFile, reloadFileFromDisk } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -23,12 +23,13 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   } = useOpenPLCStore()
 
   const projectPort = useProject()
+  const capabilities = useCapabilities()
   const { fileName } = data
 
   const handleSave = async () => {
     closeModal()
 
-    const result = await executeSaveFile(fileName, projectPort)
+    const result = await executeSaveFile(fileName, projectPort, capabilities)
     if (!result.success) return
 
     forceCloseFile(fileName)
@@ -37,7 +38,7 @@ const SaveChangesFileModal = ({ isOpen, data, ...rest }: SaveChangesFileModalPro
   const handleDontSave = async () => {
     closeModal()
 
-    await reloadPouFromDisk(fileName, projectPort)
+    await reloadFileFromDisk(fileName, projectPort)
     updateFile({ name: fileName, saved: true })
     forceCloseFile(fileName)
   }

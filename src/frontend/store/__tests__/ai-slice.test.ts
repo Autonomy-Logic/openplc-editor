@@ -2,7 +2,6 @@ import { createStore, StoreApi } from 'zustand/vanilla'
 
 import { createAISlice, createAISliceFactory } from '../slices/ai/slice'
 import type { AISlice, ChatMessage } from '../slices/ai/types'
-import { MAX_CONVERSATION_MESSAGES } from '../slices/ai/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,10 +38,15 @@ describe('createAISlice', () => {
       expect(ai.isEnabled).toBe(false)
       expect(ai.isLoading).toBe(false)
       expect(ai.hasConsented).toBe(false)
+      expect(ai.acuUsed).toBe(0)
+      expect(ai.acuTotal).toBe(0)
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.planSlug).toBeNull()
       expect(ai.creditsUsed).toBe(0)
       expect(ai.creditsTotal).toBe(500)
       expect(ai.tier).toBe('free')
       expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.billingError).toBeNull()
       expect(ai.messages).toEqual([])
       expect(ai.activeEditorPou).toBeNull()
       expect(ai.isAgenticLoopRunning).toBe(false)
@@ -112,11 +116,50 @@ describe('createAISlice', () => {
     })
   })
 
-  describe('setCredits', () => {
+  describe('setUsage', () => {
+    it('writes the new ACU fields', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
+    })
+
+    it('mirrors to deprecated creditsUsed/creditsTotal so unmigrated consumers stay in sync', () => {
+      store.getState().aiActions.setUsage(42, 1000)
+      expect(store.getState().ai.creditsUsed).toBe(42)
+      expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+  })
+
+  describe('setSubscription', () => {
+    it('sets subscriptionStatus, currentPeriodEnd, and planSlug together', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBe('active')
+      expect(ai.currentPeriodEnd).toBe('2026-06-01')
+      expect(ai.planSlug).toBe('community')
+    })
+
+    it('accepts null for all three fields (e.g. on logout)', () => {
+      store.getState().aiActions.setSubscription('active', '2026-06-01', 'community')
+      store.getState().aiActions.setSubscription(null, null, null)
+      const { ai } = store.getState()
+      expect(ai.subscriptionStatus).toBeNull()
+      expect(ai.currentPeriodEnd).toBeNull()
+      expect(ai.planSlug).toBeNull()
+    })
+  })
+
+  describe('setCredits (deprecated)', () => {
     it('sets both used and total credits', () => {
       store.getState().aiActions.setCredits(42, 1000)
       expect(store.getState().ai.creditsUsed).toBe(42)
       expect(store.getState().ai.creditsTotal).toBe(1000)
+    })
+
+    it('mirrors to new acuUsed/acuTotal so consumers migrated ahead of their call sites stay correct', () => {
+      store.getState().aiActions.setCredits(42, 1000)
+      expect(store.getState().ai.acuUsed).toBe(42)
+      expect(store.getState().ai.acuTotal).toBe(1000)
     })
   })
 
@@ -143,6 +186,32 @@ describe('createAISlice', () => {
       store.getState().aiActions.setCurrentPeriodEnd('2026-04-01')
       store.getState().aiActions.setCurrentPeriodEnd(null)
       expect(store.getState().ai.currentPeriodEnd).toBeNull()
+    })
+  })
+
+  describe('setBillingError', () => {
+    it('sets the structured 402 payload', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'insufficient_acu',
+        message: 'Out of ACU',
+        remaining: 0,
+        required: 12,
+        monthlyLimit: 613,
+      })
+      const { billingError } = store.getState().ai
+      expect(billingError?.code).toBe('insufficient_acu')
+      expect(billingError?.required).toBe(12)
+      expect(billingError?.monthlyLimit).toBe(613)
+    })
+
+    it('clears the billing error when passed null', () => {
+      store.getState().aiActions.setBillingError({
+        code: 'subscription_inactive',
+        message: 'Payment failed',
+        subscriptionStatus: 'past_due',
+      })
+      store.getState().aiActions.setBillingError(null)
+      expect(store.getState().ai.billingError).toBeNull()
     })
   })
 
@@ -212,17 +281,16 @@ describe('createAISlice', () => {
       expect(messages[1].id).toBe('msg-2')
     })
 
-    it('enforces MAX_CONVERSATION_MESSAGES by keeping the most recent messages', () => {
-      expect(MAX_CONVERSATION_MESSAGES).toBe(50)
-
-      for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 5; i++) {
+    it('retains every appended message without truncation', () => {
+      const total = 75
+      for (let i = 0; i < total; i++) {
         store.getState().aiActions.addMessage(makeMessage({ id: `msg-${i}`, content: `Message ${i}` }))
       }
 
       const messages = store.getState().ai.messages
-      expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-      expect(messages[0].id).toBe('msg-5')
-      expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`msg-${MAX_CONVERSATION_MESSAGES + 4}`)
+      expect(messages).toHaveLength(total)
+      expect(messages[0].id).toBe('msg-0')
+      expect(messages[total - 1].id).toBe(`msg-${total - 1}`)
     })
   })
 
@@ -543,17 +611,18 @@ describe('createAISlice', () => {
         expect(store.getState().ai.error).toBeNull()
       })
 
-      it('caps at MAX_CONVERSATION_MESSAGES, keeping the most recent', () => {
+      it('replaces with the full payload without truncation', () => {
+        const total = 75
         const many: ChatMessage[] = []
-        for (let i = 0; i < MAX_CONVERSATION_MESSAGES + 7; i++) {
+        for (let i = 0; i < total; i++) {
           many.push(makeMessage({ id: `m-${i}`, content: `Message ${i}` }))
         }
         store.getState().aiActions.replaceMessages(many)
 
         const messages = store.getState().ai.messages
-        expect(messages).toHaveLength(MAX_CONVERSATION_MESSAGES)
-        expect(messages[0].id).toBe('m-7')
-        expect(messages[MAX_CONVERSATION_MESSAGES - 1].id).toBe(`m-${MAX_CONVERSATION_MESSAGES + 6}`)
+        expect(messages).toHaveLength(total)
+        expect(messages[0].id).toBe('m-0')
+        expect(messages[total - 1].id).toBe(`m-${total - 1}`)
       })
     })
 
@@ -614,10 +683,15 @@ describe('createAISliceFactory', () => {
       createAISliceFactory({ isFeatureEnabled: true, hasUserConsented: false, inlineCompletionsEnabled: true }),
     )
     const { ai } = store.getState()
+    expect(ai.acuUsed).toBe(0)
+    expect(ai.acuTotal).toBe(0)
+    expect(ai.subscriptionStatus).toBeNull()
+    expect(ai.planSlug).toBeNull()
     expect(ai.creditsUsed).toBe(0)
     expect(ai.creditsTotal).toBe(500)
     expect(ai.tier).toBe('free')
     expect(ai.currentPeriodEnd).toBeNull()
+    expect(ai.billingError).toBeNull()
     expect(ai.messages).toEqual([])
     expect(ai.activeEditorPou).toBeNull()
     expect(ai.isAgenticLoopRunning).toBe(false)

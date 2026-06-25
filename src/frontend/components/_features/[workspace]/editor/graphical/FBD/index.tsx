@@ -5,9 +5,15 @@ import { zodFBDFlowSchema } from '../../../../../../store/slices/fbd'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
+import { useBoundPou } from '../active-context'
 
 export default function FbdEditor() {
-  const editor = useOpenPLCStore((state) => state.editor)
+  // Bound POU comes from the `GraphicalEditorActiveProvider` set up
+  // in the wrapper one level up.  With multi-mount, every open FBD
+  // POU has its own FbdEditor instance — the context is what tells
+  // each instance which POU's flow to operate on, instead of all of
+  // them collapsing to the globally-active editor.
+  const pouName = useBoundPou()
   const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
@@ -18,7 +24,7 @@ export default function FbdEditor() {
   )
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
-  const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
+  const flow = fbdFlows.find((flow) => flow.name === pouName)
   const flowUpdated = flow?.updated || false
 
   const nodeDivergences = useMemo(() => {
@@ -85,17 +91,17 @@ export default function FbdEditor() {
     if (!flowSchema.success) return
 
     updatePou({
-      name: editor.meta.name,
+      name: pouName,
       content: {
         language: 'fbd',
         value: flowSchema.data,
       },
     })
 
-    fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
 
     if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(editor.meta.name)
+      handleFileAndWorkspaceSavedState(pouName)
     }
   }, [flowUpdated])
 

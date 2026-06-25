@@ -34,9 +34,15 @@ const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => 
 
 /**
  * This is a validation to check if the value of the location is unique.
+ *
+ * `exclude` lets the update path skip the variable currently being
+ * mutated — re-setting a variable's location to its current value
+ * (e.g. to re-resolve a renamed alias) must not collide with itself.
+ * Reference-equality is enough since `variables` is the live array
+ * and the caller passes the same object reference.
  */
-const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
-  return variables.some((variable) => variable.location === location)
+const checkIfLocationExists = (variables: PLCVariable[], location: string, exclude?: PLCVariable) => {
+  return variables.some((variable) => variable !== exclude && variable.location === location)
 }
 
 /**
@@ -149,12 +155,12 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
     case 'UDINT':
     case 'REAL':
     case 'DWORD':
-      return 'Valid locations: %MD0 (change the number to the desired location)'
+      return 'Valid locations: %QD0, %ID0, %MD0 (change the number to the desired location)'
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
     case 'LWORD':
-      return 'Valid locations: %ML0 (change the number to the desired location)'
+      return 'Valid locations: %QL0, %IL0, %ML0 (change the number to the desired location)'
     default:
       return ''
   }
@@ -206,6 +212,92 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable exists change the variable name.
  **/
+/**
+ * Increment an IEC 61131-3 address by one slot, respecting the
+ * width of the variable's underlying type.  For BOOL addresses
+ * (`%IX/%QX<byte>.<bit>`) the bit field wraps from .7 back to .0
+ * with the byte index bumping by one; for word / dword / lword
+ * forms the numeric index after the prefix increments by one.
+ *
+ * Returns `null` when the type isn't recognised — the caller stops
+ * the auto-increment loop and falls back to whatever location it
+ * currently holds, so an unknown future IEC type can't produce an
+ * infinite loop here.
+ */
+const incrementLocationByOne = (location: string, typeValue: string): string | null => {
+  switch (typeValue.toUpperCase()) {
+    case 'BOOL': {
+      const stringWithNoPrefix = location
+        .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
+      const position = parseInt(stringWithNoPrefix.split('.')[0])
+      const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
+      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.BOOL_OUTPUT)
+        ? PLC_ADDRESS_PREFIX.BOOL_OUTPUT
+        : PLC_ADDRESS_PREFIX.BOOL_INPUT
+      return `${prefix}${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
+    }
+    case 'INT':
+    case 'UINT':
+    case 'WORD': {
+      const stringWithNoPrefix = location
+        .replace(PLC_ADDRESS_PREFIX.WORD_OUTPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.WORD_INPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.WORD_MEMORY, '')
+      const position = parseInt(stringWithNoPrefix)
+      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.WORD_OUTPUT)
+        ? PLC_ADDRESS_PREFIX.WORD_OUTPUT
+        : location.startsWith(PLC_ADDRESS_PREFIX.WORD_INPUT)
+          ? PLC_ADDRESS_PREFIX.WORD_INPUT
+          : PLC_ADDRESS_PREFIX.WORD_MEMORY
+      return `${prefix}${position + 1}`
+    }
+    case 'DINT':
+    case 'UDINT':
+    case 'REAL':
+    case 'DWORD': {
+      const stringWithNoPrefix = location
+        .replace(PLC_ADDRESS_PREFIX.DWORD_OUTPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.DWORD_INPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
+      const position = parseInt(stringWithNoPrefix)
+      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.DWORD_OUTPUT)
+        ? PLC_ADDRESS_PREFIX.DWORD_OUTPUT
+        : location.startsWith(PLC_ADDRESS_PREFIX.DWORD_INPUT)
+          ? PLC_ADDRESS_PREFIX.DWORD_INPUT
+          : PLC_ADDRESS_PREFIX.DWORD_MEMORY
+      return `${prefix}${position + 1}`
+    }
+    case 'LINT':
+    case 'ULINT':
+    case 'LREAL':
+    case 'LWORD': {
+      const stringWithNoPrefix = location
+        .replace(PLC_ADDRESS_PREFIX.LWORD_OUTPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.LWORD_INPUT, '')
+        .replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
+      const position = parseInt(stringWithNoPrefix)
+      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.LWORD_OUTPUT)
+        ? PLC_ADDRESS_PREFIX.LWORD_OUTPUT
+        : location.startsWith(PLC_ADDRESS_PREFIX.LWORD_INPUT)
+          ? PLC_ADDRESS_PREFIX.LWORD_INPUT
+          : PLC_ADDRESS_PREFIX.LWORD_MEMORY
+      return `${prefix}${position + 1}`
+    }
+    default:
+      return null
+  }
+}
+
+/** Safety bound on the auto-increment loop in `createVariableValidation`.
+ *  Picked well above any realistic project size (8 bits × N bytes =
+ *  N×8 BOOLs; this lets us scan ~1000 bytes / words / dwords / lwords
+ *  before we give up).  The loop normally terminates after at most
+ *  a handful of iterations — the bound only matters if the table is
+ *  pathologically dense or an unknown IEC type slipped past
+ *  `incrementLocationByOne`'s switch. */
+const MAX_AUTO_INCREMENT_ITERATIONS = 8192
+
 const createVariableValidation = (
   variables: PLCVariable[],
   variable: PLCVariable,
@@ -218,68 +310,25 @@ const createVariableValidation = (
     response.name = `${variableNameWithoutNumber}${number}`
   }
 
-  if (checkIfLocationExists(variables, variableLocation)) {
-    if (variableLocation === '') return response
-
-    const variableFound = variables.find((variable) => variable.location === variableLocation)
-    /* istanbul ignore next -- defensive: find() uses same predicate as checkIfLocationExists above */
-    if (!variableFound) return response
-
-    switch (variable.type.value.toUpperCase()) {
-      case 'BOOL': {
-        const stringWithNoPrefix = variableFound.location
-          .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
-          .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
-        const position = parseInt(stringWithNoPrefix.split('.')[0])
-        const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
-
-        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.BOOL_OUTPUT)
-          ? PLC_ADDRESS_PREFIX.BOOL_OUTPUT
-          : PLC_ADDRESS_PREFIX.BOOL_INPUT
-        response.location = `${prefix}${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
-        break
-      }
-
-      case 'INT':
-      case 'UINT':
-      case 'WORD': {
-        const stringWithNoPrefix = variableFound.location
-          .replace(PLC_ADDRESS_PREFIX.WORD_OUTPUT, '')
-          .replace(PLC_ADDRESS_PREFIX.WORD_INPUT, '')
-          .replace(PLC_ADDRESS_PREFIX.WORD_MEMORY, '')
-        const position = parseInt(stringWithNoPrefix)
-        const prefix = variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.WORD_OUTPUT)
-          ? PLC_ADDRESS_PREFIX.WORD_OUTPUT
-          : variableFound?.location.startsWith(PLC_ADDRESS_PREFIX.WORD_INPUT)
-            ? PLC_ADDRESS_PREFIX.WORD_INPUT
-            : PLC_ADDRESS_PREFIX.WORD_MEMORY
-        response.location = `${prefix}${position + 1}`
-        break
-      }
-
-      case 'DINT':
-      case 'UDINT':
-      case 'REAL':
-      case 'DWORD': {
-        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
-        const position = parseInt(stringWithNoPrefix)
-        response.location = `${PLC_ADDRESS_PREFIX.DWORD_MEMORY}${position + 1}`
-        break
-      }
-
-      case 'LINT':
-      case 'ULINT':
-      case 'LREAL':
-      case 'LWORD': {
-        const stringWithNoPrefix = variableFound.location.replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
-        const position = parseInt(stringWithNoPrefix)
-        response.location = `${PLC_ADDRESS_PREFIX.LWORD_MEMORY}${position + 1}`
-        break
-      }
-
-      default:
-        break
+  if (checkIfLocationExists(variables, variableLocation) && variableLocation !== '') {
+    // Scan forward through the address space until we find a slot
+    // that no other variable in this table holds.  Single-increment
+    // wasn't enough: when the user kept clicking "+" through a row
+    // of contiguous variables, the increment would eventually land
+    // ON another already-bound row and silently produce a duplicate-
+    // location collision that only the compiler caught (forum
+    // thread, v4.2.0 follow-up).  An `inUse` set keeps the inner
+    // check O(1) so the loop is linear in the number of variables.
+    const inUse = new Set(variables.map((v) => v.location))
+    let candidate = variableLocation
+    let iterations = 0
+    while (inUse.has(candidate) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
+      const next = incrementLocationByOne(candidate, variable.type.value)
+      if (!next || next === candidate) break // unknown type / no progress — bail
+      candidate = next
+      iterations += 1
     }
+    response.location = candidate
   }
   return response
 }
@@ -330,7 +379,10 @@ const updateVariableValidation = (
 
   if (dataToBeUpdated.location) {
     const { location } = dataToBeUpdated
-    if (checkIfLocationExists(variables, location)) {
+    // Exclude the variable being updated so re-setting its own
+    // location (e.g. re-picking the same address to refresh a
+    // renamed alias) doesn't trip the uniqueness check on itself.
+    if (checkIfLocationExists(variables, location, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Location already exists',

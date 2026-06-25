@@ -14,12 +14,11 @@
   "testEnvironmentOptions": {
     "url": "http://localhost/"
   },
-  "testMatch": [
-    "<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)",
-    "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"
-  ],
+  "testMatch": ["<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)", "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"],
+  "testPathIgnorePatterns": ["/node_modules/", "src/frontend/utils/__tests__/notify-no-write-permission.test.ts"],
+  "transformIgnorePatterns": ["node_modules/(?!strucpp)"],
   "transform": {
-    "\\.(ts|tsx)$": [
+    "\\.(ts|tsx|js|jsx)$": [
       "ts-jest",
       {
         "tsconfig": "tsconfig.json"

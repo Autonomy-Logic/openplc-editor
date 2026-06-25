@@ -3,7 +3,7 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
@@ -11,6 +11,7 @@ import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
+import { hasStringName, safeUpper } from '../../../utils/safe-upper'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import { TypeChangeModal } from '../type-change-modal'
@@ -62,11 +63,11 @@ const SelectableTypeCell = ({
   const VariableTypes = [
     {
       definition: 'base-type',
-      values: baseTypeSchema.options,
+      values: baseTypeEnum.options,
     },
     {
       definition: 'user-data-type',
-      values: dataTypes.map((dataType) => dataType.name),
+      values: dataTypes.filter(hasStringName).map((dataType) => dataType.name),
     },
   ]
 
@@ -74,34 +75,42 @@ const SelectableTypeCell = ({
     {
       definition: 'system',
       values: sliceLibraries.system.flatMap((library) =>
-        library.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+        (library.pous ?? [])
+          .filter((pou) => pou?.type === 'function-block')
+          .filter(hasStringName)
+          .map((pou) => pou.name.toUpperCase()),
       ),
     },
     {
       definition: 'user',
       values: sliceLibraries.user
+        .filter(hasStringName)
         .filter((userLibrary) => userLibrary.name !== editor.meta.name)
-        .flatMap((userLibrary) =>
-          'pous' in userLibrary && Array.isArray((userLibrary as { pous: { type: string; name: string }[] }).pous)
-            ? (userLibrary as { pous: { type: string; name: string }[] }).pous
-                .filter((pou) => pou.type === 'function-block')
-                .map((pou) => pou.name.toUpperCase())
-            : userLibrary.type === 'function-block'
-              ? [userLibrary.name.toUpperCase()]
-              : [],
-        ),
+        .flatMap((userLibrary) => {
+          const pous = (userLibrary as { pous?: { type?: string; name?: string }[] }).pous
+          if (Array.isArray(pous)) {
+            return pous
+              .filter((pou) => pou?.type === 'function-block')
+              .filter(hasStringName)
+              .map((pou) => pou.name.toUpperCase())
+          }
+          return userLibrary.type === 'function-block' ? [userLibrary.name.toUpperCase()] : []
+        }),
     },
   ]
 
   // Filter available types based on language
   const getAvailableTypes = () => {
     if (language === 'python' || language === 'cpp') {
-      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT', 'LOGLEVEL']
+      // Native-language POUs (Python / C++) don't share strucpp's
+      // chrono-backed handling for IEC time types yet, so hide them
+      // from the type dropdown.
+      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
 
       // Only show Base Type for Python/C++ and filter out specific types
       const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
         ...type,
-        values: type.values.filter((value) => !excludedTypes.includes(value.toUpperCase())),
+        values: type.values.filter((value) => !excludedTypes.includes(safeUpper(value))),
       }))
 
       return availableTypes
@@ -143,22 +152,22 @@ const SelectableTypeCell = ({
   const filteredBaseTypes =
     availableVariableTypes
       .find((v) => v.definition === 'base-type')
-      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['base-type'].toUpperCase())) || []
+      ?.values.filter((val) => safeUpper(val).includes(safeUpper(variableFilters['base-type']))) || []
 
   const filteredUserDataTypes =
     availableVariableTypes
       .find((v) => v.definition === 'user-data-type')
-      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase())) || []
+      ?.values.filter((val) => safeUpper(val).includes(safeUpper(variableFilters['user-data-type']))) || []
 
   const filteredSystemLibraries =
     availableLibraryTypes
       .find((l) => l.definition === 'system')
-      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
+      ?.values.filter((val) => safeUpper(val).includes(safeUpper(libraryFilter))) || []
 
   const filteredUserLibraries =
     availableLibraryTypes
       .find((l) => l.definition === 'user')
-      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
+      ?.values.filter((val) => safeUpper(val).includes(safeUpper(libraryFilter))) || []
 
   const applyTypeChange = (definition: PLCVariable['type']['definition'], value: PLCVariable['type']['value']) => {
     const language = 'language' in editor.meta ? editor.meta.language : undefined
