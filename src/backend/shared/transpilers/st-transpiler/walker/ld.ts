@@ -93,6 +93,13 @@ interface WalkerState {
     originFormalParameter: string
   }[]
   emittedBlocks: Set<string>
+  /** Output-write sinks (coil / output / inOut variable) keyed by the
+   *  block that feeds them — emitted right after the block's call so a
+   *  downstream block reads the written value, not a stale one (#830). */
+  consumersByBlock: Map<string, RFNode[]>
+  /** Sinks already emitted — by block coupling or the main sweep — so
+   *  the other path skips them. */
+  emittedSinks: Set<string>
   /** Connector expressions cached by name, consumed by continuation
    *  visits later in the same rung (FBD-only). */
   connectorExprs: Map<string, ProgramChunk[]>
@@ -172,6 +179,8 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
     triggerVars: [],
     functionTempVars: [],
     emittedBlocks: new Set(),
+    consumersByBlock: new Map(),
+    emittedSinks: new Set(),
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
@@ -250,8 +259,24 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
   ordered.sort((a, b) => nodeExecutionOrder(a) - nodeExecutionOrder(b))
   others.sort((a, b) => compareNodePosition(state, a, b))
 
-  for (const sink of ordered) emitSink(state, sink)
-  for (const sink of others) emitSink(state, sink)
+  // Index each block's output-write sinks (coils / output / inOut
+  // variables fed solely by that block).  These are emitted right after
+  // the block's call by `emitBlockConsumers` — wherever the call lands,
+  // eager or lazy — and skipped in the sweep below.  Otherwise a block
+  // numbered ahead of its output variable (write left at
+  // executionOrderId 0) emits its call in the ordered pass while the
+  // assignment waits for the unordered pass, so a later block in the
+  // rung reads the variable before it is written (#830).
+  for (const node of [...ordered, ...others]) {
+    const blockId = blockFedSink(state, node)
+    if (blockId === null) continue
+    const list = state.consumersByBlock.get(blockId) ?? []
+    list.push(node)
+    state.consumersByBlock.set(blockId, list)
+  }
+
+  emitSinksWithCoilGrouping(state, ordered)
+  emitSinksWithCoilGrouping(state, others)
 
   const bodySt = '\n' + state.program.map((c) => c[0]).join('')
   const syntheticVars: SyntheticVar[] = [
@@ -279,6 +304,23 @@ function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
   return ax - bx
 }
 
+/**
+ * If `node` is an output-write sink (coil / output- or inOut-variable)
+ * whose value comes solely from a single block, return that block's id.
+ * Such a sink is the block's output binding — it must emit right after
+ * the block's call so downstream blocks read the written value, not a
+ * stale one (#830).  Returns null for anything else (multi-source
+ * sinks, non-block sources, blocks, connectors).
+ */
+function blockFedSink(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil' && !isVariableNode(node)) return null
+  const edges = state.incoming.get(node.id) ?? []
+  if (edges.length !== 1) return null
+  const src = state.byId.get(edges[0].source)
+  if (src === undefined || src.type !== 'block') return null
+  return src.id
+}
+
 function emitSink(state: WalkerState, node: RFNode): void {
   // Top-level sink walks ALWAYS use order=false — the sink's own
   // executionOrderId doesn't propagate into its upstream walks
@@ -297,7 +339,110 @@ function emitSink(state: WalkerState, node: RFNode): void {
   if (node.type === 'connector') return emitConnectorNode(state, node)
 }
 
+/**
+ * Emit sinks in order, collapsing SET/RESET coils that branch off the
+ * SAME upstream source into a single `IF`.  Parallel coils share one
+ * energization path, so the rung condition must be evaluated ONCE and
+ * applied to every branch — emitting a separate `IF` per coil
+ * re-evaluates the condition between assignments, which is wrong when
+ * the condition reads a coil an earlier branch just set
+ * (e.g. `IF NOT(coils1)... coils1 := TRUE`).
+ *
+ * Same-source coils are gathered even when they are NOT adjacent in
+ * emission order: a coil fed by their merge (so it shares neither
+ * source) can sort between two parallel branches by position, yet the
+ * branches must still collapse into one `IF`.  The group is emitted at
+ * the first branch's slot; the intervening sink (and any other
+ * downstream work) follows after — which is also its dataflow order,
+ * since a merge-fed sink is downstream of the branches it consumes.
+ */
+function emitSinksWithCoilGrouping(state: WalkerState, sinks: RFNode[]): void {
+  for (let i = 0; i < sinks.length; i++) {
+    if (state.emittedSinks.has(sinks[i].id)) continue
+    const key = setResetCoilGroupKey(state, sinks[i])
+    if (key === null) {
+      state.emittedSinks.add(sinks[i].id)
+      emitSink(state, sinks[i])
+      continue
+    }
+    const group: RFNode[] = [sinks[i]]
+    for (let j = i + 1; j < sinks.length; j++) {
+      if (state.emittedSinks.has(sinks[j].id)) continue
+      if (setResetCoilGroupKey(state, sinks[j]) === key) group.push(sinks[j])
+    }
+    for (const g of group) state.emittedSinks.add(g.id)
+    if (group.length === 1) emitCoilNode(state, sinks[i])
+    else emitCoilGroup(state, group)
+  }
+}
+
+/**
+ * Emit a block's output-write sinks (coils / output / inOut variables
+ * fed solely by it) right after its call — wherever that call lands.
+ * Reuses the coil-grouping sweep so parallel SET/RESET coils off the
+ * same block still collapse into one `IF`.  Idempotent via
+ * `state.emittedSinks`, so the main sweep skips what is emitted here.
+ */
+function emitBlockConsumers(state: WalkerState, blockId: string): void {
+  const consumers = state.consumersByBlock.get(blockId)
+  if (consumers === undefined) return
+  emitSinksWithCoilGrouping(state, consumers)
+}
+
+/**
+ * Group identity for a SET/RESET coil: the sorted set of its upstream
+ * source node ids.  Two coils with the same key branch off the same
+ * point (parallel rails) and therefore share a condition.  Returns
+ * null for anything not groupable (non-coils, plain/negated/edge
+ * coils, or an unconnected coil).
+ */
+function setResetCoilGroupKey(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil') return null
+  const data = asCoilData(node.data)
+  if (data === null || (data.variant !== 'set' && data.variant !== 'reset')) return null
+  const sources = (state.incoming.get(node.id) ?? []).map((e) => e.source).sort()
+  if (sources.length === 0) return null
+  return sources.join('|')
+}
+
 /* ─────────────────────────── coil emission ──────────────────────────────── */
+
+/**
+ * Emit a group of parallel SET/RESET coils under one shared `IF`.
+ * The condition is computed once from the first coil's upstream (all
+ * coils in the group share it by construction), then each branch's
+ * assignment is written inside the single `THEN` body.
+ */
+function emitCoilGroup(state: WalkerState, coils: RFNode[]): void {
+  const first = coils[0]
+  const paths = pathsFromIncoming(state, first.id, /*order=*/ false)
+  if (paths.length === 0) {
+    // Shared upstream resolved to nothing — fall back to per-coil
+    // emission so each surfaces its own "must be connected" warning.
+    for (const coil of coils) emitCoilNode(state, coil)
+    return
+  }
+  const expr = pathsToChunks(paths)
+  const firstData = asCoilData(first.data)
+  const firstInfo: Location = [state.tagName, 'coil', locId(first)]
+
+  state.program.push([`${state.currentIndent}IF `, [...firstInfo, firstData?.variant ?? 'set']])
+  for (const chunk of expr) state.program.push(chunk)
+  state.program.push([' THEN\n', []])
+
+  const inner = state.currentIndent + '  '
+  for (const coil of coils) {
+    const data = asCoilData(coil.data)
+    if (data === null) continue
+    const storage = data.variant === 'reset' ? 'reset' : 'set'
+    const value = storage === 'set' ? 'TRUE' : 'FALSE'
+    const info: Location = [state.tagName, 'coil', locId(coil)]
+    state.program.push([inner, []])
+    state.program.push([data.variable, [...info, 'reference']])
+    state.program.push([` := ${value}; (*${storage}*)\n`, []])
+  }
+  state.program.push([`${state.currentIndent}END_IF;\n`, []])
+}
 
 function emitCoilNode(state: WalkerState, node: RFNode): void {
   const data = asCoilData(node.data)
@@ -674,6 +819,7 @@ function emitFunctionBlockCall(state: WalkerState, node: RFNode, data: BlockData
     for (const chunk of parts[i]) state.program.push(chunk)
   }
   state.program.push([');\n', []])
+  emitBlockConsumers(state, node.id)
 }
 
 function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): void {
@@ -728,6 +874,7 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   }
   state.program.push([');\n', []])
   void primaryFormal
+  emitBlockConsumers(state, node.id)
 }
 
 function buildInputArgs(
