@@ -1,11 +1,7 @@
-import * as Popover from '@radix-ui/react-popover'
-import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
-import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
-import { InputWithRef } from '@root/frontend/components/_atoms/input'
+import { GenericComboboxCell } from '@root/frontend/components/_atoms/generic-table-inputs/generic-combobox-cell'
 import { Label } from '@root/frontend/components/_atoms/label'
-import { cn } from '@root/frontend/utils/cn'
 import type { NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 
 type InterfaceSelectorProps = {
   interfaces: NetworkInterface[]
@@ -15,10 +11,17 @@ type InterfaceSelectorProps = {
   error: string | null
 }
 
+// Field-style trigger (bordered dropdown), distinct from the default table-cell look.
+const FIELD_TRIGGER_CLASS =
+  'flex h-[30px] w-full min-w-[200px] max-w-[300px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-normal text-neutral-700 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-100'
+
 /**
- * Editable combobox for network interface selection.
- * Shows a dropdown with available interfaces from runtime, but also allows typing custom values.
- * Follows the same pattern as the Modbus RTU SerialPortCombobox.
+ * Network-interface picker for the EtherCAT screen.
+ *
+ * A thin wrapper over the shared GenericComboboxCell — the single combobox in
+ * the app. The runtime returns the full set of adapters and that list is shown
+ * in full (`disableFilter`), while the user can still type a custom interface
+ * name (`canAddACustomOption`) that propagates verbatim through onSelectInterface.
  */
 const InterfaceSelector = ({
   interfaces,
@@ -27,177 +30,41 @@ const InterfaceSelector = ({
   isLoading,
   error,
 }: InterfaceSelectorProps) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const [inputValue, setInputValue] = useState(selectedInterface)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const optionRefs = useRef<Array<HTMLDivElement | null>>([])
-  const [highlightedIndex, setHighlightedIndex] = useState(-1)
-
-  // Sync input value with external value changes
-  useEffect(() => {
-    setInputValue(selectedInterface)
-  }, [selectedInterface])
-
-  // Build options from interfaces
-  const options = useMemo(
-    () => interfaces.map((iface) => ({ value: iface.name, label: iface.description || iface.name })),
-    [interfaces],
+  // While a scan is in flight, present an empty list so the "Loading…" message
+  // shows (mirrors the previous behavior); otherwise map adapters to options
+  // keyed by interface name (the value that propagates).
+  const selectValues = useMemo(
+    () =>
+      isLoading
+        ? []
+        : interfaces.map((iface) => ({
+            id: iface.name,
+            value: iface.name,
+            label:
+              iface.description && iface.description !== iface.name
+                ? `${iface.name} — ${iface.description}`
+                : iface.name,
+          })),
+    [interfaces, isLoading],
   )
-
-  // No typed-text filtering: the scan returns the full set of adapters the
-  // runtime can see, and that list should always be shown in full. The input
-  // is for entering a custom interface name (e.g. one not yet up), not for
-  // narrowing the discovered list — narrowing only hid valid choices.
-
-  // Focus input and select all text when dropdown opens
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        inputRef.current?.focus()
-        inputRef.current?.select()
-        const currentIndex = options.findIndex((opt) => opt.value === selectedInterface)
-        setHighlightedIndex(currentIndex >= 0 ? currentIndex : -1)
-      }, 0)
-    }
-  }, [isOpen, options, selectedInterface])
-
-  // Scroll highlighted option into view
-  useEffect(() => {
-    if (highlightedIndex >= 0 && highlightedIndex < options.length && optionRefs.current[highlightedIndex]) {
-      optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlightedIndex, options.length])
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value)
-    setHighlightedIndex(-1)
-  }
-
-  const handleInputBlur = () => {
-    if (inputValue !== selectedInterface) {
-      onSelectInterface(inputValue)
-    }
-  }
-
-  const handleSelectOption = useCallback(
-    (optionValue: string) => {
-      setInputValue(optionValue)
-      onSelectInterface(optionValue)
-      setIsOpen(false)
-    },
-    [onSelectInterface],
-  )
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => (prev < options.length - 1 ? prev + 1 : 0))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
-        handleSelectOption(options[highlightedIndex].value)
-      } else if (inputValue.trim()) {
-        onSelectInterface(inputValue.trim())
-        setIsOpen(false)
-      }
-    } else if (e.key === 'Escape') {
-      setIsOpen(false)
-    }
-  }
-
-  const handleOpenChange = (open: boolean) => {
-    if (!open && inputValue.trim() !== selectedInterface) {
-      onSelectInterface(inputValue.trim())
-    }
-    setIsOpen(open)
-  }
 
   return (
     <div className='flex flex-col gap-1'>
       <Label className='text-xs text-neutral-950 dark:text-white'>Network Interface</Label>
-      <Popover.Root open={isOpen} onOpenChange={handleOpenChange}>
-        <Popover.Trigger asChild>
-          <button
-            type='button'
-            className='flex h-[30px] w-full min-w-[200px] max-w-[300px] items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-          >
-            <span className='truncate text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-              {selectedInterface || 'Select interface'}
-            </span>
-            <ArrowIcon size='sm' className={cn('rotate-270 stroke-brand transition-all', isOpen && 'rotate-90')} />
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            sideOffset={5}
-            align='start'
-            className='z-50 w-[--radix-popover-trigger-width] min-w-[200px] rounded-lg border border-neutral-300 bg-white shadow-lg outline-none dark:border-brand-medium-dark dark:bg-neutral-950'
-          >
-            <div className='p-2'>
-              <InputWithRef
-                ref={inputRef}
-                value={inputValue}
-                onChange={handleInputChange}
-                onBlur={handleInputBlur}
-                onKeyDown={handleKeyDown}
-                placeholder='eth0'
-                className='h-[28px] w-full rounded-md border border-neutral-200 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
-              />
-            </div>
-            <div className='max-h-[200px] overflow-y-auto'>
-              {isLoading ? (
-                <div className='flex items-center justify-center py-2 text-xs text-neutral-500'>
-                  Loading interfaces...
-                </div>
-              ) : options.length > 0 ? (
-                options.map((option, index) => (
-                  <div
-                    key={option.value}
-                    ref={(el) => (optionRefs.current[index] = el)}
-                    className={cn(
-                      'flex w-full cursor-pointer flex-col px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                      (selectedInterface === option.value || highlightedIndex === index) &&
-                        'bg-neutral-100 dark:bg-neutral-800',
-                    )}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    onClick={() => handleSelectOption(option.value)}
-                    role='option'
-                    aria-selected={highlightedIndex === index}
-                  >
-                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      {option.value}
-                    </span>
-                    {option.label !== option.value && (
-                      <span className='text-start font-caption text-[10px] font-normal text-neutral-500 dark:text-neutral-400'>
-                        {option.label}
-                      </span>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className='px-2 py-2 text-center text-xs text-neutral-500'>
-                  No interfaces available. Type a custom value.
-                </div>
-              )}
-            </div>
-            {inputValue.trim() && !options.some((opt) => opt.value === inputValue.trim()) && (
-              <div
-                className='flex cursor-pointer items-center gap-2 border-t border-neutral-200 px-2 py-1 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'
-                onClick={() => handleSelectOption(inputValue.trim())}
-              >
-                <PlusIcon className='h-3 w-3 stroke-brand' />
-                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Use "{inputValue.trim()}"
-                </span>
-              </div>
-            )}
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-
+      <GenericComboboxCell
+        value={selectedInterface}
+        onValueChange={onSelectInterface}
+        selectValues={selectValues}
+        displayLabel={selectedInterface || 'Select interface'}
+        disableFilter
+        canAddACustomOption
+        showClearOption={false}
+        showChevron
+        triggerClassName={FIELD_TRIGGER_CLASS}
+        placeholder='eth0'
+        customValueLabel='Use custom interface'
+        emptyMessage={isLoading ? 'Loading interfaces...' : 'No interfaces available. Type a custom value.'}
+      />
       {error && <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>}
     </div>
   )
