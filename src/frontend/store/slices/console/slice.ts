@@ -15,6 +15,7 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
     searchTerm: '',
     timestampFormat: 'full',
   },
+  followRequestId: 0,
   consoleActions: {
     addLog: (log) => {
       setState(
@@ -58,6 +59,13 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
       setState(
         produce((state: ConsoleSlice) => {
           state.filters.timestampFormat = format
+        }),
+      )
+    },
+    requestConsoleFollow: () => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.followRequestId += 1
         }),
       )
     },

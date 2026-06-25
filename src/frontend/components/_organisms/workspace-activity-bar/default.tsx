@@ -38,6 +38,7 @@ const showDebuggerMessage = (
   title: string,
   message: string,
   buttons: string[],
+  options?: { primaryButtonIndex?: number; dismissButtonIndex?: number },
 ): Promise<number> => {
   return new Promise((resolve) => {
     useOpenPLCStore.getState().modalActions.openModal('debugger-message', {
@@ -45,6 +46,7 @@ const showDebuggerMessage = (
       title,
       message,
       buttons,
+      ...options,
       onResponse: (buttonIndex: number) => resolve(buttonIndex),
     })
   })
@@ -75,7 +77,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     project: { data: projectData, meta: projectMeta },
     deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
-    consoleActions: { addLog },
+    consoleActions: { addLog, requestConsoleFollow },
   } = useOpenPLCStore()
 
   // Project-type capability matrix.  Drives which set of action
@@ -154,6 +156,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
       if (isCompiling) return
 
+      // Reveal the console and re-attach it to the tail so build output is
+      // visible from the first line, even if the console was collapsed or the
+      // user had scrolled up. One-shot — it won't fight a later manual scroll.
+      requestConsoleFollow()
+
       // Always save the full project before building. The compile
       // pipeline reads source from disk (project.json, devices/*.json,
       // pous/**, ...) so any in-memory edit that hasn't been flushed
@@ -181,6 +188,51 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       setIsCompiling(true)
+
+      // Targets that build through the device runtime (everything except the
+      // arduino-cli / in-process-simulator pipelines, i.e. directUsbUpload)
+      // run the FINAL build step ON the device. If the runtime is actively
+      // scanning a program, that heavy on-device work can stall the build or
+      // make the running program miss scan cycles / deadlines. So when we're
+      // connected to a RUNNING runtime, require the user to stop the PLC first
+      // and, on their consent, stop it before compiling.
+      {
+        const state = useOpenPLCStore.getState()
+        const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+          state.deviceDefinitions.configuration.deviceBoard,
+        )
+        const requiresRuntimeConnection = !resolveTargetCapabilities(boardInfo).directUsbUpload
+        const { connectionStatus: connStatus, plcStatus: runStatus } = state.runtimeConnection
+        if (requiresRuntimeConnection && connStatus === 'connected' && runStatus === 'RUNNING') {
+          const response = await showDebuggerMessage(
+            'warning',
+            'Stop PLC',
+            'The PLC must be stopped before continuing.',
+            ['Cancel', 'Stop PLC and Continue'],
+            // Cancel is first (left, neutral); proceed is the blue primary on
+            // the right; Escape / click-away routes to Cancel.
+            { primaryButtonIndex: 1, dismissButtonIndex: 0 },
+          )
+          if (response !== 1) {
+            // User declined — abort the build and leave the PLC running.
+            setIsCompiling(false)
+            return
+          }
+          const stopResult = await runtime.stopPlc()
+          if (!stopResult.success) {
+            addLog({
+              id: crypto.randomUUID(),
+              level: 'error',
+              message: `Failed to stop PLC: ${stopResult.error ?? 'Unknown error'}`,
+            })
+            setIsCompiling(false)
+            return
+          }
+          useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
+          addLog({ id: crypto.randomUUID(), level: 'info', message: 'PLC stopped before build.' })
+        }
+      }
+
       addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
 
       // Pre-compile alias sync: ensure every located variable's
@@ -275,6 +327,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       executeSave,
       canEdit,
       jwtToken,
+      runtime,
+      requestConsoleFollow,
     ],
   )
 
@@ -288,6 +342,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleBuildLibrary = useCallback(
     async (overrides?: { cleanBuild?: boolean }) => {
       if (isCompiling) return
+
+      // Reveal the console and re-attach to the tail (see handleBuild).
+      requestConsoleFollow()
 
       // Always save before building.  The manifest tab and any POU
       // bodies may have edits the workspace-level `editingState`
@@ -353,7 +410,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         setIsCompiling(false)
       }
     },
-    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave],
+    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave, requestConsoleFollow],
   )
 
   // ---------------------------------------------------------------------------

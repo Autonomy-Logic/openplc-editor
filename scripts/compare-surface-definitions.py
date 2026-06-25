@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Compare SURFACES definitions between the web and editor compare-surfaces.py scripts.
+Compare surface definitions between the web and editor compare-surfaces.py scripts.
 
-Parses the SURFACES variable from both scripts using Python's AST module
-and checks that they define the same set of surfaces.
+Parses the SURFACES and MAPPED_SURFACES variables from both scripts using
+Python's AST module and checks that they define the same surfaces, so the two
+repos can never silently check a different set.
 Exit code 0 = match, 1 = mismatch or parse failure.
 """
 
@@ -17,15 +18,30 @@ from pathlib import Path
 SCRIPT_RELATIVE_PATH = "scripts/compare-surfaces.py"
 
 
-def extract_surfaces(filepath: Path) -> list[str] | None:
+def extract_var(filepath: Path, varname: str):
+    """Return the literal value assigned to `varname` in the script, or None."""
     with open(filepath) as f:
         tree = ast.parse(f.read())
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "SURFACES":
-                    return sorted(ast.literal_eval(node.value))
+                if isinstance(target, ast.Name) and target.id == varname:
+                    return ast.literal_eval(node.value)
     return None
+
+
+def extract_surfaces(filepath: Path) -> list[str] | None:
+    value = extract_var(filepath, "SURFACES")
+    return sorted(value) if value is not None else None
+
+
+def extract_mapped(filepath: Path) -> list | None:
+    """MAPPED_SURFACES as a list of dicts, normalized (sorted by name) for a
+    stable comparison; missing entirely returns None."""
+    value = extract_var(filepath, "MAPPED_SURFACES")
+    if value is None:
+        return None
+    return sorted(value, key=lambda m: m.get("name", ""))
 
 
 def main() -> int:
@@ -71,7 +87,18 @@ def main() -> int:
             print(f"  Only in editor: {', '.join(sorted(editor_only))}")
         return 1
 
+    # MAPPED_SURFACES must match too (it controls the path-mapped checks).
+    web_mapped = extract_mapped(web_script)
+    editor_mapped = extract_mapped(editor_script)
+    if web_mapped != editor_mapped:
+        print("::error::MAPPED_SURFACES definitions do not match:")
+        print(f"  web:    {web_mapped}")
+        print(f"  editor: {editor_mapped}")
+        return 1
+
     print(f"SURFACES definitions match: {web}")
+    mapped_names = [m.get("name") for m in (web_mapped or [])]
+    print(f"MAPPED_SURFACES definitions match: {mapped_names}")
     return 0
 
 

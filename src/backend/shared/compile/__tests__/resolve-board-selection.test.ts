@@ -179,4 +179,64 @@ describe('resolveBoardSelection', () => {
       expect(result.boardRuntime).toBe('arduino-cli')
     }
   })
+
+  it('maps a prebuilt arduino-hal VPP board: coreVersion + resolved precompiledLibraryDir', () => {
+    // Prebuilt mixed VPP: target.coreVersion (ABI-locked core) and
+    // hal.precompiledLibrary (vendor lib dir, resolved package-relative)
+    // must surface on boardEntry so the pipeline pins the core and passes
+    // the 2nd --library. The open hal.source integration layer stays.
+    const pkg: InstalledPackage = {
+      packageId: 'com.automationdirect.p1am-prebuilt-test',
+      version: '0.1.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      path: '/fake/packages/p1am',
+      devices: ['p1am-200'],
+    }
+    const manifest: PackageManifest = {
+      formatVersion: '1.0',
+      package: {
+        id: 'com.automationdirect.p1am-prebuilt-test',
+        name: 'P1AM',
+        version: '0.1.0',
+        vendor: { name: 'AutomationDirect', logo: 'l.png' },
+        description: 'd',
+      },
+      devices: [
+        {
+          id: 'p1am-200',
+          name: 'AutomationDirect P1AM-200',
+          preview: 'p.png',
+          target: {
+            type: 'arduino-cli',
+            core: 'FACTS:samd',
+            platform: 'FACTS:samd:P1AM-200',
+            coreVersion: '1.7.13',
+          },
+          hal: {
+            type: 'arduino-hal',
+            provisioning: 'prebuilt',
+            source: 'hal/arduino/p1am.cpp',
+            precompiledLibrary: 'hal/arduino/lib',
+            extraArduinoLibraries: ['P1AM'],
+          },
+        },
+      ],
+    }
+    const packageManager: PackageManagerPort = {
+      listInstalled: () => [pkg],
+      getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
+    }
+    const resolver = makeResolver({}, { packageManager })
+
+    const result = resolveBoardSelection(resolver, 'AutomationDirect P1AM-200')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.platform).toBe('FACTS:samd:P1AM-200')
+      expect(result.boardEntry.core).toBe('FACTS:samd')
+      expect(result.boardEntry.coreVersion).toBe('1.7.13')
+      // resolvePackageRelativePath fake joins as `${pkg.path}/${rel}`.
+      expect(result.boardEntry.precompiledLibraryDir).toBe('/fake/packages/p1am/hal/arduino/lib')
+      expect(result.boardEntry.extra_libraries).toEqual(['P1AM'])
+    }
+  })
 })

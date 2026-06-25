@@ -153,6 +153,35 @@ describe('generateModbusMasterConfig', () => {
     expect(generateModbusMasterConfig([device])).toBeNull()
   })
 
+  it('logs a skip warning for an RTU device without a serial port', () => {
+    const device: PLCRemoteDevice = {
+      name: 'BadRTU',
+      protocol: 'modbus-tcp',
+      modbusTcpConfig: {
+        transport: 'rtu',
+        timeout: 500,
+        ioGroups: [
+          {
+            id: 'g1',
+            name: 'Group1',
+            functionCode: '3',
+            cycleTime: 100,
+            offset: '0',
+            length: 1,
+            errorHandling: 'keep-last-value',
+            ioPoints: [{ id: 'p1', name: 'P1', type: 'WORD', iecLocation: '%MW0' }],
+          },
+        ],
+      },
+    }
+
+    const log = jest.fn()
+    expect(generateModbusMasterConfig([device], log)).toBeNull()
+    expect(log).toHaveBeenCalledWith(
+      'Modbus RTU device "BadRTU" is missing a serial port configuration and will be skipped.',
+    )
+  })
+
   it('uses default values for optional TCP fields', () => {
     const device: PLCRemoteDevice = {
       name: 'Defaults',

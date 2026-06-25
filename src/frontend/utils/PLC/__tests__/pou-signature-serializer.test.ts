@@ -1,5 +1,10 @@
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { OPAQUE_BODY_PLACEHOLDER, serializePouSignatureToST } from '../pou-signature-serializer'
+import {
+  OPAQUE_BODY_PLACEHOLDER,
+  SCOPE_QUERY_POU_NAME,
+  serializePouScopeForQuery,
+  serializePouSignatureToST,
+} from '../pou-signature-serializer'
 
 function makePou(overrides: Partial<PLCPou> = {}): PLCPou {
   return {
@@ -155,6 +160,53 @@ describe('serializePouSignatureToST', () => {
       expect(inputSlice).toContain('in1')
       expect(inputSlice).not.toContain('out1')
       expect(inputSlice).not.toContain('state')
+    })
+  })
+
+  describe('serializePouScopeForQuery', () => {
+    it('wraps the partial expression in the POU scope with a throwaway name', () => {
+      const pou = makePou({
+        name: 'Irrigation',
+        pouType: 'function-block',
+        interface: FB_VARIABLES,
+        body: { language: 'ld', value: {} as never },
+      })
+      const { text, position } = serializePouScopeForQuery(pou, 'in1.')
+      // Emits the POU's real kind + a throwaway name (not the real one).
+      expect(text).toMatch(new RegExp(`^FUNCTION_BLOCK ${SCOPE_QUERY_POU_NAME}\\b`, 'm'))
+      expect(text).not.toContain('FUNCTION_BLOCK Irrigation')
+      // VAR sections + the partial expression as the body line.
+      expect(text).toContain('in1 : BOOL;')
+      expect(text).toContain('in1.')
+      expect(text).toContain('END_FUNCTION_BLOCK')
+      // Cursor sits at the end of the body expression.
+      expect(position.character).toBe('in1.'.length)
+      // The body line is after the declaration + VAR blocks.
+      expect(text.split('\n')[position.line]).toBe('in1.')
+    })
+
+    it('keeps the function return type while swapping only the name', () => {
+      const pou = makePou({
+        name: 'AbsInt',
+        pouType: 'function',
+        interface: { returnType: 'INT', variables: [] },
+        body: { language: 'st', value: '' },
+      })
+      const { text } = serializePouScopeForQuery(pou, 'x')
+      expect(text).toMatch(new RegExp(`^FUNCTION ${SCOPE_QUERY_POU_NAME} : INT\\b`, 'm'))
+      expect(text).toMatch(/END_FUNCTION\b/m)
+    })
+
+    it('omits the return type for a program', () => {
+      const pou = makePou({ name: 'MainProg', pouType: 'program', interface: { variables: [] } })
+      const { text } = serializePouScopeForQuery(pou, '')
+      expect(text).toMatch(new RegExp(`^PROGRAM ${SCOPE_QUERY_POU_NAME}$`, 'm'))
+    })
+
+    it('makes the synthetic POU name unique when a uniqueId is given', () => {
+      const pou = makePou({ name: 'Foo', pouType: 'function-block', interface: { variables: [] } })
+      const { text } = serializePouScopeForQuery(pou, '', 42)
+      expect(text).toContain(`FUNCTION_BLOCK ${SCOPE_QUERY_POU_NAME}42__`)
     })
   })
 

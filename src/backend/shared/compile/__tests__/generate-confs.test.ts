@@ -137,6 +137,19 @@ describe('generateRuntimeConfs — happy path', () => {
     expect(log).toHaveBeenCalledWith('OPC-UA Address Space: 5 node(s) configured', 'info')
   })
 
+  it('forwards Modbus master skip diagnostics through the log callback as level=warning', () => {
+    const log = jest.fn()
+    mockedModbusMaster.mockImplementation((_devices, innerLog) => {
+      innerLog?.('Modbus RTU device "BadRTU" is missing a serial port configuration and will be skipped.')
+      return null
+    })
+    generateRuntimeConfs(makeInput({ log }))
+    expect(log).toHaveBeenCalledWith(
+      'Modbus RTU device "BadRTU" is missing a serial port configuration and will be skipped.',
+      'warning',
+    )
+  })
+
   it('returns null for confs whose generator returned null', () => {
     // Default-mock behavior (all null).
     const result = generateRuntimeConfs(makeInput())

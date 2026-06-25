@@ -347,6 +347,14 @@ void modbusTask()
             }
         }
     #endif
+
+    // The reverse-copies above (COILS → bool_output, holding → int_output,
+    // memory) write located variables' raw storage directly, clobbering any
+    // debugger force. Re-impose forces here so forcing works while STILL
+    // mirroring Modbus client writes into mapped outputs. (Supersedes the open
+    // PR #719, which made forcing work by deleting the digital reverse-copy —
+    // at the cost of Modbus coil mirroring.)
+    runtime_apply_located_forces();
 }
 #endif
 

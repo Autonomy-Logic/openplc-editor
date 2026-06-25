@@ -904,6 +904,18 @@ async function saveVendorScreenOnly(
   }
   onDisk.vendorScreenData = diskVendor
 
+  // Keep the active board's per-board bucket in lock-step with the flat view
+  // we just patched, leaving every other board's bucket on disk untouched.
+  // Without this, a later load would restore a stale bucket over the keys we
+  // surgically saved (the archive is authoritative on load).
+  const boardId = state.deviceDefinitions.configuration.deviceBoard
+  const diskByBoard =
+    onDisk.vendorScreenDataByBoard && typeof onDisk.vendorScreenDataByBoard === 'object'
+      ? ({ ...(onDisk.vendorScreenDataByBoard as Record<string, unknown>) } as Record<string, unknown>)
+      : ({} as Record<string, unknown>)
+  diskByBoard[boardId] = diskVendor
+  onDisk.vendorScreenDataByBoard = diskByBoard
+
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 

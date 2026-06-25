@@ -239,10 +239,14 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleCoreInstallation(args.coreId, (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        })
+        await handlers.handleCoreInstallation(
+          args.coreId,
+          (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+          args.coreVersion,
+        )
         return { ok: true }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)

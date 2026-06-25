@@ -6,6 +6,7 @@ import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
+import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
 import { cn } from '../../../../utils/cn'
@@ -35,7 +36,7 @@ const VariableElement = (block: VariableProps) => {
   const pouName = useBoundPou()
   const {
     project: {
-      data: { pous, dataTypes },
+      data: { pous },
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
@@ -126,74 +127,37 @@ const VariableElement = (block: VariableProps) => {
   }, [data.variable?.name])
 
   /**
-   * Update inputError state when the table of variables is updated
+   * Validate the variable node against the block pin's expected type via the
+   * STruC++ LSP. The pin type may be a generic (ANY_NUM, …) and the typed
+   * value may be an instance member or struct/array access the local
+   * interface list can't resolve. `isAVariable` (yellow) means "not a known
+   * symbol"; `inputError` (red) means "known but type-incompatible".
    */
   useEffect(() => {
-    const { node: variableNode, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-      nodeId: id,
-      variableName: data.variable?.name,
-    })
-    if (!rung || !variableNode) return
-
-    // Use the node's current variable name (from the store) as the source of truth.
-    // The prop `data.variable?.name` may be stale during React's render cycle, so
-    // looking up the POU variable by the node's actual name avoids overwriting
-    // user-initiated changes (selection, clearing) with stale prop values.
-    const nodeVariableName = (variableNode as VariableNode).data.variable.name
-    const nodeVarRef = (variableNode as VariableNode).data.variable
-
-    if (!nodeVariableName) {
+    const name = data.variable?.name?.trim() ?? ''
+    if (!name) {
       setIsAVariable(false)
+      setInputError(false)
       return
     }
-
-    // Find the POU variable that matches the node's current variable name
-    const pouVariables = pous.find((p) => p.name === pouName)?.interface?.variables ?? []
-    const variable = pouVariables.find((v) => v.name.toLowerCase() === nodeVariableName.toLowerCase())
-
-    if (!variable || !inputVariableRef) {
-      setIsAVariable(false)
-    } else {
-      const namesMatchCI = variable.name.toLowerCase() === nodeVariableName.toLowerCase()
-      const caseDiffers = variable.name !== nodeVariableName
-      const refStale = nodeVarRef !== variable
-
-      if (!namesMatchCI || caseDiffers || refStale) {
-        updateNode({
-          editorName: pouName,
-          rungId: rung.id,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
-        updateRelatedNode(rung, variableNode as VariableNode, variable)
+    let cancelled = false
+    void resolveScopeExpressionType(pouName, name).then((res) => {
+      if (cancelled) return
+      // Leave the current state untouched while the LSP is still warming so
+      // we never flash a false error/warning during boot.
+      if (res.status === 'unavailable') return
+      if (res.status === 'unknown') {
+        setIsAVariable(false)
+        setInputError(false)
+        return
       }
-
-      const validation = validateVariableType(variable.type.value, data.block.variableType)
-      if (!validation.isValid && dataTypes.length > 0) {
-        const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        validation.isValid = userDataTypes.includes(variable.type.value)
-        validation.error = undefined
-      }
-      // Only sync variableValue when not actively editing (autocomplete closed)
-      if (!openAutocomplete) {
-        setVariableValue(variable.name)
-      }
-      setInputError(!validation.isValid)
       setIsAVariable(true)
+      setInputError(!validateVariableType(res.type, data.block.variableType).isValid)
+    })
+    return () => {
+      cancelled = true
     }
-
-    const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
-      return
-    }
-  }, [pous, data.variable?.name])
+  }, [pous, pouName, data.variable?.name, data.block.variableType.type.value])
 
   /**
    * Handle with the variable input onBlur event

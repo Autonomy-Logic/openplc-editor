@@ -50,7 +50,15 @@ const HTTP_FALLBACK_POLL_INTERVAL_MS = 1000
 // board, since the same board can run over RTU or TCP depending on the
 // user's communication preferences.
 //
-// Modbus RTU             : 256-byte serial frame → ~20 vars per request.
+// Modbus RTU             : capped at 19 so the REQUEST stays ≤63 bytes and
+//                          fits in a single 64-byte USB-CDC packet. A 20-var
+//                          request is 6 + 3·20 = 66 bytes, which a USB-CDC
+//                          target (e.g. SAMD21 / P1AM-100) receives split
+//                          across two USB packets; older firmware whose serial
+//                          framer can't reassemble a multi-packet request then
+//                          drops it. Newer firmware (length-aware handle_serial)
+//                          handles any size, but 19 keeps us compatible with
+//                          field devices on both. 19·3 + 6 = 63 ≤ 64.
 // Modbus TCP             : Arduino sketch's MAX_MB_FRAME caps it; 60 is
 //                          well within the headroom.
 // WebSocket (Runtime v4) : Linux runtime's MAX_DEBUG_FRAME=4096; ~500
@@ -60,7 +68,7 @@ const HTTP_FALLBACK_POLL_INTERVAL_MS = 1000
 //                          down to a safe size.
 // Simulator              : virtual serial port mirrors the RTU framing,
 //                          so it shares the RTU ceiling.
-const RTU_BATCH_SIZE = 20
+const RTU_BATCH_SIZE = 19
 const TCP_BATCH_SIZE = 60
 const WEBSOCKET_BATCH_SIZE = 500
 const MIN_BATCH_SIZE = 2
