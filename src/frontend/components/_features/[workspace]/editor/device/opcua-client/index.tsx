@@ -12,13 +12,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
-import {
-  Modal,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '../../../../../_molecules/modal'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { useProjectVariables, type VariableTreeNode } from '../../server/opcua-server/hooks/use-project-variables'
 
 // Shared field styles — matched to the OPC-UA Server editor.
@@ -32,8 +26,7 @@ const selectItemStyles = cn(
   'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
   'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
 )
-const selectItemTextStyles =
-  'text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'
+const selectItemTextStyles = 'text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'
 const labelStyles = 'w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
 
 const SECURITY_POLICIES: OpcUaClientSecurity['securityPolicy'][] = [
@@ -422,10 +415,7 @@ export const OpcUaClientEditor = () => {
                 </Row>
               </SectionCard>
 
-              <SectionCard
-                title='Authentication'
-                description='How the client identifies itself to the remote server.'
-              >
+              <SectionCard title='Authentication' description='How the client identifies itself to the remote server.'>
                 <Row label='Auth Method'>
                   <SimpleSelect
                     value={sec.authMode}

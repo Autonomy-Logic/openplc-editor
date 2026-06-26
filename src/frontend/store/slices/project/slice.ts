@@ -1567,9 +1567,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === name)
           if (!device?.opcuaClientConfig) return
-          device.opcuaClientConfig.mappings = device.opcuaClientConfig.mappings.filter(
-            (m) => m.id !== mappingId,
-          )
+          device.opcuaClientConfig.mappings = device.opcuaClientConfig.mappings.filter((m) => m.id !== mappingId)
         }),
       )
       return ok()

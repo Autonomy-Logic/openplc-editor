@@ -187,9 +187,7 @@ export const generateOpcUaClientConfig = (
     return null
   }
 
-  const clients = remoteDevices.filter(
-    (d) => d.protocol === 'opc-ua-client' && d.opcuaClientConfig?.enabled,
-  )
+  const clients = remoteDevices.filter((d) => d.protocol === 'opc-ua-client' && d.opcuaClientConfig?.enabled)
   if (clients.length === 0) {
     return null
   }

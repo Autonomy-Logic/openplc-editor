@@ -394,11 +394,7 @@ export interface OpcUaServerConfig {
 
 // Security policies the runtime's OPC-UA client supports (must match the
 // keys of SECURITY_POLICY_MAPPING in the runtime's shared.opcua_common).
-export type OpcUaClientSecurityPolicy =
-  | 'None'
-  | 'Basic256Sha256'
-  | 'Aes128_Sha256_RsaOaep'
-  | 'Aes256_Sha256_RsaPss'
+export type OpcUaClientSecurityPolicy = 'None' | 'Basic256Sha256' | 'Aes128_Sha256_RsaOaep' | 'Aes256_Sha256_RsaPss'
 
 export type OpcUaClientAuthMode = 'anonymous' | 'username' | 'certificate'
 

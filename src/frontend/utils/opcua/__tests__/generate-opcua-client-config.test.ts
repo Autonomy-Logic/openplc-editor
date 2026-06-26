@@ -195,10 +195,7 @@ describe('generateOpcUaClientConfig', () => {
 
   it('aggregates multiple enabled client devices into servers[]', () => {
     const a = makeDevice(baseClientConfig({ mappings: [makeMapping()] }), 'A')
-    const b = makeDevice(
-      baseClientConfig({ endpointUrl: 'opc.tcp://other:4840/y', mappings: [makeMapping()] }),
-      'B',
-    )
+    const b = makeDevice(baseClientConfig({ endpointUrl: 'opc.tcp://other:4840/y', mappings: [makeMapping()] }), 'B')
     const json = generateOpcUaClientConfig(
       [a, b],
       debugMapJson([{ path: 'COUNTER', type: 'INT', arr: 0, elem: 0, size: 2 }]),
@@ -211,11 +208,7 @@ describe('generateOpcUaClientConfig', () => {
   it('throws OpcUaConfigError when a mapping local variable cannot be resolved', () => {
     const device = makeDevice(baseClientConfig({ mappings: [makeMapping({ variablePath: 'MISSING' })] }))
     expect(() =>
-      generateOpcUaClientConfig(
-        [device],
-        debugMapJson([{ path: 'COUNTER', type: 'INT', arr: 0, elem: 0 }]),
-        instances,
-      ),
+      generateOpcUaClientConfig([device], debugMapJson([{ path: 'COUNTER', type: 'INT', arr: 0, elem: 0 }]), instances),
     ).toThrow(OpcUaConfigError)
   })
 })
