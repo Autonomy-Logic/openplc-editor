@@ -45,11 +45,6 @@ import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/util
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
-import {
-  createMd5UnavailableResult,
-  type DebuggerMd5VerificationResult,
-  isRecoverableMd5ReadError,
-} from '../debugger/md5-verification'
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -1428,7 +1423,13 @@ class MainProcessBridge implements MainIpcModule {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<DebuggerMd5VerificationResult> => {
+  ): Promise<{
+    success: boolean
+    match?: boolean
+    targetMd5?: string
+    targetEndian?: 'le' | 'be'
+    error?: string
+  }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugTransport | null = null
     try {
@@ -1442,13 +1443,7 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await client.connect()
-        const md5ReadResult = await this.readTargetMd5(client)
-        if (md5ReadResult.unavailableResult) {
-          client.disconnect()
-          return md5ReadResult.unavailableResult
-        }
-
-        const { targetMd5, targetEndian } = md5ReadResult
+        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
         // Keep the client for subsequent debug operations
@@ -1472,13 +1467,7 @@ class MainProcessBridge implements MainIpcModule {
           wsClient = this.debuggerWebSocketClient
         }
 
-        const md5ReadResult = await this.readTargetMd5(wsClient)
-        if (md5ReadResult.unavailableResult) {
-          wsClient.disconnect()
-          return md5ReadResult.unavailableResult
-        }
-
-        const { targetMd5, targetEndian } = md5ReadResult
+        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1510,14 +1499,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType === 'rtu' &&
           this.debuggerRtuPort === connectionParams.port
         ) {
-          const md5ReadResult = await this.readTargetMd5(this.debuggerModbusClient)
-          if (md5ReadResult.unavailableResult) {
-            this.debuggerModbusClient.disconnect()
-            this.debuggerModbusClient = null
-            return md5ReadResult.unavailableResult
-          }
-
-          const { targetMd5, targetEndian } = md5ReadResult
+          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
           const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
           return { success: true, match, targetMd5, targetEndian }
         }
@@ -1531,13 +1513,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       await client.connect()
-      const md5ReadResult = await this.readTargetMd5(client)
-      if (md5ReadResult.unavailableResult) {
-        client.disconnect()
-        return md5ReadResult.unavailableResult
-      }
-
-      const { targetMd5, targetEndian } = md5ReadResult
+      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1559,30 +1535,6 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
       }
-    }
-  }
-
-  private async readTargetMd5(client: ModbusTcpClient | ModbusRtuClient | WebSocketDebugTransport): Promise<
-    | {
-        targetMd5: string
-        targetEndian: 'le' | 'be'
-        unavailableResult?: never
-      }
-    | {
-        targetMd5?: never
-        targetEndian?: never
-        unavailableResult: DebuggerMd5VerificationResult
-      }
-  > {
-    try {
-      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
-      return { targetMd5, targetEndian }
-    } catch (error) {
-      if (isRecoverableMd5ReadError(error)) {
-        return { unavailableResult: createMd5UnavailableResult() }
-      }
-
-      throw error
     }
   }
 
