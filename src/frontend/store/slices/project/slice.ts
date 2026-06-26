@@ -5,8 +5,6 @@ import { StateCreator } from 'zustand'
 import type {
   ModbusIOPoint,
   OpcUaClientConfig,
-  OpcUaClientMapping,
-  OpcUaClientSecurity,
   OpcUaServerConfig,
   PLCServer,
   PLCVariable,
