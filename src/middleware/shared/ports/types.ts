@@ -1054,7 +1054,6 @@ export interface Md5VerifyResult {
    *  swap layer at read / write boundaries.  Omitted on failure. */
   targetEndian?: 'le' | 'be'
   error?: string
-  targetMd5Unavailable?: boolean
 }
 
 // ---------------------------------------------------------------------------
