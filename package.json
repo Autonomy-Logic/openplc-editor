@@ -1,6 +1,6 @@
 {
-  "name": "open-plc-editor",
-  "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
+  "name": "open-plc-editor-jwplc",
+  "description": "OpenPLC Editor - JWPLC Edition, build maintained by JW Control for JWPLC Basic integration",
   "version": "4.2.7",
   "license": "GPL-3.0",
   "author": {
