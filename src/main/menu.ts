@@ -19,10 +19,7 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
   private projectService: ProjectService
-  private readonly handleDevelopmentContextMenu = (
-    _: Electron.Event,
-    props: Electron.ContextMenuParams,
-  ): void => {
+  private readonly handleDevelopmentContextMenu = (_: Electron.Event, props: Electron.ContextMenuParams): void => {
     if (!this.hasLiveWindow()) return
 
     const { x, y } = props
