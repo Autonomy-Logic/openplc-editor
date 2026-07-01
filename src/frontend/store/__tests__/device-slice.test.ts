@@ -1023,6 +1023,131 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // Per-target vendor-screen scoping — VPP screens (backplane modules, IO
+  // mappings, …) are board-specific. A backplane configured for SLM-RP4 must
+  // not bleed into P1AM-100 when the user switches targets. Mirrors the
+  // per-board pin-mapping contract: each board keeps its own bucket, work on
+  // board A survives a switch to B and reappears on returning to A.
+  // -----------------------------------------------------------------------
+  describe('per-target vendor-screen scoping', () => {
+    const vsd = (state: ReturnType<typeof store.getState>) => state.deviceDefinitions.configuration.vendorScreenData
+    const archive = (state: ReturnType<typeof store.getState>) =>
+      state.deviceDefinitions.configuration.vendorScreenDataByBoard
+    let store: ReturnType<typeof makeStore>
+
+    it('mirrors setVendorScreenData into the active board’s bucket', () => {
+      store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+      store.getState().deviceActions.setVendorScreenData('module-configuration', { slots: ['mod-a'] })
+
+      expect(vsd(store.getState())).toEqual({ 'module-configuration': { slots: ['mod-a'] } })
+      expect(archive(store.getState())?.['SLM-RP4']).toEqual({ 'module-configuration': { slots: ['mod-a'] } })
+    })
+
+    it('isolates vendor data across boards: SLM-RP4 modules do NOT appear on P1AM-100', () => {
+      store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+      store.getState().deviceActions.setVendorScreenData('module-configuration', { slots: ['mod-a'] })
+
+      store.getState().deviceActions.setDeviceBoard('P1AM-100')
+      // New target starts clean — no stale modules carried over.
+      expect(vsd(store.getState())).toEqual({})
+    })
+
+    it('preserves each board’s vendor data across a switch and restores it on return', () => {
+      store = makeStore()
+      const actions = store.getState().deviceActions
+
+      actions.setDeviceBoard('SLM-RP4')
+      actions.setVendorScreenData('module-configuration', { slots: ['slm-mod'] })
+
+      actions.setDeviceBoard('P1AM-100')
+      expect(vsd(store.getState())).toEqual({})
+      actions.setVendorScreenData('module-configuration', { slots: ['p1am-mod'] })
+
+      // Back to SLM-RP4 — its modules must be intact…
+      actions.setDeviceBoard('SLM-RP4')
+      expect(vsd(store.getState())).toEqual({ 'module-configuration': { slots: ['slm-mod'] } })
+      // …and P1AM-100's bucket still carries its own, untouched.
+      expect(archive(store.getState())?.['P1AM-100']).toEqual({ 'module-configuration': { slots: ['p1am-mod'] } })
+    })
+
+    it('mirrors restoreVendorScreenSlice into the active board’s bucket', () => {
+      store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+      store.getState().deviceActions.setVendorScreenData('modbus_rtu', { enabled: true })
+      store.getState().deviceActions.restoreVendorScreenSlice(['modbus_rtu'], { modbus_rtu: { enabled: false } })
+
+      expect(archive(store.getState())?.['SLM-RP4']).toEqual({ modbus_rtu: { enabled: false } })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Vendor-screen data migration on load (setDeviceDefinitions →
+  // mergeDeviceConfigWithDefaults → migrateVendorScreenData)
+  // -----------------------------------------------------------------------
+  describe('vendor-screen data migration on load', () => {
+    const cfg = (store: ReturnType<typeof makeStore>) => store.getState().deviceDefinitions.configuration
+
+    it('migrates a legacy flat blob by attributing it to the saved board', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'SLM-RP4', vendorScreenData: { 'module-configuration': { slots: ['x'] } } },
+      })
+      expect(cfg(store).vendorScreenData).toEqual({ 'module-configuration': { slots: ['x'] } })
+      expect(cfg(store).vendorScreenDataByBoard).toEqual({ 'SLM-RP4': { 'module-configuration': { slots: ['x'] } } })
+    })
+
+    it('prefers the per-board archive and activates the saved board’s bucket', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'P1AM-100',
+          vendorScreenDataByBoard: {
+            'SLM-RP4': { 'module-configuration': { slots: ['slm'] } },
+            'P1AM-100': { 'module-configuration': { slots: ['p1am'] } },
+          },
+        },
+      })
+      expect(cfg(store).vendorScreenData).toEqual({ 'module-configuration': { slots: ['p1am'] } })
+    })
+
+    it('falls back to the flat blob for the active board when the archive lacks that bucket', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'P1AM-100',
+          vendorScreenData: { 'module-configuration': { slots: ['flat'] } },
+          vendorScreenDataByBoard: { 'SLM-RP4': { 'module-configuration': { slots: ['slm'] } } },
+        },
+      })
+      expect(cfg(store).vendorScreenData).toEqual({ 'module-configuration': { slots: ['flat'] } })
+      // The active board's bucket is seeded from the flat blob; SLM-RP4 kept.
+      expect(cfg(store).vendorScreenDataByBoard?.['P1AM-100']).toEqual({ 'module-configuration': { slots: ['flat'] } })
+      expect(cfg(store).vendorScreenDataByBoard?.['SLM-RP4']).toEqual({ 'module-configuration': { slots: ['slm'] } })
+    })
+
+    it('leaves the archive untouched when the active board has no bucket and there is no flat blob', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'P1AM-100',
+          vendorScreenDataByBoard: { 'SLM-RP4': { 'module-configuration': { slots: ['slm'] } } },
+        },
+      })
+      expect(cfg(store).vendorScreenData).toBeUndefined()
+      expect(cfg(store).vendorScreenDataByBoard).toEqual({ 'SLM-RP4': { 'module-configuration': { slots: ['slm'] } } })
+    })
+
+    it('leaves both fields undefined when neither flat nor archive is present', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'P1AM-100' } })
+      expect(cfg(store).vendorScreenData).toBeUndefined()
+      expect(cfg(store).vendorScreenDataByBoard).toBeUndefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setCommunicationPort
   // -----------------------------------------------------------------------
   describe('setCommunicationPort', () => {

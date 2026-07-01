@@ -18,6 +18,7 @@ const STICK_THRESHOLD_PX = 4
 const Console = memo(() => {
   const logs = useOpenPLCStore((state) => state.logs)
   const filters = useOpenPLCStore((state) => state.filters)
+  const followRequestId = useOpenPLCStore((state) => state.followRequestId)
   const navigateToCompileError = useNavigateToCompileError()
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -98,6 +99,28 @@ const Console = memo(() => {
     if (!container) return
     container.scrollTop = container.scrollHeight
   }, [filteredLogs])
+
+  /**
+   * One-shot "kick to bottom" requested externally (e.g. a build starting).
+   * Unlike the auto-scroll above, this re-engages auto-follow and scrolls to
+   * the latest line regardless of the current scroll position — so a build
+   * that starts while the user has scrolled up still snaps to the tail and
+   * keeps following. The rAF re-assert covers the case where the console panel
+   * is being revealed on this same tick (its height isn't final until after
+   * this layout pass). `followRequestId` starts at 0, so the initial mount is
+   * skipped and we never force-scroll unprompted.
+   */
+  useLayoutEffect(() => {
+    if (followRequestId === 0) return
+    stickToBottomRef.current = true
+    const container = containerRef.current
+    if (container) container.scrollTop = container.scrollHeight
+    const raf = requestAnimationFrame(() => {
+      const c = containerRef.current
+      if (c && stickToBottomRef.current) c.scrollTop = c.scrollHeight
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [followRequestId])
 
   return (
     <div

@@ -2,6 +2,25 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ;(globalThis as any).vi = jest
 
+// Radix UI primitives (DropdownMenu, Select, …) rely on Pointer Capture and
+// scrollIntoView, which jsdom doesn't implement — without these, the menus
+// never open in tests. Polyfill as no-ops so combobox/dropdown components are
+// exercisable. (Editor-private setup; the web Vitest run has its own mirror.)
+if (typeof Element !== 'undefined') {
+  if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false
+  if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => undefined
+  if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => undefined
+}
+// Radix ScrollArea (inside the combobox menu) instantiates a ResizeObserver,
+// which jsdom doesn't provide. A no-op stub is enough for tests.
+if (typeof (globalThis as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
+  ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
+
 // jsdom 24+ ships `structuredClone` on the window, but the jest
 // jsdom environment we ship doesn't expose it on the test global
 // scope.  Production code that runs through this shim (e.g.

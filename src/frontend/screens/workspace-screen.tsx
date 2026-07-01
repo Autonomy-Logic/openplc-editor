@@ -315,6 +315,7 @@ const WorkspaceScreen = () => {
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
   const [activeTab, setActiveTab] = useState('console')
+  const consoleFollowRequestId = useOpenPLCStore((state) => state.followRequestId)
   const hasSearchResults = searchResults.length > 0
 
   const togglePanel = () => {
@@ -353,6 +354,16 @@ const WorkspaceScreen = () => {
       }
     })
   }, [isCollapsed])
+
+  // A build (or other producer) requested the console: reveal the console
+  // panel and switch to the Console tab. The console component handles the
+  // kick-to-bottom off the same nonce. Skip the initial value (0) so we never
+  // force the console open on first render.
+  useEffect(() => {
+    if (consoleFollowRequestId === 0) return
+    consolePanelRef.current?.expand()
+    setActiveTab('console')
+  }, [consoleFollowRequestId])
 
   // Load available boards via device port.
   // `setAvailableOptions` owns the alias sync — once the boards land,

@@ -19,6 +19,21 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
   private projectService: ProjectService
+  private readonly handleDevelopmentContextMenu = (_: Electron.Event, props: Electron.ContextMenuParams): void => {
+    if (!this.hasLiveWindow()) return
+
+    const { x, y } = props
+
+    Menu.buildFromTemplate([
+      {
+        label: 'Inspect element',
+        click: () => {
+          if (!this.hasLiveWindow()) return
+          this.mainWindow.webContents.inspectElement(x, y)
+        },
+      },
+    ]).popup({ window: this.mainWindow })
+  }
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -32,7 +47,19 @@ export default class MenuBuilder {
     this.projectService = new ProjectService(mainWindow)
   }
 
+  private hasLiveWindow(): boolean {
+    return !this.mainWindow.isDestroyed()
+  }
+
+  private getFallbackMenu(): Menu {
+    return Menu.getApplicationMenu() ?? Menu.buildFromTemplate([])
+  }
+
   async buildMenu(): Promise<Menu> {
+    if (!this.hasLiveWindow()) {
+      return this.getFallbackMenu()
+    }
+
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
       this.setupDevelopmentEnvironment()
     }
@@ -129,18 +156,10 @@ export default class MenuBuilder {
    */
 
   setupDevelopmentEnvironment(): void {
-    this.mainWindow.webContents.on('context-menu', (_, props) => {
-      const { x, y } = props
+    if (!this.hasLiveWindow()) return
 
-      Menu.buildFromTemplate([
-        {
-          label: 'Inspect element',
-          click: () => {
-            this.mainWindow.webContents.inspectElement(x, y)
-          },
-        },
-      ]).popup({ window: this.mainWindow })
-    })
+    this.mainWindow.webContents.removeListener('context-menu', this.handleDevelopmentContextMenu)
+    this.mainWindow.webContents.on('context-menu', this.handleDevelopmentContextMenu)
   }
 
   /** Theme order for the Display ▸ Change Theme cycle: Light → Dark → 90's. */
@@ -166,10 +185,14 @@ export default class MenuBuilder {
     // a light base, so don't drive a dark OS theme for it.
     nativeTheme.themeSource = newTheme === 'dark' ? 'dark' : 'light'
     store.set('theme', newTheme)
-    // Send the explicit theme name so the renderer applies light / dark / 90's
-    // (the legacy no-payload signal just toggled light↔dark).
-    this.mainWindow.webContents.send('system:update-theme', newTheme)
-    void this.buildMenu()
+    if (this.hasLiveWindow()) {
+      // Send the explicit theme name so the renderer applies light / dark / 90's
+      // (the legacy no-payload signal just toggled light<->dark).
+      this.mainWindow.webContents.send('system:update-theme', newTheme)
+    }
+    void this.buildMenu().catch((error) => {
+      console.error('Error rebuilding application menu:', error)
+    })
   }
 
   /**
