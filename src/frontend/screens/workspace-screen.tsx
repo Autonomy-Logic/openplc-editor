@@ -69,6 +69,7 @@ const WorkspaceScreen = () => {
     useCallback((s) => s.workspaceActions, []),
   )
   const { setAvailableOptions } = useOpenPLCStore(useCallback((s) => s.deviceActions, []))
+  const addLog = useOpenPLCStore(useCallback((s) => s.consoleActions.addLog, []))
 
   // RARE: UI state (changes on user interaction, not during debug polling)
   const tabs = useOpenPLCStore(useCallback((s) => s.tabs, []))
@@ -416,6 +417,31 @@ const WorkspaceScreen = () => {
       unsubBoards()
     }
   }, [packagesPort, device, setAvailableOptions])
+
+  // Desktop security safeguard: whenever a project opens, re-verify the
+  // signatures of every installed VPP package and drop any that no longer
+  // validate (a locally-crafted/unsigned .vpp can bypass the signed import
+  // flow). Each removal is surfaced as a WARNING in the console panel; the
+  // main process emits `packages:boards-updated` on removal, so the board
+  // list refreshes via the subscription above. On web `packagesPort` is
+  // undefined (packages are backend-provided), so this is a no-op.
+  useEffect(() => {
+    if (!packagesPort || !projectPath) return
+    let cancelled = false
+    void packagesPort.verifyInstalledSignatures().then((removed) => {
+      if (cancelled) return
+      for (const packageId of removed) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Removed untrusted VPP package "${packageId}": its signature is missing or invalid.`,
+        })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [packagesPort, projectPath, addLog])
 
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-brand-dark dark:bg-neutral-950'>
