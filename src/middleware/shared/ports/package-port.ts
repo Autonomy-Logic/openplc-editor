@@ -59,4 +59,14 @@ export interface PackagePort {
    * Subscribe to board list updates (triggered after package install/uninstall).
    */
   onBoardsUpdated(callback: () => void): Unsubscribe
+
+  /**
+   * Re-verify the signatures of every installed package and remove any whose
+   * signature no longer validates, returning the ids removed. A desktop-only
+   * safeguard: locally-installed `.vpp` files can be added or altered outside
+   * the signed import flow, so they are re-checked whenever a project opens.
+   * Platforms where packages are backend-provided (web) don't wire a `packages`
+   * port and never call this; a no-op shim there returns `[]`.
+   */
+  verifyInstalledSignatures(): Promise<string[]>
 }

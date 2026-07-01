@@ -123,5 +123,9 @@ export function createEditorPackageAdapter(): PackagePort {
     onBoardsUpdated(callback: () => void): Unsubscribe {
       return window.bridge.onBoardsUpdated(callback)
     },
+
+    verifyInstalledSignatures(): Promise<string[]> {
+      return window.bridge.verifyInstalledPackageSignatures()
+    },
   }
 }

@@ -842,6 +842,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
+    this.registerHandle('packages:verify-signatures', this.handlePackagesVerifySignatures)
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -1373,6 +1374,16 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents.send('packages:boards-updated')
     }
     return result
+  }
+  // Re-verify installed VPP signatures (invoked by the renderer when a project
+  // opens) and return the ids removed. If anything was dropped, notify the
+  // renderer so the board/device list refreshes via the existing subscription.
+  handlePackagesVerifySignatures = async (): Promise<string[]> => {
+    const removed = this.packageManagerModule.verifyInstalledSignatures()
+    if (removed.length > 0) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return removed
   }
   handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
     this.packageManagerModule.getInstalledPackageManifest(packageId)

@@ -365,6 +365,7 @@ const rendererProcessBridge = {
   uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
+  verifyInstalledPackageSignatures: (): Promise<string[]> => ipcRenderer.invoke('packages:verify-signatures'),
   onOpenPackageManager: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('packages:open-manager', listener)
