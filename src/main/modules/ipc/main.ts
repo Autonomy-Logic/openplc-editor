@@ -1314,7 +1314,11 @@ class MainProcessBridge implements MainIpcModule {
     this.simulatorModule.stop()
     this.mainWindow?.webContents.reload()
   }
-  handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
+  handleWindowRebuildMenu = () => {
+    void this.menuBuilder.buildMenu().catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
 
   // Hardware handlers
   handleHardwareGetAvailableCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
