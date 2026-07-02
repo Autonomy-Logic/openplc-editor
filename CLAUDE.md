@@ -244,6 +244,18 @@ When adding new code to covered directories, you must add corresponding tests to
 - Pre-commit hooks via Husky run lint-staged on `./src/**/*.{ts,tsx}`
 - Path alias: `@root/*` -> `./src/*`
 
+### TypeScript Best Practices
+
+- No type assertions: `as` hides real type errors — fix the type at the source or narrow with type guards. `as const` is fine; `as unknown as T` is forbidden.
+- No non-null assertions (`!`): handle the undefined case or narrow explicitly.
+- For truly unknown data use `unknown` and narrow before use — never `any`.
+- No `@ts-ignore`/`@ts-expect-error` without a one-line justification.
+- Validate external data at the boundary (IPC payloads, project files, downloaded binaries metadata) with schemas (zod) or type guards instead of casting.
+- No floating promises: `await` or handle rejection explicitly — async errors must not disappear.
+- Prefer `??` over `||` for defaults when `0`, `''`, or `false` are valid values.
+- Model variant states as discriminated unions; make `switch` exhaustive with a `never` check.
+- Zustand state changes only through slice actions — never mutate store values from components.
+
 ## Key Technologies
 
 - **Electron 35** / **React 18** / **TypeScript** (target ES2022)
