@@ -93,7 +93,7 @@ const CreateDeviceEditor = (
 
 const CreateRemoteDeviceEditor = (
   name: string,
-  protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet',
+  protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' | 'opc-ua-client',
 ): EditorModel => ({
   type: 'plc-remote-device',
   meta: { name, protocol },

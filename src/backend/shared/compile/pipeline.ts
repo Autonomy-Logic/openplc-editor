@@ -529,6 +529,7 @@ async function runCompilePipelineInner(
         modbusMaster: confs.modbusMaster,
         s7Comm: confs.s7Comm,
         opcUa: confs.opcUa,
+        opcUaClient: confs.opcUaClient,
         // `generateRuntimeConfs` validated EtherCAT before returning;
         // null here means "no EtherCAT devices" → composer skips.
         ethercat: confs.ethercat ?? '',

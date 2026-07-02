@@ -607,7 +607,7 @@ const ModbusTcpConfigSchema = z.object({
 })
 type ModbusTcpConfig = z.infer<typeof ModbusTcpConfigSchema>
 
-const PLCRemoteDeviceProtocolSchema = z.enum(['modbus-tcp', 'ethernet-ip', 'ethercat', 'profinet'])
+const PLCRemoteDeviceProtocolSchema = z.enum(['modbus-tcp', 'ethernet-ip', 'ethercat', 'profinet', 'opc-ua-client'])
 type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
 
 // ---- EtherCAT Configuration Schemas ----
@@ -738,11 +738,58 @@ const EthercatConfigSchema = z.object({
 })
 type EthercatConfig = z.infer<typeof EthercatConfigSchema>
 
+// ---- OPC-UA Client Configuration Schemas ----
+// The runtime acts as an OPC-UA client connecting OUT to a remote server.
+// Policies must match the runtime's shared.opcua_common SECURITY_POLICY_MAPPING.
+
+const OpcUaClientSecurityPolicySchema = z.enum([
+  'None',
+  'Basic256Sha256',
+  'Aes128_Sha256_RsaOaep',
+  'Aes256_Sha256_RsaPss',
+])
+
+const OpcUaClientAuthModeSchema = z.enum(['anonymous', 'username', 'certificate'])
+
+const OpcUaClientDirectionSchema = z.enum(['remote_to_plc', 'plc_to_remote'])
+
+const OpcUaClientSecuritySchema = z.object({
+  securityPolicy: OpcUaClientSecurityPolicySchema,
+  securityMode: OpcUaSecurityModeSchema,
+  authMode: OpcUaClientAuthModeSchema,
+  username: z.string().nullable(),
+  password: z.string().nullable(),
+  clientCertPem: z.string().nullable(),
+  clientKeyPem: z.string().nullable(),
+  serverCertPem: z.string().nullable(),
+})
+
+const OpcUaClientMappingSchema = z.object({
+  id: z.string(),
+  pouName: z.string(),
+  variablePath: z.string(),
+  variableType: z.string(),
+  remoteNodeId: z.string(),
+  direction: OpcUaClientDirectionSchema,
+  cycleTimeMs: z.number().int().min(1),
+})
+
+const OpcUaClientConfigSchema = z.object({
+  enabled: z.boolean(),
+  endpointUrl: z.string(),
+  sessionTimeoutMs: z.number().int().min(0),
+  reconnect: z.boolean(),
+  security: OpcUaClientSecuritySchema,
+  mappings: z.array(OpcUaClientMappingSchema),
+})
+type OpcUaClientConfig = z.infer<typeof OpcUaClientConfigSchema>
+
 const PLCRemoteDeviceSchema = z.object({
   name: z.string(),
   protocol: PLCRemoteDeviceProtocolSchema,
   modbusTcpConfig: ModbusTcpConfigSchema.optional(),
   ethercatConfig: EthercatConfigSchema.optional(),
+  opcuaClientConfig: OpcUaClientConfigSchema.optional(),
 })
 type PLCRemoteDevice = z.infer<typeof PLCRemoteDeviceSchema>
 
@@ -866,6 +913,7 @@ export {
   ModbusTransportTypeSchema,
   OpcUaAddressSpaceConfigSchema,
   OpcUaAuthMethodSchema,
+  OpcUaClientConfigSchema,
   OpcUaFieldConfigSchema,
   OpcUaNodeConfigSchema,
   OpcUaPermissionsSchema,
@@ -929,6 +977,7 @@ export type {
   ModbusTransportType,
   OpcUaAddressSpaceConfig,
   OpcUaAuthMethod,
+  OpcUaClientConfig,
   OpcUaFieldConfig,
   OpcUaNodeConfig,
   OpcUaPermissions,

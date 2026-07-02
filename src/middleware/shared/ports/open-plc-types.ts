@@ -6,6 +6,12 @@
  */
 
 import type {
+  OpcUaClientAuthMode,
+  OpcUaClientConfig,
+  OpcUaClientDirection,
+  OpcUaClientMapping,
+  OpcUaClientSecurity,
+  OpcUaClientSecurityPolicy,
   OpcUaFieldConfig,
   OpcUaNodeConfig,
   OpcUaPermissions,
@@ -122,6 +128,12 @@ export interface PLCProject {
 // ---------------------------------------------------------------------------
 
 export type {
+  OpcUaClientAuthMode,
+  OpcUaClientConfig,
+  OpcUaClientDirection,
+  OpcUaClientMapping,
+  OpcUaClientSecurity,
+  OpcUaClientSecurityPolicy,
   OpcUaFieldConfig,
   OpcUaNodeConfig,
   OpcUaPermissions,

@@ -24,6 +24,7 @@ function baseInput(overrides: Partial<ComposeRuntimeV4BundleInput> = {}): Compos
       modbusMaster: null,
       s7Comm: null,
       opcUa: null,
+      opcUaClient: null,
       ethercat: '{"masters":[]}',
     },
     ...overrides,
@@ -95,6 +96,7 @@ describe('composeRuntimeV4Bundle', () => {
           modbusMaster: '{"masters":[]}',
           s7Comm: '{"servers":[]}',
           opcUa: '{"endpoints":[]}',
+          opcUaClient: '{"servers":[]}',
           ethercat: '{"masters":[]}',
         },
       }),
@@ -103,6 +105,7 @@ describe('composeRuntimeV4Bundle', () => {
     expect(files['conf/modbus_master.json']).toBe('{"masters":[]}')
     expect(files['conf/s7comm.json']).toBe('{"servers":[]}')
     expect(files['conf/opcua.json']).toBe('{"endpoints":[]}')
+    expect(files['conf/opcua_client.json']).toBe('{"servers":[]}')
     expect(files['conf/ethercat.json']).toBe('{"masters":[]}')
   })
 

@@ -86,6 +86,10 @@ export interface ComposeRuntimeV4BundleInput {
      *  Caller catches `OpcUaConfigError` and surfaces it before
      *  calling the composer — passing `null` skips the file. */
     opcUa: string | null
+    /** From `generateOpcUaClientConfig(remoteDevices, debug-map, instances)`.
+     *  Caller catches `OpcUaConfigError` and surfaces it before calling the
+     *  composer — passing `null` skips the file. */
+    opcUaClient: string | null
     /** From `generateEthercatConfig(remoteDevices)`.  Caller should
      *  run `validateEthercatConfig` first and abort the compile (not
      *  call the composer) when validation produces errors. */
@@ -142,6 +146,7 @@ export function composeRuntimeV4Bundle(input: ComposeRuntimeV4BundleInput): Reco
   if (input.confs.modbusMaster) files['conf/modbus_master.json'] = input.confs.modbusMaster
   if (input.confs.s7Comm) files['conf/s7comm.json'] = input.confs.s7Comm
   if (input.confs.opcUa) files['conf/opcua.json'] = input.confs.opcUa
+  if (input.confs.opcUaClient) files['conf/opcua_client.json'] = input.confs.opcUaClient
   files['conf/ethercat.json'] = input.confs.ethercat
 
   return files

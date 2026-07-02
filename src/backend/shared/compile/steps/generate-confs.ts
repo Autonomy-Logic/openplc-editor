@@ -37,7 +37,7 @@
 // → frontend`) but functional, see the build-pipeline refactor plan.
 import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
-import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
+import { generateOpcUaClientConfig, generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
 import { generateEthercatConfig } from '../../ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
@@ -87,6 +87,8 @@ export interface GenerateConfsOutput {
   modbusMaster: string | null
   s7Comm: string | null
   opcUa: string | null
+  /** OPC-UA Client (remote device). Same resolver/error semantics as opcUa. */
+  opcUaClient: string | null
   /** EtherCAT is gated on `validateEthercatConfig`; this function
    *  throws BEFORE returning when validation fails.  Successful
    *  return guarantees either `null` (no devices) or a string that
@@ -142,6 +144,21 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
     throw error
   }
 
+  // OPC-UA Client: aggregates every enabled 'opc-ua-client' remote device
+  // into one conf/opcua_client.json. Same fail-fast gate as the OPC-UA server
+  // (a renamed/deleted local variable in a mapping throws OpcUaConfigError).
+  let opcUaClient: string | null = null
+  try {
+    opcUaClient = generateOpcUaClientConfig(remoteDevices, debugMapContent, instances)
+  } catch (error) {
+    if (error instanceof OpcUaConfigError) {
+      log(`OPC-UA Client Configuration Error:\n${error.message}`, 'error')
+    } else {
+      log(`Failed to generate OPC-UA client config: ${getErrorMessage(error)}`, 'error')
+    }
+    throw error
+  }
+
   // EtherCAT: validate BEFORE returning so a bad config aborts the
   // compile before the composer runs.  Validation failures throw a
   // plain `Error` — caller's try/catch wraps it with the runtime-v4
@@ -152,5 +169,5 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
   }
 
-  return { modbusSlave, modbusMaster, s7Comm, opcUa, ethercat }
+  return { modbusSlave, modbusMaster, s7Comm, opcUa, opcUaClient, ethercat }
 }
