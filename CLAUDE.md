@@ -326,6 +326,12 @@ intended to be unique system-wide; the registry's
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
 
+## Git Workflow
+
+- Base branch: `development` — feature branches start from it and PRs target it.
+- Branch naming: `<type>/DOPE-<n>-<kebab-slug>`, where `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`. Non-ticket maintenance uses `chore/`, `ci/`, `docs/`.
+- Commit messages: Conventional Commits, concise and focused on why.
+
 ## Issue Tracker
 
 Jira, project key `DOPE`. Fetch and update tickets via the Atlassian MCP tools. Reference the ticket key (`DOPE-<n>`) in branch names and PR descriptions. GitHub Issues (`.github/ISSUE_TEMPLATE/`) receives external bug reports; planned work lives in Jira.
