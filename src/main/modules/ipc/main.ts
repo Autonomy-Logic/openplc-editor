@@ -878,6 +878,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
+    this.registerHandle('packages:verify-signatures', this.handlePackagesVerifySignatures)
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -1116,11 +1117,13 @@ class MainProcessBridge implements MainIpcModule {
       nativeTheme.themeSource = savedTheme
     }
 
+    const isWindowMaximized = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.isMaximized() : false
+
     return {
       OS: platform,
       architecture: 'x64',
       prefersDarkMode: nativeTheme.shouldUseDarkColors,
-      isWindowMaximized: this.mainWindow?.isMaximized(),
+      isWindowMaximized,
     }
   }
 
@@ -1271,7 +1274,14 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort, this)
+    void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
+      mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${getErrorMessage(error)}\nStopping compilation process.`,
+      })
+      mainProcessPort.postMessage({ closePort: true })
+      mainProcessPort.close()
+    })
   }
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
@@ -1341,7 +1351,11 @@ class MainProcessBridge implements MainIpcModule {
     this.simulatorModule.stop()
     this.mainWindow?.webContents.reload()
   }
-  handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
+  handleWindowRebuildMenu = () => {
+    void this.menuBuilder.buildMenu().catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
 
   // Hardware handlers
   handleHardwareGetAvailableCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
@@ -1409,6 +1423,16 @@ class MainProcessBridge implements MainIpcModule {
       this.mainWindow?.webContents.send('packages:boards-updated')
     }
     return result
+  }
+  // Re-verify installed VPP signatures (invoked by the renderer when a project
+  // opens) and return the ids removed. If anything was dropped, notify the
+  // renderer so the board/device list refreshes via the existing subscription.
+  handlePackagesVerifySignatures = async (): Promise<string[]> => {
+    const removed = this.packageManagerModule.verifyInstalledSignatures()
+    if (removed.length > 0) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return removed
   }
   handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
     this.packageManagerModule.getInstalledPackageManifest(packageId)

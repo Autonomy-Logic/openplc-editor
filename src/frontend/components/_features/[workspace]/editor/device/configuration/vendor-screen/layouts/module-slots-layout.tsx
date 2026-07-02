@@ -3,6 +3,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { DragHandleIcon } from '@root/frontend/assets/icons/interface/DragHandle'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
+import { GenericComboboxCell } from '@root/frontend/components/_atoms/generic-table-inputs/generic-combobox-cell'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
@@ -168,6 +169,67 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
         </span>
       </button>
     </div>
+  )
+}
+
+// Field-style trigger matching the other vendor-screen pickers.
+const MODULE_PICKER_TRIGGER_CLASS =
+  'flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+
+// Sentinel value for the "-- Empty --" choice. Translated to '' (clear the slot)
+// at the onChange boundary so callers never see it.
+const EMPTY_SLOT_VALUE = '__empty__'
+
+type ModuleSlotPickerProps = {
+  slotNumber: number
+  /** Modules offered in the list (already scoped: fixed-only when locked). */
+  modules: ModuleDefinition[]
+  selectedModule: ModuleDefinition | undefined
+  /** Offer the "-- Empty --" choice (physical mode, unlocked slots). */
+  includeEmpty: boolean
+  /** Locked (built-in) slot — picker is non-interactive. */
+  disabled: boolean
+  /** Receives the module id, or '' when the slot is cleared. */
+  onChange: (moduleId: string) => void
+}
+
+/**
+ * Per-slot module picker.
+ *
+ * A thin wrapper over the shared GenericComboboxCell — the single combobox in
+ * the app. It maps the module list to options (sorted alphabetically, with an
+ * optional "-- Empty --" entry), translates the empty sentinel back to '' for
+ * the caller, and renders the field-style trigger. The combobox provides the
+ * search filter for free; custom values are disabled (only known modules).
+ */
+const ModuleSlotPicker = ({
+  slotNumber,
+  modules,
+  selectedModule,
+  includeEmpty,
+  disabled,
+  onChange,
+}: ModuleSlotPickerProps) => {
+  const selectValues = useMemo(() => {
+    const sorted = [...modules]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m) => ({ id: m.id, value: m.id, label: m.name }))
+    return includeEmpty ? [{ id: EMPTY_SLOT_VALUE, value: EMPTY_SLOT_VALUE, label: '-- Empty --' }, ...sorted] : sorted
+  }, [modules, includeEmpty])
+
+  return (
+    <GenericComboboxCell
+      value={selectedModule ? selectedModule.id : EMPTY_SLOT_VALUE}
+      onValueChange={(v) => onChange(v === EMPTY_SLOT_VALUE ? '' : v)}
+      selectValues={selectValues}
+      displayLabel={selectedModule ? selectedModule.name : '-- Empty --'}
+      disabled={disabled}
+      showClearOption={false}
+      showChevron
+      triggerClassName={MODULE_PICKER_TRIGGER_CLASS}
+      placeholder={`Search modules… (slot ${slotNumber})`}
+      emptyMessage='No modules available'
+    />
   )
 }
 
@@ -802,47 +864,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                         <Label className='w-20 shrink-0 text-xs font-medium text-neutral-950 dark:text-white'>
                           Module
                         </Label>
-                        <Select
-                          value={selectedModule ? selectedModule.id : '__empty__'}
-                          onValueChange={(v) => handleSlotChange(selectedSlot, v === '__empty__' ? '' : v)}
+                        <ModuleSlotPicker
+                          slotNumber={selectedSlot + 1}
+                          modules={dropdownModules}
+                          selectedModule={selectedModule}
+                          includeEmpty={!stackable && !locked}
                           disabled={locked}
-                        >
-                          <SelectTrigger
-                            aria-label={`Module for slot ${selectedSlot + 1}`}
-                            placeholder='-- Empty --'
-                            withIndicator
-                            className='flex h-[32px] w-80 cursor-pointer items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[disabled]:cursor-not-allowed data-[state=open]:border-brand-medium-dark data-[disabled]:opacity-60 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                          />
-                          <SelectContent
-                            className='h-fit max-h-[280px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                            sideOffset={5}
-                            position='popper'
-                            align='center'
-                            side='bottom'
-                          >
-                            {!stackable && !locked && (
-                              <SelectItem
-                                value='__empty__'
-                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                              >
-                                <span className='font-caption text-cp-sm font-medium italic text-neutral-500 dark:text-neutral-400'>
-                                  -- Empty --
-                                </span>
-                              </SelectItem>
-                            )}
-                            {dropdownModules.map((mod) => (
-                              <SelectItem
-                                key={mod.id}
-                                value={mod.id}
-                                className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                              >
-                                <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                  {mod.name}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          onChange={(moduleId) => handleSlotChange(selectedSlot, moduleId)}
+                        />
                         {stackable && selectedModule && !locked && (
                           <button
                             type='button'
