@@ -325,3 +325,7 @@ intended to be unique system-wide; the registry's
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
+
+## Issue Tracker
+
+Jira, project key `DOPE`. Fetch and update tickets via the Atlassian MCP tools. Reference the ticket key (`DOPE-<n>`) in branch names and PR descriptions. GitHub Issues (`.github/ISSUE_TEMPLATE/`) receives external bug reports; planned work lives in Jira.
