@@ -14,7 +14,7 @@ In order to run the development version, clone the repository, and install depen
 You'll need the following tools:
 
 - [Git](https://git-scm.com/)
-- [NodeJS](https://nodejs.org/en/download/), version `>=20 <24`
+- [NodeJS](https://nodejs.org/en/download/), version `>=22 <24`
 
 ### Step by step
 
