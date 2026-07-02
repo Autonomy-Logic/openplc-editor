@@ -1,8 +1,17 @@
 # STruC++ Migration: Overview
 
+> **Status.** STruC++ is the editor's ST compiler today: it is pinned in
+> `binary-versions.json` (v0.5.x) and installed as an npm tarball by
+> `scripts/download-binaries.ts`; `compiler-module.ts` compiles ST to C++ with it.
+> The editor no longer ships or invokes an `iec2c` binary — remaining
+> `iec2c`/`matiec` mentions in `src/` are comments, plus the Runtime v3 path
+> where the editor uploads plain `program.st` for on-device MatIEC recompilation
+> (`src/backend/shared/compile/pipeline.ts`). The OPC UA plugin migration
+> (Phase 9) remains paused.
+
 ## Problem Statement
 
-The OpenPLC Editor uses MatIEC (`iec2c`) to compile IEC 61131-3 Structured Text into C code,
+The OpenPLC Editor used MatIEC (`iec2c`) to compile IEC 61131-3 Structured Text into C code,
 and `xml2st` to generate debug infrastructure. This pipeline has two critical issues:
 
 1. **MatIEC is unmaintained**: The compiler is old, barely maintained, and has poor scalability.
@@ -14,7 +23,8 @@ and `xml2st` to generate debug infrastructure. This pipeline has two critical is
 ## Solution
 
 Replace `iec2c` (MatIEC) with **STruC++**, a modern IEC 61131-3 Structured Text to C++17 compiler
-written in TypeScript. STruC++ is located at `~/Documents/Code/strucpp`.
+written in TypeScript. STruC++ lives in the `Autonomy-Logic/STruCpp` repository and is
+distributed as an npm tarball pinned in `binary-versions.json`.
 
 STruC++ solves both problems:
 - It is actively developed with full CODESYS compatibility and OOP support

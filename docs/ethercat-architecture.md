@@ -27,7 +27,7 @@ Network scan → Match against repo → Add to project → Configure → Generat
 
 ## 2. Type System
 
-### Core Types (`src/types/ethercat/esi-types.ts`)
+### Core Types (`src/middleware/shared/ports/esi-types.ts`)
 
 | Type | Purpose |
 |------|---------|
@@ -42,7 +42,7 @@ Network scan → Match against repo → Add to project → Configure → Generat
 | `ESIDeviceRef` | Pointer to a device in the repository (`repositoryItemId` + `deviceIndex`) |
 | `ScannedDeviceMatch` | A scanned device paired with its ESI matches (exact/partial/none) |
 
-### Discovery Types (`src/types/ethercat/index.ts`)
+### Discovery Types (`src/middleware/shared/ports/ethercat-types.ts`)
 
 | Type | Purpose |
 |------|---------|
@@ -51,7 +51,7 @@ Network scan → Match against repo → Add to project → Configure → Generat
 | `NetworkInterface` | Adapter for scanning (name, description) |
 | `EtherCATRuntimeStatusResponse` | Runtime state machine (masters/slaves with states, WKC) |
 
-### Project Persistence (`src/types/PLC/open-plc.ts`)
+### Project Persistence (`src/backend/shared/types/PLC/open-plc.ts`)
 
 ```typescript
 PLCRemoteDevice {
@@ -61,7 +61,7 @@ PLCRemoteDevice {
 }
 
 EthercatConfig {
-  masterConfig?: EtherCATMasterConfig  // interface, cycleTimeUs, watchdogTimeoutCycles
+  masterConfig?: EtherCATMasterConfig  // networkInterface, cycleTimeUs, watchdogTimeoutCycles, taskPriority
   devices: ConfiguredEtherCATDevice[]
 }
 ```
@@ -82,7 +82,7 @@ Stored in `project.json` under `data.remoteDevices[]`.
 └── ...
 ```
 
-### ESI Service (`src/main/services/esi-service/index.ts`)
+### ESI Service (`src/backend/editor/ethercat/esi-service.ts`)
 
 Runs in the **main process**. Key methods:
 
@@ -95,7 +95,7 @@ Runs in the **main process**. Key methods:
 | `clearRepository(projectPath)` | Delete all ESI files and index |
 | `migrateRepositoryToV2(projectPath)` | Convert v1 (metadata-only) → v2 (with summaries) |
 
-### ESI Parser (`src/main/services/esi-service/esi-parser-main.ts`)
+### ESI Parser (`src/backend/shared/ethercat/esi-parser-main.ts`)
 
 Two parsing modes:
 
@@ -132,36 +132,19 @@ Defined in `src/main/modules/ipc/main.ts` (handlers) and `src/main/modules/ipc/r
 
 ## 4. Remote Device (Bus) Creation
 
-### Store Action (`src/renderer/store/slices/project/slice.ts`)
+### Store Action (`src/frontend/store/slices/project/slice.ts`)
 
 `createRemoteDevice(device: PLCRemoteDevice)`:
-1. Validates name doesn't conflict with POUs/datatypes
+1. Validates the name is not already used by another remote device
 2. Pushes to `project.data.remoteDevices[]`
-3. **Auto-creates a system task** for EtherCAT:
 
-```typescript
-{
-  name: "EtherCAT_<DeviceName>",  // ethercatTaskName()
-  triggering: 'Cyclic',
-  interval: "T#1ms",              // cycleTimeUsToIecInterval(1000)
-  priority: 1,
-  isSystemTask: true,
-  associatedDevice: deviceName,
-}
-```
+No IEC task is created: the EtherCAT bus is driven by a dedicated thread inside the
+runtime plugin. Bus timing lives entirely in `masterConfig` (`cycleTimeUs`, `taskPriority`).
 
 Related actions:
-- `deleteRemoteDevice(name)` — removes device + associated system task
-- `updateRemoteDeviceName(oldName, newName)` — renames both device and task
-- `updateEthercatConfig(deviceName, ethercatConfig)` — updates config and **syncs cycle time to task interval**
-
-### Task Helpers (`src/utils/ethercat/ethercat-task-helpers.ts`)
-
-| Function | Output |
-|----------|--------|
-| `ethercatTaskName("Master1")` | `"EtherCAT_Master1"` |
-| `cycleTimeUsToIecInterval(1000)` | `"T#1ms"` |
-| `cycleTimeUsToIecInterval(500)` | `"T#500us"` |
+- `deleteRemoteDevice(name)` — removes the device
+- `updateRemoteDeviceName(oldName, newName)` — renames the device
+- `updateEthercatConfig(deviceName, ethercatConfig)` — replaces the device's EtherCAT config
 
 ---
 
@@ -209,7 +192,7 @@ window.bridge.etherCATScan(ipAddress, jwtToken, { interface, timeout_ms })
 
 ## 6. Device Matching
 
-**File:** `src/utils/ethercat/device-matcher.ts`
+**File:** `src/backend/shared/ethercat/device-matcher.ts`
 
 `matchDevicesToRepository(scannedDevices, repository)` → `ScannedDeviceMatch[]`
 
@@ -256,7 +239,7 @@ Two paths:
    - Assigns next available position
    - Calls `syncDevicesToStore()`
 
-### Device Enrichment (`src/utils/ethercat/enrich-device-data.ts`)
+### Device Enrichment (`src/backend/shared/ethercat/enrich-device-data.ts`)
 
 `enrichDeviceData(esiDevice)` extracts fields spread into `ConfiguredEtherCATDevice`:
 
@@ -267,7 +250,7 @@ Two paths:
 | `slaveType: string` | `deriveSlaveType()` — heuristic: `digital_input`, `analog_output`, `coupler`, etc. |
 | `sdoConfigurations: SDOConfigurationEntry[]` | `extractDefaultSdoConfigurations()` — RW objects in 0x2000+ range |
 
-### Default Slave Config (`src/utils/ethercat/device-config-defaults.ts`)
+### Default Slave Config (`src/backend/shared/ethercat/device-config-defaults.ts`)
 
 `createDefaultSlaveConfig()` returns:
 ```typescript
@@ -287,7 +270,7 @@ Two paths:
 ### Editor Components
 
 ```
-src/renderer/components/_features/[workspace]/editor/device/ethercat/
+src/frontend/components/_features/[workspace]/editor/device/ethercat/
 ├── index.tsx                          # Bus-level editor (3 tabs: Network, Repository, Advanced)
 ├── ethercat-device-editor.tsx         # Per-device editor (4 tabs below)
 └── components/
@@ -313,7 +296,7 @@ src/renderer/components/_features/[workspace]/editor/device/ethercat/
 3. **Startup Parameters** — `SdoParametersSection`: editable CoE SDO entries
 4. **Channel Mappings** — `ChannelMappingsSection`: IEC 61131-3 located variable assignments
 
-### Channel Mapping Utilities (`src/utils/ethercat/esi-parser.ts`)
+### Channel Mapping Utilities (`src/backend/shared/ethercat/esi-parser.ts`)
 
 | Function | Purpose |
 |----------|---------|
@@ -330,7 +313,7 @@ IEC location format:
   Example: BOOL input at byte 0, bit 2 → %IX0.2
 ```
 
-### SDO Extraction (`src/utils/ethercat/sdo-config-defaults.ts`)
+### SDO Extraction (`src/backend/shared/ethercat/sdo-config-defaults.ts`)
 
 `extractDefaultSdoConfigurations(coeObjects)` → `SDOConfigurationEntry[]`
 
@@ -338,7 +321,7 @@ IEC location format:
 - Excludes system objects (0x0000–0x1FFF)
 - For complex objects: extracts RW sub-items with default values
 
-### Device Configuration Hook (`src/renderer/hooks/use-device-configuration.ts`)
+### Device Configuration Hook (`src/frontend/hooks/use-device-configuration.ts`)
 
 `useDeviceConfiguration({ device, projectPath, ... })` provides:
 - Lazy-loads full ESI device on first render
@@ -352,7 +335,7 @@ IEC location format:
 
 ### Zustand Store Slices
 
-The EtherCAT state lives primarily in the **Project Slice** (`src/renderer/store/slices/project/slice.ts`):
+The EtherCAT state lives primarily in the **Project Slice** (`src/frontend/store/slices/project/slice.ts`):
 
 ```
 project.data.remoteDevices[] → PLCRemoteDevice[]
@@ -365,16 +348,16 @@ Key actions on the project slice:
 
 | Action | Purpose |
 |--------|---------|
-| `createRemoteDevice()` | Add bus + auto-create system task |
-| `deleteRemoteDevice()` | Remove bus + delete system task |
-| `updateEthercatConfig()` | Update master config and/or device list, sync task interval |
-| `updateRemoteDeviceName()` | Rename bus + associated task |
+| `createRemoteDevice()` | Add bus |
+| `deleteRemoteDevice()` | Remove bus |
+| `updateEthercatConfig()` | Update master config and/or device list |
+| `updateRemoteDeviceName()` | Rename bus |
 
 The **Editor Slice** manages the active editor model:
 - Bus editor: `type: 'plc-remote-device'`, `meta: { name, protocol: 'ethercat' }`
 - Device editor: `type: 'plc-ethercat-device'`, `meta: { name, busName, deviceId }`
 
-### EtherCAT Editor State (`src/renderer/components/.../ethercat/index.tsx`)
+### EtherCAT Editor State (`src/frontend/components/.../ethercat/index.tsx`)
 
 Local component state in `EtherCATEditor`:
 
@@ -395,7 +378,7 @@ masterConfig = remoteDevice.ethercatConfig.masterConfig
 
 ## 10. JSON Configuration Generation for Runtime
 
-### Generator (`src/utils/ethercat/generate-ethercat-config.ts`)
+### Generator (`src/backend/shared/ethercat/generate-ethercat-config.ts`)
 
 `generateEthercatConfig(remoteDevices[])` → JSON string or `null`
 
@@ -410,8 +393,7 @@ interface RuntimeRootEntry {
       interface: string          // "eth0"
       cycle_time_us: number
       watchdog_timeout_cycles: number
-      task_name?: string         // "EtherCAT_Master1"
-      task_cycle_time_us?: number
+      task_priority?: number     // SCHED_FIFO priority of the bus thread (default 90)
     }
     slaves: RuntimeSlave[]
     diagnostics: {
@@ -452,14 +434,13 @@ Channel type derivation: `deriveChannelType(direction, bitLen)` → `"digital_in
 
 SDO value parsing: `parseNumericValue(str)` handles decimal, hex (`0xFF`, `#xFF`), float, negative.
 
-### Compiler Integration (`src/main/modules/compiler/compiler-module.ts`)
+### Compiler Integration (`src/backend/shared/compile/steps/generate-confs.ts`)
 
-`handleGenerateEthercatConfig(sourceTargetFolderPath, projectData, handleOutputData)`:
+`generateRuntimeConfs()`:
 
-1. Calls `generateEthercatConfig(projectData.remoteDevices)`
-2. Creates `conf/` directory in firmware build folder
-3. Writes `conf/ethercat.json`
-4. Part of the larger build pipeline alongside `modbus-master.json`, `s7comm.json`, `opcua.json`
+1. Calls `generateEthercatConfig(remoteDevices)` and validates the result with `validateEthercatConfig()`
+2. Returns the JSON alongside the other runtime configs (Modbus slave/master, S7comm, OPC UA)
+3. The bundle composer (`src/middleware/shared/utils/library/compose-runtime-v4-bundle.ts`) writes it to `conf/ethercat.json`, next to `conf/modbus_master.json`, `conf/s7comm.json`, `conf/opcua.json`
 
 ---
 
@@ -468,7 +449,7 @@ SDO value parsing: `parseNumericValue(str)` handles decimal, hex (`0xFF`, `#xFF`
 ```
 1. CREATE BUS
    UI: Add Remote Device → protocol: ethercat
-   Store: createRemoteDevice() → remoteDevices[] + system task
+   Store: createRemoteDevice() → remoteDevices[]
 
 2. UPLOAD ESI FILES
    UI: Repository tab → drag & drop XML
@@ -487,7 +468,7 @@ SDO value parsing: `parseNumericValue(str)` handles decimal, hex (`0xFF`, `#xFF`
 4. ENRICH & STORE
    IPC: esiLoadDeviceFull() → parseESIDeviceFull()
    Util: enrichDeviceData() → channelInfo, PDOs, slaveType, SDOs
-   Store: updateEthercatConfig() → devices[] + sync task interval
+   Store: updateEthercatConfig() → devices[]
 
 5. CONFIGURE DEVICE
    UI: Click device in tree → EtherCATDeviceEditor
@@ -507,59 +488,58 @@ SDO value parsing: `parseNumericValue(str)` handles decimal, hex (`0xFF`, `#xFF`
 ### Types
 | File | Contents |
 |------|----------|
-| `src/types/ethercat/esi-types.ts` | ESIDevice, ConfiguredEtherCATDevice, channels, PDOs, SDOs |
-| `src/types/ethercat/index.ts` | EtherCATDevice, scan/status responses, NetworkInterface |
-| `src/types/PLC/open-plc.ts` | Zod schemas: EthercatConfig, EtherCATMasterConfig, PLCRemoteDevice |
+| `src/middleware/shared/ports/esi-types.ts` | ESIDevice, ConfiguredEtherCATDevice, channels, PDOs, SDOs |
+| `src/middleware/shared/ports/ethercat-types.ts` | EtherCATDevice, scan/status responses, NetworkInterface |
+| `src/backend/shared/types/PLC/open-plc.ts` | Zod schemas: EthercatConfig, EtherCATMasterConfig, PLCRemoteDevice |
 
 ### Main Process
 | File | Contents |
 |------|----------|
-| `src/main/services/esi-service/index.ts` | ESI file persistence and repository management |
-| `src/main/services/esi-service/esi-parser-main.ts` | XML parsing (light and full modes) |
+| `src/backend/editor/ethercat/esi-service.ts` | ESI file persistence and repository management |
+| `src/backend/shared/ethercat/esi-parser-main.ts` | XML parsing (light and full modes) |
 | `src/main/modules/ipc/main.ts` | IPC handlers for scan, status, ESI operations |
 | `src/main/modules/ipc/renderer.ts` | Renderer-side IPC bridge (`window.bridge.*`) |
-| `src/main/modules/compiler/compiler-module.ts` | Firmware build: writes `conf/ethercat.json` |
+| `src/backend/shared/compile/steps/generate-confs.ts` | Build pipeline: generates the `conf/ethercat.json` payload |
 
-### Renderer — Utilities
+### Shared Utilities
 | File | Contents |
 |------|----------|
-| `src/utils/ethercat/device-matcher.ts` | Match scanned devices against ESI repository |
-| `src/utils/ethercat/enrich-device-data.ts` | Extract persistable data from full ESI device |
-| `src/utils/ethercat/esi-parser.ts` | pdoToChannels, generateIecLocation, default mappings |
-| `src/utils/ethercat/device-config-defaults.ts` | DEFAULT_SLAVE_CONFIG |
-| `src/utils/ethercat/sdo-config-defaults.ts` | Extract default SDO configurations from CoE |
-| `src/utils/ethercat/ethercat-task-helpers.ts` | Task naming, cycle time conversion |
-| `src/utils/ethercat/generate-ethercat-config.ts` | Generate runtime JSON from project state |
+| `src/backend/shared/ethercat/device-matcher.ts` | Match scanned devices against ESI repository |
+| `src/backend/shared/ethercat/enrich-device-data.ts` | Extract persistable data from full ESI device |
+| `src/backend/shared/ethercat/esi-parser.ts` | pdoToChannels, generateIecLocation, default mappings |
+| `src/backend/shared/ethercat/device-config-defaults.ts` | DEFAULT_SLAVE_CONFIG |
+| `src/backend/shared/ethercat/sdo-config-defaults.ts` | Extract default SDO configurations from CoE |
+| `src/backend/shared/ethercat/generate-ethercat-config.ts` | Generate runtime JSON from project state |
+| `src/backend/shared/ethercat/validate-ethercat-config.ts` | Validate generated runtime JSON |
 
 ### Renderer — Components
 | File | Contents |
 |------|----------|
-| `src/renderer/components/.../ethercat/index.tsx` | Bus-level editor (Network, Repository, Advanced tabs) |
-| `src/renderer/components/.../ethercat/ethercat-device-editor.tsx` | Per-device editor (Info, Config, SDO, Channels tabs) |
-| `src/renderer/components/.../ethercat/components/scan-bus-tab.tsx` | Scan UI + configured devices list with +/- |
-| `src/renderer/components/.../ethercat/components/device-browser-modal.tsx` | Browse ESI repo to add devices |
-| `src/renderer/components/.../ethercat/components/device-configuration-form.tsx` | Slave config forms |
-| `src/renderer/components/.../ethercat/components/channel-mapping-table.tsx` | IEC variable mapping |
-| `src/renderer/components/.../ethercat/components/sdo-parameters-table.tsx` | CoE SDO editing |
+| `src/frontend/components/.../ethercat/index.tsx` | Bus-level editor (Network, Repository, Advanced tabs) |
+| `src/frontend/components/.../ethercat/ethercat-device-editor.tsx` | Per-device editor (Info, Config, SDO, Channels tabs) |
+| `src/frontend/components/.../ethercat/components/scan-bus-tab.tsx` | Scan UI + configured devices list with +/- |
+| `src/frontend/components/.../ethercat/components/device-browser-modal.tsx` | Browse ESI repo to add devices |
+| `src/frontend/components/.../ethercat/components/device-configuration-form.tsx` | Slave config forms |
+| `src/frontend/components/.../ethercat/components/channel-mapping-table.tsx` | IEC variable mapping |
+| `src/frontend/components/.../ethercat/components/sdo-parameters-table.tsx` | CoE SDO editing |
 
 ### Renderer — Store
 | File | Contents |
 |------|----------|
-| `src/renderer/store/slices/project/slice.ts` | createRemoteDevice, updateEthercatConfig, delete, rename |
-| `src/renderer/store/slices/editor/types.ts` | Editor model schema (plc-ethercat-device variant) |
-| `src/renderer/store/slices/tabs/utils.ts` | CreateEtherCATDeviceEditor |
-| `src/renderer/store/slices/shared/index.ts` | openFile, closeFile, forceCloseFile, deleteEthercatDevice |
-| `src/renderer/hooks/use-device-configuration.ts` | Lazy-load full device, manage channels/SDOs |
+| `src/frontend/store/slices/project/slice.ts` | createRemoteDevice, updateEthercatConfig, delete, rename |
+| `src/frontend/store/slices/editor/types.ts` | Editor model schema (plc-ethercat-device variant) |
+| `src/frontend/store/slices/tabs/utils.ts` | CreateEtherCATDeviceEditor |
+| `src/frontend/store/slices/shared/slice.ts` | closeFile, forceCloseFile, ethercatDeviceActions.delete |
+| `src/frontend/hooks/use-device-configuration.ts` | Lazy-load full device, manage channels/SDOs |
 
 ---
 
 ## 13. Constraints & Notes
 
 1. **ESI parsing is CPU-bound** — runs in main process. Sequential uploads recommended for UI responsiveness.
-2. **Cycle time ↔ task sync** — `updateEthercatConfig()` auto-updates the associated system task interval.
+2. **No IEC task** — the EtherCAT bus is driven by a dedicated thread inside the runtime plugin; timing comes from `masterConfig` (`cycleTimeUs`, `taskPriority`).
 3. **Address uniqueness** — IEC addresses must be unique across all remote devices (Modbus + EtherCAT). `usedAddresses` is tracked when generating mappings.
 4. **CoE SDO range** — only objects in 0x2000+ are user-configurable. System objects (0x0000–0x1FFF) are runtime-managed.
 5. **PDO padding** — entries with `index: "0x0000"` are padding: excluded from channel lists but preserved in persisted PDOs for correct byte offsets.
-6. **System tasks** — auto-created on device creation, auto-deleted on removal. Marked with `isSystemTask: true`.
-7. **Repository v2 migration** — old v1 (metadata-only) auto-migrates to v2 (with device summaries) on first load.
-8. **Editor caching** — editor models are cached by `meta.name`. When removing a device, its tab/editor must be explicitly closed to avoid stale `deviceId` references on re-add.
+6. **Repository v2 migration** — old v1 (metadata-only) auto-migrates to v2 (with device summaries) on first load.
+7. **Editor caching** — editor models are cached by `meta.name`. When removing a device, its tab/editor must be explicitly closed to avoid stale `deviceId` references on re-add.

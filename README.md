@@ -38,6 +38,14 @@ npm install
 npm run dev
 ```
 
+### Running tests
+
+```bash
+npm run test         # Unit tests (Jest, with coverage)
+npm run test:watch   # Unit tests in watch mode (no coverage)
+npm run test:e2e     # End-to-end tests (Playwright, builds the app first)
+```
+
 ## Releasing a New Version
 
 The project uses GitHub Actions to automatically build and release new versions for all supported platforms (macOS, Windows, and Linux) in both x64 and ARM64 architectures.
