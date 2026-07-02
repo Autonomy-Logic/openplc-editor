@@ -1,10 +1,10 @@
+import { Pencil1Icon, TrashIcon } from '@radix-ui/react-icons'
 import type { ModbusIOGroup, ModbusIOPoint } from '@root/middleware/shared/ports/types'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
-import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
@@ -348,21 +348,12 @@ type IOGroupRowProps = {
   ioGroup: ModbusIOGroup
   isExpanded: boolean
   onToggleExpand: () => void
-  isSelected: boolean
-  onSelect: () => void
   onEdit: () => void
+  onDelete: () => void
   onUpdateAlias: (ioPointId: string, alias: string) => void
 }
 
-const IOGroupRow = ({
-  ioGroup,
-  isExpanded,
-  onToggleExpand,
-  isSelected,
-  onSelect,
-  onEdit,
-  onUpdateAlias,
-}: IOGroupRowProps) => {
+const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onUpdateAlias }: IOGroupRowProps) => {
   const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
   const groupAddress = firstIOPoint?.iecLocation || '-'
@@ -370,22 +361,9 @@ const IOGroupRow = ({
 
   return (
     <>
-      <tr
-        onClick={onSelect}
-        onDoubleClick={onEdit}
-        className={cn(
-          'cursor-pointer border-b border-neutral-200 dark:border-neutral-800',
-          isSelected && 'bg-brand/10 dark:bg-brand/20',
-        )}
-      >
+      <tr className='border-b border-neutral-200 dark:border-neutral-800'>
         <td className='px-2 py-2'>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleExpand()
-            }}
-            className='flex items-center justify-center'
-          >
+          <button onClick={onToggleExpand} className='flex items-center justify-center'>
             <ArrowIcon
               direction='right'
               className={cn('h-4 w-4 stroke-brand-light transition-all', isExpanded && 'rotate-270 stroke-brand')}
@@ -400,6 +378,28 @@ const IOGroupRow = ({
           {getFunctionCodeLabel(ioGroup.functionCode)}
         </td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>-</td>
+        <td className='px-2 py-2'>
+          <div className='flex justify-end gap-2'>
+            <button
+              type='button'
+              onClick={onEdit}
+              className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+              title='Edit'
+              aria-label={`Edit ${ioGroup.name}`}
+            >
+              <Pencil1Icon className='h-4 w-4' />
+            </button>
+            <button
+              type='button'
+              onClick={onDelete}
+              className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+              title='Delete'
+              aria-label={`Delete ${ioGroup.name}`}
+            >
+              <TrashIcon className='h-4 w-4' />
+            </button>
+          </div>
+        </td>
       </tr>
       {isExpanded &&
         (ioGroup.ioPoints ?? []).map((ioPoint: ModbusIOPoint, index: number) => (
@@ -446,6 +446,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
           className='h-6 w-full rounded border border-neutral-200 bg-white px-1 text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
         />
       </td>
+      <td className='px-2 py-1'></td>
     </tr>
   )
 }
@@ -490,7 +491,6 @@ const RemoteDeviceEditor = () => {
 
   // UI state
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingGroup, setEditingGroup] = useState<ModbusIOGroup | null>(null)
 
@@ -737,13 +737,13 @@ const RemoteDeviceEditor = () => {
     [deviceName, projectActions, editingGroup, sharedWorkspaceActions],
   )
 
-  const handleDeleteIOGroup = useCallback(() => {
-    if (selectedGroupId) {
-      projectActions.deleteIOGroup(deviceName, selectedGroupId)
-      setSelectedGroupId(null)
+  const handleDeleteIOGroup = useCallback(
+    (groupId: string) => {
+      projectActions.deleteIOGroup(deviceName, groupId)
       sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
-    }
-  }, [deviceName, selectedGroupId, projectActions, sharedWorkspaceActions])
+    },
+    [deviceName, projectActions, sharedWorkspaceActions],
+  )
 
   const handleUpdateAlias = useCallback(
     (ioGroupId: string, ioPointId: string, alias: string) => {
@@ -951,13 +951,6 @@ const RemoteDeviceEditor = () => {
                 icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
                 id: 'add-io-group-button',
               },
-              {
-                ariaLabel: 'Remove IO Group',
-                onClick: handleDeleteIOGroup,
-                disabled: !selectedGroupId,
-                icon: <MinusIcon className='h-4 w-4 stroke-brand' />,
-                id: 'remove-io-group-button',
-              },
             ]}
             buttonProps={{
               className:
@@ -983,18 +976,21 @@ const RemoteDeviceEditor = () => {
                 <th className='w-[8%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Offset
                 </th>
-                <th className='w-[22%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[20%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Function Code
                 </th>
                 <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Alias
+                </th>
+                <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                  Actions
                 </th>
               </tr>
             </thead>
             <tbody>
               {ioGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                  <td colSpan={8} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                     No IO groups configured. Click the + button to add one.
                   </td>
                 </tr>
@@ -1005,9 +1001,8 @@ const RemoteDeviceEditor = () => {
                     ioGroup={ioGroup}
                     isExpanded={expandedGroups.has(ioGroup.id)}
                     onToggleExpand={() => handleToggleExpand(ioGroup.id)}
-                    isSelected={selectedGroupId === ioGroup.id}
-                    onSelect={() => setSelectedGroupId(ioGroup.id)}
                     onEdit={() => handleOpenEditModal(ioGroup.id)}
+                    onDelete={() => handleDeleteIOGroup(ioGroup.id)}
                     onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
                   />
                 ))

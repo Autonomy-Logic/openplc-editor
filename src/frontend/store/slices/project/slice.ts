@@ -158,6 +158,10 @@ function generateIOPoints(
    * without needing to rebuild the pool inside the loop. */
   pool: Parameters<typeof nextFreeAddress>[0],
   pending: Set<string>,
+  /* Points that previously occupied this group (edit flow). Their
+   * aliases are carried over positionally so resizing / editing a
+   * group doesn't wipe the aliases the user attached to each slot. */
+  existingPoints: ModbusIOPoint[] = [],
 ): ModbusIOPoint[] {
   const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
   const points: ModbusIOPoint[] = []
@@ -165,7 +169,13 @@ function generateIOPoints(
   for (let i = 0; i < length; i++) {
     const iecLocation = nextFreeAddress(pool, iecPrefix, isBit, undefined, pending)
     pending.add(iecLocation)
-    points.push({ id: `${groupName}_${i}`, name: `${groupName}_${i}`, type, iecLocation, alias: '' })
+    points.push({
+      id: `${groupName}_${i}`,
+      name: `${groupName}_${i}`,
+      type,
+      iecLocation,
+      alias: existingPoints[i]?.alias ?? '',
+    })
   }
 
   return points
@@ -1531,12 +1541,63 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return ok()
     },
     updateIOGroup: (deviceName, groupId, updates) => {
+      // Editing a group's length / function code / name must regenerate
+      // its I/O points — the previous implementation only `Object.assign`ed
+      // the metadata, so the point list (and therefore the effective size
+      // shown in the table) never changed (bug: "size stays as originally
+      // set"). We regenerate ONLY this group's points here — no
+      // project-wide reallocation. To let the group reuse its own freed
+      // addresses, the pool is built from every producer EXCEPT this
+      // group's current points (all other Modbus groups, pin-mapping, VPP
+      // and EtherCAT claims are still honoured). Existing aliases are
+      // carried over positionally.
+      const live = getState()
+      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
+        live.deviceDefinitions.configuration.deviceBoard ?? '',
+      )
+      const ioMapping =
+        (
+          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+            | undefined
+        )?.entries ?? []
+
+      // Clone remoteDevices with the edited group's points cleared so its
+      // own addresses are free for re-allocation without disturbing the
+      // rest of the project.
+      const remoteDevicesForPool = live.project.data.remoteDevices?.map((d) =>
+        d.name !== deviceName || !d.modbusTcpConfig
+          ? d
+          : {
+              ...d,
+              modbusTcpConfig: {
+                ...d.modbusTcpConfig,
+                ioGroups: d.modbusTcpConfig.ioGroups.map((g) => (g.id === groupId ? { ...g, ioPoints: [] } : g)),
+              },
+            },
+      )
+
+      const pool = buildAddressPool(
+        {
+          pinMapping: {
+            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
+          },
+          vendorIoMapping: { entries: ioMapping },
+          remoteDevices: remoteDevicesForPool,
+        },
+        resolveTargetCapabilities(boardInfo),
+      )
+
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
           if (!device?.modbusTcpConfig) return
           const group = device.modbusTcpConfig.ioGroups.find((g) => g.id === groupId)
-          if (group) Object.assign(group, updates)
+          if (!group) return
+          const existingPoints = group.ioPoints ?? []
+          Object.assign(group, updates)
+          const pending = new Set<string>()
+          group.ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending, existingPoints)
         }),
       )
       return ok()
