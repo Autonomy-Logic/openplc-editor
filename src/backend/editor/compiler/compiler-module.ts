@@ -50,10 +50,19 @@ import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 type LibraryCompileBridge = {
   makeRuntimeApiRequest: <T = void>(
     ipAddress: string,
-    jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+  // Required to satisfy compileProgram's bridge contract; never invoked on the
+  // library path (it compiles with runtimeIpAddress=null, so no upload runs).
+  makeRuntimeApiUpload: (opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
 }
 
@@ -1903,73 +1912,8 @@ class CompilerModule {
     })
   }
 
-  /**
-   * Send a compiled program file to the runtime's `/api/upload-file`
-   * over HTTPS via a multipart/form-data POST.  Pure transport — no
-   * polling, no PLC start, no UI logging.  Used as the `uploadProgram`
-   * callback fed to the shared `deployRuntimeProgram` orchestrator.
-   *
-   * v3 callers pass `program.st` + `text/plain`; v4 callers pass the
-   * compiled zip + `application/zip`.  `cleanBuild` toggles the
-   * `?clean=1` flag the runtime honours by wiping `build/` and ccache
-   * before compiling.
-   */
-  private async sendRuntimeUpload(opts: {
-    hostname: string
-    jwtToken: string
-    filename: string
-    contentType: string
-    fileBuffer: Buffer
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }): Promise<{ success: boolean; error?: string }> {
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
-    const header = Buffer.from(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
-        `Content-Type: ${opts.contentType}\r\n\r\n`,
-    )
-    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-    const body = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
-
-    return new Promise<{ success: boolean; error?: string }>((resolve) => {
-      const req = https.request(
-        {
-          hostname: opts.hostname,
-          port: 8443,
-          path: opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file',
-          method: 'POST',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
-            'Content-Length': body.length,
-            Authorization: `Bearer ${opts.jwtToken}`,
-          },
-          ...getRuntimeHttpsOptions(),
-        } as https.RequestOptions,
-        (res: IncomingMessage) => {
-          let data = ''
-          res.on('data', (chunk: Buffer) => {
-            data += chunk.toString()
-          })
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              opts.onUploadAccepted?.(data)
-              resolve({ success: true })
-            } else {
-              resolve({ success: false, error: data || `HTTP ${res.statusCode}` })
-            }
-          })
-        },
-      )
-      req.setTimeout(300_000, () => {
-        req.destroy()
-        resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
-      })
-      req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
-      req.write(body)
-      req.end()
-    })
-  }
+  // Runtime upload moved to MainProcessBridge.makeRuntimeApiUpload so it shares
+  // the single token authority (transparent refresh + retry on an expired JWT).
 
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
@@ -2457,10 +2401,17 @@ class CompilerModule {
     mainProcessBridge: {
       makeRuntimeApiRequest: <T = void>(
         ipAddress: string,
-        jwtToken: string,
         endpoint: string,
         responseParser?: (data: string) => T,
       ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+      makeRuntimeApiUpload: (opts: {
+        ipAddress: string
+        fileBuffer: Buffer
+        filename: string
+        contentType: string
+        cleanBuild: boolean
+        onUploadAccepted?: (responseBody: string) => void
+      }) => Promise<{ success: true; data: string } | { success: false; error: string }>
       /**
        * Resolve a list of project-enabled library names to parsed
        * `.stlib` archives.  Bundled libraries are always-on and
@@ -2710,7 +2661,6 @@ class CompilerModule {
         cleanBuild: cleanBuild ?? false,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
-        sendRuntimeUpload: (opts) => this.sendRuntimeUpload(opts),
         pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
         pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
         startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,

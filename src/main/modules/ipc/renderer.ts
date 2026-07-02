@@ -455,7 +455,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:login', ipAddress, username, password),
   runtimeGetStatus: (
     ipAddress: string,
-    jwtToken: string,
     includeStats?: boolean,
   ): Promise<{
     success: boolean
@@ -477,34 +476,28 @@ const rendererProcessBridge = {
       }>
     }
     error?: string
-  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, jwtToken, includeStats),
-  runtimeStartPlc: (
-    ipAddress: string,
-    jwtToken: string,
-  ): Promise<{ success: boolean; error?: string; status?: string }> =>
-    ipcRenderer.invoke('runtime:start-plc', ipAddress, jwtToken),
-  runtimeStopPlc: (ipAddress: string, jwtToken: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('runtime:stop-plc', ipAddress, jwtToken),
+  }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
+  runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>
+    ipcRenderer.invoke('runtime:start-plc', ipAddress),
+  runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:stop-plc', ipAddress),
   runtimeGetCompilationStatus: (
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{
     success: boolean
     data?: { status: string; logs: string[]; exit_code: number | null }
     error?: string
-  }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress, jwtToken),
+  }> => ipcRenderer.invoke('runtime:get-compilation-status', ipAddress),
   runtimeGetLogs: (
     ipAddress: string,
-    jwtToken: string,
     minId?: number,
   ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-logs', ipAddress, jwtToken, minId),
+    ipcRenderer.invoke('runtime:get-logs', ipAddress, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
   runtimeGetSerialPorts: (
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>
-    ipcRenderer.invoke('runtime:get-serial-ports', ipAddress, jwtToken),
+    ipcRenderer.invoke('runtime:get-serial-ports', ipAddress),
   runtimeDiscoverDevices: (opts?: {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
@@ -521,42 +514,36 @@ const rendererProcessBridge = {
   // ===================== ETHERCAT DISCOVERY METHODS =====================
   etherCATGetInterfaces: (
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-interfaces', ipAddress, jwtToken),
+    ipcRenderer.invoke('ethercat:get-interfaces', ipAddress),
 
   etherCATGetStatus: (
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-status', ipAddress, jwtToken),
+    ipcRenderer.invoke('ethercat:get-status', ipAddress),
 
   etherCATScan: (
     ipAddress: string,
-    jwtToken: string,
     scanRequest: EtherCATScanRequest,
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:scan', ipAddress, jwtToken, scanRequest),
+    ipcRenderer.invoke('ethercat:scan', ipAddress, scanRequest),
 
   etherCATTest: (
     ipAddress: string,
-    jwtToken: string,
     testRequest: EtherCATTestRequest,
   ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:test', ipAddress, jwtToken, testRequest),
+    ipcRenderer.invoke('ethercat:test', ipAddress, testRequest),
 
   etherCATValidate: (
     ipAddress: string,
-    jwtToken: string,
     validateRequest: EtherCATValidateRequest,
   ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:validate', ipAddress, jwtToken, validateRequest),
+    ipcRenderer.invoke('ethercat:validate', ipAddress, validateRequest),
 
   etherCATGetRuntimeStatus: (
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> =>
-    ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress, jwtToken),
+    ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress),
 
   // ===================== ESI REPOSITORY METHODS =====================
   esiLoadRepositoryIndex: (
