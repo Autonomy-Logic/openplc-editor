@@ -2386,6 +2386,61 @@ describe('createProjectSlice', () => {
       const result = store.getState().projectActions.updateIOGroup('EtherCAT', 'g1', { name: 'x' })
       expect(result.ok).toBe(true)
     })
+
+    it('regenerates ioPoints when the length grows (edit size)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints).toHaveLength(2)
+
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 4 })
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points).toHaveLength(4)
+      expect(points.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW2', '%IW3'])
+    })
+
+    it('regenerates ioPoints when the length shrinks (edit size)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 1 })
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points).toHaveLength(1)
+      expect(points[0].iecLocation).toBe('%IW0')
+    })
+
+    it('re-derives addresses under the new prefix when the function code changes', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // FC3 -> %IW
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { functionCode: '1' }) // FC1 -> %IX
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points.map((p) => p.iecLocation)).toEqual(['%IX0.0', '%IX0.1'])
+    })
+
+    it('regenerates only the edited group, leaving sibling groups untouched (no project-wide recompaction)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
+
+      // Grow g1. Because this edit is localized (it does NOT recompact the
+      // whole project), g1 reuses its own freed %IW0/%IW1 and its third
+      // point takes the next free slot after g2's untouched %IW2/%IW3.
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3 })
+      const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW4'])
+      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW2', '%IW3']) // sibling untouched
+    })
+
+    it('preserves point aliases positionally when regenerating', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'Temp')
+
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3 })
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points).toHaveLength(3)
+      expect(points[0].alias).toBe('Temp') // survived the reshuffle
+      expect(points[2].alias).toBe('') // freshly allocated slot
+    })
   })
 
   describe('deleteIOGroup', () => {
