@@ -14,7 +14,12 @@
  */
 
 import type { LibraryBuildPort, VerifyCompileArgs } from '../../../../middleware/shared/ports/library-build-port'
+import type { TranspileToStArgs, TranspileToStResult } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
+
+// ST the fake `transpileToSt` port method emits.  Fixed content so the
+// verification-cache tests can precompute the harness MD5 off it.
+const FAKE_PROGRAM_ST = 'PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n'
 
 // ---------------------------------------------------------------------------
 // Mocks for the inner shared helpers
@@ -48,6 +53,8 @@ interface PortHarness {
   missing: string[]
   verifyResult: { success: boolean; message?: string }
   verifyCalls: VerifyCompileArgs[]
+  transpileResult: TranspileToStResult
+  transpileCalls: TranspileToStArgs[]
   /** Programmable error for whichever method the test wants to fail. */
   throwOn: Partial<Record<keyof LibraryBuildPort, Error>>
 }
@@ -61,6 +68,8 @@ function makePort(): PortHarness {
     missing: [],
     verifyResult: { success: true },
     verifyCalls: [],
+    transpileResult: { ok: true, programSt: FAKE_PROGRAM_ST },
+    transpileCalls: [],
     throwOn: {},
   }
   harness.port = {
@@ -70,9 +79,12 @@ function makePort(): PortHarness {
       // distinguishable.
       return `md5-${input.length}-${input.charCodeAt(0) ?? 0}`
     },
-    async transpileXmlToSt({ xml }) {
-      if (harness.throwOn.transpileXmlToSt) throw harness.throwOn.transpileXmlToSt
-      return { ok: true, programSt: `PROGRAM main\n(* from xml: ${xml.length} bytes *)\nEND_PROGRAM\n` }
+    async transpileToSt(args: TranspileToStArgs, log) {
+      if (harness.throwOn.transpileToSt) throw harness.throwOn.transpileToSt
+      harness.transpileCalls.push(args)
+      // Exercise the orchestrator's log-forwarding lambda.
+      log('transpiler: parsing project IR', 'info')
+      return harness.transpileResult
     },
     async readBuildFile(_projectPath: string, relPath: string) {
       if (harness.throwOn.readBuildFile) throw harness.throwOn.readBuildFile
@@ -122,7 +134,7 @@ beforeEach(() => {
   mockComposeVerify.mockClear()
 
   mockPrepareXml.mockReturnValue({
-    xml: '<plc><pou>...</pou></plc>',
+    projectData: projectDataEmpty(),
     knownPous: [],
     manifest: { name: 'lib', version: '0.1.0', namespace: 'lib', extra: {} },
   })
@@ -155,22 +167,23 @@ describe('runLibraryBuildPipeline', () => {
     expect(harness.files.get('build/lib.stlib')).toMatch(/^\{[\s\S]+\}\n$/)
     // Verification cache persisted with the MD5 the orchestrator computed.
     expect(harness.files.has('build/.verify-cache-library.json')).toBe(true)
-    // Intermediates (plc.xml, program.st) live in memory only — the
-    // orchestrator does NOT persist them.  See the path-constants
-    // comment in library-build-orchestrator.ts for the rationale.
-    expect(harness.files.has('build/library/src/plc.xml')).toBe(false)
+    // Intermediates (program.st) live in memory only — the ST is
+    // produced in-process by `transpileToSt` and never persisted.
+    // See the path-constants comment in library-build-orchestrator.ts.
     expect(harness.files.has('build/library/src/program.st')).toBe(false)
     // Stage messages flow through in order.
     expect(events.map((e) => e.message)).toEqual(
       expect.arrayContaining([
         'Starting library build...',
         'Manifest OK — building "lib" v0.1.0.',
-        'Compiling file plc.xml',
+        'Transpiling project to Structured Text',
         'Verifying with OpenPLC Simulator (avr-gcc)...',
         'Compiling library archive...',
         'Library built successfully: build/lib.stlib',
       ]),
     )
+    // The stubbed projectData from Stage 1 is what the transpiler sees.
+    expect(harness.transpileCalls).toHaveLength(1)
   })
 
   it('does not call deleteBuildSubtree (intermediates are no longer persisted)', async () => {
@@ -247,7 +260,7 @@ describe('runLibraryBuildPipeline', () => {
     expect(aux.dependencyRefs).toEqual([{ name: 'oscat-basic', version: '1.0.0' }])
   })
 
-  it('aborts before xml2st when the project enables an unresolved library', async () => {
+  it('aborts before the strucpp compile when the project enables an unresolved library', async () => {
     const harness = makePort()
     harness.missing = ['ghost-lib']
     const { events, emit } = captureEvents()
@@ -277,9 +290,8 @@ describe('runLibraryBuildPipeline', () => {
     const harness = makePort()
     // Pre-seed the cache.  computeMd5 in the harness is deterministic
     // off program.st length + first char; the orchestrator's value
-    // will match this when the same xml2st output replays.
-    const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
-    const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
+    // will match this when the same transpiler output replays.
+    const expectedMd5 = `md5-${FAKE_PROGRAM_ST.length}-${FAKE_PROGRAM_ST.charCodeAt(0)}`
     harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { events, emit } = captureEvents()
 
@@ -300,8 +312,7 @@ describe('runLibraryBuildPipeline', () => {
 
   it('cleanBuild forces a fresh verification regardless of cache', async () => {
     const harness = makePort()
-    const programSt = `PROGRAM main\n(* from xml: 24 bytes *)\nEND_PROGRAM\n`
-    const expectedMd5 = `md5-${programSt.length}-${programSt.charCodeAt(0)}`
+    const expectedMd5 = `md5-${FAKE_PROGRAM_ST.length}-${FAKE_PROGRAM_ST.charCodeAt(0)}`
     harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
     const { emit } = captureEvents()
 
@@ -316,6 +327,52 @@ describe('runLibraryBuildPipeline', () => {
       emit,
     )
 
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('runs a fresh verification when the cache read throws', async () => {
+    const harness = makePort()
+    // Throw only on the cache read; the manifest read (Stage 0) must
+    // still succeed so we reach the cache-consult path.
+    const realRead = harness.port.readBuildFile.bind(harness.port)
+    harness.port.readBuildFile = async (projectPath, relPath) => {
+      if (relPath === 'build/.verify-cache-library.json') throw new Error('cache read blew up')
+      return realRead(projectPath, relPath)
+    }
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Cache read failed → treated as a miss → fresh verification runs.
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('runs a fresh verification when the cached file is malformed JSON', async () => {
+    const harness = makePort()
+    harness.files.set('build/.verify-cache-library.json', '{ not valid json')
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Malformed cache → fall through to a real verification run.
     expect(harness.verifyCalls).toHaveLength(1)
   })
 
@@ -417,5 +474,152 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.error).toBe('library.json is missing manifest.namespace')
     expect(mockLibraryBuild).not.toHaveBeenCalled()
     expect(harness.verifyCalls).toHaveLength(0)
+  })
+
+  it('fails when reading library.json throws an IO error', async () => {
+    const harness = makePort()
+    harness.throwOn.readBuildFile = new Error('disk on fire')
+    const { emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Could not read library\.json: disk on fire/)
+    expect(mockPrepareXml).not.toHaveBeenCalled()
+  })
+
+  it('fails when the transpiler reports an error', async () => {
+    const harness = makePort()
+    harness.transpileResult = {
+      ok: false,
+      errors: [{ message: 'unexpected token in POU body', line: 1, column: 1, severity: 'error' }],
+    }
+    const { emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/transpile-from-json failed: unexpected token in POU body/)
+    expect(result.libraryName).toBe('lib')
+    expect(mockLibraryBuild).not.toHaveBeenCalled()
+    expect(harness.verifyCalls).toHaveLength(0)
+  })
+
+  it('falls back to a generic message when the transpiler returns ok=true but no ST', async () => {
+    const harness = makePort()
+    // ok=true with an undefined programSt still short-circuits, and
+    // with no `errors[]` the orchestrator uses its default message.
+    harness.transpileResult = { ok: true, programSt: undefined }
+    const { emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/transpile-from-json failed: transpile-from-json failed/)
+  })
+
+  it('treats a thrown verifyCompile as a failed (advisory) verification', async () => {
+    const harness = makePort()
+    // A non-Error throwable exercises the `String(error)` fallback in
+    // `formatError`.
+    harness.port.verifyCompile = async () => {
+      throw 'avr-gcc segfaulted'
+    }
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Verification failures are advisory — the build still succeeds.
+    expect(result.success).toBe(true)
+    expect(result.verification?.success).toBe(false)
+    expect(result.verification?.message).toBe('avr-gcc segfaulted')
+    expect(events.some((e) => e.level === 'warning' && /Verification reported issues/.test(e.message))).toBe(true)
+  })
+
+  it('warns but still ships the .stlib when the verification cache cannot be written', async () => {
+    const harness = makePort()
+    // Fail only the cache write; the .stlib write happens later and
+    // must still succeed.
+    const realWrite = harness.port.writeBuildFile.bind(harness.port)
+    harness.port.writeBuildFile = async (projectPath, relPath, content) => {
+      if (relPath === 'build/.verify-cache-library.json') throw new Error('cache dir read-only')
+      return realWrite(projectPath, relPath, content)
+    }
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(harness.files.has('build/lib.stlib')).toBe(true)
+    expect(events.some((e) => e.level === 'warning' && /Could not write verification cache/.test(e.message))).toBe(true)
+  })
+
+  it('fails when the .stlib archive cannot be written', async () => {
+    const harness = makePort()
+    harness.port.writeBuildFile = async (_projectPath, relPath) => {
+      if (relPath === 'build/lib.stlib') throw new Error('out of disk space')
+      // Let the cache write succeed.
+    }
+    const { emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Could not write lib\.stlib: out of disk space/)
+    expect(result.libraryName).toBe('lib')
   })
 })
