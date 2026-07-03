@@ -166,6 +166,17 @@ export type ProjectActions = {
   }
 
   /**
+   * Central, capability-scoped recalculation of the Modbus remote-device
+   * addresses via the IEC address registry. Derives consumers from live
+   * producer state, keeps pin-mapping / VPP / EtherCAT pinned as fixed
+   * constraints, re-packs the Modbus producers (closing gaps left by a
+   * removed group/device — project-wide), writes the addresses back onto
+   * the `ioPoints`, and reconciles bound variables. Invoked after every
+   * Modbus mutation and on target switch.
+   */
+  recalculateRemoteDeviceAddresses: () => ProjectResponse
+
+  /**
    * Cascade-rename every variable's `.alias` field from `oldAlias` to
    * `newAlias` across all POU-local and global variables.  Used by
    * the IO-mapping screens (pin-mapping, VPP modules, VPP io-table,

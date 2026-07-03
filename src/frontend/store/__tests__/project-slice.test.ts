@@ -2273,8 +2273,8 @@ describe('createProjectSlice', () => {
       expect(groups[1].ioPoints![1].iecLocation).toBe('%IW3')
     })
 
-    it('skips bit addresses that are already used (bit-based collision with gaps)', () => {
-      // Create a device with pre-existing bit addresses that have gaps
+    it('recompacts bit addresses project-wide, closing a pre-existing gap', () => {
+      // A pre-existing group carries a manual gap (%IX0.0 then %IX0.2).
       const device = makeRemoteDevice('Dev1')
       device.modbusTcpConfig!.ioGroups = [
         {
@@ -2287,18 +2287,19 @@ describe('createProjectSlice', () => {
           errorHandling: 'keep-last-value',
           ioPoints: [
             { id: 'p0', name: 'p0', type: 'Digital Input (Coil Status)', iecLocation: '%IX0.0', alias: '' },
-            // Skip %IX0.1 (gap) and use %IX0.2
             { id: 'p1', name: 'p1', type: 'Digital Input (Coil Status)', iecLocation: '%IX0.2', alias: '' },
           ],
         },
       ]
       seedRemoteDevice(store, device)
 
-      // Add a new group; the generator should skip %IX0.0 (used), use %IX0.1 (free), skip %IX0.2 (used), use %IX0.3
+      // Adding a group triggers the central recalculation: the whole Modbus
+      // space re-packs, so the pre-existing group closes its gap
+      // (%IX0.0/%IX0.1) and the new group packs right after (%IX0.2/%IX0.3).
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '1', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.1')
-      expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IX0.0', '%IX0.1'])
+      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IX0.2', '%IX0.3'])
     })
 
     it('ignores VPP claims on a target whose caps do not include vppIo', () => {
@@ -2415,18 +2416,17 @@ describe('createProjectSlice', () => {
       expect(points.map((p) => p.iecLocation)).toEqual(['%IX0.0', '%IX0.1'])
     })
 
-    it('regenerates only the edited group, leaving sibling groups untouched (no project-wide recompaction)', () => {
+    it('recompacts sibling groups project-wide after an edit (central registry)', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
 
-      // Grow g1. Because this edit is localized (it does NOT recompact the
-      // whole project), g1 reuses its own freed %IW0/%IW1 and its third
-      // point takes the next free slot after g2's untouched %IW2/%IW3.
+      // Grow g1 to 3 points. The central recalculation re-packs the whole
+      // Modbus space in group order: g1 → %IW0/1/2, g2 slides to %IW3/4.
       store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3 })
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW4'])
-      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW2', '%IW3']) // sibling untouched
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW2'])
+      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW3', '%IW4'])
     })
 
     it('preserves point aliases positionally when regenerating', () => {
@@ -2462,6 +2462,78 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
       const result = store.getState().projectActions.deleteIOGroup('EtherCAT', 'g1')
       expect(result.ok).toBe(true)
+    })
+
+    it('recompacts the surviving groups into the freed slots (bug #4)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
+      store.getState().projectActions.deleteIOGroup('Dev1', 'g1')
+      const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+      expect(groups).toHaveLength(1)
+      // g2 slides down into the freed slots — no gap left behind.
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+  })
+
+  describe('recalculateRemoteDeviceAddresses (central registry)', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    it('recompacts across devices when a whole device is removed', () => {
+      seedRemoteDevice(store, makeRemoteDevice('A'))
+      seedRemoteDevice(store, makeRemoteDevice('B'))
+      store.getState().projectActions.addIOGroup('A', makeIOGroup('ga', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('B', makeIOGroup('gb', '3', 2)) // %IW2,3
+      store.getState().projectActions.deleteRemoteDevice('A')
+      const devices = store.getState().project.data.remoteDevices!
+      expect(devices).toHaveLength(1)
+      // B's group reclaims device A's freed addresses project-wide.
+      expect(devices[0].modbusTcpConfig!.ioGroups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('is a benign no-op with no remote devices', () => {
+      const result = store.getState().projectActions.recalculateRemoteDeviceAddresses()
+      expect(result.ok).toBe(true)
+    })
+
+    it('activates pin-mapping / VPP kinds when the target supports them', () => {
+      // A board that exposes pin mapping AND VPP I/O — exercises those
+      // capability branches. Modbus still allocates around them.
+      store.getState().deviceActions.setAvailableOptions({
+        availableBoards: new Map<string, BoardInfo>([
+          [
+            'VPP Board',
+            {
+              compiler: 'openplc-compiler',
+              core: 'rt-v4',
+              preview: '',
+              specs: {},
+              capabilities: {
+                pinMapping: true,
+                vppIo: true,
+                modbusTcpRemote: true,
+                ethercat: true,
+                modbusTcpServer: true,
+                opcuaServer: true,
+                s7Server: true,
+                debuggerTransports: ['websocket'],
+                pythonFunctionBlocks: true,
+                arduinoApiCompletions: false,
+                hasRuntimeStats: true,
+                isInProcessSimulator: false,
+                directUsbUpload: false,
+              },
+            },
+          ],
+        ]),
+      })
+      store.getState().deviceActions.setDeviceBoard('VPP Board')
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
     })
   })
 

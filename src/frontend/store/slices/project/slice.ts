@@ -19,6 +19,15 @@ import {
   syncVariableAliases as syncVariablesPure,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
+import {
+  channelKey,
+  type IecAddressRegistry,
+  migrateToRegistry,
+  modbusConsumerId,
+  recalculate as recalculateRegistry,
+  unpinAllocatableChannels,
+} from '../../../../middleware/shared/utils/iec-address/registry'
+import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
@@ -268,6 +277,80 @@ function resolveAliasForLocation(getState: ProjectGetState, location: string | u
 
 type ProjectSetState = StoreApi<ProjectSliceRoot>['setState']
 type ProjectGetState = () => ProjectSliceRoot
+
+// ---------------------------------------------------------------------------
+// Central IEC address recalculation (remote-device producers)
+// ---------------------------------------------------------------------------
+
+/** Consumer kinds this recalculation is allowed to move. Pin mapping, VPP,
+ *  and EtherCAT own their own allocation, so they are treated as fixed
+ *  constraints here (seeded + kept pinned) — Modbus allocates around them.
+ *  EtherCAT joins this set once its bit-offset allocator is migrated. */
+const REMOTE_DEVICE_KINDS: ReadonlySet<string> = new Set(['modbus-tcp-remote'])
+
+/** Map the active target's capabilities to the set of consumer kinds that
+ *  participate in allocation. A target without pin mapping / VPP simply
+ *  omits those kinds, so their addresses free up and remote-device
+ *  producers recompact into the space (project-wide recalc on target
+ *  switch). */
+function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
+  const kinds = new Set<string>()
+  if (caps.pinMapping) kinds.add('pin-mapping')
+  if (caps.vppIo) kinds.add('vpp-io')
+  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
+  if (caps.ethercat) kinds.add('ethercat')
+  return kinds
+}
+
+/**
+ * Build the capability-scoped registry from live producer state, reallocating
+ * ONLY the remote-device producers (Modbus + EtherCAT) while treating pins
+ * and VPP as fixed constraints. This is what closes gaps project-wide when a
+ * group / device is removed, and what drops inactive producers on a target
+ * switch. Read live state (never draft proxies) before entering `produce`.
+ */
+function buildRemoteDeviceRegistry(live: ProjectSliceRoot): IecAddressRegistry {
+  const board = live.deviceDefinitions.configuration.deviceBoard
+  const boardInfo = live.deviceAvailableOptions.availableBoards.get(board ?? '')
+  const ioMapping =
+    (
+      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
+        | undefined
+    )?.entries ?? []
+  const seeded = migrateToRegistry({
+    pinMapping: { pins: live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
+    vendorIoMapping: { entries: ioMapping },
+    remoteDevices: live.project.data.remoteDevices,
+  })
+  const activeKinds = activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo))
+  return recalculateRegistry(unpinAllocatableChannels(seeded, REMOTE_DEVICE_KINDS), { activeKinds }).registry
+}
+
+/** Write the registry's assigned addresses back onto the Modbus producers
+ *  (`ioPoints`). Keyed exactly as `migrateToRegistry` built the consumers,
+ *  so there is no mapping drift. Runs inside `produce` on the draft.
+ *  EtherCAT `channelMappings` are intentionally left to their own allocator
+ *  for now (they still participate as fixed constraints via the pool). */
+function applyRemoteDeviceAddresses(
+  remoteDevices: ProjectSlice['project']['data']['remoteDevices'],
+  registry: IecAddressRegistry,
+): void {
+  if (!remoteDevices) return
+  for (const device of remoteDevices) {
+    const deviceRef = device.name || 'device'
+    const groups = device.modbusTcpConfig?.ioGroups
+    if (!groups) continue
+    for (let g = 0; g < groups.length; g++) {
+      const group = groups[g]
+      const consumerId = modbusConsumerId(deviceRef, group.id ?? String(g))
+      for (const point of group.ioPoints ?? []) {
+        const address = registry.assignments[channelKey(consumerId, point.id)]
+        if (address) point.iecLocation = address
+      }
+    }
+  }
+}
 
 const reconcileVariablesText = (
   pouName: string | undefined,
@@ -1456,6 +1539,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           slice.project.data.remoteDevices = slice.project.data.remoteDevices.filter((d) => d.name !== name)
         }),
       )
+      // Removing a device frees its addresses — recompact the survivors
+      // project-wide (bug #4) and let bound variables follow.
+      getState().projectActions.recalculateRemoteDeviceAddresses()
       return ok()
     },
     updateRemoteDeviceName: (name, newName) => {
@@ -1500,6 +1586,20 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    recalculateRemoteDeviceAddresses: () => {
+      // Central, capability-scoped recalculation of the Modbus producers.
+      // Build the registry from live state before entering produce, write
+      // the compacted addresses back onto the ioPoints, then reconcile the
+      // program variables bound to any alias that moved.
+      const registry = buildRemoteDeviceRegistry(getState())
+      setState(
+        produce((slice: ProjectSlice) => {
+          applyRemoteDeviceAddresses(slice.project.data.remoteDevices, registry)
+        }),
+      )
+      getState().projectActions.syncVariableAliases()
+      return ok()
+    },
     addIOGroup: (deviceName, group) => {
       // Read producer state from the live store before entering produce
       // so the pool reflects every active source (pin-mapping, VPP,
@@ -1538,6 +1638,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
         }),
       )
+      // Central recalculation is the authority for final addresses: it
+      // recompacts all remote-device producers project-wide and reconciles
+      // bound variables. (The provisional addresses above just seed the
+      // point structure/classes.)
+      getState().projectActions.recalculateRemoteDeviceAddresses()
       return ok()
     },
     updateIOGroup: (deviceName, groupId, updates) => {
@@ -1600,6 +1705,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           group.ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending, existingPoints)
         }),
       )
+      getState().projectActions.recalculateRemoteDeviceAddresses()
       return ok()
     },
     deleteIOGroup: (deviceName, groupId) => {
@@ -1610,6 +1716,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           device.modbusTcpConfig.ioGroups = device.modbusTcpConfig.ioGroups.filter((g) => g.id !== groupId)
         }),
       )
+      // Recompact so the groups that followed reclaim the freed addresses.
+      getState().projectActions.recalculateRemoteDeviceAddresses()
       return ok()
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {
