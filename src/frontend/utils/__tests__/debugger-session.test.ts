@@ -5,7 +5,8 @@ import { packDebugAddr } from '../debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMap,
+  debugMapToEntries,
+  deriveVariableIndexMap,
   logCompilerEvent,
 } from '../debugger-session'
 
@@ -203,7 +204,7 @@ describe('logCompilerEvent', () => {
 })
 
 // ---------------------------------------------------------------------------
-// buildVariableIndexMap
+// deriveVariableIndexMap
 // ---------------------------------------------------------------------------
 
 function makeMap(leaves: Array<{ path: string; type: string; size: number }>): DebugMap {
@@ -220,7 +221,21 @@ function addr(arrayIdx: number, elemIdx: number): number {
   return packDebugAddr({ arrayIdx, elemIdx })
 }
 
-describe('buildVariableIndexMap', () => {
+describe('deriveVariableIndexMap', () => {
+  // The index map is now DERIVED from the debug tree (the single enumeration
+  // walk) rather than a parallel walk — so these tests drive the real flow:
+  // build the tree via buildDebugVariableTreeMap, then derive.
+  function derive(
+    pous: PLCPou[],
+    instances: PLCInstance[],
+    map: DebugMap,
+    dataTypes: PLCDataType[] = [],
+  ): { indexMap: Map<string, number>; warnings: string[] } {
+    const entries = debugMapToEntries(map)
+    const { treeMap, warnings } = buildDebugVariableTreeMap(pous, instances, entries, { dataTypes, pous }, SYSTEM_LIBS)
+    return { indexMap: deriveVariableIndexMap(treeMap, map), warnings }
+  }
+
   it('builds index map for simple base-type variables', () => {
     const pou = makePou('Main', 'program', [makeBaseVariable('SPEED', 'INT'), makeBaseVariable('TEMP', 'REAL')])
     const instances = [makeInstance('INSTANCE0', 'Main')]
@@ -229,7 +244,7 @@ describe('buildVariableIndexMap', () => {
       { path: 'INSTANCE0.TEMP', type: 'REAL', size: 4 },
     ])
 
-    const { indexMap, warnings } = buildVariableIndexMap([pou], instances, map)
+    const { indexMap, warnings } = derive([pou], instances, map)
 
     expect(indexMap.get('Main:SPEED')).toBe(addr(0, 0))
     expect(indexMap.get('Main:TEMP')).toBe(addr(0, 1))
@@ -238,7 +253,7 @@ describe('buildVariableIndexMap', () => {
 
   it('warns when no instance is found for a program POU', () => {
     const pou = makePou('Orphan', 'program', [makeBaseVariable('X', 'INT')])
-    const { warnings } = buildVariableIndexMap([pou], [], makeMap([]))
+    const { warnings } = derive([pou], [], makeMap([]))
 
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('Orphan')
@@ -246,7 +261,7 @@ describe('buildVariableIndexMap', () => {
 
   it('skips non-program POUs', () => {
     const fb = makePou('MyFB', 'function-block', [makeBaseVariable('Q', 'BOOL')])
-    const { indexMap } = buildVariableIndexMap([fb], [makeInstance('INSTANCE0', 'Main')], makeMap([]))
+    const { indexMap } = derive([fb], [makeInstance('INSTANCE0', 'Main')], makeMap([]))
 
     expect(indexMap.size).toBe(0)
   })
@@ -260,7 +275,7 @@ describe('buildVariableIndexMap', () => {
       { path: 'INSTANCE0.ARR[2]', type: 'INT', size: 2 },
     ])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, map)
+    const { indexMap } = derive([pou], instances, map)
 
     expect(indexMap.get('Main:ARR[0]')).toBe(addr(0, 0))
     expect(indexMap.get('Main:ARR[1]')).toBe(addr(0, 1))
@@ -276,11 +291,49 @@ describe('buildVariableIndexMap', () => {
       { path: 'INSTANCE0.NEG[1]', type: 'BOOL', size: 1 },
     ])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, map)
+    const { indexMap } = derive([pou], instances, map)
 
     expect(indexMap.get('Main:NEG[-1]')).toBe(addr(0, 0))
     expect(indexMap.get('Main:NEG[0]')).toBe(addr(0, 1))
     expect(indexMap.get('Main:NEG[1]')).toBe(addr(0, 2))
+  })
+
+  it('resolves VAR_EXTERNAL globals by their bare (unprefixed) debug path', () => {
+    // A CONFIGURATION VAR_GLOBAL is emitted under its bare uppercase name, not
+    // the program-instance path. The tree resolves the external via the global
+    // path, so the composite key gets an index (force/release then work from
+    // the LD/FBD editors).
+    const pou = makePou('Main', 'program', [
+      makeBaseVariable('START_PB', 'BOOL', 'external'),
+      makeBaseVariable('LOCAL_X', 'INT'),
+    ])
+    const instances = [makeInstance('INSTANCE0', 'Main')]
+    const map = makeMap([
+      { path: 'START_PB', type: 'BOOL', size: 1 },
+      { path: 'INSTANCE0.LOCAL_X', type: 'INT', size: 2 },
+    ])
+
+    const { indexMap } = derive([pou], instances, map)
+
+    expect(indexMap.get('Main:START_PB')).toBe(addr(0, 0))
+    expect(indexMap.get('Main:LOCAL_X')).toBe(addr(0, 1))
+    // The instance-prefixed path must NOT resolve the global.
+    expect(indexMap.has('INSTANCE0.START_PB')).toBe(false)
+  })
+
+  it('maps a global shared by two programs to the same index under both keys', () => {
+    // The regression this whole refactor targets: a VAR_GLOBAL referenced (as
+    // VAR_EXTERNAL) by two programs must resolve to ONE address under BOTH
+    // composite keys, so force + value display work on every referencing POU.
+    const main = makePou('Main', 'program', [makeBaseVariable('START_PB', 'BOOL', 'external')])
+    const another = makePou('Another', 'program', [makeBaseVariable('START_PB', 'BOOL', 'external')])
+    const instances = [makeInstance('INSTANCE0', 'Main'), makeInstance('INSTANCE1', 'Another')]
+    const map = makeMap([{ path: 'START_PB', type: 'BOOL', size: 1 }])
+
+    const { indexMap } = derive([main, another], instances, map)
+
+    expect(indexMap.get('Main:START_PB')).toBe(addr(0, 0))
+    expect(indexMap.get('Another:START_PB')).toBe(addr(0, 0))
   })
 
   it('falls back to raw debug path for unmatched leaves (nested fields)', () => {
@@ -288,7 +341,7 @@ describe('buildVariableIndexMap', () => {
     const instances = [makeInstance('INSTANCE0', 'Main')]
     const map = makeMap([{ path: 'INSTANCE0.FB.FIELD', type: 'INT', size: 2 }])
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, map)
+    const { indexMap } = derive([pou], instances, map)
 
     expect(indexMap.get('INSTANCE0.FB.FIELD')).toBe(addr(0, 0))
   })
@@ -310,7 +363,7 @@ describe('buildVariableIndexMap', () => {
       ],
     }
 
-    const { indexMap } = buildVariableIndexMap([pou], instances, map)
+    const { indexMap } = derive([pou], instances, map)
 
     expect(indexMap.get('Main:X')).toBe(addr(0, 0))
     expect(indexMap.get('INSTANCE0.OTHER')).toBe(addr(1, 0))

@@ -19,8 +19,8 @@ import { parseDebugMap } from '../utils/debug-parser'
 import {
   buildDebugVariableTreeMap,
   buildFbInstanceMap,
-  buildVariableIndexMap,
   debugMapToEntries,
+  deriveVariableIndexMap,
 } from '../utils/debugger-session'
 import { encodeForceValue } from '../utils/variable-sizes'
 
@@ -88,7 +88,6 @@ export function useDebugSession(): UseDebugSessionReturn {
           return { success: false, error }
         }
 
-        const { indexMap, warnings } = buildVariableIndexMap(project.data.pous, instances, debugMap)
         const entriesForTree = debugMapToEntries(debugMap)
         logActions.addLog({
           id: crypto.randomUUID(),
@@ -96,11 +95,10 @@ export function useDebugSession(): UseDebugSessionReturn {
           message: `Debug map: ${debugMap.leaves.length} leaves across ${debugMap.arrays.length} arrays.`,
         })
 
-        for (const w of warnings) {
-          logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
-        }
-
-        // Build debug variable tree
+        // Build the debug variable tree — the single enumeration walk. The
+        // composite-key → index map (used by the LD/FBD editors and the poller)
+        // is derived from this same tree, so every consumer resolves a
+        // variable's address identically.
         let treeMap = new Map<string, DebugTreeNode>()
         const pouTrees: Record<string, DebugTreeNode[]> = {}
         try {
@@ -120,6 +118,10 @@ export function useDebugSession(): UseDebugSessionReturn {
             pouTrees[pouName].push(node)
           }
 
+          for (const w of treeResult.warnings) {
+            logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+          }
+
           logActions.addLog({
             id: crypto.randomUUID(),
             level: 'info',
@@ -134,6 +136,9 @@ export function useDebugSession(): UseDebugSessionReturn {
         }
 
         debugTreesRef.current = pouTrees
+
+        // Derive the composite-key → packed-address map from the tree leaves.
+        const indexMap = deriveVariableIndexMap(treeMap, debugMap)
 
         // Build FB instance map
         const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
