@@ -16,16 +16,17 @@ import {
   buildAliasRegistry,
   describeSource,
   nextFreeAddress,
-  syncVariableAliases as syncVariablesPure,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import {
+  buildAliasIndex,
   channelKey,
   ethercatConsumerId,
   type IecAddressRegistry,
   migrateToRegistry,
   modbusConsumerId,
   recalculate as recalculateRegistry,
+  resolveLocation,
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
 } from '../../../../middleware/shared/utils/iec-address/registry'
@@ -190,57 +191,6 @@ function generateIOPoints(
   }
 
   return points
-}
-
-// ---------------------------------------------------------------------------
-// Alias auto-adopt
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the canonical alias that a variable should carry for its
- * current `location`.  Builds a fresh pool + registry from the live
- * store state, scoped to the active target's capabilities, then
- * returns whatever alias the registry attaches to that address (or
- * `undefined` when the address isn't aliased, or `location` is empty).
- *
- * Used by both `createVariable` and `updateVariable` to enforce the
- * alias-↔-location invariant: a variable's `alias` field MUST point
- * at the same producer-channel its `location` points at.  Without
- * this, the "+" button (which auto-increments the location of a
- * spread-from-previous variable) leaves the OLD alias attached to a
- * NEW address — `syncVariableAliases` then collapses every such
- * variable back to the OLD alias's canonical address on the next
- * refresh pass, producing the duplicate-address compile errors
- * reported in v4.2.0.
- *
- * Returns `undefined` for an empty / missing location so callers can
- * distinguish "no alias because the address is unmapped" from "no
- * alias because we didn't bother to look".
- */
-function resolveAliasForLocation(getState: ProjectGetState, location: string | undefined): string | undefined {
-  if (!location) return undefined
-  const live = getState()
-  const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-    live.deviceDefinitions.configuration.deviceBoard ?? '',
-  )
-  const ioMapping =
-    (
-      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-        | undefined
-    )?.entries ?? []
-  const pool = buildAddressPool(
-    {
-      pinMapping: {
-        pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-      },
-      vendorIoMapping: { entries: ioMapping },
-      remoteDevices: live.project.data.remoteDevices,
-    },
-    resolveTargetCapabilities(boardInfo),
-  )
-  const registry = buildAliasRegistry(pool)
-  return registry.byAddress.get(location)?.alias
 }
 
 // ---------------------------------------------------------------------------
@@ -711,23 +661,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         if (!reconcile.ok) return reconcile
       }
 
-      // Apply the validator's name + location auto-increment OUTSIDE
-      // produce so we can then re-resolve the alias against the live
-      // store state.  The new variable's `alias` MUST point at the
-      // channel its post-increment `location` points at — otherwise
-      // the "+ button" UI flow (which spreads the previous variable
-      // as a template) carries a stale alias from the previous row
-      // forward, breaking the alias-↔-location invariant.  The next
-      // `syncVariableAliases` refresh would then silently collapse
-      // the new variable back to the stale alias's canonical
-      // address, producing the duplicate-address compile errors
-      // reported in v4.2.0 (forum thread "openplc-420-teething-bugs").
+      // Apply the validator's name + location auto-increment against the
+      // live store state. The "+ button" UI flow spreads the previous
+      // variable as a template, so the validator walks the location forward
+      // to the next free slot to avoid duplicate-address compile errors
+      // (forum thread "openplc-420-teething-bugs", v4.2.0).
       const sourceVariables =
         scope === 'local' && associatedPou
           ? (getState().project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables ?? [])
           : getState().project.data.configurations.resource.globalVariables
       const validated = createVariableValidation(sourceVariables, data)
-      data = { ...data, ...validated, alias: resolveAliasForLocation(getState, validated.location) }
+      // Single-field location model: `location` is the binding itself — an
+      // alias name OR a literal `%addr`. It is stored verbatim (no
+      // address→alias auto-adoption); alias→address resolution happens at
+      // compile time. The legacy `alias` field is unused.
+      data = { ...data, ...validated }
 
       let response: ProjectResponse = { ok: true }
       setState(
@@ -787,20 +735,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
 
       let response: ProjectResponse = { ok: true }
 
-      // Auto-adopt path: whenever the location changes, re-resolve
-      // the alias against the live registry so the variable's alias
-      // always points at the producer-channel its location points at.
-      // If the address has an alias, the variable adopts it (cell
-      // shows the alias name; `syncVariableAliases` will keep the
-      // location current as the alias moves).  If not, the alias
-      // clears — re-typing a now-orphaned location intentionally
-      // drops the stale alias label too.  Done outside `produce` so
-      // we read the live store state including pinMapping + caps.
-      const aliasOverride: { alias: string | undefined } | undefined =
-        typeof updates.location === 'string'
-          ? { alias: resolveAliasForLocation(getState, updates.location) }
-          : undefined
-
+      // Single-field location model: `location` is the binding (alias name
+      // or literal `%addr`), stored verbatim. No address→alias adoption —
+      // a manual literal stays manual even if an alias later appears at that
+      // address; alias→address resolution happens at compile time.
       setState(
         produce((slice: ProjectSlice) => {
           // Resolve the target variables array (local POU or global)
@@ -831,7 +769,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           variables[found.index] = {
             ...variables[found.index],
             ...updates,
-            ...(aliasOverride ?? {}),
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]
@@ -933,113 +870,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
     },
 
-    syncVariableAliases: () => {
-      // Build pool + registry once from the live state before entering
-      // produce so we don't read draft proxies inside the registry
-      // build.
-      const live = getState()
-      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-        live.deviceDefinitions.configuration.deviceBoard ?? '',
-      )
-      const ioMapping =
-        (
-          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined
-        )?.entries ?? []
-      const pool = buildAddressPool(
-        {
-          pinMapping: {
-            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-          },
-          vendorIoMapping: { entries: ioMapping },
-          remoteDevices: live.project.data.remoteDevices,
-        },
-        resolveTargetCapabilities(boardInfo),
-      )
-      const registry = buildAliasRegistry(pool)
-
-      // Conflicts are unreachable under normal editor flows because
-      // the editor always assigns addresses uniquely. They can
-      // appear when a project file has been hand-edited or migrated
-      // incorrectly — silent first-wins is the worst failure mode,
-      // so surface them in the console panel.
-      if (pool.conflicts.length > 0) {
-        const sample = pool.conflicts
-          .slice(0, 5)
-          .map((c) => `${c.address} (${c.sources.map((s) => s.kind).join(', ')})`)
-          .join('; ')
-        const overflow = pool.conflicts.length > 5 ? ` (+${pool.conflicts.length - 5} more)` : ''
-        live.consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `Address pool reports ${pool.conflicts.length} conflicting claim(s): ${sample}${overflow}. The first source wins; later ones lose their address binding.`,
-        })
-      }
-      // Same migration warning, alias side: projects authored before
-      // the write-time `validateAliasEdit` gate landed may have
-      // duplicate alias names across producers.  The registry
-      // first-wins on `byAlias`, but every variable bound to the
-      // losing entry gets quietly collapsed to the winner's address
-      // through the sync's refresh path.  Surface this loudly so the
-      // user can resolve it (rename one of the duplicates) instead
-      // of silently inheriting a broken state.
-      if (registry.duplicateAliases.length > 0) {
-        const sample = registry.duplicateAliases.slice(0, 5).join(', ')
-        const overflow = registry.duplicateAliases.length > 5 ? ` (+${registry.duplicateAliases.length - 5} more)` : ''
-        live.consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message: `Alias registry reports ${registry.duplicateAliases.length} duplicate alias name(s): ${sample}${overflow}. Each alias must be unique across all I/O channels — rename the duplicates in the IO mapping screens. Until then, variables bound to the losing entries will resolve to the winning entry's address.`,
-        })
-      }
-
-      let adopted = 0
-      let refreshed = 0
-      let orphaned = 0
-
-      setState(
-        produce((slice: ProjectSlice) => {
-          for (const pou of slice.project.data.pous) {
-            /* istanbul ignore if -- PLCPouSchema requires `interface.variables` to be an
-               array (defaults to []), so every POU sourced from a Zod-validated project
-               carries the field; defensive against future schema relaxation */
-            if (!pou.interface?.variables) continue
-            const result = syncVariablesPure(pou.interface.variables, registry)
-            adopted += result.report.adopted.length
-            refreshed += result.report.refreshed.length
-            orphaned += result.report.orphaned.length
-            // Mutate in place to preserve draft semantics.
-            for (let i = 0; i < result.variables.length; i++) {
-              pou.interface.variables[i] = result.variables[i]
-            }
-          }
-
-          const globals = slice.project.data.configurations.resource.globalVariables
-          if (globals) {
-            const result = syncVariablesPure(globals, registry)
-            adopted += result.report.adopted.length
-            refreshed += result.report.refreshed.length
-            orphaned += result.report.orphaned.length
-            for (let i = 0; i < result.variables.length; i++) {
-              globals[i] = result.variables[i]
-            }
-          }
-        }),
-      )
-
-      return { adopted, refreshed, orphaned }
-    },
-
     /**
-     * Cascade-rename every variable's `.alias` from `oldAlias` to
-     * `newAlias`.  See the type doc in `project/types.ts` for the
-     * full contract — short version: when the user renames the
-     * alias on a producer channel (pin mapping, VPP module, Modbus
-     * TCP, EtherCAT), the bound variables follow so they don't drop
-     * into the orphan path.  Case-insensitive match.  A subsequent
-     * `syncVariableAliases()` then refreshes the variables'
-     * `.location` against the now-renamed alias's address.
+     * Cascade-rename every variable whose `location` binds to `oldAlias`
+     * so it points at `newAlias` instead.  See the type doc in
+     * `project/types.ts` for the full contract — short version: when the
+     * user renames the alias on a producer channel (pin mapping, VPP
+     * module, Modbus TCP, EtherCAT), the bound variables follow so they
+     * don't drop into the orphan (unlocated) path at compile time.
+     * Case-sensitive match — the alias registry is case-sensitive, so
+     * `location` must equal the producer alias exactly to resolve.
      */
     renameAlias: (oldAlias, newAlias) => {
       const trimmedOld = oldAlias?.trim() ?? ''
@@ -1048,23 +887,22 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // mapping screen on first-time alias write where there's no
       // prior text to cascade.
       if (trimmedOld.length === 0) return { renamed: 0 }
-      // No-op when the rename is a pure case change or an actual
-      // no-op — saves a render pass and avoids spurious mutation.
-      if (trimmedOld.toLowerCase() === trimmedNew.toLowerCase()) return { renamed: 0 }
+      // True no-op only when the name is unchanged. A CASE change must still
+      // cascade — the alias registry is case-sensitive, so `location` has to
+      // match the producer alias exactly to resolve at compile time.
+      if (trimmedOld === trimmedNew) return { renamed: 0 }
 
       let renamed = 0
       const cascade = (variable: PLCVariable): PLCVariable => {
-        if (!variable.alias) return variable
-        if (variable.alias.toLowerCase() !== trimmedOld.toLowerCase()) return variable
+        // `location` is the binding: a variable bound to this alias holds the
+        // alias NAME in `location`. Manual literal locations start with `%`
+        // and never equal a (non-`%`) alias name, so they're left untouched.
+        if (variable.location !== trimmedOld) return variable
         renamed += 1
-        // When the user clears the alias on the producer side, the
-        // bound variables should also drop their alias — the next
-        // `syncVariableAliases()` will then re-evaluate them against
-        // the live registry (auto-adopt by raw location if the same
-        // address is still claimed by some other producer, or leave
-        // them alias-less otherwise).  `undefined` rather than ''
-        // matches the rest of the codebase's "no alias" convention.
-        return { ...variable, alias: trimmedNew.length > 0 ? trimmedNew : undefined }
+        // When the producer CLEARS its alias (newAlias empty), the bound
+        // variable becomes unlocated — `location` clears, matching the
+        // compile-time "missing alias → empty location" rule.
+        return { ...variable, location: trimmedNew }
       }
 
       setState(
@@ -1662,8 +1500,12 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // registry. Build the registry from live producer state (VPP + Modbus
       // reallocated; pins/EtherCAT held as fixed constraints), restoring any
       // aliases the session memory remembers for reappeared channels, then
-      // write the compacted addresses + aliases back onto every producer and
-      // reconcile bound variables.
+      // write the compacted addresses + aliases back onto every producer.
+      //
+      // Bound variables need no update here: they reference producer aliases
+      // by NAME (stable), so a moved address is picked up automatically at
+      // compile time. Only a producer *rename* touches variables — via
+      // `renameAlias`, called by the alias editors.
       const live = getState()
       const registry = buildIecRegistry(live)
       const index = indexRegistry(registry)
@@ -1683,7 +1525,6 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           applyEthercatAddresses(slice.project.data.remoteDevices, index)
         }),
       )
-      getState().projectActions.syncVariableAliases()
       return ok()
     },
     rememberChannelAlias: (memoryKey, alias) => {
@@ -1699,6 +1540,24 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }),
       )
       return ok()
+    },
+    getCompileReadyProjectData: () => {
+      // Compile-time alias resolution (editor-side; the compiler/runtime never
+      // see aliases). Returns a COPY of the project data with every variable's
+      // `location` resolved: an alias name → its current IEC address, a
+      // literal `%addr` → verbatim, a missing/orphaned alias → '' (unlocated).
+      // The store keeps the alias-name form for display; only this snapshot is
+      // resolved.
+      const live = getState()
+      const aliasIndex = buildAliasIndex(buildIecRegistry(live))
+      const data = structuredClone(live.project.data)
+      const resolveAll = (variables: PLCVariable[] | undefined): void => {
+        if (!variables) return
+        for (const variable of variables) variable.location = resolveLocation(variable.location, aliasIndex)
+      }
+      for (const pou of data.pous) resolveAll(pou.interface?.variables)
+      resolveAll(data.configurations?.resource?.globalVariables)
+      return data
     },
     addIOGroup: (deviceName, group) => {
       // Read producer state from the live store before entering produce
@@ -1883,12 +1742,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (point) point.alias = alias
         }),
       )
-      // Producer mutation: refresh variables that were bound to the
-      // old alias (or that now resolve to the new one).
-      getState().projectActions.syncVariableAliases()
       return ok()
     },
     updateEthercatConfig: (deviceName, ethercatConfig) => {
+      // Capture the previous channel aliases so an alias RENAME cascades onto
+      // bound variables (whose `location` holds the alias name). Unlike
+      // pin/VPP/Modbus, EtherCAT rewrites its channel list wholesale, so we
+      // diff old→new here rather than at a discrete alias editor.
+      const prevDevice = getState().project.data.remoteDevices?.find((d) => d.name === deviceName)
+      const prevAliasByChannel = new Map<string, string>()
+      for (const slave of prevDevice?.ethercatConfig?.devices ?? []) {
+        for (const mapping of slave.channelMappings ?? []) {
+          if (mapping.alias) prevAliasByChannel.set(`${slave.name}:${mapping.channelId}`, mapping.alias)
+        }
+      }
+
       let response = ok()
       setState(
         produce((slice: ProjectSlice) => {
@@ -1911,9 +1779,18 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // directly. No IEC task needs syncing.
         }),
       )
-      // Channel-mapping changes go through the central registry so EtherCAT
-      // addresses are packed alongside VPP/Modbus and bound variables follow.
-      if (response.ok) getState().projectActions.recalculateIecAddresses()
+      if (response.ok) {
+        // Cascade any alias rename onto bound variable locations.
+        for (const slave of ethercatConfig.devices ?? []) {
+          for (const mapping of slave.channelMappings ?? []) {
+            const old = prevAliasByChannel.get(`${slave.name}:${mapping.channelId}`)
+            if (old && old !== (mapping.alias ?? '')) getState().projectActions.renameAlias(old, mapping.alias ?? '')
+          }
+        }
+        // Channel-mapping changes go through the central registry so EtherCAT
+        // addresses are packed alongside VPP/Modbus.
+        getState().projectActions.recalculateIecAddresses()
+      }
       return response
     },
   },

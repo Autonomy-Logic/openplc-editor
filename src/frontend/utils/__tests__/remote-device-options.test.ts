@@ -1,5 +1,6 @@
+import type { IoMappingEntry } from '../../../middleware/shared/ports/types'
 import type { RemoteDeviceIOPoint } from '../remote-device-options'
-import { buildRemoteDeviceOptionGroups } from '../remote-device-options'
+import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../remote-device-options'
 
 function makeIOPoint(overrides: Partial<RemoteDeviceIOPoint> = {}): RemoteDeviceIOPoint {
   return {
@@ -34,8 +35,8 @@ describe('buildRemoteDeviceOptionGroups', () => {
       {
         label: 'Remote: Device1',
         options: [
-          { id: 'cell-1-remote-pt-1', value: '%IX0.0', label: '%IX0.0 (Sensor1)' },
-          { id: 'cell-1-remote-pt-2', value: '%IX0.1', label: '%IX0.1 (Sensor2)' },
+          { id: 'cell-1-remote-pt-1', value: 'Sensor1', label: 'Sensor1 (%IX0.0)' },
+          { id: 'cell-1-remote-pt-2', value: 'Sensor2', label: 'Sensor2 (%IX0.1)' },
         ],
       },
     ])
@@ -83,13 +84,59 @@ describe('buildRemoteDeviceOptionGroups', () => {
     const result = buildRemoteDeviceOptionGroups('x', points)
     expect(result).toHaveLength(1)
     expect(result[0].options).toHaveLength(2)
-    expect(result[0].options[0].label).toBe('%IX0.0 (A_first)')
-    expect(result[0].options[1].label).toBe('%IX0.1 (B_unique)')
+    expect(result[0].options[0].label).toBe('A_first (%IX0.0)')
+    expect(result[0].options[1].label).toBe('B_unique (%IX0.1)')
   })
 
   it('uses cellId in option IDs', () => {
     const points = [makeIOPoint({ ioPointId: 'pt-7' })]
     const result = buildRemoteDeviceOptionGroups('my-cell', points)
     expect(result[0].options[0].id).toBe('my-cell-remote-pt-7')
+  })
+})
+
+function makeVendorEntry(overrides: Partial<IoMappingEntry> = {}): IoMappingEntry {
+  return {
+    slot: 1,
+    moduleId: 'mod-a',
+    moduleName: 'Relay Module',
+    channelName: 'DO1',
+    channelType: 'coil',
+    dataType: 'BOOL',
+    iecAddress: '%QX0.0',
+    alias: 'relay_1',
+    ...overrides,
+  }
+}
+
+describe('buildVendorIoOptionGroups', () => {
+  it('binds each option by alias name and labels it with the address for context', () => {
+    const result = buildVendorIoOptionGroups('cell-1', [makeVendorEntry()])
+    expect(result).toEqual([
+      {
+        label: 'Slot 1: Relay Module',
+        options: [{ id: 'cell-1-vendor-1-DO1', value: 'relay_1', label: 'relay_1 (%QX0.0)' }],
+      },
+    ])
+  })
+
+  it('skips entries without an alias (only aliased vendor channels are bindable)', () => {
+    const entries = [
+      makeVendorEntry({ channelName: 'DO1', alias: '' }),
+      makeVendorEntry({ channelName: 'DO2', alias: 'relay_2', iecAddress: '%QX0.1' }),
+    ]
+    const result = buildVendorIoOptionGroups('cell-1', entries)
+    expect(result).toHaveLength(1)
+    expect(result[0].options).toEqual([{ id: 'cell-1-vendor-1-DO2', value: 'relay_2', label: 'relay_2 (%QX0.1)' }])
+  })
+
+  it('dedupes by IEC address (defensive against drifted projects with duplicate addresses)', () => {
+    const entries = [
+      makeVendorEntry({ channelName: 'DO1', alias: 'first', iecAddress: '%QX0.0' }),
+      makeVendorEntry({ channelName: 'DO2', alias: 'second', iecAddress: '%QX0.0' }), // same address — dropped
+    ]
+    const result = buildVendorIoOptionGroups('cell-1', entries)
+    expect(result[0].options).toHaveLength(1)
+    expect(result[0].options[0].value).toBe('first') // first-iterated wins
   })
 })

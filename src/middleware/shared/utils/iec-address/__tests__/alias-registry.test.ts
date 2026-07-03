@@ -1,12 +1,6 @@
 import { ARDUINO_CLI_CAPABILITIES, RUNTIME_V4_CAPABILITIES } from '../../target-capabilities'
 import { buildAddressPool } from '../address-pool'
-import {
-  aliasForAddress,
-  buildAliasRegistry,
-  isAliasNameAvailable,
-  resolveAlias,
-  validateAliasEdit,
-} from '../alias-registry'
+import { buildAliasRegistry, isAliasNameAvailable, resolveAlias, validateAliasEdit } from '../alias-registry'
 
 const v4 = RUNTIME_V4_CAPABILITIES
 const arduino = ARDUINO_CLI_CAPABILITIES
@@ -24,11 +18,10 @@ describe('buildAliasRegistry', () => {
     )
     const reg = buildAliasRegistry(pool)
     expect(reg.byAlias.size).toBe(0)
-    expect(reg.byAddress.size).toBe(0)
     expect(reg.duplicateAliases).toEqual([])
   })
 
-  it('indexes every aliased claim by both alias and address', () => {
+  it('indexes every aliased claim by alias name', () => {
     const pool = buildAddressPool(
       {
         vendorIoMapping: {
@@ -44,10 +37,10 @@ describe('buildAliasRegistry', () => {
     )
     const reg = buildAliasRegistry(pool)
     expect(reg.byAlias.size).toBe(2)
-    expect(reg.byAddress.size).toBe(2)
     expect(reg.byAlias.get('conveyor_motor')?.address).toBe('%QX0.5')
-    expect(reg.byAddress.get('%IW2')?.alias).toBe('tank_level')
-    expect(reg.byAddress.has('%QW3')).toBe(false)
+    expect(reg.byAlias.get('tank_level')?.address).toBe('%IW2')
+    // The un-aliased claim (%QW3) is absent from the index.
+    expect([...reg.byAlias.values()].some((e) => e.address === '%QW3')).toBe(false)
   })
 
   it('records duplicate alias names; first encounter wins in byAlias', () => {
@@ -70,9 +63,6 @@ describe('buildAliasRegistry', () => {
     const reg = buildAliasRegistry(pool)
     // Pool's reservation pass runs pin-mapping first; that's who wins.
     expect(reg.byAlias.get('valve')?.address).toBe('%QX0.0')
-    // Both addresses are still indexed under byAddress (both have aliases attached).
-    expect(reg.byAddress.get('%QX0.0')?.alias).toBe('valve')
-    expect(reg.byAddress.get('%MW1')?.alias).toBe('valve')
     expect(reg.duplicateAliases).toEqual(['valve'])
   })
 
@@ -141,33 +131,6 @@ describe('resolveAlias', () => {
 
   it('returns undefined for an unknown alias (variable would be orphaned)', () => {
     expect(resolveAlias(reg, 'missing_alias')).toBeUndefined()
-  })
-})
-
-describe('aliasForAddress', () => {
-  const pool = buildAddressPool(
-    {
-      vendorIoMapping: {
-        entries: [
-          { iecAddress: '%IW0', alias: 'pressure', slot: 1, channelName: 'AI1' },
-          { iecAddress: '%IW1', slot: 1, channelName: 'AI2' },
-        ],
-      },
-    },
-    v4WithVpp,
-  )
-  const reg = buildAliasRegistry(pool)
-
-  it('returns the alias for an address that has one (auto-adopt path)', () => {
-    expect(aliasForAddress(reg, '%IW0')).toBe('pressure')
-  })
-
-  it('returns undefined for an address with no alias attached', () => {
-    expect(aliasForAddress(reg, '%IW1')).toBeUndefined()
-  })
-
-  it('returns undefined for an address no producer has claimed', () => {
-    expect(aliasForAddress(reg, '%IW9')).toBeUndefined()
   })
 })
 

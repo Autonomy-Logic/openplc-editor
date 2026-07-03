@@ -1,6 +1,8 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
+import { useProjectAliasBindings } from '@root/frontend/hooks/use-project-alias-bindings'
 import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
+import { isLiteralLocation } from '@root/middleware/shared/utils/iec-address/registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -19,6 +21,7 @@ import {
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { InputWithRef } from '../../_atoms/input'
+import { LocationWarningGlyph } from '../../_atoms/location-warning-glyph'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../rename-impact-modal'
 
@@ -471,37 +474,42 @@ const EditableLocationCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable, isDebuggerVisible])
 
-  // Alias staleness checks.  Lifted above `onBlur` so the short-
-  // circuit can take them into account.  Two flavours of staleness
-  // both demand that the location-pick re-fires `updateVariable`
-  // even when the picked value matches the cell's current address:
-  //
-  //   - `isOrphaned`: the variable's stored alias is no longer in the
-  //     registry's `byAlias` (producer renamed/removed it).
-  //     Re-picking the same address re-runs the auto-adopt and
-  //     refreshes the alias against the live registry.
-  //   - `isMismatched`: the variable carries an alias that points at
-  //     a *different* address than its current location.  Happens when
-  //     legacy projects authored before `createVariable`'s auto-adopt
-  //     fix carried a stale alias from one row to the next through the
-  //     "+ button" template spread.  Without this exception, clicking
-  //     on the right alias for the current address would no-op because
-  //     the address itself isn't changing — the user would have to
-  //     pick a DIFFERENT alias first, then return to the desired one,
-  //     to force the alias write through.
+  // Orphan check for the single-field location model. `location` is the
+  // binding: a literal `%addr` (manual) OR an alias name. It is "orphaned"
+  // when it holds an alias NAME that no active producer declares — the
+  // variable resolves to nothing (unlocated) at compile time, so we flag it.
+  // A literal address is never orphaned; an empty location is simply
+  // unlocated (no warning). `isLocationCell` scopes the check to the
+  // location column (the same cell renders name/type/etc.).
   const aliasRegistry = useAliasRegistry()
-  const isOrphaned = !!variable?.alias && !aliasRegistry.byAlias.has(variable.alias)
-  const isMismatched =
-    !!variable?.alias && aliasRegistry.byAlias.has(variable.alias)
-      ? aliasRegistry.byAlias.get(variable.alias)?.address !== variable.location
-      : false
+  const isLocationCell = id === 'location'
+  const locationValue = variable?.location ?? ''
+  const isOrphaned =
+    isLocationCell &&
+    locationValue.length > 0 &&
+    !isLiteralLocation(locationValue) &&
+    !aliasRegistry.byAlias.has(locationValue)
+  // Manual-location conflict: a literal `%addr` that collides with an alias a
+  // variable elsewhere is bound to. IEC located addresses are GLOBAL, so the
+  // conflicting variable can live in any POU or the global scope — the scan
+  // is project-wide. The alias resolves to the same `%addr` at compile time,
+  // so the two variables would occupy one location, which the compiler
+  // rejects. Clearing the other variable's binding clears this warning.
+  // Flagged with the same glyph as an orphaned alias; we flag the manual
+  // entry, not the aliased one (the alias is the canonical binding).
+  const aliasBindings = useProjectAliasBindings()
+  const locationConflict =
+    isLocationCell && isLiteralLocation(locationValue)
+      ? aliasBindings.find((binding) => binding.address === locationValue)
+      : undefined
+  const isManualConflict = locationConflict !== undefined
+  const hasLocationWarning = isOrphaned || isManualConflict
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
     // Short-circuit unchanged-value blurs so re-focus doesn't fire a
-    // gratuitous state update.  Exceptions for the location column,
-    // see the `isOrphaned` / `isMismatched` block above.
-    if (value === initialValue && !(id === 'location' && (isOrphaned || isMismatched))) return
+    // gratuitous state update.
+    if (value === initialValue) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
@@ -538,21 +546,20 @@ const EditableLocationCell = ({
     [id, existingPins, remoteIOPoints, vendorIoEntries, capabilities],
   )
 
-  // Combined display: when the variable carries an alias, show it
-  // alongside the raw address as "alias (address)" — same shape
-  // across selected and unselected states so clicking a row doesn't
-  // flip the cell's appearance. When there's no alias, only the
-  // address shows. The combobox `value` stays as the raw address so
-  // typing / picking still operates on the canonical form.
-  const orphanTooltip = isOrphaned
-    ? `Alias "${variable?.alias}" is no longer declared by any active source. Last known address: ${cellValue}`
-    : undefined
-  const combinedLabel = variable?.alias ? `${variable.alias} (${cellValue})` : cellValue
+  // Single-field display: `location` is shown verbatim — the alias name when
+  // the variable is alias-bound, the literal address when manual. The
+  // combobox `value` is the same string, so picking an alias option (whose
+  // value is the alias name) or typing a literal both operate on `location`.
+  const warningTooltip = isOrphaned
+    ? `Alias "${cellValue}" is not declared by any active I/O source — this variable is unlocated at compile time.`
+    : locationConflict
+      ? `Address ${cellValue} conflicts with alias "${locationConflict.aliasName}" assigned to "${locationConflict.variableName}". Two variables cannot share a location.`
+      : undefined
 
   return selected ? (
     <GenericComboboxCell
       value={cellValue}
-      displayLabel={combinedLabel}
+      displayLabel={cellValue}
       onValueChange={(value) => {
         onBlur(value)
       }}
@@ -560,14 +567,12 @@ const EditableLocationCell = ({
       selected={selected}
       openOnSelectedOption
       canAddACustomOption
-      // Orphaned/mismatched aliases blank the location (sync clears it for
-      // compilation) but leave a stale alias label. Keep "Clear" enabled even
-      // when the location is empty so the user can drop the stale alias.
-      allowClearWhenEmpty={id === 'location' && (isOrphaned || isMismatched)}
+      // An orphaned alias name resolves to nothing at compile; keep "Clear"
+      // enabled even when empty so the user can drop it.
+      allowClearWhenEmpty={id === 'location' && isOrphaned}
     />
   ) : (
     <div
-      title={orphanTooltip ?? (variable?.alias ? `${variable.alias} -> ${cellValue}` : undefined)}
       className={cn(
         'flex w-full flex-1 items-center justify-center gap-1 bg-transparent p-2 text-center outline-none',
         {
@@ -576,22 +581,17 @@ const EditableLocationCell = ({
         },
       )}
     >
-      {isOrphaned && (
-        <span
-          aria-label='Orphaned alias'
-          className='text-amber-500 dark:text-amber-400'
-          /* small inline-svg keeps the cell self-contained */
-        >
-          <svg viewBox='0 0 16 16' fill='currentColor' className='h-3.5 w-3.5' aria-hidden='true'>
-            <path d='M8 1.5 1 14h14L8 1.5Zm0 4.25 5.13 9.13H2.87L8 5.75Zm-.75 3v3h1.5v-3h-1.5Zm0 4v1.25h1.5V12.75h-1.5Z' />
-          </svg>
-        </span>
+      {hasLocationWarning && warningTooltip && (
+        <LocationWarningGlyph
+          label={isManualConflict ? 'Address conflicts with an alias' : 'Orphaned alias'}
+          tooltip={warningTooltip}
+        />
       )}
       <HighlightedText
-        text={combinedLabel}
+        text={cellValue}
         searchQuery={searchQuery}
         className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {
-          'text-amber-600 dark:text-amber-400': isOrphaned,
+          'text-amber-600 dark:text-amber-400': hasLocationWarning,
         })}
       />
     </div>

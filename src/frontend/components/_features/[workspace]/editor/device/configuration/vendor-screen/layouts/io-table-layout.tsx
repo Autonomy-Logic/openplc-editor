@@ -187,10 +187,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       return
     }
 
-    // Phase 2 — cascade rename onto bound variables BEFORE writing
-    // so the subsequent `syncVariableAliases()` sees variables
-    // pointing at the new alias and takes the refresh path instead
-    // of orphan.
+    // Cascade the rename onto bound variables: any variable whose
+    // `location` holds the old alias name follows to the new one, so it
+    // stays located (resolved at compile time) rather than orphaning.
     const oldAlias = target.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
@@ -205,8 +204,8 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     useOpenPLCStore
       .getState()
       .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
-    // Refresh variables against any allocator-driven address shifts.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    // Variables bound to this channel hold its alias NAME (resolved at
+    // compile); the `renameAlias` above already cascaded any rename to them.
   }
 
   const groups = useMemo(() => {

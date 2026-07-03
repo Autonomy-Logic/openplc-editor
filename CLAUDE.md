@@ -304,20 +304,29 @@ openplc-web). Pure functions, no IPC, no electron coupling.
     replaces the old `generateIecAddress` helper. Pass `alsoUsed` for
     in-flight allocations within a batch.
 - **Alias registry** (`alias-registry.ts`): derived index on top of
-  the pool. `byAlias` / `byAddress` maps plus `duplicateAliases`
-  (first-wins). Pure function — rebuild on demand, cost is
-  O(producers).
-- **Variable sync** (`sync-variable-aliases.ts`): pure function that
-  walks variables and either adopts (no alias bound but address
-  matches), refreshes (alias address moved), or orphans (alias gone).
-  Called from every producer-mutation site, target switch,
-  project load, and pre-compile via the
-  `projectActions.syncVariableAliases()` store action.
+  the pool. `byAlias` map plus `duplicateAliases` (first-wins). Pure
+  function — rebuild on demand, cost is O(producers).
+- **Compile-time resolution** (`registry/resolve.ts`): a variable's
+  `location` holds EITHER an alias name OR a literal `%addr`
+  (single-field model). `buildAliasIndex(registry)` builds the
+  `alias → address` map; `resolveLocation(field, index)` resolves a
+  variable's `location` for the compiler:
+  - literal `%…` → used verbatim (manual locations honoured exactly);
+  - alias that still exists → its current address;
+  - alias that is gone → `''` (variable becomes unlocated).
+  The compiler/runtime never see aliases: the editor resolves them in
+  a pre-compile snapshot via the
+  `projectActions.getCompileReadyProjectData()` store action. When a
+  producer alias is renamed, `projectActions.renameAlias(old, new)`
+  cascades onto every bound variable's `location`.
 
-The variable cell renders `alias ?? location` and shows an amber
-warning glyph + tooltip when the alias is orphaned. Aliases are
-intended to be unique system-wide; the registry's
-`isAliasNameAvailable(name, ignoring?)` is the system-wide validator.
+The variable cell renders `location` verbatim — the alias name when
+alias-bound, the `%addr` when a manual literal — and shows an amber
+warning glyph + tooltip when an alias-bound location no longer resolves
+(orphaned). Aliases are intended to be unique system-wide; every
+IO-mapping / pin / remote-device editor calls the registry's
+`validateAliasEdit(registry, name, ignoring)` gate before persisting a
+new alias.
 
 ## Environment
 

@@ -252,6 +252,28 @@ function seedRemoteDevice(store: ReturnType<typeof makeStore>, device: PLCRemote
   })
 }
 
+/** Seed global variables directly (bypassing createVariable's dedup so the
+ *  `location` binding is stored verbatim for alias-cascade / compile tests). */
+function seedGlobals(store: ReturnType<typeof makeStore>, vars: PLCVariable[]) {
+  const current = store.getState().project
+  store.getState().projectActions.setProject({
+    ...current,
+    data: {
+      ...current.data,
+      configurations: {
+        ...current.data.configurations,
+        resource: { ...current.data.configurations.resource, globalVariables: vars },
+      },
+    },
+  })
+}
+
+/** A BOOL variable whose `location` is set verbatim — an alias name, a literal
+ *  `%addr`, or empty — for the single-field location model. */
+function locVar(name: string, location: string, cls: PLCVariable['class'] = 'local'): PLCVariable {
+  return { name, class: cls, type: { definition: 'base-type', value: 'BOOL' }, location, documentation: '' }
+}
+
 /** Seed a Runtime v4 target so the cap-gated address pool counts
  *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
  *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
@@ -820,30 +842,30 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
     })
 
-    it('clearing the location drops a stale alias', () => {
-      // Reproduces the orphaned-alias case: a variable that carries a
-      // location plus an alias no longer backed by any producer (target
-      // changed / device removed). Clearing the location (location: '')
-      // must succeed AND drop the stale alias.
+    it('stores the location binding verbatim (alias name or literal) and never auto-adopts', () => {
+      // Single-field model: `location` is the binding. A manual literal is
+      // stored verbatim; an alias name is stored verbatim (NOT auto-resolved
+      // to an address, NOT auto-adopted from a matching address); clearing
+      // succeeds.
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
+
       store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: '%QW0' } })
-      // Attach a stale alias (no producer declares it).
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QW0')
+
+      // Bind by alias name — kept verbatim.
       store
         .getState()
-        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
-      let v = store.getState().project.data.configurations.resource.globalVariables[0]
-      expect(v.location).toBe('%QW0')
-      expect(v.alias).toBe('StaleAlias')
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: 'push_button' } })
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('push_button')
 
+      // Clearing the location.
       const result = store.getState().projectActions.updateVariable({
         scope: 'global',
         variableId: 'gx',
         data: { location: '' },
       })
       expect(result.ok).toBe(true)
-      v = store.getState().project.data.configurations.resource.globalVariables[0]
-      expect(v.location).toBe('')
-      expect(v.alias ?? '').toBe('')
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('')
     })
   })
 
@@ -2050,6 +2072,28 @@ describe('createProjectSlice', () => {
       const mappings = store.getState().project.data.remoteDevices![0].ethercatConfig!.devices[0].channelMappings
       expect(mappings.map((m) => m.iecLocation)).toEqual(['%IW0', '%IW1'])
     })
+
+    it('cascades a channel alias rename onto bound variable locations', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const withAlias = (alias: string) => ({
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [
+          {
+            id: 's1',
+            name: 'Slave1',
+            channelMappings: [{ channelId: 'c0', iecLocation: '%IW0', alias }],
+          } as unknown as ConfiguredEtherCATDevice,
+        ],
+      })
+      // First write establishes the channel alias `ec_in`.
+      store.getState().projectActions.updateEthercatConfig('BusA', withAlias('ec_in'))
+      // A program variable binds to that alias by name.
+      seedPou(store, makePou('Prog', 'program', [locVar('reading', 'ec_in')]))
+      // Rewriting the config with a renamed alias must cascade onto the binding.
+      store.getState().projectActions.updateEthercatConfig('BusA', withAlias('ec_input'))
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('ec_input')
+    })
   })
 
   describe('createRemoteDevice', () => {
@@ -2680,6 +2724,124 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
       const result = store.getState().projectActions.updateIOPointAlias('EtherCAT', 'g1', 'p1', 'alias')
       expect(result.ok).toBe(true)
+    })
+
+    it('rejects an alias that is already assigned to another channel', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      // Claim "dup" on the first point, then try to reuse it on the second.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', points[0].id, 'dup')
+      const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', points[1].id, 'dup')
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Alias already in use')
+      // The rejected write never lands.
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![1].alias).toBe('')
+    })
+
+    it('cascades a rename onto variables bound to the point’s previous alias', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      // First set an alias, then bind a program variable to it by name.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'sensor_a')
+      seedPou(store, makePou('Prog', 'program', [locVar('reading', 'sensor_a')]))
+      // Renaming the point alias must follow the binding to the new name.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'sensor_b')
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('sensor_b')
+    })
+  })
+
+  describe('renameAlias', () => {
+    it('cascades onto bound POU and global variable locations, leaving manual literals untouched', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1'), locVar('manual', '%QX0.0')]))
+      seedGlobals(store, [locVar('gBound', 'relay_1', 'global')])
+      const result = store.getState().projectActions.renameAlias('relay_1', 'relay_2')
+      expect(result.renamed).toBe(2)
+      const vars = store.getState().project.data.pous[0].interface!.variables!
+      expect(vars[0].location).toBe('relay_2') // alias-bound → follows the rename
+      expect(vars[1].location).toBe('%QX0.0') // manual literal → untouched
+      expect(store.getState().project.data.configurations.resource.globalVariables![0].location).toBe('relay_2')
+    })
+
+    it('cascades a case-only change (the alias registry is case-sensitive)', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'Relay')]))
+      const result = store.getState().projectActions.renameAlias('Relay', 'relay')
+      expect(result.renamed).toBe(1)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay')
+    })
+
+    it('clears bound variable locations when the alias is renamed to empty', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('relay_1', '')
+      expect(result.renamed).toBe(1)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('')
+    })
+
+    it('is a no-op when the old alias is empty', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('', 'relay_2')
+      expect(result.renamed).toBe(0)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay_1')
+    })
+
+    it('is a no-op when the name is unchanged', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('relay_1', 'relay_1')
+      expect(result.renamed).toBe(0)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay_1')
+    })
+  })
+
+  describe('getCompileReadyProjectData', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    it('resolves alias locations to addresses, honours manual literals, and drops missing aliases', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0, %IW1
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow') // flow → %IW0
+
+      seedPou(
+        store,
+        makePou('Prog', 'program', [
+          locVar('aliasBound', 'flow'), // → %IW0
+          locVar('manual', '%QX0.0'), // → %QX0.0 (verbatim)
+          locVar('ghost', 'no_such_alias'), // → '' (alias gone)
+          locVar('unlocated', ''), // → ''
+        ]),
+      )
+      // A POU whose interface carries no `variables` array — the resolver must
+      // skip it without throwing (early-return guard).
+      const current = store.getState().project
+      store.getState().projectActions.setProject({
+        ...current,
+        data: {
+          ...current.data,
+          pous: [
+            ...current.data.pous,
+            {
+              name: 'NoVars',
+              pouType: 'program',
+              interface: {},
+              body: makeBody(),
+              documentation: '',
+            } as unknown as PLCPou,
+          ],
+        },
+      })
+      seedGlobals(store, [locVar('gFlow', 'flow', 'global')]) // → %IW0
+
+      const data = store.getState().projectActions.getCompileReadyProjectData()
+      const resolved = data.pous[0].interface!.variables!
+      expect(resolved.map((v) => v.location)).toEqual(['%IW0', '%QX0.0', '', ''])
+      expect(data.configurations.resource.globalVariables![0].location).toBe('%IW0')
+
+      // The live store keeps the alias-name form — only the returned snapshot
+      // is resolved.
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('flow')
     })
   })
 

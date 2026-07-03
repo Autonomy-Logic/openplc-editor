@@ -72,27 +72,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
 
-      // availableBoards drives target-capability resolution, which the
-      // alias registry depends on. This action is the project-load
-      // sync point: the workspace screen calls us once it finishes
-      // board discovery, so by the time we run, the active target's
-      // capabilities resolve correctly. Re-syncing on every subsequent
-      // boards refresh (e.g. VPP package install) catches capability
-      // shifts for the active board.
-      //
-      // We only sync when `availableBoards` was actually provided —
-      // ports-only updates (e.g. board.tsx refresh-ports) don't affect
-      // capabilities and shouldn't churn the alias registry.
-      if (availableBoards) {
-        const syncReport = getState().projectActions.syncVariableAliases()
-        if (syncReport.adopted > 0 || syncReport.refreshed > 0 || syncReport.orphaned > 0) {
-          getState().consoleActions.addLog({
-            id: crypto.randomUUID(),
-            level: 'info',
-            message: `Alias sync: adopted=${syncReport.adopted} refreshed=${syncReport.refreshed} orphaned=${syncReport.orphaned}`,
-          })
-        }
-      }
+      // Board discovery only affects target-capability resolution; it no
+      // longer needs to touch program variables. In the single-field model a
+      // variable's `location` holds either a stable alias name (resolved to an
+      // address at compile time) or a literal address — neither changes when
+      // the board list lands. Producer address recompaction on an actual
+      // target change is handled by `setDeviceBoard → recalculateIecAddresses`.
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(

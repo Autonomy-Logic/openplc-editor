@@ -173,15 +173,10 @@ const Board = memo(function () {
     handleDeviceValueAtFirstRender()
   }, [])
 
-  // Sync alias-bound variables whenever the target changes. Producers
-  // gate by capability, so switching boards activates / deactivates
-  // entire I/O sources and the variables bound to their aliases may
-  // need to refresh or orphan. The effect fires after setDeviceBoard
-  // commits, regardless of which code path triggered the switch
-  // (regular pick, Python-warning confirm, V4-features-warning confirm).
-  useEffect(() => {
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
-  }, [deviceBoard])
+  // A target switch no longer needs to touch program variables: their
+  // `location` holds a stable alias name (resolved at compile) or a literal
+  // address — neither changes with the board. Producer address recompaction
+  // for the new target is handled by `setDeviceBoard → recalculateIecAddresses`.
 
   useEffect(() => {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)

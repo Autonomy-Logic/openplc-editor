@@ -147,25 +147,6 @@ export type ProjectActions = {
   }) => void
 
   /**
-   * Re-sync every located variable (POU-local + globals) against the
-   * current alias registry. Variables auto-adopt new aliases, follow
-   * existing ones to refreshed addresses, and surface orphans (alias
-   * the registry no longer knows about). Called from every site that
-   * mutates an alias-producing source (VPP slot edits, Modbus / EtherCAT
-   * alias edits, pin renames, target switch, pre-compile) and from
-   * `deviceActions.setAvailableOptions` once the workspace screen
-   * finishes board discovery — that's the project-load sync point.
-   *
-   * Returns a combined sync report so the caller can log a one-liner
-   * summary ("Adopted N aliases, refreshed M, K orphaned").
-   */
-  syncVariableAliases: () => {
-    adopted: number
-    refreshed: number
-    orphaned: number
-  }
-
-  /**
    * Central, capability-scoped recalculation via the IEC address registry.
    * Derives consumers from live producer state, restores aliases the session
    * memory remembers for reappeared channels, re-packs the allocatable
@@ -185,23 +166,27 @@ export type ProjectActions = {
   rememberChannelAlias: (memoryKey: string, alias: string) => ProjectResponse
 
   /**
-   * Cascade-rename every variable's `.alias` field from `oldAlias` to
-   * `newAlias` across all POU-local and global variables.  Used by
-   * the IO-mapping screens (pin-mapping, VPP modules, VPP io-table,
-   * Modbus TCP remote, EtherCAT) when the user renames the alias on
-   * a producer channel — the rename cascades to bound variables so
-   * they don't become orphaned just because the alias text moved.
+   * Compile-time alias resolution (editor-side; the compiler/runtime never
+   * see aliases). Returns a COPY of the project data with every variable's
+   * `location` resolved to a concrete IEC address: an alias name → its
+   * current address, a literal `%addr` → verbatim, a missing/orphaned alias
+   * → '' (unlocated). The store keeps the alias-name form for display.
+   */
+  getCompileReadyProjectData: () => ProjectState['data']
+
+  /**
+   * Cascade-rename bound variables' `location` from `oldAlias` to `newAlias`
+   * across all POU-local and global variables. In the single-field model a
+   * variable bound to a producer alias holds the alias NAME in `location`;
+   * when the user renames (or clears) that alias on the producer channel
+   * (pin mapping, VPP module, Modbus TCP, EtherCAT), the bound variables must
+   * follow so they keep resolving at compile time.
    *
-   * Empty `oldAlias` (channel previously had no alias) is a no-op.
-   * Empty `newAlias` (user clearing the alias) causes the matching
-   * variables to drop their alias too; `syncVariableAliases` will
-   * then re-evaluate them against the live registry (auto-adopt by
-   * raw location when applicable, otherwise alias-less binding).
-   *
-   * Case-insensitive matching to align with the rest of the IEC
-   * identifier handling.  Callers should follow this with a
-   * `syncVariableAliases()` to refresh `.location` against the now-
-   * renamed alias's address.
+   * Empty `oldAlias` is a no-op (first-time alias write — nothing to cascade).
+   * Empty `newAlias` (clearing the alias) sets the matching variables'
+   * `location` to '' — they become unlocated, matching the compile-time
+   * "missing alias → empty location" rule. Exact (case-sensitive) match,
+   * since the alias registry that resolves names at compile is case-sensitive.
    *
    * Returns the number of variables actually mutated.
    */
