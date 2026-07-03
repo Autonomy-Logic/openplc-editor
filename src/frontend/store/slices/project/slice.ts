@@ -21,6 +21,7 @@ import {
 } from '../../../../middleware/shared/utils/iec-address'
 import {
   channelKey,
+  ethercatConsumerId,
   type IecAddressRegistry,
   migrateToRegistry,
   modbusConsumerId,
@@ -283,11 +284,11 @@ type ProjectGetState = () => ProjectSliceRoot
 // Central IEC address recalculation (registry-owned)
 // ---------------------------------------------------------------------------
 
-/** Consumer kinds the central recalculation reallocates. Pin mapping and
- *  EtherCAT own their own allocation for now, so they are treated as fixed
- *  constraints here (seeded + kept pinned) — VPP and Modbus allocate around
- *  them. EtherCAT/pins join this set in their own migration commits. */
-const ALLOCATED_KINDS: ReadonlySet<string> = new Set(['vpp-io', 'modbus-tcp-remote'])
+/** Consumer kinds the central recalculation reallocates. Pin mapping is fixed
+ *  (hardware addresses), so pins are treated as constraints (seeded + kept
+ *  pinned) that VPP / Modbus / EtherCAT allocate around; pins join in their
+ *  own commit. */
+const ALLOCATED_KINDS: ReadonlySet<string> = new Set(['vpp-io', 'modbus-tcp-remote', 'ethercat'])
 
 /** IO-mapping (VPP) entry shape the recalc reads/writes. */
 type VppMappingEntry = {
@@ -377,6 +378,29 @@ function applyModbusAddresses(
         if (!info) continue
         if (info.address) point.iecLocation = info.address
         point.alias = info.alias
+      }
+    }
+  }
+}
+
+/** Write the registry's addresses + aliases back onto the EtherCAT producers'
+ *  `channelMappings`. Runs inside `produce`. */
+function applyEthercatAddresses(
+  remoteDevices: ProjectSlice['project']['data']['remoteDevices'],
+  index: ReadonlyMap<string, { address?: string; alias: string }>,
+): void {
+  if (!remoteDevices) return
+  for (const device of remoteDevices) {
+    const deviceRef = device.name || 'device'
+    const slaves = device.ethercatConfig?.devices
+    if (!slaves) continue
+    for (const slave of slaves) {
+      const consumerId = ethercatConsumerId(deviceRef, slave.name || 'slave')
+      for (const mapping of slave.channelMappings ?? []) {
+        const info = index.get(channelKey(consumerId, mapping.channelId))
+        if (!info) continue
+        if (info.address) mapping.iecLocation = info.address
+        mapping.alias = info.alias
       }
     }
   }
@@ -1648,10 +1672,12 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         getState().deviceActions.setVendorScreenData('io-mapping', { entries: applyVppEntries(vppEntries, index) })
       }
 
-      // Modbus ioPoints live in project.data — write them on the draft.
+      // Modbus ioPoints + EtherCAT channelMappings live in project.data —
+      // write them on the draft.
       setState(
         produce((slice: ProjectSlice) => {
           applyModbusAddresses(slice.project.data.remoteDevices, index)
+          applyEthercatAddresses(slice.project.data.remoteDevices, index)
         }),
       )
       getState().projectActions.syncVariableAliases()
@@ -1882,6 +1908,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // directly. No IEC task needs syncing.
         }),
       )
+      // Channel-mapping changes go through the central registry so EtherCAT
+      // addresses are packed alongside VPP/Modbus and bound variables follow.
+      if (response.ok) getState().projectActions.recalculateIecAddresses()
       return response
     },
   },

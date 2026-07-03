@@ -1,6 +1,8 @@
 import { modbusMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { createStore } from 'zustand/vanilla'
 
+import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
+
 import type {
   BoardInfo,
   ModbusIOGroup,
@@ -2025,6 +2027,28 @@ describe('createProjectSlice', () => {
       const result = store.getState().projectActions.updateEthercatConfig('BusA', cfg)
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.remoteDevices![0].ethercatConfig).toEqual(cfg)
+    })
+
+    it('reallocates EtherCAT channel addresses through the central registry', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const cfg = {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [
+          {
+            id: 's1',
+            name: 'Slave1',
+            channelMappings: [
+              { channelId: 'c0', iecLocation: '%IW5', alias: '' },
+              { channelId: 'c1', iecLocation: '%IW6', alias: '' },
+            ],
+          } as unknown as ConfiguredEtherCATDevice,
+        ],
+      }
+      store.getState().projectActions.updateEthercatConfig('BusA', cfg)
+      // The central registry compacts the channels to the lowest free %IW slots.
+      const mappings = store.getState().project.data.remoteDevices![0].ethercatConfig!.devices[0].channelMappings
+      expect(mappings.map((m) => m.iecLocation)).toEqual(['%IW0', '%IW1'])
     })
   })
 
