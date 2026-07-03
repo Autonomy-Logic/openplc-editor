@@ -1,9 +1,11 @@
 /**
  * Tests for the library build pipeline.
  *
- * The XmlGenerator is mocked because it depends on the frontend
- * xml-generator helpers; we exercise the orchestration here, not
- * actual XML serialisation (covered by xml-generator's own tests).
+ * `prepareXmlForLibraryBuild` no longer generates PLCopen XML — the
+ * old xml2st flow was replaced by an in-process JSON → ST transpiler.
+ * The function now only validates the manifest and returns the stubbed
+ * project data (plus the POU inventory the splitter needs); the actual
+ * transpile happens later via `LibraryBuildPort.transpileToSt`.
  * Strucpp is mocked via the runtime's test escape hatch — the build
  * pipeline must remain pure (no real strucpp load) for these tests.
  */
@@ -15,12 +17,6 @@ import type { StrucppRuntime } from '../strucpp-runtime'
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockXmlGenerator = jest.fn()
-jest.mock('../../utils/PLC/xml-generator', () => ({
-  XmlGenerator: (...args: unknown[]) => mockXmlGenerator(...args),
-}))
-
-// Import after mocks
 import { __setStrucppRuntimeForTests } from '../strucpp-runtime'
 import {
   __TESTING__,
@@ -289,7 +285,6 @@ describe('prepareXmlForLibraryBuild', () => {
     expect('error' in result).toBe(true)
     if (!('error' in result)) return
     expect(result.error).toContain('library.json is invalid')
-    expect(mockXmlGenerator).not.toHaveBeenCalled()
   })
 
   it('formats multi-line error reports with one bullet per validation issue', () => {
@@ -299,34 +294,16 @@ describe('prepareXmlForLibraryBuild', () => {
     expect(bulletCount).toBeGreaterThanOrEqual(3)
   })
 
-  it('returns a structured error when XML generation fails', () => {
-    mockXmlGenerator.mockReturnValue({ ok: false, message: 'no main pou', data: undefined })
+  it('returns stubbed projectData + knownPous (including stub) + parsed manifest on success', () => {
     const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('error' in result).toBe(true)
-    if (!('error' in result)) return
-    expect(result.error).toContain('no main pou')
-  })
-
-  it('falls back to "unknown error" when XmlGenerator omits a message', () => {
-    mockXmlGenerator.mockReturnValue({ ok: false, data: undefined })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    if (!('error' in result)) throw new Error('expected error')
-    expect(result.error).toContain('unknown error')
-  })
-
-  it('treats ok=true but empty data as an error', () => {
-    mockXmlGenerator.mockReturnValue({ ok: true, message: 'XML generated', data: '' })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('error' in result).toBe(true)
-  })
-
-  it('returns xml + knownPous (including stub) + parsed manifest on success', () => {
-    mockXmlGenerator.mockReturnValue({ ok: true, message: 'XML generated', data: '<plc/>' })
-    const result = prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON)
-    expect('xml' in result).toBe(true)
-    if (!('xml' in result)) return
-    expect(result.xml).toBe('<plc/>')
+    // `error` is the union discriminant — its absence means success.
+    expect('error' in result).toBe(false)
+    if ('error' in result) return
     expect(result.manifest.name).toBe('demo_lib')
+
+    // The stubbed project carries the library's POUs plus the
+    // synthesised `main` program the transpiler requires.
+    expect(result.projectData.pous.map((p) => p.data.name)).toEqual(['TankController', STUB.STUB_PROGRAM_NAME])
 
     // POUs from the project + the stub program
     const names = result.knownPous.map((p) => p.name)
@@ -337,7 +314,6 @@ describe('prepareXmlForLibraryBuild', () => {
   })
 
   it('maps each POU type to the correct splitter kind', () => {
-    mockXmlGenerator.mockReturnValue({ ok: true, data: '<plc/>' })
     const project = makeLibraryProject({
       pous: [
         {
@@ -364,7 +340,7 @@ describe('prepareXmlForLibraryBuild', () => {
       ],
     })
     const result = prepareXmlForLibraryBuild(project, VALID_MANIFEST_JSON)
-    if (!('knownPous' in result)) throw new Error('expected success')
+    if ('error' in result) throw new Error('expected success')
     const byName = Object.fromEntries(result.knownPous.map((p) => [p.name, p.kind]))
     expect(byName).toEqual({ Add2: 'FUNCTION', Tank: 'FUNCTION_BLOCK', main: 'PROGRAM' })
   })
