@@ -37,6 +37,17 @@ export interface RegistryChannel {
   /** Fixed hardware address (e.g. an Arduino pin). When set the channel is
    *  RESERVED at this literal address instead of being allocated. */
   pinned?: string
+  /**
+   * Stable *semantic* identity that outlives this channel's presence in the
+   * registry — e.g. `moduleId:slot:channelName` for a VPP channel. When a
+   * consumer is removed and later re-added with the same semantic identity,
+   * the session alias-memory restores the alias by this key. Distinct from
+   * `channelId` (which is only stable *within* a live consumer): the memory
+   * key also encodes the module/slot so "same module, different slot" and
+   * "different module, same slot" resolve to different keys. Session-scoped —
+   * never serialized.
+   */
+  memoryKey?: string
 }
 
 /** Well-known consumer kinds. Left open (`string`) so future producers can

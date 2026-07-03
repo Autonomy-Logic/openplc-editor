@@ -18,6 +18,30 @@ export function createRegistry(): IecAddressRegistry {
   return { consumers: [], assignments: {} }
 }
 
+/**
+ * Restore aliases from the session alias-memory onto channels that carry a
+ * `memoryKey` but currently have no alias. This is what brings a module's
+ * aliases back when it is removed and re-added on the same slot within a
+ * session — the memory (keyed by `moduleId:slot:channel`) survives the
+ * channel's absence. Channels that already have an alias, or lack a
+ * `memoryKey`, are left untouched. Pure; the memory itself lives in the
+ * store (session-scoped, never serialized).
+ */
+export function restoreAliasesFromMemory(
+  registry: IecAddressRegistry,
+  memory: Readonly<Record<string, string>>,
+): IecAddressRegistry {
+  const consumers = registry.consumers.map((consumer) => ({
+    ...consumer,
+    channels: consumer.channels.map((channel) => {
+      if (channel.alias || !channel.memoryKey) return channel
+      const remembered = memory[channel.memoryKey]
+      return remembered ? { ...channel, alias: remembered } : channel
+    }),
+  }))
+  return { ...registry, consumers }
+}
+
 /** Reassign every address from the registered consumers. Deterministic,
  *  gapless, and idempotent (recalculating an unchanged registry is a
  *  no-op). Pass `options.activeKinds` to scope allocation to the current

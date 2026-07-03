@@ -5,10 +5,11 @@ import {
   createRegistry,
   recalculate,
   removeConsumer,
+  restoreAliasesFromMemory,
   setAlias,
   updateConsumer,
 } from '../registry'
-import type { RegistryConsumer } from '../types'
+import type { IecAddressRegistry, RegistryConsumer } from '../types'
 
 const word = { direction: 'Q', size: 'W' } as const
 
@@ -106,6 +107,44 @@ describe('addressOf', () => {
   it('returns undefined for an unknown channel', () => {
     const reg = addConsumer(createRegistry(), consumer('c1', 0, [{ channelId: 'a', class: word }]))
     expect(addressOf(reg, 'c1', 'nope')).toBeUndefined()
+  })
+})
+
+describe('restoreAliasesFromMemory', () => {
+  const reg = (): IecAddressRegistry => ({
+    consumers: [
+      {
+        id: 'vpp-slot-1',
+        kind: 'vpp-io',
+        order: 0,
+        channels: [
+          { channelId: 'DO1', class: word, memoryKey: 'mod-a:1:DO1' }, // no alias
+          { channelId: 'DO2', class: word, alias: 'kept', memoryKey: 'mod-a:1:DO2' }, // has alias
+          { channelId: 'DO3', class: word }, // no memoryKey
+        ],
+      },
+    ],
+    assignments: {},
+  })
+
+  it('restores an alias for a channel whose memoryKey is remembered', () => {
+    const out = restoreAliasesFromMemory(reg(), { 'mod-a:1:DO1': 'push_button' })
+    expect(out.consumers[0].channels[0].alias).toBe('push_button')
+  })
+
+  it('does not overwrite a channel that already has an alias', () => {
+    const out = restoreAliasesFromMemory(reg(), { 'mod-a:1:DO2': 'other' })
+    expect(out.consumers[0].channels[1].alias).toBe('kept')
+  })
+
+  it('leaves channels without a memoryKey untouched', () => {
+    const out = restoreAliasesFromMemory(reg(), { 'mod-a:1:DO1': 'x' })
+    expect(out.consumers[0].channels[2].alias).toBeUndefined()
+  })
+
+  it('leaves a channel untouched when its memoryKey is not remembered', () => {
+    const out = restoreAliasesFromMemory(reg(), {})
+    expect(out.consumers[0].channels[0].alias).toBeUndefined()
   })
 })
 

@@ -13,6 +13,7 @@ export {
   createRegistry,
   recalculate,
   removeConsumer,
+  restoreAliasesFromMemory,
   setAlias,
   updateConsumer,
 } from './registry'
