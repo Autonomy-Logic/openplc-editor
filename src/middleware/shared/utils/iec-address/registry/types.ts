@@ -81,3 +81,17 @@ export interface AllocationResult {
 export type SetAliasResult =
   | { ok: true; registry: IecAddressRegistry }
   | { ok: false; conflict: { alias: string; consumerId: string; channelId: string } }
+
+export interface AllocateOptions {
+  /**
+   * When provided, consumers whose `kind` is NOT in this set are excluded
+   * from allocation — their channels receive no address. This is how
+   * target-capability scoping works: a platform without pin mapping or VPP
+   * I/O simply deactivates those consumer kinds. The consumers stay
+   * registered (aliases preserved), so switching back to a capable target
+   * restores them; meanwhile the still-active consumers recompact
+   * project-wide into the freed space. Omitting the set treats every kind
+   * as active.
+   */
+  activeKinds?: ReadonlySet<string>
+}

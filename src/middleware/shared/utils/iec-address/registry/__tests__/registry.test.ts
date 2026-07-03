@@ -29,6 +29,21 @@ describe('recalculate', () => {
     expect(r2.assignments).toEqual(r1.assignments)
   })
 
+  it('scopes allocation to active consumer kinds', () => {
+    let reg = createRegistry()
+    reg = addConsumer(reg, { id: 'pins', kind: 'pin-mapping', order: 0, channels: [{ channelId: 'a', class: word }] })
+    reg = addConsumer(reg, {
+      id: 'mb',
+      kind: 'modbus-tcp-remote',
+      order: 1,
+      channels: [{ channelId: 'a', class: word }],
+    })
+    // Simulate switching to a target without pin mapping.
+    const scoped = recalculate(reg, { activeKinds: new Set(['modbus-tcp-remote']) })
+    expect(scoped.registry.assignments[channelKey('pins', 'a')]).toBeUndefined()
+    expect(scoped.registry.assignments[channelKey('mb', 'a')]).toBe('%QW0')
+  })
+
   it('surfaces pinned conflicts', () => {
     const reg = addConsumer(
       createRegistry(),

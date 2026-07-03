@@ -105,6 +105,23 @@ describe('allocateAddresses', () => {
     expect(conflicts[0].keys).toEqual([channelKey('c1', 'first'), channelKey('c1', 'second')])
   })
 
+  it('excludes consumers whose kind is inactive and recompacts survivors', () => {
+    const consumers: RegistryConsumer[] = [
+      { id: 'pins', kind: 'pin-mapping', order: 0, channels: [{ channelId: 'a', class: word }] },
+      { id: 'mb', kind: 'modbus-tcp-remote', order: 1, channels: [{ channelId: 'a', class: word }] },
+    ]
+    // With pin-mapping inactive (e.g. a Runtime v4 target), only the Modbus
+    // consumer allocates — and it takes %QW0, not %QW1.
+    const active = allocateAddresses(consumers, { activeKinds: new Set(['modbus-tcp-remote']) })
+    expect(active.assignments[channelKey('pins', 'a')]).toBeUndefined()
+    expect(active.assignments[channelKey('mb', 'a')]).toBe('%QW0')
+
+    // With both active, pin-mapping (order 0) takes %QW0 and Modbus %QW1.
+    const both = allocateAddresses(consumers)
+    expect(both.assignments[channelKey('pins', 'a')]).toBe('%QW0')
+    expect(both.assignments[channelKey('mb', 'a')]).toBe('%QW1')
+  })
+
   it('handles an empty consumer list', () => {
     expect(allocateAddresses([])).toEqual({ assignments: {}, conflicts: [] })
   })

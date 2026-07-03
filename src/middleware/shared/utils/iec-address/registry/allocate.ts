@@ -15,7 +15,7 @@
  */
 
 import { formatAddress, parseAddress, prefixOf } from './address-space'
-import type { AddressConflict, AllocationResult, RegistryConsumer } from './types'
+import type { AddressConflict, AllocateOptions, AllocationResult, RegistryConsumer } from './types'
 
 /** Stable, unambiguous map key for a channel assignment. JSON-encoding the
  *  pair means ids may contain any characters without risking a collision. */
@@ -45,8 +45,12 @@ function firstKeyAt(assignments: Record<string, string>, address: string): strin
   return ''
 }
 
-export function allocateAddresses(consumers: readonly RegistryConsumer[]): AllocationResult {
-  const ordered = orderedConsumers(consumers)
+export function allocateAddresses(
+  consumers: readonly RegistryConsumer[],
+  options: AllocateOptions = {},
+): AllocationResult {
+  const { activeKinds } = options
+  const ordered = orderedConsumers(consumers).filter((c) => !activeKinds || activeKinds.has(c.kind))
   const assignments: Record<string, string> = {}
   const conflicts: AddressConflict[] = []
   // prefix -> set of claimed linear slot indices

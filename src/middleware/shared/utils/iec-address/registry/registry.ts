@@ -5,7 +5,14 @@
  */
 
 import { allocateAddresses, channelKey } from './allocate'
-import type { AddressConflict, IecAddressRegistry, RegistryChannel, RegistryConsumer, SetAliasResult } from './types'
+import type {
+  AddressConflict,
+  AllocateOptions,
+  IecAddressRegistry,
+  RegistryChannel,
+  RegistryConsumer,
+  SetAliasResult,
+} from './types'
 
 export function createRegistry(): IecAddressRegistry {
   return { consumers: [], assignments: {} }
@@ -13,26 +20,39 @@ export function createRegistry(): IecAddressRegistry {
 
 /** Reassign every address from the registered consumers. Deterministic,
  *  gapless, and idempotent (recalculating an unchanged registry is a
- *  no-op). Returns the new registry plus any pinned-address conflicts. */
-export function recalculate(registry: IecAddressRegistry): {
+ *  no-op). Pass `options.activeKinds` to scope allocation to the current
+ *  target's capabilities. Returns the new registry plus any pinned-address
+ *  conflicts. */
+export function recalculate(
+  registry: IecAddressRegistry,
+  options: AllocateOptions = {},
+): {
   registry: IecAddressRegistry
   conflicts: AddressConflict[]
 } {
-  const { assignments, conflicts } = allocateAddresses(registry.consumers)
+  const { assignments, conflicts } = allocateAddresses(registry.consumers, options)
   return { registry: { consumers: registry.consumers, assignments }, conflicts }
 }
 
 /** Register a new consumer (or replace one with the same id) and recompute. */
-export function addConsumer(registry: IecAddressRegistry, consumer: RegistryConsumer): IecAddressRegistry {
+export function addConsumer(
+  registry: IecAddressRegistry,
+  consumer: RegistryConsumer,
+  options: AllocateOptions = {},
+): IecAddressRegistry {
   const consumers = registry.consumers.filter((c) => c.id !== consumer.id)
   consumers.push(consumer)
-  return recalculate({ ...registry, consumers }).registry
+  return recalculate({ ...registry, consumers }, options).registry
 }
 
 /** Remove a consumer by id and recompute so survivors reclaim its slots. */
-export function removeConsumer(registry: IecAddressRegistry, consumerId: string): IecAddressRegistry {
+export function removeConsumer(
+  registry: IecAddressRegistry,
+  consumerId: string,
+  options: AllocateOptions = {},
+): IecAddressRegistry {
   const consumers = registry.consumers.filter((c) => c.id !== consumerId)
-  return recalculate({ ...registry, consumers }).registry
+  return recalculate({ ...registry, consumers }, options).registry
 }
 
 /** Patch a consumer's channels / label / order and recompute. No-op when
@@ -41,6 +61,7 @@ export function updateConsumer(
   registry: IecAddressRegistry,
   consumerId: string,
   patch: Partial<Pick<RegistryConsumer, 'channels' | 'label' | 'order'>>,
+  options: AllocateOptions = {},
 ): IecAddressRegistry {
   let found = false
   const consumers = registry.consumers.map((c) => {
@@ -49,7 +70,7 @@ export function updateConsumer(
     return { ...c, ...patch }
   })
   if (!found) return registry
-  return recalculate({ ...registry, consumers }).registry
+  return recalculate({ ...registry, consumers }, options).registry
 }
 
 /** The resolved address for a channel, or `undefined` when unknown. */
