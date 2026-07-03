@@ -1,6 +1,12 @@
 export { formatAddress, isBitClass, isIecAddress, parseAddress, type ParsedAddress, prefixOf } from './address-space'
 export { allocateAddresses, channelKey } from './allocate'
-export { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels } from './migrate'
+export {
+  ethercatConsumerId,
+  migrateToRegistry,
+  modbusConsumerId,
+  recalculateFromLegacy,
+  unpinAllocatableChannels,
+} from './migrate'
 export {
   addConsumer,
   addressOf,

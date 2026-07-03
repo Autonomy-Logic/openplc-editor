@@ -1,6 +1,7 @@
 import type { PoolInputs } from '../../address-pool'
 import { channelKey } from '../allocate'
 import { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels } from '../migrate'
+import { recalculate } from '../registry'
 import { buildAliasIndex } from '../resolve'
 
 describe('migrateToRegistry', () => {
@@ -209,6 +210,24 @@ describe('unpinAllocatableChannels', () => {
     const modbus = unpinned.consumers.find((c) => c.kind === 'modbus-tcp-remote')!
     expect(pins.channels[0].pinned).toBe('%IX0.0') // hardware pin stays pinned
     expect(modbus.channels[0].pinned).toBeUndefined() // freed for compaction
+  })
+
+  it('unpins only the requested kinds, keeping others as fixed constraints', () => {
+    const inputs: PoolInputs = {
+      pinMapping: { pins: [{ address: '%QW0' }] },
+      vendorIoMapping: { entries: [{ slot: 1, channelName: 'a', iecAddress: '%QW1' }] },
+      remoteDevices: [
+        { name: 'd', modbusTcpConfig: { ioGroups: [{ id: 'g', ioPoints: [{ id: 'p', iecLocation: '%QW5' }] }] } },
+      ],
+    }
+    // Reallocate ONLY modbus; pins (%QW0) and VPP (%QW1) stay pinned, so the
+    // modbus point compacts to the next free slot after them: %QW2.
+    const reg = recalculate(
+      unpinAllocatableChannels(migrateToRegistry(inputs), new Set(['modbus-tcp-remote'])),
+    ).registry
+    expect(reg.assignments[channelKey('pin-mapping', '%QW0')]).toBe('%QW0')
+    expect(reg.assignments[channelKey('vpp-slot-1', 'a')]).toBe('%QW1')
+    expect(reg.assignments[channelKey('modbus:d:g', 'p')]).toBe('%QW2')
   })
 
   it('leaves already-unpinned channels untouched', () => {

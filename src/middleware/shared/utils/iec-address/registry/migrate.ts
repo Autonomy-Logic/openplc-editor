@@ -31,6 +31,12 @@ import type {
 
 const PIN_MAPPING_KIND = 'pin-mapping'
 
+/* Consumer-id builders. Exported so the store's address write-back keys the
+ * registry the exact same way the migration created it (no drift). */
+export const modbusConsumerId = (deviceName: string, groupId: string): string => `modbus:${deviceName}:${groupId}`
+export const ethercatConsumerId = (deviceName: string, slaveName: string): string =>
+  `ethercat:${deviceName}:${slaveName}`
+
 /** Build a channel seeded (pinned) at a legacy address, or `null` when the
  *  address is not a parseable IEC location (nothing to migrate). */
 function seedChannel(
@@ -99,7 +105,7 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
       }
       if (channels.length > 0) {
         consumers.push({
-          id: `modbus:${deviceName}:${groupId}`,
+          id: modbusConsumerId(deviceName, groupId),
           kind: 'modbus-tcp-remote',
           label: `${deviceName} / ${groupId}`,
           order: order++,
@@ -121,7 +127,7 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
       }
       if (channels.length > 0) {
         consumers.push({
-          id: `ethercat:${deviceName}:${slaveName}`,
+          id: ethercatConsumerId(deviceName, slaveName),
           kind: 'ethercat',
           label: `${deviceName} / ${slaveName}`,
           order: order++,
@@ -136,13 +142,21 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
 }
 
 /**
- * Release the migration seeds: clear `pinned` on every channel EXCEPT real
- * hardware pins (`pin-mapping`), so a subsequent `recalculate` is free to
- * compact allocatable producers. Pure.
+ * Release the migration seeds so a subsequent `recalculate` can compact.
+ *
+ * By default every channel EXCEPT real hardware pins (`pin-mapping`) is
+ * unpinned. Pass `onlyKinds` to unpin just those consumer kinds and keep
+ * everything else pinned — used when reallocating a subset of producers
+ * (e.g. only remote devices) while treating pins and VPP as fixed
+ * constraints managed by their own allocators. Pure.
  */
-export function unpinAllocatableChannels(registry: IecAddressRegistry): IecAddressRegistry {
+export function unpinAllocatableChannels(
+  registry: IecAddressRegistry,
+  onlyKinds?: ReadonlySet<string>,
+): IecAddressRegistry {
+  const shouldUnpin = (kind: string): boolean => (onlyKinds ? onlyKinds.has(kind) : kind !== PIN_MAPPING_KIND)
   const consumers = registry.consumers.map((consumer) => {
-    if (consumer.kind === PIN_MAPPING_KIND) return consumer
+    if (!shouldUnpin(consumer.kind)) return consumer
     return {
       ...consumer,
       channels: consumer.channels.map((channel) => {
