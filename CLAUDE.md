@@ -323,8 +323,10 @@ openplc-web). Pure functions, no IPC, no electron coupling.
 The variable cell renders `location` verbatim — the alias name when
 alias-bound, the `%addr` when a manual literal — and shows an amber
 warning glyph + tooltip when an alias-bound location no longer resolves
-(orphaned). Aliases are intended to be unique system-wide; every
-IO-mapping / pin / remote-device editor calls the registry's
+(orphaned) or when a manual `%addr` collides with an alias another
+project variable is bound to (duplicate-location risk). Aliases are
+intended to be unique system-wide; every IO-mapping / pin /
+remote-device editor calls the registry's
 `validateAliasEdit(registry, name, ignoring)` gate before persisting a
 new alias.
 
