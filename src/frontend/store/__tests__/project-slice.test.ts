@@ -1,3 +1,4 @@
+import { modbusMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { createStore } from 'zustand/vanilla'
 
 import type {
@@ -283,6 +284,40 @@ function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
     ]),
   })
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+}
+
+/** Seed a target that exposes pin mapping AND VPP I/O (plus Modbus), so the
+ *  central recalculation reallocates VPP + Modbus. */
+function seedVppBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'VPP Board',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v4',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: true,
+            vppIo: true,
+            modbusTcpRemote: true,
+            ethercat: true,
+            modbusTcpServer: true,
+            opcuaServer: true,
+            s7Server: true,
+            debuggerTransports: ['websocket'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: true,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('VPP Board')
 }
 
 // ===========================================================================
@@ -2476,7 +2511,7 @@ describe('createProjectSlice', () => {
     })
   })
 
-  describe('recalculateRemoteDeviceAddresses (central registry)', () => {
+  describe('recalculateIecAddresses (central registry)', () => {
     beforeEach(() => {
       seedRuntimeV4Board(store)
     })
@@ -2494,46 +2529,90 @@ describe('createProjectSlice', () => {
     })
 
     it('is a benign no-op with no remote devices', () => {
-      const result = store.getState().projectActions.recalculateRemoteDeviceAddresses()
+      const result = store.getState().projectActions.recalculateIecAddresses()
       expect(result.ok).toBe(true)
     })
 
     it('activates pin-mapping / VPP kinds when the target supports them', () => {
       // A board that exposes pin mapping AND VPP I/O — exercises those
       // capability branches. Modbus still allocates around them.
-      store.getState().deviceActions.setAvailableOptions({
-        availableBoards: new Map<string, BoardInfo>([
-          [
-            'VPP Board',
-            {
-              compiler: 'openplc-compiler',
-              core: 'rt-v4',
-              preview: '',
-              specs: {},
-              capabilities: {
-                pinMapping: true,
-                vppIo: true,
-                modbusTcpRemote: true,
-                ethercat: true,
-                modbusTcpServer: true,
-                opcuaServer: true,
-                s7Server: true,
-                debuggerTransports: ['websocket'],
-                pythonFunctionBlocks: true,
-                arduinoApiCompletions: false,
-                hasRuntimeStats: true,
-                isInProcessSimulator: false,
-                directUsbUpload: false,
-              },
-            },
-          ],
-        ]),
-      })
-      store.getState().deviceActions.setDeviceBoard('VPP Board')
+      seedVppBoard(store)
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
       const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
       expect(points.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('reallocates and writes back VPP io-mapping entries (compacting a gap)', () => {
+      seedVppBoard(store)
+      // A VPP entry sitting at %QX0.5 with a manual gap below it.
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [
+          {
+            slot: 1,
+            channelName: 'DO1',
+            channelType: 'coil',
+            dataType: 'BOOL',
+            moduleId: 'mod-a',
+            iecAddress: '%QX0.5',
+            alias: '',
+          },
+          // An unparseable address is skipped by the migration → left verbatim.
+          {
+            slot: 1,
+            channelName: 'BAD',
+            channelType: 'coil',
+            dataType: 'BOOL',
+            moduleId: 'mod-a',
+            iecAddress: 'NOPE',
+            alias: '',
+          },
+        ],
+      })
+      store.getState().projectActions.recalculateIecAddresses()
+      const entries = (
+        store.getState().deviceDefinitions.configuration.vendorScreenData!['io-mapping'] as {
+          entries: Array<{ iecAddress: string }>
+        }
+      ).entries
+      // The valid VPP channel compacts to the lowest free %QX slot; the
+      // unmapped entry is returned unchanged.
+      expect(entries[0].iecAddress).toBe('%QX0.0')
+      expect(entries[1].iecAddress).toBe('NOPE')
+    })
+
+    it('skips devices without a Modbus config during writeback', () => {
+      seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      const result = store.getState().projectActions.recalculateIecAddresses()
+      expect(result.ok).toBe(true)
+      expect(
+        store.getState().project.data.remoteDevices![1].modbusTcpConfig!.ioGroups[0].ioPoints![0].iecLocation,
+      ).toBe('%IW0')
+    })
+
+    it('restores a remembered alias onto a reappeared channel via recalc', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      // Simulate the alias having been set earlier (recorded in session memory)
+      // while the channel is currently alias-less (as after a remove/re-add).
+      store.getState().projectActions.rememberChannelAlias(modbusMemoryKey('Dev1', 'g1', pointId), 'temp_sensor')
+      store.getState().projectActions.recalculateIecAddresses()
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].alias).toBe(
+        'temp_sensor',
+      )
+    })
+  })
+
+  describe('rememberChannelAlias', () => {
+    it('stores an alias under its memory key and clears it when emptied', () => {
+      const key = vppMemoryKey('mod-a', 1, 'DO1')
+      store.getState().projectActions.rememberChannelAlias(key, '  relay_1  ')
+      expect(store.getState().iecAliasMemory[key]).toBe('relay_1')
+      store.getState().projectActions.rememberChannelAlias(key, '   ')
+      expect(store.getState().iecAliasMemory[key]).toBeUndefined()
     })
   })
 

@@ -10,6 +10,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -142,11 +143,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
-    setEntries(newEntries)
+    // Write the freshly-derived channel structure, then let the central
+    // registry own the FINAL addresses (VPP + Modbus packed together,
+    // aliases restored from the session memory) and pull its result back
+    // into local state so the table renders the compacted addresses.
     setVendorScreenData(persistenceKey, { entries: newEntries })
-    // Producer mutation: addresses were just re-allocated for every
-    // VPP-active slot. Refresh variables bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    setEntries(getStoreState().storedMapping?.entries ?? newEntries)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -197,6 +200,11 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
     // Refresh variables against any allocator-driven address shifts.
     useOpenPLCStore.getState().projectActions.syncVariableAliases()
   }

@@ -166,15 +166,23 @@ export type ProjectActions = {
   }
 
   /**
-   * Central, capability-scoped recalculation of the Modbus remote-device
-   * addresses via the IEC address registry. Derives consumers from live
-   * producer state, keeps pin-mapping / VPP / EtherCAT pinned as fixed
-   * constraints, re-packs the Modbus producers (closing gaps left by a
-   * removed group/device — project-wide), writes the addresses back onto
-   * the `ioPoints`, and reconciles bound variables. Invoked after every
-   * Modbus mutation and on target switch.
+   * Central, capability-scoped recalculation via the IEC address registry.
+   * Derives consumers from live producer state, restores aliases the session
+   * memory remembers for reappeared channels, re-packs the allocatable
+   * producers (VPP + Modbus today; closing gaps project-wide) while holding
+   * pins / EtherCAT as fixed constraints, writes the addresses + aliases back
+   * onto every producer, and reconciles bound variables. Invoked after every
+   * producer mutation and on target switch.
    */
-  recalculateRemoteDeviceAddresses: () => ProjectResponse
+  recalculateIecAddresses: () => ProjectResponse
+
+  /**
+   * Record (or clear, when `alias` is empty) an alias in the session memory
+   * keyed by a channel's stable semantic identity (see `iecAliasMemory`).
+   * Called from every producer's alias editor so the alias returns if the
+   * producer is removed and re-added within the session.
+   */
+  rememberChannelAlias: (memoryKey: string, alias: string) => ProjectResponse
 
   /**
    * Cascade-rename every variable's `.alias` field from `oldAlias` to
@@ -311,6 +319,14 @@ export type ProjectSlice = {
   project: ProjectState
   /** Relative file paths queued for deletion on next full project save. */
   pendingDeletions: string[]
+  /**
+   * Session-scoped IEC alias memory: `memoryKey -> alias`, where `memoryKey`
+   * is a channel's stable semantic identity (`vpp:moduleId:slot:channel`,
+   * `modbus:device:group:point`, …). Lets a removed producer's aliases return
+   * when the same one is re-added within a session. NEVER serialized — reset
+   * on project load; only current addresses/aliases are saved to disk.
+   */
+  iecAliasMemory: Record<string, string>
   projectActions: ProjectActions
 }
 

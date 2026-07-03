@@ -2,10 +2,13 @@ export { formatAddress, isBitClass, isIecAddress, parseAddress, type ParsedAddre
 export { allocateAddresses, channelKey } from './allocate'
 export {
   ethercatConsumerId,
+  ethercatMemoryKey,
   migrateToRegistry,
   modbusConsumerId,
+  modbusMemoryKey,
   recalculateFromLegacy,
   unpinAllocatableChannels,
+  vppMemoryKey,
 } from './migrate'
 export {
   addConsumer,

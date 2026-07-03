@@ -37,18 +37,30 @@ export const modbusConsumerId = (deviceName: string, groupId: string): string =>
 export const ethercatConsumerId = (deviceName: string, slaveName: string): string =>
   `ethercat:${deviceName}:${slaveName}`
 
+/* Session alias-memory key builders. The key is the stable *semantic*
+ * identity of a channel — it must be identical at the migration site and at
+ * every alias-edit site so `restoreAliasesFromMemory` matches. Exported so
+ * producers (e.g. the VPP layouts) record aliases under the same key. */
+export const vppMemoryKey = (moduleId: string, slot: number, channelName: string): string =>
+  `vpp:${moduleId}:${slot}:${channelName}`
+export const modbusMemoryKey = (deviceName: string, groupId: string, pointId: string): string =>
+  `modbus:${deviceName}:${groupId}:${pointId}`
+export const ethercatMemoryKey = (deviceName: string, slaveName: string, channelId: string): string =>
+  `ethercat:${deviceName}:${slaveName}:${channelId}`
+
 /** Build a channel seeded (pinned) at a legacy address, or `null` when the
  *  address is not a parseable IEC location (nothing to migrate). */
 function seedChannel(
   channelId: string,
   address: string | undefined,
   alias: string | undefined,
+  memoryKey: string,
 ): RegistryChannel | null {
   if (!address) return null
   const parsed = parseAddress(address)
   if (!parsed) return null
   const cls: AddressClass = parsed.cls
-  const channel: RegistryChannel = { channelId, class: cls, pinned: address }
+  const channel: RegistryChannel = { channelId, class: cls, pinned: address, memoryKey }
   if (alias && alias.length > 0) channel.alias = alias
   return channel
 }
@@ -65,7 +77,8 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
   // 1. Pin mapping — one consumer, one channel per pin (fixed hardware).
   const pinChannels: RegistryChannel[] = []
   for (const pin of inputs.pinMapping?.pins ?? []) {
-    const channel = seedChannel(pin.address, pin.address, pin.alias)
+    // Pins are fixed hardware — the address itself is the stable identity.
+    const channel = seedChannel(pin.address, pin.address, pin.alias, `pin:${pin.address}`)
     if (channel) pinChannels.push(channel)
   }
   if (pinChannels.length > 0) {
@@ -75,7 +88,12 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
   // 2. VPP I/O — one consumer per slot; channels keyed by channel name.
   const bySlot = new Map<number, RegistryChannel[]>()
   for (const entry of inputs.vendorIoMapping?.entries ?? []) {
-    const channel = seedChannel(entry.channelName, entry.iecAddress, entry.alias)
+    const channel = seedChannel(
+      entry.channelName,
+      entry.iecAddress,
+      entry.alias,
+      vppMemoryKey(entry.moduleId ?? '', entry.slot, entry.channelName),
+    )
     if (!channel) continue
     const list = bySlot.get(entry.slot)
     if (list) list.push(channel)
@@ -100,7 +118,12 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
       const groupId = group.id ?? String(g)
       const channels: RegistryChannel[] = []
       for (const point of group.ioPoints ?? []) {
-        const channel = seedChannel(point.id, point.iecLocation, point.alias)
+        const channel = seedChannel(
+          point.id,
+          point.iecLocation,
+          point.alias,
+          modbusMemoryKey(deviceName, groupId, point.id),
+        )
         if (channel) channels.push(channel)
       }
       if (channels.length > 0) {
@@ -122,7 +145,12 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
       const slaveName = slave.name || 'slave'
       const channels: RegistryChannel[] = []
       for (const mapping of slave.channelMappings ?? []) {
-        const channel = seedChannel(mapping.channelId, mapping.iecLocation, mapping.alias)
+        const channel = seedChannel(
+          mapping.channelId,
+          mapping.iecLocation,
+          mapping.alias,
+          ethercatMemoryKey(deviceName, slaveName, mapping.channelId),
+        )
         if (channel) channels.push(channel)
       }
       if (channels.length > 0) {

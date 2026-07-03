@@ -405,7 +405,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       // Modbus addresses project-wide so they reclaim the freed space, and
       // reconcile bound variables. (Skipped when the board is unchanged.)
       if (previousBoard !== deviceBoard) {
-        getState().projectActions.recalculateRemoteDeviceAddresses()
+        getState().projectActions.recalculateIecAddresses()
       }
     },
     setSelectedPlatformOption: (key, value): void => {

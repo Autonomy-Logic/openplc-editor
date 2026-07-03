@@ -25,6 +25,7 @@ import {
   migrateToRegistry,
   modbusConsumerId,
   recalculate as recalculateRegistry,
+  restoreAliasesFromMemory,
   unpinAllocatableChannels,
 } from '../../../../middleware/shared/utils/iec-address/registry'
 import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
@@ -279,18 +280,39 @@ type ProjectSetState = StoreApi<ProjectSliceRoot>['setState']
 type ProjectGetState = () => ProjectSliceRoot
 
 // ---------------------------------------------------------------------------
-// Central IEC address recalculation (remote-device producers)
+// Central IEC address recalculation (registry-owned)
 // ---------------------------------------------------------------------------
 
-/** Consumer kinds this recalculation is allowed to move. Pin mapping, VPP,
- *  and EtherCAT own their own allocation, so they are treated as fixed
- *  constraints here (seeded + kept pinned) — Modbus allocates around them.
- *  EtherCAT joins this set once its bit-offset allocator is migrated. */
-const REMOTE_DEVICE_KINDS: ReadonlySet<string> = new Set(['modbus-tcp-remote'])
+/** Consumer kinds the central recalculation reallocates. Pin mapping and
+ *  EtherCAT own their own allocation for now, so they are treated as fixed
+ *  constraints here (seeded + kept pinned) — VPP and Modbus allocate around
+ *  them. EtherCAT/pins join this set in their own migration commits. */
+const ALLOCATED_KINDS: ReadonlySet<string> = new Set(['vpp-io', 'modbus-tcp-remote'])
+
+/** IO-mapping (VPP) entry shape the recalc reads/writes. */
+type VppMappingEntry = {
+  iecAddress: string
+  alias?: string
+  slot: number
+  channelName: string
+  moduleId?: string
+  [key: string]: unknown
+}
+
+/** Live VPP io-mapping entries (empty when the board has no VPP backplane). */
+function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
+  return (
+    (
+      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+        | { entries?: VppMappingEntry[] }
+        | undefined
+    )?.entries ?? []
+  )
+}
 
 /** Map the active target's capabilities to the set of consumer kinds that
  *  participate in allocation. A target without pin mapping / VPP simply
- *  omits those kinds, so their addresses free up and remote-device
+ *  omits those kinds, so their addresses free up and the still-active
  *  producers recompact into the space (project-wide recalc on target
  *  switch). */
 function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
@@ -303,38 +325,44 @@ function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
 }
 
 /**
- * Build the capability-scoped registry from live producer state, reallocating
- * ONLY the remote-device producers (Modbus + EtherCAT) while treating pins
- * and VPP as fixed constraints. This is what closes gaps project-wide when a
- * group / device is removed, and what drops inactive producers on a target
- * switch. Read live state (never draft proxies) before entering `produce`.
+ * Build the capability-scoped registry from live producer state: derive
+ * consumers (pins/VPP/Modbus/EtherCAT), restore any aliases held in the
+ * session memory for channels that reappeared (remove→re-add), then
+ * reallocate the `ALLOCATED_KINDS` while keeping the rest pinned as fixed
+ * constraints. Read live state (never draft proxies) before `produce`.
  */
-function buildRemoteDeviceRegistry(live: ProjectSliceRoot): IecAddressRegistry {
+function buildIecRegistry(live: ProjectSliceRoot): IecAddressRegistry {
   const board = live.deviceDefinitions.configuration.deviceBoard
   const boardInfo = live.deviceAvailableOptions.availableBoards.get(board ?? '')
-  const ioMapping =
-    (
-      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-        | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-        | undefined
-    )?.entries ?? []
   const seeded = migrateToRegistry({
     pinMapping: { pins: live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
-    vendorIoMapping: { entries: ioMapping },
+    vendorIoMapping: { entries: readVppEntries(live) },
     remoteDevices: live.project.data.remoteDevices,
   })
+  const restored = restoreAliasesFromMemory(seeded, live.iecAliasMemory ?? {})
   const activeKinds = activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo))
-  return recalculateRegistry(unpinAllocatableChannels(seeded, REMOTE_DEVICE_KINDS), { activeKinds }).registry
+  return recalculateRegistry(unpinAllocatableChannels(restored, ALLOCATED_KINDS), { activeKinds }).registry
 }
 
-/** Write the registry's assigned addresses back onto the Modbus producers
- *  (`ioPoints`). Keyed exactly as `migrateToRegistry` built the consumers,
- *  so there is no mapping drift. Runs inside `produce` on the draft.
- *  EtherCAT `channelMappings` are intentionally left to their own allocator
- *  for now (they still participate as fixed constraints via the pool). */
-function applyRemoteDeviceAddresses(
+/** Flatten the registry into a `channelKey -> { address, alias }` index for
+ *  writing results back onto each producer. */
+function indexRegistry(registry: IecAddressRegistry): Map<string, { address?: string; alias: string }> {
+  const index = new Map<string, { address?: string; alias: string }>()
+  for (const consumer of registry.consumers) {
+    for (const channel of consumer.channels) {
+      const key = channelKey(consumer.id, channel.channelId)
+      index.set(key, { address: registry.assignments[key], alias: channel.alias ?? '' })
+    }
+  }
+  return index
+}
+
+/** Write the registry's addresses + (memory-restored) aliases back onto the
+ *  Modbus producers' `ioPoints`. Keyed exactly as `migrateToRegistry` built
+ *  the consumers, so there is no mapping drift. Runs inside `produce`. */
+function applyModbusAddresses(
   remoteDevices: ProjectSlice['project']['data']['remoteDevices'],
-  registry: IecAddressRegistry,
+  index: ReadonlyMap<string, { address?: string; alias: string }>,
 ): void {
   if (!remoteDevices) return
   for (const device of remoteDevices) {
@@ -345,11 +373,26 @@ function applyRemoteDeviceAddresses(
       const group = groups[g]
       const consumerId = modbusConsumerId(deviceRef, group.id ?? String(g))
       for (const point of group.ioPoints ?? []) {
-        const address = registry.assignments[channelKey(consumerId, point.id)]
-        if (address) point.iecLocation = address
+        const info = index.get(channelKey(consumerId, point.id))
+        if (!info) continue
+        if (info.address) point.iecLocation = info.address
+        point.alias = info.alias
       }
     }
   }
+}
+
+/** Rebuild VPP io-mapping entries with the registry's addresses + aliases.
+ *  Pure — returns a new entries array for `setVendorScreenData`. */
+function applyVppEntries(
+  entries: readonly VppMappingEntry[],
+  index: ReadonlyMap<string, { address?: string; alias: string }>,
+): VppMappingEntry[] {
+  return entries.map((entry) => {
+    const info = index.get(channelKey(`vpp-slot-${entry.slot}`, entry.channelName))
+    if (!info) return entry
+    return { ...entry, iecAddress: info.address ?? entry.iecAddress, alias: info.alias }
+  })
 }
 
 const reconcileVariablesText = (
@@ -426,6 +469,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
   },
   pendingDeletions: [],
+  iecAliasMemory: {},
 
   projectActions: {
     // -----------------------------------------------------------------------
@@ -1541,7 +1585,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       // Removing a device frees its addresses — recompact the survivors
       // project-wide (bug #4) and let bound variables follow.
-      getState().projectActions.recalculateRemoteDeviceAddresses()
+      getState().projectActions.recalculateIecAddresses()
       return ok()
     },
     updateRemoteDeviceName: (name, newName) => {
@@ -1586,18 +1630,45 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
-    recalculateRemoteDeviceAddresses: () => {
-      // Central, capability-scoped recalculation of the Modbus producers.
-      // Build the registry from live state before entering produce, write
-      // the compacted addresses back onto the ioPoints, then reconcile the
-      // program variables bound to any alias that moved.
-      const registry = buildRemoteDeviceRegistry(getState())
+    recalculateIecAddresses: () => {
+      // Central, capability-scoped recalculation via the IEC address
+      // registry. Build the registry from live producer state (VPP + Modbus
+      // reallocated; pins/EtherCAT held as fixed constraints), restoring any
+      // aliases the session memory remembers for reappeared channels, then
+      // write the compacted addresses + aliases back onto every producer and
+      // reconcile bound variables.
+      const live = getState()
+      const registry = buildIecRegistry(live)
+      const index = indexRegistry(registry)
+
+      // VPP io-mapping lives in device-slice vendorScreenData — write it via
+      // the device action so the layouts (which render from the store) update.
+      const vppEntries = readVppEntries(live)
+      if (vppEntries.length > 0) {
+        getState().deviceActions.setVendorScreenData('io-mapping', { entries: applyVppEntries(vppEntries, index) })
+      }
+
+      // Modbus ioPoints live in project.data — write them on the draft.
       setState(
         produce((slice: ProjectSlice) => {
-          applyRemoteDeviceAddresses(slice.project.data.remoteDevices, registry)
+          applyModbusAddresses(slice.project.data.remoteDevices, index)
         }),
       )
       getState().projectActions.syncVariableAliases()
+      return ok()
+    },
+    rememberChannelAlias: (memoryKey, alias) => {
+      // Record (or clear) an alias in the session memory keyed by the
+      // channel's stable semantic identity, so removing a producer and
+      // re-adding the same one restores the alias. Session-scoped — never
+      // serialized.
+      setState(
+        produce((slice: ProjectSlice) => {
+          const trimmed = alias.trim()
+          if (trimmed.length > 0) slice.iecAliasMemory[memoryKey] = trimmed
+          else delete slice.iecAliasMemory[memoryKey]
+        }),
+      )
       return ok()
     },
     addIOGroup: (deviceName, group) => {
@@ -1642,7 +1713,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // recompacts all remote-device producers project-wide and reconciles
       // bound variables. (The provisional addresses above just seed the
       // point structure/classes.)
-      getState().projectActions.recalculateRemoteDeviceAddresses()
+      getState().projectActions.recalculateIecAddresses()
       return ok()
     },
     updateIOGroup: (deviceName, groupId, updates) => {
@@ -1705,7 +1776,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           group.ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending, existingPoints)
         }),
       )
-      getState().projectActions.recalculateRemoteDeviceAddresses()
+      getState().projectActions.recalculateIecAddresses()
       return ok()
     },
     deleteIOGroup: (deviceName, groupId) => {
@@ -1717,7 +1788,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }),
       )
       // Recompact so the groups that followed reclaim the freed addresses.
-      getState().projectActions.recalculateRemoteDeviceAddresses()
+      getState().projectActions.recalculateIecAddresses()
       return ok()
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {

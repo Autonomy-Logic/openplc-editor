@@ -23,6 +23,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -467,10 +468,12 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       }
     }
 
+    // Write the derived channel structure, then let the central registry own
+    // the final addresses (VPP + Modbus packed together, aliases restored
+    // from the session memory) and reconcile variables. This layout renders
+    // from the store, so the registry's write-back propagates automatically.
     setVendorScreenData('io-mapping', { entries: newEntries })
-    // Producer mutation: every VPP slot just had its addresses
-    // re-allocated. Sync variables that were bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -678,13 +681,19 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // call sees variables already pointing at the new alias name and
     // takes the refresh path (location follows alias) instead of the
     // orphan path (location cleared, warning glyph rendered).
-    const oldAlias = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)?.alias ?? ''
+    const targetEntry = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)
+    const oldAlias = targetEntry?.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(targetEntry?.moduleId ?? '', slot, channelName), alias)
     // Refresh variables bound to the (now-renamed) alias against
     // any address shifts produced by the change.
     useOpenPLCStore.getState().projectActions.syncVariableAliases()
