@@ -1,6 +1,6 @@
 import type { PoolInputs } from '../../address-pool'
 import { channelKey } from '../allocate'
-import { migrateToRegistry, unpinAllocatableChannels } from '../migrate'
+import { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels } from '../migrate'
 import { buildAliasIndex } from '../resolve'
 
 describe('migrateToRegistry', () => {
@@ -136,6 +136,62 @@ describe('migrateToRegistry', () => {
     expect(modbus.channels.map((c) => c.channelId)).toEqual(['ok'])
     // The ethercat slave had only an unparseable mapping → no consumer.
     expect(reg.consumers.some((c) => c.kind === 'ethercat')).toBe(false)
+  })
+})
+
+describe('recalculateFromLegacy', () => {
+  it('recompacts a gap left by a removed group and keeps aliases following', () => {
+    // Two modbus groups; the first (%IW0/%IW1) has been removed, leaving the
+    // survivor at %IW2/%IW3 in the legacy data — a gap.
+    const inputs: PoolInputs = {
+      remoteDevices: [
+        {
+          name: 'd',
+          modbusTcpConfig: {
+            ioGroups: [
+              {
+                id: 'g2',
+                ioPoints: [
+                  { id: 'p0', iecLocation: '%IW2', alias: 'temp' },
+                  { id: 'p1', iecLocation: '%IW3' },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    }
+    const { registry } = recalculateFromLegacy(inputs)
+    // The survivor slides down to %IW0/%IW1 — gap reclaimed.
+    expect(registry.assignments[channelKey('modbus:d:g2', 'p0')]).toBe('%IW0')
+    expect(registry.assignments[channelKey('modbus:d:g2', 'p1')]).toBe('%IW1')
+    // The alias follows its channel to the new address.
+    expect(buildAliasIndex(registry).get('temp')).toBe('%IW0')
+  })
+
+  it('keeps hardware pins fixed while allocatable producers compact', () => {
+    const inputs: PoolInputs = {
+      pinMapping: { pins: [{ address: '%IX0.2', alias: 'btn' }] },
+      remoteDevices: [
+        { name: 'd', modbusTcpConfig: { ioGroups: [{ id: 'g', ioPoints: [{ id: 'p', iecLocation: '%IX0.5' }] }] } },
+      ],
+    }
+    const { registry } = recalculateFromLegacy(inputs)
+    expect(registry.assignments[channelKey('pin-mapping', '%IX0.2')]).toBe('%IX0.2') // pinned stays
+    expect(registry.assignments[channelKey('modbus:d:g', 'p')]).toBe('%IX0.0') // compacts to lowest free
+  })
+
+  it('excludes inactive-kind producers under capability scoping', () => {
+    const inputs: PoolInputs = {
+      pinMapping: { pins: [{ address: '%QW0' }] },
+      remoteDevices: [
+        { name: 'd', modbusTcpConfig: { ioGroups: [{ id: 'g', ioPoints: [{ id: 'p', iecLocation: '%QW5' }] }] } },
+      ],
+    }
+    // Target without pin mapping: pins drop out, modbus compacts to %QW0.
+    const { registry } = recalculateFromLegacy(inputs, { activeKinds: new Set(['modbus-tcp-remote']) })
+    expect(registry.assignments[channelKey('pin-mapping', '%QW0')]).toBeUndefined()
+    expect(registry.assignments[channelKey('modbus:d:g', 'p')]).toBe('%QW0')
   })
 })
 

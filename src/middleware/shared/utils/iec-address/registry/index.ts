@@ -1,6 +1,6 @@
 export { formatAddress, isBitClass, isIecAddress, parseAddress, type ParsedAddress, prefixOf } from './address-space'
 export { allocateAddresses, channelKey } from './allocate'
-export { migrateToRegistry, unpinAllocatableChannels } from './migrate'
+export { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels } from './migrate'
 export {
   addConsumer,
   addressOf,

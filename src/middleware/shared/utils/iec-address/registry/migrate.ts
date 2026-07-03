@@ -20,7 +20,14 @@
 import type { PoolInputs } from '../address-pool'
 import { parseAddress } from './address-space'
 import { recalculate } from './registry'
-import type { AddressClass, IecAddressRegistry, RegistryChannel, RegistryConsumer } from './types'
+import type {
+  AddressClass,
+  AddressConflict,
+  AllocateOptions,
+  IecAddressRegistry,
+  RegistryChannel,
+  RegistryConsumer,
+} from './types'
 
 const PIN_MAPPING_KIND = 'pin-mapping'
 
@@ -146,4 +153,28 @@ export function unpinAllocatableChannels(registry: IecAddressRegistry): IecAddre
     }
   })
   return { ...registry, consumers }
+}
+
+/**
+ * Full project-wide recalculation from live producer state. This is the
+ * single entry point the store's `recalculateIecAddresses` action drives:
+ *
+ *   1. derive the consumer structure + aliases from the current producers
+ *      (`migrateToRegistry` — everything seeded at its present address),
+ *   2. release the seeds on allocatable channels (`unpinAllocatableChannels`
+ *      keeps only real hardware pins fixed),
+ *   3. re-allocate, capability-scoped, so freed slots are reclaimed and
+ *      inactive-kind producers drop out.
+ *
+ * The result is the fresh registry (gapless, target-scoped) plus any
+ * pinned-address conflicts. Aliases ride along on their channels, so the
+ * caller's variable reconciliation makes program variables follow.
+ */
+export function recalculateFromLegacy(
+  inputs: PoolInputs,
+  options: AllocateOptions = {},
+): { registry: IecAddressRegistry; conflicts: AddressConflict[] } {
+  const seeded = migrateToRegistry(inputs)
+  const unpinned = unpinAllocatableChannels(seeded)
+  return recalculate(unpinned, options)
 }
