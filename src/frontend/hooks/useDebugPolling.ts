@@ -95,11 +95,19 @@ interface LeafMeta {
 }
 
 /**
- * Collect ALL leaf indexes from a tree (ignoring expansion state).
- * Used to build the full index→metadata lookup for parsing responses.
+ * Collect ALL leaf metadata from a tree (ignoring expansion state), grouped by
+ * debug index. Used to build the full index→metadata lookup for parsing
+ * responses.
+ *
+ * One index can map to MANY composite keys: a shared CONFIGURATION VAR_GLOBAL is
+ * referenced (as VAR_EXTERNAL) by every program that uses it, so `main:start_pb`
+ * and `another_test:start_pb` resolve to the same address. The value read from
+ * that address must fan out to every composite key, or the variable displays on
+ * only one POU (the last one walked). Hence `LeafMeta[]` per index, not a single
+ * `LeafMeta`.
  */
-function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, LeafMeta> {
-  const result = new Map<number, LeafMeta>()
+function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, LeafMeta[]> {
+  const result = new Map<number, LeafMeta[]>()
 
   function walk(node: DebugTreeNode) {
     if (node.isComplex && node.children) {
@@ -109,7 +117,9 @@ function collectAllLeafMeta(nodes: DebugTreeNode[]): Map<number, LeafMeta> {
     } else if (node.debugIndex !== undefined) {
       const meta: LeafMeta = { compositeKey: node.compositeKey, type: node.type }
       if (node.enumValues) meta.enumValues = node.enumValues
-      result.set(node.debugIndex, meta)
+      const existing = result.get(node.debugIndex)
+      if (existing) existing.push(meta)
+      else result.set(node.debugIndex, [meta])
     }
   }
 
@@ -158,7 +168,8 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const batchSizeRef = useRef(TCP_BATCH_SIZE)
 
   // Full leaf index→metadata map — computed once when debugger starts.
-  const allLeavesRef = useRef<Map<number, LeafMeta> | null>(null)
+  // One index → many leaves (a shared global appears under each POU's key).
+  const allLeavesRef = useRef<Map<number, LeafMeta[]> | null>(null)
 
   // Cached active indexes — rebuilt only when invalidation triggers change.
   const activeIndexesRef = useRef<number[] | null>(null)
@@ -183,11 +194,13 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     if (allLeavesRef.current) return allLeavesRef.current
 
     const allTrees = debugTreesRef.current
-    const allLeaves = new Map<number, LeafMeta>()
+    const allLeaves = new Map<number, LeafMeta[]>()
     for (const pouTrees of Object.values(allTrees)) {
       const leaves = collectAllLeafMeta(pouTrees)
-      for (const [index, meta] of leaves) {
-        allLeaves.set(index, meta)
+      for (const [index, metas] of leaves) {
+        const existing = allLeaves.get(index)
+        if (existing) existing.push(...metas)
+        else allLeaves.set(index, [...metas])
       }
     }
 
@@ -297,8 +310,8 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         }
 
         const index = batch[pos]
-        const meta = allLeaves.get(index)
-        if (!meta) {
+        const metas = allLeaves.get(index)
+        if (!metas || metas.length === 0) {
           // No leaf metadata — the runtime still consumed the position
           // (it doesn't know our index→type map).  Count it consumed and
           // press on; the value bytes for this slot are forfeit.
@@ -306,6 +319,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
           continue
         }
 
+        // Every leaf at one index is the same underlying variable/address, so
+        // they share type/size; parse once off the first, then fan the value
+        // out to every composite key (a shared global lives under each POU's).
+        const meta = metas[0]
         const typeSize = getTypeSizeByName(meta.type)
         if (bufferOffset + typeSize > responseBuffer.length) {
           // Response buffer ran out before we reached every position the
@@ -334,12 +351,15 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
           // Out-of-range falls back to the raw integer.
           const stored = meta.enumValues !== undefined ? (meta.enumValues[Number(value)] ?? value) : value
           const current = isBool ? currentBool : currentNonBool
-          if (current.get(meta.compositeKey) !== stored) {
-            ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, stored)
+          const changed = isBool ? changedBool : changedNonBool
+          // Fan out to every composite key sharing this address (shared globals).
+          for (const m of metas) {
+            if (current.get(m.compositeKey) !== stored) changed.set(m.compositeKey, stored)
           }
           bufferOffset += bytesRead
         } catch {
-          ;(isBool ? changedBool : changedNonBool).set(meta.compositeKey, 'ERR')
+          const changed = isBool ? changedBool : changedNonBool
+          for (const m of metas) changed.set(m.compositeKey, 'ERR')
           bufferOffset += typeSize
         }
         positionsConsumed = pos + 1

@@ -9,12 +9,7 @@
 import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import type { DebugVariableEntry } from './debug-parser'
-import {
-  buildDebugPath,
-  buildGlobalDebugPath,
-  findDebugVariable,
-  findDebugVariableForField,
-} from './debug-variable-finder'
+import { buildVariableDebugPath, findDebugVariable, findDebugVariableForField } from './debug-variable-finder'
 import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
 
 /**
@@ -405,9 +400,8 @@ export function traverseVariable<T>(variable: PLCVariable, context: TraversalCon
   const { debugVariables, projectPous, pouName, instanceName, systemLibraries } = context
   const compositeKey = `${pouName}:${variable.name}`
 
-  // Build the base path
-  const fullPath =
-    variable.class === 'external' ? buildGlobalDebugPath(variable.name) : buildDebugPath(instanceName, variable.name)
+  // Build the base path (single rule — see buildVariableDebugPath)
+  const fullPath = buildVariableDebugPath(variable.class === 'external', instanceName, variable.name)
 
   if (variable.type.definition === 'base-type') {
     const baseType = variable.type.value.toUpperCase()
