@@ -30,7 +30,7 @@
 #include "defines.h"
 #include "arduino_runtime_glue.h"
 
-#ifdef MODBUS_ENABLED
+#if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
 #endif
 
@@ -178,6 +178,15 @@ void setup()
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
+    #elif defined(DEBUGGER_ENABLED)
+        // Always-on debugger without full Modbus: bring up the serial port and
+        // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
+        // variables directly through the strucpp debug table (openplc_debug_*),
+        // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
+        // deliberately not called here, saving SRAM on small boards.
+        DEBUG_IFACE.begin(DEBUG_BAUD);
+        mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+        modbus.slaveid = DEBUG_SLAVE;
     #endif
 
     setupCycleDelay(base_tick_ns);
@@ -369,8 +378,12 @@ void scheduler()
         sketch_loop();
     #endif
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
         modbusTask();
+    #elif defined(DEBUGGER_ENABLED)
+        // Debug-only: poll the serial transport for debugger requests. No buffer
+        // sync (modbusTask's mirror loops) because there are no operation buffers.
+        mbtask();
     #endif
 
     if (!first_cycle)
@@ -392,11 +405,17 @@ void loop()
         last_run += scan_cycle;
     }
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
     // Only run Modbus task again if we have at least 10ms gap until the next cycle
     if ((micros() - last_run) >= 10000)
     {
         modbusTask();
+    }
+    #elif defined(DEBUGGER_ENABLED)
+    // Debug-only: give the debugger extra serial-poll time between cycles too.
+    if ((micros() - last_run) >= 10000)
+    {
+        mbtask();
     }
     #endif
 

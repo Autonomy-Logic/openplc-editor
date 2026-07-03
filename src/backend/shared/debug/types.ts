@@ -24,6 +24,38 @@ export interface DebugSetResult {
 }
 
 /**
+ * Result of the always-on debugger status probe (FC 0x46). `running` is the
+ * PLC scan liveness flag, `tick` the scan counter (advances each cycle), and
+ * `uptimeMs` the milliseconds since the board booted.
+ */
+export interface DebugStatusResult {
+  success: boolean
+  running?: boolean
+  tick?: number
+  uptimeMs?: number
+  error?: string
+}
+
+/** Result of the runtime version probe (FC 0x47) — ASCII version string. */
+export interface DebugVersionResult {
+  success: boolean
+  version?: string
+  error?: string
+}
+
+/**
+ * Result of the board-id probe (FC 0x48). `boardId` is the raw unique-id bytes
+ * (empty when the target has no unique-id support); `boardIdHex` is the same
+ * bytes as a lowercase hex string for display.
+ */
+export interface DebugBoardIdResult {
+  success: boolean
+  boardId?: Uint8Array
+  boardIdHex?: string
+  error?: string
+}
+
+/**
  * Result of an MD5-probe call.  The `md5` is the runtime's program hash;
  * `targetEndian` is the byte order detected from the 2-byte sentinel the
  * runtime writes into the response trailer via a native `uint16_t*`

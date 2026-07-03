@@ -145,6 +145,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   //    Runtime-v4 / runtime-v3 targets route Modbus config through
   //    `conf/modbus_slave.json` in the upload bundle and emit no
   //    macros here.
+  let modbusEnabled = false
   if (boardRuntime === 'simulator') {
     DEFINES_CONTENT += '//Comms Configuration\n'
     DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
@@ -154,12 +155,29 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MBSERIAL\n'
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
+    modbusEnabled = true
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
     const modbusBlock = generateModbusDefines(vppModbusState)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'
+      modbusEnabled = true
     }
+  }
+
+  // 4b. Debugger — always-on debug over serial for baremetal Arduino targets.
+  //     Emitted only when full Modbus is NOT active: with Modbus off, this is
+  //     the gate that brings up the serial port and the debug function codes
+  //     (0x41-0x48) WITHOUT allocating any operation buffers (coils/holding/
+  //     etc.), saving SRAM on small boards. When Modbus IS active the debugger
+  //     already rides Modbus's own transport, so emitting DEBUGGER_ENABLED then
+  //     would be redundant (and, in a TCP-only Modbus build, would leave the
+  //     serial port uninitialised). Simulator gets MODBUS_ENABLED above;
+  //     openplc-compiler runtimes don't use this firmware at all.
+  if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler' && !modbusEnabled) {
+    DEFINES_CONTENT += '//Debugger\n'
+    DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
+    DEFINES_CONTENT += `\n\n`
   }
 
   // 5. IO Config — derived from devicePinMapping.  Pin order is

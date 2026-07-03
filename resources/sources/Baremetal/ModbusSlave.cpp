@@ -12,6 +12,15 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // of the precompiled OpenPLCUserLib archive built with -std=gnu++17.
 #include "arduino_runtime_glue.h"
 
+// ArduinoUniqueID (ricaun) backs the DEBUG_GET_BOARD_ID (0x48) function code.
+// It supports AVR/megaAVR/SAM/SAMD/STM32/ESP/RP2040/Teensy. On a core without
+// support (or when a board intentionally opts out via OPENPLC_NO_UNIQUE_ID),
+// the board-id handler returns id_len = 0 instead of failing to compile.
+#ifndef OPENPLC_NO_UNIQUE_ID
+    #include <ArduinoUniqueID.h>
+    #define OPENPLC_HAS_UNIQUE_ID
+#endif
+
 //Global Modbus vars
 struct MBinfo modbus;
 uint8_t mb_frame[MAX_MB_FRAME];
@@ -242,7 +251,7 @@ void mbtask()
     #ifdef MBTCP
         handle_tcp();
     #endif
-    #ifdef MBSERIAL
+    #ifdef MB_SERIAL_ACTIVE
         handle_serial();
     #endif
 }
@@ -397,7 +406,7 @@ void handle_tcp()
 }
 #endif
 
-#ifdef MBSERIAL
+#ifdef MB_SERIAL_ACTIVE
 // Inter-frame idle, in milliseconds, used ONLY to abandon a frame whose
 // remainder never arrives. Modbus RTU was defined for RS485, where bytes of a
 // frame are ~one character time apart (T1.5/T3.5, tens of microseconds at
@@ -452,6 +461,10 @@ static int32_t mb_rtu_frame_len(const uint8_t *f, uint16_t n)
             return 10 + (int32_t)(((uint16_t)f[6] << 8) | f[7]);
         case MB_FC_DEBUG_GET_MD5:
             return 8;                                   // [id][fc][endian:2][00:2][crc:2]
+        case MB_FC_DEBUG_GET_STATUS:
+        case MB_FC_DEBUG_GET_VERSION:
+        case MB_FC_DEBUG_GET_BOARD_ID:
+            return 4;                                   // [id][fc][crc:2]
         default:
             return -1;                                  // not one of our function codes
     }
@@ -521,7 +534,7 @@ void handle_serial()
         //    Standard FCs are validated by CRC (the arbiter that makes resync
         //    trustworthy); a mismatch means corruption or misalignment, so we
         //    slide one byte and retry instead of discarding the whole buffer.
-        if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5)
+        if (mb_frame[1] != MB_FC_DEBUG_INFO && mb_frame[1] != MB_FC_DEBUG_SET && mb_frame[1] != MB_FC_DEBUG_GET && mb_frame[1] != MB_FC_DEBUG_GET_LIST && mb_frame[1] != MB_FC_DEBUG_GET_MD5 && mb_frame[1] != MB_FC_DEBUG_GET_STATUS && mb_frame[1] != MB_FC_DEBUG_GET_VERSION && mb_frame[1] != MB_FC_DEBUG_GET_BOARD_ID)
         {
             mb_frame_len = (uint16_t)expected;
             packet_crc = ((mb_frame[expected - 2] << 8) | mb_frame[expected - 1]);
@@ -594,13 +607,21 @@ void handle_serial()
 void process_mbpacket()
 {
     uint8_t fcode  = mb_frame[1];
-    // Standard Modbus fields — preserved for the non-debug FCs.
+#ifdef MODBUS_ENABLED
+    // Standard Modbus fields — only used by the operation FCs, which are
+    // compiled out in debug-only builds (so guard to avoid unused-var warnings).
     uint16_t field1 = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
     uint16_t field2 = (uint16_t)mb_frame[4] << 8 | (uint16_t)mb_frame[5];
+#endif
     void *endianness_check = &mb_frame[2];
 
     switch (fcode)
     {
+#ifdef MODBUS_ENABLED
+        // Standard Modbus operation FCs read/write the coil/register buffers,
+        // which only exist when full Modbus is enabled. In debug-only builds
+        // these cases are compiled out, so operation requests fall through to
+        // the default and get an ILLEGAL_FUNCTION exception.
         case MB_FC_WRITE_REG:
             //field1 = reg, field2 = value
             writeSingleRegister(field1, field2);
@@ -640,6 +661,7 @@ void process_mbpacket()
             //field1 = startreg, field2 = numoutputs
             writeMultipleCoils(field1, field2, mb_frame[6]);
         break;
+#endif // MODBUS_ENABLED
 
         case MB_FC_DEBUG_INFO:
             debugInfo();
@@ -677,6 +699,18 @@ void process_mbpacket()
 
         case MB_FC_DEBUG_GET_MD5:
             debugGetMd5(endianness_check);
+        break;
+
+        case MB_FC_DEBUG_GET_STATUS:
+            debugGetStatus();
+        break;
+
+        case MB_FC_DEBUG_GET_VERSION:
+            debugGetVersion();
+        break;
+
+        case MB_FC_DEBUG_GET_BOARD_ID:
+            debugGetBoardId();
         break;
 
         default:
@@ -1330,7 +1364,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
     uint16_t responseSize = 0;
     uint16_t lastReqIdx = 0;
 
-    #ifdef MBSERIAL
+    #ifdef MB_SERIAL_ACTIVE
         #define VARIDX_SIZE 20
     #else
         #define VARIDX_SIZE 60
@@ -1437,6 +1471,77 @@ void debugGetMd5(void * /*endianness*/)
     mb_frame[md5_len + 3] = sentinel_bytes[0];
     mb_frame[md5_len + 4] = sentinel_bytes[1];
     mb_frame_len = md5_len + 5;
+}
+
+// PDU request:  [FC]
+// PDU response: [FC, STATUS, running:u8, tick:u32 BE, uptime_ms:u32 BE]
+//
+// Lightweight liveness/diagnostic probe that does not require a full debug
+// session. `running` is always 1 on baremetal (the PLC scan is unconditional);
+// `tick` is the scan counter (same value the read FCs report), so a client can
+// tell whether the PLC is actually cycling by watching it advance. `uptime_ms`
+// is millis() since boot.
+void debugGetStatus()
+{
+    uint32_t uptime = (uint32_t)millis();
+
+    mb_frame[1] = MB_FC_DEBUG_GET_STATUS;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = 1; // PLC scan is always running on baremetal
+    mb_frame[4] = (uint8_t)((scan_counter >> 24) & 0xFF);
+    mb_frame[5] = (uint8_t)((scan_counter >> 16) & 0xFF);
+    mb_frame[6] = (uint8_t)((scan_counter >> 8)  & 0xFF);
+    mb_frame[7] = (uint8_t)(scan_counter & 0xFF);
+    mb_frame[8]  = (uint8_t)((uptime >> 24) & 0xFF);
+    mb_frame[9]  = (uint8_t)((uptime >> 16) & 0xFF);
+    mb_frame[10] = (uint8_t)((uptime >> 8)  & 0xFF);
+    mb_frame[11] = (uint8_t)(uptime & 0xFF);
+    mb_frame_len = 12;
+}
+
+// PDU request:  [FC]
+// PDU response: [FC, STATUS, version_ascii...]  (no NUL terminator)
+//
+// Reports OPENPLC_RUNTIME_VERSION (defined in openplc_version.h). The editor
+// reads the ASCII bytes up to the end of the frame.
+void debugGetVersion()
+{
+    mb_frame[1] = MB_FC_DEBUG_GET_VERSION;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+
+    const char ver[] = OPENPLC_RUNTIME_VERSION;
+    uint16_t i = 0;
+    for (i = 0; ver[i] != '\0'; i++)
+    {
+        if ((uint16_t)(3 + i) >= MAX_MB_FRAME) break; // never overrun the frame
+        mb_frame[3 + i] = (uint8_t)ver[i];
+    }
+    mb_frame_len = 3 + i;
+}
+
+// PDU request:  [FC]
+// PDU response: [FC, STATUS, id_len:u8, id_bytes...]
+//
+// Returns the unique hardware ID via ArduinoUniqueID. id_len is UniqueIDsize
+// (architecture-dependent: AVR 9-10, ESP8266 4, ESP32 6, SAM/SAMD 16, STM32
+// 12, Teensy 8). On a core without support, id_len = 0 and no bytes follow.
+void debugGetBoardId()
+{
+    mb_frame[1] = MB_FC_DEBUG_GET_BOARD_ID;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+
+#ifdef OPENPLC_HAS_UNIQUE_ID
+    uint8_t idLen = (uint8_t)UniqueIDsize;
+    // Clamp so [FC][STATUS][id_len][id_bytes...] always fits the frame.
+    if ((uint16_t)(4 + idLen) > MAX_MB_FRAME) idLen = (uint8_t)(MAX_MB_FRAME - 4);
+    mb_frame[3] = idLen;
+    for (uint8_t i = 0; i < idLen; i++)
+        mb_frame[4 + i] = UniqueID[i];
+    mb_frame_len = 4 + idLen;
+#else
+    mb_frame[3] = 0; // no unique-id support on this core
+    mb_frame_len = 4;
+#endif
 }
 
 uint16_t calcCrc()

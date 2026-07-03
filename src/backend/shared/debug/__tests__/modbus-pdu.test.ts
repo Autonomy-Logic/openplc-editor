@@ -12,11 +12,17 @@ if (typeof globalThis.TextDecoder === 'undefined') {
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../../simulator/types'
 import {
+  buildGetBoardIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
+  buildGetStatusRequest,
+  buildGetVersionRequest,
   buildSetVariableRequest,
+  parseGetBoardIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
+  parseGetStatusResponse,
+  parseGetVersionResponse,
   parseSetVariableResponse,
   responseFunctionCode,
 } from '../modbus-pdu'
@@ -187,6 +193,185 @@ describe('buildSetVariableRequest / parseSetVariableResponse', () => {
       new Uint8Array([ModbusFunctionCode.DEBUG_SET, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
     )
     expect(result.success).toBe(false)
+  })
+})
+
+describe('buildGetStatusRequest / parseGetStatusResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetStatusRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_STATUS)
+  })
+
+  it('parses running / tick / uptime on success', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_STATUS,
+      ModbusDebugResponse.SUCCESS,
+      0x01, // running = true
+      0x00,
+      0x00,
+      0x00,
+      0x2a, // tick = 42
+      0x00,
+      0x00,
+      0x01,
+      0x00, // uptime = 256
+    ])
+    const result = parseGetStatusResponse(buf)
+    expect(result).toEqual({ success: true, running: true, tick: 42, uptimeMs: 256 })
+  })
+
+  it('reports running=false when the flag byte is zero', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_STATUS,
+      ModbusDebugResponse.SUCCESS,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+    ])
+    expect(parseGetStatusResponse(buf).running).toBe(false)
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetStatusResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetStatusResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetStatusResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+  })
+
+  it('flags an incomplete success payload', () => {
+    const result = parseGetStatusResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS, ModbusDebugResponse.SUCCESS, 0x01]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete/)
+  })
+})
+
+describe('buildGetVersionRequest / parseGetVersionResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetVersionRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_VERSION)
+  })
+
+  it('parses the ASCII version string on success', () => {
+    const ver = new TextEnc().encode('4.2.7')
+    const buf = new Uint8Array(2 + ver.length)
+    buf[0] = ModbusFunctionCode.DEBUG_GET_VERSION
+    buf[1] = ModbusDebugResponse.SUCCESS
+    buf.set(ver, 2)
+    expect(parseGetVersionResponse(buf)).toEqual({ success: true, version: '4.2.7' })
+  })
+
+  it('strips a trailing NUL terminator', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION, ModbusDebugResponse.SUCCESS, 0x31, 0x2e, 0x30, 0x00])
+    expect(parseGetVersionResponse(buf).version).toBe('1.0')
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetVersionResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetVersionResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetVersionResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION, ModbusDebugResponse.ERROR_OUT_OF_MEMORY]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_MEMORY')
+  })
+})
+
+describe('buildGetBoardIdRequest / parseGetBoardIdResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetBoardIdRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+  })
+
+  it('parses id bytes and hex on success', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x03, // id_len = 3
+      0x0a,
+      0xbc,
+      0x01,
+    ])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(true)
+    expect(Array.from(result.boardId!)).toEqual([0x0a, 0xbc, 0x01])
+    expect(result.boardIdHex).toBe('0abc01')
+  })
+
+  it('handles id_len = 0 (unsupported core) as success with empty id', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x00])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.boardIdHex).toBe('')
+    expect(Array.from(result.boardId!)).toEqual([])
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetBoardIdResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetBoardIdResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetBoardIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+  })
+
+  it('flags a missing id_len byte', () => {
+    const result = parseGetBoardIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/at least 3/)
+  })
+
+  it('flags truncated id bytes', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete board-id data/)
   })
 })
 

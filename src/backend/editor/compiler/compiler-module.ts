@@ -198,6 +198,10 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
+    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
+    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
+    // so the lib must be installed for every Arduino build.
+    'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
     'CONTROLLINO',

@@ -85,4 +85,34 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     // non-deterministic and this test already validated at the SET layer
     // that the protocol accepts the unforce request.
   }, 30000)
+
+  it('FC 0x46 DEBUG_GET_STATUS reports the PLC running with an advancing tick', async () => {
+    const first = await client.getStatus()
+    expect(first.success).toBe(true)
+    expect(first.running).toBe(true)
+    expect(typeof first.tick).toBe('number')
+    expect(typeof first.uptimeMs).toBe('number')
+
+    // Let a few scan cycles run — the scan counter must advance.
+    await new Promise((r) => setTimeout(r, 200))
+    const second = await client.getStatus()
+    expect(second.success).toBe(true)
+    expect(second.tick!).toBeGreaterThan(first.tick!)
+  }, 30000)
+
+  it('FC 0x47 DEBUG_GET_VERSION returns the runtime version string', async () => {
+    const result = await client.getVersion()
+    expect(result.success).toBe(true)
+    // OPENPLC_RUNTIME_VERSION is a dotted version like "4.2.7".
+    expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
+  }, 30000)
+
+  it('FC 0x48 DEBUG_GET_BOARD_ID returns the AVR unique id (9 bytes on ATmega2560)', async () => {
+    const result = await client.getBoardId()
+    expect(result.success).toBe(true)
+    // ArduinoUniqueID reports 9 bytes on AVR (10 on ATmega328PB). The
+    // emulated ATmega2560 yields a non-empty id; assert it round-trips.
+    expect(result.boardId!.length).toBeGreaterThan(0)
+    expect(result.boardIdHex).toMatch(/^[0-9a-f]+$/)
+  }, 30000)
 })
