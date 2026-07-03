@@ -528,6 +528,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             },
           }
           slice.pendingDeletions = []
+          // Session alias-memory is per-project; drop it on a fresh slate so
+          // one project's remembered aliases can't leak into the next.
+          slice.iecAliasMemory = {}
         }),
       )
     },

@@ -2638,6 +2638,12 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.rememberChannelAlias(key, '   ')
       expect(store.getState().iecAliasMemory[key]).toBeUndefined()
     })
+
+    it('is reset on a fresh project so aliases do not leak between projects', () => {
+      store.getState().projectActions.rememberChannelAlias(vppMemoryKey('mod-a', 1, 'DO1'), 'relay_1')
+      store.getState().projectActions.clearProjects()
+      expect(store.getState().iecAliasMemory).toEqual({})
+    })
   })
 
   describe('updateIOPointAlias', () => {

@@ -211,3 +211,33 @@ producer and the compiler have moved to the registry.
 
 Each phase ships as a paired editor+web PR keeping the shared surface
 byte-identical.
+
+## 11. Implementation status
+
+Shipped on `feat/central-iec-address-registry` (editor + web, byte-identical):
+
+- **Pure core** — types, address-space, allocator (capability-scoped,
+  gapless, deterministic), registry ops, `resolveLocation`, migration
+  transform, and the session **alias-memory** (`memoryKey` +
+  `restoreAliasesFromMemory`, keyed `moduleId:slot:channel`; held in the store,
+  never serialized, reset on a fresh project).
+- **Central action** `recalculateIecAddresses` reallocates **VPP + Modbus +
+  EtherCAT** together (`ALLOCATED_KINDS`), capability-scoped, restoring aliases
+  from the session memory, and writes addresses + aliases back to each
+  producer (VPP `io-mapping`, Modbus `ioPoints`, EtherCAT `channelMappings`).
+  Invoked from every producer mutation and on target switch.
+- **Pins** participate as **fixed constraints** — hardware addresses are never
+  reallocated; their aliases persist per-board and flow through the same
+  registry uniqueness gate. Nothing to route.
+- **Aliases** resolve to concrete IEC addresses **in the editor** (each
+  variable's `location` is kept resolved); the compiler/runtime are untouched.
+
+**Deliberately deferred** (superseded but still present; removal needs the
+class-carrying-entry refactor + a `syncVariableAliases` migration, both best
+verified in-app): the VPP effects' provisional `nextFreeAddress` seeding
+(overwritten by the central recalc), the EtherCAT `esi-parser` overlap
+allocator (superseded by the independent-prefix model — confirmed against the
+runtime's separate typed buffers), and the legacy `address-pool` /
+`alias-registry` read model (still backs `syncVariableAliases` and the
+per-producer alias-uniqueness gates — consistent with the registry because
+both derive from the same producer state).
