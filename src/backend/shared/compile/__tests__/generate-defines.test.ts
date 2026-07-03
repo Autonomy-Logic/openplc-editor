@@ -153,6 +153,43 @@ describe('generateDefinesContent — simulator comms block', () => {
   })
 })
 
+describe('generateDefinesContent — Debugger block (always-on debug)', () => {
+  it('emits DEBUGGER_ENABLED for a baremetal arduino-cli target with no Modbus', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
+  })
+
+  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED when full Modbus is enabled (debugger rides Modbus)', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
+      },
+    })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for the simulator (it uses the full Modbus path)', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for openplc-compiler runtimes', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'openplc-compiler' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+})
+
 describe('generateDefinesContent — IO Config (pin masks)', () => {
   it('emits empty pin masks when devicePinMapping is empty', () => {
     const out = generateDefinesContent(EMPTY_INPUTS)
@@ -357,6 +394,10 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '//Program MD5',
         '#define PROGRAM_MD5 "ffffffffffffffffffffffffffffffff"',
+        '',
+        '//Debugger',
+        '#define DEBUGGER_ENABLED',
+        '',
         '',
         '//IO Config',
         '#define PINMASK_DIN ',

@@ -8,6 +8,31 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 
 #include <Arduino.h>
 #include "defines.h"
+#include "openplc_version.h"
+
+// Serial transport is active when full Modbus RTU (MBSERIAL) is enabled OR the
+// always-on debugger (DEBUGGER_ENABLED) needs the serial port without the rest
+// of Modbus. This gate guards the serial RX/framing code so the debugger works
+// over serial even when no Modbus operation buffers (coils/holding/etc.) are
+// allocated.
+#if defined(MBSERIAL) || defined(DEBUGGER_ENABLED)
+    #define MB_SERIAL_ACTIVE
+#endif
+
+// Default serial config for the always-on debugger when full Modbus RTU
+// (MBSERIAL_*) is NOT configured. Override any of these in defines.h to change
+// the port/baud/slave the debugger listens on.
+#if defined(DEBUGGER_ENABLED) && !defined(MBSERIAL)
+    #ifndef DEBUG_IFACE
+        #define DEBUG_IFACE Serial
+    #endif
+    #ifndef DEBUG_BAUD
+        #define DEBUG_BAUD 115200
+    #endif
+    #ifndef DEBUG_SLAVE
+        #define DEBUG_SLAVE 1
+    #endif
+#endif
 
 #ifndef bitRead
     #define bitRead(value, bit) (((value) >> (bit)) & 0x01)
@@ -111,6 +136,9 @@ enum {
     MB_FC_DEBUG_GET        = 0x43, // Debug get trace (read variables)
     MB_FC_DEBUG_GET_LIST   = 0x44, // Debug get trace list (read list of variables)
     MB_FC_DEBUG_GET_MD5    = 0x45, // Debug get current program MD5
+    MB_FC_DEBUG_GET_STATUS = 0x46, // Debug get PLC status (running, scan tick, uptime)
+    MB_FC_DEBUG_GET_VERSION = 0x47, // Debug get runtime firmware version
+    MB_FC_DEBUG_GET_BOARD_ID = 0x48, // Debug get unique hardware board ID
 };
 
 //Exception Codes
@@ -161,7 +189,7 @@ void mbtask();
 #ifdef MBTCP
 void handle_tcp();
 #endif
-#ifdef MBSERIAL
+#ifdef MB_SERIAL_ACTIVE
 void handle_serial();
 #endif
 void process_mbpacket();
@@ -185,6 +213,10 @@ void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
 void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx);
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray);
 void debugGetMd5(void *endianness);
+// Always-on debugger extras — served even without full Modbus (DEBUGGER_ENABLED).
+void debugGetStatus(void);
+void debugGetVersion(void);
+void debugGetBoardId(void);
 
 
 /* Table of CRC values for high-order byte */

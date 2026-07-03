@@ -462,4 +462,110 @@ export class ModbusRtuClient {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Always-on debugger extras (FC 0x46/0x47/0x48). Each is a bare-FC request.
+  // Response offsets account for the 6-byte TCP-compat padding sendRequestImpl
+  // prepends: slaveId@6, FC@7, status@8, payload@9+.
+  // -------------------------------------------------------------------------
+
+  async getStatus(): Promise<{
+    success: boolean
+    running?: boolean
+    tick?: number
+    uptimeMs?: number
+    error?: string
+  }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_STATUS, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_STATUS as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+      if (response.length < 18) {
+        return { success: false, error: `Incomplete status response (${response.length} bytes, expected at least 18)` }
+      }
+
+      return {
+        success: true,
+        running: readUint8(response, 9) !== 0,
+        tick: readUint32BE(response, 10),
+        uptimeMs: readUint32BE(response, 14),
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async getVersion(): Promise<{ success: boolean; version?: string; error?: string }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_VERSION, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_VERSION as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      const version = new TextDecoder().decode(response.slice(9)).replace(/\0+$/, '').trim()
+      return { success: true, version }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async getBoardId(): Promise<{ success: boolean; boardId?: Uint8Array; boardIdHex?: string; error?: string }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 10) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 10)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_BOARD_ID as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      const idLen = readUint8(response, 9)
+      if (response.length < 10 + idLen) {
+        return {
+          success: false,
+          error: `Incomplete board-id data (expected ${idLen} bytes, got ${response.length - 10})`,
+        }
+      }
+
+      const boardId = response.slice(10, 10 + idLen)
+      const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
+      return { success: true, boardId, boardIdHex }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
 }

@@ -42,7 +42,14 @@
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
 import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
-import type { DebugSetResult, DebugTransportResult, Md5ProbeResult } from './types'
+import type {
+  DebugBoardIdResult,
+  DebugSetResult,
+  DebugStatusResult,
+  DebugTransportResult,
+  DebugVersionResult,
+  Md5ProbeResult,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // Uint8Array helpers — host-endian-agnostic, no typed-array views on wire data.
@@ -132,6 +139,27 @@ export function buildSetVariableRequest(index: number, force: boolean, valueBuff
   } else {
     writeU8(buf, 7, 0)
   }
+  return buf
+}
+
+// Always-on debugger extras. Each is a bare [FC] PDU — no payload — mirroring
+// the firmware's `mb_rtu_frame_len` entry of 4 (id + FC + 2 CRC bytes).
+
+export function buildGetStatusRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_STATUS)
+  return buf
+}
+
+export function buildGetVersionRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_VERSION)
+  return buf
+}
+
+export function buildGetBoardIdRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_BOARD_ID)
   return buf
 }
 
@@ -246,6 +274,100 @@ export function parseSetVariableResponse(data: Uint8Array): DebugSetResult {
   }
 
   return { success: true }
+}
+
+/**
+ * Parse a status response (FC 0x46).
+ * Layout: `[FC][status][running:u8][tick:u32BE][uptime:u32BE]` (11 PDU bytes).
+ */
+export function parseGetStatusResponse(data: Uint8Array): DebugStatusResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_STATUS) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  if (data.length < 11) {
+    return { success: false, error: `Incomplete status response (${data.length} bytes, expected 11)` }
+  }
+
+  return {
+    success: true,
+    running: readU8(data, 2) !== 0,
+    tick: readU32BE(data, 3),
+    uptimeMs: readU32BE(data, 7),
+  }
+}
+
+/**
+ * Parse a version response (FC 0x47).
+ * Layout: `[FC][status][version ASCII...]` (no NUL terminator on the wire).
+ */
+export function parseGetVersionResponse(data: Uint8Array): DebugVersionResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_VERSION) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  const version = new TextDecoder('utf-8').decode(data.subarray(2)).replace(/\0+$/, '').trim()
+  return { success: true, version }
+}
+
+/**
+ * Parse a board-id response (FC 0x48).
+ * Layout: `[FC][status][id_len:u8][id_bytes...]`. `id_len === 0` means the
+ * target has no unique-id support — success with an empty id.
+ */
+export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_BOARD_ID) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  if (data.length < 3) {
+    return { success: false, error: `Incomplete board-id response (${data.length} bytes, expected at least 3)` }
+  }
+
+  const idLen = readU8(data, 2)
+  if (data.length < 3 + idLen) {
+    return {
+      success: false,
+      error: `Incomplete board-id data (expected ${idLen} bytes, got ${data.length - 3})`,
+    }
+  }
+
+  const boardId = data.slice(3, 3 + idLen)
+  const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
+  return { success: true, boardId, boardIdHex }
 }
 
 /**
