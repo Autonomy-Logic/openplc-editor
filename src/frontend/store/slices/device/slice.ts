@@ -368,6 +368,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {
+      const previousBoard = getState().deviceDefinitions.configuration.deviceBoard
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
@@ -399,6 +400,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
       )
+      // Switching target changes which producer kinds are active — a board
+      // without pin mapping / VPP frees those addresses. Recompute the
+      // Modbus addresses project-wide so they reclaim the freed space, and
+      // reconcile bound variables. (Skipped when the board is unchanged.)
+      if (previousBoard !== deviceBoard) {
+        getState().projectActions.recalculateRemoteDeviceAddresses()
+      }
     },
     setSelectedPlatformOption: (key, value): void => {
       setState(
