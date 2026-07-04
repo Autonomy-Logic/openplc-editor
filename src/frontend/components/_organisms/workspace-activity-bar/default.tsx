@@ -791,10 +791,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // Debug compilation
+      // Debug compilation. Resolve alias-bound locations to concrete
+      // addresses first (same pre-compile snapshot the build/upload paths
+      // use) — the compiler only understands `%…` literals, not alias names.
+      const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
       consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting debug compilation...' })
-      const debugCompileResult = await compiler.compileForDebug({ projectData, boardTarget, projectPath }, (event) =>
-        logCompilerEvent(event, consoleActions.addLog),
+      const debugCompileResult = await compiler.compileForDebug(
+        { projectData: freshProjectData, boardTarget, projectPath },
+        (event) => logCompilerEvent(event, consoleActions.addLog),
       )
       if (!debugCompileResult.success) {
         consoleActions.addLog({
