@@ -263,6 +263,27 @@ When adding new code to covered directories, you must add corresponding tests to
 
 ## Important Patterns
 
+### When bumping the app version:
+`APP_VERSION` in `src/frontend/data/constants/app-version.ts` is the **single
+source of truth** for the human-facing version, shared **byte-for-byte** between
+openplc-editor and openplc-web (enforced by the mirror gate / `compare-surfaces.py`).
+The About modal renders it directly; the web build writes it into `version.json`.
+
+**Bump `APP_VERSION` — never `package.json` alone.** Make the identical one-line
+edit in BOTH repos, and set `package.json.version` to the same value in both so
+they can't drift. Roles: `APP_VERSION` is what the user sees in the About dialog;
+`package.json.version` is what electron-builder stamps on the desktop binary and
+what the release tag `vX.Y.Z` must match. Bumping only `package.json` leaves the
+About dialog stuck on the old version — **this mistake shipped 4.2.7 and 4.2.8
+with About still showing 4.2.6.** If the two ever disagree, `APP_VERSION` is
+authoritative; fix it to match.
+
+Release order: bump `APP_VERSION` + `package.json` (both repos, same value) → PR
+to `development` → merge → promote `development`→`main` on both → tag `vX.Y.Z` on
+the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploys
+on its `main` push. (Ideally `package.json.version` should be derived from
+`APP_VERSION` in the release workflow so a single bump can never drift.)
+
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
 2. Add it to `PlatformPorts` in `src/middleware/shared/providers/types.ts`
