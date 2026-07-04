@@ -57,6 +57,7 @@ export type AITelemetryEventName =
   | 'completion_dismissed'
   | 'completion_error'
   | 'completion_timeout'
+  | 'completion_empty'
   | 'chat_message'
   | 'chat_rating'
   | 'conversation_created'
