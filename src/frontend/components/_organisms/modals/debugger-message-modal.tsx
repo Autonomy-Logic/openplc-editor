@@ -11,6 +11,13 @@ const DebuggerMessageModal = () => {
     message: string
     buttons: string[]
     onResponse: (buttonIndex: number) => void
+    // Optional layout overrides. By default the FIRST button is the primary
+    // (brand) action and dismissing the modal (Escape / click-away) resolves to
+    // the LAST button. Usages where the affirmative action isn't first — e.g. a
+    // [Cancel, Proceed] layout — set primaryButtonIndex to brand-style the right
+    // button and dismissButtonIndex so Escape routes to Cancel.
+    primaryButtonIndex?: number
+    dismissButtonIndex?: number
   } | null
 
   const handleButtonClick = (index: number) => {
@@ -34,11 +41,12 @@ const DebuggerMessageModal = () => {
           // Capture callback and button count before closing (closeModal clears data)
           const onResponse = modalData?.onResponse
           const lastButtonIndex = modalData?.buttons?.length ? modalData.buttons.length - 1 : 0
+          const dismissButtonIndex = modalData?.dismissButtonIndex ?? lastButtonIndex
           // Close modal first, then call callback to avoid race condition
           // when callback opens another modal
           modalActions.closeModal()
           if (onResponse) {
-            onResponse(lastButtonIndex)
+            onResponse(dismissButtonIndex)
           }
         }
         modalActions.onOpenChange('debugger-message', open)
@@ -56,7 +64,7 @@ const DebuggerMessageModal = () => {
               key={index}
               onClick={() => handleButtonClick(index)}
               className={`flex-1 rounded-md px-4 py-2 text-sm font-medium ${
-                index === 0
+                index === (modalData.primaryButtonIndex ?? 0)
                   ? 'bg-brand text-white hover:bg-brand-medium-dark'
                   : 'bg-neutral-100 text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100'
               }`}

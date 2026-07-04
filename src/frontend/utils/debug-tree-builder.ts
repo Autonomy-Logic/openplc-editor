@@ -10,7 +10,7 @@ import type { DebugTreeNode, PLCPou, PLCVariable } from '../../middleware/shared
 import type { DebugVariableEntry } from './debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from './debug-tree-traversal'
 import { traverseVariable } from './debug-tree-traversal'
-import { buildDebugPath, buildGlobalDebugPath } from './debug-variable-finder'
+import { buildGlobalDebugPath, buildVariableDebugPath } from './debug-variable-finder'
 
 /**
  * Project data shape expected by the debug tree builder.
@@ -198,8 +198,5 @@ export function buildDebugTree(
  * External variables use CONFIG0__ prefix, local variables use RES0__INSTANCE. prefix.
  */
 export function buildVariableBasePath(variableName: string, instanceName: string, variableClass?: string): string {
-  if (variableClass === 'external') {
-    return buildGlobalDebugPath(variableName)
-  }
-  return buildDebugPath(instanceName, variableName)
+  return buildVariableDebugPath(variableClass === 'external', instanceName, variableName)
 }

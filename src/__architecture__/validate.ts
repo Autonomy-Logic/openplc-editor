@@ -155,6 +155,10 @@ function getLayer(filePath: string): LayerName | null {
   // openplc-web parity explicit (this folder is byte-identical
   // between repos).
   if (rel.startsWith('middleware/shared/utils/')) return 'utils'
+  // Shared runtime-auth (RuntimeTokenManager) is pure, dependency-free logic
+  // reachable from adapters/backend/main on both platforms — same `utils` rule
+  // set, byte-identical between repos.
+  if (rel.startsWith('middleware/shared/runtime-auth/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 

@@ -105,9 +105,11 @@ describe('buildLocationDropdownOptions', () => {
       }
 
       // The VPP entry surfaces under whatever group the vendor-io
-      // builder produces for slot 1; assert via the option value.
+      // builder produces for slot 1; assert via the option value. Vendor
+      // IO options carry the ALIAS as their value (resolved to an
+      // address only at compile time), so we assert the alias here.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
-      expect(allOptionValues).toContain('%QX0.0')
+      expect(allOptionValues).toContain('slm-rp4-relay-1')
     })
 
     it('drops remote-device IO points when both `modbusTcpRemote` and `ethercat` are disabled', () => {
@@ -121,8 +123,9 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: ARDUINO_CLI_CAPABILITIES,
       })
 
+      // Remote IO options carry the alias as their value.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
-      expect(allOptionValues).not.toContain('%IW0')
+      expect(allOptionValues).not.toContain('flow-sensor-alias')
     })
 
     it('surfaces remote-device IO points when EITHER `modbusTcpRemote` OR `ethercat` is enabled', () => {
@@ -137,7 +140,7 @@ describe('buildLocationDropdownOptions', () => {
       })
 
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
-      expect(allOptionValues).toContain('%IW0')
+      expect(allOptionValues).toContain('flow-sensor-alias')
     })
 
     it('drops every IO producer when the target has nothing enabled (Runtime v3 baseline)', () => {
@@ -169,9 +172,11 @@ describe('buildLocationDropdownOptions', () => {
 
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
       // Pin (Arduino-specific) dropped, vendor (VPP-specific) dropped,
-      // remote points retained.
-      expect(allOptionValues).toContain('%IW0')
+      // remote points retained. Remote/vendor values are aliases; the
+      // pin value would have been the literal address.
+      expect(allOptionValues).toContain('flow-sensor-alias')
       expect(allOptionValues).not.toContain('%QX0.0')
+      expect(allOptionValues).not.toContain('slm-rp4-relay-1')
     })
   })
 

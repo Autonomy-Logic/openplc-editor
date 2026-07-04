@@ -1,6 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { cn } from '../../../utils/cn'
@@ -18,6 +19,11 @@ type SelectGroup = {
   options: Array<SelectOption>
 }
 
+// Default trigger look = the table-cell style (centered, borderless). Field-style
+// callers (device pickers) override it via `triggerClassName`.
+const DEFAULT_TRIGGER_CLASS =
+  'w-full flex-1 items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-700 outline-none dark:text-neutral-500'
+
 export const GenericComboboxCell = ({
   value,
   onValueChange,
@@ -27,6 +33,16 @@ export const GenericComboboxCell = ({
   canAddACustomOption = false,
   allowClearWhenEmpty = false,
   displayLabel,
+  // --- consolidation props (all optional; defaults preserve current behavior) ---
+  disableFilter = false,
+  placeholder = 'Enter a value...',
+  emptyMessage = 'No options available',
+  customValueLabel = 'Add custom value',
+  clearLabel = 'Clear location',
+  showClearOption = true,
+  disabled = false,
+  triggerClassName,
+  showChevron = false,
 }: {
   value: string
   onValueChange: (value: string) => void
@@ -44,6 +60,28 @@ export const GenericComboboxCell = ({
    *  variable cells to render `alias (address)` so the bound alias
    *  stays visible alongside the raw address the combobox edits. */
   displayLabel?: string
+  /** When true the option list is shown in full and never narrowed by the typed
+   *  text — the input only feeds the "add custom value" path. Used by pickers
+   *  (e.g. EtherCAT interface) where the discovered list must stay fully visible
+   *  and typing means "enter a custom value". Default false keeps filtering on. */
+  disableFilter?: boolean
+  /** Filter / custom-value input placeholder. */
+  placeholder?: string
+  /** Message shown when the (filtered) option list is empty. */
+  emptyMessage?: string
+  /** Label for the "add custom value" affordance. */
+  customValueLabel?: string
+  /** Label for the clear affordance. */
+  clearLabel?: string
+  /** Show the clear affordance alongside the custom-value button. Default true
+   *  preserves the variable-location cell behavior. */
+  showClearOption?: boolean
+  /** Render the trigger non-interactive (locked field). */
+  disabled?: boolean
+  /** Override the trigger layout/look (field-style vs the default table cell). */
+  triggerClassName?: string
+  /** Render a dropdown chevron in the trigger (field-style pickers). */
+  showChevron?: boolean
 }) => {
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
@@ -137,7 +175,7 @@ export const GenericComboboxCell = ({
           return null
         } else {
           const label = item.label || item.value
-          if (label.includes(input)) {
+          if (label.toLowerCase().includes(input.toLowerCase())) {
             return item
           }
           return null
@@ -147,8 +185,12 @@ export const GenericComboboxCell = ({
   }
 
   // Flatten filtered options for navigation
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const filteredOptions = useMemo(() => filterOptions(selectValues, inputValue), [selectValues, inputValue])
+
+  const filteredOptions = useMemo(
+    () => (disableFilter ? selectValues : filterOptions(selectValues, inputValue)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectValues, inputValue, disableFilter],
+  )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const flatFilteredOptions = useMemo(() => flattenOptions(filteredOptions), [filteredOptions])
 
@@ -177,8 +219,9 @@ export const GenericComboboxCell = ({
   // Keyboard navigation handler
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const showButton = canAddACustomOption && !isButtonDisabled
-    const showClearButton = canAddACustomOption && !isClearButtonDisabled
-    const totalOptions = flatFilteredOptions.length + (canAddACustomOption ? 2 : 0)
+    const showClearButton = canAddACustomOption && showClearOption && !isClearButtonDisabled
+    const totalOptions =
+      flatFilteredOptions.length + (canAddACustomOption ? 1 : 0) + (canAddACustomOption && showClearOption ? 1 : 0)
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlightedIndex((prev) => {
@@ -215,12 +258,25 @@ export const GenericComboboxCell = ({
   return (
     <PrimitiveDropdown.Root open={selectIsOpen} onOpenChange={handleOnOpenChange}>
       <PrimitiveDropdown.Trigger
+        disabled={disabled}
         className={cn(
-          'w-full flex-1 items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-700 outline-none dark:text-neutral-500',
+          triggerClassName ?? DEFAULT_TRIGGER_CLASS,
           { 'pointer-events-none': !selected },
+          disabled && 'cursor-not-allowed opacity-60',
+          showChevron && 'flex items-center justify-between gap-1',
         )}
       >
-        {displayLabel ?? value ?? ''}
+        {showChevron ? (
+          <>
+            <span className='truncate'>{displayLabel ?? value ?? ''}</span>
+            <ArrowIcon
+              size='sm'
+              className={cn('rotate-270 stroke-brand transition-all', selectIsOpen && 'rotate-90')}
+            />
+          </>
+        ) : (
+          (displayLabel ?? value ?? '')
+        )}
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Content
         sideOffset={12}
@@ -238,7 +294,7 @@ export const GenericComboboxCell = ({
               e.stopPropagation()
               handleInputKeyDown(e)
             }}
-            placeholder='Enter a value...'
+            placeholder={placeholder}
             className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
           />
         </div>
@@ -305,7 +361,7 @@ export const GenericComboboxCell = ({
                 renderOptions(filteredOptions, 0)
               ) : (
                 <div className='flex h-full w-full items-center justify-center py-2 opacity-60'>
-                  <span className='text-neutral-500'>No options available</span>
+                  <span className='text-neutral-500'>{emptyMessage}</span>
                 </div>
               )
             })()}
@@ -337,33 +393,35 @@ export const GenericComboboxCell = ({
               }}
             >
               <PlusIcon className='h-3 w-3 stroke-brand' />
-              <div className='ml-2'>Add custom value</div>
+              <div className='ml-2'>{customValueLabel}</div>
             </div>
-            <div
-              className={cn(
-                'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
-                'hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                'bg-white dark:bg-neutral-950',
-                'rounded-b-lg',
-                isClearButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
-                !isClearButtonDisabled && highlightedIndex === flatFilteredOptions.length + 1
-                  ? 'bg-neutral-100 dark:bg-neutral-900'
-                  : '',
-              )}
-              tabIndex={0}
-              role='button'
-              aria-disabled={isClearButtonDisabled}
-              onMouseEnter={() => !isClearButtonDisabled && setHighlightedIndex(flatFilteredOptions.length + 1)}
-              onClick={() => {
-                if (!isClearButtonDisabled) {
-                  handleOnValueChange('')
-                  handleOnOpenChange(false)
-                }
-              }}
-            >
-              <CloseIcon className='h-3 w-3 stroke-red-500' />
-              <div className='ml-2'>Clear location</div>
-            </div>
+            {showClearOption && (
+              <div
+                className={cn(
+                  'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
+                  'hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                  'bg-white dark:bg-neutral-950',
+                  'rounded-b-lg',
+                  isClearButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
+                  !isClearButtonDisabled && highlightedIndex === flatFilteredOptions.length + 1
+                    ? 'bg-neutral-100 dark:bg-neutral-900'
+                    : '',
+                )}
+                tabIndex={0}
+                role='button'
+                aria-disabled={isClearButtonDisabled}
+                onMouseEnter={() => !isClearButtonDisabled && setHighlightedIndex(flatFilteredOptions.length + 1)}
+                onClick={() => {
+                  if (!isClearButtonDisabled) {
+                    handleOnValueChange('')
+                    handleOnOpenChange(false)
+                  }
+                }}
+              >
+                <CloseIcon className='h-3 w-3 stroke-red-500' />
+                <div className='ml-2'>{clearLabel}</div>
+              </div>
+            )}
           </>
         )}
       </PrimitiveDropdown.Content>

@@ -50,6 +50,7 @@ beforeEach(() => {
     getPackageManifest: jest.fn().mockResolvedValue(validManifest),
     onOpenPackageManager: jest.fn().mockImplementation(() => jest.fn()),
     onBoardsUpdated: jest.fn().mockImplementation(() => jest.fn()),
+    verifyInstalledPackageSignatures: jest.fn().mockResolvedValue([]),
   } as unknown as typeof window.bridge
 
   global.fetch = jest.fn() as unknown as typeof fetch
@@ -207,6 +208,19 @@ describe('createEditorPackageAdapter', () => {
       const off = adapter.onBoardsUpdated(cb)
       expect(window.bridge.onBoardsUpdated).toHaveBeenCalledWith(cb)
       expect(off).toBe(unsubscribe)
+    })
+  })
+
+  describe('verifyInstalledSignatures', () => {
+    it('delegates to the bridge and returns the removed package ids', async () => {
+      ;(window.bridge.verifyInstalledPackageSignatures as jest.Mock).mockResolvedValue(['com.synergy-logic.slm-rp4'])
+      const removed = await adapter.verifyInstalledSignatures()
+      expect(window.bridge.verifyInstalledPackageSignatures).toHaveBeenCalledTimes(1)
+      expect(removed).toEqual(['com.synergy-logic.slm-rp4'])
+    })
+
+    it('returns an empty array when nothing was removed', async () => {
+      expect(await adapter.verifyInstalledSignatures()).toEqual([])
     })
   })
 })

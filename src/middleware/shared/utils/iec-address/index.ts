@@ -17,7 +17,6 @@ export {
 export {
   type AliasEditValidation,
   type AliasEntry,
-  aliasForAddress,
   type AliasRegistry,
   buildAliasRegistry,
   describeSource,
@@ -25,10 +24,3 @@ export {
   resolveAlias,
   validateAliasEdit,
 } from './alias-registry'
-export {
-  type SyncableVariable,
-  syncMadeChanges,
-  type SyncReport,
-  type SyncResult,
-  syncVariableAliases,
-} from './sync-variable-aliases'

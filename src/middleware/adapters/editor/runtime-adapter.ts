@@ -8,8 +8,11 @@
  * Connection context:
  *   - IP address: provided via getIpAddress() callback injected at creation.
  *     Set by the store/UI when the user configures the device.
- *   - JWT token: managed internally. Stored after successful login(),
- *     updated on token-refresh events, cleared on clearCredentials().
+ *   - JWT token: owned entirely by the main process (the single token
+ *     authority). The renderer no longer holds or passes the token — main
+ *     injects it into every runtime call and refreshes it on expiry, then
+ *     notifies the renderer via onTokenRefreshed. This adapter only tracks
+ *     whether a session is active (for isReadyForDebug).
  */
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
@@ -28,7 +31,9 @@ import type {
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
-  let jwtToken = ''
+  // Whether a runtime session is active. The token itself lives in the main
+  // process; this only gates isReadyForDebug.
+  let loggedIn = false
 
   function requireIp(): string {
     const ip = getIpAddress()
@@ -38,7 +43,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
 
   return {
     isReadyForDebug() {
-      return getIpAddress() !== '' && jwtToken !== ''
+      return getIpAddress() !== '' && loggedIn
     },
 
     async login(params: LoginParams): Promise<LoginResult> {
@@ -46,7 +51,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         const ip = requireIp()
         const result = await window.bridge.runtimeLogin(ip, params.username, params.password)
         if (result.success && result.accessToken) {
-          jwtToken = result.accessToken
+          loggedIn = true
         }
         return result
       } catch (err) {
@@ -75,7 +80,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getStatus(includeStats?: boolean): Promise<RuntimeStatusResult> {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeGetStatus(ip, jwtToken, includeStats)
+        return await window.bridge.runtimeGetStatus(ip, includeStats)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -84,7 +89,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async startPlc() {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeStartPlc(ip, jwtToken)
+        return await window.bridge.runtimeStartPlc(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -93,7 +98,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async stopPlc() {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeStopPlc(ip, jwtToken)
+        return await window.bridge.runtimeStopPlc(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -102,7 +107,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getLogs(minId?: number): Promise<RuntimeLogsResult> {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeGetLogs(ip, jwtToken, minId)
+        return await window.bridge.runtimeGetLogs(ip, minId)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -111,7 +116,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getSerialPorts(): Promise<{ success: boolean; ports?: SerialPort[]; error?: string }> {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeGetSerialPorts(ip, jwtToken)
+        return await window.bridge.runtimeGetSerialPorts(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -120,22 +125,19 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getCompilationStatus(): Promise<CompilationStatusResult> {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeGetCompilationStatus(ip, jwtToken)
+        return await window.bridge.runtimeGetCompilationStatus(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
     },
 
     async clearCredentials() {
-      jwtToken = ''
+      loggedIn = false
       return window.bridge.runtimeClearCredentials()
     },
 
     onTokenRefreshed(callback: (newToken: string) => void): Unsubscribe {
-      const handler = (_event: unknown, newToken: string) => {
-        jwtToken = newToken
-        callback(newToken)
-      }
+      const handler = (_event: unknown, newToken: string) => callback(newToken)
       return window.bridge.onRuntimeTokenRefreshed(handler)
     },
 
@@ -144,7 +146,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getNetworkInterfaces() {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATGetInterfaces(ip, jwtToken)
+        return await window.bridge.etherCATGetInterfaces(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -153,7 +155,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getEthercatServiceStatus() {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATGetStatus(ip, jwtToken)
+        return await window.bridge.etherCATGetStatus(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -162,7 +164,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async scanEthercatDevices(request) {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATScan(ip, jwtToken, request)
+        return await window.bridge.etherCATScan(ip, request)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -171,7 +173,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async testEthercatConnection(request) {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATTest(ip, jwtToken, request)
+        return await window.bridge.etherCATTest(ip, request)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -180,7 +182,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async validateEthercatConfig(request) {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATValidate(ip, jwtToken, request)
+        return await window.bridge.etherCATValidate(ip, request)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -189,7 +191,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async getEthercatRuntimeStatus() {
       try {
         const ip = requireIp()
-        return await window.bridge.etherCATGetRuntimeStatus(ip, jwtToken)
+        return await window.bridge.etherCATGetRuntimeStatus(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }

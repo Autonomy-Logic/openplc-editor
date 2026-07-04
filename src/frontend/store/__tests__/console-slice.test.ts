@@ -40,6 +40,7 @@ describe('createConsoleSlice', () => {
       searchTerm: '',
       timestampFormat: 'full',
     })
+    expect(state.followRequestId).toBe(0)
   })
 
   // -------------------------------------------------------------------------
@@ -238,5 +239,31 @@ describe('createConsoleSlice', () => {
 
     expect(store.getState().filters.searchTerm).toBe('kept')
     expect(store.getState().filters.levels.debug).toBe(false)
+  })
+
+  // -------------------------------------------------------------------------
+  // requestConsoleFollow
+  // -------------------------------------------------------------------------
+  it('requestConsoleFollow increments the follow nonce', () => {
+    expect(store.getState().followRequestId).toBe(0)
+    store.getState().consoleActions.requestConsoleFollow()
+    expect(store.getState().followRequestId).toBe(1)
+  })
+
+  it('requestConsoleFollow produces a fresh nonce on every call', () => {
+    store.getState().consoleActions.requestConsoleFollow()
+    store.getState().consoleActions.requestConsoleFollow()
+    store.getState().consoleActions.requestConsoleFollow()
+    expect(store.getState().followRequestId).toBe(3)
+  })
+
+  it('requestConsoleFollow does not affect logs or filters', () => {
+    store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'kept' })
+    store.getState().consoleActions.setSearchTerm('term')
+
+    store.getState().consoleActions.requestConsoleFollow()
+
+    expect(store.getState().logs).toHaveLength(1)
+    expect(store.getState().filters.searchTerm).toBe('term')
   })
 })

@@ -224,33 +224,18 @@
   }
 }
 
+/* Sidebar scrollbar: hidden from layout so the icon column stays centered in
+   the 56px rail. Native scrollbars/gutters reserve asymmetric space on one
+   edge (6px in Chromium, the full ~16px native width in Safari regardless of
+   the ::-webkit-scrollbar width) and shift every icon off-center. The rail
+   still scrolls via wheel/trackpad/keyboard. */
 .sidebar-scroll {
   overflow-y: auto;
-  scrollbar-gutter: stable;
-  direction: rtl;
-}
-
-.sidebar-scroll > * {
-  direction: ltr;
+  scrollbar-width: none;
 }
 
 .sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
-  background-color: transparent;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.sidebar-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(180, 208, 254, 0.3);
-}
-
-.sidebar-scroll:hover::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(180, 208, 254, 0.6);
+  display: none;
 }
 
 .apexcharts-yaxis-label tspan,
@@ -441,21 +426,6 @@
 .nineties .w-14.bg-brand-dark .retro-icon {
   width: 32px !important;
   height: 32px !important;
-}
-/* Left-align the button COLUMNS (the container divs) so the squares hug the
-   left and aren't clipped by the scrollbar gutter — but DON'T touch the
-   buttons' own `items-center`, or the icon stops being centred inside each. */
-.nineties .w-14.bg-brand-dark .sidebar-scroll,
-.nineties .w-14.bg-brand-dark div[class*='items-center'] {
-  align-items: flex-start !important;
-}
-.nineties .w-14.bg-brand-dark .sidebar-scroll {
-  padding-left: 2px !important;
-}
-/* Keep the rail's own scrollbar thin — the global chunky 16px bar otherwise
-   eats most of the 56px rail and crops the 42px buttons. */
-.nineties .w-14.bg-brand-dark .sidebar-scroll::-webkit-scrollbar {
-  width: 6px !important;
 }
 /* Darken stroke-based custom rail icons (e.g. the Exit/back arrow, a pale
    brand-blue that disappeared on silver). */

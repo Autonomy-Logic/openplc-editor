@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.2.7",
+  "version": "4.2.8",
   "license": "GPL-3.0",
   "author": {
     "name": "Autonomy Logic"
@@ -17,6 +17,7 @@
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
+    "setup:strucpp": "ts-node scripts/download-binaries.ts --strucpp-only",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",

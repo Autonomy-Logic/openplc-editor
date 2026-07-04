@@ -85,10 +85,10 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
         return { ok: false, title: 'Alias already in use', message: 'Pin alias collides with another producer.' }
       }
 
-      // Phase 2 — cascade rename onto bound variables BEFORE
-      // mutating the pin, so the subsequent `syncVariableAliases()`
-      // sees variables pointing at the new alias and refreshes
-      // locations rather than orphaning them.
+      // Cascade the rename onto bound variables: any variable whose
+      // `location` holds the old alias name follows to the new one, so it
+      // stays located (resolved to the address at compile time) rather than
+      // orphaning.
       const oldAlias = currentPin?.alias ?? ''
       if (oldAlias) {
         useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, value)
@@ -98,12 +98,10 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
     const res = updatePin({
       [columnId as keyof DevicePin]: value,
     })
-    // Pin alias / address edits are producer mutations — refresh
-    // variables bound to the affected addresses so the table
-    // reflects the new bindings without a save/reload.
-    if (res?.ok && (columnId === 'alias' || columnId === 'address')) {
-      useOpenPLCStore.getState().projectActions.syncVariableAliases()
-    }
+    // No variable re-sync needed: variables bound to this pin hold its alias
+    // NAME (resolved at compile time), and the rename above already cascaded
+    // to them via `renameAlias`. Manual literal locations are honoured
+    // verbatim and are the user's responsibility.
     return res
   }
 

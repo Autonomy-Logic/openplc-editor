@@ -180,6 +180,14 @@ export interface RuntimePort {
    */
   onTokenRefreshed?(callback: (newToken: string) => void): Unsubscribe
 
+  /**
+   * Current runtime access token held by the platform's token authority, or
+   * null when not authenticated. Exposed so non-RuntimePort callers (e.g. the
+   * compile/upload pipeline) can read the always-fresh token from the single
+   * authority instead of a separately-tracked copy.
+   */
+  getAccessToken?(): string | null
+
   // --- LAN discovery (UDP broadcast) ---
 
   /**
