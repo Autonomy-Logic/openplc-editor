@@ -887,6 +887,14 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // mapping screen on first-time alias write where there's no
       // prior text to cascade.
       if (trimmedOld.length === 0) return { renamed: 0 }
+      // Clearing an alias at its producer (empty newAlias) is a DELETION, not a
+      // rename. We deliberately do NOT cascade the empty string onto bound
+      // variables: they keep the old alias name in `location`, so they surface
+      // as orphaned (amber warning) and resolve to unlocated at compile time —
+      // exactly like deleting the whole producer/device. Cascading '' here
+      // would silently wipe the user's I/O mapping with no trace, which is the
+      // bug this guard prevents.
+      if (trimmedNew.length === 0) return { renamed: 0 }
       // True no-op only when the name is unchanged. A CASE change must still
       // cascade — the alias registry is case-sensitive, so `location` has to
       // match the producer alias exactly to resolve at compile time.
@@ -899,9 +907,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         // and never equal a (non-`%`) alias name, so they're left untouched.
         if (variable.location !== trimmedOld) return variable
         renamed += 1
-        // When the producer CLEARS its alias (newAlias empty), the bound
-        // variable becomes unlocated — `location` clears, matching the
-        // compile-time "missing alias → empty location" rule.
+        // A genuine rename (both names non-empty): the bound variable follows
+        // to the new alias so it stays located. (The empty-newAlias case is
+        // handled above and never reaches here.)
         return { ...variable, location: trimmedNew }
       }
 
