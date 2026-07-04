@@ -1,9 +1,7 @@
 /**
  * Alias registry — derived index over the address pool that lets the
- * editor answer two questions:
- *
- *   - "Given an alias name, which address does it currently point to?"
- *   - "Given an address, does it have an alias the user gave it?"
+ * editor answer: "Given an alias name, which address does it currently
+ * point to?"
  *
  * Built from the pool, so it inherits the pool's target-scoping: only
  * aliases attached to active producers appear. No new storage, no new
@@ -12,10 +10,7 @@
  * Uniqueness rule: alias names are intended to be unique system-wide
  * (across all producers). When the same alias name is declared by two
  * sources, first-wins (matching pool encounter order) and the conflict
- * is recorded in `duplicateAliases`. The expected response is for the
- * caller to invoke the address-sync flow to reassign whichever
- * variable is now orphaned — see Phase 4 of the alias-source-of-truth
- * work for the sync engine.
+ * is recorded in `duplicateAliases`.
  */
 
 import type { AddressPool, SourceRef } from './address-pool'
@@ -29,10 +24,6 @@ export interface AliasEntry {
 export interface AliasRegistry {
   /** Alias name -> the first claim that declared it. */
   byAlias: ReadonlyMap<string, AliasEntry>
-  /** Address -> the alias attached to its claim, when present. Every
-   *  address that has an alias appears here; addresses without an
-   *  alias are simply absent. */
-  byAddress: ReadonlyMap<string, AliasEntry>
   /** Alias names declared by more than one producer. First entry
    *  in `byAlias` wins; the rest were silently dropped from the
    *  primary index. Reported here so the caller can resync. */
@@ -41,7 +32,6 @@ export interface AliasRegistry {
 
 export function buildAliasRegistry(pool: AddressPool): AliasRegistry {
   const byAlias = new Map<string, AliasEntry>()
-  const byAddress = new Map<string, AliasEntry>()
   const duplicateAliases: string[] = []
 
   for (const claim of pool.byAddress.values()) {
@@ -51,8 +41,6 @@ export function buildAliasRegistry(pool: AddressPool): AliasRegistry {
       address: claim.address,
       source: claim.source,
     }
-    // Pool guarantees per-address uniqueness, so this is safe.
-    byAddress.set(claim.address, entry)
 
     if (byAlias.has(claim.alias)) {
       if (!duplicateAliases.includes(claim.alias)) {
@@ -63,7 +51,7 @@ export function buildAliasRegistry(pool: AddressPool): AliasRegistry {
     byAlias.set(claim.alias, entry)
   }
 
-  return { byAlias, byAddress, duplicateAliases }
+  return { byAlias, duplicateAliases }
 }
 
 /** Look up the canonical address for a given alias. Returns undefined
@@ -71,14 +59,6 @@ export function buildAliasRegistry(pool: AddressPool): AliasRegistry {
  *  variable that referenced it is now orphaned). */
 export function resolveAlias(registry: AliasRegistry, alias: string): string | undefined {
   return registry.byAlias.get(alias)?.address
-}
-
-/** Look up the alias attached to a given address. Used by the
- *  variable cell's auto-adopt path: if a variable's raw `location`
- *  matches a current alias, the variable cell promotes the alias
- *  name onto its display. */
-export function aliasForAddress(registry: AliasRegistry, address: string): string | undefined {
-  return registry.byAddress.get(address)?.alias
 }
 
 /** True when the alias name is not currently in use by any producer.
@@ -168,9 +148,9 @@ export function describeSource(source: SourceRef): string {
  *
  * Every IO-mapping screen / pin-mapping table / remote-device editor
  * MUST call this before persisting a new alias, otherwise the registry
- * silently first-wins on duplicates and the variables bound to the
- * losing entry are subsequently collapsed by `syncVariableAliases` to
- * the winner's address.  See the architectural notes at the top of
+ * silently first-wins on duplicates and the losing entry's alias becomes
+ * unresolvable — every variable bound to it silently goes unlocated at
+ * compile time.  See the architectural notes at the top of
  * `address-pool.ts` for the full reservation chain.
  */
 export function validateAliasEdit(

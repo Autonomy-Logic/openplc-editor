@@ -1,4 +1,7 @@
+import { modbusMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { createStore } from 'zustand/vanilla'
+
+import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
 
 import type {
   BoardInfo,
@@ -249,6 +252,28 @@ function seedRemoteDevice(store: ReturnType<typeof makeStore>, device: PLCRemote
   })
 }
 
+/** Seed global variables directly (bypassing createVariable's dedup so the
+ *  `location` binding is stored verbatim for alias-cascade / compile tests). */
+function seedGlobals(store: ReturnType<typeof makeStore>, vars: PLCVariable[]) {
+  const current = store.getState().project
+  store.getState().projectActions.setProject({
+    ...current,
+    data: {
+      ...current.data,
+      configurations: {
+        ...current.data.configurations,
+        resource: { ...current.data.configurations.resource, globalVariables: vars },
+      },
+    },
+  })
+}
+
+/** A BOOL variable whose `location` is set verbatim — an alias name, a literal
+ *  `%addr`, or empty — for the single-field location model. */
+function locVar(name: string, location: string, cls: PLCVariable['class'] = 'local'): PLCVariable {
+  return { name, class: cls, type: { definition: 'base-type', value: 'BOOL' }, location, documentation: '' }
+}
+
 /** Seed a Runtime v4 target so the cap-gated address pool counts
  *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
  *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
@@ -283,6 +308,40 @@ function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
     ]),
   })
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+}
+
+/** Seed a target that exposes pin mapping AND VPP I/O (plus Modbus), so the
+ *  central recalculation reallocates VPP + Modbus. */
+function seedVppBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'VPP Board',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v4',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: true,
+            vppIo: true,
+            modbusTcpRemote: true,
+            ethercat: true,
+            modbusTcpServer: true,
+            opcuaServer: true,
+            s7Server: true,
+            debuggerTransports: ['websocket'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: true,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('VPP Board')
 }
 
 // ===========================================================================
@@ -783,30 +842,30 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
     })
 
-    it('clearing the location drops a stale alias', () => {
-      // Reproduces the orphaned-alias case: a variable that carries a
-      // location plus an alias no longer backed by any producer (target
-      // changed / device removed). Clearing the location (location: '')
-      // must succeed AND drop the stale alias.
+    it('stores the location binding verbatim (alias name or literal) and never auto-adopts', () => {
+      // Single-field model: `location` is the binding. A manual literal is
+      // stored verbatim; an alias name is stored verbatim (NOT auto-resolved
+      // to an address, NOT auto-adopted from a matching address); clearing
+      // succeeds.
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
+
       store.getState().projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: '%QW0' } })
-      // Attach a stale alias (no producer declares it).
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('%QW0')
+
+      // Bind by alias name — kept verbatim.
       store
         .getState()
-        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { alias: 'StaleAlias' } })
-      let v = store.getState().project.data.configurations.resource.globalVariables[0]
-      expect(v.location).toBe('%QW0')
-      expect(v.alias).toBe('StaleAlias')
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { location: 'push_button' } })
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('push_button')
 
+      // Clearing the location.
       const result = store.getState().projectActions.updateVariable({
         scope: 'global',
         variableId: 'gx',
         data: { location: '' },
       })
       expect(result.ok).toBe(true)
-      v = store.getState().project.data.configurations.resource.globalVariables[0]
-      expect(v.location).toBe('')
-      expect(v.alias ?? '').toBe('')
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('')
     })
   })
 
@@ -1991,6 +2050,50 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.remoteDevices![0].ethercatConfig).toEqual(cfg)
     })
+
+    it('reallocates EtherCAT channel addresses through the central registry', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const cfg = {
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [
+          {
+            id: 's1',
+            name: 'Slave1',
+            channelMappings: [
+              { channelId: 'c0', iecLocation: '%IW5', alias: '' },
+              { channelId: 'c1', iecLocation: '%IW6', alias: '' },
+            ],
+          } as unknown as ConfiguredEtherCATDevice,
+        ],
+      }
+      store.getState().projectActions.updateEthercatConfig('BusA', cfg)
+      // The central registry compacts the channels to the lowest free %IW slots.
+      const mappings = store.getState().project.data.remoteDevices![0].ethercatConfig!.devices[0].channelMappings
+      expect(mappings.map((m) => m.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('cascades a channel alias rename onto bound variable locations', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, { name: 'BusA', protocol: 'ethercat' })
+      const withAlias = (alias: string) => ({
+        masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, taskPriority: 50 },
+        devices: [
+          {
+            id: 's1',
+            name: 'Slave1',
+            channelMappings: [{ channelId: 'c0', iecLocation: '%IW0', alias }],
+          } as unknown as ConfiguredEtherCATDevice,
+        ],
+      })
+      // First write establishes the channel alias `ec_in`.
+      store.getState().projectActions.updateEthercatConfig('BusA', withAlias('ec_in'))
+      // A program variable binds to that alias by name.
+      seedPou(store, makePou('Prog', 'program', [locVar('reading', 'ec_in')]))
+      // Rewriting the config with a renamed alias must cascade onto the binding.
+      store.getState().projectActions.updateEthercatConfig('BusA', withAlias('ec_input'))
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('ec_input')
+    })
   })
 
   describe('createRemoteDevice', () => {
@@ -2273,8 +2376,8 @@ describe('createProjectSlice', () => {
       expect(groups[1].ioPoints![1].iecLocation).toBe('%IW3')
     })
 
-    it('skips bit addresses that are already used (bit-based collision with gaps)', () => {
-      // Create a device with pre-existing bit addresses that have gaps
+    it('recompacts bit addresses project-wide, closing a pre-existing gap', () => {
+      // A pre-existing group carries a manual gap (%IX0.0 then %IX0.2).
       const device = makeRemoteDevice('Dev1')
       device.modbusTcpConfig!.ioGroups = [
         {
@@ -2287,18 +2390,19 @@ describe('createProjectSlice', () => {
           errorHandling: 'keep-last-value',
           ioPoints: [
             { id: 'p0', name: 'p0', type: 'Digital Input (Coil Status)', iecLocation: '%IX0.0', alias: '' },
-            // Skip %IX0.1 (gap) and use %IX0.2
             { id: 'p1', name: 'p1', type: 'Digital Input (Coil Status)', iecLocation: '%IX0.2', alias: '' },
           ],
         },
       ]
       seedRemoteDevice(store, device)
 
-      // Add a new group; the generator should skip %IX0.0 (used), use %IX0.1 (free), skip %IX0.2 (used), use %IX0.3
+      // Adding a group triggers the central recalculation: the whole Modbus
+      // space re-packs, so the pre-existing group closes its gap
+      // (%IX0.0/%IX0.1) and the new group packs right after (%IX0.2/%IX0.3).
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '1', 2))
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[1].ioPoints![0].iecLocation).toBe('%IX0.1')
-      expect(groups[1].ioPoints![1].iecLocation).toBe('%IX0.3')
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IX0.0', '%IX0.1'])
+      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IX0.2', '%IX0.3'])
     })
 
     it('ignores VPP claims on a target whose caps do not include vppIo', () => {
@@ -2415,18 +2519,17 @@ describe('createProjectSlice', () => {
       expect(points.map((p) => p.iecLocation)).toEqual(['%IX0.0', '%IX0.1'])
     })
 
-    it('regenerates only the edited group, leaving sibling groups untouched (no project-wide recompaction)', () => {
+    it('recompacts sibling groups project-wide after an edit (central registry)', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
 
-      // Grow g1. Because this edit is localized (it does NOT recompact the
-      // whole project), g1 reuses its own freed %IW0/%IW1 and its third
-      // point takes the next free slot after g2's untouched %IW2/%IW3.
+      // Grow g1 to 3 points. The central recalculation re-packs the whole
+      // Modbus space in group order: g1 → %IW0/1/2, g2 slides to %IW3/4.
       store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3 })
       const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW4'])
-      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW2', '%IW3']) // sibling untouched
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1', '%IW2'])
+      expect(groups[1].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW3', '%IW4'])
     })
 
     it('preserves point aliases positionally when regenerating', () => {
@@ -2462,6 +2565,128 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
       const result = store.getState().projectActions.deleteIOGroup('EtherCAT', 'g1')
       expect(result.ok).toBe(true)
+    })
+
+    it('recompacts the surviving groups into the freed slots (bug #4)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
+      store.getState().projectActions.deleteIOGroup('Dev1', 'g1')
+      const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+      expect(groups).toHaveLength(1)
+      // g2 slides down into the freed slots — no gap left behind.
+      expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+  })
+
+  describe('recalculateIecAddresses (central registry)', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    it('recompacts across devices when a whole device is removed', () => {
+      seedRemoteDevice(store, makeRemoteDevice('A'))
+      seedRemoteDevice(store, makeRemoteDevice('B'))
+      store.getState().projectActions.addIOGroup('A', makeIOGroup('ga', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('B', makeIOGroup('gb', '3', 2)) // %IW2,3
+      store.getState().projectActions.deleteRemoteDevice('A')
+      const devices = store.getState().project.data.remoteDevices!
+      expect(devices).toHaveLength(1)
+      // B's group reclaims device A's freed addresses project-wide.
+      expect(devices[0].modbusTcpConfig!.ioGroups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('is a benign no-op with no remote devices', () => {
+      const result = store.getState().projectActions.recalculateIecAddresses()
+      expect(result.ok).toBe(true)
+    })
+
+    it('activates pin-mapping / VPP kinds when the target supports them', () => {
+      // A board that exposes pin mapping AND VPP I/O — exercises those
+      // capability branches. Modbus still allocates around them.
+      seedVppBoard(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      expect(points.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('reallocates and writes back VPP io-mapping entries (compacting a gap)', () => {
+      seedVppBoard(store)
+      // A VPP entry sitting at %QX0.5 with a manual gap below it.
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [
+          {
+            slot: 1,
+            channelName: 'DO1',
+            channelType: 'coil',
+            dataType: 'BOOL',
+            moduleId: 'mod-a',
+            iecAddress: '%QX0.5',
+            alias: '',
+          },
+          // An unparseable address is skipped by the migration → left verbatim.
+          {
+            slot: 1,
+            channelName: 'BAD',
+            channelType: 'coil',
+            dataType: 'BOOL',
+            moduleId: 'mod-a',
+            iecAddress: 'NOPE',
+            alias: '',
+          },
+        ],
+      })
+      store.getState().projectActions.recalculateIecAddresses()
+      const entries = (
+        store.getState().deviceDefinitions.configuration.vendorScreenData!['io-mapping'] as {
+          entries: Array<{ iecAddress: string }>
+        }
+      ).entries
+      // The valid VPP channel compacts to the lowest free %QX slot; the
+      // unmapped entry is returned unchanged.
+      expect(entries[0].iecAddress).toBe('%QX0.0')
+      expect(entries[1].iecAddress).toBe('NOPE')
+    })
+
+    it('skips devices without a Modbus config during writeback', () => {
+      seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      const result = store.getState().projectActions.recalculateIecAddresses()
+      expect(result.ok).toBe(true)
+      expect(
+        store.getState().project.data.remoteDevices![1].modbusTcpConfig!.ioGroups[0].ioPoints![0].iecLocation,
+      ).toBe('%IW0')
+    })
+
+    it('restores a remembered alias onto a reappeared channel via recalc', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      // Simulate the alias having been set earlier (recorded in session memory)
+      // while the channel is currently alias-less (as after a remove/re-add).
+      store.getState().projectActions.rememberChannelAlias(modbusMemoryKey('Dev1', 'g1', pointId), 'temp_sensor')
+      store.getState().projectActions.recalculateIecAddresses()
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].alias).toBe(
+        'temp_sensor',
+      )
+    })
+  })
+
+  describe('rememberChannelAlias', () => {
+    it('stores an alias under its memory key and clears it when emptied', () => {
+      const key = vppMemoryKey('mod-a', 1, 'DO1')
+      store.getState().projectActions.rememberChannelAlias(key, '  relay_1  ')
+      expect(store.getState().iecAliasMemory[key]).toBe('relay_1')
+      store.getState().projectActions.rememberChannelAlias(key, '   ')
+      expect(store.getState().iecAliasMemory[key]).toBeUndefined()
+    })
+
+    it('is reset on a fresh project so aliases do not leak between projects', () => {
+      store.getState().projectActions.rememberChannelAlias(vppMemoryKey('mod-a', 1, 'DO1'), 'relay_1')
+      store.getState().projectActions.clearProjects()
+      expect(store.getState().iecAliasMemory).toEqual({})
     })
   })
 
@@ -2499,6 +2724,124 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
       const result = store.getState().projectActions.updateIOPointAlias('EtherCAT', 'g1', 'p1', 'alias')
       expect(result.ok).toBe(true)
+    })
+
+    it('rejects an alias that is already assigned to another channel', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const points = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!
+      // Claim "dup" on the first point, then try to reuse it on the second.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', points[0].id, 'dup')
+      const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', points[1].id, 'dup')
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Alias already in use')
+      // The rejected write never lands.
+      expect(store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![1].alias).toBe('')
+    })
+
+    it('cascades a rename onto variables bound to the point’s previous alias', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      // First set an alias, then bind a program variable to it by name.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'sensor_a')
+      seedPou(store, makePou('Prog', 'program', [locVar('reading', 'sensor_a')]))
+      // Renaming the point alias must follow the binding to the new name.
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'sensor_b')
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('sensor_b')
+    })
+  })
+
+  describe('renameAlias', () => {
+    it('cascades onto bound POU and global variable locations, leaving manual literals untouched', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1'), locVar('manual', '%QX0.0')]))
+      seedGlobals(store, [locVar('gBound', 'relay_1', 'global')])
+      const result = store.getState().projectActions.renameAlias('relay_1', 'relay_2')
+      expect(result.renamed).toBe(2)
+      const vars = store.getState().project.data.pous[0].interface!.variables!
+      expect(vars[0].location).toBe('relay_2') // alias-bound → follows the rename
+      expect(vars[1].location).toBe('%QX0.0') // manual literal → untouched
+      expect(store.getState().project.data.configurations.resource.globalVariables![0].location).toBe('relay_2')
+    })
+
+    it('cascades a case-only change (the alias registry is case-sensitive)', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'Relay')]))
+      const result = store.getState().projectActions.renameAlias('Relay', 'relay')
+      expect(result.renamed).toBe(1)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay')
+    })
+
+    it('clears bound variable locations when the alias is renamed to empty', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('relay_1', '')
+      expect(result.renamed).toBe(1)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('')
+    })
+
+    it('is a no-op when the old alias is empty', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('', 'relay_2')
+      expect(result.renamed).toBe(0)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay_1')
+    })
+
+    it('is a no-op when the name is unchanged', () => {
+      seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
+      const result = store.getState().projectActions.renameAlias('relay_1', 'relay_1')
+      expect(result.renamed).toBe(0)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay_1')
+    })
+  })
+
+  describe('getCompileReadyProjectData', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    it('resolves alias locations to addresses, honours manual literals, and drops missing aliases', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0, %IW1
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow') // flow → %IW0
+
+      seedPou(
+        store,
+        makePou('Prog', 'program', [
+          locVar('aliasBound', 'flow'), // → %IW0
+          locVar('manual', '%QX0.0'), // → %QX0.0 (verbatim)
+          locVar('ghost', 'no_such_alias'), // → '' (alias gone)
+          locVar('unlocated', ''), // → ''
+        ]),
+      )
+      // A POU whose interface carries no `variables` array — the resolver must
+      // skip it without throwing (early-return guard).
+      const current = store.getState().project
+      store.getState().projectActions.setProject({
+        ...current,
+        data: {
+          ...current.data,
+          pous: [
+            ...current.data.pous,
+            {
+              name: 'NoVars',
+              pouType: 'program',
+              interface: {},
+              body: makeBody(),
+              documentation: '',
+            } as unknown as PLCPou,
+          ],
+        },
+      })
+      seedGlobals(store, [locVar('gFlow', 'flow', 'global')]) // → %IW0
+
+      const data = store.getState().projectActions.getCompileReadyProjectData()
+      const resolved = data.pous[0].interface!.variables!
+      expect(resolved.map((v) => v.location)).toEqual(['%IW0', '%QX0.0', '', ''])
+      expect(data.configurations.resource.globalVariables![0].location).toBe('%IW0')
+
+      // The live store keeps the alias-name form — only the returned snapshot
+      // is resolved.
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('flow')
     })
   })
 

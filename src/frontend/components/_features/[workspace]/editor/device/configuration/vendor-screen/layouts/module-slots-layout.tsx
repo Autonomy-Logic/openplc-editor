@@ -23,6 +23,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -467,10 +468,12 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       }
     }
 
+    // Write the derived channel structure, then let the central registry own
+    // the final addresses (VPP + Modbus packed together, aliases restored
+    // from the session memory) and reconcile variables. This layout renders
+    // from the store, so the registry's write-back propagates automatically.
     setVendorScreenData('io-mapping', { entries: newEntries })
-    // Producer mutation: every VPP slot just had its addresses
-    // re-allocated. Sync variables that were bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -644,10 +647,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // from the live state (including the entry being edited, scoped
     // to the active board's capabilities) and reject the edit if the
     // new alias is already claimed by a different channel.  Without
-    // this gate, the pool's silent first-wins reservation would
-    // cause every variable that the user later binds to the losing
-    // entry to collapse to the winner's address through
-    // `syncVariableAliases`'s refresh path.
+    // this gate, the pool's silent first-wins reservation would make
+    // the losing entry's alias unresolvable, so every variable the
+    // user later binds to it would silently become unlocated at
+    // compile time.
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(
       state.deviceDefinitions.configuration.deviceBoard ?? '',
     )
@@ -673,21 +676,25 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       return
     }
 
-    // Phase 2 — cascade rename onto bound variables BEFORE writing
-    // the new entries, so the subsequent `syncVariableAliases()`
-    // call sees variables already pointing at the new alias name and
-    // takes the refresh path (location follows alias) instead of the
-    // orphan path (location cleared, warning glyph rendered).
-    const oldAlias = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)?.alias ?? ''
+    // Cascade the rename onto bound variables: any variable whose
+    // `location` holds the old alias name follows to the new one
+    // (location follows alias), keeping it located instead of orphaning
+    // it (location cleared, warning glyph rendered).
+    const targetEntry = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)
+    const oldAlias = targetEntry?.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
-    // Refresh variables bound to the (now-renamed) alias against
-    // any address shifts produced by the change.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(targetEntry?.moduleId ?? '', slot, channelName), alias)
+    // Variables bound to this channel hold its alias NAME (resolved at
+    // compile); the `renameAlias` above already cascaded any rename to them.
   }
 
   /**

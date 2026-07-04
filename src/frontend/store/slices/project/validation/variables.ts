@@ -116,9 +116,15 @@ const arrayValidation = ({ value }: { value: string }) => {
 }
 
 /**
- * This is a validation to check if the value of the location is valid.
+ * Validate a variable's `location`. Single-field model: `location` is either
+ * an alias name, a literal IEC address, or empty.
+ *   - Empty → unlocated, valid.
+ *   - A non-`%` value → an alias name; its concrete address (and therefore
+ *     its type match) is resolved at compile time, so accept it here.
+ *   - A literal `%…` → must match the variable's type's address class.
  */
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
+  if (variableLocation === '' || !variableLocation.startsWith('%')) return true
   switch (variableType.toUpperCase()) {
     case 'BOOL': {
       const boolMatch = BOOL_LOCATION_REGEX.test(variableLocation) && variableLocation.split('.')[1] <= '7'

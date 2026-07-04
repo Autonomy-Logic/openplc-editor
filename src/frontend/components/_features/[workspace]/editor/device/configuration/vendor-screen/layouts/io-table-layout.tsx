@@ -10,6 +10,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -142,11 +143,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
-    setEntries(newEntries)
+    // Write the freshly-derived channel structure, then let the central
+    // registry own the FINAL addresses (VPP + Modbus packed together,
+    // aliases restored from the session memory) and pull its result back
+    // into local state so the table renders the compacted addresses.
     setVendorScreenData(persistenceKey, { entries: newEntries })
-    // Producer mutation: addresses were just re-allocated for every
-    // VPP-active slot. Refresh variables bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    setEntries(getStoreState().storedMapping?.entries ?? newEntries)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -184,10 +187,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       return
     }
 
-    // Phase 2 — cascade rename onto bound variables BEFORE writing
-    // so the subsequent `syncVariableAliases()` sees variables
-    // pointing at the new alias and takes the refresh path instead
-    // of orphan.
+    // Cascade the rename onto bound variables: any variable whose
+    // `location` holds the old alias name follows to the new one, so it
+    // stays located (resolved at compile time) rather than orphaning.
     const oldAlias = target.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
@@ -197,8 +199,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
-    // Refresh variables against any allocator-driven address shifts.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
+    // Variables bound to this channel hold its alias NAME (resolved at
+    // compile); the `renameAlias` above already cascaded any rename to them.
   }
 
   const groups = useMemo(() => {

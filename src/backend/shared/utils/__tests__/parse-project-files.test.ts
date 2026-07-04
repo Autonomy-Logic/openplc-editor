@@ -74,6 +74,68 @@ describe('parseProjectFiles — basic', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Legacy alias → single-field location migration (foldLegacyVariableAliases)
+// ---------------------------------------------------------------------------
+
+describe('parseProjectFiles — legacy alias migration', () => {
+  it('folds a JSON POU variable with a non-empty alias into its location', () => {
+    // Old two-field model: an alias-bound variable stored the resolved
+    // %address in `location` and the alias name in `alias`.  The single-
+    // field model keeps only the alias name in `location`.
+    const legacyPou = JSON.stringify({
+      type: 'program',
+      data: {
+        name: 'Legacy',
+        variables: [
+          {
+            name: 'sensor',
+            class: 'local',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '%IX0.0',
+            alias: 'flow_sensor',
+            documentation: '',
+          },
+        ],
+        body: { language: 'st', value: '' },
+        documentation: '',
+      },
+    })
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/Legacy.json', content: legacyPou }]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    const variable = result.projectData.pous[0].interface?.variables[0]
+    // Alias name folded into location; the `alias` field is gone.
+    expect(variable?.location).toBe('flow_sensor')
+    expect('alias' in (variable as unknown as Record<string, unknown>)).toBe(false)
+  })
+
+  it('leaves a manual (empty-alias) JSON POU variable location untouched', () => {
+    const legacyPou = JSON.stringify({
+      type: 'program',
+      data: {
+        name: 'Manual',
+        variables: [
+          {
+            name: 'coil',
+            class: 'local',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '%QX0.0',
+            alias: '',
+            documentation: '',
+          },
+        ],
+        body: { language: 'st', value: '' },
+        documentation: '',
+      },
+    })
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/Manual.json', content: legacyPou }]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    const variable = result.projectData.pous[0].interface?.variables[0]
+    // Empty alias is not a binding — the manual %address is preserved.
+    expect(variable?.location).toBe('%QX0.0')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Line 79 — detectPouTypeFromPath: function-block and function detection
 // ---------------------------------------------------------------------------
 

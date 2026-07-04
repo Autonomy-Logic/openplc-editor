@@ -222,6 +222,41 @@ function createFallbackPou(content: string, language: string, pouType: string, p
  * On parse failure, falls back to createFallbackPou which preserves
  * documentation, raw variable text, and body content.
  */
+/**
+ * Migrate legacy variables from the two-field (`location` + `alias`) model to
+ * the single-field model, where `location` holds the binding itself — the
+ * alias name for an alias-bound variable, a literal `%addr` for a manual one.
+ *
+ * Any object that carries BOTH a string `location` and a non-empty string
+ * `alias` is a legacy alias-bound PLCVariable: its alias name is folded into
+ * `location` and the `alias` field dropped. Objects with `alias` but no
+ * `location` (producer channels: pins, VPP entries, Modbus points, EtherCAT
+ * mappings) keep their alias untouched. Manual variables (empty alias) keep
+ * their literal `location`.
+ *
+ * Generic, idempotent deep walk: projects already in the single-field form
+ * (no `alias` on variables) pass through unchanged, so it is safe to run on
+ * every load.
+ */
+function foldLegacyVariableAliases(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(foldLegacyVariableAliases)
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    const isLegacyAliasBound = typeof obj.location === 'string' && typeof obj.alias === 'string' && obj.alias.length > 0
+    const out: Record<string, unknown> = {}
+    for (const [key, child] of Object.entries(obj)) {
+      if (isLegacyAliasBound && key === 'alias') continue // fold away
+      if (isLegacyAliasBound && key === 'location') {
+        out.location = obj.alias as string
+        continue
+      }
+      out[key] = foldLegacyVariableAliases(child)
+    }
+    return out
+  }
+  return value
+}
+
 function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
   /* istanbul ignore if -- defensive: parseProjectFiles upstream only forwards files whose
@@ -233,7 +268,7 @@ function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string 
   // Legacy JSON format
   if (ext === 'json') {
     try {
-      const parsed = JSON.parse(file.content) as unknown
+      const parsed = foldLegacyVariableAliases(JSON.parse(file.content))
       // JSON POUs may be in the old discriminated union format: { type, data }
       if (parsed && typeof parsed === 'object' && 'type' in parsed && 'data' in parsed) {
         const ipcPou = parsed as { type: string; data: Record<string, unknown> }
@@ -352,7 +387,7 @@ export function parseProjectFiles(
   // Parse and Zod-validate project.json (matches old backend safeParseProjectFile behavior)
   let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
   try {
-    const raw = projectJson ? (JSON.parse(projectJson) as unknown) : null
+    const raw = projectJson ? foldLegacyVariableAliases(JSON.parse(projectJson)) : null
     if (raw) {
       const result = PLCProjectSchema.safeParse(raw)
       if (result.success) {
