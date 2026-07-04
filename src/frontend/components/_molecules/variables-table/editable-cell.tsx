@@ -556,21 +556,36 @@ const EditableLocationCell = ({
       ? `Address ${cellValue} conflicts with alias "${locationConflict.aliasName}" assigned to "${locationConflict.variableName}". Two variables cannot share a location.`
       : undefined
 
+  // The warning glyph must stay visible whether or not the row is selected.
+  // The selected branch renders an editable combobox; previously the glyph
+  // lived only in the display branch, so an active conflict/orphan looked
+  // unflagged the moment the row was selected. Render it in both branches.
+  const warningGlyph =
+    hasLocationWarning && warningTooltip ? (
+      <LocationWarningGlyph
+        label={isManualConflict ? 'Address conflicts with an alias' : 'Orphaned alias'}
+        tooltip={warningTooltip}
+      />
+    ) : null
+
   return selected ? (
-    <GenericComboboxCell
-      value={cellValue}
-      displayLabel={cellValue}
-      onValueChange={(value) => {
-        onBlur(value)
-      }}
-      selectValues={selectableValues()}
-      selected={selected}
-      openOnSelectedOption
-      canAddACustomOption
-      // An orphaned alias name resolves to nothing at compile; keep "Clear"
-      // enabled even when empty so the user can drop it.
-      allowClearWhenEmpty={id === 'location' && isOrphaned}
-    />
+    <div className='flex w-full flex-1 items-center gap-1'>
+      {warningGlyph}
+      <GenericComboboxCell
+        value={cellValue}
+        displayLabel={cellValue}
+        onValueChange={(value) => {
+          onBlur(value)
+        }}
+        selectValues={selectableValues()}
+        selected={selected}
+        openOnSelectedOption
+        canAddACustomOption
+        // An orphaned alias name resolves to nothing at compile; keep "Clear"
+        // enabled even when empty so the user can drop it.
+        allowClearWhenEmpty={id === 'location' && isOrphaned}
+      />
+    </div>
   ) : (
     <div
       className={cn(
@@ -581,12 +596,7 @@ const EditableLocationCell = ({
         },
       )}
     >
-      {hasLocationWarning && warningTooltip && (
-        <LocationWarningGlyph
-          label={isManualConflict ? 'Address conflicts with an alias' : 'Orphaned alias'}
-          tooltip={warningTooltip}
-        />
-      )}
+      {warningGlyph}
       <HighlightedText
         text={cellValue}
         searchQuery={searchQuery}

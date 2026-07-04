@@ -88,6 +88,33 @@ type ConfigScreenDefinition = {
 // Walk a screen definition and return every field that contributes
 // to the configuration form. The screen JSON is a vendor artifact —
 // be tolerant of missing/oddly-shaped fragments rather than crash.
+/**
+ * Alias cell with local state so the value commits on blur (focus change),
+ * not on every keystroke. Committing per keystroke fires the alias-rename
+ * cascade for every intermediate string while editing — e.g. clearing "flow"
+ * would cascade through "flo", "fl", "f" onto bound variables. Committing on
+ * blur means a single rename (old → final) reaches the store, and clearing the
+ * field to empty leaves bound variables orphaned rather than partially renamed.
+ */
+function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => {
+    setLocal(value)
+  }, [value])
+  return (
+    <input
+      type='text'
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== value) onCommit(local)
+      }}
+      placeholder='Alias...'
+      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+    />
+  )
+}
+
 function collectConfigFields(def: ConfigScreenDefinition | undefined | null): ConfigFieldDef[] {
   if (!def?.sections) return []
   const out: ConfigFieldDef[] = []
@@ -993,12 +1020,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                                 {entry.iecAddress}
                               </td>
                               <td className='px-1 py-1'>
-                                <input
-                                  type='text'
-                                  value={entry.alias}
-                                  onChange={(e) => handleAliasChange(entry.slot, entry.channelName, e.target.value)}
-                                  placeholder='Alias...'
-                                  className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+                                <AliasInputCell
+                                  value={entry.alias ?? ''}
+                                  onCommit={(next) => handleAliasChange(entry.slot, entry.channelName, next)}
                                 />
                               </td>
                             </tr>

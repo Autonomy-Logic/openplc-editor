@@ -389,18 +389,33 @@ const EditableLocationCell = ({
       ? `Address ${cellValue} conflicts with alias "${locationConflict.aliasName}" assigned to "${locationConflict.variableName}". Two variables cannot share a location.`
       : undefined
 
+  // The warning glyph must stay visible whether or not the row is selected.
+  // The editable branch renders a combobox; previously the glyph lived only in
+  // the display branch, so an active conflict/orphan looked unflagged the
+  // moment the row was selected. Render it in both branches.
+  const warningGlyph =
+    hasLocationWarning && warningTooltip ? (
+      <LocationWarningGlyph
+        label={isManualConflict ? 'Address conflicts with an alias' : 'Orphaned alias'}
+        tooltip={warningTooltip}
+      />
+    ) : null
+
   return editable ? (
-    <GenericComboboxCell
-      value={cellValue}
-      displayLabel={cellValue}
-      onValueChange={(value) => {
-        onBlur(value)
-      }}
-      selectValues={selectableValues()}
-      selected={editable}
-      openOnSelectedOption
-      canAddACustomOption
-    />
+    <div className='flex w-full flex-1 items-center gap-1'>
+      {warningGlyph}
+      <GenericComboboxCell
+        value={cellValue}
+        displayLabel={cellValue}
+        onValueChange={(value) => {
+          onBlur(value)
+        }}
+        selectValues={selectableValues()}
+        selected={editable}
+        openOnSelectedOption
+        canAddACustomOption
+      />
+    </div>
   ) : (
     <div
       className={cn(
@@ -410,12 +425,7 @@ const EditableLocationCell = ({
         },
       )}
     >
-      {hasLocationWarning && warningTooltip && (
-        <LocationWarningGlyph
-          label={isManualConflict ? 'Address conflicts with an alias' : 'Orphaned alias'}
-          tooltip={warningTooltip}
-        />
-      )}
+      {warningGlyph}
       <HighlightedText
         text={cellValue}
         searchQuery={searchQuery}

@@ -2771,11 +2771,14 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay')
     })
 
-    it('clears bound variable locations when the alias is renamed to empty', () => {
+    it('leaves bound variable locations untouched (orphaned) when the alias is cleared', () => {
       seedPou(store, makePou('Prog', 'program', [locVar('bound', 'relay_1')]))
       const result = store.getState().projectActions.renameAlias('relay_1', '')
-      expect(result.renamed).toBe(1)
-      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('')
+      // Clearing an alias is a deletion, not a rename: the bound variable keeps
+      // the now-missing alias name and orphans (surfaces the warning glyph),
+      // rather than being silently wiped. Same behavior as deleting the device.
+      expect(result.renamed).toBe(0)
+      expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('relay_1')
     })
 
     it('is a no-op when the old alias is empty', () => {
