@@ -1320,6 +1320,46 @@ void loop()
     coexistenceRef.current?.setActive(inlineCompletionsActive)
   }, [inlineCompletionsActive, editorInstanceId])
 
+  // AI inline-completion idle re-trigger.
+  //
+  // Monaco only auto-triggers inline completions on a content change and renders
+  // just the latest call's result, so a request can complete without ever
+  // painting (a late/superseded result is silently dropped) — after which
+  // nothing re-requests until the next keystroke, and the suggestion appears to
+  // "give up". This re-arms it: once the user has been idle for 2s with AI on and
+  // no ghost text currently visible, we explicitly re-trigger inline suggest so
+  // the editor always eventually offers something for a settled cursor. The 2s
+  // window keeps this from firing needless requests during active editing; it
+  // fires at most once per idle period (triggering does not change content, so
+  // the timer is not re-armed by its own action).
+  useEffect(() => {
+    if (!inlineCompletionsActive) return
+    const editor = editorRef.current
+    if (!editor) return
+
+    const IDLE_MS = 2000
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+    const scheduleIdleRetrigger = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        if (!editor.hasTextFocus()) return
+        const model = editor.getModel()
+        if (!model || model.getValueLength() === 0) return
+        // Skip if a ghost is already showing (avoid a redundant request).
+        const dom = editor.getDomNode()
+        if (dom?.querySelector('.ghost-text-decoration, .ghost-text, [class*="ghost-text"]')) return
+        editor.trigger('openplc-ai-idle', 'editor.action.inlineSuggest.trigger', {})
+      }, IDLE_MS)
+    }
+
+    const changeDisposable = editor.onDidChangeModelContent(scheduleIdleRetrigger)
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      changeDisposable.dispose()
+    }
+  }, [inlineCompletionsActive, editorInstanceId])
+
   // -----------------------------------------------------------------------
   // Drag-and-drop
   // -----------------------------------------------------------------------
