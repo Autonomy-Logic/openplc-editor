@@ -15,6 +15,7 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 
+import { type Cia402AxisConfig, DEFAULT_CIA402_AXIS_CONFIG, isCia402Drive } from './cia402'
 import { esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
@@ -113,6 +114,7 @@ export function enrichDeviceData(
   slaveType: string
   sdoConfigurations?: SDOConfigurationEntry[]
   channelMappings: EtherCATChannelMapping[]
+  cia402?: Cia402AxisConfig
 } {
   return {
     channelInfo: buildChannelInfo(device),
@@ -121,5 +123,8 @@ export function enrichDeviceData(
     slaveType: deriveSlaveType(device),
     sdoConfigurations: device.coeObjects?.length ? extractDefaultSdoConfigurations(device.coeObjects) : undefined,
     channelMappings: generateDefaultChannelMappings(pdoToChannels(device), usedAddresses),
+    // A CiA 402 servo is auto-recognized as a SoftMotion axis; the user can
+    // disable/tune it in the device's Axis configuration.
+    cia402: isCia402Drive(device) ? { ...DEFAULT_CIA402_AXIS_CONFIG } : undefined,
   }
 }

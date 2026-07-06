@@ -5,6 +5,7 @@ import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPy
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
 import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { generateSoftMotionArtifacts } from '../../ethercat/generate-softmotion'
 
 type CppPouData = {
   name: string
@@ -172,6 +173,14 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
     projectDataWithCpp.originalCppPous = originalCppPousData
 
     log('info', `Successfully processed ${cppPous.length} C/C++ POU(s)`)
+  }
+
+  // --- SoftMotion: generate AXIS_REF_SM3 globals + PDO scalars + drive bridge
+  //     for CiA 402 EtherCAT axes (no-op when the project has none). ---
+  const withMotion = generateSoftMotionArtifacts(processedProjectData) as ProjectDataWithCpp
+  if (withMotion !== processedProjectData) {
+    processedProjectData = withMotion
+    log('info', 'Generated SoftMotion axis bindings for CiA 402 drive(s)')
   }
 
   return { projectData: processedProjectData as ProjectDataWithCpp, validationFailed: false }
