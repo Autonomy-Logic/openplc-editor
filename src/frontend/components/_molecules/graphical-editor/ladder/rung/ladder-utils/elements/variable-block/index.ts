@@ -174,9 +174,7 @@ export const updateVariableBlockPosition = (rung: RungLadderState, previousNodes
   // `previousNodes` is a fallback identity source for pipelines that strip
   // variable nodes before layout (the drag-drop flow removes them in
   // `prepareDropState`) — entries from `rung.nodes` win when both exist.
-  const previousIdentities = collectVariableIdentities(
-    previousNodes ? [...previousNodes, ...rung.nodes] : rung.nodes,
-  )
+  const previousIdentities = collectVariableIdentities(previousNodes ? [...previousNodes, ...rung.nodes] : rung.nodes)
 
   const { nodes: removedVariableNodes, edges: removedVariableEdges } = removeVariableBlock(rung)
   newNodes = removedVariableNodes

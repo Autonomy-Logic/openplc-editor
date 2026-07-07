@@ -559,10 +559,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     // Blur with an unchanged name is not an edit — skip the write so merely
     // clicking in and out of a block never marks the POU as modified. The
     // autocomplete's explicit create action (createIfNotFound) still proceeds.
-    if (
-      !createIfNotFound &&
-      variableNameToSubmit === (node.data as { variable?: { name?: string } }).variable?.name
-    ) {
+    if (!createIfNotFound && variableNameToSubmit === (node.data as { variable?: { name?: string } }).variable?.name) {
       return
     }
 

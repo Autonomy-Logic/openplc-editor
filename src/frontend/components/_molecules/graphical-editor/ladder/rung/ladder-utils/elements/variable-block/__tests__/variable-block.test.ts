@@ -65,9 +65,7 @@ describe('updateVariableBlockPosition identity reuse', () => {
     const variables = nodes.filter((n) => n.type === 'variable')
 
     expect(variables).toHaveLength(3)
-    const byHandle = new Map(
-      variables.map((n) => [(n.data as { block: { handleId: string } }).block.handleId, n]),
-    )
+    const byHandle = new Map(variables.map((n) => [(n.data as { block: { handleId: string } }).block.handleId, n]))
     expect(byHandle.get('CU')?.id).toBe('VARIABLE_prev_cu')
     expect((byHandle.get('CU')?.data as { numericId: number }).numericId).toBe(111)
     expect(byHandle.get('PV')?.id).toBe('VARIABLE_prev_pv')
@@ -120,9 +118,7 @@ describe('updateVariableBlockPosition identity reuse', () => {
     const variables = nodes.filter((n) => n.type === 'variable')
 
     expect(variables).toHaveLength(3)
-    const byHandle = new Map(
-      variables.map((n) => [(n.data as { block: { handleId: string } }).block.handleId, n]),
-    )
+    const byHandle = new Map(variables.map((n) => [(n.data as { block: { handleId: string } }).block.handleId, n]))
     expect(byHandle.get('CU')?.id).toBe('VARIABLE_prev_cu')
     expect(byHandle.get('PV')?.id).toBe('VARIABLE_prev_pv')
     expect(byHandle.get('CV')?.id).toBe('VARIABLE_prev_cv')

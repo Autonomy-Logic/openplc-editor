@@ -498,9 +498,12 @@ describe('createLadderFlowSlice', () => {
     seedFlowWithRung(store, 'editor-1', rung)
     store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
 
-    store
-      .getState()
-      .ladderFlowActions.updateNode({ editorName: 'editor-1', rungId: 'rung-1', nodeId: 'n1', node: makeNode({ id: 'n1' }) })
+    store.getState().ladderFlowActions.updateNode({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      nodeId: 'n1',
+      node: makeNode({ id: 'n1' }),
+    })
 
     expect(store.getState().ladderFlows[0].updated).toBe(true)
   })

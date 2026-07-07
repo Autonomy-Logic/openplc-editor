@@ -151,7 +151,7 @@ describe('syncNodesWithVariables', () => {
     expect(updateNode).toHaveBeenCalledWith(expect.objectContaining({ editorName: 'editor1' }))
   })
 
-  it('skips variable-pin nodes whose pin type cannot be resolved (never judges against \'\')', () => {
+  it("skips variable-pin nodes whose pin type cannot be resolved (never judges against '')", () => {
     const updateNode = vi.fn()
     const variable = makeVariable('myVar', 'BOOL')
     const node = makeNode('n1', 'variable', { name: 'myVar' } as Partial<PLCVariable>, { wrongVariable: true })
@@ -183,9 +183,9 @@ describe('syncNodesWithVariables', () => {
     const variable = makeVariable('reset_in', 'BOOL')
     const node = makeNode('n1', 'variable', { name: 'reset_in' } as Partial<PLCVariable>, pinExtra('BOOL'))
 
-    const ladderFlows = [
-      { name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] },
-    ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
+    const ladderFlows = [{ name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] }] as unknown as Parameters<
+      typeof syncNodesWithVariables
+    >[1]
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
     expect(updateNode).not.toHaveBeenCalled()
@@ -196,9 +196,9 @@ describe('syncNodesWithVariables', () => {
     const variable = makeVariable('reset_in', 'INT')
     const node = makeNode('n1', 'variable', { name: 'reset_in' } as Partial<PLCVariable>, pinExtra('BOOL'))
 
-    const ladderFlows = [
-      { name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] },
-    ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
+    const ladderFlows = [{ name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] }] as unknown as Parameters<
+      typeof syncNodesWithVariables
+    >[1]
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
     expect(updateNode).toHaveBeenCalledWith(
@@ -216,16 +216,14 @@ describe('syncNodesWithVariables', () => {
   it('clears a stale wrongVariable flag on a variable-pin node once the pin type matches', () => {
     const updateNode = vi.fn()
     const variable = makeVariable('reset_in', 'BOOL')
-    const node = makeNode(
-      'n1',
-      'variable',
-      { name: 'reset_in' } as Partial<PLCVariable>,
-      { ...pinExtra('BOOL'), wrongVariable: true },
-    )
+    const node = makeNode('n1', 'variable', { name: 'reset_in' } as Partial<PLCVariable>, {
+      ...pinExtra('BOOL'),
+      wrongVariable: true,
+    })
 
-    const ladderFlows = [
-      { name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] },
-    ] as unknown as Parameters<typeof syncNodesWithVariables>[1]
+    const ladderFlows = [{ name: 'editor1', rungs: [{ id: 'r1', nodes: [node], edges: [] }] }] as unknown as Parameters<
+      typeof syncNodesWithVariables
+    >[1]
 
     syncNodesWithVariables([variable], ladderFlows, updateNode)
     expect(updateNode).toHaveBeenCalledWith(

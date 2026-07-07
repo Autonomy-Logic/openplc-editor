@@ -118,14 +118,18 @@ describe('graphical node sanitization', () => {
 
   it('clears selection state and resets selectedNodes on LD rungs', () => {
     const pou = makeLdPou([{ id: 'n1', selected: true, dragging: true, draggable: true, data: { draggable: true } }])
-    const value = sanitizePou(pou, undefined).body.value as { rungs: { selectedNodes: unknown[]; nodes: Record<string, unknown>[] }[] }
+    const value = sanitizePou(pou, undefined).body.value as {
+      rungs: { selectedNodes: unknown[]; nodes: Record<string, unknown>[] }[]
+    }
     expect(value.rungs[0].selectedNodes).toEqual([])
     expect(value.rungs[0].nodes[0].selected).toBe(false)
     expect(value.rungs[0].nodes[0].dragging).toBe(false)
   })
 
   it('strips the hasDivergence render decoration from LD node data', () => {
-    const pou = makeLdPou([{ id: 'n1', draggable: true, data: { draggable: true, hasDivergence: false, variable: { name: 'X' } } }])
+    const pou = makeLdPou([
+      { id: 'n1', draggable: true, data: { draggable: true, hasDivergence: false, variable: { name: 'X' } } },
+    ])
     const value = sanitizePou(pou, undefined).body.value as { rungs: { nodes: { data: Record<string, unknown> }[] }[] }
     expect('hasDivergence' in value.rungs[0].nodes[0].data).toBe(false)
     expect(value.rungs[0].nodes[0].data.variable).toEqual({ name: 'X' })
@@ -161,7 +165,15 @@ describe('graphical node sanitization', () => {
         value: {
           name: 'MyFbd',
           rung: {
-            nodes: [{ id: 'n1', selected: true, dragging: true, draggable: false, data: { draggable: true, hasDivergence: true } }],
+            nodes: [
+              {
+                id: 'n1',
+                selected: true,
+                dragging: true,
+                draggable: false,
+                data: { draggable: true, hasDivergence: true },
+              },
+            ],
             edges: [],
             selectedNodes: [{ id: 'ghost' }],
           },
@@ -170,7 +182,10 @@ describe('graphical node sanitization', () => {
       documentation: '',
     } as unknown as PLCPou
     const value = sanitizePou(pou, undefined).body.value as {
-      rung: { selectedNodes: unknown[]; nodes: { selected: boolean; dragging: boolean; draggable: boolean; data: Record<string, unknown> }[] }
+      rung: {
+        selectedNodes: unknown[]
+        nodes: { selected: boolean; dragging: boolean; draggable: boolean; data: Record<string, unknown> }[]
+      }
     }
     expect(value.rung.selectedNodes).toEqual([])
     expect(value.rung.nodes[0].selected).toBe(false)
