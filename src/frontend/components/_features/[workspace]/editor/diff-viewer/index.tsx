@@ -13,7 +13,11 @@
  *     serialized form for files edited this session — keeping the diff live.
  *
  * The HEAD `before` map is cached in the version-control slice (`headContent`)
- * and invalidated on project load / commit / in-place reload.
+ * and invalidated on project load / commit / in-place reload, plus pruned
+ * per-path on save (`recordSavedFiles`). The fetch below refires whenever the
+ * open path has no cached entry, so a viewer that stayed mounted across a
+ * commit (which empties the pending set) picks up the new HEAD on the next
+ * change instead of diffing against a stale snapshot.
  */
 
 import { useEffect, useMemo } from 'react'
@@ -61,28 +65,51 @@ export function DiffViewerEditor() {
 
   const filePath = editor.type === 'diff-viewer' ? editor.meta.filePath : ''
 
+  // The cached snapshot serves this diff only when it has an entry for the
+  // open path. A missing entry means the cache predates the change being
+  // viewed (e.g. it was rebuilt while a commit had emptied the pending set),
+  // so it must be refetched — rendering it would diff against a wrong HEAD.
+  const headReady = headContent !== null && (!filePath || headContent[filePath] !== undefined)
+
   // Lazily fetch the HEAD content of all pending files via the backend's
   // content-bearing /changes call (authoritative against the real HEAD), and
-  // cache the `before` map. Invalidated on load / commit / reload.
+  // cache the `before` map. Invalidated on load / commit / reload and pruned
+  // per-path on save.
   useEffect(() => {
-    if (headContent !== null || !projectId || !versionControl) return
+    if (headReady || !projectId || !versionControl) return
     let cancelled = false
+    // Snapshot the working-tree bytes before fetching: if `filePath` turns
+    // out to have no pending change, its working tree equals HEAD, so these
+    // bytes ARE its HEAD content. Caching them keeps `headReady` from
+    // refetching in a loop and gives later diffs the correct original side.
+    let workingTreeSnapshot = ''
+    if (filePath) {
+      try {
+        workingTreeSnapshot = buildAllProjectFileContents()[filePath] ?? ''
+      } catch {
+        workingTreeSnapshot = ''
+      }
+    }
     void (async () => {
       try {
         const { changes } = await versionControl.getChanges(projectId, undefined, true)
         const map: Record<string, string> = {}
         for (const c of changes) map[c.path] = c.before ?? ''
+        if (filePath && map[filePath] === undefined) map[filePath] = workingTreeSnapshot
         if (!cancelled) setHeadContent(map)
       } catch {
-        if (!cancelled) setHeadContent({})
+        // Cache an (empty) entry for the open path even on failure so
+        // `headReady` doesn't retry in a tight loop; the next mount or path
+        // change triggers a fresh attempt.
+        if (!cancelled) setHeadContent(filePath ? { [filePath]: '' } : {})
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [headContent, projectId, versionControl, setHeadContent])
+  }, [headReady, filePath, projectId, versionControl, setHeadContent])
 
-  const original = headContent && filePath ? (headContent[filePath] ?? '') : ''
+  const original = headReady && headContent && filePath ? (headContent[filePath] ?? '') : ''
 
   // The working-tree side: raw loaded bytes for files untouched this session,
   // freshly serialized for edited ones. Recomputed when `project` changes.
@@ -111,7 +138,7 @@ export function DiffViewerEditor() {
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950'>
         <div className='flex shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800'>
           <p className='flex-1 truncate font-mono text-xs text-neutral-600 dark:text-neutral-400'>{filePath}</p>
-          {headContent !== null && (
+          {headReady && (
             <span
               className={cn(
                 'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold',
@@ -123,7 +150,7 @@ export function DiffViewerEditor() {
           )}
         </div>
         <div className='min-h-0 flex-1'>
-          {headContent === null ? (
+          {!headReady ? (
             <div className='flex h-full items-center justify-center'>
               <div className='flex flex-col items-center gap-3'>
                 <div className='h-5 w-5 animate-spin rounded-full border-2 border-brand-light border-t-transparent' />

@@ -98,11 +98,16 @@ type LadderFlowActions = {
     nodeId,
     rungId,
     editorName,
+    transient,
   }: {
     node: Node
     nodeId: string
     rungId: string
     editorName: string
+    /** UI-only update (e.g. drag-lock while a variable input is focused) —
+     *  writes the node without marking the flow as edited, so merely
+     *  focusing/blurring an element never dirties the POU. */
+    transient?: boolean
   }) => void
   addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
   removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void

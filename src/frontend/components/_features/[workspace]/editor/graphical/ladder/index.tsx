@@ -92,18 +92,27 @@ export default function LadderEditor() {
 
   /**
    * Update the flow state to project JSON.
+   *
+   * Validate the flow with Zod but persist the raw object (minus the
+   * transient `updated` flag). Using the parsed result would silently strip
+   * every field not declared in `zodLadderFlowSchema` (e.g. `handleBranches`,
+   * `positionAbsolute`, `zIndex`) and reorder keys to schema order, which
+   * makes `serializeGraphicalPouToString` produce byte-drift vs. the loaded
+   * disk copy — surfacing as phantom "Modified" entries in Source Control
+   * for POUs the user never edited.
    */
   useEffect(() => {
-    if (!flowUpdated) return
+    if (!flowUpdated || !flow) return
 
     const flowSchema = zodLadderFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
 
+    const { updated: _updated, ...flowBody } = flow
     updatePou({
       name: pouName,
       content: {
         language: 'ld',
-        value: flowSchema.data,
+        value: structuredClone(flowBody),
       },
     })
 

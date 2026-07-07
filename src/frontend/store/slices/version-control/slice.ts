@@ -96,6 +96,16 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
           const initialMap = new Map(draft.versionControl.initialPending.map((e) => [e.path, e.status]))
           const changedSet = new Set(draft.versionControl.changedPaths)
 
+          // Drop the cached HEAD snapshot for every path this save touched.
+          // A save doesn't move HEAD, but the cached entry may predate it
+          // wrongly (e.g. a fetch that raced a commit), and the diff view
+          // can't tell a stale entry from a fresh one — pruning forces it to
+          // refetch authoritative content the next time the path is viewed.
+          if (draft.versionControl.headContent) {
+            for (const { path } of saved) delete draft.versionControl.headContent[path]
+            for (const path of deleted) delete draft.versionControl.headContent[path]
+          }
+
           for (const { path, content } of saved) {
             // Track S3's current state for this path so future "clean"
             // saves echo back what's now in S3 (instead of the original

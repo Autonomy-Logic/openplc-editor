@@ -294,7 +294,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         }),
       )
     },
-    updateNode({ editorName, node, nodeId, rungId }) {
+    updateNode({ editorName, node, nodeId, rungId, transient }) {
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flow = ladderFlows.find((flow) => flow.name === editorName)
@@ -307,7 +307,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (nodeIndex === -1) return
 
           rung.nodes[nodeIndex] = node
-          flow.updated = true
+          if (!transient) flow.updated = true
         }),
       )
     },

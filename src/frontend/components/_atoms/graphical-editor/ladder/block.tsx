@@ -556,6 +556,16 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
+    // Blur with an unchanged name is not an edit — skip the write so merely
+    // clicking in and out of a block never marks the POU as modified. The
+    // autocomplete's explicit create action (createIfNotFound) still proceeds.
+    if (
+      !createIfNotFound &&
+      variableNameToSubmit === (node.data as { variable?: { name?: string } }).variable?.name
+    ) {
+      return
+    }
+
     const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
 
     const findMatchingVariable = () =>
@@ -873,6 +883,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             onFocus={(e) => {
               e.target.select()
               if (!node || !rung) return
+              // Drag-lock while typing is UI state, not an edit — transient
+              // so focusing the input never marks the flow as modified.
               updateNode({
                 editorName: pouName,
                 nodeId: node.id,
@@ -881,6 +893,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                   ...node,
                   draggable: false,
                 },
+                transient: true,
               })
               return
             }}
@@ -894,6 +907,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                   ...node,
                   draggable: node.data.draggable as boolean,
                 },
+                transient: true,
               })
               return
             }}

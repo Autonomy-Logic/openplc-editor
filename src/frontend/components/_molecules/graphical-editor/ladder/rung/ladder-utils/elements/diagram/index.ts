@@ -396,6 +396,10 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
 export const updateDiagramElementsPosition = (
   rung: RungLadderState,
   defaultBounds: [number, number],
+  /** Fallback identity source for the variable-node rebuild — pass the
+   *  pre-strip node set when `rung.nodes` had its variable nodes removed
+   *  earlier in the pipeline (see updateVariableBlockPosition). */
+  previousNodes?: Node[],
 ): { nodes: Node[]; edges: Edge[] } => {
   // Pre-expand block dimensions BEFORE the main layout loop. findAllParallelsDepthAndNodes
   // and the parallel-path Y formulas both read block.height; if blocks haven't been
@@ -689,10 +693,13 @@ export const updateDiagramElementsPosition = (
     defaultBounds,
   )
 
-  const variablesNodes = updateVariableBlockPosition({
-    ...rung,
-    nodes: changedRailNodes,
-  })
+  const variablesNodes = updateVariableBlockPosition(
+    {
+      ...rung,
+      nodes: changedRailNodes,
+    },
+    previousNodes,
+  )
 
   return { nodes: variablesNodes.nodes, edges: variablesNodes.edges }
 }

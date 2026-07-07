@@ -139,6 +139,29 @@ describe('createVersionControlSlice', () => {
       expect(vc().changedPaths).toContain('tracked.st')
       expect(vc().changedPaths).not.toContain('session.st')
     })
+
+    it('prunes saved and deleted paths from the cached HEAD snapshot', () => {
+      actions().initBaseline({ initialPending: [], baselineContent: { 'gone.st': 'g' } })
+      actions().setHeadContent({ 'saved.st': 'old-head', 'gone.st': 'old-head', 'untouched.st': 'head' })
+
+      actions().recordSavedFiles({
+        saved: [{ path: 'saved.st', content: 'new' }],
+        deleted: ['gone.st'],
+      })
+
+      expect(vc().headContent).toEqual({ 'untouched.st': 'head' })
+    })
+
+    it('leaves the HEAD snapshot null when it was never fetched', () => {
+      actions().initBaseline({ initialPending: [], baselineContent: {} })
+
+      actions().recordSavedFiles({
+        saved: [{ path: 'saved.st', content: 'new' }],
+        deleted: [],
+      })
+
+      expect(vc().headContent).toBeNull()
+    })
   })
 
   it('commitBaseline refreshes baseline, clears pending, and invalidates HEAD', () => {

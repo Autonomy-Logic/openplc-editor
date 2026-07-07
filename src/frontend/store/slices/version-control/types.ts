@@ -58,10 +58,11 @@ export type VersionControlState = {
      * `/changes?includeContent=true` `before` field (authoritative against the
      * real HEAD). `null` until lazily fetched by the diff view; reset to `null`
      * on project load / commit / in-place reload so it refetches against the
-     * current HEAD. Unlike `baselineContent` (which reflects the loaded working
-     * tree and so already includes pre-existing pending changes), this is the
-     * committed content, so it can show a diff for changes made before the
-     * current session.
+     * current HEAD, and pruned per-path by `recordSavedFiles` so a re-edited
+     * file never diffs against a stale snapshot. Unlike `baselineContent`
+     * (which reflects the loaded working tree and so already includes
+     * pre-existing pending changes), this is the committed content, so it can
+     * show a diff for changes made before the current session.
      */
     headContent: Record<string, string> | null
   }
@@ -96,7 +97,10 @@ export type VersionControlActions = {
    * Update `changedPaths` based on what the save just sent. Files matching
    * baseline are removed; files differing are added; deletions are folded
    * back into initialPending or changedPaths depending on their original
-   * status (see slice implementation for the case-by-case logic).
+   * status (see slice implementation for the case-by-case logic). Also prunes
+   * the saved/deleted paths from the cached `headContent` snapshot so the
+   * diff view refetches their HEAD side instead of trusting a possibly-stale
+   * entry.
    */
   recordSavedFiles: (args: { saved: SavedFileRecord[]; deleted: string[] }) => void
   /**
