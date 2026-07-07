@@ -55,6 +55,19 @@ describe('createVersionControlSlice', () => {
     })
   })
 
+  describe('mergeHeadContent', () => {
+    it('creates the snapshot from null', () => {
+      actions().mergeHeadContent({ 'a.st': 'head-a' })
+      expect(vc().headContent).toEqual({ 'a.st': 'head-a' })
+    })
+
+    it('merges entries without dropping the rest of the map', () => {
+      actions().setHeadContent({ 'a.st': 'head-a', 'b.st': 'head-b' })
+      actions().mergeHeadContent({ 'b.st': 'updated', 'c.st': 'head-c' })
+      expect(vc().headContent).toEqual({ 'a.st': 'head-a', 'b.st': 'updated', 'c.st': 'head-c' })
+    })
+  })
+
   it('initBaseline resets the cached HEAD snapshot to null', () => {
     actions().setHeadContent({ 'a.st': 'x' })
     actions().initBaseline({

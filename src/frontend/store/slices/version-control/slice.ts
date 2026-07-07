@@ -58,6 +58,13 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
         }),
       ),
 
+    mergeHeadContent: (entries: Record<string, string>) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.headContent = { ...(draft.versionControl.headContent ?? {}), ...entries }
+        }),
+      ),
+
     initBaseline: ({ initialPending, baselineContent, rawLoadedContent, loadedSerialized }) =>
       setState(
         produce<VersionControlSlice>((draft) => {

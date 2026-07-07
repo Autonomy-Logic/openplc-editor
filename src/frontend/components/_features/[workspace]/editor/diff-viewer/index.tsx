@@ -62,6 +62,7 @@ export function DiffViewerEditor() {
   // of each diff. `null` = not yet loaded → fetched lazily below.
   const headContent = useOpenPLCStore((s) => s.versionControl.headContent)
   const setHeadContent = useOpenPLCStore((s) => s.versionControlActions.setHeadContent)
+  const mergeHeadContent = useOpenPLCStore((s) => s.versionControlActions.mergeHeadContent)
 
   const filePath = editor.type === 'diff-viewer' ? editor.meta.filePath : ''
 
@@ -101,13 +102,13 @@ export function DiffViewerEditor() {
         // Cache an (empty) entry for the open path even on failure so
         // `headReady` doesn't retry in a tight loop; the next mount or path
         // change triggers a fresh attempt.
-        if (!cancelled) setHeadContent(filePath ? { [filePath]: '' } : {})
+        if (!cancelled) mergeHeadContent(filePath ? { [filePath]: '' } : {})
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [headReady, filePath, projectId, versionControl, setHeadContent])
+  }, [headReady, filePath, projectId, versionControl, setHeadContent, mergeHeadContent])
 
   const original = headReady && headContent && filePath ? (headContent[filePath] ?? '') : ''
 

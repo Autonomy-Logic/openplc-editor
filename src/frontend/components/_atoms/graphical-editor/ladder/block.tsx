@@ -879,6 +879,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+                nodeId: id,
+              })
               if (!node || !rung) return
               // Drag-lock while typing is UI state, not an edit — transient
               // so focusing the input never marks the flow as modified.
@@ -895,6 +898,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+                nodeId: id,
+              })
               if (!node || !rung) return
               updateNode({
                 editorName: pouName,

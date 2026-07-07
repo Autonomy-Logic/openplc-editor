@@ -76,6 +76,8 @@ export type VersionControlActions = {
   /** Set (or clear, with `null`) the lazily-fetched HEAD snapshot used as the
    *  "original" side of source-control diffs. */
   setHeadContent: (content: Record<string, string> | null) => void
+  /** Merge entries into the HEAD snapshot without dropping the rest of the map (creates it when `null`). */
+  mergeHeadContent: (entries: Record<string, string>) => void
   /**
    * Snapshot baseline + initial pending at the last "in-sync" point
    * (project load, after restore, after discard).
