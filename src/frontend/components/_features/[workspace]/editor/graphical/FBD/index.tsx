@@ -82,19 +82,27 @@ export default function FbdEditor() {
   }, [flow?.rung.nodes, userLibraries, pous])
 
   /**
-   * Update the flow state to project JSON
+   * Update the flow state to project JSON.
+   *
+   * Validate the flow with Zod but persist the raw object (minus the
+   * transient `updated` flag). Using the parsed result would silently strip
+   * every field not declared in `zodFBDFlowSchema` and reorder keys to
+   * schema order, which makes `serializeGraphicalPouToString` produce
+   * byte-drift vs. the loaded disk copy — surfacing as phantom "Modified"
+   * entries in Source Control for POUs the user never edited.
    */
   useEffect(() => {
-    if (!flowUpdated) return
+    if (!flowUpdated || !flow) return
 
     const flowSchema = zodFBDFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
 
+    const { updated: _updated, ...flowBody } = flow
     updatePou({
       name: pouName,
       content: {
         language: 'fbd',
-        value: flowSchema.data,
+        value: structuredClone(flowBody),
       },
     })
 

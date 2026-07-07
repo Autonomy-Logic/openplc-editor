@@ -23,6 +23,18 @@ const getBlockExpectedType = (node: Node): string => {
     return 'BOOL'
   }
 
+  // Variable-pin nodes (block-pin connectors): the expected type is the pin's
+  // declared type, carried in data.block.variableType. Their `variant` is the
+  // string 'input'/'output', so the generic variant branch below would yield
+  // '' and validateVariableType(x, '') is always false — which used to flag
+  // every LINKED pin as wrongVariable on each relink pass (project open,
+  // drag-stop), swapping its payload for a broken one and dirtying the POU.
+  if (node.type === 'variable') {
+    const pinType = (node.data as { block?: { variableType?: { type?: { value?: string } } } }).block?.variableType
+      ?.type?.value
+    return typeof pinType === 'string' ? pinType.trim().toUpperCase() : ''
+  }
+
   if (variant && typeof variant.name === 'string') {
     return variant.name.trim().toUpperCase()
   }
@@ -57,6 +69,10 @@ export const syncNodesWithVariables = (
         if (!target) return
 
         const expectedType = getBlockExpectedType(node)
+
+        // Unknown expectation — don't judge. sameType(x, '') is always false,
+        // so flagging here would mark perfectly valid links as broken.
+        if (!expectedType) return
 
         const isTheSameType = sameType(target.type.value, expectedType)
 
@@ -117,6 +133,10 @@ export const syncNodesWithVariablesFBD = (
       if (!target) return
 
       const expectedType = getBlockExpectedType(node)
+
+      // Unknown expectation — don't judge. sameType(x, '') is always false,
+      // so flagging here would mark perfectly valid links as broken.
+      if (!expectedType) return
 
       const isTheSameType = sameType(target.type.value, expectedType)
 

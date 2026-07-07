@@ -156,6 +156,10 @@ export const Contact = (block: ContactProps) => {
     })
     if (!rung || !node) return
 
+    // Blur with an unchanged name is not an edit — skip the write so merely
+    // clicking in and out of a contact never marks the POU as modified.
+    if (variableNameToSubmit === (node.data as { variable?: { name?: string } }).variable?.name) return
+
     // Persist whatever the user typed; the validation effect resolves and
     // type-checks it against the full project scope and drives the red state.
     updateNode({
@@ -216,6 +220,8 @@ export const Contact = (block: ContactProps) => {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
+              // Drag-lock while typing is UI state, not an edit — transient
+              // so focusing the input never marks the flow as modified.
               updateNode({
                 editorName: pouName,
                 nodeId: node.id,
@@ -224,6 +230,7 @@ export const Contact = (block: ContactProps) => {
                   ...node,
                   draggable: false,
                 },
+                transient: true,
               })
               return
             }}
@@ -240,6 +247,7 @@ export const Contact = (block: ContactProps) => {
                   ...node,
                   draggable: node.data.draggable as boolean,
                 },
+                transient: true,
               })
               return
             }}

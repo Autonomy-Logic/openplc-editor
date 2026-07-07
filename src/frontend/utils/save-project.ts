@@ -57,6 +57,70 @@ export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou
   return stripGraphicalSelections(next)
 }
 
+/**
+ * Canonicalize one graphical node for persistence. Beyond clearing selection
+ * state, this neutralizes runtime UI state that would otherwise byte-drift
+ * the serialized file against HEAD without any semantic change:
+ *
+ *   - `data.hasDivergence` is a render-time decoration (library-divergence
+ *     tooltip) that can leak into the store via rungLocal-derived writes.
+ *   - top-level `draggable` is toggled at runtime (drag-lock while a variable
+ *     input is focused); `data.draggable` is the design-time value set by the
+ *     node builders, so persist that instead.
+ */
+function sanitizeGraphicalNode(node: Record<string, unknown>): Record<string, unknown> {
+  const data = node.data as Record<string, unknown> | undefined
+  const { hasDivergence: _hasDivergence, ...cleanData } = data ?? {}
+  return {
+    ...node,
+    ...(data !== undefined ? { data: cleanData } : {}),
+    selected: false,
+    dragging: false,
+    draggable: Boolean(cleanData.draggable),
+  }
+}
+
+/**
+ * Deterministic `reactFlowViewport` from content, mirroring the formula in
+ * RungBody.updateReactFlowPanelExtent: bounds over all nodes plus the
+ * synthetic 150×40 origin node, floored at `defaultBounds`, +20px height
+ * padding. The runtime writes measured, timing-dependent values into
+ * `reactFlowViewport` (window size, drag history), so persisting the raw
+ * value makes byte stability depend on UI state. Serializing a pure function
+ * of content keeps unchanged rungs byte-identical. Returns the existing value
+ * when the rung lacks the inputs (e.g. FBD rungs have no defaultBounds).
+ */
+function canonicalRungViewport(rung: Record<string, unknown>): unknown {
+  const nodes = rung.nodes
+  const defaultBounds = rung.defaultBounds
+  if (!Array.isArray(nodes) || !Array.isArray(defaultBounds)) return rung.reactFlowViewport
+
+  let minX = 0
+  let minY = 0
+  let maxX = 150
+  let maxY = 40
+  for (const n of nodes as Array<Record<string, unknown>>) {
+    const pos = n.position as { x?: number; y?: number } | undefined
+    const measured = n.measured as { width?: number; height?: number } | undefined
+    const x = pos?.x ?? 0
+    const y = pos?.y ?? 0
+    const w = measured?.width ?? (n.width as number | undefined) ?? 0
+    const h = measured?.height ?? (n.height as number | undefined) ?? 0
+    if (x < minX) minX = x
+    if (y < minY) minY = y
+    if (x + w > maxX) maxX = x + w
+    if (y + h > maxY) maxY = y + h
+  }
+
+  let width = maxX - minX
+  let height = maxY - minY
+  const defaultWidth = Number(defaultBounds[0]) || 0
+  const defaultHeight = Number(defaultBounds[1]) || 0
+  if (width < defaultWidth) width = defaultWidth
+  if (height < defaultHeight) height = defaultHeight
+  return [width, height + 20]
+}
+
 function stripGraphicalSelections(pou: PLCPou): PLCPou {
   const lang = pou.body.language
   if (lang !== 'ld' && lang !== 'fbd') return pou
@@ -74,12 +138,9 @@ function stripGraphicalSelections(pou: PLCPou): PLCPou {
           rungs: (body.rungs as Array<Record<string, unknown>>).map((rung) => ({
             ...rung,
             selectedNodes: [],
+            reactFlowViewport: canonicalRungViewport(rung),
             nodes: Array.isArray(rung.nodes)
-              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({
-                  ...n,
-                  selected: false,
-                  dragging: false,
-                }))
+              ? (rung.nodes as Array<Record<string, unknown>>).map(sanitizeGraphicalNode)
               : rung.nodes,
           })),
         },
@@ -99,11 +160,7 @@ function stripGraphicalSelections(pou: PLCPou): PLCPou {
             ...rung,
             selectedNodes: [],
             nodes: Array.isArray(rung.nodes)
-              ? (rung.nodes as Array<Record<string, unknown>>).map((n) => ({
-                  ...n,
-                  selected: false,
-                  dragging: false,
-                }))
+              ? (rung.nodes as Array<Record<string, unknown>>).map(sanitizeGraphicalNode)
               : rung.nodes,
           },
         },
