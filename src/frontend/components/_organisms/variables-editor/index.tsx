@@ -961,7 +961,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
-      if (freshPou && freshPou.interface && 'variablesText' in freshPou.interface) {
+      if (freshPou && 'variablesText' in freshPou) {
         clearPouVariablesText(editor.meta.name)
       }
 
