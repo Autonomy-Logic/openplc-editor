@@ -191,6 +191,13 @@ describe('parseIecStringToVariables', () => {
     expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*OUTPUT/)
   })
 
+  it('includes the offending line and a repair hint in the located-class error (issue #904)', () => {
+    const input = 'VAR_OUTPUT\n  actuator AT %QX0.0 : BOOL;\nEND_VAR'
+    expect(() => parseIecStringToVariables(input)).toThrow(
+      'Syntax error on line 2: "actuator AT %QX0.0 : BOOL;". Location ("AT") is not allowed for variables of class "OUTPUT". Move "actuator" to a VAR block (class LOCAL) or remove the "AT %QX0.0" clause.',
+    )
+  })
+
   it('throws when location is used with inOut class', () => {
     const input = 'VAR_IN_OUT\n  x AT %MW0 : INT;\nEND_VAR'
     expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*INOUT/)
