@@ -843,11 +843,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             model.variable = { display: 'code', code: pouWithText.variablesText }
           }
           getState().editorActions.addModel(model)
-          // If this is the active editor (main POU), update it too
-          /* istanbul ignore next -- setEditor early-returns when name matches current editor */
-          if (getState().editor.meta.name === pou.name) {
-            getState().editorActions.setEditor(model)
-          }
+          // The auto-open block above may already have added and activated a
+          // default table-mode model for this POU (it prefers "main" — exactly
+          // the POU most likely to carry the unparseable variables). `addModel`
+          // no-ops on duplicates and `setEditor` early-returns when the name
+          // matches the active editor, so neither can deliver the raw text to
+          // an existing model — the code view would show an empty skeleton
+          // instead of the preserved declarations. `updateModelVariablesForName`
+          // updates whichever object holds the POU: the active editor or the
+          // stored model.
+          getState().editorActions.updateModelVariablesForName(pou.name, {
+            display: 'code',
+            code: pouWithText.variablesText,
+          })
         }
       })
 
