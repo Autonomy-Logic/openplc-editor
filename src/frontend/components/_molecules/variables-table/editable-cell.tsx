@@ -568,7 +568,12 @@ const EditableLocationCell = ({
       />
     ) : null
 
-  return selected ? (
+  // The read-only rule must gate the selected branch too: without the
+  // `isEditable()` check the combobox rendered fully interactive on any
+  // selected row, letting the user attach a location to an interface-class
+  // (input/output/inOut/external/temp) variable — an invalid declaration
+  // that broke the project on reopen (GitHub issue #904).
+  return selected && isEditable() ? (
     <div className='flex w-full flex-1 items-center gap-1'>
       {warningGlyph}
       <GenericComboboxCell

@@ -180,6 +180,11 @@ describe('checkVariableName', () => {
 // ===========================================================================
 
 describe('createVariableValidation', () => {
+  it('strips the location when creating an interface-class variable (issue #904)', () => {
+    const result = createVariableValidation([], makeVariable('Q1', 'BOOL', '%QX0.0', 'output'))
+    expect(result).toEqual({ name: 'Q1', location: '' })
+  })
+
   it('returns unchanged name and location when no conflicts', () => {
     const variable = makeVariable('NewVar', 'INT', '')
     const result = createVariableValidation([], variable)
@@ -410,10 +415,19 @@ describe('createVariableValidation', () => {
 describe('updateVariableValidation', () => {
   const existingVars = [makeVariable('Var1', 'INT', '%QW0'), makeVariable('Var2', 'BOOL', '%QX0.0')]
 
-  it('returns ok: true when updating class only', () => {
+  it('clears an existing location when class changes to an interface class (issue #904)', () => {
+    // Var1 holds location '%QW0'; a located VAR_OUTPUT entry is invalid IEC
+    // and would fail to parse on project reopen, so the class change must
+    // clear the location in the same update.
     const result = updateVariableValidation(existingVars, { class: 'output' }, existingVars[0])
     expect(result.ok).toBe(true)
-    expect(result.data).toEqual({ class: 'output' })
+    expect(result.data).toEqual({ class: 'output', location: '' })
+  })
+
+  it('keeps the location when class changes to local', () => {
+    const result = updateVariableValidation(existingVars, { class: 'local' }, existingVars[0])
+    expect(result.ok).toBe(true)
+    expect(result.data).toEqual({ class: 'local' })
   })
 
   // -- Name validation --
@@ -441,6 +455,27 @@ describe('updateVariableValidation', () => {
   })
 
   // -- Location validation --
+  it('rejects a location on an interface-class variable (issue #904)', () => {
+    const outputVar = makeVariable('OutVar', 'BOOL', '', 'output')
+    const result = updateVariableValidation([outputVar], { location: '%QX0.1' }, outputVar)
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('Location is not allowed')
+    expect(result.message).toContain('OUTPUT')
+  })
+
+  it('rejects a combined update setting an interface class and a location together', () => {
+    const localVar = makeVariable('LVar', 'BOOL', '')
+    const result = updateVariableValidation([localVar], { class: 'input', location: '%IX0.0' }, localVar)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('INPUT')
+  })
+
+  it('accepts a location in a combined update that sets class local', () => {
+    const inputVar = makeVariable('IVar', 'BOOL', '', 'input')
+    const result = updateVariableValidation([], { class: 'local', location: '%QX0.0' }, inputVar)
+    expect(result.ok).toBe(true)
+  })
+
   it('returns error when location already exists', () => {
     const result = updateVariableValidation(existingVars, { location: '%QW0' }, existingVars[1])
     expect(result.ok).toBe(false)

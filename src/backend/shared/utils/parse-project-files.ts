@@ -257,7 +257,7 @@ function foldLegacyVariableAliases(value: unknown): unknown {
   return value
 }
 
-function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string }) | null {
+function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
   /* istanbul ignore if -- defensive: parseProjectFiles upstream only forwards files whose
      extension matched the POU file glob; an extension-less file path can never reach here */
@@ -303,9 +303,20 @@ function parsePouFile(file: RawProjectFile): (PLCPou & { variablesText?: string 
     }
   } catch (err) {
     console.error(`[parseProjectFiles] Failed to parse POU: ${file.relativePath}`, err)
+    const pouName = getBaseNameFromPath(file.relativePath)
+    const reason =
+      err instanceof Error ? err.message : /* istanbul ignore next -- every parser throw site uses Error */ String(err)
+    // Surface the failure on project open (the console panel shows these
+    // warnings) instead of silently loading the POU with no variables —
+    // GitHub issue #904. For textual POUs the raw declarations survive in
+    // `variablesText`, so point the user at the in-app repair path.
+    warnings.push(
+      language === 'st' || language === 'il'
+        ? `POU "${pouName}" (${file.relativePath}) could not be fully parsed: ${reason} Its variable declarations were preserved as raw text — open the POU's variables editor in code view, fix the declaration, and save.`
+        : `POU "${pouName}" (${file.relativePath}) could not be fully parsed and was loaded with partial data: ${reason}`,
+    )
     // Fallback: preserve as much data as possible
     try {
-      const pouName = getBaseNameFromPath(file.relativePath)
       return createFallbackPou(file.content, language, pouType, pouName)
     } catch (fallbackErr) {
       /* istanbul ignore next -- defensive: createFallbackPou itself is non-throwing for any
@@ -465,7 +476,7 @@ export function parseProjectFiles(
   // Parse POU files
   const pous: (PLCPou & { variablesText?: string })[] = []
   for (const file of filteredPouFiles) {
-    const pou = parsePouFile(file)
+    const pou = parsePouFile(file, warnings)
     if (pou) {
       // Ensure all POUs have a name (derive from filename if missing)
       if (!pou.name) {
