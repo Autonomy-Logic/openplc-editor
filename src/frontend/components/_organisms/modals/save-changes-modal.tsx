@@ -43,7 +43,7 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
   const capabilities = useCapabilities()
 
   const {
-    sharedWorkspaceActions: { clearStatesOnCloseProject },
+    sharedWorkspaceActions: { clearStatesOnCloseProject, handleOpenProjectResponse },
   } = useOpenPLCStore()
 
   const clearAndClose = () => {
@@ -64,9 +64,13 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
         clearAndClose()
         openModal('create-project', null)
         return
-      case 'open-project':
-        await projectPort.openProject()
+      case 'open-project': {
+        const result = await projectPort.openProject()
+        if (result.success && result.data) {
+          handleOpenProjectResponse(result.data)
+        }
         return
+      }
       case 'open-recent-project':
       case 'open-project-by-path':
         // Execute the deferred action (e.g., re-open the recent project)
