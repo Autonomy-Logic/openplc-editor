@@ -7,6 +7,8 @@ import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import { isArduinoTarget } from '../../../utils/device'
+import { findModbusScreenName } from '../../../utils/vpp/modbus-screen'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -68,6 +70,12 @@ const Project = () => {
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
+
+  // Arduino boards carry their Modbus slave config in a VPP "Modbus" vendor
+  // screen. To unify with the runtime-v4 servers UX, we surface that screen
+  // under the Servers group instead of the generic vendor-screen list.
+  const modbusScreenName = findModbusScreenName(currentBoardInfo?.vpp?.screens)
+  const showModbusUnderServers = isArduinoTarget(currentBoardInfo) && !!modbusScreenName
 
   const handleCreateTab = ({ elementType, name, path, configuration: tabConfig }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }
@@ -377,9 +385,13 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Vendor screens from VPP packages — hidden for libraries. */}
+          {/* Vendor screens from VPP packages — hidden for libraries. The
+           *  Modbus screen is re-homed under the Servers group (below) for
+           *  Arduino targets, so it's filtered out here to avoid duplication. */}
           {projectCaps.hasVendorScreens &&
-            vendorScreens.map((screenName) => (
+            vendorScreens
+              .filter((screenName) => !(showModbusUnderServers && screenName === modbusScreenName))
+              .map((screenName) => (
               <ProjectTreeLeaf
                 key={`vendor-${screenName}`}
                 leafLang='vendorScreen'
@@ -400,25 +412,44 @@ const Project = () => {
            *  lack local serial ports (e.g. orchestrator-only / web
            *  builds), per the fix in d257e2a07; libraries still hide
            *  it via the `projectCaps.hasServers` capability check. */}
-          {projectCaps.hasServers && (
-            <ProjectTreeBranch branchTarget='server'>
-              {[...(servers || [])]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((server) => (
-                  <ProjectTreeLeaf
-                    key={server.name}
-                    leafLang='server'
-                    leafType='server'
-                    label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: server.name,
-                        path: `/servers/${server.name}`,
-                        elementType: { type: 'server', protocol: server.protocol },
-                      })
-                    }
-                  />
-                ))}
+          {(projectCaps.hasServers || showModbusUnderServers) && (
+            <ProjectTreeBranch branchTarget='server' forceExpandable={showModbusUnderServers}>
+              {projectCaps.hasServers &&
+                [...(servers || [])]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((server) => (
+                    <ProjectTreeLeaf
+                      key={server.name}
+                      leafLang='server'
+                      leafType='server'
+                      label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
+                      onClick={() =>
+                        handleCreateTab({
+                          name: server.name,
+                          path: `/servers/${server.name}`,
+                          elementType: { type: 'server', protocol: server.protocol },
+                        })
+                      }
+                    />
+                  ))}
+              {/* Arduino Modbus slave config, re-homed from the vendor-screen
+               *  list into Servers. Opens the same vendor-screen editor, so
+               *  persistence + firmware build stay byte-identical. */}
+              {showModbusUnderServers && modbusScreenName && (
+                <ProjectTreeLeaf
+                  key={`server-modbus-${modbusScreenName}`}
+                  leafLang='server'
+                  leafType='server'
+                  label='Modbus'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: modbusScreenName,
+                      path: `/vendor-screen/${modbusScreenName}`,
+                      elementType: { type: 'vendor-screen', screenName: modbusScreenName },
+                    })
+                  }
+                />
+              )}
             </ProjectTreeBranch>
           )}
 

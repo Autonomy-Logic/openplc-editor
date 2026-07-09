@@ -95,6 +95,11 @@ type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
     | 'server'
     | 'remote-device'
   children?: ReactNode
+  /** Force the branch to be expandable/open even when it has no
+   *  store-derived content. Used when the branch renders externally
+   *  supplied children (e.g. the Arduino Modbus config re-homed under
+   *  Servers, which isn't a `project.data.servers` entry). */
+  forceExpandable?: boolean
 }
 
 const BranchSources = {
@@ -107,7 +112,7 @@ const BranchSources = {
   server: { BranchIcon: ServerIcon, label: 'Servers' },
   'remote-device': { BranchIcon: RemoteDeviceIcon, label: 'Remote Devices' },
 }
-const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, children, forceExpandable, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
       data: { pous, dataTypes, servers, remoteDevices },
@@ -118,6 +123,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
+    Boolean(forceExpandable) ||
     pous.some((pou) => pou.pouType === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
