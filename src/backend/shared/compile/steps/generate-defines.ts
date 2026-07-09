@@ -79,6 +79,10 @@ export interface GenerateDefinesInput {
    *  fixed RTU-over-USART0 block.  Web passes `undefined` until
    *  VPP screens land on the web build. */
   vppModbusState?: VppModbusScreenState
+  /** Name of the board's default serial port (from the VPP manifest device's
+   *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
+   *  RTU "shares the debug serial" flag. Absent → `Serial`. */
+  defaultSerial?: string
 }
 
 /**
@@ -100,7 +104,8 @@ export interface GenerateDefinesInput {
  * editor-produced and web-produced firmware comes out clean).
  */
 export function generateDefinesContent(input: GenerateDefinesInput): string {
-  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState } = input
+  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState, defaultSerial } =
+    input
 
   let DEFINES_CONTENT = ''
 
@@ -145,7 +150,6 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   //    Runtime-v4 / runtime-v3 targets route Modbus config through
   //    `conf/modbus_slave.json` in the upload bundle and emit no
   //    macros here.
-  let modbusEnabled = false
   if (boardRuntime === 'simulator') {
     DEFINES_CONTENT += '//Comms Configuration\n'
     DEFINES_CONTENT += '#define SIMULATOR_MODE\n'
@@ -155,28 +159,27 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MBSERIAL\n'
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
-    modbusEnabled = true
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState)
+    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'
-      modbusEnabled = true
     }
   }
 
-  // 4b. Debugger — always-on debug over serial for baremetal Arduino targets.
-  //     Emitted only when full Modbus is NOT active: with Modbus off, this is
-  //     the gate that brings up the serial port and the debug function codes
-  //     (0x41-0x48) WITHOUT allocating any operation buffers (coils/holding/
-  //     etc.), saving SRAM on small boards. When Modbus IS active the debugger
-  //     already rides Modbus's own transport, so emitting DEBUGGER_ENABLED then
-  //     would be redundant (and, in a TCP-only Modbus build, would leave the
-  //     serial port uninitialised). Simulator gets MODBUS_ENABLED above;
-  //     openplc-compiler runtimes don't use this firmware at all.
-  if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler' && !modbusEnabled) {
+  // 4b. Debugger — always-on serial debugger for baremetal Arduino targets.
+  //     The default serial port is ALWAYS initialised (DEBUG_IFACE @ DEBUG_BAUD)
+  //     so the debug function codes (0x41-0x48) respond over serial regardless
+  //     of whether Modbus is configured — without allocating operation buffers.
+  //     When Modbus RTU runs on that same default port, generateModbusDefines
+  //     emits MBSERIAL_SHARES_DEBUG_SERIAL so the firmware begins the port once.
+  //     Simulator uses its fixed MODBUS_ENABLED block above; openplc-compiler
+  //     runtimes don't use this firmware at all.
+  if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
     DEFINES_CONTENT += '//Debugger\n'
     DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
+    DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${vppModbusState?.serial?.baud_rate ?? '115200'}\n`
     DEFINES_CONTENT += `\n\n`
   }
 
