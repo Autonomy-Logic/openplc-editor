@@ -428,6 +428,23 @@ void handle_tcp()
 static uint16_t mb_rx_len = 0;
 static uint32_t mb_rx_last_ms = 0;
 
+#ifdef MBSERIAL_ON_SECONDARY
+// Dual-serial: the debugger keeps the default serial while Modbus RTU runs on a
+// distinct UART. Each port needs its OWN RX assembly buffer — a partial frame on
+// one port must survive while the other is serviced. `mb_frame` becomes a
+// transient process/TX buffer, borrowed for one complete transaction at a time
+// (safe: Modbus RTU is half-duplex turn-taking and the ports are polled
+// sequentially). These extra buffers are compiled ONLY for boards that use a
+// secondary Modbus serial (multi-UART, RAM-rich), so single-UART boards keep the
+// original single-buffer footprint.
+static uint8_t  mb_rx_dbg[MAX_MB_FRAME];
+static uint16_t mb_rx_dbg_len = 0;
+static uint32_t mb_rx_dbg_last_ms = 0;
+static uint8_t  mb_rx_rtu[MAX_MB_FRAME];
+static uint16_t mb_rx_rtu_len = 0;
+static uint32_t mb_rx_rtu_last_ms = 0;
+#endif
+
 // Total on-wire length (slave id + PDU + 2 CRC bytes) of the request whose
 // first `n` bytes are in `f`. Returns >0 for a known length, 0 when more header
 // bytes are needed to size it, and -1 for a function code we do not serve (so
@@ -475,25 +492,32 @@ static int32_t mb_rtu_frame_len(const uint8_t *f, uint16_t n)
 // so a genuine frame head sitting further into the buffer always survives and
 // is eventually found (guarantees resync convergence; no "discard every frame"
 // loop). Slides only run on the error path, so the O(n) cost is irrelevant.
-static void mb_rtu_drop_front(uint16_t k)
+static void mb_rtu_drop_front(uint8_t *buf, uint16_t *plen, uint16_t k)
 {
-    if (k >= mb_rx_len) { mb_rx_len = 0; return; }
-    for (uint16_t i = k; i < mb_rx_len; i++)
-        mb_frame[i - k] = mb_frame[i];
-    mb_rx_len = (uint16_t)(mb_rx_len - k);
+    if (k >= *plen) { *plen = 0; return; }
+    for (uint16_t i = k; i < *plen; i++)
+        buf[i - k] = buf[i];
+    *plen = (uint16_t)(*plen - k);
 }
 
-void handle_serial()
+// Service ONE serial port. `buf`/`plen`/`plast` are the port's own RX-assembly
+// state; `slaveid` is its framing id; `txpin` its RS485 driver-enable pin (-1
+// when none). A complete frame is copied into the shared `mb_frame`, processed,
+// and the response written back to `port`. In the single-serial build `buf` IS
+// `mb_frame` (in-place, no copy); in the dual-serial build each port owns a
+// distinct buffer and `mb_frame` is the transient process/TX scratch.
+static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
+                               uint8_t *buf, uint16_t *plen, uint32_t *plast)
 {
     uint16_t packet_crc;
 
     // 1) Drain the RX buffer without blocking. One frame's bytes may arrive
     //    across several calls; the scan cycle is never stalled waiting on them.
-    while ((*mb_serialport).available() > 0)
+    while (port->available() > 0)
     {
-        if (mb_rx_len >= MAX_MB_FRAME) break;           // full — let the parser drain it
-        mb_frame[mb_rx_len++] = (uint8_t)(*mb_serialport).read();
-        mb_rx_last_ms = millis();
+        if (*plen >= MAX_MB_FRAME) break;               // full — let the parser drain it
+        buf[(*plen)++] = (uint8_t)port->read();
+        *plast = millis();
     }
 
     // 2) Extract every complete frame in the buffer. Each iteration either
@@ -501,36 +525,43 @@ void handle_serial()
     //    loop always terminates.
     for (;;)
     {
-        if (mb_rx_len == 0)
+        if (*plen == 0)
             return;
 
-        // Header byte-alignment: the first byte must be OUR slave id. This is
-        // the cheap framing check, and it is the ONLY validation applied to
-        // debugger frames (CRC is deliberately skipped on debug FCs for
+        // Header byte-alignment: the first byte must be THIS port's slave id.
+        // This is the cheap framing check, and it is the ONLY validation applied
+        // to debugger frames (CRC is deliberately skipped on debug FCs for
         // performance — those function codes are private and well-formed).
-        if (mb_frame[0] != modbus.slaveid)
+        if (buf[0] != slaveid)
         {
-            mb_rtu_drop_front(1);                       // foreign/garbage head — slide
+            mb_rtu_drop_front(buf, plen, 1);            // foreign/garbage head — slide
             continue;
         }
 
-        int32_t expected = mb_rtu_frame_len(mb_frame, mb_rx_len);
+        int32_t expected = mb_rtu_frame_len(buf, *plen);
 
         if (expected < 0 || expected > MAX_MB_FRAME)
         {
-            mb_rtu_drop_front(1);                       // illegal FC / impossible length
+            mb_rtu_drop_front(buf, plen, 1);            // illegal FC / impossible length
             continue;
         }
-        if (expected == 0 || mb_rx_len < (uint16_t)expected)
+        if (expected == 0 || *plen < (uint16_t)expected)
         {
             // Header incomplete, or the frame's tail has not arrived yet. Wait
             // for it; abandon the partial only if its remainder never comes.
-            if ((uint32_t)(millis() - mb_rx_last_ms) > MB_RTU_FRAME_GAP_MS)
-                mb_rx_len = 0;
+            if ((uint32_t)(millis() - *plast) > MB_RTU_FRAME_GAP_MS)
+                *plen = 0;
             return;
         }
 
-        // 3) A full candidate frame occupies mb_frame[0 .. expected).
+        // 3) A full candidate frame occupies buf[0 .. expected). Move it into the
+        //    shared process buffer (a no-op self-copy on the single-serial path,
+        //    where buf already IS mb_frame).
+        if (buf != mb_frame)
+        {
+            for (int32_t i = 0; i < expected; i++) mb_frame[i] = buf[i];
+        }
+
         //    Standard FCs are validated by CRC (the arbiter that makes resync
         //    trustworthy); a mismatch means corruption or misalignment, so we
         //    slide one byte and retry instead of discarding the whole buffer.
@@ -540,7 +571,7 @@ void handle_serial()
             packet_crc = ((mb_frame[expected - 2] << 8) | mb_frame[expected - 1]);
             if (packet_crc != calcCrc())
             {
-                mb_rtu_drop_front(1);
+                mb_rtu_drop_front(buf, plen, 1);
                 continue;
             }
         }
@@ -558,34 +589,34 @@ void handle_serial()
     mb_frame[mb_frame_len - 2] = (uint8_t)(packet_crc >> 8);
     mb_frame[mb_frame_len - 1] = (uint8_t)(packet_crc & 0x00FF);
 
-    if (mb_txpin >= 0)
+    if (txpin >= 0)
     {
-        digitalWrite(mb_txpin, HIGH);
+        digitalWrite(txpin, HIGH);
         delayMicroseconds(mb_t35);
     }
 
     #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (mb_serialport == &Serial3) // RS485 serial port
+        if (port == &Serial3) // RS485 serial port
             Controllino_RS485TxEnable(); // Enable RS485 chip to transmit
     #elif defined(CONTROLLINO_MICRO)
-        if (mb_serialport == &Serial2) {
+        if (port == &Serial2) {
             digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, HIGH);
             digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, HIGH);
         }
     #endif
 
-    (*mb_serialport).write(mb_frame, mb_frame_len);
-    (*mb_serialport).flush();
+    port->write(mb_frame, mb_frame_len);
+    port->flush();
     delayMicroseconds(mb_t35);
 
-    if (mb_txpin >= 0)
-        digitalWrite(mb_txpin, LOW);
+    if (txpin >= 0)
+        digitalWrite(txpin, LOW);
 
     #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (mb_serialport == &Serial3) // RS485 serial port
+        if (port == &Serial3) // RS485 serial port
             Controllino_RS485RxEnable(); // Go back to receive mode after transmitted data
     #elif defined(CONTROLLINO_MICRO)
-        if (mb_serialport == &Serial2) {
+        if (port == &Serial2) {
             digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, LOW);
             digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, LOW);
         }
@@ -597,9 +628,27 @@ void handle_serial()
         //    can already be buffered. Reset for the next request. A
         //    non-conformant pipelining master simply retransmits after its
         //    timeout, and the gap/realignment logic above recovers cleanly.
-        mb_rx_len = 0;
+        *plen = 0;
         return;
     }
+}
+
+// Dispatch to one or two serial ports. Single-serial: the debugger and Modbus
+// RTU (if any) share one port, assembled in-place in mb_frame. Dual-serial
+// (MBSERIAL_ON_SECONDARY): the debugger keeps the default serial while Modbus
+// RTU runs on a distinct UART — each with its own RX buffer.
+void handle_serial()
+{
+#ifdef MBSERIAL_ON_SECONDARY
+    handle_serial_port(&DEBUG_IFACE, -1, DEBUG_SLAVE, mb_rx_dbg, &mb_rx_dbg_len, &mb_rx_dbg_last_ms);
+    #ifdef MBSERIAL_TXPIN
+        handle_serial_port(&MBSERIAL_IFACE, MBSERIAL_TXPIN, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
+    #else
+        handle_serial_port(&MBSERIAL_IFACE, -1, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
+    #endif
+#else
+    handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, mb_frame, &mb_rx_len, &mb_rx_last_ms);
+#endif
 }
 #endif
 

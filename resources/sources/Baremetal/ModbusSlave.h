@@ -19,10 +19,12 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
     #define MB_SERIAL_ACTIVE
 #endif
 
-// Default serial config for the always-on debugger when full Modbus RTU
-// (MBSERIAL_*) is NOT configured. Override any of these in defines.h to change
-// the port/baud/slave the debugger listens on.
-#if defined(DEBUGGER_ENABLED) && !defined(MBSERIAL)
+// Default serial config for the always-on debugger. `defines.h` normally emits
+// DEBUG_IFACE / DEBUG_BAUD explicitly (from the Serial screen); these `#ifndef`
+// defaults cover anything it left unset. Defined whenever the debugger is on —
+// including alongside full Modbus RTU, since the dual-serial path (RTU on a
+// secondary UART, MBSERIAL_ON_SECONDARY) needs DEBUG_SLAVE for the default port.
+#ifdef DEBUGGER_ENABLED
     #ifndef DEBUG_IFACE
         #define DEBUG_IFACE Serial
     #endif

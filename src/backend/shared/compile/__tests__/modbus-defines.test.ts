@@ -38,6 +38,7 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBSERIAL_IFACE Serial')
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    expect(out).not.toContain('MBSERIAL_ON_SECONDARY')
   })
 
   it('Phase 2: RTU on a secondary port uses its own baud and does NOT share the debug serial', () => {
@@ -51,6 +52,8 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 19200')
     expect(out).not.toContain('MBSERIAL_SHARES_DEBUG_SERIAL')
+    // Distinct UART from the debugger's default → firmware services two serials.
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
   })
 
   it('Phase 2: honors a non-default `defaultSerial` when deciding the shares flag', () => {

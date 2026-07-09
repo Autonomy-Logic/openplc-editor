@@ -161,10 +161,15 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
     lines.push(`#define MBSERIAL_SLAVE ${slave}`)
-    // The RTU port IS the debugger's default serial → tell the firmware to
-    // initialise the port once (the always-on debugger already begins it)
-    // instead of calling begin() twice.
-    if (onDefaultPort) lines.push('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    // On the default port the RTU IS the debugger's serial → tell the firmware
+    // to begin the port once (the always-on debugger already begins it). On a
+    // secondary port the RTU runs on a DISTINCT UART while the debugger keeps
+    // the default serial, so the firmware services two serial ports.
+    if (onDefaultPort) {
+      lines.push('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    } else {
+      lines.push('#define MBSERIAL_ON_SECONDARY')
+    }
     if (rtu.enable_rs485_en_pin === true && rtu.rtu_rs485_en_pin) {
       lines.push(`#define MBSERIAL_TXPIN ${rtu.rtu_rs485_en_pin}`)
     }
