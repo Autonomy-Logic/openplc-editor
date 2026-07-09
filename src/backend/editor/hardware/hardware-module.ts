@@ -358,6 +358,8 @@ class HardwareModule {
                   }
                 : null,
             },
+            ...(device.serialPorts ? { serialPorts: device.serialPorts } : {}),
+            ...(device.defaultSerial ? { defaultSerial: device.defaultSerial } : {}),
             ...(device.debug ? { debug: device.debug } : {}),
           })
         }

@@ -628,6 +628,18 @@ export interface BoardInfo {
    */
   platformOptions?: PlatformOption[]
   /**
+   * Hardware serial ports this board exposes (e.g. `['Serial', 'Serial1']`),
+   * mirrored from the VPP manifest device's `serialPorts`. Consumed by VPP
+   * screen `select` fields via `optionsRef: 'board.serialPorts'` (the Modbus
+   * RTU port picker) and by the always-on serial/debugger. Absent → the editor
+   * assumes a single `Serial`.
+   */
+  serialPorts?: string[]
+  /** Name of the default serial port (usually the USB CDC port) where the
+   *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
+   *  `Serial`. */
+  defaultSerial?: string
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
@@ -786,6 +798,13 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
+     *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
+     *  `select` fields via `optionsRef: 'board.serialPorts'`. */
+    serialPorts?: string[]
+    /** Name of the default serial port (usually the USB CDC port). Surfaced onto
+     *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
+    defaultSerial?: string
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the

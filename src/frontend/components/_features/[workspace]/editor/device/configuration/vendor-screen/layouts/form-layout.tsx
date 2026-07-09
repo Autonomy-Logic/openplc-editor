@@ -4,6 +4,7 @@ import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
+import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 
 import type { ScreenSection } from '../index'
@@ -19,6 +20,10 @@ type FieldDef = {
   unit?: string
   help?: string
   options?: string[] | Array<{ value: string; label: string }>
+  // Dynamic option source (VPP screen schema): a dotted path resolved against
+  // per-board context, e.g. "board.serialPorts". Wins over `options` when it
+  // resolves to a non-empty array; otherwise `options` is the fallback.
+  optionsRef?: string
   // Honored by text-like inputs (text, password, ip-address, mac-address).
   // Mirrors the VPP screen schema's optional field props — empty strings
   // are skipped so HTML5 placeholder/maxLength/pattern stay unset when
@@ -77,6 +82,10 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
+  // Board context for dynamic `optionsRef` resolution (e.g. the Modbus RTU
+  // serial-port picker reading `board.serialPorts`).
+  const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
+  const currentBoardInfo = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards.get(deviceBoard))
   // Single-source-of-truth for the per-section storage key — see
   // `getSectionPersistenceKey` in ../index.tsx.  Every layout that
   // persists must derive its key through this helper so the
@@ -162,7 +171,9 @@ function FormLayout({ section }: FormLayoutProps) {
                         align='center'
                         side='bottom'
                       >
-                        {(field.options ?? []).map((opt) => {
+                        {resolveFieldOptions(field, {
+                          board: currentBoardInfo as Record<string, unknown> | undefined,
+                        }).map((opt) => {
                           const value = typeof opt === 'string' ? opt : opt.value
                           const label = typeof opt === 'string' ? opt : opt.label
                           return (
