@@ -199,14 +199,26 @@ export function resolveDebugConnection(
       .map((channel, index) => ({ channel, index }))
       .filter(({ channel }) => evaluateCondition(channel.enabledWhen, context.state))
     if (enabled.length === 0) {
-      const msg = spec.messages?.noneEnabled
-      return {
-        kind: 'error',
-        title: msg?.title ?? 'No Debug Channel',
-        body: msg?.body ?? 'No debug channel is enabled for this board.',
+      // Always-on debugger: every baremetal firmware keeps the serial debug
+      // function codes compiled in even when no Modbus transport is enabled
+      // (the DEBUGGER_ENABLED gate brings up the serial port without Modbus
+      // operation buffers). So when no channel's `enabledWhen` matches, fall
+      // back to the serial (`rtu`) channel instead of erroring — serial debug
+      // is always available. A TCP-only Modbus build leaves `enabled` non-empty
+      // (the `tcp` channel matches), so it never reaches this fallback and
+      // correctly debugs over TCP, matching the firmware which does NOT bring
+      // up the serial debugger in that configuration.
+      const rtuFallbackIndex = spec.channels.findIndex((channel) => channel.channel === 'rtu')
+      if (rtuFallbackIndex < 0) {
+        const msg = spec.messages?.noneEnabled
+        return {
+          kind: 'error',
+          title: msg?.title ?? 'No Debug Channel',
+          body: msg?.body ?? 'No debug channel is enabled for this board.',
+        }
       }
-    }
-    if (enabled.length > 1) {
+      activeIndex = rtuFallbackIndex
+    } else if (enabled.length > 1) {
       const msg = spec.messages?.pickProtocol
       return {
         kind: 'pick',
@@ -214,8 +226,9 @@ export function resolveDebugConnection(
         title: msg?.title ?? 'Select Debug Channel',
         body: msg?.body ?? 'Multiple debug channels are enabled.  Which one should the debugger use?',
       }
+    } else {
+      activeIndex = enabled[0].index
     }
-    activeIndex = enabled[0].index
   }
 
   const channel = spec.channels[activeIndex]
