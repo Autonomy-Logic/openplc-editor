@@ -130,6 +130,11 @@ void setup()
 
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
+            #ifdef MBSERIAL_ON_SECONDARY
+                // Dual-serial: Modbus RTU runs on a secondary UART (below) while
+                // the always-on debugger keeps the default serial — bring it up.
+                DEBUG_IFACE.begin(DEBUG_BAUD);
+            #endif
             #ifdef MBSERIAL_TXPIN
                 // Disable TX pin from OpenPLC hardware layer
                 for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
