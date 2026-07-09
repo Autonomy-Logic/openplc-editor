@@ -951,6 +951,101 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // Phase 2 — serial / network / modbus split migration (on load)
+  // -----------------------------------------------------------------------
+  describe('setDeviceDefinitions — Phase 2 serial/network migration', () => {
+    const loadConfig = (vendorScreenData: Record<string, unknown>, deviceBoard = 'Test Board') => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard, vendorScreenData } })
+      return store.getState().deviceDefinitions.configuration
+    }
+
+    it('seeds serial.baud_rate from the legacy modbus_rtu.rtu_baud_rate', () => {
+      const cfg = loadConfig({ modbus_rtu: { enabled: true, rtu_baud_rate: '9600' } })
+      expect(cfg.vendorScreenData?.serial).toEqual({ baud_rate: '9600' })
+    })
+
+    it('does not seed serial when it already exists (idempotent)', () => {
+      const cfg = loadConfig({ serial: { baud_rate: '115200' }, modbus_rtu: { rtu_baud_rate: '9600' } })
+      expect(cfg.vendorScreenData?.serial).toEqual({ baud_rate: '115200' })
+    })
+
+    it('does not create serial when there is no legacy rtu baud', () => {
+      const cfg = loadConfig({ modbus_rtu: { enabled: false } })
+      expect(cfg.vendorScreenData?.serial).toBeUndefined()
+    })
+
+    it('lifts network fields out of modbus_tcp into a network section', () => {
+      const cfg = loadConfig({
+        modbus_tcp: {
+          enabled: true,
+          tcp_interface: 'Wi-Fi',
+          tcp_wifi_ssid: 'net',
+          tcp_wifi_password: 'pw',
+          enable_dhcp: true,
+          ip_address: '192.168.0.5',
+        },
+      })
+      expect(cfg.vendorScreenData?.network).toEqual({
+        enabled: true,
+        interface: 'Wi-Fi',
+        wifi_ssid: 'net',
+        wifi_password: 'pw',
+        enable_dhcp: true,
+        ip_address: '192.168.0.5',
+      })
+      // modbus_tcp keeps its own (non-network) fields, stripped of network keys.
+      expect(cfg.vendorScreenData?.modbus_tcp).toEqual({ enabled: true })
+    })
+
+    it('derives network.enabled=false from a disabled modbus_tcp', () => {
+      const cfg = loadConfig({ modbus_tcp: { enabled: false, tcp_interface: 'Ethernet' } })
+      expect((cfg.vendorScreenData?.network as Record<string, unknown>).enabled).toBe(false)
+    })
+
+    it('does not create network when it already exists (idempotent)', () => {
+      const cfg = loadConfig({
+        network: { enabled: true, interface: 'Ethernet' },
+        modbus_tcp: { enabled: true, tcp_interface: 'Wi-Fi' },
+      })
+      expect(cfg.vendorScreenData?.network).toEqual({ enabled: true, interface: 'Ethernet' })
+      // modbus_tcp is left as-is when network already exists.
+      expect(cfg.vendorScreenData?.modbus_tcp).toEqual({ enabled: true, tcp_interface: 'Wi-Fi' })
+    })
+
+    it('does not create network when modbus_tcp has no legacy network fields', () => {
+      const cfg = loadConfig({ modbus_tcp: { enabled: true } })
+      expect(cfg.vendorScreenData?.network).toBeUndefined()
+    })
+
+    it('migrates every board bucket and mirrors the active view from the deviceBoard bucket', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Board A',
+          vendorScreenDataByBoard: {
+            'Board A': { modbus_rtu: { rtu_baud_rate: '9600' } },
+            'Board B': { modbus_rtu: { rtu_baud_rate: '19200' } },
+          },
+        },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect((cfg.vendorScreenDataByBoard?.['Board A'].serial as Record<string, unknown>).baud_rate).toBe('9600')
+      expect((cfg.vendorScreenDataByBoard?.['Board B'].serial as Record<string, unknown>).baud_rate).toBe('19200')
+      // Invariant: the flat active view is the migrated deviceBoard bucket.
+      expect(cfg.vendorScreenData).toBe(cfg.vendorScreenDataByBoard?.['Board A'])
+    })
+
+    it('leaves configuration without vendorScreenData untouched', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'Test Board' } })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.vendorScreenData).toBeUndefined()
+      expect(cfg.vendorScreenDataByBoard).toBeUndefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // restoreVendorScreenSlice — revert path for vendor-screen tabs
   // -----------------------------------------------------------------------
   describe('restoreVendorScreenSlice', () => {

@@ -585,6 +585,66 @@ function syncActiveBoardVendorBucket(configuration: DeviceConfiguration): void {
  *   the board the project was saved with, so other boards start clean instead
  *   of inheriting it. Mirrors the `pinsByBoard` migration.
  */
+/**
+ * Phase 2 (serial-network-modbus split) field map: the `network` section is
+ * lifted out of the legacy `modbus_tcp` section. Keys map legacy → new; keep in
+ * sync with `screens/network.json` (openplc-packages) and `modbus-defines.ts`.
+ */
+const LEGACY_TCP_TO_NETWORK: Record<string, string> = {
+  tcp_interface: 'interface',
+  tcp_mac_address: 'mac_address',
+  tcp_wifi_ssid: 'wifi_ssid',
+  tcp_wifi_password: 'wifi_password',
+  enable_dhcp: 'enable_dhcp',
+  ip_address: 'ip_address',
+  gateway: 'gateway',
+  subnet: 'subnet',
+  dns: 'dns',
+}
+
+/**
+ * Phase 2 split migration for one board's vendor-screen bucket. Seeds the
+ * `serial` section's baud from the legacy `modbus_rtu.rtu_baud_rate`, and lifts
+ * the network fields out of `modbus_tcp` into a dedicated `network` section
+ * (stripping them from `modbus_tcp`).
+ *
+ * Idempotent: a section that already exists is left untouched, so re-opening an
+ * already-migrated project is a no-op. Pure — returns the same reference when
+ * there's nothing to migrate, otherwise a new object (never mutates input).
+ */
+function migrateSerialNetworkSections(bucket: Record<string, unknown>): Record<string, unknown> {
+  const rtu = bucket.modbus_rtu as Record<string, unknown> | undefined
+  const tcp = bucket.modbus_tcp as Record<string, unknown> | undefined
+
+  const needsSerial = bucket.serial === undefined && rtu?.rtu_baud_rate !== undefined
+  const legacyNetworkKeys = tcp ? Object.keys(LEGACY_TCP_TO_NETWORK).filter((key) => tcp[key] !== undefined) : []
+  const needsNetwork = bucket.network === undefined && legacyNetworkKeys.length > 0
+
+  if (!needsSerial && !needsNetwork) return bucket
+
+  const next: Record<string, unknown> = { ...bucket }
+
+  if (needsSerial && rtu) {
+    next.serial = { baud_rate: rtu.rtu_baud_rate }
+  }
+
+  if (needsNetwork && tcp) {
+    const network: Record<string, unknown> = { enabled: Boolean(tcp.enabled) }
+    for (const legacyKey of legacyNetworkKeys) {
+      network[LEGACY_TCP_TO_NETWORK[legacyKey]] = tcp[legacyKey]
+    }
+    next.network = network
+
+    const strippedTcp: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(tcp)) {
+      if (!(key in LEGACY_TCP_TO_NETWORK)) strippedTcp[key] = value
+    }
+    next.modbus_tcp = strippedTcp
+  }
+
+  return next
+}
+
 function migrateVendorScreenData(
   provided: Partial<DeviceConfiguration>,
   deviceBoard: string,
@@ -594,14 +654,19 @@ function migrateVendorScreenData(
 
   if (archive && Object.keys(archive).length > 0) {
     const active = archive[deviceBoard] ?? flat
-    return {
-      vendorScreenData: active,
-      vendorScreenDataByBoard: active !== undefined ? { ...archive, [deviceBoard]: active } : { ...archive },
-    }
+    const merged = active !== undefined ? { ...archive, [deviceBoard]: active } : { ...archive }
+    // Apply the Phase 2 split to every board bucket, then mirror the active
+    // view from the migrated deviceBoard bucket so the invariant
+    // (vendorScreenData === vendorScreenDataByBoard[deviceBoard]) holds.
+    const migrated = Object.fromEntries(
+      Object.entries(merged).map(([board, bucket]) => [board, migrateSerialNetworkSections(bucket)]),
+    )
+    return { vendorScreenData: migrated[deviceBoard], vendorScreenDataByBoard: migrated }
   }
 
   if (flat !== undefined) {
-    return { vendorScreenData: flat, vendorScreenDataByBoard: { [deviceBoard]: flat } }
+    const migratedFlat = migrateSerialNetworkSections(flat)
+    return { vendorScreenData: migratedFlat, vendorScreenDataByBoard: { [deviceBoard]: migratedFlat } }
   }
 
   return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
