@@ -168,15 +168,36 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('#define DEBUGGER_ENABLED')
   })
 
-  it('does NOT emit DEBUGGER_ENABLED when full Modbus is enabled (debugger rides Modbus)', () => {
+  it('emits DEBUGGER_ENABLED even when full Modbus is enabled (always-on serial debugger)', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
+        serial: { baud_rate: '9600' },
+        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
       },
+      defaultSerial: 'Serial',
     })
-    expect(out).not.toContain('DEBUGGER_ENABLED')
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+    // RTU on the default serial → shares the debugger's port (single begin()).
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('emits DEBUG_IFACE from defaultSerial and DEBUG_BAUD from the Serial section', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: { baud_rate: '9600' } },
+    })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+  })
+
+  it('falls back to DEBUG_IFACE Serial and DEBUG_BAUD 115200 when unset', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 115200')
   })
 
   it('does NOT emit DEBUGGER_ENABLED for the simulator (it uses the full Modbus path)', () => {
@@ -397,6 +418,8 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '//Debugger',
         '#define DEBUGGER_ENABLED',
+        '#define DEBUG_IFACE Serial',
+        '#define DEBUG_BAUD 115200',
         '',
         '',
         '//IO Config',
