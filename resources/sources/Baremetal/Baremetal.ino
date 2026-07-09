@@ -155,6 +155,18 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
+            // NOTE (single-serial model): the debugger and Modbus RTU share one
+            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
+            // port IS the debugger's default serial, so this single begin() also
+            // brings up the debugger. Running the debugger on the default USB
+            // serial while RTU uses a *different* UART simultaneously would need
+            // a second serial handler — a documented follow-up.
+        #elif defined(DEBUGGER_ENABLED)
+            // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
+            // still needs the default serial up on mb_serialport to respond.
+            DEBUG_IFACE.begin(DEBUG_BAUD);
+            mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+            modbus.slaveid = DEBUG_SLAVE;
         #endif
 
         #ifdef MBTCP
