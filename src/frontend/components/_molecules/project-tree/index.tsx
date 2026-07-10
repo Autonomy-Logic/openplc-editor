@@ -9,6 +9,7 @@ import { DeviceTransferIcon } from '../../../assets/icons/interface/DeviceTransf
 import { DuplicateIcon } from '../../../assets/icons/interface/Duplicate'
 import { MoreOptionsIcon } from '../../../assets/icons/interface/MoreOptions'
 import { PencilIcon } from '../../../assets/icons/interface/Pencil'
+import { SoftMotionIcon } from '../../../assets/icons/interface/SoftMotion'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { DataTypeIcon } from '../../../assets/icons/project/DataType'
@@ -460,6 +461,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'remoteDevice'
     | 'vendorScreen'
     | 'ethercatDevice'
+    | 'softMotionDrive'
     | 'libraryManifest'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
@@ -486,6 +488,9 @@ const LeafSources = {
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
   vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
+  // A recognized CiA 402 SoftMotion drive gets a distinct rotary-axis icon so
+  // it reads as an axis (usable in MC_* blocks), not a plain EtherCAT slave.
+  softMotionDrive: { LeafIcon: SoftMotionIcon },
   // Library manifest gets its own document-with-bookmark icon so
   // the explorer leaf, the workspace tab, and the breadcrumb all
   // render the same glyph — the manifest is the user's entry point

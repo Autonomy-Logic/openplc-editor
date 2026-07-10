@@ -3,6 +3,7 @@ import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configur
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
+  Cia402AxisConfig,
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
   ESIDeviceSummary,
@@ -16,13 +17,14 @@ import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { Cia402AxisTab } from './components/cia402-axis-tab'
 import {
   ChannelMappingsSection,
   DeviceConfigurationForm,
   SdoParametersSection,
 } from './components/device-configuration-form'
 
-type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings'
+type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings' | 'axis'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -187,6 +189,24 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
+  const handleUpdateCia402 = useCallback(
+    (patch: Partial<Cia402AxisConfig>) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const base: Cia402AxisConfig = d.cia402 ?? {
+            enabled: false,
+            scaleNum: 1,
+            scaleDenom: 1,
+            scaleFactor: 1,
+          }
+          return { ...d, cia402: { ...base, ...patch } }
+        }),
+      )
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
   // Load ESI repository. Resets and reloads whenever `projectPath` changes
   // so switching projects picks up the new project's repository instead of
   // serving the prior one from the stale "already loaded" flag.
@@ -283,10 +303,23 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
           <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
+          {device.cia402 && <TabItem value='axis' label='SoftMotion Axis' isActive={activeTab === 'axis'} />}
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
         </Tabs.List>
+
+        {/* SoftMotion Axis (CiA 402) Tab */}
+        {device.cia402 && (
+          <Tabs.Content
+            value='axis'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex-1 overflow-auto p-4'>
+              <Cia402AxisTab device={device} onUpdate={handleUpdateCia402} />
+            </div>
+          </Tabs.Content>
+        )}
 
         {/* Device Info Tab */}
         <Tabs.Content
