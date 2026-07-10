@@ -9,10 +9,13 @@ import { enrichDeviceData } from '../enrich-device-data'
 import { parseESIDeviceFull } from '../esi-parser-main'
 import {
   generateSoftMotionArtifacts,
+  injectAxisExternals,
   isValidIecIdentifier,
+  serializeSoftMotionAxisGlobalsToST,
   SM3_BRIDGE_INSTANCE_NAME,
   SM3_BRIDGE_POU_NAME,
   sanitizeAxisName,
+  softMotionAxisNames,
 } from '../generate-softmotion'
 
 const ESI_XML = readFileSync(resolve(__dirname, 'fixtures/cia402-servo-esi.xml'), 'utf-8')
@@ -74,6 +77,52 @@ describe('generateSoftMotionArtifacts', () => {
   it('is a no-op when there are no CiA 402 axes', () => {
     const project = makeProject([])
     expect(generateSoftMotionArtifacts(project)).toBe(project)
+  })
+
+  describe('softMotionAxisNames', () => {
+    it('returns sanitized names of enabled axes', () => {
+      expect(softMotionAxisNames(makeProject([makeDevice('My Axis')]))).toEqual(['My_Axis'])
+    })
+    it('returns [] when there are no axes', () => {
+      expect(softMotionAxisNames(makeProject([]))).toEqual([])
+    })
+  })
+
+  describe('injectAxisExternals', () => {
+    const prog = (value: string) =>
+      ({ name: 'p', pouType: 'program', interface: { variables: [] }, body: { language: 'st', value } }) as never
+
+    it('adds the external to a program that references the axis', () => {
+      const out = injectAxisExternals(prog('pwr(Axis := Ax);'), ['Ax'])
+      expect(out.interface!.variables.some((v) => v.name === 'Ax' && v.class === 'external')).toBe(true)
+    })
+    it('leaves a POU that does not reference any axis unchanged', () => {
+      const pou = prog('y := 1;')
+      expect(injectAxisExternals(pou, ['Ax'])).toBe(pou)
+    })
+    it('skips a function POU', () => {
+      const fn = {
+        name: 'f',
+        pouType: 'function',
+        interface: { variables: [] },
+        body: { language: 'st', value: 'x := Ax;' },
+      } as never
+      expect(injectAxisExternals(fn, ['Ax'])).toBe(fn)
+    })
+  })
+
+  describe('serializeSoftMotionAxisGlobalsToST', () => {
+    it('returns empty string when there are no axes', () => {
+      expect(serializeSoftMotionAxisGlobalsToST(makeProject([]))).toBe('')
+    })
+
+    it('declares each axis as a VAR_GLOBAL of type AXIS_REF_SM3', () => {
+      const st = serializeSoftMotionAxisGlobalsToST(makeProject([makeDevice('X_Axis')]))
+      expect(st).toContain('VAR_GLOBAL')
+      expect(st).toContain('X_Axis : AXIS_REF_SM3;')
+      expect(st).toContain('END_VAR')
+      expect(st).toContain('CONFIGURATION')
+    })
   })
 
   it('is a no-op when the CiA 402 device is disabled', () => {
@@ -165,17 +214,32 @@ describe('generateSoftMotionArtifacts', () => {
     expect(main.interface!.variables.some((v) => v.name === 'X_Axis' && v.class === 'external')).toBe(true)
   })
 
-  it('leaves non-program POUs untouched', () => {
+  it('injects the axis external into a function block that references it', () => {
     const project = makeProject([makeDevice('X_Axis')])
     project.pous.push({
-      name: 'helper',
+      name: 'MotionFB',
       pouType: 'function-block',
       interface: { variables: [] },
       body: { language: 'st', value: 'x := X_Axis.fActPosition;' },
     })
     const out = generateSoftMotionArtifacts(project)
-    const helper = out.pous.find((p) => p.name === 'helper')!
-    expect(helper.interface!.variables.some((v) => v.name === 'X_Axis')).toBe(false)
+    const fb = out.pous.find((p) => p.name === 'MotionFB')!
+    const ext = fb.interface!.variables.find((v) => v.name === 'X_Axis')
+    expect(ext?.class).toBe('external')
+    expect(ext?.type).toEqual({ definition: 'derived', value: 'AXIS_REF_SM3' })
+  })
+
+  it('leaves functions untouched (they cannot hold VAR_EXTERNAL)', () => {
+    const project = makeProject([makeDevice('X_Axis')])
+    project.pous.push({
+      name: 'helperFn',
+      pouType: 'function',
+      interface: { variables: [] },
+      body: { language: 'st', value: 'x := X_Axis.fActPosition;' },
+    })
+    const out = generateSoftMotionArtifacts(project)
+    const fn = out.pous.find((p) => p.name === 'helperFn')!
+    expect(fn.interface!.variables.some((v) => v.name === 'X_Axis')).toBe(false)
   })
 
   it('runs the bridge first each scan (instance unshifted to the front)', () => {

@@ -40,6 +40,15 @@ export const POUVARS_URI_AUTHORITY = 'pouvars'
  */
 export const DATA_TYPES_URI = 'inmemory://datatypes/__project__.st'
 
+/**
+ * URI for the synthesized SoftMotion axis globals document — a
+ * `VAR_GLOBAL <axis> : AXIS_REF_SM3` per recognized CiA 402 drive, so editor
+ * code referencing an axis (`MC_Power(Axis := X_Axis)`) resolves against the
+ * same public axis the compiler generates, without the user declaring it.
+ * Single fixed URI per session; the axis set is project-global.
+ */
+export const SOFTMOTION_GLOBALS_URI = 'inmemory://softmotion/__axes__.st'
+
 /** Public service the rest of the renderer talks to. */
 export interface StLspService {
   /**

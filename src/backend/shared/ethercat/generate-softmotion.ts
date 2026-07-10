@@ -148,6 +148,66 @@ function collectAxes(project: PLCProjectData): AxisPlan[] {
   return plans
 }
 
+/** Sanitized names of every enabled, resolvable CiA 402 axis in the project. */
+export function softMotionAxisNames(project: PLCProjectData): string[] {
+  return collectAxes(project).map((a) => a.axisName)
+}
+
+/** POU types that may access a SoftMotion axis global via VAR_EXTERNAL. Functions
+ *  are stateless and can't hold VAR_EXTERNAL, so they're excluded. */
+const AXIS_EXTERNAL_POU_TYPES = new Set(['program', 'function-block'])
+
+/**
+ * Inject a `VAR_EXTERNAL <axis> : AXIS_REF_SM3` into `pou` for every axis in
+ * `axisNames` its body references but hasn't already declared — so
+ * `MC_*(Axis := <axis>)` resolves without the user declaring the global.
+ * Returns the POU unchanged when nothing applies. Programs and function blocks
+ * only: strucpp requires a VAR_EXTERNAL to touch a global, and both POU kinds
+ * support it (a function can't). Shared by the compiler and the language server
+ * so the editor sees exactly what the compiler generates.
+ */
+export function injectAxisExternals(pou: PLCPou, axisNames: string[]): PLCPou {
+  if (!AXIS_EXTERNAL_POU_TYPES.has(pou.pouType)) return pou
+  const declared = new Set((pou.interface?.variables ?? []).map((v) => v.name.toUpperCase()))
+  const toAdd = axisNames
+    .filter((name) => !declared.has(name.toUpperCase()) && bodyReferences(pou.body.value, name))
+    .map((name) => external(name, 'AXIS_REF_SM3', 'derived'))
+  if (toAdd.length === 0) return pou
+  return {
+    ...pou,
+    interface: { ...pou.interface, variables: [...(pou.interface?.variables ?? []), ...toAdd] },
+  }
+}
+
+/**
+ * Serialize the SoftMotion axis globals as a standalone ST configuration for the
+ * language server. Each CiA 402 drive becomes a `VAR_GLOBAL <name> : AXIS_REF_SM3`
+ * so editor code referencing the axis (e.g. `MC_Power(Axis := X_Axis)`) resolves
+ * against the same public axis the compiler generates — without the user
+ * declaring anything. Returns '' when the project has no axes.
+ *
+ * Only the axis references are declared (not the located PDO scalar globals),
+ * because those are internal to the generated drive bridge and never named in
+ * user code. `AXIS_REF_SM3` itself comes from the bundled plcopen-softmotion
+ * stlib the LSP already ingests.
+ */
+export function serializeSoftMotionAxisGlobalsToST(project: PLCProjectData): string {
+  const axes = collectAxes(project)
+  if (axes.length === 0) return ''
+
+  const decls = axes.map((a) => `  ${a.axisName} : AXIS_REF_SM3;`).join('\n')
+  return [
+    'CONFIGURATION __softmotion_axes__',
+    'VAR_GLOBAL',
+    decls,
+    'END_VAR',
+    'RESOURCE __softmotion_res__ ON PLC',
+    'END_RESOURCE',
+    'END_CONFIGURATION',
+    '',
+  ].join('\n')
+}
+
 /**
  * Inject generated SoftMotion globals + the per-scan bridge program for every
  * CiA 402 axis in the project. No-op (returns the input) when there are none.
@@ -199,20 +259,11 @@ export function generateSoftMotionArtifacts(project: PLCProjectData): PLCProject
     documentation: 'Auto-generated SoftMotion drive bridge — do not edit; regenerated each compile.',
   }
 
-  // Inject a VAR_EXTERNAL for each axis into user programs that reference it, so
-  // `MC_*(Axis := X_Axis)` resolves without the user declaring the global.
-  const patchedPous = project.pous.map((pou) => {
-    if (pou.pouType !== 'program') return pou
-    const declared = new Set((pou.interface?.variables ?? []).map((v) => v.name.toUpperCase()))
-    const toAdd = axes
-      .filter((a) => !declared.has(a.axisName.toUpperCase()) && bodyReferences(pou.body.value, a.axisName))
-      .map((a) => external(a.axisName, 'AXIS_REF_SM3', 'derived'))
-    if (toAdd.length === 0) return pou
-    return {
-      ...pou,
-      interface: { ...pou.interface, variables: [...(pou.interface?.variables ?? []), ...toAdd] },
-    }
-  })
+  // Inject a VAR_EXTERNAL for each axis into user programs and function blocks
+  // that reference it, so `MC_*(Axis := X_Axis)` resolves without the user
+  // declaring the global.
+  const axisNames = axes.map((a) => a.axisName)
+  const patchedPous = project.pous.map((pou) => injectAxisExternals(pou, axisNames))
 
   const resource = project.configurations.resource
   // Ensure a task exists to run the bridge, then attach the bridge instance at
