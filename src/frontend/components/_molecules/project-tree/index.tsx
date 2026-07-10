@@ -533,7 +533,9 @@ const ProjectTreeLeaf = ({
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
   const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
-  const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice', [leafLang])
+  // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
+  // shares every EtherCAT device action (rename/delete), just a distinct icon.
+  const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice' || leafLang === 'softMotionDrive', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })

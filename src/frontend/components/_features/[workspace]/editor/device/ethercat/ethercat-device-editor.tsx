@@ -104,6 +104,17 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     )
   }, [remoteDevice])
 
+  // A recognized CiA 402 SoftMotion drive: its PDO channel mappings are
+  // generated and consumed internally by the drive bridge, so the raw
+  // Channel Mappings tab is hidden and the SoftMotion Axis tab leads.
+  const isSoftMotion = !!device?.cia402?.enabled
+
+  // Channel Mappings is hidden for SoftMotion drives; if it was the active
+  // tab (the default), fall through to the SoftMotion Axis tab.
+  useEffect(() => {
+    if (isSoftMotion && activeTab === 'channel-mappings') setActiveTab('axis')
+  }, [isSoftMotion, activeTab])
+
   // Pool of every claim from producers active on the current target.
   // EtherCAT is sharing the image table with VPP and Modbus TCP on
   // Runtime v4, so all three feed into the pool — but capability
@@ -302,7 +313,9 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
-          <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
+          {!isSoftMotion && (
+            <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
+          )}
           {device.cia402 && <TabItem value='axis' label='SoftMotion Axis' isActive={activeTab === 'axis'} />}
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
@@ -398,21 +411,24 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           </div>
         </Tabs.Content>
 
-        {/* Channel Mappings Tab */}
-        <Tabs.Content
-          value='channel-mappings'
-          className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
-        >
-          <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-            <ChannelMappingsSection
-              isLoading={isLoadingChannels}
-              loadError={channelLoadError}
-              channels={channels}
-              mappings={device.channelMappings}
-              onAliasChange={handleAliasChange}
-            />
-          </div>
-        </Tabs.Content>
+        {/* Channel Mappings Tab — hidden for SoftMotion drives (their PDO
+            mappings are generated and consumed internally by the bridge). */}
+        {!isSoftMotion && (
+          <Tabs.Content
+            value='channel-mappings'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
+              <ChannelMappingsSection
+                isLoading={isLoadingChannels}
+                loadError={channelLoadError}
+                channels={channels}
+                mappings={device.channelMappings}
+                onAliasChange={handleAliasChange}
+              />
+            </div>
+          </Tabs.Content>
+        )}
       </Tabs.Root>
     </div>
   )

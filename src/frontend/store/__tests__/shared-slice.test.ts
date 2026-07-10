@@ -932,6 +932,18 @@ describe('createSharedSlice', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'missing-slave', 'X')
         expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
       })
+
+      it('rejects an invalid IEC identifier for a SoftMotion (CiA 402) drive', () => {
+        addEthercatBus('bus3', [
+          { id: 'axis-1', name: 'X_Axis', cia402: { enabled: true, scaleNum: 1, scaleDenom: 1, scaleFactor: 1 } },
+        ] as never)
+        const bad = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'ASDA-A2-E')
+        expect(bad.ok).toBe(false)
+        expect(bad.message).toContain('valid axis name')
+        // A valid identifier is accepted.
+        const good = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'Y_Axis')
+        expect(good.ok).toBe(true)
+      })
     })
   })
 

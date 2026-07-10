@@ -9,6 +9,7 @@ import { enrichDeviceData } from '../enrich-device-data'
 import { parseESIDeviceFull } from '../esi-parser-main'
 import {
   generateSoftMotionArtifacts,
+  isValidIecIdentifier,
   SM3_BRIDGE_INSTANCE_NAME,
   SM3_BRIDGE_POU_NAME,
   sanitizeAxisName,
@@ -50,9 +51,7 @@ function makeProject(devices: ConfiguredEtherCATDevice[]): PLCProjectData {
         globalVariables: [],
       },
     },
-    remoteDevices: [
-      { name: 'ethercat-bus', protocol: 'ethercat', ethercatConfig: { devices } },
-    ],
+    remoteDevices: [{ name: 'ethercat-bus', protocol: 'ethercat', ethercatConfig: { devices } }],
   }
 }
 
@@ -61,6 +60,15 @@ describe('generateSoftMotionArtifacts', () => {
     expect(sanitizeAxisName('X_Axis')).toBe('X_Axis')
     expect(sanitizeAxisName('My Axis 01')).toBe('My_Axis_01')
     expect(sanitizeAxisName('9drive')).toBe('_9drive')
+  })
+
+  it('validates IEC identifiers', () => {
+    expect(isValidIecIdentifier('X_Axis')).toBe(true)
+    expect(isValidIecIdentifier('_axis1')).toBe(true)
+    expect(isValidIecIdentifier('ASDA-A2-E')).toBe(false)
+    expect(isValidIecIdentifier('My Axis')).toBe(false)
+    expect(isValidIecIdentifier('9drive')).toBe(false)
+    expect(isValidIecIdentifier('')).toBe(false)
   })
 
   it('is a no-op when there are no CiA 402 axes', () => {
@@ -133,7 +141,13 @@ describe('generateSoftMotionArtifacts', () => {
     const project = makeProject([makeDevice('X_Axis')])
     project.pous[0].interface = {
       variables: [
-        { name: 'X_Axis', class: 'external', type: { definition: 'derived', value: 'AXIS_REF_SM3' }, location: '', documentation: '' },
+        {
+          name: 'X_Axis',
+          class: 'external',
+          type: { definition: 'derived', value: 'AXIS_REF_SM3' },
+          location: '',
+          documentation: '',
+        },
       ],
     }
     project.pous[0].body = { language: 'st', value: 'pwr(Axis := X_Axis);' }
@@ -214,9 +228,7 @@ describe('generateSoftMotionArtifacts', () => {
       a.id = 'a'
       b.id = 'b'
       const out = generateSoftMotionArtifacts(makeProject([a, b]))
-      const axisGlobals = out.configurations.resource.globalVariables.filter(
-        (g) => g.name === 'X_Axis',
-      )
+      const axisGlobals = out.configurations.resource.globalVariables.filter((g) => g.name === 'X_Axis')
       expect(axisGlobals).toHaveLength(1)
     })
 
@@ -241,9 +253,7 @@ describe('generateSoftMotionArtifacts', () => {
       const out = generateSoftMotionArtifacts(project)
       expect(out.configurations.resource.tasks).toHaveLength(1)
       expect(out.configurations.resource.tasks[0].triggering).toBe('Cyclic')
-      expect(out.configurations.resource.instances[0].task).toBe(
-        out.configurations.resource.tasks[0].name,
-      )
+      expect(out.configurations.resource.instances[0].task).toBe(out.configurations.resource.tasks[0].name)
     })
   })
 })

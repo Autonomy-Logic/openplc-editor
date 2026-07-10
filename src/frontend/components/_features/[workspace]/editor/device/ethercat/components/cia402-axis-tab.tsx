@@ -1,5 +1,4 @@
 import { type Cia402Role, resolveCia402Objects } from '@root/backend/shared/ethercat/cia402'
-import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { InputWithRef } from '@root/frontend/components/_atoms/input'
 import type { Cia402AxisConfig, ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
 import { useMemo } from 'react'
@@ -77,20 +76,6 @@ export const Cia402AxisTab = ({ device, onUpdate }: Cia402AxisTabProps) => {
 
   return (
     <div className='flex flex-col gap-6'>
-      {/* Enable */}
-      <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
-        <Checkbox checked={cia402.enabled} onCheckedChange={(checked) => onUpdate({ enabled: checked === true })} />
-        Treat this drive as a SoftMotion axis
-      </label>
-
-      <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-        Referenced in application code as{' '}
-        <code className='rounded bg-neutral-100 px-1 py-0.5 font-mono text-brand-medium-dark dark:bg-neutral-800'>
-          {device.name}
-        </code>{' '}
-        — e.g. <span className='font-mono'>MC_Power(Axis := {device.name}, Enable := TRUE)</span>.
-      </p>
-
       {/* Scaling */}
       <div>
         <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>

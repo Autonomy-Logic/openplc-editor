@@ -69,6 +69,16 @@ export function sanitizeAxisName(name: string): string {
   return s
 }
 
+/**
+ * True when `name` is already a valid IEC 61131-3 identifier — a letter or
+ * underscore followed by letters, digits, or underscores. A SoftMotion drive's
+ * name IS the axis variable name used in `MC_*(Axis := <name>)`, so it must
+ * satisfy this (no spaces, hyphens, or leading digits).
+ */
+export function isValidIecIdentifier(name: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+}
+
 function lrealLiteral(n: number): string {
   return Number.isInteger(n) ? `${n}.0` : `${n}`
 }

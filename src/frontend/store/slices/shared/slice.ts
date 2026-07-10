@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { isValidIecIdentifier } from '../../../../backend/shared/ethercat/generate-softmotion'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
@@ -393,6 +394,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!device) return { ok: false, message: 'EtherCAT device not found' }
 
       const oldName = device.name
+      // A SoftMotion drive's name IS the axis variable name emitted into
+      // generated code, so it must be a valid IEC identifier (no spaces,
+      // hyphens, or leading digits).
+      if (device.cia402?.enabled && !isValidIecIdentifier(newName)) {
+        return {
+          ok: false,
+          message: `"${newName}" is not a valid axis name. Use letters, digits, and underscores, starting with a letter or underscore.`,
+        }
+      }
       // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
       // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
       // silently on duplicates, so new write paths must replicate one strategy.
