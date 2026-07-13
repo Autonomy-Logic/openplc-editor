@@ -3,8 +3,9 @@ license_store.h - Single storage interface for the on-device license blob (OLS-0
 Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The one point of contact for persisting the license blob. The closed license-core
-CONSUMES this interface; the open-source firmware IMPLEMENTS it (per-arch backend
-selected at compile time in license_store.cpp: ESP32 NVS / AVR EEPROM).
+CONSUMES this interface; the open-source firmware IMPLEMENTS it (per-arch backend,
+each self-gated on its ARDUINO_ARCH_* macro: ESP32 NVS / ESP8266 emulated-EEPROM /
+AVR EEPROM).
 
 license_store_read validates magic + crc32 internally, so it returns semantic
 status (EMPTY / CORRUPT). ECDSA verify lives ABOVE this layer (out of scope here).

@@ -13,6 +13,6 @@ build with a clear message on architectures that have no backend yet
 (SAMD/STM32/RP2040 are outside the MVP).
 */
 
-#if !defined(ARDUINO_ARCH_ESP32) && !defined(ARDUINO_ARCH_AVR)
-    #error "license_store: no storage backend for this architecture (need ESP32 or AVR)"
+#if !defined(ARDUINO_ARCH_ESP32) && !defined(ARDUINO_ARCH_AVR) && !defined(ARDUINO_ARCH_ESP8266)
+    #error "license_store: no storage backend for this architecture (need ESP32, ESP8266 or AVR)"
 #endif
