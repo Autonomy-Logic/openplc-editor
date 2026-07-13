@@ -41,6 +41,11 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define MB_DEBUG_SUCCESS                 0x7E
 #define MB_DEBUG_ERROR_OUT_OF_BOUNDS     0x81
 #define MB_DEBUG_ERROR_OUT_OF_MEMORY     0x82
+// License storage semantic states (on-device-license-storage, OLS-08/09).
+// The editor distinguishes these: EMPTY -> "buy" dialog, CORRUPT -> re-provision.
+// They don't collide with Modbus exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
+#define MB_DEBUG_LIC_EMPTY               0x83
+#define MB_DEBUG_LIC_CORRUPT             0x84
 
 //Modbus registers struct
 struct MBinfo {
@@ -77,6 +82,8 @@ enum {
     MB_FC_DEBUG_GET_STATUS = 0x46, // Debug get PLC status (running, scan tick, uptime)
     MB_FC_DEBUG_GET_VERSION = 0x47, // Debug get runtime firmware version
     MB_FC_DEBUG_GET_BOARD_ID = 0x48, // Debug get unique hardware board ID
+    MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
+    MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
 };
 
 //Exception Codes

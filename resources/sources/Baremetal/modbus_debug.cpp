@@ -4,6 +4,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_debug.h"
+#include "license_store.h"
 // Debug surface comes via the extern "C" shims in arduino_runtime_glue.h
 // (openplc_debug_*, scan_counter) so this TU stays free of strucpp's
 // template-heavy headers and compiles cleanly under arduino-cli's default C++
@@ -394,4 +395,58 @@ void debugGetBoardId()
     mb_frame[3] = 0; // no unique-id support on this core
     mb_frame_len = 4;
 #endif
+}
+
+// PDU request:  [FC][len:u16 BE][blob...]   (dispatcher passes `len` already unpacked)
+// PDU response: [FC][STATUS]
+//
+// NOTE on endianness: `len` on the wire is BIG-ENDIAN (matches every other debug
+// FC, e.g. GET_LIST/SET). The blob CONTENT it carries is little-endian — the two
+// are independent. `blob` points at mb_frame[4], so we must read the store BEFORE
+// touching mb_frame[1..3]; here we only write the response after license_store_write
+// has consumed `blob`, so there is no overlap hazard on write.
+void debugWriteLicense(uint16_t len, const uint8_t *blob)
+{
+    lic_store_status_t st = license_store_write(blob, (size_t)len);
+    mb_frame[1] = MB_FC_DEBUG_WRITE_LICENSE;
+    mb_frame[2] = lic_status_to_mb(st);
+    mb_frame_len = 3;
+}
+
+// PDU request:  [FC]
+// PDU response (OK):                  [FC][STATUS][len:u16 BE][blob...]
+// PDU response (EMPTY/CORRUPT/error): [FC][STATUS]   (no len, no blob)
+//
+// Absolute mb_frame indices (index 0 is the slave id, PDU starts at 1, exactly
+// like debugGetBoardId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
+//
+// Offset resolution (design §2.5 ressalva): the response blob offset is 5, so we
+// read the store straight into &mb_frame[5]. The frame IS the static buffer, so
+// no malloc on AVR. READ has no request payload, so writing at [5] cannot clobber
+// any input (unlike the old debugGetTraceList overlap). out_len is unknown until
+// after the read; the len field lives at [3..4], BEFORE the blob, so filling it
+// afterwards never overlaps the blob bytes. mb_frame_len = 5 + out_len (a 106 B
+// blob fits MAX_MB_FRAME — 128 on 328P, 256 elsewhere — comfortably).
+//
+// NOTE on endianness: len on the wire is BIG-ENDIAN (matches every other debug
+// FC); the blob CONTENT is little-endian. The two are independent.
+void debugReadLicense(void)
+{
+    size_t out_len = 0;
+    lic_store_status_t st =
+        license_store_read(&mb_frame[5], MAX_MB_FRAME - 5, &out_len);
+
+    mb_frame[1] = MB_FC_DEBUG_READ_LICENSE;
+    mb_frame[2] = lic_status_to_mb(st);
+    if (st == LIC_STORE_OK)
+    {
+        // len BIG-ENDIAN at [3..4] (blob content stays little-endian).
+        mb_frame[3] = (uint8_t)((out_len >> 8) & 0xFF);
+        mb_frame[4] = (uint8_t)(out_len & 0xFF);
+        mb_frame_len = 5 + out_len;
+    }
+    else
+    {
+        mb_frame_len = 3;   // [FC][STATUS] only
+    }
 }
