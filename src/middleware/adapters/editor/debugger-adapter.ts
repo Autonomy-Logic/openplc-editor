@@ -14,6 +14,8 @@ import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type {
   DebugConnectionConfig,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
   Md5VerifyResult,
@@ -59,6 +61,26 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
     async setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult> {
       try {
         return await window.bridge.debuggerSetVariable(index, force, valueBuffer)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+      try {
+        return await window.bridge.debuggerWriteLicense(blob)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async readLicense(): Promise<DebugLicenseReadResult> {
+      try {
+        const result = await window.bridge.debuggerReadLicense()
+        return {
+          ...result,
+          blob: result.blob ? Uint8Array.from(result.blob) : undefined,
+        }
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }

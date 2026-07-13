@@ -12,12 +12,16 @@ export enum ModbusFunctionCode {
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
   DEBUG_GET_BOARD_ID = 0x48,
+  DEBUG_WRITE_LICENSE = 0x49,
+  DEBUG_READ_LICENSE = 0x4a,
 }
 
 export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
+  LIC_EMPTY = 0x83,
+  LIC_CORRUPT = 0x84,
 }
 
 interface ModbusTcpClientOptions {
@@ -345,6 +349,141 @@ export class ModbusTcpClient {
       }
 
       return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // On-device license storage (FC 0x49/0x4A). TCP frame: [MBAP:6][FC@7][...].
+  // The wire `len` is BIG-ENDIAN (matches the other FCs) while the blob content
+  // it frames is little-endian — do not confuse the two.
+  // -------------------------------------------------------------------------
+
+  async writeLicense(blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    const functionCode = ModbusFunctionCode.DEBUG_WRITE_LICENSE
+
+    // PDU: [FC][len:u16 BE][blob...]
+    const pduLength = 3 + blob.length
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    request.writeUInt8(functionCode, 7)
+    request.writeUInt16BE(blob.length, 8)
+    for (let i = 0; i < blob.length; i++) {
+      request.writeUInt8(blob[i], 10 + i)
+    }
+
+    try {
+      const data = await this.sendTcpRequest(request)
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+
+      const responseTransactionId = data.readUInt16BE(0)
+      const responseFunctionCode = data.readUInt8(7)
+      const statusCode = data.readUInt8(8)
+
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, status: statusCode, error: `Target returned error code: 0x${statusCode.toString(16)}` }
+      }
+
+      return { success: true, status: statusCode }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  async readLicense(): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    blob?: Uint8Array
+    error?: string
+  }> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    const functionCode = ModbusFunctionCode.DEBUG_READ_LICENSE
+
+    // PDU: [FC] only.
+    const pduLength = 2
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    request.writeUInt8(functionCode, 7)
+
+    try {
+      const data = await this.sendTcpRequest(request)
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+
+      const responseTransactionId = data.readUInt16BE(0)
+      const responseFunctionCode = data.readUInt8(7)
+      const statusCode = data.readUInt8(8)
+
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_READ_LICENSE as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.LIC_EMPTY as number)) {
+        return { success: true, status: statusCode, empty: true }
+      }
+      if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
+        return { success: true, status: statusCode, corrupt: true }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      if (data.length < 11) {
+        return {
+          success: false,
+          status: statusCode,
+          error: `Incomplete license response (${data.length} bytes, expected at least 11)`,
+        }
+      }
+
+      // [len:u16 BE] at offset 9..10, blob at 11+
+      const len = data.readUInt16BE(9)
+      if (data.length < 11 + len) {
+        return {
+          success: false,
+          status: statusCode,
+          error: `Incomplete license blob (expected ${len} bytes, got ${data.length - 11})`,
+        }
+      }
+
+      const blob = Uint8Array.prototype.slice.call(data, 11, 11 + len)
+      return { success: true, status: statusCode, blob }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

@@ -44,6 +44,8 @@ import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/e
 import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
 import type {
   DebugBoardIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
   DebugSetResult,
   DebugStatusResult,
   DebugTransportResult,
@@ -160,6 +162,29 @@ export function buildGetVersionRequest(): Uint8Array {
 export function buildGetBoardIdRequest(): Uint8Array {
   const buf = alloc(1)
   writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+  return buf
+}
+
+/**
+ * Build a write-license request (FC 0x49).
+ * PDU: `[FC][len:U16BE][blob...]`.
+ *
+ * The `len` on the wire is BIG-ENDIAN (matches every other debug FC), even
+ * though the blob *content* is little-endian (see license-blob.ts / design §1).
+ * Do not confuse the two: `writeU16BE` is deliberate here.
+ */
+export function buildWriteLicenseRequest(blob: Uint8Array): Uint8Array {
+  const buf = alloc(3 + blob.length)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_WRITE_LICENSE)
+  writeU16BE(buf, 1, blob.length)
+  buf.set(blob, 3)
+  return buf
+}
+
+/** Build a read-license request (FC 0x4A). Bare `[FC]` PDU — no payload. */
+export function buildReadLicenseRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_READ_LICENSE)
   return buf
 }
 
@@ -368,6 +393,79 @@ export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
   const boardId = data.slice(3, 3 + idLen)
   const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
   return { success: true, boardId, boardIdHex }
+}
+
+/**
+ * Parse a write-license response (FC 0x49).
+ * Layout: `[FC][status]`. SUCCESS → `{ success: true, status }`; any other
+ * status is a device-side failure surfaced as `{ success: false, error }`.
+ */
+export function parseWriteLicenseResponse(data: Uint8Array): DebugLicenseWriteResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_WRITE_LICENSE) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, status, error: statusError(status) }
+  }
+
+  return { success: true, status }
+}
+
+/**
+ * Parse a read-license response (FC 0x4A).
+ * Layout (OK):    `[FC][status=SUCCESS][len:U16BE][blob...]`.
+ * Layout (other): `[FC][status]` — no len, no blob.
+ *
+ * `len` is BIG-ENDIAN (readU16BE) — the wire convention — while the blob it
+ * frames is little-endian content. LIC_EMPTY / LIC_CORRUPT are valid device
+ * states (`success: true` with the corresponding flag), not transport errors.
+ */
+export function parseReadLicenseResponse(data: Uint8Array): DebugLicenseReadResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_READ_LICENSE) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status === ModbusDebugResponse.LIC_EMPTY) {
+    return { success: true, status, empty: true }
+  }
+
+  if (status === ModbusDebugResponse.LIC_CORRUPT) {
+    return { success: true, status, corrupt: true }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, status, error: statusError(status) }
+  }
+
+  if (data.length < 4) {
+    return { success: false, status, error: `Incomplete license response (${data.length} bytes, expected at least 4)` }
+  }
+
+  const len = readU16BE(data, 2)
+  if (data.length < 4 + len) {
+    return {
+      success: false,
+      status,
+      error: `Incomplete license blob (expected ${len} bytes, got ${data.length - 4})`,
+    }
+  }
+
+  return { success: true, status, blob: data.slice(4, 4 + len) }
 }
 
 /**

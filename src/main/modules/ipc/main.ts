@@ -890,6 +890,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.registerHandle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
     this.registerHandle('debugger:set-variable', this.handleDebuggerSetVariable)
+    this.registerHandle('debugger:write-license', this.handleDebuggerWriteLicense)
+    this.registerHandle('debugger:read-license', this.handleDebuggerReadLicense)
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
 
@@ -1753,6 +1755,133 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       return { success: false, error: result.error }
+    } catch (error) {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+      return { success: false, error: getErrorMessage(error), needsReconnect: true }
+    }
+  }
+
+  /**
+   * Ensure a Modbus debug client is connected, reconnecting from stored
+   * parameters if needed. License FCs (0x49/0x4A) ride the same Modbus
+   * transport as getVariablesList; WebSocket targets are unsupported.
+   * Returns the live client on success, or an error result to bubble up.
+   */
+  private ensureDebuggerModbusClient = async (): Promise<
+    { client: ModbusTcpClient | ModbusRtuClient } | { error: string; needsReconnect?: boolean }
+  > => {
+    if (this.debuggerConnectionType === null) {
+      return { error: 'Debugger not connected' }
+    }
+
+    if (this.debuggerConnectionType === 'websocket') {
+      return { error: 'License storage is not supported over the WebSocket transport' }
+    }
+
+    if (!this.debuggerModbusClient) {
+      if (this.debuggerReconnecting) {
+        return { error: 'Reconnection in progress', needsReconnect: true }
+      }
+
+      this.debuggerReconnecting = true
+      try {
+        if (this.debuggerConnectionType === 'simulator') {
+          const virtualPort = new VirtualSerialPort(this.simulatorModule)
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: 'simulator',
+            baudRate: 115200,
+            slaveId: 1,
+            timeout: 5000,
+            serialPort: virtualPort,
+          })
+        } else if (this.debuggerConnectionType === 'tcp') {
+          if (!this.debuggerTargetIp) {
+            this.debuggerReconnecting = false
+            return { error: 'No target IP address stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusTcpClient({
+            host: this.debuggerTargetIp,
+            port: 502,
+            timeout: 5000,
+          })
+        } else if (this.debuggerConnectionType === 'rtu') {
+          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
+            this.debuggerReconnecting = false
+            return { error: 'No RTU connection parameters stored', needsReconnect: true }
+          }
+          this.debuggerModbusClient = new ModbusRtuClient({
+            port: this.debuggerRtuPort,
+            baudRate: this.debuggerRtuBaudRate,
+            slaveId: this.debuggerRtuSlaveId,
+            timeout: 5000,
+          })
+        } else {
+          this.debuggerReconnecting = false
+          return { error: 'No connection type stored', needsReconnect: true }
+        }
+
+        await this.debuggerModbusClient.connect()
+        this.debuggerReconnecting = false
+      } catch (error) {
+        this.debuggerModbusClient = null
+        this.debuggerReconnecting = false
+        return { error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
+      }
+    }
+
+    return { client: this.debuggerModbusClient }
+  }
+
+  handleDebuggerWriteLicense = async (
+    _event: IpcMainInvokeEvent,
+    blob: Uint8Array,
+  ): Promise<{ success: boolean; status?: number; error?: string; needsReconnect?: boolean }> => {
+    const ensured = await this.ensureDebuggerModbusClient()
+    if ('error' in ensured) {
+      return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
+    }
+
+    try {
+      const bytes = blob instanceof Uint8Array ? blob : new Uint8Array(blob)
+      return await ensured.client.writeLicense(bytes)
+    } catch (error) {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+      return { success: false, error: getErrorMessage(error), needsReconnect: true }
+    }
+  }
+
+  handleDebuggerReadLicense = async (
+    _event: IpcMainInvokeEvent,
+  ): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    blob?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    const ensured = await this.ensureDebuggerModbusClient()
+    if ('error' in ensured) {
+      return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
+    }
+
+    try {
+      const result = await ensured.client.readLicense()
+      return {
+        success: result.success,
+        status: result.status,
+        empty: result.empty,
+        corrupt: result.corrupt,
+        blob: result.blob ? Array.from(result.blob) : undefined,
+        error: result.error,
+      }
     } catch (error) {
       if (this.debuggerModbusClient) {
         this.debuggerModbusClient.disconnect()

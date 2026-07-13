@@ -568,4 +568,100 @@ export class ModbusRtuClient {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
+
+  /**
+   * FC 0x49 DEBUG_WRITE_LICENSE. PDU payload is `[len:u16 BE][blob...]` — the
+   * length is big-endian (wire convention), the blob content is little-endian
+   * (see license-blob.ts). Response is `[FC][status]`.
+   */
+  async writeLicense(blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> {
+    try {
+      const data = allocBytes(2 + blob.length)
+      writeUint16BE(data, 0, blob.length)
+      data.set(blob, 2)
+
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_WRITE_LICENSE, data)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      return { success: true, status: statusCode }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * FC 0x4A DEBUG_READ_LICENSE. Bare `[FC]` request. Response (OK) is
+   * `[FC][status=SUCCESS][len:u16 BE][blob...]`; LIC_EMPTY (0x83) / LIC_CORRUPT
+   * (0x84) are valid device states surfaced as `success: true` with the flag.
+   */
+  async readLicense(): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    blob?: Uint8Array
+    error?: string
+  }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_READ_LICENSE as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.LIC_EMPTY as number)) {
+        return { success: true, status: statusCode, empty: true }
+      }
+      if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
+        return { success: true, status: statusCode, corrupt: true }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      // Success: [FC][status][len:u16 BE][blob...] — len at offset 9, blob at 11.
+      if (response.length < 11) {
+        return {
+          success: false,
+          status: statusCode,
+          error: `Incomplete license response (${response.length} bytes, expected at least 11)`,
+        }
+      }
+
+      const len = readUint16BE(response, 9)
+      if (response.length < 11 + len) {
+        return {
+          success: false,
+          status: statusCode,
+          error: `Incomplete license blob (expected ${len} bytes, got ${response.length - 11})`,
+        }
+      }
+
+      return { success: true, status: statusCode, blob: response.slice(11, 11 + len) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
 }

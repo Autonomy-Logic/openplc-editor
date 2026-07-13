@@ -7,10 +7,14 @@ export enum ModbusFunctionCode {
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
   DEBUG_GET_BOARD_ID = 0x48,
+  DEBUG_WRITE_LICENSE = 0x49,
+  DEBUG_READ_LICENSE = 0x4a,
 }
 
 export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
+  LIC_EMPTY = 0x83,
+  LIC_CORRUPT = 0x84,
 }

@@ -28,7 +28,15 @@
  *   - DebugTransport interface implementations
  */
 
-import type { DebugConnectionConfig, DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
+import type {
+  DebugConnectionConfig,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugSetResult,
+  DebugVariableResult,
+  Md5VerifyResult,
+  Unsubscribe,
+} from './types'
 
 export interface DebuggerPort {
   /**
@@ -55,6 +63,19 @@ export interface DebuggerPort {
    * @param valueBuffer — Raw value bytes (Uint8Array)
    */
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult>
+
+  /**
+   * Write a license blob to the target's on-device storage (FC 0x49).
+   * @param blob — Raw license blob bytes (little-endian struct; see license-blob).
+   */
+  writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+
+  /**
+   * Read the license blob from the target's on-device storage (FC 0x4A).
+   * Returns `{ empty: true }` for virgin storage and `{ corrupt: true }` when
+   * the magic matched but the crc32 failed — both with `success: true`.
+   */
+  readLicense(): Promise<DebugLicenseReadResult>
 
   /**
    * Verify that the running program matches the expected MD5 hash.

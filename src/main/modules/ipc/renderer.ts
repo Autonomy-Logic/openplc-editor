@@ -424,6 +424,18 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
+  debuggerWriteLicense: (blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> =>
+    ipcRenderer.invoke('debugger:write-license', blob),
+
+  debuggerReadLicense: (): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    blob?: number[]
+    error?: string
+  }> => ipcRenderer.invoke('debugger:read-license'),
+
   debuggerConnect: (
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {

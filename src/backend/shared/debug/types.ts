@@ -56,6 +56,33 @@ export interface DebugBoardIdResult {
 }
 
 /**
+ * Result of a write-license call (FC 0x49). The device stores the raw blob
+ * bytes; `status` is the ModbusDebugResponse code the target returned
+ * (SUCCESS/ERROR_OUT_OF_BOUNDS/ERROR_OUT_OF_MEMORY).
+ */
+export interface DebugLicenseWriteResult {
+  success: boolean
+  status?: number
+  error?: string
+}
+
+/**
+ * Result of a read-license call (FC 0x4A). `blob` is present only on SUCCESS.
+ * `empty` (status LIC_EMPTY) means virgin storage — no license provisioned;
+ * `corrupt` (status LIC_CORRUPT) means the magic matched but the crc32 failed.
+ * Both empty and corrupt are `success: true` — they are valid device states,
+ * not transport failures — the caller distinguishes via the flags.
+ */
+export interface DebugLicenseReadResult {
+  success: boolean
+  status?: number
+  empty?: boolean
+  corrupt?: boolean
+  blob?: Uint8Array
+  error?: string
+}
+
+/**
  * Result of an MD5-probe call.  The `md5` is the runtime's program hash;
  * `targetEndian` is the byte order detected from the 2-byte sentinel the
  * runtime writes into the response trailer via a native `uint16_t*`

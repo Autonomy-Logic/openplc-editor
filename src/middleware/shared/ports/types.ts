@@ -1064,6 +1064,31 @@ export interface DebugSetResult {
   error?: string
 }
 
+/**
+ * Result of writing a license blob to on-device storage (FC 0x49).
+ * `status` is the raw ModbusDebugResponse code the target returned.
+ */
+export interface DebugLicenseWriteResult {
+  success: boolean
+  status?: number
+  error?: string
+}
+
+/**
+ * Result of reading a license blob from on-device storage (FC 0x4A).
+ * `blob` is present only on success with a provisioned license. `empty`
+ * (virgin storage) and `corrupt` (magic ok, crc failed) are valid device
+ * states surfaced with `success: true` and the matching flag set.
+ */
+export interface DebugLicenseReadResult {
+  success: boolean
+  status?: number
+  empty?: boolean
+  corrupt?: boolean
+  blob?: Uint8Array
+  error?: string
+}
+
 export interface Md5VerifyResult {
   success: boolean
   match?: boolean
