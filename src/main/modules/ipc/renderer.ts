@@ -450,6 +450,23 @@ const rendererProcessBridge = {
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
+  getDeviceAnchor: (
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+  ): Promise<{
+    success: boolean
+    source: 'runtime' | 'arduino'
+    anchorHex?: string
+    anchor?: number[]
+    error?: string
+  }> => ipcRenderer.invoke('device:get-anchor', connectionType, connectionParams),
+
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),

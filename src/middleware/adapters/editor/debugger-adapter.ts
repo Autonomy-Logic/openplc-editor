@@ -18,6 +18,7 @@ import type {
   DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
+  DeviceAnchorResult,
   Md5VerifyResult,
   Unsubscribe,
 } from '../../shared/ports/types'
@@ -83,6 +84,20 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
         }
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getDeviceAnchor(config: DebugConnectionConfig): Promise<DeviceAnchorResult> {
+      try {
+        const result = await window.bridge.getDeviceAnchor(config.connectionType, config.connectionParams)
+        return {
+          ...result,
+          // Rehydrate the anchor bytes defensively — the IPC boundary may hand
+          // back a plain array-like; normalize to a real number[].
+          anchor: result.anchor ? Array.from(result.anchor) : undefined,
+        }
+      } catch (err) {
+        return { success: false, source: config.connectionType === 'websocket' ? 'runtime' : 'arduino', error: getErrorMessage(err) }
       }
     },
 

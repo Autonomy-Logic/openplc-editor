@@ -43,6 +43,12 @@ import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-clien
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
+import {
+  type DeviceAnchorResult,
+  mapArduinoAnchorResult,
+  mapRuntimeAnchorResult,
+  selectAnchorSource,
+} from '../../../backend/shared/debug/device-anchor'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -127,6 +133,9 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== RUNTIME API HANDLERS =====================
   private readonly RUNTIME_API_PORT = 8443
   private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
+  // TODO(D56): endpoint provisório — confirmar com openplc-runtime (webserver).
+  // Resposta provisória: { device_id: "<hex do id bruto de hardware>" }
+  private readonly RUNTIME_ANCHOR_ENDPOINT = '/api/device-id'
 
   /**
    * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
@@ -894,6 +903,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:read-license', this.handleDebuggerReadLicense)
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
+    this.registerHandle('device:get-anchor', this.handleGetDeviceAnchor)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -1888,6 +1898,61 @@ class MainProcessBridge implements MainIpcModule {
         this.debuggerModbusClient = null
       }
       return { success: false, error: getErrorMessage(error), needsReconnect: true }
+    }
+  }
+
+  /**
+   * Acquire the device anchor (hardware-unique id), dispatching on the target
+   * type carried by `connectionType`:
+   *   - `websocket` → OpenPLC runtime (Linux v4): fetched over the runtime
+   *     webserver HTTP API (NOT the debug channel).
+   *   - `tcp` | `rtu` | `simulator` → arduino-cli targets (ESP32/AVR/avr8js):
+   *     read via the always-on debugger FC 0x48 (GET_BOARD_ID).
+   * Both paths converge on the unified DeviceAnchorResult.
+   */
+  handleGetDeviceAnchor = async (
+    _event: IpcMainInvokeEvent,
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+  ): Promise<DeviceAnchorResult> => {
+    const source = selectAnchorSource(connectionType)
+
+    if (source === 'runtime') {
+      // Runtime Linux (D56): acquired over the webserver HTTP API, never the debug channel.
+      if (!connectionParams.ipAddress) {
+        return { success: false, source, error: 'IP address is required for runtime anchor acquisition' }
+      }
+      const res = await this.makeRuntimeApiRequest<{ device_id: string }>(
+        connectionParams.ipAddress,
+        this.RUNTIME_ANCHOR_ENDPOINT,
+        (data) => JSON.parse(data) as { device_id: string },
+      )
+      if (!res.success) {
+        return { success: false, source, error: res.error }
+      }
+      return mapRuntimeAnchorResult(res.data?.device_id)
+    }
+
+    // arduino-cli targets (ESP32/AVR/simulator): FC 0x48 over the always-on debug channel.
+    const ensured = await this.ensureDebuggerModbusClient()
+    if ('error' in ensured) {
+      return { success: false, source, error: ensured.error }
+    }
+    try {
+      const result = await ensured.client.getBoardId()
+      return mapArduinoAnchorResult(result)
+    } catch (error) {
+      if (this.debuggerModbusClient) {
+        this.debuggerModbusClient.disconnect()
+        this.debuggerModbusClient = null
+      }
+      return { success: false, source, error: getErrorMessage(error) }
     }
   }
 

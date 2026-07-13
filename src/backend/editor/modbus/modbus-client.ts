@@ -1,4 +1,5 @@
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { buildGetBoardIdRequest, parseGetBoardIdResponse } from '@root/backend/shared/debug/modbus-pdu'
+import type { DebugBoardIdResult, Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { Socket } from 'net'
@@ -484,6 +485,51 @@ export class ModbusTcpClient {
 
       const blob = Uint8Array.prototype.slice.call(data, 11, 11 + len)
       return { success: true, status: statusCode, blob }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). TCP frame is
+   * [MBAP:6][FC@7][...], so the pure PDU `[FC][status][id_len:u8][id_bytes...]`
+   * starts at offset 7 — hand it to the shared parseGetBoardIdResponse rather
+   * than parsing inline.
+   */
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    // buildGetBoardIdRequest() returns the [FC] PDU; the MBAP frame carries the
+    // function code + payload, empty for board-id.
+    const pdu = buildGetBoardIdRequest()
+
+    const pduLength = 1 + pdu.length // unitId + PDU (FC only)
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
+
+    try {
+      const data = await this.sendTcpRequest(request)
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+
+      const responseTransactionId = data.readUInt16BE(0)
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseGetBoardIdResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

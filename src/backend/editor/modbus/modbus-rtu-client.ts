@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { buildGetBoardIdRequest, parseGetBoardIdResponse } from '@root/backend/shared/debug/modbus-pdu'
+import type { DebugBoardIdResult, Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
@@ -546,6 +547,33 @@ export class ModbusRtuClient {
 
       const blob = Uint8Array.prototype.slice.call(response, 11, 11 + len)
       return { success: true, status: statusCode, blob }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). Response offsets
+   * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
+   * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
+   * to the shared parseGetBoardIdResponse rather than parsing inline.
+   */
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    try {
+      // buildGetBoardIdRequest() returns the [FC] PDU; assembleRequest writes
+      // the function code + slaveId itself and expects only the trailing payload
+      // (empty for board-id), so strip the leading FC byte.
+      const pdu = buildGetBoardIdRequest()
+      const payload = Buffer.from(pdu.subarray(1))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(response, 7)
+      return parseGetBoardIdResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

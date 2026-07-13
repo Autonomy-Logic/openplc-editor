@@ -37,6 +37,12 @@ beforeEach(() => {
       success: true,
       content: 'debug_vars[] = { ... }',
     }),
+    getDeviceAnchor: jest.fn().mockResolvedValue({
+      success: true,
+      source: 'arduino',
+      anchorHex: '0abc01',
+      anchor: [0x0a, 0xbc, 0x01],
+    }),
   } as unknown as typeof window.bridge
 
   adapter = createEditorDebuggerAdapter()
@@ -323,6 +329,45 @@ describe('verifyMd5', () => {
     const result = await adapter.verifyMd5('abc123', tcpConfig)
 
     expect(result).toEqual({ success: false, error: 'MD5 check failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getDeviceAnchor
+// ---------------------------------------------------------------------------
+
+describe('getDeviceAnchor', () => {
+  it('delegates to bridge and rehydrates the anchor bytes', async () => {
+    const result = await adapter.getDeviceAnchor(tcpConfig)
+
+    expect(window.bridge.getDeviceAnchor).toHaveBeenCalledWith('tcp', { ipAddress: '192.168.1.100', port: '502' })
+    expect(result).toEqual({ success: true, source: 'arduino', anchorHex: '0abc01', anchor: [0x0a, 0xbc, 0x01] })
+  })
+
+  it('leaves anchor undefined when the bridge returns none', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockResolvedValue({
+      success: false,
+      source: 'runtime',
+      error: 'no id',
+    })
+    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: { ipAddress: '10.0.0.1' } })
+
+    expect(result.anchor).toBeUndefined()
+    expect(result.source).toBe('runtime')
+  })
+
+  it('catches bridge errors (arduino source)', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
+    const result = await adapter.getDeviceAnchor(tcpConfig)
+
+    expect(result).toEqual({ success: false, source: 'arduino', error: 'IPC boom' })
+  })
+
+  it('catches bridge errors (runtime source)', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
+    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: {} })
+
+    expect(result).toEqual({ success: false, source: 'runtime', error: 'IPC boom' })
   })
 })
 

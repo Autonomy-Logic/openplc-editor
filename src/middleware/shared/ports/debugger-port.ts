@@ -34,6 +34,7 @@ import type {
   DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
+  DeviceAnchorResult,
   Md5VerifyResult,
   Unsubscribe,
 } from './types'
@@ -76,6 +77,16 @@ export interface DebuggerPort {
    * the magic matched but the crc32 failed — both with `success: true`.
    */
   readLicense(): Promise<DebugLicenseReadResult>
+
+  /**
+   * Acquire the target's device anchor (hardware-unique id), dispatching on the
+   * target type in `config.connectionType`: `websocket` fetches it over the
+   * runtime webserver HTTP API; arduino-cli targets (`tcp`/`rtu`/`simulator`)
+   * read it via the debugger FC 0x48. Returns a unified result regardless of
+   * source.
+   * @param config — Connection target used for the acquisition request.
+   */
+  getDeviceAnchor(config: DebugConnectionConfig): Promise<DeviceAnchorResult>
 
   /**
    * Verify that the running program matches the expected MD5 hash.

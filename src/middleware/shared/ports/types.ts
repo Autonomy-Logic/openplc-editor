@@ -1089,6 +1089,21 @@ export interface DebugLicenseReadResult {
   error?: string
 }
 
+/**
+ * Unified device-anchor (device-id) acquisition result. `source` records which
+ * target path produced the id: `runtime` (Linux v4 over the webserver HTTP API)
+ * or `arduino` (arduino-cli targets via the debugger FC 0x48). `anchorHex` is
+ * the lowercase hex of the raw hardware id; `anchor` is the same bytes as a
+ * plain number[] (IPC-safe), rehydrated to Uint8Array by the adapter.
+ */
+export interface DeviceAnchorResult {
+  success: boolean
+  source: 'runtime' | 'arduino'
+  anchorHex?: string
+  anchor?: number[]
+  error?: string
+}
+
 export interface Md5VerifyResult {
   success: boolean
   match?: boolean
