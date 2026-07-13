@@ -245,6 +245,23 @@ describe('preprocessPous — C++', () => {
     expect(vars.some((v) => v.name === 'hasBeenInitialized')).toBe(true)
   })
 
+  it('keeps C++ sidecar variables aligned with the generated ST bridge', () => {
+    const variables = [
+      makeVariable('Enable', 'input', 'BOOL'),
+      makeVariable('PrevSeq', 'local', 'USINT'),
+      makeVariable('NewData', 'output', 'BOOL'),
+    ]
+    const project = makeProjectData([makeCppPou('can_rx', validCppCode, variables)])
+    const logger = collectLog()
+    const { projectData } = preprocessPous(project, false, logger.log)
+
+    const body = projectData.pous[0].body.value as string
+    expect(body).toContain('vars.PREVSEQ = &PREVSEQ;')
+    expect(projectData.originalCppPous?.[0].variables.map((v) => v.name)).toEqual(
+      expect.arrayContaining(['PrevSeq', 'hasBeenInitialized']),
+    )
+  })
+
   it('skips C++ processing when no C++ POUs exist', () => {
     const project = makeProjectData([makeStPou('Main', 'x := 1;')])
     const logger = collectLog()

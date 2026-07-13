@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksCode } from '../generateCBlocksCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: PLCVariable['class'], baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (name: string, cls: PLCVariable['class'], baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -169,13 +169,13 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('// comment about setup')
   })
 
-  it('filters variables by class (only input and output)', () => {
+  it('generates struct fields and macros for local state variables', () => {
     const variables: PLCVariable[] = [
       makeScalarVar('inVar', 'input', 'INT'),
       {
-        name: 'localVar',
+        name: 'PrevSeq',
         class: 'local',
-        type: { definition: 'base-type', value: 'INT' },
+        type: { definition: 'base-type', value: 'USINT' },
         location: '',
         documentation: '',
         debug: false,
@@ -188,9 +188,30 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('#define inVar')
     expect(result).toContain('#define outVar')
-    expect(result).not.toContain('#define localVar')
+    expect(result).toContain('strucpp::IEC_USINT *PREVSEQ;')
+    expect(result).toContain('#define PrevSeq (*(vars->PREVSEQ))')
     expect(result).toContain('#undef inVar')
     expect(result).toContain('#undef outVar')
-    expect(result).not.toContain('#undef localVar')
+    expect(result).toContain('#undef PrevSeq')
+  })
+
+  it('does not expose the generated setup guard as a user C++ macro', () => {
+    const variables: PLCVariable[] = [
+      makeScalarVar('x', 'input', 'INT'),
+      {
+        name: 'hasBeenInitialized',
+        class: 'local',
+        type: { definition: 'base-type', value: 'BOOL' },
+        location: '',
+        documentation: '',
+        debug: false,
+      },
+    ]
+    const code = 'void setup() { }\nvoid loop() { }'
+
+    const result = generateCBlocksCode([{ name: 'test', code, variables }])
+
+    expect(result).not.toContain('HASBEENINITIALIZED')
+    expect(result).not.toContain('#define hasBeenInitialized')
   })
 })

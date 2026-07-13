@@ -137,17 +137,25 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
       return { projectData: processedProjectData as ProjectDataWithCpp, validationFailed: true }
     }
 
-    processedProjectData = addCppLocalVariables(processedProjectData)
-
-    const originalCppPousData = cppPous.map((pou) => ({
-      name: pou.name,
-      code:
+    const originalCppCodeByName = new Map(
+      cppPous.map((pou) => [
+        pou.name,
         /* istanbul ignore next -- defensive: cppPous filter guarantees language === 'cpp' */
         pou.body.language === 'cpp' ? (pou.body as { language: string; value: string }).value : '',
-      variables:
-        /* istanbul ignore next -- defensive: interface may be undefined */
-        pou.interface?.variables ?? [],
-    }))
+      ]),
+    )
+
+    processedProjectData = addCppLocalVariables(processedProjectData)
+
+    const originalCppPousData = processedProjectData.pous
+      .filter((pou: PLCPou) => pou.body.language === 'cpp')
+      .map((pou) => ({
+        name: pou.name,
+        code: originalCppCodeByName.get(pou.name) ?? '',
+        variables:
+          /* istanbul ignore next -- defensive: interface may be undefined */
+          pou.interface?.variables ?? [],
+      }))
 
     processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
       if (pou.body.language === 'cpp') {
