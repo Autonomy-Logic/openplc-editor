@@ -22,6 +22,8 @@ beforeEach(() => {
       data: [1, 0, 255, 0, 1],
     }),
     debuggerSetVariable: jest.fn().mockResolvedValue({ success: true }),
+    debuggerWriteLicense: jest.fn().mockResolvedValue({ success: true, status: 0x7e }),
+    debuggerReadLicense: jest.fn().mockResolvedValue({ success: true, status: 0x7e, blob: [0x4f, 0x50, 0x4c, 0x43] }),
     debuggerVerifyMd5: jest.fn().mockResolvedValue({
       success: true,
       match: true,
@@ -229,6 +231,57 @@ describe('setVariable', () => {
     const result = await adapter.setVariable(5, true, new Uint8Array([1]))
 
     expect(result).toEqual({ success: false, error: 'Write failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// writeLicense
+// ---------------------------------------------------------------------------
+
+describe('writeLicense', () => {
+  it('delegates to bridge with the blob', async () => {
+    const blob = new Uint8Array([0x4f, 0x50, 0x4c, 0x43])
+    const result = await adapter.writeLicense(blob)
+
+    expect(window.bridge.debuggerWriteLicense).toHaveBeenCalledWith(blob)
+    expect(result).toEqual({ success: true, status: 0x7e })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.debuggerWriteLicense as jest.Mock).mockRejectedValue(new Error('Write failed'))
+    const result = await adapter.writeLicense(new Uint8Array([1]))
+
+    expect(result).toEqual({ success: false, error: 'Write failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// readLicense
+// ---------------------------------------------------------------------------
+
+describe('readLicense', () => {
+  it('rehydrates the blob into a Uint8Array', async () => {
+    const result = await adapter.readLicense()
+
+    expect(window.bridge.debuggerReadLicense).toHaveBeenCalled()
+    expect(result.success).toBe(true)
+    expect(result.blob).toBeInstanceOf(Uint8Array)
+    expect(Array.from(result.blob!)).toEqual([0x4f, 0x50, 0x4c, 0x43])
+  })
+
+  it('leaves blob undefined for empty/corrupt device states', async () => {
+    ;(window.bridge.debuggerReadLicense as jest.Mock).mockResolvedValue({ success: true, status: 0x83, empty: true })
+    const result = await adapter.readLicense()
+
+    expect(result.empty).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.debuggerReadLicense as jest.Mock).mockRejectedValue(new Error('Read failed'))
+    const result = await adapter.readLicense()
+
+    expect(result).toEqual({ success: false, error: 'Read failed' })
   })
 })
 

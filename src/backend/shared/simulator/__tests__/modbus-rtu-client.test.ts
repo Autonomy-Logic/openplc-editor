@@ -755,6 +755,153 @@ describe('ModbusRtuClient', () => {
   })
 
   // -----------------------------------------------------------------------
+  // writeLicense (FC 0x49) / readLicense (FC 0x4A) — OLS T16
+  // -----------------------------------------------------------------------
+  describe('writeLicense', () => {
+    it('returns success on SUCCESS status', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.writeLicense(new Uint8Array([0x4f, 0x50, 0x4c, 0x43]))
+      expect(result.success).toBe(true)
+      expect(result.status).toBe(ModbusDebugResponse.SUCCESS)
+    })
+
+    it('surfaces an error (TOO_LARGE) status as failure', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])),
+      )
+      const result = await client.writeLicense(new Uint8Array(999))
+      expect(result.success).toBe(false)
+      expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_BOUNDS)
+    })
+
+    it('returns error on function code mismatch', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.writeLicense(new Uint8Array([0x4f]))
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Function code mismatch')
+    })
+
+    it('returns error on too-short response', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_WRITE_LICENSE])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+      const result = await client.writeLicense(new Uint8Array([0x4f]))
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.writeLicense(new Uint8Array([0x4f]))
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  describe('readLicense', () => {
+    it('returns the blob on SUCCESS using a BE length', async () => {
+      await connectClient()
+      const blob = new Uint8Array([0x4f, 0x50, 0x4c, 0x43, 0xde, 0xad])
+      const payload = new Uint8Array(3 + blob.length)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload[1] = 0x00 // len hi
+      payload[2] = blob.length // len lo
+      payload.set(blob, 3)
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, payload))
+      const result = await client.readLicense()
+      expect(result.success).toBe(true)
+      expect(Array.from(result.blob!)).toEqual(Array.from(blob))
+      expect(result.blob![0]).toBe(0x4f) // magic 'O' — endianness sentinel
+    })
+
+    it('classifies LIC_EMPTY as success + empty (no blob)', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_EMPTY])))
+      const result = await client.readLicense()
+      expect(result.success).toBe(true)
+      expect(result.empty).toBe(true)
+      expect(result.blob).toBeUndefined()
+    })
+
+    it('classifies LIC_CORRUPT as success + corrupt (no blob)', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_CORRUPT])),
+      )
+      const result = await client.readLicense()
+      expect(result.success).toBe(true)
+      expect(result.corrupt).toBe(true)
+      expect(result.blob).toBeUndefined()
+    })
+
+    it('surfaces an error status as failure', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.ERROR_OUT_OF_MEMORY])),
+      )
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_MEMORY)
+    })
+
+    it('returns error on function code mismatch', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Function code mismatch')
+    })
+
+    it('returns error on incomplete length field', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete license response')
+    })
+
+    it('returns error on incomplete blob data', async () => {
+      await connectClient()
+      // len says 8, but only 1 blob byte follows
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00, 0x08, 0x01])),
+      )
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete license blob')
+    })
+
+    it('returns error on too-short response', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_READ_LICENSE])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // sendRequestImpl edge cases
   // -----------------------------------------------------------------------
   describe('sendRequestImpl edge cases', () => {
@@ -930,6 +1077,36 @@ describe('ModbusRtuClient', () => {
       await connectClient()
       mockSendRequest(client, 'non-error string')
       const result = await client.getBoardId()
+      expect(result.error).toBe('non-error string')
+    })
+
+    it('writeLicense handles response too short (<9 bytes)', async () => {
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.writeLicense(new Uint8Array([0x4f]))
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('writeLicense handles non-Error exception', async () => {
+      await connectClient()
+      mockSendRequest(client, 'non-error string')
+      const result = await client.writeLicense(new Uint8Array([0x4f]))
+      expect(result.error).toBe('non-error string')
+    })
+
+    it('readLicense handles response too short (<9 bytes)', async () => {
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('readLicense handles non-Error exception', async () => {
+      await connectClient()
+      mockSendRequest(client, 'non-error string')
+      const result = await client.readLicense()
       expect(result.error).toBe('non-error string')
     })
   })
