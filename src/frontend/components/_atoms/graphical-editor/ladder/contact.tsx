@@ -21,13 +21,8 @@ export type { ContactNode } from './utils/types'
 export const Contact = (block: ContactProps) => {
   const { selected, data, id } = block
   const pouName = useBoundPou()
-  const {
-    project: {
-      data: { pous },
-    },
-    ladderFlows,
-    ladderFlowActions: { updateNode },
-  } = useOpenPLCStore()
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
 
   const debugger_ = useDebugger()
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -150,7 +145,8 @@ export const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -216,7 +212,8 @@ export const Contact = (block: ContactProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -235,7 +232,8 @@ export const Contact = (block: ContactProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

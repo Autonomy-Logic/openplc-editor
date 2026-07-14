@@ -49,18 +49,10 @@ export const BlockNodeElement = <T extends object>({
 }) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    editorActions: { updateModelVariables, updateModelFBD },
-    libraries,
-    fbdFlows,
-    fbdFlowActions: { setNodes, setEdges },
-    project,
-    project: {
-      data: { pous },
-    },
-    projectActions: { updateVariable, deleteVariable },
-    snapshotActions: { pushToHistory },
-  } = useOpenPLCStore()
+  const { updateModelVariables, updateModelFBD } = useOpenPLCStore((state) => state.editorActions)
+  const { setNodes, setEdges } = useOpenPLCStore((state) => state.fbdFlowActions)
+  const { updateVariable, deleteVariable } = useOpenPLCStore((state) => state.projectActions)
+  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
 
   const {
     name: blockName,
@@ -82,9 +74,6 @@ export const BlockNodeElement = <T extends object>({
   const inputNameRef = useRef<HTMLInputElement>(null)
   const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
 
-  const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
-    nodeId: nodeId ?? '',
-  })
   /**
    * useEffect to focus the name input when the correct block type is selected
    */
@@ -118,6 +107,16 @@ export const BlockNodeElement = <T extends object>({
     if (blockNameValue === blockName) {
       return
     }
+
+    const { project, libraries, fbdFlows } = useOpenPLCStore.getState()
+    const { pou, rung, node, variables, edges } = getFBDPouVariablesRungNodeAndEdges(
+      pouName,
+      project.data.pous,
+      fbdFlows,
+      {
+        nodeId: nodeId ?? '',
+      },
+    )
 
     const libraryBlock = libraries.system.flatMap((block) => block.pous).find((pou) => pou.name === blockNameValue)
 
@@ -331,17 +330,13 @@ export const BlockNodeElement = <T extends object>({
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
   const pouName = useBoundPou()
-  const {
-    project,
-    project: {
-      data: { pous },
-    },
-    projectActions: { createVariable },
-    snapshotActions: { pushToHistory },
-    libraries: { user: userLibraries },
-    fbdFlows,
-    fbdFlowActions: { updateNode, setNodes, setEdges },
-  } = useOpenPLCStore()
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
+  const { updateNode, setNodes, setEdges } = useOpenPLCStore((state) => state.fbdFlowActions)
+  // Pou-scoped subscription: immer's structural sharing keeps this flow's
+  // identity stable when other POUs' flows (or unrelated slices) change.
+  const flow = useOpenPLCStore((state) => state.fbdFlows.find((f) => f.name === pouName))
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as BlockVariant)
 
@@ -349,7 +344,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
 
-  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
+  const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, flow ? [flow] : [], {
     nodeId: id ?? '',
   })
 
@@ -456,6 +451,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
+    const { fbdFlows } = useOpenPLCStore.getState()
     const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
@@ -508,7 +504,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
-        const pouData = project.data.pous.find((p) => p.name === pouName)
+        const pouData = pous.find((p) => p.name === pouName)
         pushToHistory(pouName, {
           variables: pouData?.interface?.variables ?? [],
           body: pouData?.body.value,
@@ -550,6 +546,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
+    const { fbdFlows, libraries } = useOpenPLCStore.getState()
     const { rung, node, pou } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
@@ -558,7 +555,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
     if (!variant) return
 
-    const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+    const libMatch = libraries.user.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
     const libPou = pous.find((pou) => pou.name === libMatch.name)
