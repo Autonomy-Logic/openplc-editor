@@ -148,6 +148,52 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     return result.success
   }, [projectPort])
 
+  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
+  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
+  // for hals.json entries) so two boards sharing a `cacheKey` value
+  // don't see each other's last-entered IP.  Lives on a ref so it
+  // survives across re-renders without triggering them.
+  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
+
+  // Build resolver context from current store state on each call —
+  // captures the user's freshest screen edits without forcing the
+  // user to save first. Shared by the interactive debugger flow
+  // (`resolveDebugConfigWithUx`) and the non-interactive post-flash
+  // probe so both resolve the SAME baud / port / slaveId the board's
+  // debug spec dictates. `boardTarget` selects the prompt-cache bucket.
+  const buildDebugResolverContext = useCallback(
+    (boardTarget: string): DebugResolverContext => {
+      const store = useOpenPLCStore.getState()
+      const cfg = store.deviceDefinitions.configuration
+      const rtConn = store.runtimeConnection
+      // `vendorScreenData` is already keyed by section ID (e.g.
+      // `modbus_rtu`); resolver state's `screens` shape matches
+      // 1:1 so we pass it straight through.
+      const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
+      const promptCache = promptCacheRef.current[boardTarget] ?? {}
+      return {
+        state: {
+          configuration: {
+            deviceBoard: cfg.deviceBoard,
+            ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
+            ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
+          },
+          screens,
+          runtimeConnection: {
+            ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
+            ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
+          },
+          promptCache,
+        },
+        capabilities: {
+          runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
+          jwtToken: Boolean(rtConn.jwtToken),
+        },
+      }
+    },
+    [runtime],
+  )
+
   // ---------------------------------------------------------------------------
   // Build (Compile)
   // ---------------------------------------------------------------------------
@@ -322,11 +368,30 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // then persist the result. Strictly best-effort: any failure is logged
         // and swallowed so it can never affect the upload result above.
         if (result.success && resolveTargetCapabilities(currentBoardInfo).directUsbUpload) {
-          const port = deviceDefinitions.configuration.communicationPort
-          if (port) {
+          // Resolve the SAME RTU params the debugger uses (baud / port /
+          // slaveId come from the board debug spec — e.g. espressif's
+          // `rtu_baud_rate`, default "115200"), instead of hard-coding
+          // 115200/slaveId 1 which fails for boards configured otherwise.
+          // Non-interactive: no picker/prompt dialogs during a build; if a
+          // direct RTU config doesn't resolve, skip the probe (best-effort,
+          // the upload is never affected).
+          const boardTarget = deviceDefinitions.configuration.deviceBoard
+          const spec = currentBoardInfo?.debug
+          const outcome = spec
+            ? resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), undefined)
+            : undefined
+          if (outcome?.kind === 'config' && outcome.config.connectionType === 'rtu') {
+            const cp = outcome.config.connectionParams
             try {
+              // Spec params may be strings (e.g. baudRate default "115200");
+              // coerce to numbers for the probe bridge (baudRate?: number,
+              // slaveId?: number), and the port to a string.
               const probe = await window.bridge.probeDeviceStorage(
-                { port, baudRate: 115200, slaveId: 1 },
+                {
+                  port: String(cp.port),
+                  baudRate: cp.baudRate != null ? Number(cp.baudRate) : undefined,
+                  slaveId: cp.slaveId != null ? Number(cp.slaveId) : undefined,
+                },
                 { hasLicenseStore: resolveTargetCapabilities(currentBoardInfo).licenseStore },
               )
               // Debug: full response in the DevTools console.
@@ -370,6 +435,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 message: `Device storage probe error: ${getErrorMessage(probeErr)}`,
               })
             }
+          } else {
+            // pick / prompt / error / unsupported, or a non-RTU channel:
+            // best-effort — do NOT open UX dialogs during a build, just log
+            // and skip the probe.
+            addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message: `Device probe skipped: no non-interactive RTU debug config (${outcome?.kind ?? 'no spec'})`,
+            })
           }
         }
       } catch (err: unknown) {
@@ -394,6 +468,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       jwtToken,
       runtime,
       requestConsoleFollow,
+      buildDebugResolverContext,
     ],
   )
 
@@ -704,13 +779,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // user cancelled or no config could be resolved.
   // ---------------------------------------------------------------------------
 
-  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
-  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
-  // for hals.json entries) so two boards sharing a `cacheKey` value
-  // don't see each other's last-entered IP.  Lives on a ref so it
-  // survives across re-renders without triggering them.
-  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
-
   const resolveDebugConfigWithUx = useCallback(
     async (boardTarget: string, spec: DebugSpec | undefined): Promise<DebugConnectionConfig | null> => {
       if (!spec) {
@@ -723,47 +791,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return null
       }
 
-      // Build resolver context from current store state on each call —
-      // captures the user's freshest screen edits without forcing the
-      // user to save first.
-      const buildContext = (): DebugResolverContext => {
-        const store = useOpenPLCStore.getState()
-        const cfg = store.deviceDefinitions.configuration
-        const rtConn = store.runtimeConnection
-        // `vendorScreenData` is already keyed by section ID (e.g.
-        // `modbus_rtu`); resolver state's `screens` shape matches
-        // 1:1 so we pass it straight through.
-        const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
-        const cacheBucketKey = `${cfg.deviceBoard}`
-        const promptCache = promptCacheRef.current[cacheBucketKey] ?? {}
-        return {
-          state: {
-            configuration: {
-              deviceBoard: cfg.deviceBoard,
-              ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
-              ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
-            },
-            screens,
-            runtimeConnection: {
-              ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
-              ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
-            },
-            promptCache,
-          },
-          capabilities: {
-            runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
-            jwtToken: Boolean(rtConn.jwtToken),
-          },
-        }
-      }
-
       let selectedChannelIndex: number | undefined
       // Loop: pickers/prompts re-invoke the resolver with extra state
       // until it returns config or error/unsupported/cancelled.
       // Capped at 8 iterations as a defensive guard against spec
       // bugs that could otherwise loop forever.
       for (let iteration = 0; iteration < 8; iteration += 1) {
-        const outcome = resolveDebugConnection(spec, buildContext(), selectedChannelIndex)
+        const outcome = resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), selectedChannelIndex)
         if (outcome.kind === 'config') {
           return outcome.config
         }
@@ -800,7 +834,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
       return null
     },
-    [runtime],
+    [buildDebugResolverContext],
   )
 
   // ---------------------------------------------------------------------------
