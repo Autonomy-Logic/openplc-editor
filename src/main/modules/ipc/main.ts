@@ -70,9 +70,11 @@ async function connectWithRetries(
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       await client.connect()
+      logger.info(`[device-probe] serial connected on attempt ${attempt + 1}/${attempts}`)
       return
     } catch (error) {
       lastError = error
+      logger.warn(`[device-probe] connect attempt ${attempt + 1}/${attempts} failed: ${getErrorMessage(error)}`)
       if (attempt < attempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, backoffMs))
       }
@@ -2171,8 +2173,10 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
   }> => {
     const probedAt = new Date().toISOString()
+    logger.info(`[device-probe] start: port=${connectionParams.port ?? 'none'} hasLicenseStore=${opts.hasLicenseStore}`)
 
     if (!connectionParams.port) {
+      logger.warn('[device-probe] aborted: no port')
       return { success: false, probedAt, error: 'Port is required for the device storage probe' }
     }
 
@@ -2189,12 +2193,14 @@ class MainProcessBridge implements MainIpcModule {
       await connectWithRetries(client, { attempts: 5, backoffMs: 800 })
     } catch (error) {
       // Connect never came up after all retries — best-effort, don't throw.
+      logger.warn(`[device-probe] serial did not come up after retries: ${getErrorMessage(error)}`)
       return { success: false, probedAt, error: getErrorMessage(error) }
     }
 
     try {
       const anchor = mapArduinoAnchorResult(await client.getBoardId())
       const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
+      logger.info(`[device-probe] boardId: hasId=${hasId} anchor=${anchor.anchorHex ?? 'none'}`)
 
       let license:
         | {
@@ -2216,11 +2222,15 @@ class MainProcessBridge implements MainIpcModule {
           unsupported: lic.status === 0x85,
           blob: lic.blob ? Array.from(lic.blob) : undefined,
         }
+        logger.info(
+          `[device-probe] license: status=0x${(lic.status ?? 0).toString(16)} present=${lic.status === 0x7e} empty=${!!lic.empty} corrupt=${!!lic.corrupt} unsupported=${lic.status === 0x85} blobLen=${lic.blob ? lic.blob.length : 0}`,
+        )
       } else {
         // Board can't store a license — report unsupported without a read.
         license = { unsupported: true, present: false }
       }
 
+      logger.info('[device-probe] done (success)')
       return {
         success: true,
         probedAt,
@@ -2230,10 +2240,12 @@ class MainProcessBridge implements MainIpcModule {
         license,
       }
     } catch (error) {
+      logger.warn(`[device-probe] read failed after connect: ${getErrorMessage(error)}`)
       return { success: false, probedAt, error: getErrorMessage(error) }
     } finally {
       // Always release the serial — the debugger opens it on demand later.
       client.disconnect()
+      logger.info('[device-probe] serial closed')
     }
   }
 

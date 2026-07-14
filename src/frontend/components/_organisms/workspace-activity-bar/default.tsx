@@ -329,6 +329,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 { port, baudRate: 115200, slaveId: 1 },
                 { hasLicenseStore: resolveTargetCapabilities(currentBoardInfo).licenseStore },
               )
+              // Debug: full response in the DevTools console.
+              console.log('[device-probe] response:', probe)
               if (probe.success) {
                 useOpenPLCStore.getState().deviceActions.setDeviceProbeInfo({
                   probedAt: probe.probedAt,
@@ -336,6 +338,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   anchorHex: probe.anchorHex,
                   anchor: probe.anchor,
                   license: probe.license,
+                })
+                const lic = probe.license
+                const licenseSummary = lic?.present
+                  ? `present (${lic.blob?.length ?? 0} bytes)`
+                  : lic?.empty
+                    ? 'empty'
+                    : lic?.corrupt
+                      ? 'corrupt'
+                      : lic?.unsupported
+                        ? 'unsupported'
+                        : 'unknown'
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'info',
+                  message: `Device probe: id=${probe.hasId ? (probe.anchorHex ?? '(present)') : 'none'} | license=${licenseSummary}`,
                 })
               } else {
                 addLog({
@@ -346,6 +363,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               }
             } catch (probeErr: unknown) {
               // best-effort: log only, never interrupt the upload flow.
+              console.error('[device-probe] error:', probeErr)
               addLog({
                 id: crypto.randomUUID(),
                 level: 'warning',
