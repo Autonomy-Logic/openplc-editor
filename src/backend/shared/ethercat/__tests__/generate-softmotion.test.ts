@@ -116,12 +116,23 @@ describe('generateSoftMotionArtifacts', () => {
       expect(serializeSoftMotionAxisGlobalsToST(makeProject([]))).toBe('')
     })
 
-    it('declares each axis as a VAR_GLOBAL of type AXIS_REF_SM3', () => {
+    it('declares each axis as a bare top-level VAR_GLOBAL of type AXIS_REF_SM3', () => {
       const st = serializeSoftMotionAxisGlobalsToST(makeProject([makeDevice('X_Axis')]))
-      expect(st).toContain('VAR_GLOBAL')
       expect(st).toContain('X_Axis : AXIS_REF_SM3;')
+      // Bare top-level block (ambient global) — NOT wrapped in a CONFIGURATION,
+      // so the axis resolves without VAR_EXTERNAL.
+      expect(st.startsWith('VAR_GLOBAL')).toBe(true)
       expect(st).toContain('END_VAR')
-      expect(st).toContain('CONFIGURATION')
+      expect(st).not.toContain('CONFIGURATION')
+    })
+
+    it('lists axes in softMotionAxisNames order (line N+1 = axis N)', () => {
+      const project = makeProject([makeDevice('X_Axis')])
+      const st = serializeSoftMotionAxisGlobalsToST(project)
+      const names = softMotionAxisNames(project)
+      const lines = st.split('\n')
+      // line 0 = VAR_GLOBAL, line 1 = first axis
+      expect(lines[1]).toContain(names[0])
     })
   })
 

@@ -186,26 +186,26 @@ export function injectAxisExternals(pou: PLCPou, axisNames: string[]): PLCPou {
  * against the same public axis the compiler generates — without the user
  * declaring anything. Returns '' when the project has no axes.
  *
- * Only the axis references are declared (not the located PDO scalar globals),
- * because those are internal to the generated drive bridge and never named in
- * user code. `AXIS_REF_SM3` itself comes from the bundled plcopen-softmotion
- * stlib the LSP already ingests.
+ * Emitted as a **bare top-level `VAR_GLOBAL` block** (not wrapped in a
+ * CONFIGURATION): strucpp registers top-level global blocks into the ambient
+ * global scope, so a POU can reference the axis directly — no `VAR_EXTERNAL`
+ * needed, which is what keeps the editor documents byte-for-byte what the user
+ * wrote (no injected declarations shifting line numbers). Only the axis
+ * references are declared (not the located PDO scalar globals) — those are
+ * internal to the generated drive bridge and never named in user code.
+ * `AXIS_REF_SM3` itself comes from the bundled plcopen-softmotion stlib the LSP
+ * already ingests.
+ *
+ * The declaration order matches `softMotionAxisNames`, so line N+1 of this
+ * document (line 0 is `VAR_GLOBAL`) is axis N — the go-to-definition redirect
+ * relies on that to map a click back to its drive.
  */
 export function serializeSoftMotionAxisGlobalsToST(project: PLCProjectData): string {
   const axes = collectAxes(project)
   if (axes.length === 0) return ''
 
   const decls = axes.map((a) => `  ${a.axisName} : AXIS_REF_SM3;`).join('\n')
-  return [
-    'CONFIGURATION __softmotion_axes__',
-    'VAR_GLOBAL',
-    decls,
-    'END_VAR',
-    'RESOURCE __softmotion_res__ ON PLC',
-    'END_RESOURCE',
-    'END_CONFIGURATION',
-    '',
-  ].join('\n')
+  return ['VAR_GLOBAL', decls, 'END_VAR', ''].join('\n')
 }
 
 /**

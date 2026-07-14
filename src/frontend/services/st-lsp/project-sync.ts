@@ -25,11 +25,7 @@
  * `refreshStlibs()` on the service.
  */
 
-import {
-  injectAxisExternals,
-  serializeSoftMotionAxisGlobalsToST,
-  softMotionAxisNames,
-} from '../../../backend/shared/ethercat/generate-softmotion'
+import { serializeSoftMotionAxisGlobalsToST } from '../../../backend/shared/ethercat/generate-softmotion'
 import type { PLCDataType, PLCPou, PLCRemoteDevice } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
@@ -142,20 +138,15 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     seenUris.add(DATA_TYPES_URI)
     seenUris.add(SOFTMOTION_GLOBALS_URI)
 
-    // Inject the same axis VAR_EXTERNALs the compiler generates, so a POU that
-    // names an axis (`MC_*(Axis := X_Axis)`) resolves it in the editor exactly
-    // as it will at compile time. Derived from the live remote-device set.
-    const axisNames = softMotionAxisNames({
-      remoteDevices: openPLCStoreBase.getState().project.data.remoteDevices,
-    } as never)
-
     for (const pou of pous) {
       seenNames.add(pou.name)
       const nextUri = uriForPou(pou)
       const previousUri = snapshot.uriByName.get(pou.name)
-      const { text: nextText, bodyLineOffset } = serializePouSignatureToSTWithBodyOffset(
-        injectAxisExternals(pou, axisNames),
-      )
+      // POUs are serialised verbatim — no axis VAR_EXTERNAL injection here.
+      // Axes are surfaced as ambient globals (SOFTMOTION_GLOBALS_URI), so the
+      // editor documents keep the exact line layout the user wrote and
+      // go-to-definition line mapping stays correct.
+      const { text: nextText, bodyLineOffset } = serializePouSignatureToSTWithBodyOffset(pou)
 
       // POU name unchanged but URI switched (body language change).
       // Send didClose for the previous URI before didOpen on the new.
@@ -220,12 +211,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // doc so editor code resolves the new axis without a POU edit.
   const unsubscribeRemoteDevices = openPLCStoreBase.subscribe(
     (state) => state.project.data.remoteDevices,
-    (remoteDevices) => {
-      reconcileSoftMotionGlobals(remoteDevices)
-      // Axis set changed → re-publish POUs so their injected VAR_EXTERNALs
-      // pick up added/removed/renamed axes without waiting on a POU edit.
-      reconcile(openPLCStoreBase.getState().project.data.pous)
-    },
+    (remoteDevices) => reconcileSoftMotionGlobals(remoteDevices),
   )
 
   // Initial reconcile against whatever is already in the store.  The
