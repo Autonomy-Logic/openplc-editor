@@ -286,7 +286,19 @@ class HardwareModule {
             // Forward any capability overrides the manifest declares (e.g. a
             // runtime-v4 GPIO board setting `pinMapping: true`).
             // `resolveTargetCapabilities` merges these over the preset.
-            capabilities: device.capabilities,
+            //
+            // Derive the `licenseStore` UX capability from the same manifest
+            // field that drives `-DVPP_HAS_LICENSE_STORE` on the build side
+            // (`device.hal.licenseStore`, D60): presence → `true` so a future
+            // licensing UI can offer the anchor → activate → write flow only
+            // on boards whose VPP ships the storage backend. Merged on top of
+            // (and overridable by) an explicit `device.capabilities` block,
+            // mirroring how `vppIo` reaches `resolveTargetCapabilities`.
+            capabilities:
+              device.hal.licenseStore &&
+              (Array.isArray(device.hal.licenseStore) ? device.hal.licenseStore.length > 0 : true)
+                ? { ...device.capabilities, licenseStore: true }
+                : device.capabilities,
             vpp: {
               packageId: manifest.package.id,
               vendor: manifest.package.vendor.name,

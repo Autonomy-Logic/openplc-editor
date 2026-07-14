@@ -31,6 +31,10 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: false,
   isInProcessSimulator: true,
   directUsbUpload: true,
+  // No shipped Simulator VPP declares a license-store backend today, so
+  // the licensing UX stays hidden. Follows the manifest, not the kind —
+  // a Simulator VPP that shipped one would flip this to `true`.
+  licenseStore: false,
 }
 
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
@@ -47,6 +51,8 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: false,
   isInProcessSimulator: false,
   directUsbUpload: false,
+  // Runtime v3 has no VPP layer and thus no license-store backend.
+  licenseStore: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
@@ -65,6 +71,11 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: true,
   isInProcessSimulator: false,
   directUsbUpload: false,
+  // "Plain" Runtime v4 has no VPP backplane and no license-store
+  // backend. A VPP board (SLM-RP4 etc.) whose manifest declares
+  // `hal.licenseStore` overrides this to `true` via the merged
+  // capability block — same path as `vppIo`.
+  licenseStore: false,
 }
 
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
@@ -84,4 +95,8 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: false,
   isInProcessSimulator: false,
   directUsbUpload: true,
+  // Arduino-CLI VPP boards (Opta, P1AM) that ship a `hal.licenseStore`
+  // backend flip this on via their merged capability block; the plain
+  // preset stays `false`.
+  licenseStore: false,
 }

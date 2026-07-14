@@ -94,6 +94,46 @@ describe('resolveTargetCapabilities', () => {
     expect(caps.debuggerTransports).toEqual(ARDUINO_CLI_CAPABILITIES.debuggerTransports)
   })
 
+  it('leaves licenseStore false for a plain Runtime v4 board (no VPP backend declared)', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler' })
+    expect(caps.licenseStore).toBe(false)
+  })
+
+  it('leaves licenseStore false for a v4-derived VPP board that does not declare hal.licenseStore', () => {
+    // vppIo flips on from the vpp hint, but licenseStore only follows an
+    // explicit merged capability — presence of the backend, not VPP-ness.
+    const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: { kind: 'slm-rp4' } })
+    expect(caps.vppIo).toBe(true)
+    expect(caps.licenseStore).toBe(false)
+  })
+
+  it('flips licenseStore on when the board declares hal.licenseStore (merged into capabilities)', () => {
+    // The platform board loader merges `licenseStore: true` into the
+    // capability block when the VPP manifest declares `hal.licenseStore`
+    // — the resolver just honours the merged flag over the preset.
+    const caps = resolveTargetCapabilities({
+      compiler: 'openplc-compiler',
+      capabilities: { vppIo: true, licenseStore: true },
+    })
+    expect(caps.licenseStore).toBe(true)
+    // Unrelated v4 capabilities preserved.
+    expect(caps.modbusTcpServer).toBe(true)
+    expect(caps.debuggerTransports).toEqual(RUNTIME_V4_CAPABILITIES.debuggerTransports)
+  })
+
+  it('flips licenseStore on for an arduino-cli VPP board that ships the backend', () => {
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { vppIo: true, licenseStore: true },
+    })
+    expect(caps.licenseStore).toBe(true)
+    expect(caps.arduinoApiCompletions).toBe(true)
+  })
+
+  it('leaves licenseStore false when no board info is provided', () => {
+    expect(resolveTargetCapabilities(undefined).licenseStore).toBe(false)
+  })
+
   it('handles a board with capabilities but no compiler (web orchestrator devices)', () => {
     // openplc-web populates capabilities directly on vPLC entries with
     // no `compiler` field. Resolver must take the capabilities verbatim
@@ -148,5 +188,12 @@ describe('preset shapes', () => {
     expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.pythonFunctionBlocks).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.debuggerTransports).toEqual(['modbus-serial', 'modbus-tcp'])
+  })
+
+  it('every shipped preset defaults licenseStore to false (weak default -> UNSUPPORTED)', () => {
+    expect(SIMULATOR_CAPABILITIES.licenseStore).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.licenseStore).toBe(false)
+    expect(RUNTIME_V4_CAPABILITIES.licenseStore).toBe(false)
+    expect(ARDUINO_CLI_CAPABILITIES.licenseStore).toBe(false)
   })
 })
