@@ -246,6 +246,18 @@ describe('redirectDefinitionToStore', () => {
     }
   })
 
+  it('redirects a resource-global to the Resource editor', () => {
+    setProjectPous([])
+    const handled = redirectDefinitionToStore({
+      uri: 'inmemory://globals/__resource__.st',
+      range: { start: { line: 2, character: 4 }, end: { line: 2, character: 15 } },
+    })
+    expect(handled).toBe(true)
+    const state = openPLCStoreBase.getState()
+    expect(state.editor.type).toBe('plc-resource')
+    expect(state.editor.meta.name).toBe('Resource')
+  })
+
   it('returns false for a SoftMotion globals line with no matching axis', () => {
     setProjectPous([])
     expect(

@@ -49,6 +49,14 @@ export const DATA_TYPES_URI = 'inmemory://datatypes/__project__.st'
  */
 export const SOFTMOTION_GLOBALS_URI = 'inmemory://softmotion/__axes__.st'
 
+/**
+ * URI for the synthesized resource-globals document — the project's
+ * configuration-level `VAR_GLOBAL`s wrapped in a `CONFIGURATION` block, so a
+ * POU's `VAR_EXTERNAL` resolves against a matching global (strucpp requires a
+ * configuration-scoped global for that). Single fixed URI per session.
+ */
+export const RESOURCE_GLOBALS_URI = 'inmemory://globals/__resource__.st'
+
 /** Public service the rest of the renderer talks to. */
 export interface StLspService {
   /**

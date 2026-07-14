@@ -26,12 +26,20 @@
  */
 
 import { serializeSoftMotionAxisGlobalsToST } from '../../../backend/shared/ethercat/generate-softmotion'
-import type { PLCDataType, PLCPou, PLCRemoteDevice } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCRemoteDevice, PLCVariable } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
 import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
+import { serializeResourceGlobalsToST } from '../../utils/PLC/resource-globals-serializer'
 import { deleteBodyLineOffset, setBodyLineOffset } from '../lsp-shared/body-offsets'
-import { DATA_TYPES_URI, pouUri, SOFTMOTION_GLOBALS_URI, type StLspService, stubUri } from './types'
+import {
+  DATA_TYPES_URI,
+  pouUri,
+  RESOURCE_GLOBALS_URI,
+  SOFTMOTION_GLOBALS_URI,
+  type StLspService,
+  stubUri,
+} from './types'
 
 /**
  * Determines whether a POU's source goes through the live-body
@@ -79,52 +87,46 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   const snapshot = emptySnapshot()
   let disposed = false
 
-  function reconcileDataTypes(dataTypes: PLCDataType[]): void {
+  // Reconcile a single fixed-URI synthesized document (data types, resource
+  // globals, softmotion axes …) against the worker: open on first non-empty
+  // text, didChange on a text change, didClose when it becomes empty. Centralised
+  // so every synthesized doc shares one diff engine instead of copy-pasting it.
+  function reconcileSyntheticDoc(uri: string, nextText: string): void {
     if (disposed) return
-    // Single fixed-URI document that carries the whole TYPE block.
-    // Empty `dataTypes` (or types that all serialise to nothing) →
-    // close any previously-open document so strucpp doesn't keep a
-    // stale set around.
-    const nextText = serializeDataTypesToST(dataTypes)
-    const previousText = snapshot.contentByUri.get(DATA_TYPES_URI)
+    const previousText = snapshot.contentByUri.get(uri)
     if (nextText.length === 0) {
       if (previousText !== undefined) {
-        service.closeDocument(DATA_TYPES_URI)
-        snapshot.contentByUri.delete(DATA_TYPES_URI)
+        service.closeDocument(uri)
+        snapshot.contentByUri.delete(uri)
       }
       return
     }
     if (previousText === undefined) {
-      service.openDocument(DATA_TYPES_URI, nextText)
+      service.openDocument(uri, nextText)
     } else if (previousText !== nextText) {
       snapshot.version += 1
-      service.changeDocument(DATA_TYPES_URI, nextText, snapshot.version)
+      service.changeDocument(uri, nextText, snapshot.version)
     }
-    snapshot.contentByUri.set(DATA_TYPES_URI, nextText)
+    snapshot.contentByUri.set(uri, nextText)
   }
 
-  // Single fixed-URI document carrying `VAR_GLOBAL <axis> : AXIS_REF_SM3` for
-  // every recognized CiA 402 drive, so editor code that names an axis resolves
-  // it (the LSP analyses every open document together, and AXIS_REF_SM3 comes
-  // from the bundled stlib). Mirrors reconcileDataTypes.
+  // The whole `TYPE … END_TYPE` block, so any POU that references a user data
+  // type resolves it.
+  function reconcileDataTypes(dataTypes: PLCDataType[]): void {
+    reconcileSyntheticDoc(DATA_TYPES_URI, serializeDataTypesToST(dataTypes))
+  }
+
+  // The project's configuration-level `VAR_GLOBAL`s wrapped in a CONFIGURATION,
+  // so a POU's `VAR_EXTERNAL` resolves against a matching global.
+  function reconcileResourceGlobals(globals: PLCVariable[]): void {
+    reconcileSyntheticDoc(RESOURCE_GLOBALS_URI, serializeResourceGlobalsToST(globals))
+  }
+
+  // A `VAR_GLOBAL <axis> : AXIS_REF_SM3` per recognized CiA 402 drive, so editor
+  // code that names an axis resolves it (AXIS_REF_SM3 comes from the bundled
+  // stlib the LSP already ingests).
   function reconcileSoftMotionGlobals(remoteDevices: PLCRemoteDevice[] | undefined): void {
-    if (disposed) return
-    const nextText = serializeSoftMotionAxisGlobalsToST({ remoteDevices } as never)
-    const previousText = snapshot.contentByUri.get(SOFTMOTION_GLOBALS_URI)
-    if (nextText.length === 0) {
-      if (previousText !== undefined) {
-        service.closeDocument(SOFTMOTION_GLOBALS_URI)
-        snapshot.contentByUri.delete(SOFTMOTION_GLOBALS_URI)
-      }
-      return
-    }
-    if (previousText === undefined) {
-      service.openDocument(SOFTMOTION_GLOBALS_URI, nextText)
-    } else if (previousText !== nextText) {
-      snapshot.version += 1
-      service.changeDocument(SOFTMOTION_GLOBALS_URI, nextText, snapshot.version)
-    }
-    snapshot.contentByUri.set(SOFTMOTION_GLOBALS_URI, nextText)
+    reconcileSyntheticDoc(SOFTMOTION_GLOBALS_URI, serializeSoftMotionAxisGlobalsToST({ remoteDevices } as never))
   }
 
   function reconcile(pous: PLCPou[]): void {
@@ -132,10 +134,11 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
 
     const seenNames = new Set<string>()
     const seenUris = new Set<string>()
-    // The data-types and SoftMotion-globals documents survive every POU
-    // reconcile — mark their URIs as seen so the catch-all cleanup loop below
-    // doesn't drop them.
+    // The synthesized documents (data types, resource globals, SoftMotion axes)
+    // survive every POU reconcile — mark their URIs as seen so the catch-all
+    // cleanup loop below doesn't drop them.
     seenUris.add(DATA_TYPES_URI)
+    seenUris.add(RESOURCE_GLOBALS_URI)
     seenUris.add(SOFTMOTION_GLOBALS_URI)
 
     for (const pou of pous) {
@@ -206,6 +209,12 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     (state) => state.project.data.dataTypes,
     (dataTypes) => reconcileDataTypes(dataTypes),
   )
+  // Resource globals live under the configuration and change independently of
+  // POUs, so a POU's VAR_EXTERNAL resolves without waiting on a POU edit.
+  const unsubscribeResourceGlobals = openPLCStoreBase.subscribe(
+    (state) => state.project.data.configurations.resource.globalVariables,
+    (globals) => reconcileResourceGlobals(globals),
+  )
   // SoftMotion axis globals derive from the EtherCAT remote devices — adding,
   // renaming, or enabling a CiA 402 drive must refresh the synthesized globals
   // doc so editor code resolves the new axis without a POU edit.
@@ -215,9 +224,10 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   )
 
   // Initial reconcile against whatever is already in the store.  The
-  // data types and axis globals load first so any POU that references
+  // synthesized globals/types load first so any POU that references
   // them resolves on the first didOpen, not on a follow-up didChange.
   reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
+  reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
   reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
   reconcile(openPLCStoreBase.getState().project.data.pous)
 
@@ -225,6 +235,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     resync() {
       if (disposed) return
       reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
+      reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
       reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
       reconcile(openPLCStoreBase.getState().project.data.pous)
     },
@@ -244,6 +255,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       disposed = true
       unsubscribePous()
       unsubscribeDataTypes()
+      unsubscribeResourceGlobals()
       unsubscribeRemoteDevices()
       // Close every doc we'd opened so the worker stays consistent
       // if the service is restarted in the same session.

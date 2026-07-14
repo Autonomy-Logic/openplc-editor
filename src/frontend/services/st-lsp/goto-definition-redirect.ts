@@ -42,7 +42,7 @@ import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
-import { DATA_TYPES_URI, parsePouUri, SOFTMOTION_GLOBALS_URI } from './types'
+import { DATA_TYPES_URI, parsePouUri, RESOURCE_GLOBALS_URI, SOFTMOTION_GLOBALS_URI } from './types'
 
 /**
  * Map an LSP line in the synthesised datatypes document to the
@@ -155,8 +155,43 @@ function redirectSoftMotionAxis(lspLine: number): boolean {
   return false
 }
 
+/**
+ * Open the Resource editor (where configuration-level globals are declared),
+ * mirroring the project-tree click path. Used to redirect go-to-definition on a
+ * user global to the globals table instead of the synthesised globals doc.
+ */
+function openResourceEditor(): boolean {
+  const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
+    name: 'Resource',
+    path: '/data/configuration/resource',
+    elementType: { type: 'resource' },
+  }
+  const {
+    editorActions: { setEditor, addModel, getEditorFromEditors },
+    tabsActions: { updateTabs, setSelectedTab },
+  } = openPLCStoreBase.getState()
+  updateTabs(tabProps)
+  const existing = getEditorFromEditors('Resource')
+  if (existing) {
+    addModel(existing)
+    setEditor(existing)
+  } else {
+    const model = CreateEditorObjectFromTab(tabProps)
+    addModel(model)
+    setEditor(model)
+  }
+  setSelectedTab('Resource')
+  return true
+}
+
 export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
   const target = normaliseLocation(loc)
+
+  // Resource-globals doc → open the Resource editor (globals table) rather than
+  // the synthesised (non-editable) CONFIGURATION declaration.
+  if (target.uri === RESOURCE_GLOBALS_URI) {
+    return openResourceEditor()
+  }
 
   // SoftMotion axis globals doc → open the owning drive's config screen rather
   // than the synthesised (non-editable) global declaration.
