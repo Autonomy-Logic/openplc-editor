@@ -394,9 +394,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 },
                 { hasLicenseStore: resolveTargetCapabilities(currentBoardInfo).licenseStore },
               )
-              // Debug: full response in the DevTools console.
-              console.log('[device-probe] response:', probe)
               if (probe.success) {
+                // Store internally only — the probe is silent to the user.
                 useOpenPLCStore.getState().deviceActions.setDeviceProbeInfo({
                   probedAt: probe.probedAt,
                   hasId: probe.hasId,
@@ -404,46 +403,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   anchor: probe.anchor,
                   license: probe.license,
                 })
-                const lic = probe.license
-                const licenseSummary = lic?.present
-                  ? `present (${lic.blob?.length ?? 0} bytes)`
-                  : lic?.empty
-                    ? 'empty'
-                    : lic?.corrupt
-                      ? 'corrupt'
-                      : lic?.unsupported
-                        ? 'unsupported'
-                        : 'unknown'
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'info',
-                  message: `Device probe: id=${probe.hasId ? (probe.anchorHex ?? '(present)') : 'none'} | license=${licenseSummary}`,
-                })
-              } else {
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'warning',
-                  message: `Device storage probe failed: ${probe.error ?? 'unknown error'}`,
-                })
               }
-            } catch (probeErr: unknown) {
-              // best-effort: log only, never interrupt the upload flow.
-              console.error('[device-probe] error:', probeErr)
-              addLog({
-                id: crypto.randomUUID(),
-                level: 'warning',
-                message: `Device storage probe error: ${getErrorMessage(probeErr)}`,
-              })
+            } catch {
+              // best-effort: never interrupt the upload flow.
             }
-          } else {
-            // pick / prompt / error / unsupported, or a non-RTU channel:
-            // best-effort — do NOT open UX dialogs during a build, just log
-            // and skip the probe.
-            addLog({
-              id: crypto.randomUUID(),
-              level: 'info',
-              message: `Device probe skipped: no non-interactive RTU debug config (${outcome?.kind ?? 'no spec'})`,
-            })
           }
         }
       } catch (err: unknown) {

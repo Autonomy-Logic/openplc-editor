@@ -70,11 +70,9 @@ async function connectWithRetries(
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       await client.connect()
-      logger.info(`[device-probe] serial connected on attempt ${attempt + 1}/${attempts}`)
       return
     } catch (error) {
       lastError = error
-      logger.warn(`[device-probe] connect attempt ${attempt + 1}/${attempts} failed: ${getErrorMessage(error)}`)
       if (attempt < attempts - 1) {
         await new Promise((resolve) => setTimeout(resolve, backoffMs))
       }
@@ -100,10 +98,8 @@ async function readBoardIdWithRetries(
   for (let attempt = 0; attempt < attempts; attempt++) {
     last = mapArduinoAnchorResult(await client.getBoardId())
     if (last.success && !!last.anchor && last.anchor.length > 0) {
-      logger.info(`[device-probe] board id read on attempt ${attempt + 1}/${attempts}`)
       return last
     }
-    logger.warn(`[device-probe] board id not ready on attempt ${attempt + 1}/${attempts} (device likely still booting)`)
     if (attempt < attempts - 1) {
       await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
@@ -2201,10 +2197,8 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
   }> => {
     const probedAt = new Date().toISOString()
-    logger.info(`[device-probe] start: port=${connectionParams.port ?? 'none'} hasLicenseStore=${opts.hasLicenseStore}`)
 
     if (!connectionParams.port) {
-      logger.warn('[device-probe] aborted: no port')
       return { success: false, probedAt, error: 'Port is required for the device storage probe' }
     }
 
@@ -2221,7 +2215,6 @@ class MainProcessBridge implements MainIpcModule {
       await connectWithRetries(client, { attempts: 5, backoffMs: 800 })
     } catch (error) {
       // Connect never came up after all retries — best-effort, don't throw.
-      logger.warn(`[device-probe] serial did not come up after retries: ${getErrorMessage(error)}`)
       return { success: false, probedAt, error: getErrorMessage(error) }
     }
 
@@ -2230,7 +2223,6 @@ class MainProcessBridge implements MainIpcModule {
       // (the serial open auto-reset it). 6 attempts x 500ms rides an ESP8266 boot.
       const anchor = await readBoardIdWithRetries(client, { attempts: 6, backoffMs: 500 })
       const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
-      logger.info(`[device-probe] boardId: hasId=${hasId} anchor=${anchor.anchorHex ?? 'none'}`)
 
       let license:
         | {
@@ -2242,11 +2234,9 @@ class MainProcessBridge implements MainIpcModule {
             blob?: number[]
           }
         | undefined
-      if (!hasId) {
-        // The FC channel never answered — reading the license now would just
-        // return garbage (status 0x00). Report no id and skip the license read.
-        logger.warn('[device-probe] device did not report an id in time; skipping license read')
-      } else if (opts.hasLicenseStore) {
+      // When !hasId the FC channel never answered, so `license` stays undefined
+      // rather than reading garbage (status 0x00).
+      if (hasId && opts.hasLicenseStore) {
         const lic = await client.readLicense()
         license = {
           status: lic.status,
@@ -2256,15 +2246,11 @@ class MainProcessBridge implements MainIpcModule {
           unsupported: lic.status === 0x85,
           blob: lic.blob ? Array.from(lic.blob) : undefined,
         }
-        logger.info(
-          `[device-probe] license: status=0x${(lic.status ?? 0).toString(16)} present=${lic.status === 0x7e} empty=${!!lic.empty} corrupt=${!!lic.corrupt} unsupported=${lic.status === 0x85} blobLen=${lic.blob ? lic.blob.length : 0}`,
-        )
-      } else {
+      } else if (hasId) {
         // Board can't store a license — report unsupported without a read.
         license = { unsupported: true, present: false }
       }
 
-      logger.info('[device-probe] done (success)')
       return {
         success: true,
         probedAt,
@@ -2274,12 +2260,10 @@ class MainProcessBridge implements MainIpcModule {
         license,
       }
     } catch (error) {
-      logger.warn(`[device-probe] read failed after connect: ${getErrorMessage(error)}`)
       return { success: false, probedAt, error: getErrorMessage(error) }
     } finally {
       // Always release the serial — the debugger opens it on demand later.
       client.disconnect()
-      logger.info('[device-probe] serial closed')
     }
   }
 
