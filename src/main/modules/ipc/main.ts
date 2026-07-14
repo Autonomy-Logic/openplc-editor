@@ -53,6 +53,34 @@ import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
+/**
+ * Connect a Modbus RTU client with a bounded retry/backoff loop.
+ *
+ * A device flashed over arduino-cli serial reboots as the programmer releases
+ * the port, so the first `connect()` right after an upload frequently races the
+ * reboot and fails (port briefly busy / not yet enumerated). We retry a handful
+ * of times with a fixed backoff, rethrowing the last error only once every
+ * attempt is exhausted so callers can treat it as a definitive failure.
+ */
+async function connectWithRetries(
+  client: ModbusRtuClient,
+  { attempts, backoffMs }: { attempts: number; backoffMs: number },
+): Promise<void> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      await client.connect()
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs))
+      }
+    }
+  }
+  throw lastError
+}
+
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -904,6 +932,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
     this.registerHandle('device:get-anchor', this.handleGetDeviceAnchor)
+    this.registerHandle('device:probe-storage', this.handleProbeDeviceStorage)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -2100,6 +2129,112 @@ class MainProcessBridge implements MainIpcModule {
     this.debuggerJwtToken = null
     this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
+  }
+
+  /**
+   * One-shot post-flash storage probe (D61).
+   *
+   * Runs right after a successful arduino-cli serial upload to answer two
+   * questions about the freshly-flashed device: does it carry a hardware id
+   * (FC 0x48), and — for boards that declare the `licenseStore` capability —
+   * is a license blob present (FC 0x4A)?
+   *
+   * This is deliberately independent of the always-on debugger session: it
+   * spins up a TRANSIENT local `ModbusRtuClient` (never `this.debuggerModbusClient`
+   * and it never touches `this.debuggerConnectionType` / RTU session fields),
+   * probes, and closes the serial in a `finally` so the port is free for the
+   * debugger to open on demand. The device reboots after the flash, so the
+   * connection is attempted with a short retry/backoff loop.
+   *
+   * Best-effort: a connect failure after all retries returns
+   * `{ success: false, error }` rather than throwing, so the upload flow in the
+   * renderer is never broken by a probe hiccup.
+   */
+  handleProbeDeviceStorage = async (
+    _event: IpcMainInvokeEvent,
+    connectionParams: { port: string; baudRate?: number; slaveId?: number },
+    opts: { hasLicenseStore: boolean },
+  ): Promise<{
+    success: boolean
+    probedAt: string
+    hasId?: boolean
+    anchorHex?: string
+    anchor?: number[]
+    license?: {
+      status?: number
+      present: boolean
+      empty?: boolean
+      corrupt?: boolean
+      unsupported?: boolean
+      blob?: number[]
+    }
+    error?: string
+  }> => {
+    const probedAt = new Date().toISOString()
+
+    if (!connectionParams.port) {
+      return { success: false, probedAt, error: 'Port is required for the device storage probe' }
+    }
+
+    // TRANSIENT client — a local variable, never assigned to any debugger
+    // session field. Closed in the `finally` below.
+    const client = new ModbusRtuClient({
+      port: connectionParams.port,
+      baudRate: connectionParams.baudRate ?? 115200,
+      slaveId: connectionParams.slaveId ?? 1,
+      timeout: 5000,
+    })
+
+    try {
+      await connectWithRetries(client, { attempts: 5, backoffMs: 800 })
+    } catch (error) {
+      // Connect never came up after all retries — best-effort, don't throw.
+      return { success: false, probedAt, error: getErrorMessage(error) }
+    }
+
+    try {
+      const anchor = mapArduinoAnchorResult(await client.getBoardId())
+      const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
+
+      let license:
+        | {
+            status?: number
+            present: boolean
+            empty?: boolean
+            corrupt?: boolean
+            unsupported?: boolean
+            blob?: number[]
+          }
+        | undefined
+      if (opts.hasLicenseStore) {
+        const lic = await client.readLicense()
+        license = {
+          status: lic.status,
+          present: lic.status === 0x7e,
+          empty: lic.empty,
+          corrupt: lic.corrupt,
+          unsupported: lic.status === 0x85,
+          blob: lic.blob ? Array.from(lic.blob) : undefined,
+        }
+      } else {
+        // Board can't store a license — report unsupported without a read.
+        license = { unsupported: true, present: false }
+      }
+
+      return {
+        success: true,
+        probedAt,
+        hasId,
+        anchorHex: anchor.anchorHex,
+        anchor: anchor.anchor,
+        license,
+      }
+    } catch (error) {
+      return { success: false, probedAt, error: getErrorMessage(error) }
+    } finally {
+      // Always release the serial — the debugger opens it on demand later.
+      client.disconnect()
+    }
   }
 
   handleDebuggerSetVariable = async (

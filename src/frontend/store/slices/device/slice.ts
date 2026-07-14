@@ -58,6 +58,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     ethercatStatus: null,
     includeEthercatStatsInPolling: false,
   },
+  deviceProbeInfo: null,
 
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
@@ -355,7 +356,8 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     setDeviceBoard: (deviceBoard): void => {
       const previousBoard = getState().deviceDefinitions.configuration.deviceBoard
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce((draft: DeviceSlice) => {
+          const { deviceDefinitions, deviceUpdated } = draft
           deviceUpdated.updated = true
           // Wipe platformOption selections when the board changes — they're
           // declared per-board in the VPP manifest, so a `cpu=atmega328old`
@@ -372,6 +374,9 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
             deviceDefinitions.configuration.selectedPlatformOptions = {}
             deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+            // The stored probe (D61) describes the previously-selected physical
+            // target — it's meaningless once the board changes, so drop it.
+            draft.deviceProbeInfo = null
             // Vendor-screen data is board-specific (a backplane configured for
             // one target is meaningless on another). Stash the outgoing board's
             // data into its bucket, then swap the active view to the incoming
@@ -417,8 +422,15 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     setCommunicationPort: (communicationPort): void => {
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce((draft: DeviceSlice) => {
+          const { deviceDefinitions, deviceUpdated } = draft
           deviceUpdated.updated = true
+          // A different serial port means a (potentially) different physical
+          // device, so a probe (D61) captured against the old port no longer
+          // describes what's connected — drop it when the port changes.
+          if (deviceDefinitions.configuration.communicationPort !== communicationPort) {
+            draft.deviceProbeInfo = null
+          }
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
       )
@@ -554,6 +566,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             }
           }
           syncActiveBoardVendorBucket(deviceDefinitions.configuration)
+        }),
+      )
+    },
+    setDeviceProbeInfo: (info): void => {
+      setState(
+        produce((draft: DeviceSlice) => {
+          draft.deviceProbeInfo = info
         }),
       )
     },

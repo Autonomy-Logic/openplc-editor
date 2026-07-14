@@ -314,6 +314,46 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (!result.success && !streamedError) {
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
+
+        // One-shot post-flash storage probe (D61). After a successful
+        // arduino-cli serial upload (directUsbUpload boards), open a transient
+        // RTU connection, read the hardware id (FC 0x48) and — when the board
+        // declares the licenseStore capability — the stored license (FC 0x4A),
+        // then persist the result. Strictly best-effort: any failure is logged
+        // and swallowed so it can never affect the upload result above.
+        if (result.success && resolveTargetCapabilities(currentBoardInfo).directUsbUpload) {
+          const port = deviceDefinitions.configuration.communicationPort
+          if (port) {
+            try {
+              const probe = await window.bridge.probeDeviceStorage(
+                { port, baudRate: 115200, slaveId: 1 },
+                { hasLicenseStore: resolveTargetCapabilities(currentBoardInfo).licenseStore },
+              )
+              if (probe.success) {
+                useOpenPLCStore.getState().deviceActions.setDeviceProbeInfo({
+                  probedAt: probe.probedAt,
+                  hasId: probe.hasId,
+                  anchorHex: probe.anchorHex,
+                  anchor: probe.anchor,
+                  license: probe.license,
+                })
+              } else {
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'warning',
+                  message: `Device storage probe failed: ${probe.error ?? 'unknown error'}`,
+                })
+              }
+            } catch (probeErr: unknown) {
+              // best-effort: log only, never interrupt the upload flow.
+              addLog({
+                id: crypto.randomUUID(),
+                level: 'warning',
+                message: `Device storage probe error: ${getErrorMessage(probeErr)}`,
+              })
+            }
+          }
+        }
       } catch (err: unknown) {
         addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
       } finally {
@@ -325,6 +365,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       projectData,
       projectMeta,
       deviceDefinitions,
+      currentBoardInfo,
       isSimulatorBoard,
       simulator,
       debugSession,

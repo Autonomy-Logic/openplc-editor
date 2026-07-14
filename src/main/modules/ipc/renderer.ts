@@ -467,6 +467,31 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('device:get-anchor', connectionType, connectionParams),
 
+  // One-shot post-flash storage probe (D61): open a transient RTU connection
+  // with retries/backoff, read the hardware id (FC 0x48) and — when the board
+  // declares the licenseStore capability — the stored license (FC 0x4A), then
+  // close the serial. Best-effort: never throws in a way that breaks the upload
+  // flow; a connect failure surfaces as `{ success: false, error }`.
+  probeDeviceStorage: (
+    connectionParams: { port: string; baudRate?: number; slaveId?: number },
+    opts: { hasLicenseStore: boolean },
+  ): Promise<{
+    success: boolean
+    probedAt: string
+    hasId?: boolean
+    anchorHex?: string
+    anchor?: number[]
+    license?: {
+      status?: number
+      present: boolean
+      empty?: boolean
+      corrupt?: boolean
+      unsupported?: boolean
+      blob?: number[]
+    }
+    error?: string
+  }> => ipcRenderer.invoke('device:probe-storage', connectionParams, opts),
+
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
