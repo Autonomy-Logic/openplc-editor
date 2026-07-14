@@ -458,6 +458,14 @@ describe('parseWriteLicenseResponse', () => {
     expect(corrupt.status).toBe(ModbusDebugResponse.LIC_CORRUPT)
   })
 
+  it('classifies LIC_UNSUPPORTED (0x85) as success + unsupported (no backend)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.LIC_UNSUPPORTED])
+    const result = parseWriteLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.status).toBe(ModbusDebugResponse.LIC_UNSUPPORTED)
+    expect(result.unsupported).toBe(true)
+  })
+
   it('rejects a function-code mismatch', () => {
     const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.SUCCESS])
     expect(parseWriteLicenseResponse(buf).success).toBe(false)
@@ -507,6 +515,14 @@ describe('parseReadLicenseResponse', () => {
     const result = parseReadLicenseResponse(buf)
     expect(result.success).toBe(true)
     expect(result.corrupt).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('classifies LIC_UNSUPPORTED as success + unsupported (no blob)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.LIC_UNSUPPORTED])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.unsupported).toBe(true)
     expect(result.blob).toBeUndefined()
   })
 

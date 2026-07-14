@@ -460,7 +460,9 @@ export class ModbusRtuClient {
   // it frames is little-endian — do not confuse the two.
   // -------------------------------------------------------------------------
 
-  async writeLicense(blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> {
+  async writeLicense(
+    blob: Uint8Array,
+  ): Promise<{ success: boolean; status?: number; unsupported?: boolean; error?: string }> {
     try {
       const functionCode = ModbusFunctionCode.DEBUG_WRITE_LICENSE
 
@@ -484,6 +486,9 @@ export class ModbusRtuClient {
       if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
         return { success: false, error: 'Function code mismatch' }
       }
+      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
+        return { success: true, status: statusCode, unsupported: true }
+      }
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, status: statusCode, error: `Target returned error code: 0x${statusCode.toString(16)}` }
       }
@@ -499,6 +504,7 @@ export class ModbusRtuClient {
     status?: number
     empty?: boolean
     corrupt?: boolean
+    unsupported?: boolean
     blob?: Uint8Array
     error?: string
   }> {
@@ -522,6 +528,9 @@ export class ModbusRtuClient {
       }
       if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
         return { success: true, status: statusCode, corrupt: true }
+      }
+      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
+        return { success: true, status: statusCode, unsupported: true }
       }
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }

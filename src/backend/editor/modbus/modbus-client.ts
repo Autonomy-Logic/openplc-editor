@@ -23,6 +23,7 @@ export enum ModbusDebugResponse {
   ERROR_OUT_OF_MEMORY = 0x82,
   LIC_EMPTY = 0x83,
   LIC_CORRUPT = 0x84,
+  LIC_UNSUPPORTED = 0x85,
 }
 
 interface ModbusTcpClientOptions {
@@ -361,7 +362,9 @@ export class ModbusTcpClient {
   // it frames is little-endian — do not confuse the two.
   // -------------------------------------------------------------------------
 
-  async writeLicense(blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> {
+  async writeLicense(
+    blob: Uint8Array,
+  ): Promise<{ success: boolean; status?: number; unsupported?: boolean; error?: string }> {
     if (!this.socket) {
       return { success: false, error: 'Not connected to target' }
     }
@@ -401,6 +404,9 @@ export class ModbusTcpClient {
       if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
         return { success: false, error: 'Function code mismatch' }
       }
+      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
+        return { success: true, status: statusCode, unsupported: true }
+      }
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, status: statusCode, error: `Target returned error code: 0x${statusCode.toString(16)}` }
       }
@@ -416,6 +422,7 @@ export class ModbusTcpClient {
     status?: number
     empty?: boolean
     corrupt?: boolean
+    unsupported?: boolean
     blob?: Uint8Array
     error?: string
   }> {
@@ -460,6 +467,9 @@ export class ModbusTcpClient {
       }
       if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
         return { success: true, status: statusCode, corrupt: true }
+      }
+      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
+        return { success: true, status: statusCode, unsupported: true }
       }
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }

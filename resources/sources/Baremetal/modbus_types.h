@@ -46,6 +46,9 @@ protocol, transport, register and debug layers agree on the same contracts.
 // They don't collide with Modbus exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
 #define MB_DEBUG_LIC_EMPTY               0x83
 #define MB_DEBUG_LIC_CORRUPT             0x84
+// No license-store backend on this board (weak default): the licensing FCs
+// degrade gracefully instead of failing as a transport error.
+#define MB_DEBUG_LIC_UNSUPPORTED         0x85
 
 //Modbus registers struct
 struct MBinfo {

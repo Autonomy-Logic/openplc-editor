@@ -58,11 +58,14 @@ export interface DebugBoardIdResult {
 /**
  * Result of a write-license call (FC 0x49). The device stores the raw blob
  * bytes; `status` is the ModbusDebugResponse code the target returned
- * (SUCCESS/ERROR_OUT_OF_BOUNDS/ERROR_OUT_OF_MEMORY).
+ * (SUCCESS/ERROR_OUT_OF_BOUNDS/ERROR_OUT_OF_MEMORY). `unsupported` (status
+ * LIC_UNSUPPORTED) means the board has no license-store backend — a valid
+ * device state (`success: true`), not a transport failure.
  */
 export interface DebugLicenseWriteResult {
   success: boolean
   status?: number
+  unsupported?: boolean
   error?: string
 }
 
@@ -70,14 +73,16 @@ export interface DebugLicenseWriteResult {
  * Result of a read-license call (FC 0x4A). `blob` is present only on SUCCESS.
  * `empty` (status LIC_EMPTY) means virgin storage — no license provisioned;
  * `corrupt` (status LIC_CORRUPT) means the magic matched but the crc32 failed.
- * Both empty and corrupt are `success: true` — they are valid device states,
- * not transport failures — the caller distinguishes via the flags.
+ * `unsupported` (status LIC_UNSUPPORTED) means the board has no license-store
+ * backend at all. All three are `success: true` — they are valid device
+ * states, not transport failures — the caller distinguishes via the flags.
  */
 export interface DebugLicenseReadResult {
   success: boolean
   status?: number
   empty?: boolean
   corrupt?: boolean
+  unsupported?: boolean
   blob?: Uint8Array
   error?: string
 }

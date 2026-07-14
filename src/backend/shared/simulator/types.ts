@@ -17,4 +17,5 @@ export enum ModbusDebugResponse {
   ERROR_OUT_OF_MEMORY = 0x82,
   LIC_EMPTY = 0x83,
   LIC_CORRUPT = 0x84,
+  LIC_UNSUPPORTED = 0x85,
 }

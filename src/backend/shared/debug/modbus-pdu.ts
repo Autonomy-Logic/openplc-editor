@@ -397,8 +397,10 @@ export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
 
 /**
  * Parse a write-license response (FC 0x49).
- * Layout: `[FC][status]`. SUCCESS → `{ success: true, status }`; any other
- * status is a device-side failure surfaced as `{ success: false, error }`.
+ * Layout: `[FC][status]`. SUCCESS → `{ success: true, status }`. LIC_UNSUPPORTED
+ * (the board has no backend) is a valid device state → `{ success: true,
+ * unsupported: true }`, not a transport error. Any other non-SUCCESS status is a
+ * device-side failure surfaced as `{ success: false, error }`.
  */
 export function parseWriteLicenseResponse(data: Uint8Array): DebugLicenseWriteResult {
   if (data.length < 2) {
@@ -410,6 +412,10 @@ export function parseWriteLicenseResponse(data: Uint8Array): DebugLicenseWriteRe
 
   if (fc !== ModbusFunctionCode.DEBUG_WRITE_LICENSE) {
     return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
+    return { success: true, status, unsupported: true }
   }
 
   if (status !== ModbusDebugResponse.SUCCESS) {
@@ -446,6 +452,10 @@ export function parseReadLicenseResponse(data: Uint8Array): DebugLicenseReadResu
 
   if (status === ModbusDebugResponse.LIC_CORRUPT) {
     return { success: true, status, corrupt: true }
+  }
+
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
+    return { success: true, status, unsupported: true }
   }
 
   if (status !== ModbusDebugResponse.SUCCESS) {
