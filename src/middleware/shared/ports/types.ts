@@ -787,6 +787,18 @@ export interface PackageManifest {
       define?: string | string[]
       extraArduinoLibraries?: string[]
       libraries?: string
+      /**
+       * Optional on-device license-storage backend. The VPP ships the C++
+       * source(s) implementing `license_store_{write,read,erase}` (the STRONG
+       * symbols that override the editor's `license_store_weak.cpp` default);
+       * the editor injects them into the Baremetal sketch, recompiled against
+       * its own `license_blob.h`/`license_store.h` (no ABI drift). A single
+       * package-relative path or an array of them. Presence = the board
+       * supports the licensing flow (`-DVPP_HAS_LICENSE_STORE`); absence =
+       * the weak default links and the licensing FCs report
+       * `LIC_STORE_UNSUPPORTED`.
+       */
+      licenseStore?: string | string[]
     }
     defaults?: {
       runtimeIpAddress?: string

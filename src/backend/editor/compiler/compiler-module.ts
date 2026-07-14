@@ -2596,6 +2596,30 @@ class CompilerModule {
           strucppRuntimeHeaders: v4Layout,
           boardHalContent,
         })
+
+        // VPP-provided license-store backend source(s).  Mirrors the
+        // HAL read above (`boardInfo.halSourceFile` @ ~2578): each path
+        // is an absolute key `BoardInfoResolver` produced from
+        // `device.hal.licenseStore` through the same traversal-guarded
+        // `resolvePackageRelativePath`.  Unlike the HAL (which lands at
+        // the canonical `src/arduino.cpp`), these keep their distinctive
+        // basenames and land in the sketch directory next to
+        // `license_store.h` / `license_blob.h` (`examples/Baremetal/`),
+        // so their `#include "license_store.h"` resolves and they define
+        // the STRONG `license_store_*` symbols that override the
+        // skeleton's `license_store_weak.cpp`.  Boards without a VPP
+        // backend inject nothing and link the weak default (→ UNSUPPORTED).
+        for (const licenseStoreFile of boardInfo.licenseStoreSourceFiles) {
+          try {
+            const content = await readFile(licenseStoreFile, 'utf-8')
+            firmwareSkeleton[`examples/Baremetal/${path.basename(licenseStoreFile)}`] = content
+          } catch (lsErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message: `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}`,
+            })
+          }
+        }
       }
       try {
         // `devices/pin-mapping.json` ships in one of two shapes (the

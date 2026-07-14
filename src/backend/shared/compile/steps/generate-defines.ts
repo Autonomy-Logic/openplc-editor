@@ -83,6 +83,15 @@ export interface GenerateDefinesInput {
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
+  /** `true` when the selected device's VPP declares `hal.licenseStore`
+   *  (a real on-device storage backend whose source the editor injects
+   *  into the sketch). Emits `#define VPP_HAS_LICENSE_STORE` so the
+   *  firmware can advertise the licensing capability. Linkage does not
+   *  depend on this define — `license_store_weak.cpp` covers boards
+   *  without a backend — so it is purely a capability signal. Absent /
+   *  false → no define, and the weak default reports
+   *  `LIC_STORE_UNSUPPORTED`. */
+  hasLicenseStore?: boolean
 }
 
 /**
@@ -104,8 +113,16 @@ export interface GenerateDefinesInput {
  * editor-produced and web-produced firmware comes out clean).
  */
 export function generateDefinesContent(input: GenerateDefinesInput): string {
-  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState, defaultSerial } =
-    input
+  const {
+    boardEntry,
+    devicePinMapping,
+    stProgramFileContent,
+    buildMD5Hash,
+    boardRuntime,
+    vppModbusState,
+    defaultSerial,
+    hasLicenseStore,
+  } = input
 
   let DEFINES_CONTENT = ''
 
@@ -180,6 +197,18 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
     DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
     DEFINES_CONTENT += `#define DEBUG_BAUD ${vppModbusState?.serial?.baud_rate ?? '115200'}\n`
+    DEFINES_CONTENT += `\n\n`
+  }
+
+  // 4c. License-store capability — emitted when the selected device's
+  //     VPP ships an on-device storage backend (`hal.licenseStore`),
+  //     whose source the editor injects into the sketch. Linkage does
+  //     NOT depend on this define (the weak default always links); it
+  //     lets the firmware advertise the licensing capability. Boards
+  //     without a backend emit nothing and report UNSUPPORTED.
+  if (hasLicenseStore) {
+    DEFINES_CONTENT += '//License store\n'
+    DEFINES_CONTENT += '#define VPP_HAS_LICENSE_STORE\n'
     DEFINES_CONTENT += `\n\n`
   }
 

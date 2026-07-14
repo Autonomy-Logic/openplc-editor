@@ -51,6 +51,14 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.platform ? { platform: boardInfo.platform } : {}),
       ...(boardInfo.core ? { core: boardInfo.core } : {}),
       ...(boardInfo.define ? { define: boardInfo.define } : {}),
+      // Presence of a VPP license-store backend → gates the
+      // `VPP_HAS_LICENSE_STORE` capability define. The resolver already
+      // collapsed the string|array `hal.licenseStore` into resolved
+      // paths; forward the (basename-preserving) list so the pipeline
+      // reads a single truthy field.
+      ...(boardInfo.licenseStoreSourceFiles.length > 0
+        ? { licenseStore: boardInfo.licenseStoreSourceFiles.map((p) => p.split(/[\\/]/).pop() ?? p) }
+        : {}),
       ...(boardInfo.compilerFlags?.c_flags ? { c_flags: boardInfo.compilerFlags.c_flags } : {}),
       ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
       ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),

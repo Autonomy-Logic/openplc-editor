@@ -239,4 +239,61 @@ describe('resolveBoardSelection', () => {
       expect(result.boardEntry.extra_libraries).toEqual(['P1AM'])
     }
   })
+
+  it('forwards a VPP board hal.licenseStore presence onto boardEntry.licenseStore (basenames)', () => {
+    // Presence is what the pipeline gates `VPP_HAS_LICENSE_STORE` on; the
+    // resolver collapses `hal.licenseStore` into resolved paths, and
+    // resolveBoardSelection forwards the basenames so `!!boardEntry.licenseStore`
+    // is truthy. Boards without a backend leave the field undefined.
+    const pkg: InstalledPackage = {
+      packageId: 'com.openplc.espressif',
+      version: '0.1.0',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      path: '/fake/packages/espressif',
+      devices: ['esp32'],
+    }
+    const manifest: PackageManifest = {
+      formatVersion: '1.0',
+      package: {
+        id: 'com.openplc.espressif',
+        name: 'Espressif',
+        version: '0.1.0',
+        vendor: { name: 'Espressif', logo: 'l.png' },
+        description: 'd',
+      },
+      devices: [
+        {
+          id: 'esp32',
+          name: 'ESP32 Dev',
+          preview: 'p.png',
+          target: { type: 'arduino-cli', core: 'esp32:esp32', platform: 'esp32:esp32:esp32' },
+          hal: {
+            type: 'arduino-hal',
+            source: 'hal/arduino/esp32.cpp',
+            licenseStore: 'hal/license/license_store_esp32.cpp',
+          },
+        },
+      ],
+    }
+    const packageManager: PackageManagerPort = {
+      listInstalled: () => [pkg],
+      getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
+    }
+    const resolver = makeResolver({}, { packageManager })
+
+    const result = resolveBoardSelection(resolver, 'ESP32 Dev')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.licenseStore).toEqual(['license_store_esp32.cpp'])
+    }
+  })
+
+  it('leaves boardEntry.licenseStore undefined when the board declares no backend', () => {
+    const resolver = makeResolver({ 'Arduino Mega 2560': halsEntry({ compiler: 'arduino-cli' }) })
+    const result = resolveBoardSelection(resolver, 'Arduino Mega 2560')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.licenseStore).toBeUndefined()
+    }
+  })
 })

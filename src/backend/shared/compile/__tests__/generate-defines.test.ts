@@ -211,6 +211,25 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   })
 })
 
+describe('generateDefinesContent — License store capability define', () => {
+  it('emits VPP_HAS_LICENSE_STORE when hasLicenseStore is true', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, hasLicenseStore: true })
+    expect(out).toContain('//License store\n#define VPP_HAS_LICENSE_STORE\n')
+  })
+
+  it('omits VPP_HAS_LICENSE_STORE when hasLicenseStore is false', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, hasLicenseStore: false })
+    expect(out).not.toContain('VPP_HAS_LICENSE_STORE')
+    expect(out).not.toContain('//License store')
+  })
+
+  it('omits VPP_HAS_LICENSE_STORE when hasLicenseStore is absent (default)', () => {
+    const out = generateDefinesContent(EMPTY_INPUTS)
+    expect(out).not.toContain('VPP_HAS_LICENSE_STORE')
+    expect(out).not.toContain('//License store')
+  })
+})
+
 describe('generateDefinesContent — IO Config (pin masks)', () => {
   it('emits empty pin masks when devicePinMapping is empty', () => {
     const out = generateDefinesContent(EMPTY_INPUTS)
