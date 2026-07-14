@@ -57,8 +57,18 @@ typedef struct __attribute__((packed)) {
 #define LIC_BLOB_SIZE     106u
 #define LIC_PAYLOAD_SIZE  38u
 
-_Static_assert(sizeof(lic_payload_t) == 38,  "lic_payload_t must be 38 bytes");
-_Static_assert(sizeof(lic_blob_t)    == 106, "lic_blob_t must be 106 bytes");
+// Portable compile-time assert. Every Baremetal .cpp includes this header, so it
+// is compiled as C++, where static_assert is a keyword. _Static_assert is C-only
+// (C11) and the C++ frontend (xtensa/avr gcc) rejects it. Keep the C form for the
+// host golden test, which compiles this header as C11.
+#if defined(__cplusplus)
+    #define LIC_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
+#else
+    #define LIC_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+#endif
+
+LIC_STATIC_ASSERT(sizeof(lic_payload_t) == 38,  "lic_payload_t must be 38 bytes");
+LIC_STATIC_ASSERT(sizeof(lic_blob_t)    == 106, "lic_blob_t must be 106 bytes");
 
 // CRC-32/ISO-HDLC (a.k.a. CRC-32, zlib/PKZIP).
 //   poly 0xEDB88320 (reflected) · init 0xFFFFFFFF · refin/refout true · xorout 0xFFFFFFFF
