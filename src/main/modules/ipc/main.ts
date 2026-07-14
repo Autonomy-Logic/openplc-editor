@@ -83,6 +83,34 @@ async function connectWithRetries(
   throw lastError
 }
 
+/**
+ * Read the board id (FC 0x48) with a bounded retry/backoff loop — a readiness
+ * probe for the firmware itself.
+ *
+ * Opening the serial port toggles DTR/RTS, which auto-resets ESP8266/AVR boards,
+ * so right after a flash the firmware is still booting when `connect()` returns
+ * and the first FC exchange gets no valid reply. We retry the id read until the
+ * device answers (a non-empty id) or the attempts are exhausted.
+ */
+async function readBoardIdWithRetries(
+  client: ModbusRtuClient,
+  { attempts, backoffMs }: { attempts: number; backoffMs: number },
+): Promise<ReturnType<typeof mapArduinoAnchorResult>> {
+  let last = mapArduinoAnchorResult({ success: false })
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    last = mapArduinoAnchorResult(await client.getBoardId())
+    if (last.success && !!last.anchor && last.anchor.length > 0) {
+      logger.info(`[device-probe] board id read on attempt ${attempt + 1}/${attempts}`)
+      return last
+    }
+    logger.warn(`[device-probe] board id not ready on attempt ${attempt + 1}/${attempts} (device likely still booting)`)
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
+    }
+  }
+  return last
+}
+
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -2186,7 +2214,7 @@ class MainProcessBridge implements MainIpcModule {
       port: connectionParams.port,
       baudRate: connectionParams.baudRate ?? 115200,
       slaveId: connectionParams.slaveId ?? 1,
-      timeout: 5000,
+      timeout: 2000, // short: the id read is retried while the board boots
     })
 
     try {
@@ -2198,7 +2226,9 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     try {
-      const anchor = mapArduinoAnchorResult(await client.getBoardId())
+      // Readiness probe: retry the id read while the board finishes booting
+      // (the serial open auto-reset it). 6 attempts x 500ms rides an ESP8266 boot.
+      const anchor = await readBoardIdWithRetries(client, { attempts: 6, backoffMs: 500 })
       const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
       logger.info(`[device-probe] boardId: hasId=${hasId} anchor=${anchor.anchorHex ?? 'none'}`)
 
@@ -2212,7 +2242,11 @@ class MainProcessBridge implements MainIpcModule {
             blob?: number[]
           }
         | undefined
-      if (opts.hasLicenseStore) {
+      if (!hasId) {
+        // The FC channel never answered — reading the license now would just
+        // return garbage (status 0x00). Report no id and skip the license read.
+        logger.warn('[device-probe] device did not report an id in time; skipping license read')
+      } else if (opts.hasLicenseStore) {
         const lic = await client.readLicense()
         license = {
           status: lic.status,
