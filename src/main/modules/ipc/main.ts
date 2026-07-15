@@ -42,7 +42,12 @@ import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
-import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
+import {
+  getOpenProjectPath,
+  getPlcopenExportSavePath,
+  getPlcopenImportFilePath,
+  getProjectPath,
+} from '../../../backend/editor/utils'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -816,6 +821,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
     this.registerHandle('project:read-files', this.handleReadProjectFiles)
+    this.registerHandle('project:pick-plcopen-import-file', this.handlePickPlcopenImportFile)
+    this.registerHandle('project:export-plcopen-file', this.handleExportPlcopenFile)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -1040,6 +1047,36 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
+    }
+  }
+
+  handlePickPlcopenImportFile = async (_event: IpcMainInvokeEvent) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPlcopenImportFilePath(windowManager)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error picking PLCopen import file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
+  handleExportPlcopenFile = async (_event: IpcMainInvokeEvent, defaultFileName: string, xml: string) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPlcopenExportSavePath(windowManager, defaultFileName, xml)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error exporting PLCopen file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }
 

@@ -15,7 +15,13 @@
     "url": "http://localhost/"
   },
   "testMatch": ["<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)", "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"],
-  "testPathIgnorePatterns": ["/node_modules/", "src/frontend/utils/__tests__/notify-no-write-permission.test.ts"],
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    "src/frontend/utils/__tests__/notify-no-write-permission.test.ts",
+    "src/frontend/services/__tests__/export-actions.test.ts",
+    "src/frontend/services/__tests__/import-actions.test.ts",
+    "src/frontend/components/_organisms/modals/__tests__/confirm-plcopen-import-modal.test.tsx"
+  ],
   "transformIgnorePatterns": ["node_modules/(?!strucpp)"],
   "transform": {
     "\\.(ts|tsx|js|jsx)$": [

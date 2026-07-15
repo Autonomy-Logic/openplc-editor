@@ -73,6 +73,16 @@ const rendererProcessBridge = {
   openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:open-path-picker'),
   readProjectFiles: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:read-files', projectPath),
+  pickPlcopenImportFile: (): Promise<{
+    success: boolean
+    content?: string
+    error?: { title: string; description: string }
+  }> => ipcRenderer.invoke('project:pick-plcopen-import-file'),
+  exportPlcopenFile: (
+    defaultFileName: string,
+    xml: string,
+  ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
+    ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),

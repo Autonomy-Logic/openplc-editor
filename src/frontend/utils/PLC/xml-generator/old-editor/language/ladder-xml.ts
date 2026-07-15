@@ -613,7 +613,9 @@ const ladderToXml = (rungs: RungLadderState[]) => {
           ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
           break
         case 'variable':
-          if ((node as VariableNode).data.variable.name === '') return
+          // Always emit — even with an empty name. A <connection> elsewhere
+          // in the XML may already reference this node's numericId; skipping
+          // it here would leave that connection's @refLocalId dangling.
           if ((node as VariableNode).data.variant === 'input')
             ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
           if ((node as VariableNode).data.variant === 'output')
