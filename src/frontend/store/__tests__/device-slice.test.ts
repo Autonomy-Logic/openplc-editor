@@ -155,11 +155,6 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
-
-    it('has no device probe info', () => {
-      const store = makeStore()
-      expect(store.getState().deviceProbeInfo).toBeNull()
-    })
   })
 
   // -----------------------------------------------------------------------
@@ -1256,63 +1251,6 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
       expect(store.getState().deviceDefinitions.configuration.communicationPort).toBe('/dev/ttyUSB0')
       expect(store.getState().deviceUpdated.updated).toBe(true)
-    })
-
-    it('clears device probe info when the port changes', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceProbeInfo({ probedAt: '2026-07-14T00:00:00.000Z', hasId: true })
-      store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
-      expect(store.getState().deviceProbeInfo).toBeNull()
-    })
-
-    it('keeps device probe info when the port is unchanged', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
-      const info = { probedAt: '2026-07-14T00:00:00.000Z', hasId: true }
-      store.getState().deviceActions.setDeviceProbeInfo(info)
-      store.getState().deviceActions.setCommunicationPort('/dev/ttyUSB0')
-      expect(store.getState().deviceProbeInfo).toEqual(info)
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // setDeviceProbeInfo (D61)
-  // -----------------------------------------------------------------------
-  describe('setDeviceProbeInfo', () => {
-    it('stores the post-flash probe result', () => {
-      const store = makeStore()
-      const info = {
-        probedAt: '2026-07-14T00:00:00.000Z',
-        hasId: true,
-        anchorHex: '0102',
-        anchor: [0x01, 0x02],
-        license: { status: 0x7e, present: true },
-      }
-      store.getState().deviceActions.setDeviceProbeInfo(info)
-      expect(store.getState().deviceProbeInfo).toEqual(info)
-    })
-
-    it('clears the probe result when passed null', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceProbeInfo({ probedAt: '2026-07-14T00:00:00.000Z', hasId: false })
-      store.getState().deviceActions.setDeviceProbeInfo(null)
-      expect(store.getState().deviceProbeInfo).toBeNull()
-    })
-
-    it('is cleared when the device board changes', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceProbeInfo({ probedAt: '2026-07-14T00:00:00.000Z', hasId: true })
-      store.getState().deviceActions.setDeviceBoard('Arduino Mega')
-      expect(store.getState().deviceProbeInfo).toBeNull()
-    })
-
-    it('is preserved when setDeviceBoard is called with the same board', () => {
-      const store = makeStore()
-      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
-      const info = { probedAt: '2026-07-14T00:00:00.000Z', hasId: true }
-      store.getState().deviceActions.setDeviceProbeInfo(info)
-      store.getState().deviceActions.setDeviceBoard('Arduino Nano')
-      expect(store.getState().deviceProbeInfo).toEqual(info)
     })
   })
 

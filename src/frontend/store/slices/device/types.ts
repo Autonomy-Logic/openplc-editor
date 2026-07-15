@@ -73,34 +73,6 @@ export type RuntimeConnection = {
 }
 
 // ---------------------------------------------------------------------------
-// Device storage probe (D61)
-// ---------------------------------------------------------------------------
-
-/**
- * Result of the one-shot post-flash storage probe. Persisted after a
- * successful arduino-cli serial upload: whether the freshly-flashed device
- * carries a hardware id (FC 0x48) and — for boards that declare the
- * `licenseStore` capability — whether a license blob is present (FC 0x4A).
- *
- * Same shape as the `device:probe-storage` IPC return, minus the transport
- * `success` flag (only successful probes are stored).
- */
-export type DeviceProbeInfo = {
-  probedAt: string
-  hasId?: boolean
-  anchorHex?: string
-  anchor?: number[]
-  license?: {
-    status?: number
-    present: boolean
-    empty?: boolean
-    corrupt?: boolean
-    unsupported?: boolean
-    blob?: number[]
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Device state
 // ---------------------------------------------------------------------------
 
@@ -115,13 +87,6 @@ export type DeviceState = {
     updated: boolean
   }
   runtimeConnection: RuntimeConnection
-  /**
-   * Latest post-flash storage-probe result (D61), or `null` when no probe has
-   * run for the current board/port. Lives at the device-state root — it's
-   * transient runtime info about the physical device, not persisted project
-   * configuration, so it stays out of `deviceDefinitions`.
-   */
-  deviceProbeInfo: DeviceProbeInfo | null
 }
 
 // ---------------------------------------------------------------------------
@@ -193,8 +158,6 @@ export type DeviceActions = {
    *  `snapshot[k]` when present, else by deleting the key.  Used by
    *  the vendor-screen tab's "Don't save" revert. */
   restoreVendorScreenSlice: (ownedKeys: string[], snapshot: Record<string, unknown>) => void
-  /** Persist (or clear, with `null`) the post-flash storage-probe result (D61). */
-  setDeviceProbeInfo: (info: DeviceProbeInfo | null) => void
 }
 
 // ---------------------------------------------------------------------------
