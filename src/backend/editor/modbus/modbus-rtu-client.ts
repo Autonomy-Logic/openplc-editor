@@ -378,10 +378,10 @@ export class ModbusRtuClient {
 
       const request = this.assembleRequest(functionCode, data)
       const response = await this.sendRequest(request, {
-        // Raw RTU frame (SUCCESS): [id@0][FC@1][STATUS@2][lastIndex:u16@3..4]
-        // [tick:u32@5..8][responseSize:u16 BE@9..10][data@11..][crc:2] → total =
+        // Raw RTU frame (SUCCESS): id@0, FC@1, STATUS@2, lastIndex u16 @3..4,
+        // tick u32 @5..8, responseSize u16BE @9..10, data @11.., crc 2 -> total =
         // 11 + responseSize + 2 = 13 + responseSize. A non-SUCCESS response is
-        // [id][FC][STATUS][crc:2] = 5 bytes, so key off STATUS. (Mirrors the C
+        // id, FC, STATUS, crc 2 = 5 bytes, so key off STATUS. (Mirrors the C
         // runtime debugGetTraceList: mb_frame_len = 11 + responseSize / = 3.)
         expectedTotalLength: (raw) => {
           if (raw.length < 3) return null
@@ -566,7 +566,7 @@ export class ModbusRtuClient {
     try {
       const request = this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, Buffer.alloc(0))
       const response = await this.sendRequest(request, {
-        // Raw RTU frame: [id@0][FC@1][STATUS@2][len:u16 BE@3..4][blob@5..][crc:2].
+        // Raw RTU frame: id@0, FC@1, STATUS@2, len u16BE @3..4, blob @5.., crc 2.
         // SUCCESS → total = 1+1+1+2+len+2 = 7+len. A non-SUCCESS response carries
         // no len/blob ([id][FC][STATUS][crc:2] = 5 bytes), so key off STATUS.
         expectedTotalLength: (raw) => {
