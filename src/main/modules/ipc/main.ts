@@ -38,6 +38,8 @@ import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
+import { deriveDeviceId, deriveVppId } from '../../../backend/editor/license/device-identity'
+import { checkDeviceActivation } from '../../../backend/editor/license/license-activation-client'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
@@ -958,7 +960,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
     this.registerHandle('device:get-anchor', this.handleGetDeviceAnchor)
-    this.registerHandle('device:probe-storage', this.handleProbeDeviceStorage)
+    this.registerHandle('device:activate-license', this.handleActivateDeviceLicense)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -2158,48 +2160,44 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * One-shot post-flash storage probe (D61).
+   * One-shot post-flash license-activation routine (D62 — extends the D61 probe).
    *
-   * Runs right after a successful arduino-cli serial upload to answer two
-   * questions about the freshly-flashed device: does it carry a hardware id
-   * (FC 0x48), and — for boards that declare the `licenseStore` capability —
-   * is a license blob present (FC 0x4A)?
+   * Runs right after a successful arduino-cli serial upload to a licensable
+   * direct-USB board. Reads the freshly-flashed device's hardware id (FC 0x48)
+   * and any existing license (FC 0x4A); when no license is present it derives
+   * the device/VPP identifiers and asks the backend (`checkDeviceActivation`)
+   * whether the device is entitled to one, writing the returned blob back
+   * (FC 0x49). The user-facing `outcome` drives the renderer's demo notice.
    *
    * This is deliberately independent of the always-on debugger session: it
    * spins up a TRANSIENT local `ModbusRtuClient` (never `this.debuggerModbusClient`
    * and it never touches `this.debuggerConnectionType` / RTU session fields),
-   * probes, and closes the serial in a `finally` so the port is free for the
-   * debugger to open on demand. The device reboots after the flash, so the
-   * connection is attempted with a short retry/backoff loop.
+   * runs the routine, and closes the serial in a `finally` so the port is free
+   * for the debugger to open on demand. The device reboots after the flash, so
+   * the connection is attempted with a short retry/backoff loop.
    *
    * Best-effort: a connect failure after all retries returns
-   * `{ success: false, error }` rather than throwing, so the upload flow in the
-   * renderer is never broken by a probe hiccup.
+   * `{ success: false, outcome: 'error', error }` rather than throwing, so the
+   * upload flow in the renderer is never broken by an activation hiccup.
    */
-  handleProbeDeviceStorage = async (
+  handleActivateDeviceLicense = async (
     _event: IpcMainInvokeEvent,
     connectionParams: { port: string; baudRate?: number; slaveId?: number },
-    opts: { hasLicenseStore: boolean },
+    opts: { packageId: string },
   ): Promise<{
     success: boolean
     probedAt: string
-    hasId?: boolean
+    outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+    deviceId?: string
+    vppId?: string
     anchorHex?: string
-    anchor?: number[]
-    license?: {
-      status?: number
-      present: boolean
-      empty?: boolean
-      corrupt?: boolean
-      unsupported?: boolean
-      blob?: number[]
-    }
+    license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
     error?: string
   }> => {
     const probedAt = new Date().toISOString()
 
     if (!connectionParams.port) {
-      return { success: false, probedAt, error: 'Port is required for the device storage probe' }
+      return { success: false, probedAt, outcome: 'error', error: 'Port is required for license activation' }
     }
 
     // TRANSIENT client — a local variable, never assigned to any debugger
@@ -2215,7 +2213,7 @@ class MainProcessBridge implements MainIpcModule {
       await connectWithRetries(client, { attempts: 5, backoffMs: 800 })
     } catch (error) {
       // Connect never came up after all retries — best-effort, don't throw.
-      return { success: false, probedAt, error: getErrorMessage(error) }
+      return { success: false, probedAt, outcome: 'error', error: getErrorMessage(error) }
     }
 
     try {
@@ -2223,44 +2221,59 @@ class MainProcessBridge implements MainIpcModule {
       // (the serial open auto-reset it). 6 attempts x 500ms rides an ESP8266 boot.
       const anchor = await readBoardIdWithRetries(client, { attempts: 6, backoffMs: 500 })
       const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
+      if (!hasId) {
+        // Device never answered the id read — nothing to activate. best-effort.
+        return { success: true, probedAt, outcome: 'no-id' }
+      }
 
-      let license:
-        | {
-            status?: number
-            present: boolean
-            empty?: boolean
-            corrupt?: boolean
-            unsupported?: boolean
-            blob?: number[]
-          }
-        | undefined
-      // When !hasId the FC channel never answered, so `license` stays undefined
-      // rather than reading garbage (status 0x00).
-      if (hasId && opts.hasLicenseStore) {
-        const lic = await client.readLicense()
-        license = {
-          status: lic.status,
-          present: lic.status === 0x7e,
-          empty: lic.empty,
-          corrupt: lic.corrupt,
-          unsupported: lic.status === 0x85,
-          blob: lic.blob ? Array.from(lic.blob) : undefined,
+      const lic = await client.readLicense()
+      // Already licensed (status 0x7E) — nothing to do; do NOT call the backend.
+      if (lic.status === 0x7e) {
+        return {
+          success: true,
+          probedAt,
+          outcome: 'already-licensed',
+          anchorHex: anchor.anchorHex,
+          license: { present: true, blob: lic.blob ? Array.from(lic.blob) : undefined },
         }
-      } else if (hasId) {
-        // Board can't store a license — report unsupported without a read.
-        license = { unsupported: true, present: false }
+      }
+      // Unsupported (status 0x85): the target declares `isLicensable` but has no
+      // on-device storage backend — a misconfiguration. Surface it and stop.
+      if (lic.status === 0x85) {
+        return { success: true, probedAt, outcome: 'error', error: 'no on-device storage backend' }
       }
 
-      return {
-        success: true,
-        probedAt,
-        hasId,
-        anchorHex: anchor.anchorHex,
-        anchor: anchor.anchor,
-        license,
+      // Empty / corrupt → attempt activation. Derive the identifiers from the
+      // hardware anchor + the selected VPP's package id, then ask the backend.
+      const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor ?? []))
+      const vppId = deriveVppId(opts.packageId)
+      const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId })
+
+      if (!act.licensed) {
+        return { success: true, probedAt, outcome: 'demo', deviceId, vppId, anchorHex: anchor.anchorHex }
       }
+
+      if (act.license) {
+        const write = await client.writeLicense(Uint8Array.from(act.license))
+        if (write.success) {
+          return {
+            success: true,
+            probedAt,
+            outcome: 'activated',
+            deviceId,
+            vppId,
+            anchorHex: anchor.anchorHex,
+            license: { present: true, blob: act.license },
+          }
+        }
+        return { success: true, probedAt, outcome: 'error', error: write.error ?? 'License write failed' }
+      }
+
+      // Licensed but the backend returned no blob — nothing to write; treat as
+      // demo so the device still runs (best-effort).
+      return { success: true, probedAt, outcome: 'demo', deviceId, vppId, anchorHex: anchor.anchorHex }
     } catch (error) {
-      return { success: false, probedAt, error: getErrorMessage(error) }
+      return { success: false, probedAt, outcome: 'error', error: getErrorMessage(error) }
     } finally {
       // Always release the serial — the debugger opens it on demand later.
       client.disconnect()

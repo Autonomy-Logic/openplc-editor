@@ -361,47 +361,55 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // One-shot post-flash storage probe (D61). After a successful
-        // arduino-cli serial upload (directUsbUpload boards), open a transient
-        // RTU connection, read the hardware id (FC 0x48) and — when the board
-        // declares the licenseStore capability — the stored license (FC 0x4A),
-        // then persist the result. Strictly best-effort: any failure is logged
-        // and swallowed so it can never affect the upload result above.
-        if (result.success && resolveTargetCapabilities(currentBoardInfo).directUsbUpload) {
+        // One-shot post-flash license-activation routine (D62). After a
+        // successful arduino-cli serial upload to a licensable direct-USB board,
+        // open a transient RTU connection, read any existing license and — when
+        // absent — derive the device/VPP ids and ask the backend whether the
+        // device is licensed, writing the returned blob (FC 0x49). Strictly
+        // best-effort and self-contained: nothing is persisted, and only the
+        // demo outcome surfaces a notice — every other outcome is silent and can
+        // never affect the upload result above.
+        const caps = resolveTargetCapabilities(currentBoardInfo)
+        // Gate on `isLicensable`: a board with no on-device licensing declared
+        // never opens the serial for activation.
+        if (result.success && caps.directUsbUpload && caps.isLicensable) {
           // Resolve the SAME RTU params the debugger uses (baud / port /
           // slaveId come from the board debug spec — e.g. espressif's
           // `rtu_baud_rate`, default "115200"), instead of hard-coding
           // 115200/slaveId 1 which fails for boards configured otherwise.
           // Non-interactive: no picker/prompt dialogs during a build; if a
-          // direct RTU config doesn't resolve, skip the probe (best-effort,
-          // the upload is never affected).
+          // direct RTU config doesn't resolve, skip (best-effort, the upload
+          // is never affected).
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
-          const outcome = spec
+          const resolved = spec
             ? resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), undefined)
             : undefined
-          if (outcome?.kind === 'config' && outcome.config.connectionType === 'rtu') {
-            const cp = outcome.config.connectionParams
+          // The selected VPP's package id (from its installed manifest) — needed
+          // to derive the vppId and to key the backend activation request.
+          const packageId = currentBoardInfo?.vpp?.packageId
+          if (resolved?.kind === 'config' && resolved.config.connectionType === 'rtu' && packageId) {
+            const cp = resolved.config.connectionParams
             try {
               // Spec params may be strings (e.g. baudRate default "115200");
-              // coerce to numbers for the probe bridge (baudRate?: number,
+              // coerce to numbers for the bridge (baudRate?: number,
               // slaveId?: number), and the port to a string.
-              const probe = await window.bridge.probeDeviceStorage(
+              const activation = await window.bridge.activateDeviceLicense(
                 {
                   port: String(cp.port),
                   baudRate: cp.baudRate != null ? Number(cp.baudRate) : undefined,
                   slaveId: cp.slaveId != null ? Number(cp.slaveId) : undefined,
                 },
-                { hasLicenseStore: resolveTargetCapabilities(currentBoardInfo).licenseStore },
+                { packageId },
               )
-              if (probe.success) {
-                // Store internally only — the probe is silent to the user.
-                useOpenPLCStore.getState().deviceActions.setDeviceProbeInfo({
-                  probedAt: probe.probedAt,
-                  hasId: probe.hasId,
-                  anchorHex: probe.anchorHex,
-                  anchor: probe.anchor,
-                  license: probe.license,
+              // Only the demo outcome is surfaced to the user (a product notice);
+              // already-licensed / activated / no-id / error are all silent.
+              if (activation.outcome === 'demo') {
+                const vppName = boardTarget
+                addLog({
+                  id: crypto.randomUUID(),
+                  level: 'warning',
+                  message: `Licença não encontrada para "${vppName}". O VPP rodará em modo demo — adquira a licença para o modo completo.`,
                 })
               }
             } catch {

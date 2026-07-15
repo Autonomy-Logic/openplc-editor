@@ -467,30 +467,25 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('device:get-anchor', connectionType, connectionParams),
 
-  // One-shot post-flash storage probe (D61): open a transient RTU connection
-  // with retries/backoff, read the hardware id (FC 0x48) and — when the board
-  // declares the licenseStore capability — the stored license (FC 0x4A), then
-  // close the serial. Best-effort: never throws in a way that breaks the upload
-  // flow; a connect failure surfaces as `{ success: false, error }`.
-  probeDeviceStorage: (
+  // One-shot post-flash license-activation routine (D62): open a transient RTU
+  // connection with retries/backoff, read the hardware id (FC 0x48) and any
+  // existing license (FC 0x4A); when absent, derive the device/VPP ids and ask
+  // the backend whether the device is licensed, writing the returned blob back
+  // (FC 0x49), then close the serial. Best-effort: never throws in a way that
+  // breaks the upload flow; failures surface as `{ success: false, outcome: 'error' }`.
+  activateDeviceLicense: (
     connectionParams: { port: string; baudRate?: number; slaveId?: number },
-    opts: { hasLicenseStore: boolean },
+    opts: { packageId: string },
   ): Promise<{
     success: boolean
     probedAt: string
-    hasId?: boolean
+    outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+    deviceId?: string
+    vppId?: string
     anchorHex?: string
-    anchor?: number[]
-    license?: {
-      status?: number
-      present: boolean
-      empty?: boolean
-      corrupt?: boolean
-      unsupported?: boolean
-      blob?: number[]
-    }
+    license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
     error?: string
-  }> => ipcRenderer.invoke('device:probe-storage', connectionParams, opts),
+  }> => ipcRenderer.invoke('device:activate-license', connectionParams, opts),
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
