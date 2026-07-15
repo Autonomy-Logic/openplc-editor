@@ -73,22 +73,18 @@ const EDGE_COLOR_TRUE = '#00FF00'
 export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    ladderFlowActions,
-    ladderFlows,
-    libraries,
-    editorActions: { updateModelVariables },
-    project,
-    projectActions: { deleteVariable },
-    modalActions: { openModal },
-    searchQuery,
-    searchActions: { setSearchNodePosition },
-  } = useOpenPLCStore()
+  const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
+  const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
+  const deleteVariable = useOpenPLCStore((state) => state.projectActions.deleteVariable)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+  const searchQuery = useOpenPLCStore((state) => state.searchQuery)
+  const setSearchNodePosition = useOpenPLCStore((state) => state.searchActions.setSearchNodePosition)
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const resourceInstances = useOpenPLCStore((state) => state.project.data.configurations.resource.instances)
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
 
   const { captureAndPush } = usePouSnapshot()
-  const { pous } = project.data
   const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const nodeTypes = useMemo(() => customNodeTypes, [])
@@ -188,8 +184,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       if (!sourceHandle) return undefined
 
       if (pouRef?.pouType !== 'function-block') {
-        const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst) => inst.program === pouName)
+        const programInstance = resourceInstances.find((inst) => inst.program === pouName)
         if (!programInstance) return undefined
       }
 
@@ -274,7 +269,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
       return edge
     })
-  }, [rungLocal.edges, rungLocal.nodes, isDebuggerVisible, debugVariableValues, pouName, project, getCompositeKey])
+  }, [
+    rungLocal.edges,
+    rungLocal.nodes,
+    isDebuggerVisible,
+    debugVariableValues,
+    pouName,
+    pouRef,
+    resourceInstances,
+    getCompositeKey,
+  ])
 
   const styledNodes = useMemo(() => {
     const baseNodes = !isDebuggerVisible
@@ -352,7 +356,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     isDebuggerActive,
     debugVariableValues,
     pouName,
-    project,
+    pouRef,
+    resourceInstances,
     getCompositeKey,
   ])
 
@@ -451,6 +456,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Add a new node to the rung
    */
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
+    const { libraries, ladderFlows } = useOpenPLCStore.getState()
     let pouLibrary = undefined
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
@@ -533,6 +539,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Remove some nodes from the rung
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
+    const { ladderFlows } = useOpenPLCStore.getState()
     const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements({ ...rungLocal }, nodes)
 
     captureAndPush(pouName)
@@ -642,6 +649,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Handle the stop of a node drag
    */
   const handleNodeDragStop = (node: FlowNode) => {
+    const { ladderFlows } = useOpenPLCStore.getState()
     const result = onElementDrop(rungLocal, rung, node)
 
     captureAndPush(pouName)
@@ -859,24 +867,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       // Then add the node to the rung
       handleAddNode(blockType, library)
     },
-    // `libraries.system`, `libraries.user`, and `pous` aren't read
-    // directly here — `handleAddNode` closes over all three.  Omitting
-    // any of them means the memoized callback keeps a reference to the
-    // pre-update handler, so a freshly installed system library /
-    // freshly created user FB / freshly saved POU stays invisible
-    // until something else forces a re-bind (matches the FBD onDrop
-    // dep set; same failure mode: catalog-installed libs threw
-    // "block type ... does not exist" on first drop).
-    [
-      rung,
-      rungLocal,
-      setReactFlowPanelExtent,
-      reactFlowPanelExtent,
-      isDebuggerActive,
-      libraries.system,
-      libraries.user,
-      pous,
-    ],
+    // `handleAddNode` reads `libraries`/`ladderFlows` via getState() at call
+    // time (never stale) and `pous` via subscription, so unlike the previous
+    // whole-store version this callback no longer needs library/pou deps to
+    // re-bind for freshly installed libraries.
+    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, isDebuggerActive, pous],
   )
 
   return (

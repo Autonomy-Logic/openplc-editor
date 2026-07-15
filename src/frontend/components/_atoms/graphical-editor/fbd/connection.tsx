@@ -19,14 +19,9 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 const ConnectionElement = (block: ConnectionProps) => {
   const { id, data, selected, type } = block
   const pouName = useBoundPou()
-  const {
-    editorActions: { updateModelFBD },
-    fbdFlows,
-    fbdFlowActions: { updateNode },
-    project: {
-      data: { pous },
-    },
-  } = useOpenPLCStore()
+  const updateModelFBD = useOpenPLCStore((state) => state.editorActions.updateModelFBD)
+  const updateNode = useOpenPLCStore((state) => state.fbdFlowActions.updateNode)
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
 
   const inputConnectionRef = useRef<
     HTMLTextAreaElement & {
@@ -66,6 +61,7 @@ const ConnectionElement = (block: ConnectionProps) => {
    * Update inputError state when the variable is updated
    */
   useEffect(() => {
+    const { fbdFlows } = useOpenPLCStore.getState()
     const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
@@ -95,6 +91,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   const handleSubmitConnectionValueOnTextareaBlur = (connectionName?: string) => {
     const connectionNameToSubmit = connectionName || connectionValue
 
+    const { fbdFlows } = useOpenPLCStore.getState()
     const {
       pou,
       rung,
