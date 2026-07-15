@@ -409,7 +409,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 addLog({
                   id: crypto.randomUUID(),
                   level: 'warning',
-                  message: `Licença não encontrada para "${vppName}". O VPP rodará em modo demo — adquira a licença para o modo completo.`,
+                  message: `No license found for "${vppName}". The VPP will run in demo mode — purchase a license to unlock full mode.`,
                 })
               }
             } catch {
