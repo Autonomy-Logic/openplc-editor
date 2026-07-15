@@ -425,7 +425,7 @@ void debugWriteLicense(uint16_t len, const uint8_t *blob)
 // no malloc on AVR. READ has no request payload, so writing at [5] cannot clobber
 // any input (unlike the old debugGetTraceList overlap). out_len is unknown until
 // after the read; the len field lives at [3..4], BEFORE the blob, so filling it
-// afterwards never overlaps the blob bytes. mb_frame_len = 5 + out_len (a 106 B
+// afterwards never overlaps the blob bytes. mb_frame_len = 5 + out_len (a 98 B
 // blob fits MAX_MB_FRAME — 128 on 328P, 256 elsewhere — comfortably).
 //
 // NOTE on endianness: len on the wire is BIG-ENDIAN (matches every other debug

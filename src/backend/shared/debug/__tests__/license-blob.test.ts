@@ -36,11 +36,9 @@ function goldenInput(): LicenseBlob {
   return {
     magic: golden.input.magic,
     fmtVersion: golden.input.fmtVersion,
-    flags: golden.input.flags,
+    keyId: golden.input.keyId,
     deviceId: Uint8Array.from(golden.input.deviceId),
     productId: Uint8Array.from(golden.input.productId),
-    issuedAt: golden.input.issuedAt,
-    expiresAt: golden.input.expiresAt,
     signature: Uint8Array.from(golden.input.signature),
     crc32: golden.input.crc32,
   }
@@ -66,8 +64,8 @@ describe('crc32IsoHdlc', () => {
 
 describe('constants', () => {
   it('mirror the C struct sizes and magic', () => {
-    expect(LIC_BLOB_SIZE).toBe(106)
-    expect(LIC_PAYLOAD_SIZE).toBe(38)
+    expect(LIC_BLOB_SIZE).toBe(98)
+    expect(LIC_PAYLOAD_SIZE).toBe(30)
     expect(LIC_MAGIC_LE).toBe(0x434c504f)
   })
 })
@@ -84,20 +82,20 @@ describe('serializeLicenseBlob', () => {
     expect(Array.from(bytes.subarray(0, 4))).toEqual([0x4f, 0x50, 0x4c, 0x43])
   })
 
-  it('recomputes crc32 over [payload||signature] and stores it LE at offset 102', () => {
+  it('recomputes crc32 over [payload||signature] and stores it LE at offset 94', () => {
     const bytes = serializeLicenseBlob(goldenInput())
     const view = new DataView(bytes.buffer)
-    const storedCrc = view.getUint32(102, true)
+    const storedCrc = view.getUint32(94, true)
     expect(storedCrc).toBe(golden.expectedCrc32)
-    // Independent recomputation over offsets 0..101 must agree.
-    expect(crc32IsoHdlc(bytes.subarray(0, 102))).toBe(golden.expectedCrc32)
+    // Independent recomputation over offsets 0..93 must agree.
+    expect(crc32IsoHdlc(bytes.subarray(0, 94))).toBe(golden.expectedCrc32)
   })
 
   it('ignores the crc32 field on the input (always recomputes)', () => {
     const tampered = goldenInput()
     tampered.crc32 = 0xdeadbeef
     const bytes = serializeLicenseBlob(tampered)
-    expect(new DataView(bytes.buffer).getUint32(102, true)).toBe(golden.expectedCrc32)
+    expect(new DataView(bytes.buffer).getUint32(94, true)).toBe(golden.expectedCrc32)
   })
 })
 
@@ -106,11 +104,9 @@ describe('deserializeLicenseBlob', () => {
     const parsed = deserializeLicenseBlob(hexToBytes(golden.expectedBytesHex))
     expect(parsed.magic).toBe(LIC_MAGIC_LE)
     expect(parsed.fmtVersion).toBe(golden.input.fmtVersion)
-    expect(parsed.flags).toBe(golden.input.flags)
+    expect(parsed.keyId).toBe(golden.input.keyId)
     expect(Array.from(parsed.deviceId)).toEqual(golden.input.deviceId)
     expect(Array.from(parsed.productId)).toEqual(golden.input.productId)
-    expect(parsed.issuedAt).toBe(golden.input.issuedAt)
-    expect(parsed.expiresAt).toBe(golden.input.expiresAt)
     expect(Array.from(parsed.signature)).toEqual(golden.input.signature)
     expect(parsed.crc32).toBe(golden.expectedCrc32)
   })
@@ -128,11 +124,9 @@ describe('round-trip serialize -> deserialize', () => {
     // magic is forced to canonical LIC_MAGIC_LE on serialize; input already uses it.
     expect(parsed.magic).toBe(input.magic)
     expect(parsed.fmtVersion).toBe(input.fmtVersion)
-    expect(parsed.flags).toBe(input.flags)
+    expect(parsed.keyId).toBe(input.keyId)
     expect(Array.from(parsed.deviceId)).toEqual(Array.from(input.deviceId))
     expect(Array.from(parsed.productId)).toEqual(Array.from(input.productId))
-    expect(parsed.issuedAt).toBe(input.issuedAt)
-    expect(parsed.expiresAt).toBe(input.expiresAt)
     expect(Array.from(parsed.signature)).toEqual(Array.from(input.signature))
     // crc32 is recomputed on serialize; the round-tripped value is the real crc.
     expect(parsed.crc32).toBe(golden.expectedCrc32)

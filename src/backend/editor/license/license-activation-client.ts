@@ -33,7 +33,7 @@ export interface DeviceActivationInput {
  *  post-flash routine can degrade to demo mode without a hard failure. */
 export interface DeviceActivationResult {
   licensed: boolean
-  /** License blob bytes (106 B) when `licensed` — ready to write via FC 0x49. */
+  /** License blob bytes (98 B) when `licensed` — ready to write via FC 0x49. */
   license?: number[]
   /** Backend-supplied reason (e.g. "no active subscription"). */
   reason?: string
@@ -48,8 +48,8 @@ const REQUEST_TIMEOUT_MS = 30_000
  * Check whether a device is entitled to a license for the given VPP.
  *
  * `process.env.OPLC_LICENSE_MOCK` short-circuits the network:
- *   - `'licensed'` → `{ licensed: true, license: <golden 106-byte blob> }`
- *     (exercises the on-device write path).
+ *   - `'licensed'` → `{ licensed: true, license: <golden 98-byte blob> }`
+ *     (exercises the on-device write path; 98-byte blob).
  *   - `'demo'`     → `{ licensed: false }`.
  *   - absent       → calls the real edge client (§4).
  */
@@ -157,7 +157,7 @@ function unwrapHttpEnvelope(raw: unknown): unknown {
 // ---------------------------------------------------------------------------
 
 /**
- * The deterministic 106-byte golden license blob, as `number[]`. Built via
+ * The deterministic 98-byte golden license blob, as `number[]`. Built via
  * the shared `serializeLicenseBlob` from the known golden input (the same
  * vector as `on-device-license-storage`'s `license-golden.json`), so the
  * mock exercises a byte-valid on-device write.
@@ -166,11 +166,9 @@ function goldenLicenseBytes(): number[] {
   const blob = serializeLicenseBlob({
     magic: 0, // forced to LIC_MAGIC_LE by the serializer
     fmtVersion: 1,
-    flags: 0,
+    keyId: 0,
     deviceId: Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
     productId: Uint8Array.from([160, 161, 162, 163, 164, 165, 166, 167]),
-    issuedAt: 1600000000,
-    expiresAt: 1784499200,
     signature: new Uint8Array(64).fill(17),
     crc32: 0, // recomputed by the serializer
   })
