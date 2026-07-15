@@ -134,6 +134,34 @@ describe('resolveTargetCapabilities', () => {
     expect(resolveTargetCapabilities(undefined).licenseStore).toBe(false)
   })
 
+  it('leaves isLicensable false for a plain Runtime v4 board (not a licensed product)', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler' })
+    expect(caps.isLicensable).toBe(false)
+  })
+
+  it('leaves isLicensable false for a v4-derived VPP board that does not declare it', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: { kind: 'slm-rp4' } })
+    expect(caps.vppIo).toBe(true)
+    expect(caps.isLicensable).toBe(false)
+  })
+
+  it('flips isLicensable on when the manifest declares capabilities.isLicensable', () => {
+    // The manifest ships `capabilities.isLicensable: true`; it flows verbatim
+    // through the board loader's capability spread, exactly like `vppIo`.
+    const caps = resolveTargetCapabilities({
+      compiler: 'openplc-compiler',
+      capabilities: { vppIo: true, licenseStore: true, isLicensable: true },
+    })
+    expect(caps.isLicensable).toBe(true)
+    // Unrelated capabilities preserved.
+    expect(caps.licenseStore).toBe(true)
+    expect(caps.modbusTcpServer).toBe(true)
+  })
+
+  it('leaves isLicensable false when no board info is provided', () => {
+    expect(resolveTargetCapabilities(undefined).isLicensable).toBe(false)
+  })
+
   it('handles a board with capabilities but no compiler (web orchestrator devices)', () => {
     // openplc-web populates capabilities directly on vPLC entries with
     // no `compiler` field. Resolver must take the capabilities verbatim
@@ -195,5 +223,12 @@ describe('preset shapes', () => {
     expect(RUNTIME_V3_CAPABILITIES.licenseStore).toBe(false)
     expect(RUNTIME_V4_CAPABILITIES.licenseStore).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.licenseStore).toBe(false)
+  })
+
+  it('every shipped preset defaults isLicensable to false (weak default -> not licensed)', () => {
+    expect(SIMULATOR_CAPABILITIES.isLicensable).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.isLicensable).toBe(false)
+    expect(RUNTIME_V4_CAPABILITIES.isLicensable).toBe(false)
+    expect(ARDUINO_CLI_CAPABILITIES.isLicensable).toBe(false)
   })
 })

@@ -51,6 +51,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   directUsbUpload: false,
   licenseStore: false,
+  isLicensable: false,
 }
 
 /**

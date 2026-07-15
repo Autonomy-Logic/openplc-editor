@@ -109,4 +109,16 @@ export interface TargetCapabilities {
    *  manifest field that drives `-DVPP_HAS_LICENSE_STORE` on the build
    *  side, mirroring how `vppIo` is resolved. */
   licenseStore: boolean
+
+  /** The selected board's VPP participates in the paid licensing flow
+   *  (PLA-01). Gate for the post-flash activation routine: only boards
+   *  whose VPP manifest declares `capabilities.isLicensable: true` run the
+   *  `anchor -> derive -> activate -> write` flow after a successful upload.
+   *  `false` (the weak default) for every board that doesn't declare it —
+   *  including plain Runtime v3/v4, Linux, Arduino, and the Simulator.
+   *  Distinct from `licenseStore`: `licenseStore` is about whether the VPP
+   *  ships the on-device storage backend, `isLicensable` about whether the
+   *  VPP is sold as a licensed product. Flows verbatim from the manifest's
+   *  `capabilities` block, exactly like `vppIo`. */
+  isLicensable: boolean
 }

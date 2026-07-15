@@ -35,6 +35,8 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   // the licensing UX stays hidden. Follows the manifest, not the kind —
   // a Simulator VPP that shipped one would flip this to `true`.
   licenseStore: false,
+  // No shipped Simulator VPP is a paid/licensed product.
+  isLicensable: false,
 }
 
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
@@ -53,6 +55,8 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   directUsbUpload: false,
   // Runtime v3 has no VPP layer and thus no license-store backend.
   licenseStore: false,
+  // Runtime v3 has no VPP layer and is not a licensed product.
+  isLicensable: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
@@ -76,6 +80,9 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   // `hal.licenseStore` overrides this to `true` via the merged
   // capability block — same path as `vppIo`.
   licenseStore: false,
+  // "Plain" Runtime v4 is not a licensed product; a paid VPP board flips
+  // this to `true` via its merged manifest capability block, like `vppIo`.
+  isLicensable: false,
 }
 
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
@@ -99,4 +106,7 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   // backend flip this on via their merged capability block; the plain
   // preset stays `false`.
   licenseStore: false,
+  // Plain Arduino targets are not licensed products; a paid Arduino-CLI VPP
+  // board flips this to `true` via its merged manifest capability block.
+  isLicensable: false,
 }
