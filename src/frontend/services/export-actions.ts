@@ -14,10 +14,10 @@
  * sidecars) since this is a plain export, not a compile.
  */
 
+import { XmlGenerator } from '../../backend/shared/utils/PLC/xml-generator'
 import type { PLCProjectData as SchemaPLCProjectData } from '../../middleware/shared/ports/open-plc-types'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import type { PLCProjectData, PouLanguage } from '../../middleware/shared/ports/types'
-import { XmlGenerator } from '../../backend/shared/utils/PLC/xml-generator'
 import { openPLCStoreBase } from '../store'
 import { toast } from '../utils/toast'
 

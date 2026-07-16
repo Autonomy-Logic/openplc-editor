@@ -6,9 +6,9 @@
  * in-memory project data is replaced with what the XML parses to.
  */
 
-import type { OpenProjectResponseData } from '../store/slices/shared/types'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../store'
+import type { OpenProjectResponseData } from '../store/slices/shared/types'
 import { buildProjectResponseFromPlcopenParse } from '../utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../utils/PLC/xml-parser'
 import { toast } from '../utils/toast'
