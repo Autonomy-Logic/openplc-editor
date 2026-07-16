@@ -11,6 +11,10 @@ before. The clock is injected (now_ms) so the core stays host-testable.
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     LIC_GATE_FULL = 0,          /* valid license -> full operation */
     LIC_GATE_DEMO = 1,          /* no/invalid license -> demo window running */
@@ -25,5 +29,9 @@ void license_gate_init(const uint8_t *blob, size_t blob_len,
                        uint32_t now_ms);
 lic_gate_state_t license_gate_state(uint32_t now_ms);
 int license_gate_actuation_allowed(uint32_t now_ms);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LICENSE_GATE_H */
