@@ -279,6 +279,18 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // ST LSP go-to-definition — needs sanitizeAxisName/softMotionAxisNames from
+  // the SoftMotion codegen (backend/shared/ethercat/generate-softmotion.ts) to
+  // map a clicked axis reference back to its originating drive. Same shape as
+  // the other backend-shared exceptions below: the pure discovery logic isn't
+  // duplicated, only reached across a layer boundary the file itself can't move.
+  'frontend/services/st-lsp/goto-definition-redirect.ts': ['backend-shared'],
+  // ST LSP project sync — needs serializeSoftMotionAxisGlobalsToST to publish
+  // the generated axis globals into the LSP's ambient document set.
+  'frontend/services/st-lsp/project-sync.ts': ['backend-shared'],
+  // Shared workspace slice — needs isValidIecIdentifier to validate a renamed
+  // EtherCAT device name before it's used as a SoftMotion axis identifier.
+  'frontend/store/slices/shared/slice.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------
