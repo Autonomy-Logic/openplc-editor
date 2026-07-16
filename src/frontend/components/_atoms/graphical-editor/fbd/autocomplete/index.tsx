@@ -31,14 +31,10 @@ type FBDBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProps>(
   ({ block: unknownBlock, isOpen, setIsOpen, keyPressed, valueToSearch }: FBDBlockAutoCompleteProps, ref) => {
     const pouName = useBoundPou()
-    const {
-      project: {
-        data: { pous },
-      },
-      projectActions: { createVariable },
-      fbdFlows,
-      fbdFlowActions: { updateNode, addNode },
-    } = useOpenPLCStore()
+    const pous = useOpenPLCStore((state) => state.project.data.pous)
+    const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+    const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
+    const { updateNode, addNode } = useOpenPLCStore((state) => state.fbdFlowActions)
 
     const block = unknownBlock as Node<BasicNodeData> & { positionAbsoluteX?: number; positionAbsoluteY?: number }
     const { edges, rung } = useMemo(() => {

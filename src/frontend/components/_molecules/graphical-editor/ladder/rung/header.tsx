@@ -26,10 +26,8 @@ type RungHeaderProps = {
 
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const editorName = useBoundPou()
-  const {
-    ladderFlowActions: { addComment, duplicateRung },
-    modalActions: { openModal },
-  } = useOpenPLCStore()
+  const { addComment, duplicateRung } = useOpenPLCStore((state) => state.ladderFlowActions)
+  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)

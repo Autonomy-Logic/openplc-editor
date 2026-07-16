@@ -705,6 +705,21 @@ const SDOConfigurationEntrySchema = z.object({
   objectName: z.string(),
 })
 
+/**
+ * CiA 402 SoftMotion axis configuration on a recognized EtherCAT drive. When
+ * present and enabled, the device is treated as a SoftMotion axis: at compile
+ * time the editor generates an AXIS_REF_SM3 global (named after the device),
+ * located scalar globals bound to the drive's CiA 402 PDO addresses, and a
+ * per-scan SM_Drive_GenericDS402 bridge. Scaling mirrors the AXIS_REF_SM3
+ * fields (increments per unit = scaleFactor * scaleNum / scaleDenom).
+ */
+const Cia402AxisConfigSchema = z.object({
+  enabled: z.boolean(),
+  scaleNum: z.number(),
+  scaleDenom: z.number(),
+  scaleFactor: z.number(),
+})
+
 const ConfiguredEtherCATDeviceSchema = z.object({
   id: z.string(),
   position: z.number().optional(),
@@ -721,6 +736,8 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   txPdos: z.array(PersistedPdoSchema).optional(),
   slaveType: z.string().optional(),
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+  /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
+  cia402: Cia402AxisConfigSchema.optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({
