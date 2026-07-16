@@ -18,13 +18,6 @@
 #include "openplc.h"
 #include "generated.hpp"
 #include "debug_dispatch.hpp"
-#include "license_gate.h"
-
-// millis() is provided by the Arduino core (extern "C" in wiring.c). This TU is
-// deliberately kept free of <Arduino.h> (see header above), so forward-declare
-// the one symbol we need instead of pulling the macro-polluting header. The
-// symbol resolves at final link against the core. No esp_timer dependency.
-extern "C" unsigned long millis(void);
 
 // ---------------------------------------------------------------------------
 // Runtime fault hook
@@ -258,25 +251,7 @@ void runtime_plc_cycle()
     }
     ++scan_counter;
 
-    // License gate: the single actuation chokepoint. While the license is valid
-    // (or no license-core is linked — the weak gate returns 1) outputs are
-    // pushed to the pins as usual. Once the 15-minute demo window expires the
-    // core returns 0 here, and we stop actuating.
-    if (license_gate_actuation_allowed((uint32_t)millis())) {
-        updateOutputBuffers();
-    } else {
-        // Demo expired: stop actuation. Zero the PLC output image (deref each
-        // bound located-output pointer), then push that safe zero state to the
-        // pins so outputs are actively de-energized. Inputs keep being read —
-        // updateInputBuffers() already ran this cycle — so the debugger still
-        // observes live inputs.
-        for (size_t i = 0; i < (MAX_DIGITAL_OUTPUT / 8); ++i)
-            for (size_t j = 0; j < 8; ++j)
-                if (bool_output[i][j]) *bool_output[i][j] = 0;
-        for (size_t i = 0; i < MAX_ANALOG_OUTPUT; ++i)
-            if (int_output[i]) *int_output[i] = 0;
-        updateOutputBuffers();
-    }
+    updateOutputBuffers();
 
     strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
 }

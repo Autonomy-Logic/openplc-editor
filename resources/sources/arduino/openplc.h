@@ -81,6 +81,13 @@ extern "C" {
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
+// Raw I/O ops provided by the VPP's open HAL; gated by the license-core.
+// updateInput/OutputBuffers above come from the license-core .a (strong,
+// gated wrappers) or from a weak default (license_io_weak.cpp) that maps
+// them to these raw ops unenforced.
+void hal_read_inputs(void);
+void hal_write_outputs(void);
+void hal_disable_all_outputs(void);
 #ifdef __cplusplus
 }
 #endif
