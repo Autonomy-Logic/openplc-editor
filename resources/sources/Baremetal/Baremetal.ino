@@ -29,9 +29,21 @@
 #include "openplc.h"
 #include "defines.h"
 #include "arduino_runtime_glue.h"
+#include "license_gate.h"
+#include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
 
 #if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
+#endif
+
+// Hardware anchor for the license gate: the SAME ArduinoUniqueID material the
+// debugger returns for FC 0x48 (see modbus_debug.cpp::debugGetBoardId). Mirror
+// that file's guard exactly so a core without UniqueID support — or a board
+// that opts out via OPENPLC_NO_UNIQUE_ID — still compiles; the anchor is simply
+// empty there and the license-core binds to whatever it gets.
+#ifndef OPENPLC_NO_UNIQUE_ID
+    #include <ArduinoUniqueID.h>
+    #define OPENPLC_HAS_UNIQUE_ID
 #endif
 
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
@@ -127,6 +139,38 @@ void setup()
 
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
+
+    // -----------------------------------------------------------------------
+    // License gate (Slice C, D65). Hand the stored license blob and the
+    // hardware anchor to the license-core so it can verify the license and arm
+    // its demo timer. Without a license-core linked, license_gate_init() is the
+    // weak default (license_gate_weak.cpp) and this whole block is a harmless
+    // no-op — actuation then stays unconditionally allowed, i.e. behaviour is
+    // identical to boards that never had licensing. millis() gives the core the
+    // same time base the runtime uses (no esp_timer dependency).
+    // -----------------------------------------------------------------------
+    {
+        uint8_t lic_blob[LIC_BLOB_SIZE];
+        size_t  lic_len = 0;
+        if (license_store_read(lic_blob, sizeof(lic_blob), &lic_len) != LIC_STORE_OK)
+        {
+            // EMPTY / CORRUPT / UNSUPPORTED / any error: nothing usable was
+            // read, so present a zero-length blob. The core's verify rejects it
+            // and starts the demo window; with no core the weak gate ignores
+            // the args entirely.
+            lic_len = 0;
+        }
+
+    #ifdef OPENPLC_HAS_UNIQUE_ID
+        const uint8_t *anchor     = UniqueID;
+        size_t         anchor_len = (size_t)UniqueIDsize;
+    #else
+        const uint8_t *anchor     = NULL;
+        size_t         anchor_len = 0;
+    #endif
+
+        license_gate_init(lic_blob, lic_len, anchor, anchor_len, (uint32_t)millis());
+    }
 
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
