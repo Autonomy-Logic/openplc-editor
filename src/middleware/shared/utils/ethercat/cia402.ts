@@ -95,10 +95,7 @@ function pdosContainIndex(pdos: ESIPdo[], index: number): boolean {
  * (Controlword out, Statusword in) — i.e. it can be driven as a SoftMotion axis.
  */
 export function isCia402Drive(device: ESIDevice): boolean {
-  return (
-    pdosContainIndex(device.rxPdo, MANDATORY_INDICES[0]) &&
-    pdosContainIndex(device.txPdo, MANDATORY_INDICES[1])
-  )
+  return pdosContainIndex(device.rxPdo, MANDATORY_INDICES[0]) && pdosContainIndex(device.txPdo, MANDATORY_INDICES[1])
 }
 
 /** A resolved CiA 402 object: its role, IEC located address, and IEC type. */

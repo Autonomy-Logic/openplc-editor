@@ -2,7 +2,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-
+import { enrichDeviceData } from '../../../../../backend/shared/ethercat/enrich-device-data'
+import { parseESIDeviceFull } from '../../../../../backend/shared/ethercat/esi-parser-main'
 import {
   CIA402_OBJECTS,
   DEFAULT_CIA402_AXIS_CONFIG,
@@ -10,11 +11,9 @@ import {
   normalizeObjectIndex,
   resolveCia402Objects,
 } from '../cia402'
-import { enrichDeviceData } from '../enrich-device-data'
-import { parseESIDeviceFull } from '../esi-parser-main'
 
 const ESI_XML = readFileSync(
-  resolve(__dirname, 'fixtures/cia402-servo-esi.xml'),
+  resolve(__dirname, '../../../../../backend/shared/ethercat/__tests__/fixtures/cia402-servo-esi.xml'),
   'utf-8',
 )
 

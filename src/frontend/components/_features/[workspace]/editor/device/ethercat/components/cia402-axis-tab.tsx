@@ -1,6 +1,6 @@
-import { type Cia402Role, resolveCia402Objects } from '@root/backend/shared/ethercat/cia402'
 import { InputWithRef } from '@root/frontend/components/_atoms/input'
 import type { Cia402AxisConfig, ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
+import { type Cia402Role, resolveCia402Objects } from '@root/middleware/shared/utils/ethercat'
 import { useMemo } from 'react'
 
 const inputClassName =

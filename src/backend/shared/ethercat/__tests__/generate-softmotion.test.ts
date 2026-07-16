@@ -10,12 +10,8 @@ import { parseESIDeviceFull } from '../esi-parser-main'
 import {
   generateSoftMotionArtifacts,
   injectAxisExternals,
-  isValidIecIdentifier,
-  serializeSoftMotionAxisGlobalsToST,
   SM3_BRIDGE_INSTANCE_NAME,
   SM3_BRIDGE_POU_NAME,
-  sanitizeAxisName,
-  softMotionAxisNames,
 } from '../generate-softmotion'
 
 const ESI_XML = readFileSync(resolve(__dirname, 'fixtures/cia402-servo-esi.xml'), 'utf-8')
@@ -59,33 +55,9 @@ function makeProject(devices: ConfiguredEtherCATDevice[]): PLCProjectData {
 }
 
 describe('generateSoftMotionArtifacts', () => {
-  it('sanitizes device names into valid IEC identifiers', () => {
-    expect(sanitizeAxisName('X_Axis')).toBe('X_Axis')
-    expect(sanitizeAxisName('My Axis 01')).toBe('My_Axis_01')
-    expect(sanitizeAxisName('9drive')).toBe('_9drive')
-  })
-
-  it('validates IEC identifiers', () => {
-    expect(isValidIecIdentifier('X_Axis')).toBe(true)
-    expect(isValidIecIdentifier('_axis1')).toBe(true)
-    expect(isValidIecIdentifier('ASDA-A2-E')).toBe(false)
-    expect(isValidIecIdentifier('My Axis')).toBe(false)
-    expect(isValidIecIdentifier('9drive')).toBe(false)
-    expect(isValidIecIdentifier('')).toBe(false)
-  })
-
   it('is a no-op when there are no CiA 402 axes', () => {
     const project = makeProject([])
     expect(generateSoftMotionArtifacts(project)).toBe(project)
-  })
-
-  describe('softMotionAxisNames', () => {
-    it('returns sanitized names of enabled axes', () => {
-      expect(softMotionAxisNames(makeProject([makeDevice('My Axis')]))).toEqual(['My_Axis'])
-    })
-    it('returns [] when there are no axes', () => {
-      expect(softMotionAxisNames(makeProject([]))).toEqual([])
-    })
   })
 
   describe('injectAxisExternals', () => {
@@ -108,31 +80,6 @@ describe('generateSoftMotionArtifacts', () => {
         body: { language: 'st', value: 'x := Ax;' },
       } as never
       expect(injectAxisExternals(fn, ['Ax'])).toBe(fn)
-    })
-  })
-
-  describe('serializeSoftMotionAxisGlobalsToST', () => {
-    it('returns empty string when there are no axes', () => {
-      expect(serializeSoftMotionAxisGlobalsToST(makeProject([]))).toBe('')
-    })
-
-    it('declares each axis as a bare top-level VAR_GLOBAL of type AXIS_REF_SM3', () => {
-      const st = serializeSoftMotionAxisGlobalsToST(makeProject([makeDevice('X_Axis')]))
-      expect(st).toContain('X_Axis : AXIS_REF_SM3;')
-      // Bare top-level block (ambient global) — NOT wrapped in a CONFIGURATION,
-      // so the axis resolves without VAR_EXTERNAL.
-      expect(st.startsWith('VAR_GLOBAL')).toBe(true)
-      expect(st).toContain('END_VAR')
-      expect(st).not.toContain('CONFIGURATION')
-    })
-
-    it('lists axes in softMotionAxisNames order (line N+1 = axis N)', () => {
-      const project = makeProject([makeDevice('X_Axis')])
-      const st = serializeSoftMotionAxisGlobalsToST(project)
-      const names = softMotionAxisNames(project)
-      const lines = st.split('\n')
-      // line 0 = VAR_GLOBAL, line 1 = first axis
-      expect(lines[1]).toContain(names[0])
     })
   })
 

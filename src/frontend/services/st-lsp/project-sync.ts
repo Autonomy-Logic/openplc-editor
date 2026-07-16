@@ -25,8 +25,8 @@
  * `refreshStlibs()` on the service.
  */
 
-import { serializeSoftMotionAxisGlobalsToST } from '../../../backend/shared/ethercat/generate-softmotion'
 import type { PLCDataType, PLCPou, PLCRemoteDevice, PLCVariable } from '../../../middleware/shared/ports/types'
+import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
 import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
