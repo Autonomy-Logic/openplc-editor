@@ -45,7 +45,11 @@ beforeEach(() => {
     sharedWorkspaceActions: { handleOpenProjectResponse },
   })
   mockParsePlcopenXml.mockReturnValue({
-    projectData: { dataTypes: [], pous: [], configurations: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+    projectData: {
+      dataTypes: [],
+      pous: [],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    },
     warnings: [],
     projectName: 'Imported',
   })
@@ -84,7 +88,11 @@ describe('executeImportPlcopen', () => {
     expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>')
     expect(handleOpenProjectResponse).toHaveBeenCalledWith({
       meta: { name: 'Imported', type: 'plc-project', path: 'proj-1' },
-      projectData: { dataTypes: [], pous: [], configurations: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+      projectData: {
+        dataTypes: [],
+        pous: [],
+        configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      },
       warnings: [],
     })
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'default' }))
@@ -92,7 +100,11 @@ describe('executeImportPlcopen', () => {
 
   it('falls back to "Imported Project" when the XML carries no project name', async () => {
     mockParsePlcopenXml.mockReturnValue({
-      projectData: { dataTypes: [], pous: [], configurations: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+      projectData: {
+        dataTypes: [],
+        pous: [],
+        configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      },
       warnings: [],
       projectName: '',
     })
@@ -108,7 +120,11 @@ describe('executeImportPlcopen', () => {
   it('logs warnings to console and shows a warning toast mentioning the count', async () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockParsePlcopenXml.mockReturnValue({
-      projectData: { dataTypes: [], pous: [], configurations: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+      projectData: {
+        dataTypes: [],
+        pous: [],
+        configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      },
       warnings: ['SFC body dropped', 'Unknown dialect element'],
       projectName: 'Imported',
     })

@@ -1,4 +1,10 @@
-import { BASE_TYPE_NAMES, IEC_BASE_TYPES, isBaseTypeName, lookupBaseType, lookupBaseTypeByXmlElement } from '../iec-types-registry'
+import {
+  BASE_TYPE_NAMES,
+  IEC_BASE_TYPES,
+  isBaseTypeName,
+  lookupBaseType,
+  lookupBaseTypeByXmlElement,
+} from '../iec-types-registry'
 
 describe('iec-types-registry', () => {
   describe('IEC_BASE_TYPES', () => {

@@ -27,7 +27,10 @@ describe('parseLadderXml', () => {
           '@width': '40',
           '@height': '40',
           position: { '@x': '50', '@y': '0' },
-          connectionPointIn: { relPosition: { '@x': '0', '@y': '20' }, connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }] },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }],
+          },
           connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
           variable: ['X1'],
         },
@@ -39,7 +42,10 @@ describe('parseLadderXml', () => {
           '@width': '40',
           '@height': '40',
           position: { '@x': '100', '@y': '0' },
-          connectionPointIn: { relPosition: { '@x': '0', '@y': '20' }, connection: [{ '@refLocalId': '2', '@formalParameter': 'output' }] },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '2', '@formalParameter': 'output' }],
+          },
           connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
           variable: ['Y1'],
         },
@@ -50,7 +56,10 @@ describe('parseLadderXml', () => {
           '@width': '20',
           '@height': '40',
           position: { '@x': '150', '@y': '0' },
-          connectionPointIn: { relPosition: { '@x': '0', '@y': '20' }, connection: [{ '@refLocalId': '3', '@formalParameter': 'output' }] },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '3', '@formalParameter': 'output' }],
+          },
         },
       ],
     })
@@ -61,22 +70,13 @@ describe('parseLadderXml', () => {
     // Node order within a rung follows the raw XML's element-type grouping
     // (leftPowerRail, rightPowerRail, contact, coil, ...) — see
     // parseLadderXml's node-collection loop — not rung/visual position.
-    expect(rung.nodes.map((n) => n.id)).toEqual([
-      'LEFT-POWER-RAIL-1',
-      'RIGHT-POWER-RAIL-4',
-      'CONTACT-2',
-      'COIL-3',
-    ])
+    expect(rung.nodes.map((n) => n.id)).toEqual(['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'])
     // Edge order follows pendingEdges collection order (grouped by the
     // consuming node's XML element type), not visual left-to-right order —
     // compare as a set of {source,target} pairs instead of an exact sequence.
     expect(rung.edges).toHaveLength(3)
     expect(rung.edges.map((e) => `${e.source}->${e.target}`).sort()).toEqual(
-      [
-        'LEFT-POWER-RAIL-1->CONTACT-2',
-        'CONTACT-2->COIL-3',
-        'COIL-3->RIGHT-POWER-RAIL-4',
-      ].sort(),
+      ['LEFT-POWER-RAIL-1->CONTACT-2', 'CONTACT-2->COIL-3', 'COIL-3->RIGHT-POWER-RAIL-4'].sort(),
     )
     expect(rung.edges.every((e) => e.type === 'smoothstep')).toBe(true)
     expect((rung.nodes[2].data as { variable: { name: string } }).variable).toEqual({ name: 'X1' })
@@ -271,7 +271,11 @@ describe('parseLadderXml', () => {
     // to the block/outVariable component) — search across all rungs.
     const allNodes = body.rungs.flatMap((r) => r.nodes)
     const outVarNode = allNodes.find((n) => n.id === 'OUTPUT-VARIABLE-3')
-    expect(outVarNode?.data.block).toEqual({ id: '', handleId: 'OUT', variableType: { name: '', class: '', type: { definition: 'base-type', value: '' } } })
+    expect(outVarNode?.data.block).toEqual({
+      id: '',
+      handleId: 'OUT',
+      variableType: { name: '', class: '', type: { definition: 'base-type', value: '' } },
+    })
     const inVarNode = allNodes.find((n) => n.id === 'INPUT-VARIABLE-2')
     expect(inVarNode?.data.variable).toEqual({ name: 'LIT1' })
   })

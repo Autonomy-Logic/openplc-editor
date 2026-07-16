@@ -30,7 +30,9 @@ describe('ConfirmPlcopenImportModal', () => {
     render(<ConfirmPlcopenImportModal isOpen />)
     expect(screen.getByText('Import PLCopen XML?')).toBeTruthy()
     expect(
-      screen.getByText('Importing a PLCopen XML file will overwrite the entire currently open project. This cannot be undone.'),
+      screen.getByText(
+        'Importing a PLCopen XML file will overwrite the entire currently open project. This cannot be undone.',
+      ),
     ).toBeTruthy()
   })
 

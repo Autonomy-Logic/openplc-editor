@@ -39,7 +39,14 @@ describe('parseConfigurationXml', () => {
       },
     })
     expect(result.resource.globalVariables).toEqual([
-      { name: 'gvar', class: 'global', type: { definition: 'base-type', value: 'BOOL' }, location: '', initialValue: null, documentation: '' },
+      {
+        name: 'gvar',
+        class: 'global',
+        type: { definition: 'base-type', value: 'BOOL' },
+        location: '',
+        initialValue: null,
+        documentation: '',
+      },
     ])
   })
 

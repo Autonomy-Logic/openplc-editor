@@ -31,7 +31,7 @@ export function parseVariableXml(varXml: unknown, variableClass: VariableClass):
   const v = asRecord(varXml)
   const initialValueXml = asRecord(v.initialValue)
   const simpleValue = asRecord(initialValueXml.simpleValue)
-  const initialValue = typeof simpleValue['@value'] === 'string' ? (simpleValue['@value']) : null
+  const initialValue = typeof simpleValue['@value'] === 'string' ? simpleValue['@value'] : null
   const location = v['@address']
 
   return {

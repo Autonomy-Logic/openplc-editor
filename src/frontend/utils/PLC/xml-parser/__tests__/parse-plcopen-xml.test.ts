@@ -74,16 +74,59 @@ const fbdRung = {
     },
   ],
   edges: [
-    { id: 'e1', source: 'iv1', sourceHandle: 'output-variable', target: 'ov1', targetHandle: 'input-variable', type: 'smoothstep' },
+    {
+      id: 'e1',
+      source: 'iv1',
+      sourceHandle: 'output-variable',
+      target: 'ov1',
+      targetHandle: 'input-variable',
+      type: 'smoothstep',
+    },
   ],
 }
 
-const railOutHandle = { id: 'left-rail', type: 'source' as const, position: 'right' as const, glbPosition: { x: 20, y: 20 }, relPosition: { x: 20, y: 20 } }
-const contactInHandle = { id: 'input', type: 'target' as const, position: 'left' as const, glbPosition: { x: 50, y: 20 }, relPosition: { x: 0, y: 20 } }
-const contactOutHandle = { id: 'output', type: 'source' as const, position: 'right' as const, glbPosition: { x: 90, y: 20 }, relPosition: { x: 40, y: 20 } }
-const coilInHandle = { id: 'input', type: 'target' as const, position: 'left' as const, glbPosition: { x: 100, y: 20 }, relPosition: { x: 0, y: 20 } }
-const coilOutHandle = { id: 'output', type: 'source' as const, position: 'right' as const, glbPosition: { x: 140, y: 20 }, relPosition: { x: 40, y: 20 } }
-const railInHandle = { id: 'right-rail', type: 'target' as const, position: 'left' as const, glbPosition: { x: 150, y: 20 }, relPosition: { x: 0, y: 20 } }
+const railOutHandle = {
+  id: 'left-rail',
+  type: 'source' as const,
+  position: 'right' as const,
+  glbPosition: { x: 20, y: 20 },
+  relPosition: { x: 20, y: 20 },
+}
+const contactInHandle = {
+  id: 'input',
+  type: 'target' as const,
+  position: 'left' as const,
+  glbPosition: { x: 50, y: 20 },
+  relPosition: { x: 0, y: 20 },
+}
+const contactOutHandle = {
+  id: 'output',
+  type: 'source' as const,
+  position: 'right' as const,
+  glbPosition: { x: 90, y: 20 },
+  relPosition: { x: 40, y: 20 },
+}
+const coilInHandle = {
+  id: 'input',
+  type: 'target' as const,
+  position: 'left' as const,
+  glbPosition: { x: 100, y: 20 },
+  relPosition: { x: 0, y: 20 },
+}
+const coilOutHandle = {
+  id: 'output',
+  type: 'source' as const,
+  position: 'right' as const,
+  glbPosition: { x: 140, y: 20 },
+  relPosition: { x: 40, y: 20 },
+}
+const railInHandle = {
+  id: 'right-rail',
+  type: 'target' as const,
+  position: 'left' as const,
+  glbPosition: { x: 150, y: 20 },
+  relPosition: { x: 0, y: 20 },
+}
 
 const ladderRung = {
   id: 'rung-0',
@@ -185,7 +228,11 @@ const ladderRung = {
 function makeFixture(): PLCProjectData {
   return {
     dataTypes: [
-      { name: 'MyStruct', derivation: 'structure', variable: [{ name: 'flag', type: { definition: 'base-type', value: 'BOOL' } }] },
+      {
+        name: 'MyStruct',
+        derivation: 'structure',
+        variable: [{ name: 'flag', type: { definition: 'base-type', value: 'BOOL' } }],
+      },
       {
         name: 'MyEnum',
         derivation: 'enumerated',
@@ -207,7 +254,13 @@ function makeFixture(): PLCProjectData {
           name: 'mainSt',
           language: 'st',
           variables: [
-            { name: 'a', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'a',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'st', value: 'a := TRUE;' },
           documentation: 'ST program',
@@ -219,7 +272,13 @@ function makeFixture(): PLCProjectData {
           name: 'mainIl',
           language: 'il',
           variables: [
-            { name: 'b', class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' },
+            {
+              name: 'b',
+              class: 'local',
+              type: { definition: 'base-type', value: 'INT' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'il', value: 'LD 1' },
           documentation: '',
@@ -231,8 +290,20 @@ function makeFixture(): PLCProjectData {
           name: 'mainLd',
           language: 'ld',
           variables: [
-            { name: 'X1', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-            { name: 'Y1', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'X1',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'Y1',
+              class: 'output',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'ld', value: { name: 'mainLd', rungs: [ladderRung] } },
           documentation: '',
@@ -244,8 +315,20 @@ function makeFixture(): PLCProjectData {
           name: 'mainFbd',
           language: 'fbd',
           variables: [
-            { name: 'X1', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
-            { name: 'Y1', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+            {
+              name: 'X1',
+              class: 'input',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'Y1',
+              class: 'output',
+              type: { definition: 'base-type', value: 'BOOL' },
+              location: '',
+              documentation: '',
+            },
           ],
           body: { language: 'fbd', value: { name: 'mainFbd', rung: fbdRung } },
           documentation: '',
@@ -257,7 +340,13 @@ function makeFixture(): PLCProjectData {
         tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 0 }],
         instances: [{ name: 'inst0', task: 'task0', program: 'mainSt' }],
         globalVariables: [
-          { name: 'gvar', class: 'global', type: { definition: 'base-type', value: 'BOOL' }, location: '', documentation: '' },
+          {
+            name: 'gvar',
+            class: 'global',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
         ],
       },
     },
@@ -305,7 +394,14 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
     expect(pou?.pouType).toBe('program')
     expect(pou?.documentation).toBe('ST program')
     expect(pou?.interface?.variables).toEqual([
-      { name: 'a', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, location: '', initialValue: null, documentation: '' },
+      {
+        name: 'a',
+        class: 'input',
+        type: { definition: 'base-type', value: 'BOOL' },
+        location: '',
+        initialValue: null,
+        documentation: '',
+      },
     ])
     expect(pou?.body).toEqual({ language: 'st', value: 'a := TRUE;' })
   })
@@ -319,7 +415,11 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
   it('recovers the LD program rung: power rails, contact, coil, and their wiring', () => {
     const pou = result.projectData.pous.find((p) => p.name === 'mainLd')
     expect(pou?.body.language).toBe('ld')
-    const ldBody = pou?.body.value as { name: string; updated: boolean; rungs: Array<{ nodes: unknown[]; edges: unknown[] }> }
+    const ldBody = pou?.body.value as {
+      name: string
+      updated: boolean
+      rungs: Array<{ nodes: unknown[]; edges: unknown[] }>
+    }
     expect(ldBody.name).toBe('mainLd')
     expect(ldBody.updated).toBe(false)
     expect(ldBody.rungs).toHaveLength(1)
@@ -330,7 +430,9 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
       ['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'].sort(),
     )
     expect(rung.edges).toHaveLength(3)
-    const nodesById = new Map((rung.nodes as Array<{ id: string; data: { variable: { name: string } } }>).map((n) => [n.id, n]))
+    const nodesById = new Map(
+      (rung.nodes as Array<{ id: string; data: { variable: { name: string } } }>).map((n) => [n.id, n]),
+    )
     const contactNode = nodesById.get('CONTACT-2') as { data: { variable: { name: string } } }
     const coilNode = nodesById.get('COIL-3') as { data: { variable: { name: string } } }
     expect(contactNode.data.variable).toEqual({ name: 'X1' })
@@ -359,7 +461,14 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
     expect(resource.tasks).toEqual([{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 0 }])
     expect(resource.instances).toEqual([{ name: 'inst0', task: 'task0', program: 'mainSt' }])
     expect(resource.globalVariables).toEqual([
-      { name: 'gvar', class: 'global', type: { definition: 'base-type', value: 'BOOL' }, location: '', initialValue: null, documentation: '' },
+      {
+        name: 'gvar',
+        class: 'global',
+        type: { definition: 'base-type', value: 'BOOL' },
+        location: '',
+        initialValue: null,
+        documentation: '',
+      },
     ])
   })
 })
@@ -390,7 +499,9 @@ describe('parsePlcopenXml — dialect scope', () => {
   it('produces a warning (does not throw) for an SFC body', () => {
     const result = parsePlcopenXml(baseXml('<SFC/>'))
     expect(result.projectData.pous).toEqual([])
-    expect(result.warnings).toEqual(['POU "unsupported": Sequential Function Chart is not supported by the importer, skipped'])
+    expect(result.warnings).toEqual([
+      'POU "unsupported": Sequential Function Chart is not supported by the importer, skipped',
+    ])
   })
 
   it('produces a warning (does not throw) for a body shape outside the old-editor dialect', () => {
@@ -452,6 +563,8 @@ describe('parsePlcopenXml — malformed connection reference', () => {
     const pou = result.projectData.pous.find((p) => p.name === 'dangling')
     const fbdBody = pou?.body.value as { rung: { edges: unknown[] } }
     expect(fbdBody.rung.edges).toEqual([])
-    expect(result.warnings).toEqual(['POU "dangling": FBD connection references unknown localId "doesnotexist", skipped'])
+    expect(result.warnings).toEqual([
+      'POU "dangling": FBD connection references unknown localId "doesnotexist", skipped',
+    ])
   })
 })

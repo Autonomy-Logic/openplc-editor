@@ -106,11 +106,7 @@ const getPlcopenImportFilePath = async (serviceManager: GetProjectPathProps) => 
   }
 }
 
-const getPlcopenExportSavePath = async (
-  serviceManager: GetProjectPathProps,
-  defaultFileName: string,
-  xml: string,
-) => {
+const getPlcopenExportSavePath = async (serviceManager: GetProjectPathProps, defaultFileName: string, xml: string) => {
   const { canceled, filePath } = await dialog.showSaveDialog(serviceManager, {
     title: 'Export PLCopen XML',
     defaultPath: defaultFileName,

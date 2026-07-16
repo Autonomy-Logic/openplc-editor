@@ -151,7 +151,9 @@ function parseRightRailXml(entry: Record<string, unknown>): { node: PowerRailNod
 // nothing in the XML shape prevents a foreign document from setting more
 // than one — priority storage > negated > edge is an arbitrary, documented
 // call for that (currently unseen-in-fixtures) case.
-function parseCoilVariant(entry: Record<string, unknown>): 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset' {
+function parseCoilVariant(
+  entry: Record<string, unknown>,
+): 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset' {
   const storage = entry['@storage']
   if (storage === 'set') return 'set'
   if (storage === 'reset') return 'reset'
@@ -368,7 +370,11 @@ function parseInVariableXml(entry: Record<string, unknown>): VariableNode {
       // the block's own <inputVariables> entry names its source by
       // refLocalId, not the reverse) — left as an honest placeholder; the
       // edge built from that block's connection is the source of truth.
-      block: { id: '', handleId: '', variableType: { name: '', class: '', type: { definition: 'base-type', value: '' } } },
+      block: {
+        id: '',
+        handleId: '',
+        variableType: { name: '', class: '', type: { definition: 'base-type', value: '' } },
+      },
     },
   }
 }
@@ -511,9 +517,7 @@ export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderF
     const targetNodeId = nodeIdByNumericId.get(pending.targetNumericId)
     const sourceNodeId = nodeIdByNumericId.get(pending.sourceRefLocalId)
     if (!targetNodeId || !sourceNodeId) {
-      warnings.push(
-        `POU "${pouName}": LD connection references unknown localId "${pending.sourceRefLocalId}", skipped`,
-      )
+      warnings.push(`POU "${pouName}": LD connection references unknown localId "${pending.sourceRefLocalId}", skipped`)
       continue
     }
     const sourceHandle = pending.sourceFormalParameter ?? LEAF_OUTPUT_HANDLE
