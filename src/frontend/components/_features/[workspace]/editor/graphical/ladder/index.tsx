@@ -15,7 +15,7 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -34,6 +34,8 @@ import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
+
+const EMPTY_DIVERGENCES: string[] = []
 
 export default function LadderEditor() {
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
@@ -78,7 +80,63 @@ export default function LadderEditor() {
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
-  const nodeDivergences = getLibraryDivergences()
+
+  const nodeDivergences = useMemo(() => {
+    if (!flow) return EMPTY_DIVERGENCES
+
+    const divergences = []
+
+    for (const rung of flow.rungs) {
+      for (const node of rung.nodes) {
+        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+        if (!variant) continue
+
+        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+        if (!libMatch) continue
+
+        const originalPou = pous.find((pou) => pou.name === libMatch.name)
+        if (!originalPou) continue
+
+        const originalVariables = originalPou.interface?.variables ?? []
+        const originalInOut = originalVariables.filter((variable) =>
+          ['input', 'output', 'inOut'].includes(variable.class || ''),
+        )
+
+        const currentVariables = variant.variables.filter(
+          (variable) =>
+            ['input', 'output', 'inOut'].includes(variable.class || '') &&
+            !['OUT', 'EN', 'ENO'].includes(variable.name),
+        )
+
+        const formatVariable = (variable: {
+          name: string
+          class?: string
+          type: { definition: string; value: string }
+        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
+
+        if (originalPou.pouType === 'function') {
+          const outVariable = variant.variables.find((v) => v.name === 'OUT')
+          const outType = outVariable?.type?.value?.toUpperCase()
+          const returnType = originalPou.interface?.returnType?.toUpperCase()
+          if (!outType || !returnType || outType !== returnType) {
+            divergences.push(`${rung.id}:${node.id}`)
+            continue
+          }
+        }
+
+        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+        const hasDivergence =
+          originalInOut?.length !== currentVariables.length ||
+          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
+
+        if (hasDivergence) {
+          divergences.push(`${rung.id}:${node.id}`)
+        }
+      }
+    }
+
+    return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
+  }, [flow?.rungs, userLibraries, pous])
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -214,63 +272,6 @@ export default function LadderEditor() {
    */
   const handleModalClose = () => {
     closeModal()
-  }
-
-  function getLibraryDivergences() {
-    if (!flow) return []
-
-    const divergences = []
-
-    for (const rung of flow.rungs) {
-      for (const node of rung.nodes) {
-        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
-        if (!variant) continue
-
-        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
-        if (!libMatch) continue
-
-        const originalPou = pous.find((pou) => pou.name === libMatch.name)
-        if (!originalPou) continue
-
-        const originalVariables = originalPou.interface?.variables ?? []
-        const originalInOut = originalVariables.filter((variable) =>
-          ['input', 'output', 'inOut'].includes(variable.class || ''),
-        )
-
-        const currentVariables = variant.variables.filter(
-          (variable) =>
-            ['input', 'output', 'inOut'].includes(variable.class || '') &&
-            !['OUT', 'EN', 'ENO'].includes(variable.name),
-        )
-
-        const formatVariable = (variable: {
-          name: string
-          class?: string
-          type: { definition: string; value: string }
-        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
-
-        if (originalPou.pouType === 'function') {
-          const outVariable = variant.variables.find((v) => v.name === 'OUT')
-          const outType = outVariable?.type?.value?.toUpperCase()
-          const returnType = originalPou.interface?.returnType?.toUpperCase()
-          if (!outType || !returnType || outType !== returnType) {
-            divergences.push(`${rung.id}:${node.id}`)
-            continue
-          }
-        }
-
-        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
-        const hasDivergence =
-          originalInOut?.length !== currentVariables.length ||
-          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
-
-        if (hasDivergence) {
-          divergences.push(`${rung.id}:${node.id}`)
-        }
-      }
-    }
-
-    return divergences
   }
 
   return (

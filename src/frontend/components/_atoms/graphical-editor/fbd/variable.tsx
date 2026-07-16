@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { useDebugger } from '../../../../../middleware/shared/providers'
@@ -696,4 +696,6 @@ const VariableElement = (block: VariableProps) => {
   )
 }
 
-export { VariableElement }
+const exportVariableElement = memo(VariableElement)
+
+export { exportVariableElement as VariableElement }

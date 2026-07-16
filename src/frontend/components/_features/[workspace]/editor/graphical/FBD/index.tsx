@@ -7,6 +7,8 @@ import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
 import { useBoundPou } from '../active-context'
 
+const EMPTY_DIVERGENCES: string[] = []
+
 export default function FbdEditor() {
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  With multi-mount, every open FBD
@@ -28,7 +30,7 @@ export default function FbdEditor() {
   const flowUpdated = flow?.updated || false
 
   const nodeDivergences = useMemo(() => {
-    if (!flow) return []
+    if (!flow) return EMPTY_DIVERGENCES
 
     const divergences = []
 
@@ -78,7 +80,7 @@ export default function FbdEditor() {
       }
     }
 
-    return divergences
+    return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
   }, [flow?.rung.nodes, userLibraries, pous])
 
   /**

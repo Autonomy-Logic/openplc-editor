@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
@@ -251,4 +251,6 @@ const ConnectionElement = (block: ConnectionProps) => {
   )
 }
 
-export { ConnectionElement }
+const exportConnectionElement = memo(ConnectionElement)
+
+export { exportConnectionElement as ConnectionElement }

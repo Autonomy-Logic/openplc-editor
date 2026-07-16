@@ -2,7 +2,7 @@ import './style.css'
 
 import type { BackgroundProps, ControlProps, ReactFlowProps } from '@xyflow/react'
 import { Background, Controls, ReactFlow } from '@xyflow/react'
-import { PropsWithChildren } from 'react'
+import { PropsWithChildren, useMemo } from 'react'
 
 import { cn } from '../../../utils/cn'
 
@@ -14,6 +14,8 @@ type ReactFlowPanelProps = PropsWithChildren & {
   viewportConfig?: ReactFlowProps
 }
 
+const DEFAULT_DELETE_KEY_CODES = ['Delete', 'Backspace']
+
 export const ReactFlowPanel = ({
   children,
   background,
@@ -22,20 +24,27 @@ export const ReactFlowPanel = ({
   controlsConfig,
   viewportConfig,
 }: ReactFlowPanelProps) => {
-  const getDeleteKeyCodes = () => {
-    if (!viewportConfig?.deleteKeyCode) return ['Delete', 'Backspace']
-    return viewportConfig.deleteKeyCode
-  }
+  const deleteKeyCodes = viewportConfig?.deleteKeyCode ? viewportConfig.deleteKeyCode : DEFAULT_DELETE_KEY_CODES
+
+  // Stable children identity — inline JSX would break FlowRenderer's memo.
+  const flowChildren = useMemo(
+    () => (
+      <>
+        {background && <Background {...backgroundConfig} />}
+        {controls && (
+          <Controls {...controlsConfig} className={cn(controlsConfig?.className)}>
+            {controlsConfig?.children}
+          </Controls>
+        )}
+        {children}
+      </>
+    ),
+    [background, backgroundConfig, controls, controlsConfig, children],
+  )
 
   return (
-    <ReactFlow deleteKeyCode={getDeleteKeyCodes()} {...viewportConfig}>
-      {background && <Background {...backgroundConfig} />}
-      {controls && (
-        <Controls {...controlsConfig} className={cn(controlsConfig?.className)}>
-          {controlsConfig?.children}
-        </Controls>
-      )}
-      {children}
+    <ReactFlow deleteKeyCode={deleteKeyCodes} {...viewportConfig}>
+      {flowChildren}
     </ReactFlow>
   )
 }

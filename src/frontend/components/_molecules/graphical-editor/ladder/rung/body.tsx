@@ -1,12 +1,19 @@
-import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
+import type {
+  CoordinateExtent,
+  DefaultEdgeOptions,
+  Node as FlowNode,
+  OnNodesChange,
+  ReactFlowInstance,
+} from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
-import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-key'
 import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
+import { useStableCallback } from '../../../../../hooks/use-stable-callback'
 import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
 import { cn } from '../../../../../utils/cn'
@@ -69,6 +76,14 @@ type RungBodyProps = {
 }
 
 const EDGE_COLOR_TRUE = '#00FF00'
+
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
+  deletable: false,
+  selectable: false,
+  type: 'smoothstep',
+}
+const PRO_OPTIONS = { hideAttribution: true }
+const NOOP = () => {}
 
 export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
   const pouName = useBoundPou()
@@ -687,192 +702,189 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     openModal(modalToOpen, node)
   }
 
+  const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {
+    handleRemoveNode(nodes)
+  })
+  const onNodeDragStart = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+    handleNodeStartDrag(node)
+  })
+  const onNodeDrag = useStableCallback((event: MouseEvent) => {
+    handleNodeDrag(event)
+  })
+  const onNodeDragStop = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+    handleNodeDragStop(node)
+  })
+  const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+    handleNodeDoubleClick(node)
+  })
+
   /**
    * Handle the change of the nodes
    * This function is called every time the nodes change
    * It is used to update the local rung state
    */
-  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
-    (changes) => {
-      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
-      changes.forEach((change) => {
-        switch (change.type) {
-          case 'select': {
-            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-            if (change.selected) {
-              selectedNodes.push(node)
-              return
-            }
+  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
+    let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+    changes.forEach((change) => {
+      switch (change.type) {
+        case 'select': {
+          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+          if (change.selected) {
+            selectedNodes.push(node)
+            return
+          }
 
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
-          }
-          case 'add': {
-            selectedNodes = []
-            return
-          }
-          case 'remove': {
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
-          }
+          selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+          return
         }
-      })
+        case 'add': {
+          selectedNodes = []
+          return
+        }
+        case 'remove': {
+          selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+          return
+        }
+      }
+    })
 
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: applyNodeChanges(changes, rungLocal.nodes),
-        selectedNodes: selectedNodes,
-      }))
-    },
-    [rungLocal, rung, dragging],
-  )
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: applyNodeChanges(changes, rungLocal.nodes),
+      selectedNodes: selectedNodes,
+    }))
+  })
 
   /**
    * Handle the drag enter of the viewport
    * This function is called when a dragged element enters the viewport
    */
-  const onDragEnterViewport = useCallback<DragEventHandler>(
-    (event) => {
-      if (isDebuggerActive) return
-      // Check recursively if the drag event is coming from within the ladder area
-      if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
-        return
-      }
+  const onDragEnterViewport = useStableCallback((event: DragEvent) => {
+    if (isDebuggerActive) return
+    // Check recursively if the drag event is coming from within the ladder area
+    if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
+      return
+    }
 
-      // Only expand rung once when drag first enters (not on every placeholder hover)
-      const isFirstDragEnter = !dragging
-      if (isFirstDragEnter) {
-        setDragging(true)
-        setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 50]])
-      }
+    // Only expand rung once when drag first enters (not on every placeholder hover)
+    const isFirstDragEnter = !dragging
+    if (isFirstDragEnter) {
+      setDragging(true)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + 50]])
+    }
 
-      event.preventDefault()
-      // Check if the dragged element is not a ladder block (cross-browser compatible)
-      if (!isLadderBlockDrag(event.dataTransfer)) {
-        return
-      }
+    event.preventDefault()
+    // Check if the dragged element is not a ladder block (cross-browser compatible)
+    if (!isLadderBlockDrag(event.dataTransfer)) {
+      return
+    }
 
-      // Only render placeholders once on first enter (avoid re-rendering on every hover)
-      if (isFirstDragEnter) {
-        const copyRungLocal = { ...rungLocal }
-        const nodes = renderPlaceholderElements(copyRungLocal)
-        setRungLocal((rung) => ({ ...rung, nodes }))
-      }
-    },
-    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
-  )
+    // Only render placeholders once on first enter (avoid re-rendering on every hover)
+    if (isFirstDragEnter) {
+      const copyRungLocal = { ...rungLocal }
+      const nodes = renderPlaceholderElements(copyRungLocal)
+      setRungLocal((rung) => ({ ...rung, nodes }))
+    }
+  })
 
   /**
    * Handle the drag leave of the viewport
    * This function is called when a dragged element leaves the viewport
    */
-  const onDragLeaveViewport = useCallback<DragEventHandler>(
-    (event) => {
-      if (isDebuggerActive) return
-      // Check if the dragged element is a child of the flow viewport
-      if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
+  const onDragLeaveViewport = useStableCallback((event: DragEvent) => {
+    if (isDebuggerActive) return
+    // Check if the dragged element is a child of the flow viewport
+    if (isDragEventFromWithinLadderArea(event.relatedTarget, reactFlowViewportRef.current)) {
+      return
+    }
+
+    // Safari/WebKit quirk: When placeholders appear under cursor, Safari fires dragLeave
+    // with relatedTarget as null. We need to distinguish between:
+    // 1. Spurious dragLeave (hovering over placeholders) - cursor still inside rung
+    // 2. Real dragLeave (actually leaving) - cursor outside rung
+    if (!event.relatedTarget && dragging && reactFlowViewportRef.current) {
+      const rect = reactFlowViewportRef.current.getBoundingClientRect()
+      const isInsideBounds =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
+
+      // If cursor is still inside rung bounds, it's a spurious event - keep placeholders
+      if (isInsideBounds) {
         return
       }
+      // If cursor is outside bounds, it's a real leave - cleanup immediately
+    }
 
-      // Safari/WebKit quirk: When placeholders appear under cursor, Safari fires dragLeave
-      // with relatedTarget as null. We need to distinguish between:
-      // 1. Spurious dragLeave (hovering over placeholders) - cursor still inside rung
-      // 2. Real dragLeave (actually leaving) - cursor outside rung
-      if (!event.relatedTarget && dragging && reactFlowViewportRef.current) {
-        const rect = reactFlowViewportRef.current.getBoundingClientRect()
-        const isInsideBounds =
-          event.clientX >= rect.left &&
-          event.clientX <= rect.right &&
-          event.clientY >= rect.top &&
-          event.clientY <= rect.bottom
+    setDragging(false)
+    setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
 
-        // If cursor is still inside rung bounds, it's a spurious event - keep placeholders
-        if (isInsideBounds) {
-          return
-        }
-        // If cursor is outside bounds, it's a real leave - cleanup immediately
-      }
-
-      setDragging(false)
-      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
-
-      // If it is, remove the placeholder elements`
-      const nodes = removePlaceholderElements(rungLocal.nodes)
-      setRungLocal((rung) => ({ ...rung, nodes }))
-    },
-    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, dragging, isDebuggerActive],
-  )
+    // If it is, remove the placeholder elements`
+    const nodes = removePlaceholderElements(rungLocal.nodes)
+    setRungLocal((rung) => ({ ...rung, nodes }))
+  })
 
   /**
    * Handle the drag over of the viewport
    * This function is called when a dragged element is over the viewport
    */
-  const onDragOver = useCallback<DragEventHandler>(
-    (event) => {
-      if (isDebuggerActive) return
-      if (!reactFlowInstance) return
+  const onDragOver = useStableCallback((event: DragEvent) => {
+    if (isDebuggerActive) return
+    if (!reactFlowInstance) return
 
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
 
-      const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
-        x: event.clientX,
-        y: event.clientY,
-      })
-      if (!closestPlaceholder) return
+    const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
+      x: event.clientX,
+      y: event.clientY,
+    })
+    if (!closestPlaceholder) return
 
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: rung.nodes.map((node) => {
-          if (node.id === closestPlaceholder.id) {
-            return {
-              ...node,
-              selected: true,
-            }
-          }
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: rung.nodes.map((node) => {
+        if (node.id === closestPlaceholder.id) {
           return {
             ...node,
-            selected: false,
+            selected: true,
           }
-        }),
-      }))
-    },
-    [rung, rungLocal, isDebuggerActive],
-  )
+        }
+        return {
+          ...node,
+          selected: false,
+        }
+      }),
+    }))
+  })
 
   /**
    * Handle the drop of the viewport
    * This function is called when a dragged element is dropped in the viewport
    */
-  const onDrop = useCallback<DragEventHandler>(
-    (event) => {
-      if (isDebuggerActive) return
-      setDragging(false)
-      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
+  const onDrop = useStableCallback((event: DragEvent) => {
+    if (isDebuggerActive) return
+    setDragging(false)
+    setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - 50]])
 
-      event.preventDefault()
-      // Check if there is a ladder block in the dragged data (cross-browser compatible)
-      const blockType = getLadderBlockType(event.dataTransfer)
-      if (!blockType) {
-        setRungLocal(rung)
-        return
-      }
+    event.preventDefault()
+    // Check if there is a ladder block in the dragged data (cross-browser compatible)
+    const blockType = getLadderBlockType(event.dataTransfer)
+    if (!blockType) {
+      setRungLocal(rung)
+      return
+    }
 
-      // Check if there is a library in the dragged data
-      const library =
-        event.dataTransfer.getData('application/library') === ''
-          ? undefined
-          : event.dataTransfer.getData('application/library')
+    // Check if there is a library in the dragged data
+    const library =
+      event.dataTransfer.getData('application/library') === ''
+        ? undefined
+        : event.dataTransfer.getData('application/library')
 
-      // Then add the node to the rung
-      handleAddNode(blockType, library)
-    },
-    // `handleAddNode` reads `libraries`/`ladderFlows` via getState() at call
-    // time (never stale) and `pous` via subscription, so unlike the previous
-    // whole-store version this callback no longer needs library/pou deps to
-    // re-bind for freshly installed libraries.
-    [rung, rungLocal, setReactFlowPanelExtent, reactFlowPanelExtent, isDebuggerActive, pous],
-  )
+    // Then add the node to the rung
+    handleAddNode(blockType, library)
+  })
 
   return (
     <div
@@ -899,41 +911,17 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               elementsSelectable: true,
               nodesDraggable: !isDebuggerActive,
               nodesConnectable: !isDebuggerActive,
-              defaultEdgeOptions: {
-                deletable: false,
-                selectable: false,
-                type: 'smoothstep',
-              },
+              defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
 
               onInit: setReactFlowInstance,
 
               onNodesChange: onNodesChange,
-              onNodeClick: isDebuggerActive ? () => {} : undefined,
-              onNodesDelete: isDebuggerActive
-                ? undefined
-                : (nodes) => {
-                    handleRemoveNode(nodes)
-                  },
-              onNodeDragStart: isDebuggerActive
-                ? undefined
-                : (_event, node) => {
-                    handleNodeStartDrag(node)
-                  },
-              onNodeDrag: isDebuggerActive
-                ? undefined
-                : (event) => {
-                    handleNodeDrag(event)
-                  },
-              onNodeDragStop: isDebuggerActive
-                ? undefined
-                : (_event, node) => {
-                    handleNodeDragStop(node)
-                  },
-              onNodeDoubleClick: isDebuggerActive
-                ? undefined
-                : (_event, node) => {
-                    handleNodeDoubleClick(node)
-                  },
+              onNodeClick: isDebuggerActive ? NOOP : undefined,
+              onNodesDelete: isDebuggerActive ? undefined : onNodesDelete,
+              onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
+              onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
+              onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
+              onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
 
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
@@ -952,9 +940,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               preventScrolling: false,
               nodeDragThreshold: 25,
 
-              proOptions: {
-                hideAttribution: true,
-              },
+              proOptions: PRO_OPTIONS,
             }}
           />
         </div>

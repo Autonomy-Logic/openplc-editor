@@ -1,4 +1,4 @@
-import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
@@ -327,7 +327,7 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>(block: BlockProps<T>) => {
+const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -816,3 +816,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     </div>
   )
 }
+
+// Cast keeps the generic call signature `memo` would otherwise widen away.
+const exportBlock = memo(Block) as typeof Block
+
+export { exportBlock as Block }
