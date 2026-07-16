@@ -17,6 +17,7 @@
  */
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
+import { buildGlobalCompositeKey } from './debug-variable-finder'
 
 /**
  * Minimal state shape required by the debug polling filter.
@@ -93,14 +94,25 @@ export function buildActiveIndexSet(
     const watched = variables.filter((v) => v.debug === true)
     if (watched.length === 0) continue
 
+    // VAR_EXTERNAL watches resolve to a shared global by its canonical,
+    // POU-independent key (Config0:<name>) — matching the debug tree — so a
+    // global watched from a program body, a function block, or any nesting polls
+    // the one global address regardless of POU kind or selected FB instance.
+    for (const v of watched) {
+      if (v.class === 'external') activeKeys.add(buildGlobalCompositeKey(v.name))
+    }
+
+    const localWatched = watched.filter((v) => v.class !== 'external')
+    if (localWatched.length === 0) continue
+
     if (pou.pouType === 'function-block') {
       const resolved = resolveFbInstance(pou.name, fbSelectedInstance, fbDebugInstances)
       if (!resolved) continue
-      for (const v of watched) {
+      for (const v of localWatched) {
         activeKeys.add(`${resolved.programName}:${resolved.fbVariableName}.${v.name}`)
       }
     } else {
-      for (const v of watched) {
+      for (const v of localWatched) {
         activeKeys.add(`${pou.name}:${v.name}`)
       }
     }

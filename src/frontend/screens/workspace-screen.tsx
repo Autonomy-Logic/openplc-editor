@@ -55,6 +55,7 @@ import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
+import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
 import { toast } from '../utils/toast'
 
 const WorkspaceScreen = () => {
@@ -153,59 +154,74 @@ const WorkspaceScreen = () => {
   useRuntimePolling()
 
   // Build debug variables from POUs with debug=true
-  const allDebugVariables = useMemo(
-    () =>
-      pous.flatMap((pou) => {
-        const variables = pou.interface?.variables ?? []
-        return variables
-          .filter((v) => v.debug === true)
-          .map((v) => {
-            let typeValue = ''
-            if (v.type.definition === 'base-type') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'user-data-type') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'array') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'derived') {
-              typeValue = v.type.value
-            }
+  const allDebugVariables = useMemo(() => {
+    const rows = pous.flatMap((pou) => {
+      const variables = pou.interface?.variables ?? []
+      return variables
+        .filter((v) => v.debug === true)
+        .map((v) => {
+          let typeValue = ''
+          if (v.type.definition === 'base-type') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'user-data-type') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'array') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'derived') {
+            typeValue = v.type.value
+          }
 
+          let compositeKey: string
+          let displayName: string
+          let rowPouName = pou.name
+          if (v.class === 'external') {
+            // A VAR_EXTERNAL points at one shared global. Give it the canonical,
+            // POU/instance-independent identity used by the debug tree + poller so
+            // it resolves the global's value and every reference collapses to a
+            // single `Config0.<name>` watch (deduped below).
+            compositeKey = buildGlobalCompositeKey(v.name)
+            displayName = `${GLOBAL_CONFIG_NAME}.${v.name}`
+            rowPouName = GLOBAL_CONFIG_NAME
+          } else if (pou.pouType === 'function-block') {
             // For function block POUs, transform the key to use instance context
-            let compositeKey: string
-            let displayName: string
-            if (pou.pouType === 'function-block') {
-              const fbTypeKey = pou.name.toUpperCase()
-              const selectedKey = fbSelectedInstance.get(fbTypeKey)
-              const instances = fbDebugInstances.get(fbTypeKey) ?? []
-              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            const fbTypeKey = pou.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            const instances = fbDebugInstances.get(fbTypeKey) ?? []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
 
-              if (selectedInstance) {
-                compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
-                displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
-              } else {
-                compositeKey = `${pou.name}:${v.name}`
-                displayName = v.name
-              }
+            if (selectedInstance) {
+              compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+              displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
             } else {
               compositeKey = `${pou.name}:${v.name}`
               displayName = v.name
             }
+          } else {
+            compositeKey = `${pou.name}:${v.name}`
+            displayName = v.name
+          }
 
-            const variableValue = debugBoolValues.get(compositeKey) ?? debugNonBoolValues.get(compositeKey)
-            const displayValue = variableValue !== undefined ? variableValue : '-'
+          const variableValue = debugBoolValues.get(compositeKey) ?? debugNonBoolValues.get(compositeKey)
+          const displayValue = variableValue !== undefined ? variableValue : '-'
 
-            return {
-              pouName: pou.name,
-              name: displayName,
-              type: typeValue,
-              value: displayValue,
-              compositeKey,
-            }
-          })
-      }),
-    [pous, debugBoolValues, debugNonBoolValues, fbSelectedInstance, fbDebugInstances],
-  )
+          return {
+            pouName: rowPouName,
+            name: displayName,
+            type: typeValue,
+            value: displayValue,
+            compositeKey,
+          }
+        })
+    })
+
+    // Collapse duplicates by composite key — a global referenced via VAR_EXTERNAL
+    // from several POUs (and mirrored by the debug-flag sync) yields one row.
+    const byKey = new Map<string, (typeof rows)[number]>()
+    for (const row of rows) {
+      if (!byKey.has(row.compositeKey)) byKey.set(row.compositeKey, row)
+    }
+    return Array.from(byKey.values())
+  }, [pous, debugBoolValues, debugNonBoolValues, fbSelectedInstance, fbDebugInstances])
 
   // Deduplicate names with POU prefix when conflicts exist
   const debugVariables = useMemo(() => {
