@@ -3,7 +3,9 @@ import {
   appendToDebugPath,
   buildDebugPath,
   buildDebugPathPrefix,
+  buildGlobalCompositeKey,
   buildGlobalDebugPath,
+  GLOBAL_CONFIG_NAME,
   findDebugVariable,
   findDebugVariableForField,
   findDebugVariableWithFallback,
@@ -86,6 +88,17 @@ describe('buildDebugPath', () => {
   it('builds nested struct/FB field paths', () => {
     const result = buildDebugPath('INSTANCE0', 'OUTER.INNER.FIELD')
     expect(result).toBe('INSTANCE0.OUTER.INNER.FIELD')
+  })
+})
+
+describe('buildGlobalCompositeKey', () => {
+  it('qualifies the global with the config name, preserving declared case', () => {
+    expect(buildGlobalCompositeKey('test_global')).toBe(`${GLOBAL_CONFIG_NAME}:test_global`)
+  })
+
+  it('produces the same key regardless of the referencing POU (dedup)', () => {
+    // Every reference to a global maps here, so all references collapse to one key.
+    expect(buildGlobalCompositeKey('MY_GLOBAL')).toBe(buildGlobalCompositeKey('MY_GLOBAL'))
   })
 })
 

@@ -9,8 +9,18 @@
 import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import type { DebugVariableEntry } from './debug-parser'
-import { buildVariableDebugPath, findDebugVariable, findDebugVariableForField } from './debug-variable-finder'
-import { findFunctionBlockVariables, findStructureVariables, normalizeTypeString } from './pou-helpers'
+import {
+  buildGlobalCompositeKey,
+  buildVariableDebugPath,
+  findDebugVariable,
+  findDebugVariableForField,
+} from './debug-variable-finder'
+import {
+  findFunctionBlockExternalVariables,
+  findFunctionBlockVariables,
+  findStructureVariables,
+  normalizeTypeString,
+} from './pou-helpers'
 
 /**
  * Pick the right type name for a leaf. The debug-map records the IEC base
@@ -247,6 +257,16 @@ function traverseNestedNode<T>(
       }
     }
 
+    // VAR_EXTERNAL members reference config-scoped globals, not instance state,
+    // so findFunctionBlockVariables omits them. Surface them here so a global can
+    // be watched from inside any FB: traverseVariable resolves the `external`
+    // class to the shared global's address and the canonical `Config0:<name>`
+    // key, so this node dedups with the same global watched from the program body
+    // or any other FB — regardless of how deep this instance is nested.
+    for (const ext of findFunctionBlockExternalVariables(typeName, projectPous)) {
+      children.push(traverseVariable(ext, context, visitor))
+    }
+
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'user-data-type') {
     // Structure type — STruC++ emits struct fields as `PARENT.FIELD`
@@ -398,7 +418,10 @@ function traverseNestedNode<T>(
  */
 export function traverseVariable<T>(variable: PLCVariable, context: TraversalContext, visitor: DebugNodeVisitor<T>): T {
   const { debugVariables, projectPous, pouName, instanceName, systemLibraries } = context
-  const compositeKey = `${pouName}:${variable.name}`
+  // A VAR_EXTERNAL reference gets a canonical, POU-independent key so every
+  // reference to the same global dedups to one watch displayed as `Config0.<name>`.
+  const compositeKey =
+    variable.class === 'external' ? buildGlobalCompositeKey(variable.name) : `${pouName}:${variable.name}`
 
   // Build the base path (single rule — see buildVariableDebugPath)
   const fullPath = buildVariableDebugPath(variable.class === 'external', instanceName, variable.name)
