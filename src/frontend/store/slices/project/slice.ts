@@ -369,6 +369,31 @@ function applyVppEntries(
   })
 }
 
+/**
+ * Mirror a shared global's debug (watch) flag across every reference to it.
+ *
+ * A VAR_EXTERNAL is a pointer to one CONFIGURATION VAR_GLOBAL, so "watch this
+ * global in the debugger" is a property of the global, not of any single
+ * reference. Toggling the debug icon on the global's own definition or on any
+ * POU's VAR_EXTERNAL therefore updates them all in lockstep — so every table
+ * shows the same icon state and the global polls/displays as one entity
+ * (matching the canonical Config0:<name> key used by the debug tree and poller).
+ *
+ * Mutates the produce draft in place. Case-insensitive on the global name,
+ * consistent with global-variable lookup elsewhere in this slice.
+ */
+function syncGlobalDebugFlag(slice: ProjectSlice, globalName: string, debug: boolean): void {
+  const lower = globalName.toLowerCase()
+  for (const g of slice.project.data.configurations.resource.globalVariables) {
+    if (g.name.toLowerCase() === lower) g.debug = debug
+  }
+  for (const pou of slice.project.data.pous) {
+    for (const v of pou.interface?.variables ?? []) {
+      if (v.class === 'external' && v.name.toLowerCase() === lower) v.debug = debug
+    }
+  }
+}
+
 const reconcileVariablesText = (
   pouName: string | undefined,
   getState: ProjectGetState,
@@ -772,6 +797,16 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]
+
+          // A shared global's watch flag belongs to the global, not to any one
+          // reference — keep the global's definition and every VAR_EXTERNAL to it
+          // in sync so the debug icon toggles everywhere at once.
+          if (updates.debug !== undefined) {
+            const target = variables[found.index]
+            if (scope === 'global' || target.class === 'external') {
+              syncGlobalDebugFlag(slice, target.name, updates.debug)
+            }
+          }
         }),
       )
       if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)

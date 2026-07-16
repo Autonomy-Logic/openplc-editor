@@ -156,7 +156,7 @@ describe('traverseVariable', () => {
   })
 
   describe('external variables', () => {
-    it('uses  prefix for external base-type variables', () => {
+    it('resolves external base-type variables to the global path + canonical key', () => {
       const variable = makeBaseVariable('GLOBAL_FLAG', 'BOOL', 'external')
       const debugVars = [makeDebugVar('GLOBAL_FLAG', 'BOOL_ENUM', 5)]
       const ctx = makeContext({ debugVariables: debugVars })
@@ -165,6 +165,32 @@ describe('traverseVariable', () => {
 
       expect(result.fullPath).toBe('GLOBAL_FLAG')
       expect(result.debugIndex).toBe(5)
+      // POU-independent key so every reference dedups to one watch.
+      expect(result.compositeKey).toBe('Config0:GLOBAL_FLAG')
+    })
+
+    it('surfaces a function block VAR_EXTERNAL as a canonical global child', () => {
+      // A user FB that references a global via VAR_EXTERNAL. The global lives at
+      // its bare name; the FB member must resolve there (not to an instance
+      // path) so it shows the shared value and dedups across every reference.
+      const customFb = makePou('MyFb', 'function-block', [
+        makeBaseVariable('LOCAL_X', 'INT', 'local'),
+        makeBaseVariable('SHARED', 'INT', 'external'),
+      ])
+      const variable = makeDerivedVariable('inst', 'MyFb')
+      const debugVars = [makeDebugVar('INSTANCE0.INST.LOCAL_X', 'INT_ENUM', 3), makeDebugVar('SHARED', 'INT_ENUM', 42)]
+      const ctx = makeContext({ debugVariables: debugVars, projectPous: [customFb] })
+
+      const result = traverseVariable(variable, ctx, simpleVisitor)
+
+      const shared = result.children!.find((c) => c.name === 'SHARED')
+      expect(shared).toBeDefined()
+      expect(shared!.fullPath).toBe('SHARED')
+      expect(shared!.compositeKey).toBe('Config0:SHARED')
+      expect(shared!.debugIndex).toBe(42)
+      // Local member keeps its instance-scoped path.
+      const local = result.children!.find((c) => c.name === 'LOCAL_X')
+      expect(local!.compositeKey).toBe('Main:inst.LOCAL_X')
     })
   })
 

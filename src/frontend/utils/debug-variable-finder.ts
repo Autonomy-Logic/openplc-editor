@@ -95,6 +95,25 @@ export function buildGlobalDebugPath(variablePath: string): string {
 }
 
 /**
+ * The configuration name STruC++ emits for the generated CONFIGURATION/RESOURCE
+ * (hardcoded in parse-resource-configuration-to-string.ts). Used only to label
+ * global (VAR_EXTERNAL) watches in the debugger so they read as `Config0.<name>`.
+ */
+export const GLOBAL_CONFIG_NAME = 'Config0'
+
+/**
+ * Canonical composite key for a global referenced through VAR_EXTERNAL. It is
+ * deliberately independent of the referencing POU or FB instance, so every
+ * reference to the same global — a program body, any function block, any depth
+ * of nesting — dedups to a single debugger watch that displays as
+ * `Config0.<name>`. The value still resolves via buildGlobalDebugPath (the bare
+ * uppercase name in debug-map.json); this only governs identity/display.
+ */
+export function buildGlobalCompositeKey(variableName: string): string {
+  return `${GLOBAL_CONFIG_NAME}:${variableName}`
+}
+
+/**
  * The single path rule for a program variable: a shared global (VAR_EXTERNAL →
  * CONFIGURATION VAR_GLOBAL) addresses by its bare name; everything else is
  * instance-prefixed. Both the tree traversal and the base-path shim resolve

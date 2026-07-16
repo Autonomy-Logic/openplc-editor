@@ -10,7 +10,7 @@ import type { DebugTreeNode, PLCPou, PLCVariable } from '../../middleware/shared
 import type { DebugVariableEntry } from './debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from './debug-tree-traversal'
 import { traverseVariable } from './debug-tree-traversal'
-import { buildGlobalDebugPath, buildVariableDebugPath } from './debug-variable-finder'
+import { buildVariableDebugPath } from './debug-variable-finder'
 
 /**
  * Project data shape expected by the debug tree builder.
@@ -135,39 +135,11 @@ export function buildDebugTree(
   projectData: DebugProjectData,
   systemLibraries: SystemLibrary[],
 ): DebugTreeNode {
-  // Handle external variables specially - they use global path
-  // For external variables, we need to adjust the traversal
-  if (variable.class === 'external') {
-    // External variables use CONFIG0__ prefix instead of RES0__INSTANCE
-    // Create a modified variable traversal for external variables
-    const fullPath = buildGlobalDebugPath(variable.name)
-    const compositeKey = `${pouName}:${variable.name}`
-
-    if (variable.type.definition === 'base-type') {
-      const debugVar = debugVariables.find((dv) => dv.name === fullPath)
-      const node: DebugTreeNode = {
-        name: variable.name,
-        fullPath,
-        compositeKey,
-        type: variable.type.value.toUpperCase(),
-        isComplex: false,
-        debugIndex: debugVar?.index,
-      }
-
-      /* istanbul ignore next -- dev-only: guarded by DEBUG_TREE_LOGGING constant */
-      if (DEBUG_TREE_LOGGING) {
-        console.groupCollapsed(`Debug Tree for ${variable.name} (external)`)
-        logDebugTree(node)
-        console.groupEnd()
-      }
-
-      return node
-    }
-
-    // For complex external variables, use the standard traversal
-    // but we need to handle this specially since external vars use CONFIG0__ prefix
-    // The shared traversal handles external class automatically
-  }
+  // External (VAR_EXTERNAL) variables are handled uniformly by the shared
+  // traversal: it resolves the `external` class to the global address
+  // (buildVariableDebugPath) and the canonical `Config0:<name>` composite key,
+  // so a global watched from a program body, a function block, or any nesting
+  // dedups to one entry. No special-casing needed here.
 
   // Create traversal context
   const context: TraversalContext = {

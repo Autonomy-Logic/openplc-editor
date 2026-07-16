@@ -35,6 +35,7 @@ function setProjectPous(pous: PLCPou[]) {
         ...s.project.data,
         pous,
         dataTypes: [],
+        remoteDevices: [],
       },
     },
     editor: { type: 'available', meta: { name: 'available' } },
@@ -185,5 +186,85 @@ describe('redirectDefinitionToStore', () => {
     if (state.editor.type === 'plc-textual') {
       expect(state.editor.variable.display).toBe('table')
     }
+  })
+
+  it('redirects a SoftMotion axis global to the owning drive editor', () => {
+    // Minimal CiA 402 drive: controlWord (0x6040 out) + statusWord (0x6041 in)
+    // mapped, so collectAxes/softMotionAxisNames recognise it as an axis.
+    openPLCStoreBase.setState((s) => ({
+      ...s,
+      project: {
+        ...s.project,
+        data: {
+          ...s.project.data,
+          pous: [],
+          dataTypes: [],
+          remoteDevices: [
+            {
+              name: 'eth',
+              protocol: 'ethercat',
+              ethercatConfig: {
+                devices: [
+                  {
+                    id: 'd1',
+                    name: 'My_Axis',
+                    cia402: { enabled: true, scaleNum: 1, scaleDenom: 1, scaleFactor: 1 },
+                    channelInfo: [
+                      { channelId: 'c1', entryIndex: '0x6040', direction: 'output', iecType: 'UINT' },
+                      { channelId: 'c2', entryIndex: '0x6041', direction: 'input', iecType: 'UINT' },
+                    ],
+                    channelMappings: [
+                      { channelId: 'c1', iecLocation: '%QW0', alias: '' },
+                      { channelId: 'c2', iecLocation: '%IW0', alias: '' },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        } as never,
+      },
+      editor: { type: 'available', meta: { name: 'available' } },
+      editors: [],
+      tabs: [],
+      selectedTab: null,
+    }))
+
+    // Line 0 of the globals doc is `VAR_GLOBAL`; line 1 is the first axis.
+    const handled = redirectDefinitionToStore({
+      uri: 'inmemory://softmotion/__axes__.st',
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } },
+    })
+
+    expect(handled).toBe(true)
+    const state = openPLCStoreBase.getState()
+    expect(state.editor.type).toBe('plc-ethercat-device')
+    expect(state.editor.meta.name).toBe('My_Axis')
+    if (state.editor.type === 'plc-ethercat-device') {
+      expect(state.editor.meta.busName).toBe('eth')
+      expect(state.editor.meta.deviceId).toBe('d1')
+    }
+  })
+
+  it('redirects a resource-global to the Resource editor', () => {
+    setProjectPous([])
+    const handled = redirectDefinitionToStore({
+      uri: 'inmemory://globals/__resource__.st',
+      range: { start: { line: 2, character: 4 }, end: { line: 2, character: 15 } },
+    })
+    expect(handled).toBe(true)
+    const state = openPLCStoreBase.getState()
+    expect(state.editor.type).toBe('plc-resource')
+    expect(state.editor.meta.name).toBe('Resource')
+  })
+
+  it('returns false for a SoftMotion globals line with no matching axis', () => {
+    setProjectPous([])
+    expect(
+      redirectDefinitionToStore({
+        uri: 'inmemory://softmotion/__axes__.st',
+        range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } },
+      }),
+    ).toBe(false)
   })
 })

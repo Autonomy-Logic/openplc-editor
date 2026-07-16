@@ -842,6 +842,58 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
     })
 
+    it('syncs a VAR_EXTERNAL debug toggle to the global and every other reference', () => {
+      // One global, referenced via VAR_EXTERNAL from a program and an FB.
+      seedGlobals(store, [makeVariable('test_global', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('test_global', 'external')]))
+      seedPou(store, makePou('Mover', 'function-block', [makeVariable('test_global', 'external')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'test_global',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBe(true)
+      for (const pou of st.data.pous) {
+        expect(pou.interface?.variables[0].debug).toBe(true)
+      }
+    })
+
+    it('syncs a global debug toggle down to every VAR_EXTERNAL reference (case-insensitive)', () => {
+      seedGlobals(store, [makeVariable('Test_Global', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('TEST_GLOBAL', 'external')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'Test_Global',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBe(true)
+      expect(st.data.pous[0].interface?.variables[0].debug).toBe(true)
+    })
+
+    it('does not propagate a local (non-external) debug toggle to a same-named global', () => {
+      seedGlobals(store, [makeVariable('x', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('x', 'local')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'x',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.pous[0].interface?.variables[0].debug).toBe(true)
+      // The unrelated same-named global must stay untouched.
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBeFalsy()
+    })
+
     it('stores the location binding verbatim (alias name or literal) and never auto-adopts', () => {
       // Single-field model: `location` is the binding. A manual literal is
       // stored verbatim; an alias name is stored verbatim (NOT auto-resolved
