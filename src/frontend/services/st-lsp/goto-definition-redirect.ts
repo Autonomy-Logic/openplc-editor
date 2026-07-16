@@ -35,8 +35,8 @@
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
-import { sanitizeAxisName, softMotionAxisNames } from '../../../backend/shared/ethercat/generate-softmotion'
 import type { PLCDataType } from '../../../middleware/shared/ports/types'
+import { sanitizeAxisName, softMotionAxisNames } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { serializeDataTypesToLines } from '../../utils/PLC/data-type-serializer'

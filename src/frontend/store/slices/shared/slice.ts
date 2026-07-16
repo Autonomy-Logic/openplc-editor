@@ -1,8 +1,8 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { isValidIecIdentifier } from '../../../../backend/shared/ethercat/generate-softmotion'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
