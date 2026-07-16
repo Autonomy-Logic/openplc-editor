@@ -87,7 +87,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
             </button>
           </TooltipSidebarWrapperButton>
         )}
-        <DividerActivityBar />
+        {(explorer || sourceControl) && <DividerActivityBar />}
         <div className='flex w-full flex-col items-center gap-5'>
           <DefaultWorkspaceActivityBar {...defaultActivityBar} />
         </div>

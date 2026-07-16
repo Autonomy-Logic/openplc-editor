@@ -40,21 +40,23 @@ export default function LadderEditor() {
   // in the wrapper one level up.  Mirrors `FbdEditor` — see that
   // file for the multi-mount rationale.
   const pouName = useBoundPou()
-  const {
-    ladderFlows,
-    ladderFlowActions,
-    searchNodePosition,
-    modals,
-    project: {
-      data: { pous },
-    },
-    projectActions: { updatePou },
-    modalActions: { closeModal },
-    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
-    snapshotActions: { pushToHistory },
-    libraries: { user: userLibraries },
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  // Pou-scoped subscription: immer's structural sharing keeps this flow's
+  // identity stable when other POUs' flows (or unrelated slices) change.
+  const flow = useOpenPLCStore((state) => state.ladderFlows.find((f) => f.name === pouName))
+  const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
+  const searchNodePosition = useOpenPLCStore((state) => state.searchNodePosition)
+  const blockElementModal = useOpenPLCStore((state) => state.modals['block-ladder-element'])
+  const contactElementModal = useOpenPLCStore((state) => state.modals['contact-ladder-element'])
+  const coilElementModal = useOpenPLCStore((state) => state.modals['coil-ladder-element'])
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const updatePou = useOpenPLCStore((state) => state.projectActions.updatePou)
+  const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
+  const handleFileAndWorkspaceSavedState = useOpenPLCStore(
+    (state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState,
+  )
+  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
+  const userLibraries = useOpenPLCStore((state) => state.libraries.user)
+  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const captureSnapshot = useCallback(
     (pouName: string): PouHistorySnapshot | null => {
@@ -71,7 +73,6 @@ export default function LadderEditor() {
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const flow = ladderFlows.find((flow) => flow.name === pouName)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated || false
 
@@ -92,18 +93,27 @@ export default function LadderEditor() {
 
   /**
    * Update the flow state to project JSON.
+   *
+   * Validate the flow with Zod but persist the raw object (minus the
+   * transient `updated` flag). Using the parsed result would silently strip
+   * every field not declared in `zodLadderFlowSchema` (e.g. `handleBranches`,
+   * `positionAbsolute`, `zIndex`) and reorder keys to schema order, which
+   * makes `serializeGraphicalPouToString` produce byte-drift vs. the loaded
+   * disk copy — surfacing as phantom "Modified" entries in Source Control
+   * for POUs the user never edited.
    */
   useEffect(() => {
-    if (!flowUpdated) return
+    if (!flowUpdated || !flow) return
 
     const flowSchema = zodLadderFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
 
+    const { updated: _updated, ...flowBody } = flow
     updatePou({
       name: pouName,
       content: {
         language: 'ld',
-        value: flowSchema.data,
+        value: structuredClone(flowBody),
       },
     })
 
@@ -299,25 +309,25 @@ export default function LadderEditor() {
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
-          {modals['block-ladder-element']?.open && (
+          {blockElementModal?.open && (
             <BlockElement
               onClose={handleModalClose}
-              selectedNode={modals['block-ladder-element'].data as BlockNode<BlockVariant>}
-              isOpen={modals['block-ladder-element'].open}
+              selectedNode={blockElementModal.data as BlockNode<BlockVariant>}
+              isOpen={blockElementModal.open}
             />
           )}
-          {modals['contact-ladder-element']?.open && (
+          {contactElementModal?.open && (
             <ContactElement
               onClose={handleModalClose}
-              node={modals['contact-ladder-element'].data as ContactNode}
-              isOpen={modals['contact-ladder-element'].open}
+              node={contactElementModal.data as ContactNode}
+              isOpen={contactElementModal.open}
             />
           )}
-          {modals['coil-ladder-element']?.open && (
+          {coilElementModal?.open && (
             <CoilElement
               onClose={handleModalClose}
-              node={modals['coil-ladder-element'].data as CoilNode}
-              isOpen={modals['coil-ladder-element'].open}
+              node={coilElementModal.data as CoilNode}
+              isOpen={coilElementModal.open}
             />
           )}
         </Portal.Root>

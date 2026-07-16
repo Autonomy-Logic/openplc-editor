@@ -1914,6 +1914,38 @@ describe('createSharedSlice', () => {
         }
       })
 
+      it('delivers the raw variable text to the auto-opened main POU (issue #904)', () => {
+        // The reporter's exact scenario: "main" itself carries the
+        // unparseable variables. The auto-open block adds and activates a
+        // default table-mode model for it BEFORE the code-mode pass runs —
+        // addModel no-ops on the duplicate and setEditor early-returns on
+        // the active editor, so the raw text must flow through
+        // updateModelVariablesForName to reach the active editor.
+        const rawText = 'VAR_OUTPUT\n  Q1 : BOOL AT %QX0.0;\nEND_VAR'
+        const data = makeMinimalProjectResponse()
+        const unparseableMain = {
+          name: 'main',
+          pouType: 'program' as const,
+          interface: { variables: [] as PLCVariable[] },
+          body: { language: 'st' as const, value: '' },
+          documentation: '',
+          variablesText: rawText,
+        }
+        data.projectData.pous.length = 0
+        data.projectData.pous.push(unparseableMain)
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        // main was auto-opened and is the active editor
+        const state = store.getState()
+        expect(state.editor.meta.name).toBe('main')
+        // The active editor must show the preserved declarations in code view
+        expect('variable' in state.editor && state.editor.variable).toEqual({
+          display: 'code',
+          code: rawText,
+        })
+      })
+
       it('does not create code-mode model for POU with variables (non-empty)', () => {
         const data = makeMinimalProjectResponse()
         // main has variables, so no variablesText processing should occur

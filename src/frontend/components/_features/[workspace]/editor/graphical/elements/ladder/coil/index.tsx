@@ -15,14 +15,8 @@ type CoilElementProps = {
 
 const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   const pouName = useBoundPou()
-  const {
-    ladderFlows,
-    project: {
-      data: { pous },
-    },
-    ladderFlowActions: { updateNode },
-    modalActions: { onOpenChange },
-  } = useOpenPLCStore()
+  const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
+  const onOpenChange = useOpenPLCStore((state) => state.modalActions.onOpenChange)
 
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
   const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({
@@ -42,7 +36,8 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return

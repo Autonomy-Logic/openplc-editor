@@ -51,21 +51,18 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   // tab store mutations don't fire effects against the wrong flow.
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    editorActions: { updateModelVariables },
-    fbdFlowActions,
-    libraries,
-    project,
-    projectActions: { deleteVariable },
-    modals,
-    modalActions: { closeModal, openModal },
-  } = useOpenPLCStore()
+  const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
+  const deleteVariable = useOpenPLCStore((state) => state.projectActions.deleteVariable)
+  const { closeModal, openModal } = useOpenPLCStore((state) => state.modalActions)
+  const blockElementModal = useOpenPLCStore((state) => state.modals['block-fbd-element'])
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const resourceInstances = useOpenPLCStore((state) => state.project.data.configurations.resource.instances)
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
   const { captureAndPush } = usePouSnapshot()
 
-  const { pous } = project.data
   const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
@@ -141,8 +138,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       if (!sourceHandle) return undefined
 
       if (pouRef?.pouType !== 'function-block') {
-        const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst: { program: string }) => inst.program === pouName)
+        const programInstance = resourceInstances.find((inst: { program: string }) => inst.program === pouName)
         if (!programInstance) return undefined
       }
 
@@ -251,7 +247,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     debugForcedVariables,
     pouName,
     pouRef?.interface?.variables,
-    project.data.configurations.resource.instances,
+    resourceInstances,
   ])
 
   const styledNodes = useMemo(() => {
@@ -371,6 +367,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   ) => {
     captureAndPush(pouName)
 
+    const { libraries } = useOpenPLCStore.getState()
     let pouLibrary = undefined
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')
@@ -678,16 +675,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
-    // `libraries.system`, `libraries.user`, and `pous` aren't read
-    // directly in onDrop's body — `handleAddElementByDropping` closes
-    // over all three.  Omitting any one means the memoized callback
-    // keeps a reference to the pre-update handler, so a freshly
-    // installed system library / freshly created user FB / freshly
-    // saved POU stays invisible until something else forces a re-bind
-    // (full project save resets `rung`, which is why "Save Project"
-    // used to mask this — and why catalog-installed libs threw
-    // "block type ... does not exist" on first drop).
-    [rung, reactFlowInstance, libraries.system, libraries.user, pous],
+    // `handleAddElementByDropping` reads `libraries` via getState() at call
+    // time (never stale) and `pous` via subscription, so unlike the previous
+    // whole-store version this callback no longer needs library deps to
+    // re-bind for freshly installed libraries.
+    [rung, reactFlowInstance, pous],
   )
 
   /**
@@ -790,11 +782,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           },
         }}
       />
-      {modals['block-fbd-element']?.open && (
+      {blockElementModal?.open && (
         <BlockElement
           onClose={handleModalClose}
-          selectedNode={modals['block-fbd-element'].data as BlockNode<object>}
-          isOpen={modals['block-fbd-element'].open}
+          selectedNode={blockElementModal.data as BlockNode<object>}
+          isOpen={blockElementModal.open}
         />
       )}
     </div>

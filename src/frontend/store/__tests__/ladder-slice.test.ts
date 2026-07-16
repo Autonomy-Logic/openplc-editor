@@ -493,6 +493,38 @@ describe('createLadderFlowSlice', () => {
     expect(store.getState().ladderFlows[0].rungs[0].nodes).toHaveLength(2)
   })
 
+  it('updateNode marks the flow as updated', () => {
+    const rung = makeRung({ nodes: [makeNode({ id: 'n1' })] })
+    seedFlowWithRung(store, 'editor-1', rung)
+    store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().ladderFlowActions.updateNode({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      nodeId: 'n1',
+      node: makeNode({ id: 'n1' }),
+    })
+
+    expect(store.getState().ladderFlows[0].updated).toBe(true)
+  })
+
+  it('updateNode with transient replaces the node without marking the flow as updated', () => {
+    const rung = makeRung({ nodes: [makeNode({ id: 'n1', data: { label: 'old' } })] })
+    seedFlowWithRung(store, 'editor-1', rung)
+    store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().ladderFlowActions.updateNode({
+      editorName: 'editor-1',
+      rungId: 'rung-1',
+      nodeId: 'n1',
+      node: makeNode({ id: 'n1', data: { label: 'new' } }),
+      transient: true,
+    })
+
+    expect(store.getState().ladderFlows[0].rungs[0].nodes.find((n) => n.id === 'n1')?.data.label).toBe('new')
+    expect(store.getState().ladderFlows[0].updated).toBe(false)
+  })
+
   // -------------------------------------------------------------------------
   // addNode
   // -------------------------------------------------------------------------

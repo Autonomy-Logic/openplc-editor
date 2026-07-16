@@ -147,8 +147,6 @@ const WorkspaceScreen = () => {
   // for now — git-on-library is plausible but out of scope and
   // would re-introduce the same UI churn we just removed.
   const hasVersionControl = capabilities.hasVersionControl && projectCaps.hasVersionControl
-  const sourceControlPanelRef = useRef<ImperativePanelHandle | null>(null)
-  const [leftPanelSize, setLeftPanelSize] = useState(16)
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
@@ -327,7 +325,7 @@ const WorkspaceScreen = () => {
   } & ImperativePanelHandle
 
   const panelRef = useRef<ImperativePanelHandle | null>(null)
-  const explorerPanelRef = useRef<PanelMethods | null>(null)
+  const leftPanelRef = useRef<PanelMethods | null>(null)
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
   const [activeTab, setActiveTab] = useState('console')
@@ -364,7 +362,7 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
-    ;[explorerPanelRef, workspacePanelRef, consolePanelRef, sourceControlPanelRef].forEach((ref) => {
+    ;[leftPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
       if (ref.current && typeof ref.current[action] === 'function') {
         ref.current[action]()
       }
@@ -473,13 +471,7 @@ const WorkspaceScreen = () => {
               hasVersionControl
                 ? {
                     isActive: activePanel === 'explorer',
-                    onClick: () => {
-                      if (activePanel !== 'explorer') {
-                        const size = sourceControlPanelRef.current?.getSize()
-                        if (size) setLeftPanelSize(size)
-                      }
-                      setActivePanel('explorer')
-                    },
+                    onClick: () => setActivePanel('explorer'),
                   }
                 : undefined
             }
@@ -488,13 +480,7 @@ const WorkspaceScreen = () => {
                 ? {
                     isActive: activePanel === 'source-control',
                     pendingCount: pendingChangesCount,
-                    onClick: () => {
-                      if (activePanel !== 'source-control') {
-                        const size = explorerPanelRef.current?.getSize()
-                        if (size) setLeftPanelSize(size)
-                      }
-                      setActivePanel('source-control')
-                    },
+                    onClick: () => setActivePanel('source-control'),
                   }
                 : undefined
             }
@@ -506,15 +492,26 @@ const WorkspaceScreen = () => {
             direction='horizontal'
             className='relative flex h-full w-full'
           >
-            {hasVersionControl && activePanel === 'source-control' ? (
-              <SourceControlPanel
-                collapse={sourceControlPanelRef}
-                defaultSize={leftPanelSize}
-                projectId={projectPath}
-              />
-            ) : (
-              <Explorer collapse={explorerPanelRef} defaultSize={leftPanelSize} />
-            )}
+            {/* The left panel must stay mounted across context switches: swapping
+                the ResizablePanel itself makes react-resizable-panels rebuild the
+                layout from defaultSize and re-normalize, growing the sidebar on
+                every switch. Only the children swap. */}
+            <ResizablePanel
+              ref={leftPanelRef}
+              id='leftPanel'
+              order={1}
+              collapsible={true}
+              minSize={13}
+              defaultSize={16}
+              maxSize={80}
+              className="flex h-full w-full max-w-lg flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
+            >
+              {hasVersionControl && activePanel === 'source-control' ? (
+                <SourceControlPanel projectId={projectPath} />
+              ) : (
+                <Explorer />
+              )}
+            </ResizablePanel>
             <ResizableHandle
               id='workspaceHandle'
               hitAreaMargins={{ coarse: 12, fine: 3 }}
