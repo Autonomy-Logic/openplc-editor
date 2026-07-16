@@ -14,8 +14,12 @@ import type {
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
+import {
+  type Cia402AxisConfig,
+  DEFAULT_CIA402_AXIS_CONFIG,
+  isCia402Drive,
+} from '@root/middleware/shared/utils/ethercat'
 
-import { type Cia402AxisConfig, DEFAULT_CIA402_AXIS_CONFIG, isCia402Drive } from './cia402'
 import { esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
