@@ -30,6 +30,10 @@ void license_gate_init(const uint8_t *blob, size_t blob_len,
 lic_gate_state_t license_gate_state(uint32_t now_ms);
 int license_gate_actuation_allowed(uint32_t now_ms);
 
+/* Link anchor: the sketch references this no-op so ld pulls the closed .a's
+ * gated I/O translation unit (updateInput/OutputBuffers) into the firmware. */
+void license_io_link_anchor(void);
+
 #ifdef __cplusplus
 }
 #endif
