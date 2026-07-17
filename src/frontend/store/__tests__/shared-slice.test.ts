@@ -186,6 +186,12 @@ describe('createSharedSlice', () => {
         expect(state.libraries.user).toHaveLength(0)
       })
 
+      it('flags the workspace dirty after delete (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.delete('Main')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('clears editor if current editor matches deleted POU', () => {
         // Main should be the current editor after create
         expect(store.getState().editor.meta.name).toBe('Main')
@@ -229,6 +235,12 @@ describe('createSharedSlice', () => {
         expect(state.libraries.user[0].name).toBe('NewName')
       })
 
+      it('flags the workspace dirty after rename (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.rename('OldName', 'NewName')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('returns error when new name already exists', () => {
         store.getState().pouActions.create({ type: 'function', name: 'Existing', language: 'st' })
         const result = store.getState().pouActions.rename('OldName', 'Existing')
@@ -269,6 +281,12 @@ describe('createSharedSlice', () => {
         // Editor model added but not set as current (no tab opened)
         expect(state.files['Copy']).toBeDefined()
         expect(state.files['Copy'].isNew).toBe(true)
+      })
+
+      it('flags the workspace dirty after duplicate (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.duplicate('Source', 'Copy')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
       })
 
       it('returns error when source POU does not exist', () => {
@@ -574,6 +592,12 @@ describe('createSharedSlice', () => {
         expect(state.project.data.dataTypes[1].name).toBe('CopyDT')
         expect(state.project.data.dataTypes[1].derivation).toBe('array')
         expect(state.files['CopyDT']).toBeDefined()
+      })
+
+      it('flags the workspace dirty after duplicate (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().datatypeActions.duplicate('SourceDT', 'CopyDT')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
       })
 
       it('returns error when source data type does not exist', () => {
