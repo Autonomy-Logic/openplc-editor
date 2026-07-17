@@ -1,7 +1,5 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
-import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RungLadderState } from '../../../store/slices/ladder'
 import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
@@ -67,8 +65,6 @@ function resolveDeleteTarget(
 
 const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteElementProps) => {
   const store = useOpenPLCStore()
-  const projectPort = useProject()
-  const capabilities = useCapabilities()
   const {
     editor,
     project: {
@@ -147,8 +143,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
     })
   }
 
-  const handleDeleteElement = async (): Promise<void> => {
-    let needsPersist = false
+  const handleDeleteElement = (): void => {
     try {
       // Ladder rung deletion: takes precedence when a rung is provided.
       // Rung deletes are an in-editor edit, not a file-level deletion — they
@@ -175,7 +170,6 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
             description: `POU "${name}" was successfully deleted.`,
             variant: 'default',
           })
-          needsPersist = true
           break
         case 'datatype':
           deleteDatatypeAction(name)
@@ -194,7 +188,6 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
             description: `Server "${name}" was successfully deleted.`,
             variant: 'default',
           })
-          needsPersist = true
           break
         case 'remote-device':
           deleteRemoteDeviceAction(name)
@@ -203,7 +196,6 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
             description: `Remote device "${name}" was successfully deleted.`,
             variant: 'default',
           })
-          needsPersist = true
           break
         default:
           throw new Error('Unknown element type')
@@ -216,16 +208,11 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
       })
     }
 
+    // Deletions are soft and consistent across web and desktop: the element is
+    // removed from the in-memory project, its file removal is queued in
+    // `pendingDeletions`, and the workspace is flagged dirty (see deleteElement).
+    // Nothing is written to disk until the user saves.
     closeModal()
-
-    // For element types that map to a file in S3 (POU, server, remote device),
-    // trigger a full project save so the deletion is actually persisted.
-    // Otherwise the file stays in S3 and reappears on refresh — only the
-    // local UI state had been updated. executeSaveProject surfaces its own
-    // success/failure toasts.
-    if (needsPersist) {
-      await executeSaveProject(projectPort, capabilities)
-    }
   }
 
   const handleCloseModal = () => {
