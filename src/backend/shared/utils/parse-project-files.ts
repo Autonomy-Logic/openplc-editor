@@ -111,11 +111,16 @@ function getLanguageFromExt(relativePath: string): string | null {
 
 /**
  * Extract the base filename without extension from a relative path.
+ *
+ * Splits on BOTH separators: the desktop reader builds relative paths with
+ * `path.join`, which emits backslashes on Windows, so a `/`-only split would
+ * return the whole `pous\functions\Name` path as the "basename" — the origin of
+ * the POU name→path corruption in the "deleting function" bug.
  */
 function getBaseNameFromPath(relativePath: string): string {
   return (
     relativePath
-      .split('/')
+      .split(/[\\/]/)
       .pop()
       ?.replace(/\.\w+$/, '') ?? 'unknown'
   )
