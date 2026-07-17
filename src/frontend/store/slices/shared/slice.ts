@@ -40,6 +40,13 @@ function deleteElement(
   if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
     state.editorActions.clearEditor()
   }
+
+  // A delete is an unsaved structural change (the file removal is queued in
+  // `pendingDeletions`). Flag the workspace dirty so it persists ONLY on the
+  // next save — identical on web and desktop. The file entry is already gone,
+  // so mark the workspace directly rather than via a file-scoped helper.
+  state.workspaceActions.setEditingState('unsaved')
+
   return { ok: true as const }
 }
 
@@ -69,6 +76,11 @@ function renameElement(
   state.fbdFlowActions.renameFBDFlow(oldName, newName)
 
   afterRename?.(oldName, newName)
+
+  // A rename is an unsaved structural change — flag it dirty (the renamed file
+  // now lives under `newName`) so it persists ONLY on the next save, identical
+  // on web and desktop.
+  state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
 
   return { ok: true as const }
 }
@@ -193,6 +205,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
 
+      // Persist only on save: flag the new POU dirty instead of auto-saving.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
       return { ok: true }
     },
   },
@@ -262,6 +277,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const editorModel = createEditorObjectForDatatype(newName, source.derivation)
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: 'data-type', filePath: newName, isNew: true })
+
+      // Persist only on save: flag the new datatype dirty instead of auto-saving.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
 
       return { ok: true }
     },
