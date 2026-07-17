@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
@@ -18,7 +18,7 @@ import type { CoilProps } from './utils/types'
 
 export type { CoilNode } from './utils/types'
 
-export const Coil = (block: CoilProps) => {
+const Coil = (block: CoilProps) => {
   const { selected, data, id } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -332,3 +332,7 @@ export const Coil = (block: CoilProps) => {
     </div>
   )
 }
+
+const exportCoil = memo(Coil)
+
+export { exportCoil as Coil }

@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
@@ -18,7 +18,7 @@ import type { ContactProps } from './utils/types'
 
 export type { ContactNode } from './utils/types'
 
-export const Contact = (block: ContactProps) => {
+const Contact = (block: ContactProps) => {
   const { selected, data, id } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -333,3 +333,7 @@ export const Contact = (block: ContactProps) => {
     </div>
   )
 }
+
+const exportContact = memo(Contact)
+
+export { exportContact as Contact }
