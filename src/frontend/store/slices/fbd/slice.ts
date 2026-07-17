@@ -1,4 +1,4 @@
-import { addEdge, Node } from '@xyflow/react'
+import { addEdge } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -155,24 +155,14 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           const flow = fbdFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
-          flow.rung.nodes.push(node)
+          // Conditional in-place writes: immer only copies nodes whose values
+          // actually change, so unchanged siblings keep their identity.
+          for (const n of flow.rung.nodes) {
+            if (n.selected !== false) n.selected = false
+          }
+          flow.rung.nodes.push({ ...node, selected: true })
 
-          const selectedNodes: Node[] = []
-          flow.rung.nodes = flow.rung.nodes.map((n) => {
-            if (n.id === node.id) {
-              selectedNodes.push(n)
-              return {
-                ...n,
-                selected: true,
-              }
-            }
-            return {
-              ...n,
-              selected: false,
-            }
-          })
-
-          flow.rung.selectedNodes = selectedNodes
+          flow.rung.selectedNodes = [node]
           flow.updated = true
         }),
       )
@@ -205,16 +195,12 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
             flow.updated = true
           }
 
-          flow.rung.nodes = flow.rung.nodes.map((n) => {
-            if (n.id === node.id) {
-              return {
-                ...n,
-                selected: true,
-                draggable: (node.data as { draggable?: boolean }).draggable,
-              }
-            }
-            return n
-          })
+          const target = flow.rung.nodes.find((n) => n.id === node.id)
+          if (target) {
+            const draggable = (node.data as { draggable?: boolean }).draggable
+            if (target.selected !== true) target.selected = true
+            if (target.draggable !== draggable) target.draggable = draggable
+          }
         }),
       )
     },
@@ -227,15 +213,8 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           const selectedNodes = flow.rung.selectedNodes.filter((n) => n.id !== node.id)
           flow.rung.selectedNodes = selectedNodes
 
-          flow.rung.nodes = flow.rung.nodes.map((n) => {
-            if (n.id === node.id) {
-              return {
-                ...n,
-                selected: false,
-              }
-            }
-            return n
-          })
+          const target = flow.rung.nodes.find((n) => n.id === node.id)
+          if (target && target.selected !== false) target.selected = false
         }),
       )
     },
@@ -246,23 +225,16 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           const selectedNodes = nodes
-          if (!flow.rung.selectedNodes) flow.rung.selectedNodes = []
           flow.rung.selectedNodes = selectedNodes
 
-          flow.rung.nodes = flow.rung.nodes.map((node) => {
-            if (selectedNodes.find((n) => n.id === node.id)) {
-              return {
-                ...node,
-                selected: true,
-                draggable: (node.data as { draggable?: boolean }).draggable,
-              }
-            }
-            return {
-              ...node,
-              selected: false,
-              draggable: (node.data as { draggable?: boolean }).draggable,
-            }
-          })
+          // Conditional in-place writes: immer only copies nodes whose values
+          // actually change, so unchanged siblings keep their identity.
+          for (const node of flow.rung.nodes) {
+            const isSelected = selectedNodes.some((n) => n.id === node.id)
+            const draggable = (node.data as { draggable?: boolean }).draggable
+            if (node.selected !== isSelected) node.selected = isSelected
+            if (node.draggable !== draggable) node.draggable = draggable
+          }
         }),
       )
     },
