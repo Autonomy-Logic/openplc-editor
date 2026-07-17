@@ -140,10 +140,14 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
     if (bounds.height < defaultHeight) bounds.height = defaultHeight
 
-    setReactFlowPanelExtent([
-      [0, 0],
-      [bounds.width, bounds.height + 20],
-    ])
+    setReactFlowPanelExtent((prev) =>
+      prev[1][0] === bounds.width && prev[1][1] === bounds.height + 20
+        ? prev
+        : [
+            [0, 0],
+            [bounds.width, bounds.height + 20],
+          ],
+    )
     ladderFlowActions.updateReactFlowViewport({
       editorName: pouName,
       rungId: rungLocal.id,
@@ -724,35 +728,37 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * It is used to update the local rung state
    */
   const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
-    let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
-    changes.forEach((change) => {
-      switch (change.type) {
-        case 'select': {
-          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-          if (change.selected) {
-            selectedNodes.push(node)
+    setRungLocal((rung) => {
+      let selectedNodes: FlowNode[] = rung.nodes.filter((node) => node.selected)
+      changes.forEach((change) => {
+        switch (change.type) {
+          case 'select': {
+            const node = rung.nodes.find((n) => n.id === change.id) as FlowNode
+            if (change.selected) {
+              selectedNodes.push(node)
+              return
+            }
+
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
             return
           }
+          case 'add': {
+            selectedNodes = []
+            return
+          }
+          case 'remove': {
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            return
+          }
+        }
+      })
 
-          selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-          return
-        }
-        case 'add': {
-          selectedNodes = []
-          return
-        }
-        case 'remove': {
-          selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-          return
-        }
+      return {
+        ...rung,
+        nodes: applyNodeChanges(changes, rung.nodes),
+        selectedNodes: selectedNodes,
       }
     })
-
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: applyNodeChanges(changes, rungLocal.nodes),
-      selectedNodes: selectedNodes,
-    }))
   })
 
   /**

@@ -398,6 +398,21 @@ describe('createFBDFlowSlice', () => {
     expect(flow.rung.selectedNodes[0].id).toBe('n2')
   })
 
+  it('setSelectedNodes keeps unchanged nodes identity-stable on repeated selection', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    const n1 = makeNode({ id: 'n1', data: { draggable: true } })
+    const n2 = makeNode({ id: 'n2', data: { draggable: true } })
+    store.getState().fbdFlowActions.setNodes({ editorName: 'editor-1', nodes: [n1, n2] })
+
+    // First call normalizes selected flags on both nodes.
+    store.getState().fbdFlowActions.setSelectedNodes({ editorName: 'editor-1', nodes: [n1] })
+    const nodesAfterFirst = store.getState().fbdFlows[0].rung.nodes
+
+    // A repeated identical selection must not rebuild the nodes array.
+    store.getState().fbdFlowActions.setSelectedNodes({ editorName: 'editor-1', nodes: [n1] })
+    expect(store.getState().fbdFlows[0].rung.nodes).toBe(nodesAfterFirst)
+  })
+
   it('removeSelectedNode does nothing for nonexistent editor', () => {
     store.getState().fbdFlowActions.removeSelectedNode({ editorName: 'nonexistent', node: makeNode() })
     expect(store.getState().fbdFlows).toEqual([])
