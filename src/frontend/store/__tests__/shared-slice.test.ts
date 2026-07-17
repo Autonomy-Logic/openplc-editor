@@ -119,6 +119,12 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('POU already exists')
       })
 
+      it('rejects a POU name that is not a valid IEC identifier', () => {
+        const result = store.getState().pouActions.create({ type: 'program', name: 'Siren FC', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain("'Siren FC'")
+      })
+
       it('creates multiple POUs', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Prog1', language: 'st' })
         store.getState().pouActions.create({ type: 'function', name: 'Func1', language: 'il' })
@@ -230,6 +236,11 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('POU name already exists')
       })
 
+      it('rejects renaming to a name with path separators (the deleting-function bug)', () => {
+        const result = store.getState().pouActions.rename('OldName', 'pous\\functions\\Siren FC')
+        expect(result.ok).toBe(false)
+      })
+
       it('updates editor name if current editor matches old name', () => {
         // OldName is the current editor
         expect(store.getState().editor.meta.name).toBe('OldName')
@@ -271,6 +282,11 @@ describe('createSharedSlice', () => {
         const result = store.getState().pouActions.duplicate('Source', 'Existing')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('POU name already exists')
+      })
+
+      it('rejects duplicating to an invalid IEC identifier', () => {
+        const result = store.getState().pouActions.duplicate('Source', 'bad name')
+        expect(result.ok).toBe(false)
       })
 
       it('duplicates a function and preserves returnType', () => {
@@ -446,6 +462,11 @@ describe('createSharedSlice', () => {
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type already exists')
       })
+
+      it('rejects a data type name that is not a valid IEC identifier', () => {
+        const result = store.getState().datatypeActions.create({ name: 'bad name', derivation: 'array' })
+        expect(result.ok).toBe(false)
+      })
     })
 
     // -----------------------------------------------------------------------
@@ -567,6 +588,11 @@ describe('createSharedSlice', () => {
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
       })
+
+      it('rejects duplicating to an invalid IEC identifier', () => {
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'bad name')
+        expect(result.ok).toBe(false)
+      })
     })
   })
 
@@ -590,6 +616,13 @@ describe('createSharedSlice', () => {
     // -----------------------------------------------------------------------
     // deleteRequest
     // -----------------------------------------------------------------------
+    describe('create', () => {
+      it('rejects a server name that is not a valid IEC identifier', () => {
+        const result = store.getState().serverActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
+        expect(result.ok).toBe(false)
+      })
+    })
+
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with server elementType', () => {
         store.getState().serverActions.deleteRequest('Server1')
@@ -694,6 +727,13 @@ describe('createSharedSlice', () => {
     // -----------------------------------------------------------------------
     // deleteRequest
     // -----------------------------------------------------------------------
+    describe('create', () => {
+      it('rejects a remote device name that is not a valid IEC identifier', () => {
+        const result = store.getState().remoteDeviceActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
+        expect(result.ok).toBe(false)
+      })
+    })
+
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with remote-device elementType', () => {
         store.getState().remoteDeviceActions.deleteRequest('Device1')
