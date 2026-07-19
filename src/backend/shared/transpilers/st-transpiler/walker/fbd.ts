@@ -24,6 +24,6 @@ export interface RFFbdBody {
   rung: RFRung
 }
 
-export function emitFbdBody(body: RFFbdBody): EmitResult {
-  return emitLdBody({ rungs: [body.rung] })
+export function emitFbdBody(body: RFFbdBody, variableTypes?: ReadonlyMap<string, string>): EmitResult {
+  return emitLdBody({ rungs: [body.rung] }, variableTypes)
 }

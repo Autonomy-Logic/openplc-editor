@@ -25,6 +25,7 @@ import {
   type ProgramChunk,
   TRUE_NODE,
 } from '../core/path-tree'
+import { resolveConversionFunctionName } from '../helpers/block-library'
 import {
   asBlockData,
   asCoilData,
@@ -102,6 +103,15 @@ interface WalkerState {
    *  in the same coordinate space the python oracle sees. */
   yOffset: Map<string, number>
   warnings: string[]
+  /** Declared base-type of every known variable name, keyed by name
+   *  (see `emit/pou-graphical.ts`'s `buildVariableTypeIndex`).  Used
+   *  only to resolve a polymorphic `TO_<TYPE>` conversion block's
+   *  concrete call name from the type of whatever's wired into its
+   *  input — see `resolveConversionCallName`.  Empty when the caller
+   *  doesn't have (or doesn't pass) project/POU variable context;
+   *  conversion blocks simply keep their as-placed name in that case,
+   *  same as before this lookup existed. */
+  variableTypes: ReadonlyMap<string, string>
 }
 
 function rungHeight(rung: RFRung): number {
@@ -152,7 +162,7 @@ function isVariableNode(node: RFNode): boolean {
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
-export function emitLdBody(body: RFBody): EmitResult {
+export function emitLdBody(body: RFBody, variableTypes?: ReadonlyMap<string, string>): EmitResult {
   // POU name doesn't influence body emission today (it's only the
   // first element of the `Location` tuples used for source-map back-
   // references).  Hard-code a sentinel; the orchestrator can pass a
@@ -172,6 +182,7 @@ export function emitLdBody(body: RFBody): EmitResult {
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
+    variableTypes: variableTypes ?? new Map(),
   }
 
   // Index every node + edge from every rung up front.  Sinks are then
@@ -712,10 +723,23 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   }
   if (primaryName === null) return
 
+  // Polymorphic IEC 61131-3 conversion blocks (`TO_INT`, `TO_UINT`,
+  // `TO_REAL`, …) are placed with the generic shorthand as their type
+  // name, but that shorthand isn't itself a real ST function — only
+  // the fully qualified `<SRC>_TO_<DST>` family is (matiec/strucpp both
+  // reject a bare `TO_INT(...)` call).  Resolve it here from whatever
+  // is wired directly into the block's single input; leave the name
+  // untouched when it can't be resolved (unconnected input, upstream
+  // isn't a plain variable, or the source type has no defined
+  // conversion to this destination) so an unresolvable case still
+  // surfaces the same "undefined function" error it always did,
+  // rather than silently emitting a different wrong name.
+  const callName = resolveConversionCallName(state, node, data) ?? data.typeName
+
   state.program.push([state.currentIndent, []])
   state.program.push([primaryName, [...info, 'output', 0]])
   state.program.push([' := ', []])
-  state.program.push([data.typeName, [...info, 'type']])
+  state.program.push([callName, [...info, 'type']])
   state.program.push(['(', []])
   for (let i = 0; i < parts.length; i++) {
     if (i > 0) state.program.push([', ', []])
@@ -800,6 +824,35 @@ function firstIncomingForHandle(state: WalkerState, blockId: string, handle: str
     if (edge.targetHandle === handle) return edge
   }
   return undefined
+}
+
+/**
+ * Resolve a polymorphic `TO_<TYPE>` block's concrete ST call name
+ * (e.g. `REAL_TO_INT`) from the declared type of whatever is wired
+ * directly into its single input.  Returns `null` for anything that
+ * isn't a `TO_<TYPE>` block, has zero or more than one formal input
+ * (every real conversion function in the catalog takes exactly one),
+ * an unconnected/non-variable upstream, or a source type with no
+ * known type index entry / no matching catalog entry.
+ *
+ * Deliberately narrow: only the direct "input wired straight to a
+ * declared variable" case is resolved.  A chain through another
+ * block's output would need that block's own output type, which is
+ * the harder general connection-type-inference problem the python
+ * oracle's `ComputeConnectionTypes` solves and this walker hasn't
+ * ported (see `emit/pou-graphical.ts`'s ANY-resolution comment).
+ */
+function resolveConversionCallName(state: WalkerState, node: RFNode, data: BlockData): string | null {
+  if (data.inputs.length !== 1) return null
+  const edge = firstIncomingForHandle(state, node.id, data.inputs[0])
+  if (edge === undefined) return null
+  const upstream = state.byId.get(edge.source)
+  if (upstream === undefined) return null
+  const variableName = asVariableData(upstream.data)?.variable ?? asVariableExpressionData(upstream.data)?.expression
+  if (variableName === undefined || variableName === '') return null
+  const sourceType = state.variableTypes.get(variableName)
+  if (sourceType === undefined) return null
+  return resolveConversionFunctionName(data.typeName, sourceType)
 }
 
 /* ─────────────────────────── helpers ────────────────────────────────────── */

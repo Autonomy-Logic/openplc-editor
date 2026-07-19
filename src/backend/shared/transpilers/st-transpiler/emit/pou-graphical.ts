@@ -10,7 +10,7 @@
  */
 
 import { PLC_BASE_TYPES } from '../helpers/base-types'
-import { resolveBlockType } from '../helpers/block-library'
+import { resolveBlockType, TO_CONVERSION_TARGETS } from '../helpers/block-library'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
 import { varTypeNames } from '../helpers/type-text'
@@ -25,38 +25,6 @@ interface InterfaceEntry {
   keyword: string
   vars: TranspileVariable[]
 }
-
-/**
- * Destination types of the IEC 61131-3 polymorphic conversion family
- * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …).  Hard-coded here rather than
- * derived at runtime from the catalog so any future addition is visible
- * in code review.  Kept in sync with `data/std_block_catalog.json` — any
- * `<SRC>_TO_<X>` entry in the catalog implies `TO_<X>` is a valid
- * polymorphic conversion target.
- */
-const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
-  'BCD',
-  'BOOL',
-  'BYTE',
-  'DATE',
-  'DINT',
-  'DT',
-  'DWORD',
-  'INT',
-  'LINT',
-  'LREAL',
-  'LWORD',
-  'REAL',
-  'SINT',
-  'STRING',
-  'TIME',
-  'TOD',
-  'UDINT',
-  'UINT',
-  'ULINT',
-  'USINT',
-  'WORD',
-])
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
@@ -78,7 +46,16 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
   if (pou.body.language !== 'ld' && pou.body.language !== 'fbd') {
     throw new Error(`generateGraphicalPou called with non-graphical body: ${pou.body.language}`)
   }
-  const emitted = pou.body.language === 'ld' ? emitLdBody(pou.body.value) : emitFbdBody(pou.body.value)
+  // Declared base-type of every name the walker might see wired
+  // directly into a polymorphic `TO_<TYPE>` conversion block's input —
+  // globals first, then the POU's own interface/locals so a shadowing
+  // local wins.  Only base-types are indexed: derived/array/struct
+  // values are never valid conversion-function sources under IEC
+  // 61131-3, so they're not useful here and skipping them keeps this
+  // cheap and unambiguous.
+  const variableTypes = buildVariableTypeIndex(pou, project)
+  const emitted =
+    pou.body.language === 'ld' ? emitLdBody(pou.body.value, variableTypes) : emitFbdBody(pou.body.value, variableTypes)
 
   // Compose the final POU chunk stream now that the walker has
   // emitted the body bytes + any synthetic vars.
@@ -165,6 +142,27 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
 }
 
 /* ────────────────────────── helpers ─────────────────────────────────────── */
+
+/**
+ * Map every declared base-type variable name (project globals, then the
+ * POU's own interface/locals so a shadowing local wins) to its uppercase
+ * IEC type string.  Feeds the walker's polymorphic `TO_<TYPE>` conversion
+ * resolution (see `walker/ld.ts`'s `resolveConversionFunctionName` call
+ * site) — it needs to know the source type of whatever's wired into a
+ * conversion block's input to build the concrete `<SRC>_TO_<DST>` call
+ * name.
+ */
+function buildVariableTypeIndex(pou: TranspilePou, project: TranspileProject): Map<string, string> {
+  const index = new Map<string, string>()
+  const addAll = (variables: TranspileVariable[]) => {
+    for (const v of variables) {
+      if (v.type.definition === 'base-type') index.set(v.name, v.type.value.toUpperCase())
+    }
+  }
+  addAll(project.configuration.globalVariables)
+  addAll(pou.interface?.variables ?? [])
+  return index
+}
 
 function computeInterface(variables: TranspileVariable[], syntheticVars: SyntheticVar[]): InterfaceEntry[] {
   const classToKeyword: Record<TranspileVariableClass, string> = {
