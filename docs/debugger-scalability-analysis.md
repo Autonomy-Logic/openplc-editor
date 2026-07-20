@@ -1193,9 +1193,9 @@ Implement **Strategy F** (lazy registration) only if needed for extreme-scale pr
 ### openplc-editor
 | File | Changes |
 |------|---------|
-| `src/main/modules/compiler/compiler-module.ts` | Pass target platform to xml2st |
-| `src/utils/debug-parser.ts` | Support JSON manifest parsing |
-| `src/renderer/utils/debugger-session.ts` | Array index handling, protocol v2 |
-| `src/main/modules/modbus/modbus-client.ts` | Array element request method |
-| `src/main/modules/websocket/websocket-debug-client.ts` | Array element request method |
-| `src/renderer/screens/workspace-screen.tsx` | Array polling in debug loop |
+| `src/backend/editor/compiler/compiler-module.ts` | Pass target platform to xml2st |
+| `src/frontend/utils/debug-parser.ts` | Support JSON manifest parsing |
+| `src/frontend/utils/debugger-session.ts` | Array index handling, protocol v2 |
+| `src/backend/editor/modbus/modbus-client.ts` | Array element request method |
+| `src/backend/shared/debug/websocket-debug-transport.ts` | Array element request method |
+| `src/frontend/screens/workspace-screen.tsx` | Array polling in debug loop |
