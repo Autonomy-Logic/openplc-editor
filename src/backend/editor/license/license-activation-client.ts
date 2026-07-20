@@ -13,9 +13,11 @@
  * data }` envelope conventions as the library catalog client.
  */
 
+import { sign as cryptoSign } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import https from 'https'
 
-import { serializeLicenseBlob } from '../../shared/debug/license-blob'
+import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
 import { getEdgeApiBaseUrl } from '../library-manager/desktop-catalog-transport'
 
 /** Request payload sent to the edge activation endpoint. */
@@ -57,6 +59,17 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
   // TODO(D49/D51): remover o toggle quando o modulo vpp-licenses do autonomy-edge existir.
   const mock = process.env.OPLC_LICENSE_MOCK
   if (mock === 'licensed') {
+    // With OPLC_LICENSE_MOCK_KEY set to a per-VPP private key PEM, sign a REAL
+    // blob for this device so on-device verify passes -> FULL. Without it, fall
+    // back to the unsigned golden (exercises the write path only -> device demo).
+    const keyPath = process.env.OPLC_LICENSE_MOCK_KEY?.trim()
+    if (keyPath) {
+      try {
+        return { licensed: true, license: signedMockLicense(input, keyPath) }
+      } catch (err) {
+        return { licensed: false, error: `mock sign failed: ${err instanceof Error ? err.message : String(err)}` }
+      }
+    }
     return { licensed: true, license: goldenLicenseBytes() }
   }
   if (mock === 'demo') {
@@ -172,5 +185,38 @@ function goldenLicenseBytes(): number[] {
     signature: new Uint8Array(64).fill(17),
     crc32: 0, // recomputed by the serializer
   })
+  return Array.from(blob)
+}
+
+/** Convert a hex string (e.g. deriveDeviceId output) to bytes. */
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.trim()
+  const out = new Uint8Array(Math.floor(clean.length / 2))
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+/**
+ * DEV mock signer. Signs a REAL 98-byte license blob bound to THIS device using
+ * a per-VPP P-256 private key at `keyPath` (OPLC_LICENSE_MOCK_KEY). Mirrors the
+ * backend's future job: build the 30-byte payload, ECDSA P-256 over sha256 as
+ * raw r||s (ieee-p1363), then the blob with crc32. The blob then verifies
+ * on-device against the VPP's public key baked in the .a -> FULL. Dev-only; the
+ * private key is a local file, never committed.
+ */
+function signedMockLicense(input: DeviceActivationInput, keyPath: string): number[] {
+  const privateKeyPem = readFileSync(keyPath, 'utf8')
+  const deviceId = hexToBytes(input.deviceId) // 16 bytes (from deriveDeviceId)
+  const productId = hexToBytes(input.vppId) //    8 bytes (from deriveVppId)
+
+  // Serialize once with a placeholder signature so we sign the EXACT payload the
+  // serializer lays out (offsets 0..29), independent of layout details.
+  const draft = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: new Uint8Array(64), crc32: 0 })
+  const payload = draft.subarray(0, LIC_PAYLOAD_SIZE)
+
+  const sig = new Uint8Array(cryptoSign('sha256', Buffer.from(payload), { key: privateKeyPem, dsaEncoding: 'ieee-p1363' }))
+  if (sig.length !== 64) throw new Error(`expected 64-byte r||s signature, got ${sig.length}`)
+
+  const blob = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: sig, crc32: 0 })
   return Array.from(blob)
 }
