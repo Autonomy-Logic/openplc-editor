@@ -170,17 +170,6 @@ void setup()
     #endif
 
         license_gate_init(lic_blob, lic_len, anchor, anchor_len, (uint32_t)millis());
-
-    #if defined(VPP_HAS_LICENSE_CORE)
-        // Force ld to pull the closed license-core I/O translation unit
-        // (updateInput/OutputBuffers) into the firmware. Their only caller is
-        // the runtime glue, which the editor precompiles into another archive
-        // (libOpenPLCUserLib.a); ld's single archive pass would otherwise never
-        // pull the member on the strength of an intra-archive reference, and the
-        // link fails with "undefined reference to updateInputBuffers". This no-op
-        // reference from the sketch object (scanned before archives) pulls it in.
-        license_io_link_anchor();
-    #endif
     }
 
     #ifdef MODBUS_ENABLED
