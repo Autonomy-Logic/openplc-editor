@@ -51,9 +51,7 @@ describe('mergeSerialPortList', () => {
     const boards = boardMap([])
     const manufacturers = boardMap([['/dev/ttyUSB0', undefined]])
 
-    expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-      { name: '/dev/ttyUSB0', address: '/dev/ttyUSB0' },
-    ])
+    expect(mergeSerialPortList(boards, manufacturers)).toEqual([{ name: '/dev/ttyUSB0', address: '/dev/ttyUSB0' }])
   })
 
   it('treats an empty-string descriptor as absent', () => {
