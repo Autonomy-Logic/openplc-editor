@@ -65,4 +65,67 @@ describe('mergeSerialPortList', () => {
   it('returns an empty list when both scans are empty', () => {
     expect(mergeSerialPortList(boardMap([]), boardMap([]))).toEqual([])
   })
+
+  describe('macOS tty./cu. reconciliation', () => {
+    it('collapses the tty. (serialport) and cu. (arduino-cli) nodes of one device, preferring cu. + board name', () => {
+      const manufacturers = boardMap([['/dev/tty.usbmodem11301', 'Arduino']])
+      const boards = boardMap([['/dev/cu.usbmodem11301', 'Opta']])
+
+      expect(mergeSerialPortList(boards, manufacturers)).toEqual([
+        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
+      ])
+    })
+
+    it('keeps the cu. node when only arduino-cli reported the device', () => {
+      const boards = boardMap([['/dev/cu.usbmodem11301', 'Opta']])
+
+      expect(mergeSerialPortList(boards, boardMap([]))).toEqual([
+        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
+      ])
+    })
+
+    it('falls back to the tty. node when no cu. node was reported', () => {
+      const manufacturers = boardMap([['/dev/tty.usbserial-99', 'FTDI']])
+
+      expect(mergeSerialPortList(boardMap([]), manufacturers)).toEqual([
+        { name: '/dev/tty.usbserial-99 (FTDI)', address: '/dev/tty.usbserial-99' },
+      ])
+    })
+
+    it('reproduces the reported duplicate-ports scenario as a single deduped, cu.-based list', () => {
+      // serialport reports tty.* with manufacturers; arduino-cli reports cu.* with board id.
+      const manufacturers = boardMap([
+        ['/dev/tty.debug-console', undefined],
+        ['/dev/tty.Bluetooth-Incoming-Port', undefined],
+        ['/dev/tty.usbserial-1140', 'Prolific Technology Inc.'],
+        ['/dev/tty.usbmodem11301', 'Arduino'],
+      ])
+      const boards = boardMap([
+        ['/dev/cu.debug-console', undefined],
+        ['/dev/cu.Bluetooth-Incoming-Port', undefined],
+        ['/dev/cu.usbserial-1140', undefined],
+        ['/dev/cu.usbmodem11301', 'Opta'],
+      ])
+
+      expect(mergeSerialPortList(boards, manufacturers)).toEqual([
+        { name: '/dev/cu.debug-console', address: '/dev/cu.debug-console' },
+        { name: '/dev/cu.Bluetooth-Incoming-Port', address: '/dev/cu.Bluetooth-Incoming-Port' },
+        { name: '/dev/cu.usbserial-1140 (Prolific Technology Inc.)', address: '/dev/cu.usbserial-1140' },
+        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
+      ])
+    })
+
+    it('does not merge Linux tty paths (no dotted tty./cu. prefix)', () => {
+      const manufacturers = boardMap([
+        ['/dev/ttyUSB0', 'FTDI'],
+        ['/dev/ttyACM0', undefined],
+      ])
+      const boards = boardMap([['/dev/ttyACM0', 'Arduino Uno']])
+
+      expect(mergeSerialPortList(boards, manufacturers)).toEqual([
+        { name: '/dev/ttyUSB0 (FTDI)', address: '/dev/ttyUSB0' },
+        { name: '/dev/ttyACM0 (Arduino Uno)', address: '/dev/ttyACM0' },
+      ])
+    })
+  })
 })
