@@ -1,6 +1,25 @@
-import { mergeSerialPortList } from '../serial-port-list'
+import { mergeSerialPortList, toCalloutPath } from '../serial-port-list'
 
 const boardMap = (entries: Array<[string, string | undefined]>) => new Map<string, string | undefined>(entries)
+
+describe('toCalloutPath', () => {
+  it('rewrites a macOS dial-in (tty.) node to its call-out (cu.) node', () => {
+    expect(toCalloutPath('/dev/tty.usbmodem11301')).toBe('/dev/cu.usbmodem11301')
+  })
+
+  it('leaves an already-call-out (cu.) path unchanged', () => {
+    expect(toCalloutPath('/dev/cu.usbmodem11301')).toBe('/dev/cu.usbmodem11301')
+  })
+
+  it('leaves Linux paths unchanged (no dotted tty. prefix)', () => {
+    expect(toCalloutPath('/dev/ttyUSB0')).toBe('/dev/ttyUSB0')
+    expect(toCalloutPath('/dev/ttyACM0')).toBe('/dev/ttyACM0')
+  })
+
+  it('leaves Windows COM paths unchanged', () => {
+    expect(toCalloutPath('COM3')).toBe('COM3')
+  })
+})
 
 describe('mergeSerialPortList', () => {
   it('labels a port with the arduino-cli board name when identified', () => {
@@ -66,8 +85,8 @@ describe('mergeSerialPortList', () => {
     expect(mergeSerialPortList(boardMap([]), boardMap([]))).toEqual([])
   })
 
-  describe('macOS tty./cu. reconciliation', () => {
-    it('collapses the tty. (serialport) and cu. (arduino-cli) nodes of one device, preferring cu. + board name', () => {
+  describe('macOS tty./cu. canonicalization', () => {
+    it('collapses the tty. (serialport) and cu. (arduino-cli) nodes of one device into a single cu. entry', () => {
       const manufacturers = boardMap([['/dev/tty.usbmodem11301', 'Arduino']])
       const boards = boardMap([['/dev/cu.usbmodem11301', 'Opta']])
 
@@ -76,19 +95,11 @@ describe('mergeSerialPortList', () => {
       ])
     })
 
-    it('keeps the cu. node when only arduino-cli reported the device', () => {
-      const boards = boardMap([['/dev/cu.usbmodem11301', 'Opta']])
-
-      expect(mergeSerialPortList(boards, boardMap([]))).toEqual([
-        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
-      ])
-    })
-
-    it('falls back to the tty. node when no cu. node was reported', () => {
+    it('canonicalizes a tty.-only device (from serialport) to its cu. node', () => {
       const manufacturers = boardMap([['/dev/tty.usbserial-99', 'FTDI']])
 
       expect(mergeSerialPortList(boardMap([]), manufacturers)).toEqual([
-        { name: '/dev/tty.usbserial-99 (FTDI)', address: '/dev/tty.usbserial-99' },
+        { name: '/dev/cu.usbserial-99 (FTDI)', address: '/dev/cu.usbserial-99' },
       ])
     })
 
