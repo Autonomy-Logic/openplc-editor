@@ -3,17 +3,18 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   Connection,
+  DefaultEdgeOptions,
   Edge as FlowEdge,
   Node as FlowNode,
   OnEdgesChange,
-  OnNodeDrag,
   OnNodesChange,
   ReactFlowInstance,
   SelectionMode,
+  SnapGrid,
   XYPosition,
 } from '@xyflow/react'
 import { debounce, isEqual } from 'lodash'
-import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import {
@@ -22,6 +23,7 @@ import {
   useIsDebuggerVisible,
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { useStableCallback } from '../../../../hooks/use-stable-callback'
 import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
@@ -44,6 +46,13 @@ interface FBDProps {
 }
 
 const EDGE_COLOR_TRUE = '#00FF00'
+
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
+  type: 'smoothstep',
+}
+const SNAP_GRID: SnapGrid = [16, 16]
+const PRO_OPTIONS = { hideAttribution: true }
+const CONTROLS_CONFIG = { showInteractive: false }
 
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   // Bound POU + editor model — every multi-mounted FBDBody reads
@@ -516,171 +525,146 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * This function is called every time the nodes change
    * It is used to update the local rung state
    */
-  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
-    (changes) => {
-      setRungLocal((newRung) => {
-        let nodes = newRung.nodes
-        let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
+  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
+    setRungLocal((newRung) => {
+      let nodes = newRung.nodes
+      let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
 
-        changes.forEach((change) => {
-          switch (change.type) {
-            case 'select': {
-              const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
-              if (change.selected) {
-                selectedNodes.push(node)
-                return
-              }
-              selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+      changes.forEach((change) => {
+        switch (change.type) {
+          case 'select': {
+            const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
+            if (change.selected) {
+              selectedNodes.push(node)
               return
             }
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            return
+          }
 
-            case 'dimensions': {
-              if (change.resizing)
-                nodes = newRung.nodes.map((n) => {
-                  if (n.id === change.id) {
-                    return {
-                      ...n,
+          case 'dimensions': {
+            if (change.resizing)
+              nodes = newRung.nodes.map((n) => {
+                if (n.id === change.id) {
+                  return {
+                    ...n,
+                    width: change.dimensions?.width,
+                    height: change.dimensions?.height,
+                    measured: {
                       width: change.dimensions?.width,
                       height: change.dimensions?.height,
-                      measured: {
-                        width: change.dimensions?.width,
-                        height: change.dimensions?.height,
-                      },
-                    }
+                    },
                   }
-                  return n
-                })
-              return
-            }
+                }
+                return n
+              })
+            return
           }
-        })
-
-        return {
-          ...newRung,
-          nodes: applyNodeChanges(changes, nodes),
-          selectedNodes: selectedNodes,
         }
       })
-    },
-    [rungLocal, dragging],
-  )
 
-  const onEdgesChange: OnEdgesChange<FlowEdge> = useCallback(
-    (changes) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        edges: applyEdgeChanges(changes, rung.edges),
-      }))
-    },
-    [rungLocal, dragging],
-  )
+      return {
+        ...newRung,
+        nodes: applyNodeChanges(changes, nodes),
+        selectedNodes: selectedNodes,
+      }
+    })
+  })
 
-  const onNodeDragStart = useCallback(() => {
+  const onEdgesChange: OnEdgesChange<FlowEdge> = useStableCallback((changes) => {
+    setRungLocal((rung) => ({
+      ...rung,
+      edges: applyEdgeChanges(changes, rung.edges),
+    }))
+  })
+
+  const onNodeDragStart = useStableCallback(() => {
     captureAndPush(pouName)
     setDragging(true)
-  }, [rungLocal, dragging, captureAndPush, pouName])
+  })
 
   /**
    * When the node drag stops, update the fbd rung state
    */
-  const onNodeDragStop: OnNodeDrag = useCallback(
-    (_e, _node, nodes) => {
-      setDragging(false)
-      fbdFlowActions.setRung({
-        editorName: pouName,
-        rung: {
-          ...rungLocal,
-          nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
-          edges: rungLocal.edges,
-        },
-      })
-    },
-    [rungLocal, dragging],
-  )
+  const onNodeDragStop = useStableCallback((_e: MouseEvent, _node: FlowNode, nodes: FlowNode[]) => {
+    setDragging(false)
+    fbdFlowActions.setRung({
+      editorName: pouName,
+      rung: {
+        ...rungLocal,
+        nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
+        edges: rungLocal.edges,
+      },
+    })
+  })
 
   /**
    * Handle the drag enter of the viewport
    * This function is called when a dragged element enters the viewport
    */
-  const onDragEnterViewport = useCallback<DragEventHandler>(
-    (event) => {
-      event.preventDefault()
-      // Check if the dragged element is not an FBD block (cross-browser compatible)
-      if (!isFbdBlockDrag(event.dataTransfer)) {
-        return
-      }
-    },
-    [reactFlowViewportRef],
-  )
+  const onDragEnterViewport = useStableCallback((event: DragEvent) => {
+    event.preventDefault()
+    // Check if the dragged element is not an FBD block (cross-browser compatible)
+    if (!isFbdBlockDrag(event.dataTransfer)) {
+      return
+    }
+  })
 
   /**
    * Handle the drag leave of the viewport
    * This function is called when a dragged element leaves the viewport
    */
-  const onDragLeaveViewport = useCallback<DragEventHandler>(
-    (event) => {
-      // Check if the dragged element is a child of the flow viewport
-      const { relatedTarget } = event
-      if (
-        !reactFlowViewportRef.current ||
-        !relatedTarget ||
-        reactFlowViewportRef.current.contains(relatedTarget as Node)
-      ) {
-        return
-      }
-    },
-    [reactFlowViewportRef],
-  )
+  const onDragLeaveViewport = useStableCallback((event: DragEvent) => {
+    // Check if the dragged element is a child of the flow viewport
+    const { relatedTarget } = event
+    if (
+      !reactFlowViewportRef.current ||
+      !relatedTarget ||
+      reactFlowViewportRef.current.contains(relatedTarget as Node)
+    ) {
+      return
+    }
+  })
 
   /**
    * Handle the drag over of the viewport
    * This function is called when a dragged element is over the viewport
    */
-  const onDragOver = useCallback<DragEventHandler>(
-    (event) => {
-      if (!reactFlowInstance) return
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-    },
-    [reactFlowInstance],
-  )
+  const onDragOver = useStableCallback((event: DragEvent) => {
+    if (!reactFlowInstance) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  })
 
   /**
    * Handle the drop of the viewport
    * This function is called when a dragged element is dropped in the viewport
    */
-  const onDrop = useCallback<DragEventHandler>(
-    (event) => {
-      event.preventDefault()
-      // Check if there is an FBD block in the dragged data (cross-browser compatible)
-      const blockType = getFbdBlockType(event.dataTransfer)
+  const onDrop = useStableCallback((event: DragEvent) => {
+    event.preventDefault()
+    // Check if there is an FBD block in the dragged data (cross-browser compatible)
+    const blockType = getFbdBlockType(event.dataTransfer)
 
-      if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
-        return
-      }
+    if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
+      return
+    }
 
-      // Check if there is a library in the dragged data
-      const library =
-        event.dataTransfer.getData('application/library') === ''
-          ? undefined
-          : event.dataTransfer.getData('application/library')
+    // Check if there is a library in the dragged data
+    const library =
+      event.dataTransfer.getData('application/library') === ''
+        ? undefined
+        : event.dataTransfer.getData('application/library')
 
-      const position = reactFlowInstance?.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      }) ?? {
-        x: 0,
-        y: 0,
-      }
+    const position = reactFlowInstance?.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    }) ?? {
+      x: 0,
+      y: 0,
+    }
 
-      handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
-    },
-    // `handleAddElementByDropping` reads `libraries` via getState() at call
-    // time (never stale) and `pous` via subscription, so unlike the previous
-    // whole-store version this callback no longer needs library deps to
-    // re-bind for freshly installed libraries.
-    [rung, reactFlowInstance, pous],
-  )
+    handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
+  })
 
   /**
    * Handle the double click of a node
@@ -691,6 +675,23 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
     openModal(modalToOpen, node)
   }
+
+  const onDelete = useStableCallback(({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
+    handleOnDelete(nodes, edges)
+  })
+  const onConnect = useStableCallback((connection: Connection) => {
+    handleOnConnect(connection)
+  })
+  const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+    handleNodeDoubleClick(node)
+  })
+
+  // Per-POU pattern id.  Without this, every <Background> SVG <pattern>
+  // shares the library default id="pattern"; SVG ids are document-scoped, so
+  // opening a second FBD POU makes its <rect fill="url(#pattern)"> resolve
+  // against the first instance's pattern and the grid disappears on the
+  // second editor.  Scoping by POU name keeps each grid independent.
+  const backgroundConfig = useMemo(() => ({ id: `fbd-bg-${pouName}` }), [pouName])
 
   /**
    * Handle the close of the modal
@@ -717,17 +718,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}
-        // Per-POU pattern id.  Without this, every <Background> SVG
-        // <pattern> shares the library default id="pattern"; SVG ids
-        // are document-scoped, so opening a second FBD POU makes its
-        // <rect fill="url(#pattern)"> resolve against the first
-        // instance's pattern and the grid disappears on the second
-        // editor.  Scoping by POU name keeps each grid independent.
-        backgroundConfig={{ id: `fbd-bg-${pouName}` }}
+        backgroundConfig={backgroundConfig}
         controls={true}
-        controlsConfig={{
-          showInteractive: false,
-        }}
+        controlsConfig={CONTROLS_CONFIG}
         viewportConfig={{
           onInit: setReactFlowInstance,
 
@@ -735,29 +728,15 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           nodes: styledNodes,
           edges: styledEdges,
 
-          defaultEdgeOptions: {
-            type: 'smoothstep',
-          },
+          defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
 
           nodesDraggable: !isDebuggerActive,
           nodesConnectable: !isDebuggerActive,
           elementsSelectable: true,
 
-          onDelete: isDebuggerActive
-            ? undefined
-            : ({ nodes, edges }) => {
-                handleOnDelete(nodes, edges)
-              },
-          onConnect: isDebuggerActive
-            ? undefined
-            : (connection) => {
-                handleOnConnect(connection)
-              },
-          onNodeDoubleClick: isDebuggerActive
-            ? undefined
-            : (_event, node) => {
-                handleNodeDoubleClick(node)
-              },
+          onDelete: isDebuggerActive ? undefined : onDelete,
+          onConnect: isDebuggerActive ? undefined : onConnect,
+          onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
 
           onDragEnter: isDebuggerActive ? undefined : onDragEnterViewport,
           onDragLeave: isDebuggerActive ? undefined : onDragLeaveViewport,
@@ -774,12 +753,10 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           preventScrolling: canZoom,
           panOnDrag: canPan,
 
-          snapGrid: [16, 16],
+          snapGrid: SNAP_GRID,
           snapToGrid: true,
 
-          proOptions: {
-            hideAttribution: true,
-          },
+          proOptions: PRO_OPTIONS,
         }}
       />
       {blockElementModal?.open && (

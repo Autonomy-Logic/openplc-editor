@@ -4,7 +4,7 @@
  */
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
@@ -21,7 +21,7 @@ type RungProps = {
   isDebuggerActive?: boolean
 }
 
-export const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerActive }: RungProps) => {
+const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerActive }: RungProps) => {
   // Primitive selector: this per-rung component only needs the rung count of
   // its own flow (for the rounded-corner styling), so subscribe to just that.
   const rungsCount = useOpenPLCStore(
@@ -86,3 +86,7 @@ export const Rung = ({ className, index, id, rung, nodeDivergences, isDebuggerAc
     </div>
   )
 }
+
+const exportRung = memo(Rung)
+
+export { exportRung as Rung }

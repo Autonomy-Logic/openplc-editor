@@ -14,7 +14,7 @@ In order to run the development version, clone the repository, and install depen
 You'll need the following tools:
 
 - [Git](https://git-scm.com/)
-- [NodeJS](https://nodejs.org/en/download/), version `>=20 <24`
+- [NodeJS](https://nodejs.org/en/download/), version `>=22 <24`
 
 ### Step by step
 
@@ -36,6 +36,14 @@ npm install
 
 ```bash
 npm run dev
+```
+
+### Running tests
+
+```bash
+npm run test         # Unit tests (Jest, with coverage)
+npm run test:watch   # Unit tests in watch mode (no coverage)
+npm run test:e2e     # End-to-end tests (Playwright, builds the app first)
 ```
 
 ## Releasing a New Version
