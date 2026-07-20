@@ -254,6 +254,7 @@ When adding new code to covered directories, you must add corresponding tests to
 - No floating promises: `await` or handle rejection explicitly — async errors must not disappear.
 - Prefer `??` over `||` for defaults when `0`, `''`, or `false` are valid values.
 - Model variant states as discriminated unions; make `switch` exhaustive with a `never` check.
+- Named exports over default exports.
 - Zustand state changes only through slice actions — never mutate store values from components.
 
 ## Key Technologies
@@ -372,9 +373,7 @@ new alias.
 
 ## Git Workflow
 
-- Base branch: `development` — feature branches start from it and PRs target it.
-- Branch naming: `<type>/DOPE-<n>-<kebab-slug>`, where `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`. Non-ticket maintenance uses `chore/`, `ci/`, `docs/`.
-- Commit messages: Conventional Commits, concise and focused on why.
+Follow the Workflow section in CONTRIBUTING.md (base branch, branch naming, Conventional Commits). `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`.
 
 ## Issue Tracker
 

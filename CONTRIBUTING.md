@@ -12,7 +12,7 @@ npm run dev        # dev server on port 1313
 ## Workflow
 
 1. Internal work is tracked in Jira, project DOPE (internal tracker). External contributors: open a GitHub issue using the provided templates.
-2. Branch from `development`, named `<type>/DOPE-<n>-<kebab-slug>` (`<type>`: feature, bugfix, task, improvement). Maintenance without a ticket uses `chore/`, `ci/`, `docs/`.
+2. Branch from `development`, named `<type>/DOPE-<n>-<kebab-slug>` (`<type>`: feature, bugfix, task, improvement). Maintenance without a ticket uses `chore/`, `ci/`, `docs/`. External contributors without Jira access: use the GitHub issue number instead (`<type>/gh-<n>-<kebab-slug>`); a maintainer files the DOPE ticket when needed.
 3. Commit style: Conventional Commits, concise, focused on why.
 4. Open a PR targeting `development` and fill in the PR template.
 

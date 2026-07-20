@@ -1,10 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(git:*)",
-      "Bash(gh:*)"
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)"
     ]
   }
 }

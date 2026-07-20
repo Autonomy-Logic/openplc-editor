@@ -3,9 +3,10 @@
 > **Status.** STruC++ is the editor's ST compiler today: it is pinned in
 > `binary-versions.json` (v0.5.x) and installed as an npm tarball by
 > `scripts/download-binaries.ts`; `compiler-module.ts` compiles ST to C++ with it.
-> The editor no longer ships or invokes an `iec2c` binary — remaining
-> `iec2c`/`matiec` mentions in `src/` are comments, plus the Runtime v3 path
-> where the editor uploads plain `program.st` for on-device MatIEC recompilation
+> The editor no longer ships or invokes a local `iec2c` binary; remaining
+> `iec2c`/`matiec` mentions in `src/` are comments. MatIEC itself is not gone:
+> on the Runtime v3 path the editor uploads plain `program.st` and the runtime
+> recompiles it on-device with MatIEC
 > (`src/backend/shared/compile/pipeline.ts`). The OPC UA plugin migration
 > (Phase 9) remains paused.
 

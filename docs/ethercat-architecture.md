@@ -340,7 +340,7 @@ The EtherCAT state lives primarily in the **Project Slice** (`src/frontend/store
 ```
 project.data.remoteDevices[] → PLCRemoteDevice[]
   └── ethercatConfig
-      ├── masterConfig: { networkInterface, cycleTimeUs, watchdogTimeoutCycles }
+      ├── masterConfig: { networkInterface, cycleTimeUs, watchdogTimeoutCycles, taskPriority }
       └── devices: ConfiguredEtherCATDevice[]
 ```
 
