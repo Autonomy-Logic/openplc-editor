@@ -74,9 +74,12 @@ export function buildRemoteDeviceOptionGroups(cellId: string, remoteIOPoints: Re
     }
 
     deviceGroup.push({
+      // Single-field model: binding a variable to this channel stores the
+      // ALIAS NAME in `location` (resolved to the address at compile). The
+      // label shows the address for context.
       id: `${cellId}-remote-${ioPoint.ioPointId}`,
-      value: ioPoint.iecLocation,
-      label: `${ioPoint.iecLocation} (${ioPoint.alias})`,
+      value: ioPoint.alias,
+      label: `${ioPoint.alias} (${ioPoint.iecLocation})`,
     })
   }
 
@@ -111,9 +114,11 @@ export function buildVendorIoOptionGroups(cellId: string, entries: IoMappingEntr
     }
 
     group.push({
+      // Single-field model: bind by ALIAS NAME (resolved at compile); the
+      // label shows the address for context.
       id: `${cellId}-vendor-${entry.slot}-${entry.channelName}`,
-      value: entry.iecAddress,
-      label: `${entry.iecAddress} (${entry.alias})`,
+      value: entry.alias,
+      label: `${entry.alias} (${entry.iecAddress})`,
     })
   }
 

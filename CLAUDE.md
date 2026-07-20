@@ -275,6 +275,27 @@ When adding new code to covered directories, you must add corresponding tests to
 
 ## Important Patterns
 
+### When bumping the app version:
+`APP_VERSION` in `src/frontend/data/constants/app-version.ts` is the **single
+source of truth** for the human-facing version, shared **byte-for-byte** between
+openplc-editor and openplc-web (enforced by the mirror gate / `compare-surfaces.py`).
+The About modal renders it directly; the web build writes it into `version.json`.
+
+**Bump `APP_VERSION` — never `package.json` alone.** Make the identical one-line
+edit in BOTH repos, and set `package.json.version` to the same value in both so
+they can't drift. Roles: `APP_VERSION` is what the user sees in the About dialog;
+`package.json.version` is what electron-builder stamps on the desktop binary and
+what the release tag `vX.Y.Z` must match. Bumping only `package.json` leaves the
+About dialog stuck on the old version — **this mistake shipped 4.2.7 and 4.2.8
+with About still showing 4.2.6.** If the two ever disagree, `APP_VERSION` is
+authoritative; fix it to match.
+
+Release order: bump `APP_VERSION` + `package.json` (both repos, same value) → PR
+to `development` → merge → promote `development`→`main` on both → tag `vX.Y.Z` on
+the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploys
+on its `main` push. (Ideally `package.json.version` should be derived from
+`APP_VERSION` in the release workflow so a single bump can never drift.)
+
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
 2. Add it to `PlatformPorts` in `src/middleware/shared/providers/types.ts`
@@ -316,20 +337,31 @@ openplc-web). Pure functions, no IPC, no electron coupling.
     replaces the old `generateIecAddress` helper. Pass `alsoUsed` for
     in-flight allocations within a batch.
 - **Alias registry** (`alias-registry.ts`): derived index on top of
-  the pool. `byAlias` / `byAddress` maps plus `duplicateAliases`
-  (first-wins). Pure function — rebuild on demand, cost is
-  O(producers).
-- **Variable sync** (`sync-variable-aliases.ts`): pure function that
-  walks variables and either adopts (no alias bound but address
-  matches), refreshes (alias address moved), or orphans (alias gone).
-  Called from every producer-mutation site, target switch,
-  project load, and pre-compile via the
-  `projectActions.syncVariableAliases()` store action.
+  the pool. `byAlias` map plus `duplicateAliases` (first-wins). Pure
+  function — rebuild on demand, cost is O(producers).
+- **Compile-time resolution** (`registry/resolve.ts`): a variable's
+  `location` holds EITHER an alias name OR a literal `%addr`
+  (single-field model). `buildAliasIndex(registry)` builds the
+  `alias → address` map; `resolveLocation(field, index)` resolves a
+  variable's `location` for the compiler:
+  - literal `%…` → used verbatim (manual locations honoured exactly);
+  - alias that still exists → its current address;
+  - alias that is gone → `''` (variable becomes unlocated).
+  The compiler/runtime never see aliases: the editor resolves them in
+  a pre-compile snapshot via the
+  `projectActions.getCompileReadyProjectData()` store action. When a
+  producer alias is renamed, `projectActions.renameAlias(old, new)`
+  cascades onto every bound variable's `location`.
 
-The variable cell renders `alias ?? location` and shows an amber
-warning glyph + tooltip when the alias is orphaned. Aliases are
-intended to be unique system-wide; the registry's
-`isAliasNameAvailable(name, ignoring?)` is the system-wide validator.
+The variable cell renders `location` verbatim — the alias name when
+alias-bound, the `%addr` when a manual literal — and shows an amber
+warning glyph + tooltip when an alias-bound location no longer resolves
+(orphaned) or when a manual `%addr` collides with an alias another
+project variable is bound to (duplicate-location risk). Aliases are
+intended to be unique system-wide; every IO-mapping / pin /
+remote-device editor calls the registry's
+`validateAliasEdit(registry, name, ignoring)` gate before persisting a
+new alias.
 
 ## Environment
 

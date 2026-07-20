@@ -445,7 +445,7 @@ const Project = () => {
                       {device.ethercatConfig?.devices?.map((child) => (
                         <ProjectTreeLeaf
                           key={child.id}
-                          leafLang='ethercatDevice'
+                          leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
                           leafType='ethercat-device'
                           busName={device.name}
                           deviceId={child.id}

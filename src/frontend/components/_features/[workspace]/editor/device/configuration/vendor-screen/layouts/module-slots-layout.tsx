@@ -23,6 +23,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -87,6 +88,33 @@ type ConfigScreenDefinition = {
 // Walk a screen definition and return every field that contributes
 // to the configuration form. The screen JSON is a vendor artifact —
 // be tolerant of missing/oddly-shaped fragments rather than crash.
+/**
+ * Alias cell with local state so the value commits on blur (focus change),
+ * not on every keystroke. Committing per keystroke fires the alias-rename
+ * cascade for every intermediate string while editing — e.g. clearing "flow"
+ * would cascade through "flo", "fl", "f" onto bound variables. Committing on
+ * blur means a single rename (old → final) reaches the store, and clearing the
+ * field to empty leaves bound variables orphaned rather than partially renamed.
+ */
+function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => {
+    setLocal(value)
+  }, [value])
+  return (
+    <input
+      type='text'
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== value) onCommit(local)
+      }}
+      placeholder='Alias...'
+      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+    />
+  )
+}
+
 function collectConfigFields(def: ConfigScreenDefinition | undefined | null): ConfigFieldDef[] {
   if (!def?.sections) return []
   const out: ConfigFieldDef[] = []
@@ -467,10 +495,12 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       }
     }
 
+    // Write the derived channel structure, then let the central registry own
+    // the final addresses (VPP + Modbus packed together, aliases restored
+    // from the session memory) and reconcile variables. This layout renders
+    // from the store, so the registry's write-back propagates automatically.
     setVendorScreenData('io-mapping', { entries: newEntries })
-    // Producer mutation: every VPP slot just had its addresses
-    // re-allocated. Sync variables that were bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -644,10 +674,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // from the live state (including the entry being edited, scoped
     // to the active board's capabilities) and reject the edit if the
     // new alias is already claimed by a different channel.  Without
-    // this gate, the pool's silent first-wins reservation would
-    // cause every variable that the user later binds to the losing
-    // entry to collapse to the winner's address through
-    // `syncVariableAliases`'s refresh path.
+    // this gate, the pool's silent first-wins reservation would make
+    // the losing entry's alias unresolvable, so every variable the
+    // user later binds to it would silently become unlocated at
+    // compile time.
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(
       state.deviceDefinitions.configuration.deviceBoard ?? '',
     )
@@ -673,21 +703,25 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       return
     }
 
-    // Phase 2 — cascade rename onto bound variables BEFORE writing
-    // the new entries, so the subsequent `syncVariableAliases()`
-    // call sees variables already pointing at the new alias name and
-    // takes the refresh path (location follows alias) instead of the
-    // orphan path (location cleared, warning glyph rendered).
-    const oldAlias = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)?.alias ?? ''
+    // Cascade the rename onto bound variables: any variable whose
+    // `location` holds the old alias name follows to the new one
+    // (location follows alias), keeping it located instead of orphaning
+    // it (location cleared, warning glyph rendered).
+    const targetEntry = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)
+    const oldAlias = targetEntry?.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
-    // Refresh variables bound to the (now-renamed) alias against
-    // any address shifts produced by the change.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(targetEntry?.moduleId ?? '', slot, channelName), alias)
+    // Variables bound to this channel hold its alias NAME (resolved at
+    // compile); the `renameAlias` above already cascaded any rename to them.
   }
 
   /**
@@ -986,12 +1020,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                                 {entry.iecAddress}
                               </td>
                               <td className='px-1 py-1'>
-                                <input
-                                  type='text'
-                                  value={entry.alias}
-                                  onChange={(e) => handleAliasChange(entry.slot, entry.channelName, e.target.value)}
-                                  placeholder='Alias...'
-                                  className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+                                <AliasInputCell
+                                  value={entry.alias ?? ''}
+                                  onCommit={(next) => handleAliasChange(entry.slot, entry.channelName, next)}
                                 />
                               </td>
                             </tr>

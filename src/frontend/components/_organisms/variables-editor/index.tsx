@@ -424,17 +424,14 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     const variable: PLCVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
-    // Don't carry the previous variable's `alias` into the new row.
-    // The slice's `createVariable` auto-increments `location`; if we
-    // kept the old alias attached, the new variable would claim the
-    // OLD channel's alias while pointing at the NEW address —
-    // breaking the alias-↔-location invariant.  `createVariable`'s
-    // auto-adopt path resolves the right alias for the new location
-    // against the live registry (matching whichever producer-channel
-    // owns the auto-incremented address).
+    // Single-field location: only carry a MANUAL literal address forward
+    // (createVariable auto-increments it for a fresh contiguous row). An
+    // alias binding must NOT be duplicated onto the new row — that would
+    // point two variables at the same address and fail compile — so an
+    // alias-name location starts empty (unlocated) instead.
     const newVarData = {
       ...variable,
-      alias: undefined,
+      location: variable.location.startsWith('%') ? variable.location : '',
       class: defaultClass,
       type:
         variable.type.definition === 'derived'
@@ -964,7 +961,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
-      if (freshPou && freshPou.interface && 'variablesText' in freshPou.interface) {
+      if (freshPou && 'variablesText' in freshPou) {
         clearPouVariablesText(editor.meta.name)
       }
 

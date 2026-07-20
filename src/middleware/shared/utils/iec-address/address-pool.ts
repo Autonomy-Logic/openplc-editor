@@ -101,6 +101,10 @@ export interface PoolVppIoInput {
     slot: number
     channelName: string
     moduleName?: string
+    /** Stable module identity for the slot. Used only to build the session
+     *  alias-memory key (`vpp:moduleId:slot:channel`); the pool itself
+     *  ignores it. */
+    moduleId?: string
   }>
 }
 

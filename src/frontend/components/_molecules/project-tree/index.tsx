@@ -1,7 +1,6 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
@@ -9,6 +8,7 @@ import { DeviceTransferIcon } from '../../../assets/icons/interface/DeviceTransf
 import { DuplicateIcon } from '../../../assets/icons/interface/Duplicate'
 import { MoreOptionsIcon } from '../../../assets/icons/interface/MoreOptions'
 import { PencilIcon } from '../../../assets/icons/interface/Pencil'
+import { SoftMotionIcon } from '../../../assets/icons/interface/SoftMotion'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { DataTypeIcon } from '../../../assets/icons/project/DataType'
@@ -30,7 +30,6 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
-import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
@@ -265,9 +264,6 @@ const ProjectTreeExpandableLeaf = ({
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
-  const projectPort = useProject()
-  const capabilities = useCapabilities()
-  const { hasVersionControl } = capabilities
 
   const [isExpanded, setIsExpanded] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
@@ -286,7 +282,7 @@ const ProjectTreeExpandableLeaf = ({
     setSelectedProjectTreeLeaf({ label, type: leafType })
   }
 
-  const handleRenameFile = async (renamed: string) => {
+  const handleRenameFile = (renamed: string) => {
     setIsEditing(false)
     if (!renamed || !label) return
     if (renamed === label) return
@@ -295,15 +291,8 @@ const ProjectTreeExpandableLeaf = ({
       setNewLabel(label || '')
       return
     }
-    // Only auto-persist on platforms that track per-file changes — otherwise
-    // the user's first action on a fresh project triggers a full save with
-    // no version-control benefit. Local editor users keep the existing
-    // "save on Ctrl+S" mental model.
-    if (hasVersionControl) {
-      // Persist immediately so refresh doesn't show the old name (rename
-      // queues the old path's deletion in `pendingDeletions`, save propagates).
-      await executeSaveProject(projectPort, capabilities)
-    }
+    // Soft, unsaved change: renameElement flags the workspace dirty; the rename
+    // persists on the next save, consistently on web and desktop.
   }
 
   const handleDeleteFile = () => {
@@ -460,6 +449,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'remoteDevice'
     | 'vendorScreen'
     | 'ethercatDevice'
+    | 'softMotionDrive'
     | 'libraryManifest'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
@@ -486,6 +476,9 @@ const LeafSources = {
   remoteDevice: { LeafIcon: RemoteDeviceIcon },
   vendorScreen: { LeafIcon: ConfigIcon },
   ethercatDevice: { LeafIcon: DeviceTransferIcon },
+  // A recognized CiA 402 SoftMotion drive gets a distinct rotary-axis icon so
+  // it reads as an axis (usable in MC_* blocks), not a plain EtherCAT slave.
+  softMotionDrive: { LeafIcon: SoftMotionIcon },
   // Library manifest gets its own document-with-bookmark icon so
   // the explorer leaf, the workspace tab, and the breadcrumb all
   // render the same glyph — the manifest is the user's entry point
@@ -514,9 +507,6 @@ const ProjectTreeLeaf = ({
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
   } = useOpenPLCStore()
-  const projectPort = useProject()
-  const capabilities = useCapabilities()
-  const { hasVersionControl } = capabilities
 
   const [isEditing, setIsEditing] = useState(false)
   const [newLabel, setNewLabel] = useState(label || '')
@@ -528,7 +518,9 @@ const ProjectTreeLeaf = ({
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
   const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
-  const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice', [leafLang])
+  // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
+  // shares every EtherCAT device action (rename/delete), just a distinct icon.
+  const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice' || leafLang === 'softMotionDrive', [leafLang])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -550,7 +542,7 @@ const ProjectTreeLeaf = ({
     setSelectedProjectTreeLeaf({ label, type: leafType })
   }
 
-  const handleRenameFile = async (newLabel: string) => {
+  const handleRenameFile = (newLabel: string) => {
     setIsEditing(false)
 
     if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
@@ -571,60 +563,33 @@ const ProjectTreeLeaf = ({
       return
     }
 
-    // No-op: user blurred or hit Enter without changing anything. Skip the
-    // auto-save below so we don't persist a phantom rename event.
+    // No-op: user blurred or hit Enter without changing anything.
     if (newLabel === label) return
 
-    // Auto-save on rename only matters on platforms that track per-file
-    // changes (web). Local editor users would otherwise eat a full project
-    // save on every rename with no version-control payoff — so gate the
-    // persist behind the capability and let the editor follow the regular
-    // Ctrl+S flow.
-    const persist = async () => {
-      if (hasVersionControl) await executeSaveProject(projectPort, capabilities)
-    }
-
+    // Renames are soft, unsaved changes: renameElement flags the workspace
+    // dirty and queues the old path in `pendingDeletions`. Nothing is written
+    // to disk until the user saves — identical on web and desktop.
     if (isAPou) {
       const res = renamePou(label, newLabel)
-      if (!res.ok) {
-        setNewLabel(label || '')
-        return
-      }
-      // Persist immediately: rename creates a new file in S3 and removes
-      // the old, plus updates the badge correctly via pendingDeletions.
-      await persist()
+      if (!res.ok) setNewLabel(label || '')
       return
     }
 
     if (isDatatype) {
       const res = renameDatatype(label, newLabel)
-      if (!res.ok) {
-        setNewLabel(label || '')
-        return
-      }
-      // Datatype lives inside project.json — saving rewrites it with the
-      // renamed entry. No separate file deletion needed.
-      await persist()
+      if (!res.ok) setNewLabel(label || '')
       return
     }
 
     if (isServer) {
       const res = renameServer(label, newLabel)
-      if (!res.ok) {
-        setNewLabel(label || '')
-        return
-      }
-      await persist()
+      if (!res.ok) setNewLabel(label || '')
       return
     }
 
     if (isRemoteDevice) {
       const res = renameRemoteDevice(label, newLabel)
-      if (!res.ok) {
-        setNewLabel(label || '')
-        return
-      }
-      await persist()
+      if (!res.ok) setNewLabel(label || '')
       return
     }
 
@@ -641,7 +606,7 @@ const ProjectTreeLeaf = ({
     }
   }
 
-  const handleDuplicateFile = async () => {
+  const handleDuplicateFile = () => {
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
@@ -660,20 +625,15 @@ const ProjectTreeLeaf = ({
       return
     }
 
+    // Duplicating is a soft, unsaved change: the shared duplicate actions flag
+    // the new element dirty; it persists on the next save, like create.
     if (isAPou) {
       duplicatePou(label, `${label}_copy`)
-      // Persist the new POU file to S3 immediately. Without this, the duplicate
-      // exists only in editor memory and disappears on refresh — same class of
-      // bug as the delete flow we fixed in delete-confirmation-modal.
-      await executeSaveProject(projectPort, capabilities)
       return
     }
 
     if (isDatatype) {
       duplicateDatatype(label, `${label}_copy`)
-      // Datatypes live inside project.json; saving the project rewrites it
-      // with the new datatype included.
-      await executeSaveProject(projectPort, capabilities)
       return
     }
 

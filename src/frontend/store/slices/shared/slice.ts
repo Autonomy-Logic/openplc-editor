@@ -2,9 +2,11 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
+import { isLegalIdentifier } from '../../../utils/keywords'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
 import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
@@ -39,7 +41,27 @@ function deleteElement(
   if (currentEditor.type !== 'available' && currentEditor.meta.name === name) {
     state.editorActions.clearEditor()
   }
+
+  // A delete is an unsaved structural change (the file removal is queued in
+  // `pendingDeletions`). Flag the workspace dirty so it persists ONLY on the
+  // next save — identical on web and desktop. The file entry is already gone,
+  // so mark the workspace directly rather than via a file-scoped helper.
+  state.workspaceActions.setEditingState('unsaved')
+
   return { ok: true as const }
+}
+
+/**
+ * Reject element names that aren't valid IEC 61131-3 identifiers before they
+ * reach the file-path / parser layer. A name containing a space, slash, or
+ * backslash would otherwise be written straight into the on-disk POU path
+ * (`pous/<folder>/<name>.st`) and — on any parse failure — read back as the
+ * path itself, corrupting the name and orphaning files (the "deleting function"
+ * bug). Reuses the same primitive as variable-name validation for consistency.
+ */
+function validateElementName(name: string): { ok: true } | { ok: false; message: string } {
+  const [legal, reason] = isLegalIdentifier(name)
+  return legal ? { ok: true } : { ok: false, message: `'${name}' ${reason}` }
 }
 
 function renameElement(
@@ -49,6 +71,9 @@ function renameElement(
   updateInProject: (oldName: string, newName: string) => { ok: boolean; message?: string } | void,
   afterRename?: (oldName: string, newName: string) => void,
 ) {
+  const nameCheck = validateElementName(newName)
+  if (!nameCheck.ok) return { ok: false as const, message: nameCheck.message }
+
   const result = updateInProject(oldName, newName)
   if (result && !result.ok) return { ok: false as const, message: result.message }
 
@@ -69,6 +94,11 @@ function renameElement(
 
   afterRename?.(oldName, newName)
 
+  // A rename is an unsaved structural change — flag it dirty (the renamed file
+  // now lives under `newName`) so it persists ONLY on the next save, identical
+  // on web and desktop.
+  state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
   return { ok: true as const }
 }
 
@@ -80,6 +110,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const state = getState()
       const existing = state.project.data.pous.find((p) => p.name === name)
       if (existing) return { ok: false, message: 'POU already exists' }
+
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
 
       const pouDto = createPouObject({ type, name, language })
       const result = state.projectActions.createPou(pouDto)
@@ -154,6 +187,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const existing = state.project.data.pous.find((p) => p.name === newName)
       if (existing) return { ok: false, message: 'POU name already exists' }
 
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
       // Create a copy of the POU with the new name
       const language = sourcePou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
       const pouDto = createPouObject({ type: sourcePou.pouType, name: newName, language })
@@ -192,6 +228,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
 
+      // Persist only on save: flag the new POU dirty instead of auto-saving.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
       return { ok: true }
     },
   },
@@ -201,6 +240,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const state = getState()
       const existing = state.project.data.dataTypes.find((d) => d.name === name)
       if (existing) return { ok: false, message: 'Data type already exists' }
+
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
 
       const datatype = createDatatypeObject({ name, derivation })
       const result = state.projectActions.createDatatype({ data: datatype })
@@ -253,6 +295,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const existing = state.project.data.dataTypes.find((d) => d.name === newName)
       if (existing) return { ok: false, message: 'Data type name already exists' }
 
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
       const copy = { ...source, name: newName }
       const result = state.projectActions.createDatatype({ data: copy })
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
@@ -261,6 +306,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const editorModel = createEditorObjectForDatatype(newName, source.derivation)
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: 'data-type', filePath: newName, isNew: true })
+
+      // Persist only on save: flag the new datatype dirty instead of auto-saving.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
 
       return { ok: true }
     },
@@ -272,6 +320,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       /* istanbul ignore next -- defensive: servers is always initialized as [] */
       const servers = state.project.data.servers ?? []
       if (servers.some((s) => s.name === name)) return { ok: false, message: 'Server already exists' }
+
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
 
       const result = state.projectActions.createServer({ data: { name, protocol } })
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
@@ -306,6 +357,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       /* istanbul ignore next -- defensive: remoteDevices is always initialized as [] */
       const devices = state.project.data.remoteDevices ?? []
       if (devices.some((d) => d.name === name)) return { ok: false, message: 'Remote device already exists' }
+
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
 
       const result = state.projectActions.createRemoteDevice({ data: { name, protocol } })
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
@@ -393,6 +447,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!device) return { ok: false, message: 'EtherCAT device not found' }
 
       const oldName = device.name
+      // A SoftMotion drive's name IS the axis variable name emitted into
+      // generated code, so it must be a valid IEC identifier (no spaces,
+      // hyphens, or leading digits).
+      if (device.cia402?.enabled && !isValidIecIdentifier(newName)) {
+        return {
+          ok: false,
+          message: `"${newName}" is not a valid axis name. Use letters, digits, and underscores, starting with a letter or underscore.`,
+        }
+      }
       // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
       // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
       // silently on duplicates, so new write paths must replicate one strategy.
@@ -843,11 +906,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             model.variable = { display: 'code', code: pouWithText.variablesText }
           }
           getState().editorActions.addModel(model)
-          // If this is the active editor (main POU), update it too
-          /* istanbul ignore next -- setEditor early-returns when name matches current editor */
-          if (getState().editor.meta.name === pou.name) {
-            getState().editorActions.setEditor(model)
-          }
+          // The auto-open block above may already have added and activated a
+          // default table-mode model for this POU (it prefers "main" — exactly
+          // the POU most likely to carry the unparseable variables). `addModel`
+          // no-ops on duplicates and `setEditor` early-returns when the name
+          // matches the active editor, so neither can deliver the raw text to
+          // an existing model — the code view would show an empty skeleton
+          // instead of the preserved declarations. `updateModelVariablesForName`
+          // updates whichever object holds the POU: the active editor or the
+          // stored model.
+          getState().editorActions.updateModelVariablesForName(pou.name, {
+            display: 'code',
+            code: pouWithText.variablesText,
+          })
         }
       })
 

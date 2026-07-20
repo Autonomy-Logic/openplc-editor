@@ -115,20 +115,20 @@ export const SecurityProfilesTab = ({ config, serverName, onConfigChange }: Secu
       {config.securityProfiles.length > 0 ? (
         <div className='overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
           <table className='w-full'>
-            <thead className='bg-neutral-50 dark:bg-neutral-800'>
+            <thead className='bg-neutral-100 dark:bg-neutral-900'>
               <tr>
-                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Enabled
                 </th>
-                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>Name</th>
-                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Name</th>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Policy
                 </th>
-                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>Mode</th>
-                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>Mode</th>
+                <th className='px-3 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Authentication
                 </th>
-                <th className='px-3 py-2 text-right text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                <th className='px-3 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Actions
                 </th>
               </tr>

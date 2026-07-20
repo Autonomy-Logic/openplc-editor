@@ -12,14 +12,8 @@ import { CommentNode, CommentProps } from './utils/types'
 const CommentElement = (block: CommentProps) => {
   const { id, selected, data, width, height } = block
   const pouName = useBoundPou()
-  const {
-    editorActions: { updateModelFBD },
-    fbdFlows,
-    fbdFlowActions: { updateNode },
-    project: {
-      data: { pous },
-    },
-  } = useOpenPLCStore()
+  const updateModelFBD = useOpenPLCStore((state) => state.editorActions.updateModelFBD)
+  const updateNode = useOpenPLCStore((state) => state.fbdFlowActions.updateNode)
 
   const blockRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
@@ -48,7 +42,8 @@ const CommentElement = (block: CommentProps) => {
       return
     }
 
-    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
+    const { project, fbdFlows } = useOpenPLCStore.getState()
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, fbdFlows, {
       nodeId: id,
     })
     if (!commentaryBlock) return
@@ -98,7 +93,8 @@ const CommentElement = (block: CommentProps) => {
   }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
-    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
+    const { project, fbdFlows } = useOpenPLCStore.getState()
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, fbdFlows, {
       nodeId: id,
     })
     if (!commentaryBlock) return

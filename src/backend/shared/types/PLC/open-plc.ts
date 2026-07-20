@@ -140,15 +140,15 @@ const PLCVariableSchema = z.object({
       value: z.string(),
     }),
   ]),
+  /**
+   * The variable's binding. Single-field model: holds EITHER an alias name
+   * (bound to a producer channel) OR a literal IEC address the user typed
+   * (`%QX0.0`). Empty = unlocated. Alias→address resolution happens at
+   * compile time; a manual literal is honoured verbatim. Legacy projects
+   * that carried a separate `alias` field are migrated on load (the alias
+   * name is folded into `location`).
+   */
   location: z.string(),
-  /** Stable alias name the variable is bound to, when present. Looked
-   *  up in the alias registry to refresh `location` whenever the
-   *  underlying producer reassigns the address. Variable cells show
-   *  `alias` when set, falling back to the raw `location` otherwise.
-   *  When the alias goes missing from the registry, the variable is
-   *  "orphaned" — last-known `location` is kept, the cell flags it
-   *  for the user. */
-  alias: z.string().optional(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean().optional(),
@@ -705,6 +705,21 @@ const SDOConfigurationEntrySchema = z.object({
   objectName: z.string(),
 })
 
+/**
+ * CiA 402 SoftMotion axis configuration on a recognized EtherCAT drive. When
+ * present and enabled, the device is treated as a SoftMotion axis: at compile
+ * time the editor generates an AXIS_REF_SM3 global (named after the device),
+ * located scalar globals bound to the drive's CiA 402 PDO addresses, and a
+ * per-scan SM_Drive_GenericDS402 bridge. Scaling mirrors the AXIS_REF_SM3
+ * fields (increments per unit = scaleFactor * scaleNum / scaleDenom).
+ */
+const Cia402AxisConfigSchema = z.object({
+  enabled: z.boolean(),
+  scaleNum: z.number(),
+  scaleDenom: z.number(),
+  scaleFactor: z.number(),
+})
+
 const ConfiguredEtherCATDeviceSchema = z.object({
   id: z.string(),
   position: z.number().optional(),
@@ -721,6 +736,8 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   txPdos: z.array(PersistedPdoSchema).optional(),
   slaveType: z.string().optional(),
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+  /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
+  cia402: Cia402AxisConfigSchema.optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({

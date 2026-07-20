@@ -54,14 +54,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     ref,
   ) => {
     const pouName = useBoundPou()
-    const {
-      project: {
-        data: { pous },
-      },
-      projectActions: { createVariable },
-      ladderFlows,
-      ladderFlowActions: { updateNode },
-    } = useOpenPLCStore()
+    const pous = useOpenPLCStore((state) => state.project.data.pous)
+    const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+    const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
 
     const expectedType = expectedTypeForBlock(block, blockType)
 
@@ -84,9 +79,15 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }, [pouName, valueToSearch, expectedType, blockType, pous])
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-        nodeId: (block as Node<BasicNodeData>).id,
-      })
+      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(
+        pouName,
+        project.data.pous,
+        ladderFlows,
+        {
+          nodeId: (block as Node<BasicNodeData>).id,
+        },
+      )
       if (!rung || !variableNode) return
 
       updateNode({
@@ -143,13 +144,19 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
+      const { project, ladderFlows } = useOpenPLCStore.getState()
       if (!variableName.trim()) {
         // For variable nodes on block handles, clearing the name resets the variable
         // so that a branch (contacts/coils) can be placed on the handle instead.
         if (blockType === 'variable') {
-          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-            nodeId: (block as Node<BasicNodeData>).id,
-          })
+          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(
+            pouName,
+            project.data.pous,
+            ladderFlows,
+            {
+              nodeId: (block as Node<BasicNodeData>).id,
+            },
+          )
           if (rung && variableNode) {
             updateNode({
               editorName: pouName,
@@ -175,7 +182,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return

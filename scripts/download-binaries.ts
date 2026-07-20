@@ -54,11 +54,17 @@ function cacheFile(platform: Platform, arch: Arch): string {
 // CLI argument parsing
 // ---------------------------------------------------------------------------
 
-function parseArgs(): { platform: Platform; arch: Arch; force: boolean } {
+function parseArgs(): { platform: Platform; arch: Arch; force: boolean; strucppOnly: boolean } {
   const args = process.argv.slice(2)
   let platform = process.platform as string
   let arch = process.arch as string
   let force = false
+  // strucpp-only: install just the platform-independent strucpp package (its
+  // libs/ + runtime headers are imported by the TS sources). Skips the xml2st
+  // platform binary — used by the unit-test CI job, which runs `npm ci
+  // --ignore-scripts` (so the postinstall never fetched strucpp) but doesn't
+  // need the heavyweight platform binaries or a native rebuild.
+  let strucppOnly = false
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--platform' && args[i + 1]) {
@@ -67,6 +73,8 @@ function parseArgs(): { platform: Platform; arch: Arch; force: boolean } {
       arch = args[++i]
     } else if (args[i] === '--force') {
       force = true
+    } else if (args[i] === '--strucpp-only') {
+      strucppOnly = true
     }
   }
 
@@ -79,7 +87,7 @@ function parseArgs(): { platform: Platform; arch: Arch; force: boolean } {
     process.exit(1)
   }
 
-  return { platform: platform as Platform, arch: arch as Arch, force }
+  return { platform: platform as Platform, arch: arch as Arch, force, strucppOnly }
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +297,7 @@ async function downloadStrucpp(tool: ToolEntry): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const { platform, arch, force } = parseArgs()
+  const { platform, arch, force, strucppOnly } = parseArgs()
 
   if (!fs.existsSync(VERSIONS_FILE)) {
     console.error(`binary-versions.json not found at ${VERSIONS_FILE}`)
@@ -298,31 +306,31 @@ async function main(): Promise<void> {
 
   const versions: BinaryVersions = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf-8'))
 
-  console.log(`[download-binaries] platform=${platform} arch=${arch} force=${force}`)
+  console.log(`[download-binaries] platform=${platform} arch=${arch} force=${force} strucppOnly=${strucppOnly}`)
+
+  // strucpp is platform-independent (its libs/ + runtime headers are imported
+  // by the TS sources) — download it whenever it's missing or outdated.
+  if (force || needsStrucpp(versions)) {
+    await downloadStrucpp(versions.strucpp)
+  } else {
+    console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
+  }
+
+  // --strucpp-only stops here: the caller (e.g. the unit-test CI job) needs the
+  // strucpp package but not the platform binary or the platform cache marker.
+  if (strucppOnly) {
+    console.log(`[download-binaries] strucpp-only: skipped xml2st platform binary.`)
+    return
+  }
 
   const targetBinDir = binDir(platform, arch)
   fs.mkdirSync(targetBinDir, { recursive: true })
 
   const cached = force ? null : getCachedMetadata(platform, arch)
-  const downloadXml2stNeeded = force || needsXml2st(versions, cached, platform, arch)
-  const downloadStrucppNeeded = force || needsStrucpp(versions)
-
-  if (!downloadXml2stNeeded && !downloadStrucppNeeded) {
-    console.log(`[download-binaries] All tools up to date, skipping.`)
-    return
-  }
-
-  if (downloadXml2stNeeded) {
+  if (force || needsXml2st(versions, cached, platform, arch)) {
     await downloadXml2st(versions.xml2st, platform, arch, targetBinDir)
   } else {
     console.log(`  xml2st ${versions.xml2st.version} already installed, skipping.`)
-  }
-
-  // strucpp is platform-independent — only download once regardless of platform/arch
-  if (downloadStrucppNeeded) {
-    await downloadStrucpp(versions.strucpp)
-  } else {
-    console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
   }
 
   writeCache(versions, platform, arch)

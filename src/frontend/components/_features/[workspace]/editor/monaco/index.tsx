@@ -1245,6 +1245,17 @@ void loop()
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
+    // Force Monaco's classic hidden-<textarea> input instead of the newer
+    // EditContext-API surface (a plain `<div class="native-edit-context">`).
+    // Monaco 0.54 enables EditContext by default wherever the browser exposes
+    // the API, but WebKit/Safari's EditContext support is immature: the Tab
+    // `keydown` on that surface never reaches Monaco's keybinding service, so
+    // Tab-accept of AI inline suggestions silently no-ops on Safari (mouse
+    // "Accept" works because it's a direct widget action). The textarea path is
+    // mature and consistent across Chrome/Safari, restoring Tab-accept. (It also
+    // makes the surface a real input element that @xyflow's `isInputDOMNode`
+    // recognises — see the `.nokey` workaround note in the render below.)
+    editContext: false,
     // Lock indentation to 4 spaces across every language Monaco
     // hosts (ST / IL / Python / C++).  Without this Monaco's
     // `detectIndentation` heuristic kicks in on the existing model
@@ -1287,7 +1298,18 @@ void loop()
         // Keep the LSP dropdown visible alongside the AI ghost text instead of
         // suppressing it — coexistence is the whole point here.
         suppressSuggestions: false,
-      },
+        // Render the AI ghost text EVEN WHILE the LSP suggest widget is open
+        // with a highlighted item. Monaco defaults `showOnSuggestConflict` to
+        // 'never', which hides the ghost the instant the dropdown auto-selects
+        // an entry (which it does on almost every keystroke) — so the ghost
+        // that Tab is meant to accept would flicker away exactly when the user
+        // reaches for it. 'always' keeps both surfaces visible; acceptance stays
+        // split by key (Enter/arrows commit the LSP item, Tab commits the AI
+        // ghost — see `installAiLspCoexistenceKeybindings`). `experimental` is
+        // not yet in Monaco's public `IInlineSuggestOptions` type but is read at
+        // runtime (editorOptions.js), hence the cast.
+        experimental: { showOnSuggestConflict: 'always' },
+      } as monacoEditorOptionsType['inlineSuggest'],
     }),
   }
 
@@ -1296,6 +1318,46 @@ void loop()
   // after a remount (the mount handler also sets it, this is belt-and-braces).
   useEffect(() => {
     coexistenceRef.current?.setActive(inlineCompletionsActive)
+  }, [inlineCompletionsActive, editorInstanceId])
+
+  // AI inline-completion idle re-trigger.
+  //
+  // Monaco only auto-triggers inline completions on a content change and renders
+  // just the latest call's result, so a request can complete without ever
+  // painting (a late/superseded result is silently dropped) — after which
+  // nothing re-requests until the next keystroke, and the suggestion appears to
+  // "give up". This re-arms it: once the user has been idle for 2s with AI on and
+  // no ghost text currently visible, we explicitly re-trigger inline suggest so
+  // the editor always eventually offers something for a settled cursor. The 2s
+  // window keeps this from firing needless requests during active editing; it
+  // fires at most once per idle period (triggering does not change content, so
+  // the timer is not re-armed by its own action).
+  useEffect(() => {
+    if (!inlineCompletionsActive) return
+    const editor = editorRef.current
+    if (!editor) return
+
+    const IDLE_MS = 2000
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+    const scheduleIdleRetrigger = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        if (!editor.hasTextFocus()) return
+        const model = editor.getModel()
+        if (!model || model.getValueLength() === 0) return
+        // Skip if a ghost is already showing (avoid a redundant request).
+        const dom = editor.getDomNode()
+        if (dom?.querySelector('.ghost-text-decoration, .ghost-text, [class*="ghost-text"]')) return
+        editor.trigger('openplc-ai-idle', 'editor.action.inlineSuggest.trigger', {})
+      }, IDLE_MS)
+    }
+
+    const changeDisposable = editor.onDidChangeModelContent(scheduleIdleRetrigger)
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      changeDisposable.dispose()
+    }
   }, [inlineCompletionsActive, editorInstanceId])
 
   // -----------------------------------------------------------------------

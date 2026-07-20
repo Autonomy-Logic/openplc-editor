@@ -24,10 +24,10 @@
  *     list only **aliased entries**.  Their IEC addresses are
  *     allocator-assigned and can shift when the user changes slot
  *     layout, adds modules, etc.  Variables that bind to an alias
- *     survive those shifts (`syncVariableAliases` refreshes their
- *     `location` via the registry); variables that bound to a raw
- *     address would silently break.  Requiring an alias makes the
- *     rebind-on-shift contract explicit.
+ *     survive those shifts (the alias name is stored in `location`
+ *     and resolved to the current address at compile time); variables
+ *     that bound to a raw address would silently break.  Requiring an
+ *     alias makes the rebind-on-shift contract explicit.
  *
  * Do not "fix" the inconsistency by filtering the pin-mapping branch
  * to aliased pins only — it would force users to write an alias

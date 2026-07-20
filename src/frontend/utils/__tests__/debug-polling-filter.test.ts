@@ -103,7 +103,7 @@ function makeState(overrides: {
 describe('buildActiveIndexSet', () => {
   it('returns empty indexes when there are no active variables', () => {
     const state = makeState({})
-    const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+    const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
     const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, null)
     expect(activeIndexes).toEqual([])
     expect(cacheResult).toBeNull()
@@ -117,7 +117,7 @@ describe('buildActiveIndexSet', () => {
       ])
       const indexMap = new Map([['Main:SPEED', 10]])
       const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([10])
@@ -147,7 +147,7 @@ describe('buildActiveIndexSet', () => {
         fbSelectedInstance: fbSelected,
         fbDebugInstances: fbInstances,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([5])
@@ -156,7 +156,7 @@ describe('buildActiveIndexSet', () => {
     it('skips FB watched variables when no instance is selected', () => {
       const fbPou = makePou('MyFB', 'function-block', [makeVariable('OUT', 'output', true)])
       const state = makeState({ pous: [fbPou] })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -184,7 +184,7 @@ describe('buildActiveIndexSet', () => {
         fbSelectedInstance: fbSelected,
         fbDebugInstances: fbInstances,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -197,10 +197,33 @@ describe('buildActiveIndexSet', () => {
         body: { language: 'st', value: '' },
       }
       const state = makeState({ pous: [pou] })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
+    })
+
+    it('polls a program VAR_EXTERNAL watch by its canonical global key', () => {
+      const pou = makePou('Main', 'program', [makeVariable('SHARED', 'external', true)])
+      // The debug tree exposes the shared global under Config0:SHARED.
+      const allLeaves = new Map([[42, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
+      const state = makeState({ pous: [pou] })
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([42])
+    })
+
+    it('polls an FB VAR_EXTERNAL watch even with no instance selected (globals are instance-independent)', () => {
+      const fbPou = makePou('MyFB', 'function-block', [
+        makeVariable('SHARED', 'external', true),
+        makeVariable('OUT', 'output', true),
+      ])
+      const allLeaves = new Map([[7, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
+      const state = makeState({ pous: [fbPou] })
+
+      // OUT (local) is skipped for want of an instance; the external still polls.
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([7])
     })
   })
 
@@ -209,7 +232,7 @@ describe('buildActiveIndexSet', () => {
       const forced = new Map([['Main:FORCED_VAR', { value: 42 }]])
       const indexMap = new Map([['Main:FORCED_VAR', 7]])
       const state = makeState({ debugForcedVariables: forced, debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([7])
@@ -220,7 +243,7 @@ describe('buildActiveIndexSet', () => {
     it('includes graph-listed variable indexes', () => {
       const indexMap = new Map([['Main:PLOTTED', 3]])
       const state = makeState({ debugGraphList: ['Main:PLOTTED'], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([3])
@@ -240,8 +263,8 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [11, { compositeKey: 'Main:MyStruct.field1', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -259,8 +282,8 @@ describe('buildActiveIndexSet', () => {
         pous: [pou],
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [11, { compositeKey: 'Main:MyStruct.field1', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -269,8 +292,8 @@ describe('buildActiveIndexSet', () => {
 
     it('skips leaf entry with no colon in compositeKey', () => {
       const state = makeState({})
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [99, { compositeKey: 'no-colon-key', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [99, [{ compositeKey: 'no-colon-key', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -294,10 +317,10 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [101, { compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }],
-        [102, { compositeKey: 'Main:MY_ARRAY[2]', type: 'DINT' }],
-        [103, { compositeKey: 'Main:MY_ARRAY[3]', type: 'DINT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [101, [{ compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }]],
+        [102, [{ compositeKey: 'Main:MY_ARRAY[2]', type: 'DINT' }]],
+        [103, [{ compositeKey: 'Main:MY_ARRAY[3]', type: 'DINT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -315,8 +338,8 @@ describe('buildActiveIndexSet', () => {
         pous: [pou],
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [101, { compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [101, [{ compositeKey: 'Main:MY_ARRAY[1]', type: 'DINT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -332,9 +355,9 @@ describe('buildActiveIndexSet', () => {
         ['Main:FB.ARR[1]', 21],
         ['Main:FB.ARR[2]', 22],
       ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [21, { compositeKey: 'Main:FB.ARR[1]', type: 'INT' }],
-        [22, { compositeKey: 'Main:FB.ARR[2]', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [21, [{ compositeKey: 'Main:FB.ARR[1]', type: 'INT' }]],
+        [22, [{ compositeKey: 'Main:FB.ARR[2]', type: 'INT' }]],
       ])
 
       // Only FB expanded — array root is collapsed → elements stay hidden
@@ -372,13 +395,13 @@ describe('buildActiveIndexSet', () => {
         ['Main:FB_ARR[3].Q', 81],
         ['Main:FB_ARR[3].ET', 82],
       ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [61, { compositeKey: 'Main:FB_ARR[1].Q', type: 'BOOL' }],
-        [62, { compositeKey: 'Main:FB_ARR[1].ET', type: 'TIME' }],
-        [71, { compositeKey: 'Main:FB_ARR[2].Q', type: 'BOOL' }],
-        [72, { compositeKey: 'Main:FB_ARR[2].ET', type: 'TIME' }],
-        [81, { compositeKey: 'Main:FB_ARR[3].Q', type: 'BOOL' }],
-        [82, { compositeKey: 'Main:FB_ARR[3].ET', type: 'TIME' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [61, [{ compositeKey: 'Main:FB_ARR[1].Q', type: 'BOOL' }]],
+        [62, [{ compositeKey: 'Main:FB_ARR[1].ET', type: 'TIME' }]],
+        [71, [{ compositeKey: 'Main:FB_ARR[2].Q', type: 'BOOL' }]],
+        [72, [{ compositeKey: 'Main:FB_ARR[2].ET', type: 'TIME' }]],
+        [81, [{ compositeKey: 'Main:FB_ARR[3].Q', type: 'BOOL' }]],
+        [82, [{ compositeKey: 'Main:FB_ARR[3].ET', type: 'TIME' }]],
       ])
 
       // Array expanded, only element [2] expanded → only [2]'s leaves poll
@@ -406,10 +429,10 @@ describe('buildActiveIndexSet', () => {
         ['Main:BOOLS[1]', 92],
         ['Main:BOOLS[2]', 93],
       ])
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [91, { compositeKey: 'Main:BOOLS[0]', type: 'BOOL' }],
-        [92, { compositeKey: 'Main:BOOLS[1]', type: 'BOOL' }],
-        [93, { compositeKey: 'Main:BOOLS[2]', type: 'BOOL' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [91, [{ compositeKey: 'Main:BOOLS[0]', type: 'BOOL' }]],
+        [92, [{ compositeKey: 'Main:BOOLS[1]', type: 'BOOL' }]],
+        [93, [{ compositeKey: 'Main:BOOLS[2]', type: 'BOOL' }]],
       ])
       const state = makeState({
         pous: [pou],
@@ -423,8 +446,8 @@ describe('buildActiveIndexSet', () => {
       const pou = makePou('Main', 'program', [makeVariable('X', 'local', true)])
       const indexMap = new Map([['Main:X', 1]])
       const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [1, { compositeKey: 'Main:X', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [1, [{ compositeKey: 'Main:X', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -437,8 +460,8 @@ describe('buildActiveIndexSet', () => {
         debugGraphList: ['Main:MyStruct.field1'],
         debugVariableIndexes: new Map([['Main:MyStruct.field1', 11]]),
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [11, { compositeKey: 'Main:MyStruct.field1', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [11, [{ compositeKey: 'Main:MyStruct.field1', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -449,8 +472,8 @@ describe('buildActiveIndexSet', () => {
       const state = makeState({
         debugExpandedNodes: new Map([['Main:A', true]]),
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [20, { compositeKey: 'Main:A.B.C', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [20, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -473,8 +496,8 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [11, { compositeKey: 'Main:FB0.Q', type: 'BOOL' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [11, [{ compositeKey: 'Main:FB0.Q', type: 'BOOL' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -499,7 +522,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       expect(activeIndexes).toContain(99)
@@ -519,7 +542,7 @@ describe('buildActiveIndexSet', () => {
         editorName: 'Main',
         editorLanguage: 'st',
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       // Cache should have been replaced
@@ -529,7 +552,7 @@ describe('buildActiveIndexSet', () => {
 
     it('skips diagram/source scan when currentPou is not found', () => {
       const state = makeState({ editorName: 'Nonexistent' })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -566,7 +589,7 @@ describe('buildActiveIndexSet', () => {
         fbSelectedInstance: fbSelected,
         fbDebugInstances: fbInstances,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       // Cache should still be valid because fbContextKey matches
@@ -579,8 +602,8 @@ describe('buildActiveIndexSet', () => {
       const pou = makePou('Main', 'program', [makeVariable('A', 'local', true)])
       // A is watched but NOT in debugVariableIndexes
       const state = makeState({ pous: [pou] })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [42, { compositeKey: 'Main:A', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [42, [{ compositeKey: 'Main:A', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -599,7 +622,7 @@ describe('buildActiveIndexSet', () => {
         ['Main:B', 20],
       ])
       const state = makeState({ pous: [pou], debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([10, 20, 30])
@@ -609,8 +632,8 @@ describe('buildActiveIndexSet', () => {
       const forced = new Map([['Main:X', { value: 0 }]])
       const indexMap = new Map([['Main:X', 5]])
       const state = makeState({ debugForcedVariables: forced, debugVariableIndexes: indexMap })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [5, { compositeKey: 'Main:X', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [5, [{ compositeKey: 'Main:X', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -629,7 +652,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(15)
@@ -652,8 +675,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [20, { compositeKey: 'Main:MyTimer.ET', type: 'TIME' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [20, [{ compositeKey: 'Main:MyTimer.ET', type: 'TIME' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -670,7 +693,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).not.toContain(50)
@@ -686,7 +709,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'il',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(8)
@@ -702,7 +725,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).not.toContain(8)
@@ -718,7 +741,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).not.toContain(8)
@@ -750,7 +773,7 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(1)
@@ -775,7 +798,7 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(3)
@@ -801,7 +824,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -831,8 +854,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [50, { compositeKey: 'Main:MyTimer.Q', type: 'BOOL' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [50, [{ compositeKey: 'Main:MyTimer.Q', type: 'BOOL' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -863,8 +886,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [60, { compositeKey: 'Main:_TMP_ADD3_OUT', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [60, [{ compositeKey: 'Main:_TMP_ADD3_OUT', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -887,7 +910,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -901,7 +924,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [{ name: 'OtherPou', rungs: [] }],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -933,7 +956,7 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([1, 2, 3])
@@ -961,8 +984,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [70, { compositeKey: 'Main:Timer1.ET', type: 'TIME' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [70, [{ compositeKey: 'Main:Timer1.ET', type: 'TIME' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -986,7 +1009,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1000,7 +1023,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [{ name: 'OtherPou', rung: { nodes: [] } }],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1028,8 +1051,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [80, { compositeKey: 'Main:_TMP_MUL7_OUT', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [80, [{ compositeKey: 'Main:_TMP_MUL7_OUT', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1050,7 +1073,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1085,7 +1108,7 @@ describe('buildActiveIndexSet', () => {
         fbDebugInstances: fbInstances,
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toContain(25)
@@ -1100,7 +1123,7 @@ describe('buildActiveIndexSet', () => {
         editorName: 'MyFB',
         editorLanguage: 'st',
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1118,7 +1141,7 @@ describe('buildActiveIndexSet', () => {
       })
       // Remove the language property from meta
       delete (state as unknown as { editor: { meta: Record<string, unknown> } }).editor.meta.language
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, null)
       expect(cacheResult?.language).toBe('')
@@ -1135,7 +1158,7 @@ describe('buildActiveIndexSet', () => {
         fbSelectedInstance: fbSelected,
         fbDebugInstances: new Map(),
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       // No matching instance found in the empty list -> no variables added
@@ -1153,7 +1176,7 @@ describe('buildActiveIndexSet', () => {
         editorName: 'NoInterface',
         editorLanguage: 'st',
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       // No interface -> ?? [] -> no variables to scan
@@ -1174,7 +1197,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [{ name: 'Main', rungs: [] }],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       expect(cacheResult).not.toBe(cached)
@@ -1196,7 +1219,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'st',
         fbSelectedInstance: fbSelected,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { cacheResult } = buildActiveIndexSet(state, allLeaves, cached)
       expect(cacheResult).not.toBe(cached)
@@ -1217,8 +1240,8 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [2, { compositeKey: 'Main:A.B.C', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [2, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1240,8 +1263,8 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [2, { compositeKey: 'Main:A.B.C', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [2, [{ compositeKey: 'Main:A.B.C', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1259,7 +1282,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'python',
         debugVariableIndexes: indexMap,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       // Python is not ld/fbd/st/il -> no visible variables collected
@@ -1303,7 +1326,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       // makeKey returns null for all -> no keys added
@@ -1342,7 +1365,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1363,7 +1386,7 @@ describe('buildActiveIndexSet', () => {
         editorName: 'UnresolvedFB',
         editorLanguage: 'st',
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1393,8 +1416,8 @@ describe('buildActiveIndexSet', () => {
         debugVariableIndexes: indexMap,
         debugExpandedNodes: expandedNodes,
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [11, { compositeKey: 'Main:FB0.Q', type: 'BOOL' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [11, [{ compositeKey: 'Main:FB0.Q', type: 'BOOL' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1419,7 +1442,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1449,7 +1472,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1481,8 +1504,8 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [50, { compositeKey: 'something:Timer1.Q', type: 'BOOL' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [50, [{ compositeKey: 'something:Timer1.Q', type: 'BOOL' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1508,8 +1531,8 @@ describe('buildActiveIndexSet', () => {
         editorName: 'UnresolvedFB',
         editorLanguage: 'st',
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [90, { compositeKey: 'something:MyTimer.ET', type: 'TIME' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [90, [{ compositeKey: 'something:MyTimer.ET', type: 'TIME' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
@@ -1538,7 +1561,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1564,7 +1587,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'fbd',
         fbdFlows: [fbdFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1596,7 +1619,7 @@ describe('buildActiveIndexSet', () => {
         editorLanguage: 'ld',
         ladderFlows: [ldFlow],
       })
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>()
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
@@ -1629,8 +1652,8 @@ describe('buildActiveIndexSet', () => {
         ladderFlows: [ldFlow],
       })
       // allLeaves has entries that DON'T match the prefix
-      const allLeaves = new Map<number, { compositeKey: string; type: string }>([
-        [99, { compositeKey: 'Main:UNRELATED', type: 'INT' }],
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [99, [{ compositeKey: 'Main:UNRELATED', type: 'INT' }]],
       ])
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)

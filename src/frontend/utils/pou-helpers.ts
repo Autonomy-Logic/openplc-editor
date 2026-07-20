@@ -4,7 +4,7 @@
  */
 
 import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
-import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 
 /**
  * Variable definition from a POU or library FB.
@@ -133,6 +133,34 @@ export const findFunctionBlockVariables = (
   }
 
   return null
+}
+
+/**
+ * Return the VAR_EXTERNAL members of a user-defined function block.
+ *
+ * findFunctionBlockVariables deliberately drops externals (they point at
+ * config-scoped globals, not instance state, and must not appear in the OPC-UA
+ * picker as instance members). The debugger, however, wants to surface them so
+ * a global can be watched from inside any FB — resolved to the shared global's
+ * address, not a per-instance copy. This companion returns exactly those
+ * members so the debug tree can emit canonical global nodes for them.
+ *
+ * Library FBs are black boxes (their externals aren't in debug-map.json), so
+ * only project POUs are searched; returns [] when the FB is a library type,
+ * unknown, or declares no externals.
+ *
+ * Returns full PLCVariable objects (not the narrowed PouVariable view) so the
+ * debug traversal can hand them straight to traverseVariable.
+ */
+export const findFunctionBlockExternalVariables = (typeName: string, projectPous: PLCPou[]): PLCVariable[] => {
+  const typeNameUpper = typeName.toUpperCase()
+  const customFB = projectPous.find(
+    (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
+  )
+  if (customFB && customFB.pouType === 'function-block') {
+    return (customFB.interface?.variables ?? []).filter((v) => v.class === 'external')
+  }
+  return []
 }
 
 /**
