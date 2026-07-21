@@ -273,6 +273,7 @@ describe('createFBDFlowSlice', () => {
       editorName: 'editor-1',
       nodes: [makeNode({ id: 'n1', data: { label: 'old-1' } }), makeNode({ id: 'n2', data: { label: 'old-2' } })],
     })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
 
     store.getState().fbdFlowActions.updateNodes([
       { editorName: 'editor-1', nodeId: 'n1', node: makeNode({ id: 'n1', data: { label: 'new-1' } }) },
@@ -291,6 +292,7 @@ describe('createFBDFlowSlice', () => {
       editorName: 'editor-1',
       nodes: [makeNode({ id: 'n1', data: { label: 'old' } })],
     })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
 
     store.getState().fbdFlowActions.updateNodes([
       { editorName: 'missing-editor', nodeId: 'n1', node: makeNode({ id: 'n1' }) },
@@ -298,6 +300,7 @@ describe('createFBDFlowSlice', () => {
     ])
 
     expect(store.getState().fbdFlows[0].rung.nodes.find((n) => n.id === 'n1')?.data.label).toBe('old')
+    expect(store.getState().fbdFlows[0].updated).toBe(false)
   })
 
   // -------------------------------------------------------------------------
