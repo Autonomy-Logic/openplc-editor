@@ -39,7 +39,7 @@ src/
 ├── main/                  # Electron main process (Node.js)
 ├── frontend/              # React UI layer (renderer process)
 │   ├── components/        # Atomic Design: _atoms, _molecules, _organisms, _features, _templates
-│   ├── store/             # Zustand store (19 slices)
+│   ├── store/             # Zustand store (18 slices)
 │   ├── hooks/             # Custom React hooks
 │   ├── services/          # Business logic and side effects
 │   ├── utils/             # Domain utilities (PLC, graphical, debug, formatters)
@@ -47,7 +47,7 @@ src/
 │   ├── locales/           # i18next translations
 │   └── assets/            # Images, icons
 ├── backend/
-│   ├── editor/            # Main process modules (compiler, hardware, modbus, websocket, services)
+│   ├── editor/            # Main process modules (compiler, hardware, modbus, ethercat, library-manager, services)
 │   └── shared/            # Platform-agnostic utilities (XML generation, project parsing, simulator)
 ├── middleware/             # Ports & Adapters layer
 │   ├── shared/
@@ -131,7 +131,7 @@ Main and renderer processes communicate through typed IPC bridges:
 
 ### State Management (Zustand)
 
-Single store composed of 19 slices (`src/frontend/store/`), accessed via auto-generated selector hooks:
+Single store composed of 18 slices (`src/frontend/store/`), accessed via auto-generated selector hooks:
 
 ```typescript
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -160,7 +160,7 @@ const createPou = useOpenPLCStore((s) => s.projectActions.createPou)
 | `console` | Log output |
 | `library` | System + user function block libraries |
 | `file` | File save states (dirty tracking) |
-| `ai`, `clipboard`, `history`, `modal`, `search`, `shared`, `version-control`, `webrtc` | Supporting features |
+| `ai`, `history`, `modal`, `readme`, `search`, `shared`, `version-control`, `webrtc` | Supporting features |
 
 **Conventions:**
 - Actions are grouped under a `*Actions` namespace (e.g., `projectActions`, `deviceActions`)
@@ -205,14 +205,14 @@ Flow state is stored per-POU in dedicated slices (`ladder`, `fbd`). Flows must b
 Orchestrated by `CompilerModule` (`src/backend/editor/compiler/compiler-module.ts`):
 
 ```
-PLCProjectData -> Preprocess POUs -> XML Generation -> xml2st -> iec2c -> C code
-                                                                           |
-                                                    defines.h (pins, Modbus, MD5)
-                                                                           |
-                                                    Arduino CLI / openplc-compiler -> firmware
+PLCProjectData -> Preprocess POUs -> XML Generation -> xml2st -> STruC++ compile() -> C++ code
+                                                                                       |
+                                                                defines.h (pins, Modbus, MD5)
+                                                                                       |
+                                                                Arduino CLI / openplc-compiler -> firmware
 ```
 
-Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `/resources/sources/boards/hals.json`.
+Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 ### Debugging
 
@@ -241,8 +241,21 @@ When adding new code to covered directories, you must add corresponding tests to
 - ESLint flat config (`eslint.config.mjs`) with TypeScript strict type checking
 - Prettier: 120 char width, no semicolons, single quotes, trailing commas
 - Import sorting enforced via `simple-import-sort` plugin
-- Pre-commit hooks via Husky run lint-staged on `./src/**/*`
+- Pre-commit hooks via Husky run lint-staged on `./src/**/*.{ts,tsx}`
 - Path alias: `@root/*` -> `./src/*`
+
+### TypeScript Best Practices
+
+- No type assertions: `as` hides real type errors — fix the type at the source or narrow with type guards. `as const` is fine; `as unknown as T` is forbidden.
+- No non-null assertions (`!`): handle the undefined case or narrow explicitly.
+- For truly unknown data use `unknown` and narrow before use — never `any`.
+- No `@ts-ignore`/`@ts-expect-error` without a one-line justification.
+- Validate external data at the boundary (IPC payloads, project files, downloaded binaries metadata) with schemas (zod) or type guards instead of casting.
+- No floating promises: `await` or handle rejection explicitly — async errors must not disappear.
+- Prefer `??` over `||` for defaults when `0`, `''`, or `false` are valid values.
+- Model variant states as discriminated unions; make `switch` exhaustive with a `never` check.
+- Named exports over default exports.
+- Zustand state changes only through slice actions — never mutate store values from components.
 
 ## Key Technologies
 
@@ -311,7 +324,7 @@ on its `main` push. (Ideally `package.json.version` should be derived from
 
 ### IEC address allocation + alias registry
 
-Located in `src/backend/shared/utils/iec-address/` (byte-identical on
+Located in `src/middleware/shared/utils/iec-address/` (byte-identical on
 openplc-web). Pure functions, no IPC, no electron coupling.
 
 - **Address pool** (`address-pool.ts`): producer-only, target-scoped
@@ -353,7 +366,15 @@ new alias.
 
 ## Environment
 
-- **Node.js:** >= 20.x < 24
+- **Node.js:** >= 22.x < 24
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
+
+## Git Workflow
+
+Follow the Workflow section in CONTRIBUTING.md (base branch, branch naming, Conventional Commits). `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`.
+
+## Issue Tracker
+
+Jira, project key `DOPE`. Fetch and update tickets via the Atlassian MCP tools. Reference the ticket key (`DOPE-<n>`) in branch names and PR descriptions. GitHub Issues (`.github/ISSUE_TEMPLATE/`) receives external bug reports; planned work lives in Jira.
