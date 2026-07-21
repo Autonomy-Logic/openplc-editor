@@ -37,7 +37,9 @@ const pendingWriteBacks = new Map<string, { language: FlowLanguage; timer: Retur
 function runWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
   const state = getState()
   const flow =
-    language === 'ld' ? state.ladderFlows.find((f) => f.name === pouName) : state.fbdFlows.find((f) => f.name === pouName)
+    language === 'ld'
+      ? state.ladderFlows.find((f) => f.name === pouName)
+      : state.fbdFlows.find((f) => f.name === pouName)
   if (!flow?.updated) return
 
   // Validate with zod but persist the raw object (minus the transient
