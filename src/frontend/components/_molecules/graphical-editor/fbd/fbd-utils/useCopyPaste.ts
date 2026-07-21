@@ -39,7 +39,7 @@ export const useFBDClipboard = ({
 }) => {
   const pouName = useBoundPou()
   const isActive = useIsGraphicalEditorActive()
-  const { fbdFlowActions } = useOpenPLCStore()
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
 
   // True when the clipboard event originated from a DOM node inside
   // this FBD instance's viewport.  Used to scope **copy** and **cut**

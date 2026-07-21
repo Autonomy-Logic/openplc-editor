@@ -155,6 +155,10 @@ function getLayer(filePath: string): LayerName | null {
   // openplc-web parity explicit (this folder is byte-identical
   // between repos).
   if (rel.startsWith('middleware/shared/utils/')) return 'utils'
+  // Shared runtime-auth (RuntimeTokenManager) is pure, dependency-free logic
+  // reachable from adapters/backend/main on both platforms — same `utils` rule
+  // set, byte-identical between repos.
+  if (rel.startsWith('middleware/shared/runtime-auth/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 
@@ -275,6 +279,13 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // PLCopen export — needs the shared XmlGenerator composing function
+  // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
+  // project data into XML before handing it to the platform port. No
+  // frontend-reachable layer re-exports this function today; the
+  // conversion logic itself stays local (mirrors compiler-adapter.ts's
+  // portToSchemaProjectData) and has no other backend-shared dependency.
+  'frontend/services/export-actions.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------

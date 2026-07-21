@@ -55,6 +55,19 @@ describe('createVersionControlSlice', () => {
     })
   })
 
+  describe('mergeHeadContent', () => {
+    it('creates the snapshot from null', () => {
+      actions().mergeHeadContent({ 'a.st': 'head-a' })
+      expect(vc().headContent).toEqual({ 'a.st': 'head-a' })
+    })
+
+    it('merges entries without dropping the rest of the map', () => {
+      actions().setHeadContent({ 'a.st': 'head-a', 'b.st': 'head-b' })
+      actions().mergeHeadContent({ 'b.st': 'updated', 'c.st': 'head-c' })
+      expect(vc().headContent).toEqual({ 'a.st': 'head-a', 'b.st': 'updated', 'c.st': 'head-c' })
+    })
+  })
+
   it('initBaseline resets the cached HEAD snapshot to null', () => {
     actions().setHeadContent({ 'a.st': 'x' })
     actions().initBaseline({
@@ -138,6 +151,29 @@ describe('createVersionControlSlice', () => {
       expect(pendingPaths).not.toContain('added.st')
       expect(vc().changedPaths).toContain('tracked.st')
       expect(vc().changedPaths).not.toContain('session.st')
+    })
+
+    it('prunes saved and deleted paths from the cached HEAD snapshot', () => {
+      actions().initBaseline({ initialPending: [], baselineContent: { 'gone.st': 'g' } })
+      actions().setHeadContent({ 'saved.st': 'old-head', 'gone.st': 'old-head', 'untouched.st': 'head' })
+
+      actions().recordSavedFiles({
+        saved: [{ path: 'saved.st', content: 'new' }],
+        deleted: ['gone.st'],
+      })
+
+      expect(vc().headContent).toEqual({ 'untouched.st': 'head' })
+    })
+
+    it('leaves the HEAD snapshot null when it was never fetched', () => {
+      actions().initBaseline({ initialPending: [], baselineContent: {} })
+
+      actions().recordSavedFiles({
+        saved: [{ path: 'saved.st', content: 'new' }],
+        deleted: [],
+      })
+
+      expect(vc().headContent).toBeNull()
     })
   })
 

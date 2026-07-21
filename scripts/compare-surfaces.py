@@ -13,7 +13,10 @@ the mapped base — see MAPPED_SURFACES):
   - bare-metal-runtime  (editor: resources/sources/{arduino,Baremetal};
                          web:    src/assets/firmware/{arduino,Baremetal})
 
-Every file in these surfaces must be byte-identical across both repos.
+Every program file in these surfaces must be byte-identical across both
+repos. Test files (`__tests__/` directories, `*.test.ts(x)`, `*.spec.ts(x)`)
+are excluded — they're allowed to diverge (platform-specific mocks, adapter-
+only e2e suites) without indicating a real program-file drift.
 Exit code 0 = all identical, 1 = differences found.
 """
 
@@ -63,13 +66,24 @@ def hash_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def is_test_file(path: Path) -> bool:
+    """True for test files/directories — same exclusion the architecture
+    validator (__architecture__/validate.ts) already applies to its own scan.
+    Test files are allowed to diverge between repos (platform-specific mocks,
+    adapter-only e2e suites) without indicating a real program-file drift."""
+    if "__tests__" in path.parts:
+        return True
+    name = path.name
+    return any(name.endswith(suffix) for suffix in (".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"))
+
+
 def collect_hashes(root: Path, surface: str) -> dict[str, str]:
     base = root / surface
     if not base.exists():
         return {}
     result = {}
     for path in sorted(base.rglob("*")):
-        if path.is_file():
+        if path.is_file() and not is_test_file(path):
             rel = str(path.relative_to(root))
             result[rel] = hash_file(path)
     return result
@@ -108,7 +122,7 @@ def collect_all_hashes(base: Path, exts: list[str] | None = None) -> dict[str, s
         return result
     ext_set = set(exts) if exts else None
     for path in sorted(base.rglob("*")):
-        if path.is_file() and (ext_set is None or path.suffix in ext_set):
+        if path.is_file() and not is_test_file(path) and (ext_set is None or path.suffix in ext_set):
             result[str(path.relative_to(base))] = hash_file(path)
     return result
 

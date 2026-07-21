@@ -1,4 +1,10 @@
-import { BASE_TYPE_NAMES, IEC_BASE_TYPES, isBaseTypeName, lookupBaseType } from '../iec-types-registry'
+import {
+  BASE_TYPE_NAMES,
+  IEC_BASE_TYPES,
+  isBaseTypeName,
+  lookupBaseType,
+  lookupBaseTypeByXmlElement,
+} from '../iec-types-registry'
 
 describe('iec-types-registry', () => {
   describe('IEC_BASE_TYPES', () => {
@@ -78,6 +84,36 @@ describe('iec-types-registry', () => {
     it('rejects unknown names', () => {
       expect(isBaseTypeName('MyStruct')).toBe(false)
       expect(isBaseTypeName('')).toBe(false)
+    })
+  })
+
+  describe('lookupBaseTypeByXmlElement', () => {
+    it('resolves the standard uppercase element names', () => {
+      expect(lookupBaseTypeByXmlElement('BOOL')?.name).toBe('BOOL')
+      expect(lookupBaseTypeByXmlElement('INT')?.name).toBe('INT')
+      expect(lookupBaseTypeByXmlElement('REAL')?.name).toBe('REAL')
+    })
+
+    it('resolves the lowercase string/wstring element names', () => {
+      expect(lookupBaseTypeByXmlElement('string')?.name).toBe('STRING')
+      expect(lookupBaseTypeByXmlElement('wstring')?.name).toBe('WSTRING')
+    })
+
+    it('is case-sensitive (does not match on the wrong case)', () => {
+      expect(lookupBaseTypeByXmlElement('STRING')).toBeUndefined()
+      expect(lookupBaseTypeByXmlElement('WSTRING')).toBeUndefined()
+      expect(lookupBaseTypeByXmlElement('bool')).toBeUndefined()
+    })
+
+    it('returns undefined for unknown element names', () => {
+      expect(lookupBaseTypeByXmlElement('derived')).toBeUndefined()
+      expect(lookupBaseTypeByXmlElement('')).toBeUndefined()
+    })
+
+    it("round-trips every registry entry's own xml.elementName", () => {
+      for (const t of IEC_BASE_TYPES) {
+        expect(lookupBaseTypeByXmlElement(t.xml.elementName)).toBe(t)
+      }
     })
   })
 

@@ -1,9 +1,11 @@
+import { memo } from 'react'
+
 import { cn } from '../../../../utils/cn'
 import { CustomHandle } from './handle'
 import { DEFAULT_PARALLEL_HEIGHT, DEFAULT_PARALLEL_WIDTH } from './utils/constants'
 import type { ParallelProps } from './utils/types'
 
-export const Parallel = ({ selected, data }: ParallelProps) => {
+const Parallel = ({ selected, data }: ParallelProps) => {
   return (
     <>
       <div
@@ -35,3 +37,7 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
     </>
   )
 }
+
+const exportParallel = memo(Parallel)
+
+export { exportParallel as Parallel }

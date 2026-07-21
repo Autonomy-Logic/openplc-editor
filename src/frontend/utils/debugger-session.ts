@@ -16,7 +16,7 @@ import type {
   PLCVariable,
 } from '../../middleware/shared/ports/types'
 import type { DebugMap, DebugVariableEntry } from './debug-parser'
-import { buildLeafPathMap, packDebugAddr } from './debug-parser'
+import { packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
 import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
 
@@ -79,88 +79,47 @@ export function logCompilerEvent(
 }
 
 // ---------------------------------------------------------------------------
-// 1. buildVariableIndexMap — composite-key -> packed-DebugAddr
+// 1. deriveVariableIndexMap — composite-key -> packed-DebugAddr (from the tree)
 // ---------------------------------------------------------------------------
 
-export interface VariableIndexMapResult {
-  indexMap: Map<string, number>
-  warnings: string[]
-}
-
 /**
- * Build a composite-key -> packed-DebugAddr map from a DebugMap.
+ * Derive the composite-key -> packed-DebugAddr map from the debug tree, which
+ * is the single enumeration walk (`traverseVariable`, via
+ * `buildDebugVariableTreeMap`).
  *
- * The map addresses variables as (arrayIdx, elemIdx) pairs; we pack those
- * into a single number `(arr << 16) | elem` so downstream store types and
- * the polling loop see a plain `number` key.
+ * The tree already resolved every variable's debug address exactly once,
+ * applying the one path convention (external globals by their bare name,
+ * program-locals instance-prefixed, `.FIELD` for struct/FB fields, `[idx]` for
+ * array elements). Flattening its leaves here guarantees the LD/FBD editors,
+ * the watch panel, and the poller all address a variable identically — there is
+ * no second walk that can drift. (A divergent inline walk here is exactly how
+ * force silently no-op'd on located globals: it missed the external case.)
  *
- * Path convention emitted by STruC++:
- *   INSTANCE_NAME.VAR_NAME            (scalar)
- *   INSTANCE_NAME.VAR_NAME[5]         (array element, IEC-indexed)
- *   INSTANCE_NAME.FB_INST.FIELD       (nested struct/FB field)
+ * Addresses are (arrayIdx, elemIdx) pairs packed into a single number
+ * `(arr << 16) | elem`. `treeMap` is the flat compositeKey -> node map that
+ * `buildDebugVariableTreeMap` returns (every node, nested included).
  */
-export function buildVariableIndexMap(pous: PLCPou[], instances: PLCInstance[], map: DebugMap): VariableIndexMapResult {
+export function deriveVariableIndexMap(treeMap: Map<string, DebugTreeNode>, map: DebugMap): Map<string, number> {
   const indexMap = new Map<string, number>()
-  const warnings: string[] = []
 
-  // Single source of truth for path → packed-address (case-insensitive).
-  // Same lookup the OPC-UA resolver uses.
-  const pathToAddr = buildLeafPathMap(map)
-
-  const instanceMappings: PLCInstanceMapping[] = instances.map((inst) => ({
-    name: inst.name,
-    program: inst.program,
-  }))
-
-  pous.forEach((pou) => {
-    if (pou.pouType !== 'program') return
-
-    const instanceName = findInstanceName(pou.name, instanceMappings)
-    if (!instanceName) {
-      warnings.push(`No instance found for program '${pou.name}', skipping debug variable parsing.`)
-      return
+  // Every resolved leaf in the tree, keyed by its composite key. Complex nodes
+  // (structs / FBs / arrays) carry no address of their own — only their leaves
+  // do (debugIndex === undefined on the parents).
+  for (const [compositeKey, node] of treeMap) {
+    if (node.debugIndex !== undefined) {
+      indexMap.set(compositeKey, node.debugIndex)
     }
+  }
 
-    const upperInstance = instanceName.toUpperCase()
-    const variables = pou.interface?.variables ?? []
-
-    variables.forEach((v: PLCVariable) => {
-      if (v.type.definition === 'array' && v.type.data) {
-        const dimensions = v.type.data.dimensions
-        if (dimensions.length > 0) {
-          const dimMatch = dimensions[0].dimension.match(/^(-?\d+)\.\.(-?\d+)$/)
-          if (dimMatch) {
-            const startIdx = parseInt(dimMatch[1], 10)
-            const endIdx = parseInt(dimMatch[2], 10)
-            for (let i = 0; i <= endIdx - startIdx; i++) {
-              const iecIdx = startIdx + i
-              const path = `${upperInstance}.${v.name.toUpperCase()}[${iecIdx}]`
-              const addr = pathToAddr.get(path)
-              if (addr !== undefined) {
-                indexMap.set(`${pou.name}:${v.name}[${iecIdx}]`, addr)
-              }
-            }
-          }
-        }
-      } else {
-        const path = `${upperInstance}.${v.name.toUpperCase()}`
-        const addr = pathToAddr.get(path)
-        if (addr !== undefined) {
-          indexMap.set(`${pou.name}:${v.name}`, addr)
-        }
-      }
-    })
-  })
-
-  // Fallback: also key by the raw debug path so any leaves we didn't cover
-  // (nested fields, FB internals) remain reachable by path.
+  // Fallback: also key by the raw debug path so any leaves the tree didn't
+  // surface (e.g. library-FB internals) remain reachable by path.
   for (const leaf of map.leaves) {
     if (!indexMap.has(leaf.path)) {
       indexMap.set(leaf.path, packDebugAddr(leaf))
     }
   }
 
-  return { indexMap, warnings }
+  return indexMap
 }
 
 /**
@@ -183,12 +142,16 @@ export interface DebugVariableTreeMapResult {
   treeMap: Map<string, DebugTreeNode>
   trees: DebugTreeNode[]
   complexCount: number
+  warnings: string[]
 }
 
 /**
  * Build a flat compositeKey -> DebugTreeNode map by traversing all program
- * POU variables. Pure function — swallows per-variable errors to match
- * existing behaviour.
+ * POU variables. This is the single enumeration walk (`traverseVariable`);
+ * `deriveVariableIndexMap` and the poller's leaf collection both project off
+ * its output rather than re-walking. Pure function — swallows per-variable
+ * errors to match existing behaviour; `warnings` collects programs with no
+ * instance in Resources (same diagnostic the old index-map walk emitted).
  */
 export function buildDebugVariableTreeMap(
   pous: PLCPou[],
@@ -199,6 +162,7 @@ export function buildDebugVariableTreeMap(
 ): DebugVariableTreeMapResult {
   const trees: DebugTreeNode[] = []
   const treeMap = new Map<string, DebugTreeNode>()
+  const warnings: string[] = []
   let complexCount = 0
 
   const instanceMappings: PLCInstanceMapping[] = instances.map((inst) => ({
@@ -219,7 +183,10 @@ export function buildDebugVariableTreeMap(
     if (pou.pouType !== 'program') return
 
     const instanceName = findInstanceName(pou.name, instanceMappings)
-    if (!instanceName) return
+    if (!instanceName) {
+      warnings.push(`No instance found for program '${pou.name}', skipping debug variable parsing.`)
+      return
+    }
 
     const variables = pou.interface?.variables ?? []
     variables.forEach((v: PLCVariable) => {
@@ -262,7 +229,7 @@ export function buildDebugVariableTreeMap(
     }
   })
 
-  return { treeMap, trees, complexCount }
+  return { treeMap, trees, complexCount, warnings }
 }
 
 // ---------------------------------------------------------------------------

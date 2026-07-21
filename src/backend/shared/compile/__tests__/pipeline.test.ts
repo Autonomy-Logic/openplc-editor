@@ -61,6 +61,7 @@ import { isStrucppCompatibleRuntime } from '../../firmware/runtime-version-gate'
 import { generateRuntimeConfs } from '../steps/generate-confs'
 
 import { runCompilePipeline, type RunCompilePipelineArgs, type PipelineProgressEvent } from '../pipeline'
+
 const mockedConfs = generateRuntimeConfs as jest.MockedFunction<typeof generateRuntimeConfs>
 const mockedStrucpp = runProgramBuildPipeline as jest.MockedFunction<typeof runProgramBuildPipeline>
 const mockedVersionGate = isStrucppCompatibleRuntime as jest.MockedFunction<typeof isStrucppCompatibleRuntime>
@@ -804,6 +805,17 @@ describe('runCompilePipeline — failure propagation', () => {
     const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs(), port, emit)
     expect(result.success).toBe(false)
+  })
+
+  it('returns success=false when a simulator build produces no .hex binary', async () => {
+    // Simulator targets require the .hex artefact in memory (the loader can't
+    // find it on disk). A compile that reports ok but omits `binary` must fail
+    // with a precise error rather than silently succeeding.
+    const port = makePort({ compileArduino: jest.fn().mockResolvedValue({ ok: true }) })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(makeArgs(), port, emit)
+    expect(result.success).toBe(false)
+    expect(events.some((e) => e.stage === 'arduino-compile' && /did not produce a \.hex/.test(e.message))).toBe(true)
   })
 
   it('returns success=false when uploadRuntimeV4 reports failure', async () => {

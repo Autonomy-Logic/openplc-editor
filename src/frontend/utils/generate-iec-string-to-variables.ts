@@ -12,6 +12,21 @@ const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR_GLOBAL: 'global',
 }
 
+/**
+ * Classes whose declarations cannot carry a physical location ("AT").
+ * IEC 61131-3 only allows located declarations in VAR and VAR_GLOBAL
+ * blocks — interface sections describe the call contract, not hardware.
+ * Shared with the store-level variable validation so edit time and load
+ * time enforce the same rule (GitHub issue #904).
+ */
+export const DISALLOWED_LOCATION_CLASSES: ReadonlyArray<PLCVariable['class']> = [
+  'input',
+  'output',
+  'inOut',
+  'external',
+  'temp',
+]
+
 // Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
@@ -120,11 +135,9 @@ export const parseIecStringToVariables = (
 
     const { name, location, type, initialValue, documentation } = match.groups
 
-    const disallowedLocationClasses: Array<PLCVariable['class']> = ['input', 'output', 'inOut', 'external', 'temp']
-
-    if (location && disallowedLocationClasses.includes(currentClass)) {
+    if (location && DISALLOWED_LOCATION_CLASSES.includes(currentClass)) {
       throw new Error(
-        `Syntax error on line ${lineNumber}: Location ("AT") is not allowed for variables of class "${currentClass.toUpperCase()}".`,
+        `Syntax error on line ${lineNumber}: "${line}". Location ("AT") is not allowed for variables of class "${currentClass.toUpperCase()}". Move "${name}" to a VAR block (class LOCAL) or remove the "AT ${location}" clause.`,
       )
     }
 

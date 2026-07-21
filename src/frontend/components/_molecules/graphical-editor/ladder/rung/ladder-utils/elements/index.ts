@@ -208,6 +208,10 @@ export const addNewElement = <T>(
 export const removeElement = (
   rung: RungLadderState,
   element: Node,
+  /** Fallback identity source for the variable-node rebuild — pass the
+   *  pre-strip node set when `rung.nodes` had its variable nodes removed
+   *  earlier in the pipeline (see updateVariableBlockPosition). */
+  previousNodes?: Node[],
 ): { nodes: Node[]; edges: Edge[]; handleBranches?: HandleBranch[] } => {
   let newNodes: Node[]
   let newEdges: Edge[]
@@ -317,6 +321,7 @@ export const removeElement = (
       ...(handleBranches && { handleBranches }),
     },
     rung.defaultBounds as [number, number],
+    previousNodes,
   )
   newNodes = updatedDiagramNodes
   newEdges = updatedDiagramEdges

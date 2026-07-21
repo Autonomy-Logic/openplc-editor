@@ -3,6 +3,7 @@ import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configur
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
+  Cia402AxisConfig,
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
   ESIDeviceSummary,
@@ -16,13 +17,14 @@ import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { Cia402AxisTab } from './components/cia402-axis-tab'
 import {
   ChannelMappingsSection,
   DeviceConfigurationForm,
   SdoParametersSection,
 } from './components/device-configuration-form'
 
-type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings'
+type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings' | 'axis'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -102,6 +104,17 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     )
   }, [remoteDevice])
 
+  // A recognized CiA 402 SoftMotion drive: its PDO channel mappings are
+  // generated and consumed internally by the drive bridge, so the raw
+  // Channel Mappings tab is hidden and the SoftMotion Axis tab leads.
+  const isSoftMotion = !!device?.cia402?.enabled
+
+  // Channel Mappings is hidden for SoftMotion drives; if it was the active
+  // tab (the default), fall through to the SoftMotion Axis tab.
+  useEffect(() => {
+    if (isSoftMotion && activeTab === 'channel-mappings') setActiveTab('axis')
+  }, [isSoftMotion, activeTab])
+
   // Pool of every claim from producers active on the current target.
   // EtherCAT is sharing the image table with VPP and Modbus TCP on
   // Runtime v4, so all three feed into the pool — but capability
@@ -145,12 +158,9 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
+      // `updateEthercatConfig` reallocates addresses through the central
+      // registry and cascades any alias rename onto bound variables' names.
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
-      // Producer mutation: any change to channelMappings or aliases
-      // may move addresses or attach/detach aliases. Refresh the
-      // variables bound to those aliases so the table reflects the
-      // new bindings without waiting for save/reload.
-      projectActions.syncVariableAliases()
       // Mark the slave file dirty (same pattern as other file types)
       const { sharedWorkspaceActions } = useOpenPLCStore.getState()
       if (deviceName) {
@@ -186,6 +196,24 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   const handleUpdateSdoConfigurations = useCallback(
     (sdoConfigurations: SDOConfigurationEntry[]) => {
       syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, sdoConfigurations } : d)))
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
+  const handleUpdateCia402 = useCallback(
+    (patch: Partial<Cia402AxisConfig>) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const base: Cia402AxisConfig = d.cia402 ?? {
+            enabled: false,
+            scaleNum: 1,
+            scaleDenom: 1,
+            scaleFactor: 1,
+          }
+          return { ...d, cia402: { ...base, ...patch } }
+        }),
+      )
     },
     [configuredDevices, deviceId, syncDevicesToStore],
   )
@@ -285,11 +313,26 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
-          <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
+          {!isSoftMotion && (
+            <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
+          )}
+          {device.cia402 && <TabItem value='axis' label='SoftMotion Axis' isActive={activeTab === 'axis'} />}
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
         </Tabs.List>
+
+        {/* SoftMotion Axis (CiA 402) Tab */}
+        {device.cia402 && (
+          <Tabs.Content
+            value='axis'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex-1 overflow-auto p-4'>
+              <Cia402AxisTab device={device} onUpdate={handleUpdateCia402} />
+            </div>
+          </Tabs.Content>
+        )}
 
         {/* Device Info Tab */}
         <Tabs.Content
@@ -368,21 +411,24 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           </div>
         </Tabs.Content>
 
-        {/* Channel Mappings Tab */}
-        <Tabs.Content
-          value='channel-mappings'
-          className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
-        >
-          <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-            <ChannelMappingsSection
-              isLoading={isLoadingChannels}
-              loadError={channelLoadError}
-              channels={channels}
-              mappings={device.channelMappings}
-              onAliasChange={handleAliasChange}
-            />
-          </div>
-        </Tabs.Content>
+        {/* Channel Mappings Tab — hidden for SoftMotion drives (their PDO
+            mappings are generated and consumed internally by the bridge). */}
+        {!isSoftMotion && (
+          <Tabs.Content
+            value='channel-mappings'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
+              <ChannelMappingsSection
+                isLoading={isLoadingChannels}
+                loadError={channelLoadError}
+                channels={channels}
+                mappings={device.channelMappings}
+                onAliasChange={handleAliasChange}
+              />
+            </div>
+          </Tabs.Content>
+        )}
       </Tabs.Root>
     </div>
   )

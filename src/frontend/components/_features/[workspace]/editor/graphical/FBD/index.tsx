@@ -7,6 +7,8 @@ import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
 import { useBoundPou } from '../active-context'
 
+const EMPTY_DIVERGENCES: string[] = []
+
 export default function FbdEditor() {
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  With multi-mount, every open FBD
@@ -28,7 +30,7 @@ export default function FbdEditor() {
   const flowUpdated = flow?.updated || false
 
   const nodeDivergences = useMemo(() => {
-    if (!flow) return []
+    if (!flow) return EMPTY_DIVERGENCES
 
     const divergences = []
 
@@ -78,23 +80,31 @@ export default function FbdEditor() {
       }
     }
 
-    return divergences
+    return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
   }, [flow?.rung.nodes, userLibraries, pous])
 
   /**
-   * Update the flow state to project JSON
+   * Update the flow state to project JSON.
+   *
+   * Validate the flow with Zod but persist the raw object (minus the
+   * transient `updated` flag). Using the parsed result would silently strip
+   * every field not declared in `zodFBDFlowSchema` and reorder keys to
+   * schema order, which makes `serializeGraphicalPouToString` produce
+   * byte-drift vs. the loaded disk copy — surfacing as phantom "Modified"
+   * entries in Source Control for POUs the user never edited.
    */
   useEffect(() => {
-    if (!flowUpdated) return
+    if (!flowUpdated || !flow) return
 
     const flowSchema = zodFBDFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
 
+    const { updated: _updated, ...flowBody } = flow
     updatePou({
       name: pouName,
       content: {
         language: 'fbd',
-        value: flowSchema.data,
+        value: structuredClone(flowBody),
       },
     })
 

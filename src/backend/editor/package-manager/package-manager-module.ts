@@ -7,6 +7,7 @@ import { PackageManifestSchema } from '../../../middleware/shared/ports/package-
 import { validatePathId } from '../../shared/utils/path-safety'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
+import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
 
@@ -130,6 +131,73 @@ class PackageManagerModule {
         rmSync(tempDir, { recursive: true, force: true })
       }
     }
+  }
+
+  /**
+   * Re-verify every registry-listed package against the trusted keys and remove
+   * any whose signature does not validate, returning the ids removed. For each
+   * failing entry the package directory is deleted (when its recorded path
+   * resolves inside packagesDir) and the registry entry is dropped, emitting a
+   * warning per removal. No-op when REQUIRE_SIGNATURE is false. Directories with
+   * no registry entry are not listed and are left as-is.
+   */
+  verifyInstalledSignatures(warn: (message: string) => void = (m) => logger.warn(m)): string[] {
+    if (!REQUIRE_SIGNATURE) return []
+
+    const registry = this.readRegistry()
+    const removed: string[] = []
+    let mutated = false
+
+    for (const [packageId, info] of Object.entries(registry.packages)) {
+      const reason = this.signatureRejectionReason(packageId, info?.path)
+      if (!reason) continue
+
+      // Drop the registry entry; delete on-disk contents only when the recorded
+      // path resolves inside packagesDir.
+      try {
+        assertPathContained(this.packagesDir, info.path, 'registry package path')
+        if (existsSync(info.path)) {
+          rmSync(info.path, { recursive: true, force: true })
+        }
+      } catch {
+        // Out-of-tree or unusable path: leave disk untouched, just de-list.
+      }
+
+      delete registry.packages[packageId]
+      mutated = true
+      removed.push(packageId)
+      warn(`VPP package "${packageId}" was removed at startup due to an invalid or missing signature: ${reason}`)
+    }
+
+    if (mutated) this.writeRegistry(registry)
+    return removed
+  }
+
+  /**
+   * Returns null when the installed package recorded at `packagePath` is
+   * genuinely signed by a trusted key, or a short human-readable reason when it
+   * is not (bad id shape, path escaping packagesDir, missing files, or any
+   * failure surfaced by `verifyPackageSignature`).
+   */
+  private signatureRejectionReason(packageId: string, packagePath: string | undefined): string | null {
+    try {
+      validatePathId(packageId, 'registry package id')
+    } catch {
+      return 'invalid package id'
+    }
+    if (typeof packagePath !== 'string' || packagePath.length === 0) {
+      return 'registry entry has no package path'
+    }
+    try {
+      assertPathContained(this.packagesDir, packagePath, 'registry package path')
+    } catch {
+      return 'package path resolves outside the packages directory'
+    }
+    if (!existsSync(packagePath)) {
+      return 'package files are missing'
+    }
+    const verification = verifyPackageSignature(packagePath, TRUSTED_PACKAGE_KEYS)
+    return verification.valid ? null : (verification.error ?? 'invalid signature')
   }
 
   listInstalled(): InstalledPackage[] {

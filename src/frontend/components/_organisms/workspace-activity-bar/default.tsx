@@ -235,13 +235,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
 
-      // Pre-compile alias sync: ensure every located variable's
-      // `location` reflects the latest address its alias points to,
-      // before we snapshot projectData for the compiler. The compile
-      // pipeline itself reads `variable.location` verbatim — same
-      // contract as before, just guaranteed-fresh now.
-      useOpenPLCStore.getState().projectActions.syncVariableAliases()
-      const freshProjectData = useOpenPLCStore.getState().project.data
+      // Compile-time alias resolution: snapshot the project with every
+      // variable's `location` resolved to a concrete IEC address (alias name
+      // → current address, literal → verbatim, missing → unlocated). The
+      // compile pipeline reads `variable.location` verbatim — it never sees
+      // aliases.
+      const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
 
       try {
         // Track whether the compile stream already surfaced an error so we
@@ -563,16 +562,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      if (verifyResult.targetMd5Unavailable) {
-        consoleActions.addLog({
-          id: crypto.randomUUID(),
-          level: 'warning',
-          message:
-            verifyResult.error ??
-            'Target did not provide a program MD5. Treating target as uninitialized and offering upload.',
-        })
-      }
-
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
         // Surface the active transport in the store so transport-specific
@@ -593,25 +582,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
         consoleActions.addLog({
           id: crypto.randomUUID(),
-          level: verifyResult.targetMd5Unavailable ? 'info' : 'warning',
-          message: verifyResult.targetMd5Unavailable
-            ? `Target program MD5 is unavailable. Expected: ${md5Result.md5}`
-            : `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
+          level: 'warning',
+          message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
         const response = await showDebuggerMessage(
           'warning',
-          verifyResult.targetMd5Unavailable ? 'Program Not Found' : 'Program Mismatch',
-          verifyResult.targetMd5Unavailable
-            ? 'The target did not report any OpenPLC program MD5. This usually happens on a new device before the first upload. Would you like to upload the current project to the target?'
-            : 'The program on the target does not match. Upload the current project?',
+          'Program Mismatch',
+          'The program on the target does not match. Upload the current project?',
           ['Yes', 'No'],
         )
         if (response === 0) {
           const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
           const runtimeJwtToken = useOpenPLCStore.getState().runtimeConnection.jwtToken || null
-          // See the handleBuild call above — same pre-compile sync pass.
-          useOpenPLCStore.getState().projectActions.syncVariableAliases()
-          const freshProjectData = useOpenPLCStore.getState().project.data
+          // See the handleBuild call above — compile-time alias resolution.
+          const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
           const compileResult = await compiler.compileProgram(
             {
               projectData: freshProjectData,
@@ -807,10 +791,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // Debug compilation
+      // Debug compilation. Resolve alias-bound locations to concrete
+      // addresses first (same pre-compile snapshot the build/upload paths
+      // use) — the compiler only understands `%…` literals, not alias names.
+      const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
       consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting debug compilation...' })
-      const debugCompileResult = await compiler.compileForDebug({ projectData, boardTarget, projectPath }, (event) =>
-        logCompilerEvent(event, consoleActions.addLog),
+      const debugCompileResult = await compiler.compileForDebug(
+        { projectData: freshProjectData, boardTarget, projectPath },
+        (event) => logCompilerEvent(event, consoleActions.addLog),
       )
       if (!debugCompileResult.success) {
         consoleActions.addLog({

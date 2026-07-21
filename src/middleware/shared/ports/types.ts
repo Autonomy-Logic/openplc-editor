@@ -57,12 +57,12 @@ export interface PLCVariable {
   name: string
   class?: VariableClass
   type: PLCVariableType
+  /**
+   * The variable's binding — single-field model: an alias name OR a literal
+   * IEC address (`%QX0.0`). Empty = unlocated. Alias→address resolution
+   * happens at compile time; a manual literal is honoured verbatim.
+   */
   location: string
-  /** Stable alias name the variable is bound to, when present. Looked
-   *  up in the alias registry to keep `location` current as the
-   *  producer reassigns the address. Cell renders `alias (address)`
-   *  when set; falls back to raw `location` otherwise. */
-  alias?: string
   initialValue?: string | null
   documentation: string
   debug?: boolean
@@ -1054,7 +1054,6 @@ export interface Md5VerifyResult {
    *  swap layer at read / write boundaries.  Omitted on failure. */
   targetEndian?: 'le' | 'be'
   error?: string
-  targetMd5Unavailable?: boolean
 }
 
 // ---------------------------------------------------------------------------

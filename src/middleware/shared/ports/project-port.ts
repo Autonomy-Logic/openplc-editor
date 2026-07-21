@@ -76,6 +76,16 @@ export interface ProjectResponse {
      * expose READMEs (desktop editor, dev:local).
      */
     readme?: string | null
+    /**
+     * Signals this response was just converted from a pending raw PLCopen
+     * import (Node's `plcopen-pending-import.xml` marker) rather than
+     * loaded from a normal `project.json`. Set only by the adapter branch
+     * that runs `parsePlcopenXml` in place of `parseProjectFiles`. The
+     * caller should persist immediately (`saveProject`) so the marker gets
+     * pruned server-side — Node's save endpoint deletes any file not in
+     * the incoming payload. Absent ⇒ ordinary open/import, no auto-save.
+     */
+    wasPendingPlcopenImport?: boolean
   }
   error?: {
     title: string
@@ -169,6 +179,14 @@ export interface RawProjectFiles {
     /** See {@link ProjectResponse.data.readme}.  Carried through the
      *  raw layer for the same reason as `canEdit`. */
     readme?: string | null
+    /**
+     * Raw PLCopen XML content when the project directory is a bare
+     * pending-import marker (Node's `plcopen-pending-import.xml`) instead
+     * of a normal project — `apiFilesToRaw` surfaces the envelope's
+     * `'plcopen-pending-import.xml'` key here. `undefined` is the
+     * "not pending" case (normal project, has `project.json`).
+     */
+    pendingPlcopenSource?: string
   }
   error?: { title: string; description: string }
 }
@@ -312,4 +330,18 @@ export interface ProjectPort {
     migrated?: boolean
     error?: string
   }>
+
+  /**
+   * Pick a PLCopen XML file to import and read its contents.
+   * Editor: native open-file dialog filtered to .xml.
+   * Web: hidden <input type="file" accept=".xml">.
+   */
+  pickPlcopenImportFile(): Promise<{ success: boolean; content?: string; error?: string }>
+
+  /**
+   * Persist generated PLCopen XML content as a file the user can access.
+   * Editor: native save-file dialog, writes to disk.
+   * Web: triggers a browser download of the blob.
+   */
+  exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }>
 }

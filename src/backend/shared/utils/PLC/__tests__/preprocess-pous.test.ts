@@ -310,4 +310,71 @@ describe('preprocessPous — mixed', () => {
     const { projectData } = preprocessPous(project, false, logger.log)
     expect(projectData.originalCppPous).toBeUndefined()
   })
+
+  it('generates SoftMotion axis artifacts for a CiA 402 EtherCAT drive', () => {
+    const project: PLCProjectData = {
+      ...makeProjectData([makeStPou('main', 'pwr(Axis := X_Axis, Enable := TRUE);')]),
+      remoteDevices: [
+        {
+          name: 'ethercat-bus',
+          protocol: 'ethercat',
+          ethercatConfig: {
+            devices: [
+              {
+                id: 'd1',
+                name: 'X_Axis',
+                esiDeviceRef: { repositoryItemId: 'r', deviceIndex: 0 },
+                vendorId: '0x0',
+                productCode: '0x0',
+                revisionNo: '0x0',
+                addedFrom: 'repository',
+                config: {},
+                cia402: { enabled: true, scaleNum: 1, scaleDenom: 1, scaleFactor: 1 },
+                channelInfo: [
+                  {
+                    channelId: 'c1',
+                    name: 'Controlword',
+                    direction: 'output',
+                    pdoIndex: '0x1600',
+                    entryIndex: '0x6040',
+                    entrySubIndex: '0x0',
+                    dataType: 'UINT',
+                    bitLen: 16,
+                    iecType: 'UINT',
+                  },
+                  {
+                    channelId: 'c2',
+                    name: 'Statusword',
+                    direction: 'input',
+                    pdoIndex: '0x1A00',
+                    entryIndex: '0x6041',
+                    entrySubIndex: '0x0',
+                    dataType: 'UINT',
+                    bitLen: 16,
+                    iecType: 'UINT',
+                  },
+                ],
+                channelMappings: [
+                  { channelId: 'c1', iecLocation: '%QW0' },
+                  { channelId: 'c2', iecLocation: '%IW0' },
+                ],
+              },
+            ],
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    }
+    const logger = collectLog()
+    const { projectData } = preprocessPous(project, false, logger.log)
+    // Bridge program + axis global generated; VAR_EXTERNAL injected into main.
+    expect(projectData.pous.some((p) => p.name === '__sm3_bridge')).toBe(true)
+    expect(
+      projectData.configurations.resource.globalVariables.some(
+        (g) => g.name === 'X_Axis' && g.type.value === 'AXIS_REF_SM3',
+      ),
+    ).toBe(true)
+    const main = projectData.pous.find((p) => p.name === 'main')!
+    expect(main.interface!.variables.some((v) => v.name === 'X_Axis' && v.class === 'external')).toBe(true)
+  })
 })

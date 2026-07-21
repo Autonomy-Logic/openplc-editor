@@ -387,8 +387,8 @@ const buildAddressSpace = (
 
 /**
  * Parse debug-map.json content into the uppercase-path → packed-addr
- * Map the resolver consumes. The same lookup table the debugger's
- * buildVariableIndexMap builds — single source of truth.
+ * Map the resolver consumes. The same path→address lookup table the
+ * debugger derives its index map from — single source of truth.
  *
  * Returns an empty Map on malformed/missing input; caller checks
  * `addressSpace.nodes.length > 0 && map.size === 0` to distinguish

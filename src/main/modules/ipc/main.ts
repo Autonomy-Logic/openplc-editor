@@ -21,6 +21,7 @@ import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -41,15 +42,15 @@ import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
-import { getOpenProjectPath, getProjectPath } from '../../../backend/editor/utils'
+import {
+  getOpenProjectPath,
+  getPlcopenExportSavePath,
+  getPlcopenImportFilePath,
+  getProjectPath,
+} from '../../../backend/editor/utils'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
-import {
-  createMd5UnavailableResult,
-  type DebuggerMd5VerificationResult,
-  isRecoverableMd5ReadError,
-} from '../debugger/md5-verification'
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -70,8 +71,20 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
-  private runtimeCredentials: { ipAddress: string; username: string; password: string } | null = null
-  private tokenRefreshInFlight: Promise<{ success: boolean; accessToken?: string; error?: string }> | null = null
+  // Address of the runtime this session is authenticated against. Captured at
+  // login so the token authority can re-authenticate against the same device.
+  private runtimeIp: string | null = null
+  // Single token authority for the editor: owns the access token + credentials
+  // and the refresh/retry-on-401 logic, shared byte-for-byte with the web app.
+  // Every runtime HTTP call (GET, POST, and the project upload) goes through it,
+  // so they all self-heal identically when the 15-min JWT expires.
+  private tokens = createRuntimeTokenManager({
+    login: async (credentials) => {
+      if (!this.runtimeIp) return { success: false, error: 'No runtime address configured' }
+      const result = await this.performAuthentication(this.runtimeIp, credentials.username, credentials.password)
+      return { success: result.success, token: result.accessToken, error: result.error }
+    },
+  })
   // Current project root path used to validate file-watcher IPC calls
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
@@ -108,6 +121,12 @@ class MainProcessBridge implements MainIpcModule {
     this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+
+    // When the token authority transparently refreshes an expired token, push
+    // the fresh token to the renderer so its store connection flag tracks it.
+    this.tokens.onTokenChanged((newToken) => {
+      this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
+    })
   }
 
   // ===================== RUNTIME API HANDLERS =====================
@@ -239,27 +258,12 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
     const result = await this.performAuthentication(ipAddress, username, password)
     if (result.success && result.accessToken) {
-      this.runtimeCredentials = { ipAddress, username, password }
+      // Hand the session to the token authority so it can transparently
+      // re-authenticate against this device when the token expires.
+      this.runtimeIp = ipAddress
+      this.tokens.setSession(result.accessToken, { username, password })
     }
     return result
-  }
-
-  private async attemptTokenRefresh(): Promise<{ success: boolean; accessToken?: string; error?: string }> {
-    if (this.tokenRefreshInFlight) {
-      return this.tokenRefreshInFlight
-    }
-
-    if (!this.runtimeCredentials) {
-      return { success: false, error: 'No stored credentials available for token refresh' }
-    }
-
-    const { ipAddress, username, password } = this.runtimeCredentials
-
-    this.tokenRefreshInFlight = this.performAuthentication(ipAddress, username, password).finally(() => {
-      this.tokenRefreshInFlight = null
-    })
-
-    return this.tokenRefreshInFlight
   }
 
   private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
@@ -291,50 +295,25 @@ class MainProcessBridge implements MainIpcModule {
 
   async makeRuntimeApiRequest<T = void>(
     ipAddress: string,
-    jwtToken: string,
     endpoint: string,
     responseParser?: (data: string) => T,
   ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    try {
-      const url = this.runtimeUrl(ipAddress, endpoint)
-      const res = await this.httpRequest({
-        method: 'GET',
-        url,
-        headers: { Authorization: `Bearer ${jwtToken}` },
-      })
-
-      if (res.statusCode === 200) {
-        return this.parseApiResponse(res.data, responseParser)
-      }
-
-      if (!this.isTokenExpiredError(res.statusCode, res.data)) {
-        return { success: false, error: res.data }
-      }
-
-      // Attempt token refresh and retry
-      const refreshResult = await this.attemptTokenRefresh()
-      if (!refreshResult.success || !refreshResult.accessToken) {
-        return {
-          success: false,
-          error: refreshResult.error ? `Token refresh failed: ${refreshResult.error}` : res.data,
+    // The token authority owns the live token + refresh.
+    type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
+    const url = this.runtimeUrl(ipAddress, endpoint)
+    const result = await this.tokens.withAuth<Raw>(
+      async (token) => {
+        try {
+          const res = await this.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${token}` } })
+          if (res.statusCode === 200) return this.parseApiResponse(res.data, responseParser)
+          return { success: false, error: res.data, statusCode: res.statusCode }
+        } catch (error) {
+          return { success: false, error: getErrorMessage(error) }
         }
-      }
-
-      this.mainWindow?.webContents?.send('runtime:token-refreshed', refreshResult.accessToken)
-
-      const retryRes = await this.httpRequest({
-        method: 'GET',
-        url,
-        headers: { Authorization: `Bearer ${refreshResult.accessToken}` },
-      })
-
-      if (retryRes.statusCode === 200) {
-        return this.parseApiResponse(retryRes.data, responseParser)
-      }
-      return { success: false, error: retryRes.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
+      },
+      (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+    )
+    return result.success ? result : { success: false, error: result.error }
   }
 
   /**
@@ -353,12 +332,12 @@ class MainProcessBridge implements MainIpcModule {
    */
   makeRuntimeApiPostRequest<T>(
     ipAddress: string,
-    jwtToken: string,
     endpoint: string,
     body: string,
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
+    // Token + refresh owned by the authority.
     type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
 
     const doRequest = (token: string): Promise<PostResult> => {
@@ -415,29 +394,90 @@ class MainProcessBridge implements MainIpcModule {
     const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
       r.success ? r : { success: false, error: r.error }
 
-    return doRequest(jwtToken).then((result) => {
-      const statusCode = !result.success ? result.statusCode : undefined
-      if (!result.success && this.isTokenExpiredError(statusCode, result.error)) {
-        return this.attemptTokenRefresh().then((refreshResult) => {
-          if (refreshResult.success && refreshResult.accessToken) {
-            if (this.mainWindow && this.mainWindow.webContents) {
-              this.mainWindow.webContents.send('runtime:token-refreshed', refreshResult.accessToken)
-            }
-            return doRequest(refreshResult.accessToken).then(stripStatus)
-          }
-          return { success: false as const, error: `Token refresh failed: ${refreshResult.error || 'Unknown error'}` }
-        })
-      }
-      return stripStatus(result)
-    })
+    return this.tokens
+      .withAuth<PostResult>(
+        (token) => doRequest(token),
+        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+      )
+      .then(stripStatus)
   }
 
-  handleRuntimeGetStatus = async (
-    _event: IpcMainInvokeEvent,
-    ipAddress: string,
-    jwtToken: string,
-    includeStats?: boolean,
-  ) => {
+  /**
+   * Upload a compiled program (multipart) to the runtime, going through the
+   * token authority so an expired token is transparently refreshed and the
+   * upload retried — the same self-healing every other runtime call gets. This
+   * is the path that previously had no refresh, so a long session's upload 401'd
+   * while status polling kept working.
+   */
+  makeRuntimeApiUpload(opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }): Promise<{ success: true; data: string } | { success: false; error: string }> {
+    type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
+    const header = Buffer.from(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
+        `Content-Type: ${opts.contentType}\r\n\r\n`,
+    )
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
+    const reqBody = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+    const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
+
+    const doRequest = (token: string): Promise<UploadResult> =>
+      new Promise((resolve) => {
+        const req = https.request(
+          {
+            hostname: opts.ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path,
+            method: 'POST',
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': reqBody.length,
+              Authorization: `Bearer ${token}`,
+            },
+            ...getRuntimeHttpsOptions(),
+          } as https.RequestOptions,
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              if (res.statusCode === 200) resolve({ success: true, data })
+              else resolve({ success: false, error: data || `HTTP ${res.statusCode}`, statusCode: res.statusCode })
+            })
+          },
+        )
+        req.setTimeout(300_000, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
+        })
+        req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
+        req.write(reqBody)
+        req.end()
+      })
+
+    return this.tokens
+      .withAuth<UploadResult>(
+        (token) => doRequest(token),
+        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+      )
+      .then((result) => {
+        if (result.success) {
+          opts.onUploadAccepted?.(result.data)
+          return { success: true as const, data: result.data }
+        }
+        return { success: false as const, error: result.error }
+      })
+  }
+
+  handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, includeStats?: boolean) => {
     try {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
@@ -473,7 +513,7 @@ class MainProcessBridge implements MainIpcModule {
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: TimingStatsResponse
-      }>(ipAddress, jwtToken, endpoint, (data: string) => {
+      }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
@@ -510,7 +550,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
       // Parse the body so the renderer can drive a retry-on-BUSY
       // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
@@ -518,7 +558,6 @@ class MainProcessBridge implements MainIpcModule {
       // upload).  See `backend/shared/library/start-plc-after-build.ts`.
       const result = await this.makeRuntimeApiRequest<{ status?: string }>(
         ipAddress,
-        jwtToken,
         '/api/start-plc',
         (data: string) => JSON.parse(data) as { status?: string },
       )
@@ -530,19 +569,18 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
-      return await this.makeRuntimeApiRequest(ipAddress, jwtToken, '/api/stop-plc')
+      return await this.makeRuntimeApiRequest(ipAddress, '/api/stop-plc')
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
-  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string) => {
+  handleRuntimeGetCompilationStatus = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
       const result = await this.makeRuntimeApiRequest<{ status: string; logs: string[]; exit_code: number | null }>(
         ipAddress,
-        jwtToken,
         '/api/compilation-status',
         (data: string) => {
           const response = JSON.parse(data) as { status: string; logs: string[]; exit_code: number | null }
@@ -555,12 +593,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, jwtToken: string, minId?: number) => {
+  handleRuntimeGetLogs = async (_event: IpcMainInvokeEvent, ipAddress: string, minId?: number) => {
     try {
       const endpoint = minId !== undefined ? `/api/runtime-logs?id=${minId}` : '/api/runtime-logs'
       const result = await this.makeRuntimeApiRequest<string | RuntimeLogEntry[]>(
         ipAddress,
-        jwtToken,
         endpoint,
         (data: string) => {
           const response = JSON.parse(data) as { 'runtime-logs': string | RuntimeLogEntry[] }
@@ -578,7 +615,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
-    this.runtimeCredentials = null
+    this.tokens.clear()
+    this.runtimeIp = null
     return { success: true }
   }
 
@@ -723,12 +761,10 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeGetSerialPorts = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<{ ports: Array<{ device: string; description?: string }> }>(
         ipAddress,
-        jwtToken,
         '/api/serial-ports',
         (data: string) => {
           const response = JSON.parse(data) as {
@@ -785,6 +821,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:save-file', this.handleFileSave)
     this.registerHandle('project:open-by-path', this.handleProjectOpenByPath)
     this.registerHandle('project:read-files', this.handleReadProjectFiles)
+    this.registerHandle('project:pick-plcopen-import-file', this.handlePickPlcopenImportFile)
+    this.registerHandle('project:export-plcopen-file', this.handleExportPlcopenFile)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -847,6 +885,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
+    this.registerHandle('packages:verify-signatures', this.handlePackagesVerifySignatures)
 
     // ===================== UTILITIES =====================
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
@@ -1011,6 +1050,36 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handlePickPlcopenImportFile = async (_event: IpcMainInvokeEvent) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPlcopenImportFilePath(windowManager)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error picking PLCopen import file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
+  handleExportPlcopenFile = async (_event: IpcMainInvokeEvent, defaultFileName: string, xml: string) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPlcopenExportSavePath(windowManager, defaultFileName, xml)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error exporting PLCopen file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
   // Pou-related handlers
   handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
     try {
@@ -1085,11 +1154,13 @@ class MainProcessBridge implements MainIpcModule {
       nativeTheme.themeSource = savedTheme
     }
 
+    const isWindowMaximized = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.isMaximized() : false
+
     return {
       OS: platform,
       architecture: 'x64',
       prefersDarkMode: nativeTheme.shouldUseDarkColors,
-      isWindowMaximized: this.mainWindow?.isMaximized(),
+      isWindowMaximized,
     }
   }
 
@@ -1317,7 +1388,11 @@ class MainProcessBridge implements MainIpcModule {
     this.simulatorModule.stop()
     this.mainWindow?.webContents.reload()
   }
-  handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
+  handleWindowRebuildMenu = () => {
+    void this.menuBuilder.buildMenu().catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
 
   // Hardware handlers
   handleHardwareGetAvailableCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
@@ -1386,6 +1461,16 @@ class MainProcessBridge implements MainIpcModule {
     }
     return result
   }
+  // Re-verify installed VPP signatures (invoked by the renderer when a project
+  // opens) and return the ids removed. If anything was dropped, notify the
+  // renderer so the board/device list refreshes via the existing subscription.
+  handlePackagesVerifySignatures = async (): Promise<string[]> => {
+    const removed = this.packageManagerModule.verifyInstalledSignatures()
+    if (removed.length > 0) {
+      this.mainWindow?.webContents.send('packages:boards-updated')
+    }
+    return removed
+  }
   handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
     this.packageManagerModule.getInstalledPackageManifest(packageId)
 
@@ -1428,7 +1513,13 @@ class MainProcessBridge implements MainIpcModule {
       jwtToken?: string
     },
     expectedMd5: string,
-  ): Promise<DebuggerMd5VerificationResult> => {
+  ): Promise<{
+    success: boolean
+    match?: boolean
+    targetMd5?: string
+    targetEndian?: 'le' | 'be'
+    error?: string
+  }> => {
     let client: ModbusTcpClient | ModbusRtuClient | null = null
     let wsClient: WebSocketDebugTransport | null = null
     try {
@@ -1442,13 +1533,7 @@ class MainProcessBridge implements MainIpcModule {
           serialPort: virtualPort,
         })
         await client.connect()
-        const md5ReadResult = await this.readTargetMd5(client)
-        if (md5ReadResult.unavailableResult) {
-          client.disconnect()
-          return md5ReadResult.unavailableResult
-        }
-
-        const { targetMd5, targetEndian } = md5ReadResult
+        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
         // Keep the client for subsequent debug operations
@@ -1472,13 +1557,7 @@ class MainProcessBridge implements MainIpcModule {
           wsClient = this.debuggerWebSocketClient
         }
 
-        const md5ReadResult = await this.readTargetMd5(wsClient)
-        if (md5ReadResult.unavailableResult) {
-          wsClient.disconnect()
-          return md5ReadResult.unavailableResult
-        }
-
-        const { targetMd5, targetEndian } = md5ReadResult
+        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
 
         const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1510,14 +1589,7 @@ class MainProcessBridge implements MainIpcModule {
           this.debuggerConnectionType === 'rtu' &&
           this.debuggerRtuPort === connectionParams.port
         ) {
-          const md5ReadResult = await this.readTargetMd5(this.debuggerModbusClient)
-          if (md5ReadResult.unavailableResult) {
-            this.debuggerModbusClient.disconnect()
-            this.debuggerModbusClient = null
-            return md5ReadResult.unavailableResult
-          }
-
-          const { targetMd5, targetEndian } = md5ReadResult
+          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
           const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
           return { success: true, match, targetMd5, targetEndian }
         }
@@ -1531,13 +1603,7 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       await client.connect()
-      const md5ReadResult = await this.readTargetMd5(client)
-      if (md5ReadResult.unavailableResult) {
-        client.disconnect()
-        return md5ReadResult.unavailableResult
-      }
-
-      const { targetMd5, targetEndian } = md5ReadResult
+      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
 
       const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 
@@ -1559,30 +1625,6 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
       }
-    }
-  }
-
-  private async readTargetMd5(client: ModbusTcpClient | ModbusRtuClient | WebSocketDebugTransport): Promise<
-    | {
-        targetMd5: string
-        targetEndian: 'le' | 'be'
-        unavailableResult?: never
-      }
-    | {
-        targetMd5?: never
-        targetEndian?: never
-        unavailableResult: DebuggerMd5VerificationResult
-      }
-  > {
-    try {
-      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
-      return { targetMd5, targetEndian }
-    } catch (error) {
-      if (isRecoverableMd5ReadError(error)) {
-        return { unavailableResult: createMd5UnavailableResult() }
-      }
-
-      throw error
     }
   }
 
@@ -1981,12 +2023,10 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetInterfaces = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<{ interfaces: NetworkInterface[] }>(
         ipAddress,
-        jwtToken,
         '/api/discovery/interfaces',
         (data: string) => {
           const response = JSON.parse(data) as { status: string; interfaces: NetworkInterface[] }
@@ -2006,12 +2046,10 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetStatus = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATServiceStatusResponse; error?: string }> => {
     try {
       const result = await this.makeRuntimeApiRequest<EtherCATServiceStatusResponse>(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/status',
         (data: string) => {
           const parsed = JSON.parse(data) as unknown
@@ -2039,7 +2077,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATScan = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     scanRequest: EtherCATScanRequest,
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> => {
     try {
@@ -2052,7 +2089,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/plugin-command',
         postData,
         (data: string) => {
@@ -2081,7 +2117,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATTest = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     testRequest: EtherCATTestRequest,
   ): Promise<{ success: boolean; data?: EtherCATTestResponse; error?: string }> => {
     try {
@@ -2090,7 +2125,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/test',
         postData,
         (data: string) => JSON.parse(data) as EtherCATTestResponse,
@@ -2109,7 +2143,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATValidate = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
     validateRequest: EtherCATValidateRequest,
   ): Promise<{ success: boolean; data?: EtherCATValidateResponse; error?: string }> => {
     try {
@@ -2117,7 +2150,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/discovery/ethercat/validate',
         postData,
         (data: string) => JSON.parse(data) as EtherCATValidateResponse,
@@ -2135,7 +2167,6 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATGetRuntimeStatus = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    jwtToken: string,
   ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> => {
     try {
       const postData = JSON.stringify({
@@ -2145,7 +2176,6 @@ class MainProcessBridge implements MainIpcModule {
 
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
-        jwtToken,
         '/api/plugin-command',
         postData,
         (data: string) => {

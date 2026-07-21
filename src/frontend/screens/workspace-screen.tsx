@@ -55,6 +55,7 @@ import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
+import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
 import { toast } from '../utils/toast'
 
 const WorkspaceScreen = () => {
@@ -69,6 +70,7 @@ const WorkspaceScreen = () => {
     useCallback((s) => s.workspaceActions, []),
   )
   const { setAvailableOptions } = useOpenPLCStore(useCallback((s) => s.deviceActions, []))
+  const addLog = useOpenPLCStore(useCallback((s) => s.consoleActions.addLog, []))
 
   // RARE: UI state (changes on user interaction, not during debug polling)
   const tabs = useOpenPLCStore(useCallback((s) => s.tabs, []))
@@ -145,66 +147,79 @@ const WorkspaceScreen = () => {
   // for now — git-on-library is plausible but out of scope and
   // would re-introduce the same UI churn we just removed.
   const hasVersionControl = capabilities.hasVersionControl && projectCaps.hasVersionControl
-  const sourceControlPanelRef = useRef<ImperativePanelHandle | null>(null)
-  const [leftPanelSize, setLeftPanelSize] = useState(16)
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
 
   // Build debug variables from POUs with debug=true
-  const allDebugVariables = useMemo(
-    () =>
-      pous.flatMap((pou) => {
-        const variables = pou.interface?.variables ?? []
-        return variables
-          .filter((v) => v.debug === true)
-          .map((v) => {
-            let typeValue = ''
-            if (v.type.definition === 'base-type') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'user-data-type') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'array') {
-              typeValue = v.type.value
-            } else if (v.type.definition === 'derived') {
-              typeValue = v.type.value
-            }
+  const allDebugVariables = useMemo(() => {
+    const rows = pous.flatMap((pou) => {
+      const variables = pou.interface?.variables ?? []
+      return variables
+        .filter((v) => v.debug === true)
+        .map((v) => {
+          let typeValue = ''
+          if (v.type.definition === 'base-type') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'user-data-type') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'array') {
+            typeValue = v.type.value
+          } else if (v.type.definition === 'derived') {
+            typeValue = v.type.value
+          }
 
+          let compositeKey: string
+          let displayName: string
+          let rowPouName = pou.name
+          if (v.class === 'external') {
+            // A VAR_EXTERNAL points at one shared global. Give it the canonical,
+            // POU/instance-independent identity used by the debug tree + poller so
+            // it resolves the global's value and every reference collapses to a
+            // single `Config0.<name>` watch (deduped below).
+            compositeKey = buildGlobalCompositeKey(v.name)
+            displayName = `${GLOBAL_CONFIG_NAME}.${v.name}`
+            rowPouName = GLOBAL_CONFIG_NAME
+          } else if (pou.pouType === 'function-block') {
             // For function block POUs, transform the key to use instance context
-            let compositeKey: string
-            let displayName: string
-            if (pou.pouType === 'function-block') {
-              const fbTypeKey = pou.name.toUpperCase()
-              const selectedKey = fbSelectedInstance.get(fbTypeKey)
-              const instances = fbDebugInstances.get(fbTypeKey) ?? []
-              const selectedInstance = instances.find((inst) => inst.key === selectedKey)
+            const fbTypeKey = pou.name.toUpperCase()
+            const selectedKey = fbSelectedInstance.get(fbTypeKey)
+            const instances = fbDebugInstances.get(fbTypeKey) ?? []
+            const selectedInstance = instances.find((inst) => inst.key === selectedKey)
 
-              if (selectedInstance) {
-                compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
-                displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
-              } else {
-                compositeKey = `${pou.name}:${v.name}`
-                displayName = v.name
-              }
+            if (selectedInstance) {
+              compositeKey = `${selectedInstance.programName}:${selectedInstance.fbVariableName}.${v.name}`
+              displayName = `${selectedInstance.programName}.${selectedInstance.fbVariableName}.${v.name}`
             } else {
               compositeKey = `${pou.name}:${v.name}`
               displayName = v.name
             }
+          } else {
+            compositeKey = `${pou.name}:${v.name}`
+            displayName = v.name
+          }
 
-            const variableValue = debugBoolValues.get(compositeKey) ?? debugNonBoolValues.get(compositeKey)
-            const displayValue = variableValue !== undefined ? variableValue : '-'
+          const variableValue = debugBoolValues.get(compositeKey) ?? debugNonBoolValues.get(compositeKey)
+          const displayValue = variableValue !== undefined ? variableValue : '-'
 
-            return {
-              pouName: pou.name,
-              name: displayName,
-              type: typeValue,
-              value: displayValue,
-              compositeKey,
-            }
-          })
-      }),
-    [pous, debugBoolValues, debugNonBoolValues, fbSelectedInstance, fbDebugInstances],
-  )
+          return {
+            pouName: rowPouName,
+            name: displayName,
+            type: typeValue,
+            value: displayValue,
+            compositeKey,
+          }
+        })
+    })
+
+    // Collapse duplicates by composite key — a global referenced via VAR_EXTERNAL
+    // from several POUs (and mirrored by the debug-flag sync) yields one row.
+    const byKey = new Map<string, (typeof rows)[number]>()
+    for (const row of rows) {
+      if (!byKey.has(row.compositeKey)) byKey.set(row.compositeKey, row)
+    }
+    return Array.from(byKey.values())
+  }, [pous, debugBoolValues, debugNonBoolValues, fbSelectedInstance, fbDebugInstances])
 
   // Deduplicate names with POU prefix when conflicts exist
   const debugVariables = useMemo(() => {
@@ -310,7 +325,7 @@ const WorkspaceScreen = () => {
   } & ImperativePanelHandle
 
   const panelRef = useRef<ImperativePanelHandle | null>(null)
-  const explorerPanelRef = useRef<PanelMethods | null>(null)
+  const leftPanelRef = useRef<PanelMethods | null>(null)
   const workspacePanelRef = useRef<PanelMethods | null>(null)
   const consolePanelRef = useRef<PanelMethods | null>(null)
   const [activeTab, setActiveTab] = useState('console')
@@ -347,7 +362,7 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
-    ;[explorerPanelRef, workspacePanelRef, consolePanelRef, sourceControlPanelRef].forEach((ref) => {
+    ;[leftPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
       if (ref.current && typeof ref.current[action] === 'function') {
         ref.current[action]()
       }
@@ -417,6 +432,31 @@ const WorkspaceScreen = () => {
     }
   }, [packagesPort, device, setAvailableOptions])
 
+  // Desktop security safeguard: whenever a project opens, re-verify the
+  // signatures of every installed VPP package and drop any that no longer
+  // validate (a locally-crafted/unsigned .vpp can bypass the signed import
+  // flow). Each removal is surfaced as a WARNING in the console panel; the
+  // main process emits `packages:boards-updated` on removal, so the board
+  // list refreshes via the subscription above. On web `packagesPort` is
+  // undefined (packages are backend-provided), so this is a no-op.
+  useEffect(() => {
+    if (!packagesPort || !projectPath) return
+    let cancelled = false
+    void packagesPort.verifyInstalledSignatures().then((removed) => {
+      if (cancelled) return
+      for (const packageId of removed) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message: `Removed untrusted VPP package "${packageId}": its signature is missing or invalid.`,
+        })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [packagesPort, projectPath, addLog])
+
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-brand-dark dark:bg-neutral-950'>
       <div className='flex min-h-0 flex-1 overflow-hidden'>
@@ -431,13 +471,7 @@ const WorkspaceScreen = () => {
               hasVersionControl
                 ? {
                     isActive: activePanel === 'explorer',
-                    onClick: () => {
-                      if (activePanel !== 'explorer') {
-                        const size = sourceControlPanelRef.current?.getSize()
-                        if (size) setLeftPanelSize(size)
-                      }
-                      setActivePanel('explorer')
-                    },
+                    onClick: () => setActivePanel('explorer'),
                   }
                 : undefined
             }
@@ -446,13 +480,7 @@ const WorkspaceScreen = () => {
                 ? {
                     isActive: activePanel === 'source-control',
                     pendingCount: pendingChangesCount,
-                    onClick: () => {
-                      if (activePanel !== 'source-control') {
-                        const size = explorerPanelRef.current?.getSize()
-                        if (size) setLeftPanelSize(size)
-                      }
-                      setActivePanel('source-control')
-                    },
+                    onClick: () => setActivePanel('source-control'),
                   }
                 : undefined
             }
@@ -464,15 +492,26 @@ const WorkspaceScreen = () => {
             direction='horizontal'
             className='relative flex h-full w-full'
           >
-            {hasVersionControl && activePanel === 'source-control' ? (
-              <SourceControlPanel
-                collapse={sourceControlPanelRef}
-                defaultSize={leftPanelSize}
-                projectId={projectPath}
-              />
-            ) : (
-              <Explorer collapse={explorerPanelRef} defaultSize={leftPanelSize} />
-            )}
+            {/* The left panel must stay mounted across context switches: swapping
+                the ResizablePanel itself makes react-resizable-panels rebuild the
+                layout from defaultSize and re-normalize, growing the sidebar on
+                every switch. Only the children swap. */}
+            <ResizablePanel
+              ref={leftPanelRef}
+              id='leftPanel'
+              order={1}
+              collapsible={true}
+              minSize={13}
+              defaultSize={16}
+              maxSize={80}
+              className="flex h-full w-full max-w-lg flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
+            >
+              {hasVersionControl && activePanel === 'source-control' ? (
+                <SourceControlPanel projectId={projectPath} />
+              ) : (
+                <Explorer />
+              )}
+            </ResizablePanel>
             <ResizableHandle
               id='workspaceHandle'
               hitAreaMargins={{ coarse: 12, fine: 3 }}

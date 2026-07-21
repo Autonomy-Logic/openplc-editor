@@ -119,3 +119,27 @@ export function isBaseTypeName(name: string): boolean {
  * spelling we want to see in UI dropdowns and emit in PLCopen XML.
  */
 export const BASE_TYPE_NAMES: readonly string[] = IEC_BASE_TYPES.map((t) => t.name)
+
+/**
+ * Reverse index of {@link IEC_BASE_TYPES}, keyed by the literal PLCopen XML
+ * element name (`t.xml.elementName` — e.g. `BOOL`, `string`), for the
+ * PLCopen XML importer (frontend/utils/PLC/xml-parser/type-xml.ts). Element
+ * names are unique across the registry (case-sensitive, mixed-case by
+ * design — see `baseTypeTag`), so no collision handling is needed.
+ */
+const XML_ELEMENT_INDEX: ReadonlyMap<string, IECTypeMetadata> = (() => {
+  const m = new Map<string, IECTypeMetadata>()
+  for (const t of IEC_BASE_TYPES) m.set(t.xml.elementName, t)
+  return m
+})()
+
+/**
+ * Resolve a PLCopen XML element name (e.g. `BOOL`, `string`) back to its
+ * IEC type metadata. Case-sensitive — unlike `lookupBaseType`, callers here
+ * already have the exact tag fast-xml-parser handed them, and PLCopen XML
+ * element names are case-significant (`<string>` vs `<STRING>` are not
+ * interchangeable — xml2st rejects the latter).
+ */
+export function lookupBaseTypeByXmlElement(elementName: string): IECTypeMetadata | undefined {
+  return XML_ELEMENT_INDEX.get(elementName)
+}

@@ -149,9 +149,9 @@ describe('createEditorCompilerPlatformPort', () => {
       cleanBuild: false,
       mainProcessBridge: {
         makeRuntimeApiRequest: jest.fn(),
+        makeRuntimeApiUpload: jest.fn(),
       },
       compressSourceFolder: jest.fn(),
-      sendRuntimeUpload: jest.fn(),
       pollTimeoutMs: 1000,
       pollIntervalMs: 10,
       startTimeoutMs: 1000,
@@ -321,7 +321,7 @@ describe('createEditorCompilerPlatformPort', () => {
     })) as unknown as EditorCompilerPlatformPortContext['mainProcessBridge']['makeRuntimeApiRequest']
     const port = createEditorCompilerPlatformPort(
       makeHandlers(),
-      makeContext({ mainProcessBridge: { makeRuntimeApiRequest } }),
+      makeContext({ mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload: jest.fn() } }),
     )
     const result = await port.checkRuntimeVersion(
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
@@ -338,7 +338,7 @@ describe('createEditorCompilerPlatformPort', () => {
     const log = jest.fn()
     const port = createEditorCompilerPlatformPort(
       makeHandlers(),
-      makeContext({ mainProcessBridge: { makeRuntimeApiRequest } }),
+      makeContext({ mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload: jest.fn() } }),
     )
     const result = await port.checkRuntimeVersion(
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
@@ -355,7 +355,7 @@ describe('createEditorCompilerPlatformPort', () => {
     const log = jest.fn()
     const port = createEditorCompilerPlatformPort(
       makeHandlers(),
-      makeContext({ mainProcessBridge: { makeRuntimeApiRequest } }),
+      makeContext({ mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload: jest.fn() } }),
     )
     const result = await port.checkRuntimeVersion(
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },

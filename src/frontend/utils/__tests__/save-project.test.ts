@@ -97,6 +97,220 @@ describe('sanitizePou', () => {
 })
 
 // ---------------------------------------------------------------------------
+// graphical node sanitization (via sanitizePou → stripGraphicalSelections)
+// ---------------------------------------------------------------------------
+
+describe('graphical node sanitization', () => {
+  const makeLdPou = (nodes: unknown[], rungExtras?: Record<string, unknown>): PLCPou =>
+    ({
+      name: 'MyLadder',
+      pouType: 'program',
+      interface: { variables: [] },
+      body: {
+        language: 'ld',
+        value: {
+          name: 'MyLadder',
+          rungs: [{ id: 'rung-1', nodes, edges: [], selectedNodes: [{ id: 'ghost' }], ...rungExtras }],
+        },
+      },
+      documentation: '',
+    }) as unknown as PLCPou
+
+  it('clears selection state and resets selectedNodes on LD rungs', () => {
+    const pou = makeLdPou([{ id: 'n1', selected: true, dragging: true, draggable: true, data: { draggable: true } }])
+    const value = sanitizePou(pou, undefined).body.value as {
+      rungs: { selectedNodes: unknown[]; nodes: Record<string, unknown>[] }[]
+    }
+    expect(value.rungs[0].selectedNodes).toEqual([])
+    expect(value.rungs[0].nodes[0].selected).toBe(false)
+    expect(value.rungs[0].nodes[0].dragging).toBe(false)
+  })
+
+  it('strips the hasDivergence render decoration from LD node data', () => {
+    const pou = makeLdPou([
+      { id: 'n1', draggable: true, data: { draggable: true, hasDivergence: false, variable: { name: 'X' } } },
+    ])
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { nodes: { data: Record<string, unknown> }[] }[] }
+    expect('hasDivergence' in value.rungs[0].nodes[0].data).toBe(false)
+    expect(value.rungs[0].nodes[0].data.variable).toEqual({ name: 'X' })
+  })
+
+  it('normalizes top-level draggable to the design-time data.draggable', () => {
+    const pou = makeLdPou([
+      { id: 'locked', draggable: false, data: { draggable: true } },
+      { id: 'rail', draggable: true, data: { draggable: false } },
+      { id: 'no-data' },
+    ])
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { nodes: Record<string, unknown>[] }[] }
+    expect(value.rungs[0].nodes[0].draggable).toBe(true)
+    expect(value.rungs[0].nodes[1].draggable).toBe(false)
+    expect(value.rungs[0].nodes[2].draggable).toBe(false)
+    expect('data' in value.rungs[0].nodes[2]).toBe(false)
+  })
+
+  it('leaves non-array LD rung nodes untouched', () => {
+    const pou = makeLdPou([], {})
+    ;(pou.body.value as { rungs: Record<string, unknown>[] }).rungs[0].nodes = 'not-an-array'
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { nodes: unknown }[] }
+    expect(value.rungs[0].nodes).toBe('not-an-array')
+  })
+
+  it('sanitizes FBD rung nodes the same way', () => {
+    const pou = {
+      name: 'MyFbd',
+      pouType: 'program',
+      interface: { variables: [] },
+      body: {
+        language: 'fbd',
+        value: {
+          name: 'MyFbd',
+          rung: {
+            nodes: [
+              {
+                id: 'n1',
+                selected: true,
+                dragging: true,
+                draggable: false,
+                data: { draggable: true, hasDivergence: true },
+              },
+            ],
+            edges: [],
+            selectedNodes: [{ id: 'ghost' }],
+          },
+        },
+      },
+      documentation: '',
+    } as unknown as PLCPou
+    const value = sanitizePou(pou, undefined).body.value as {
+      rung: {
+        selectedNodes: unknown[]
+        nodes: { selected: boolean; dragging: boolean; draggable: boolean; data: Record<string, unknown> }[]
+      }
+    }
+    expect(value.rung.selectedNodes).toEqual([])
+    expect(value.rung.nodes[0].selected).toBe(false)
+    expect(value.rung.nodes[0].dragging).toBe(false)
+    expect(value.rung.nodes[0].draggable).toBe(true)
+    expect('hasDivergence' in value.rung.nodes[0].data).toBe(false)
+  })
+
+  it('returns the POU unchanged when the graphical body value is missing', () => {
+    const pou = {
+      name: 'Empty',
+      pouType: 'program',
+      interface: { variables: [] },
+      body: { language: 'ld', value: undefined },
+      documentation: '',
+    } as unknown as PLCPou
+    expect(sanitizePou(pou, undefined)).toBe(pou)
+  })
+
+  it('preserves LD rung edge order (layout algorithms may be order-sensitive)', () => {
+    const edges = [
+      { id: 'e_charlie', source: 'c', target: 'd' },
+      { id: 'e_alpha', source: 'a', target: 'b' },
+      { id: 'e_bravo', source: 'b', target: 'c' },
+    ]
+    const pou = makeLdPou([], { edges })
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { edges: { id: string }[] }[] }
+    expect(value.rungs[0].edges.map((e) => e.id)).toEqual(['e_charlie', 'e_alpha', 'e_bravo'])
+  })
+
+  it('canonicalizes reactFlowViewport from node content bounds', () => {
+    const pou = makeLdPou(
+      [{ id: 'n1', position: { x: 200, y: 10 }, width: 100, height: 60, draggable: true, data: { draggable: true } }],
+      { defaultBounds: [100, 50], reactFlowViewport: [999, 999] },
+    )
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    // bounds include the synthetic 150x40 origin node: maxX=300, maxY=70 -> [300, 70+20]
+    expect(value.rungs[0].reactFlowViewport).toEqual([300, 90])
+  })
+
+  it('floors the canonical viewport at defaultBounds', () => {
+    const pou = makeLdPou(
+      [{ id: 'n1', position: { x: 10, y: 10 }, width: 10, height: 10, draggable: true, data: { draggable: true } }],
+      { defaultBounds: [800, 200], reactFlowViewport: [123, 456] },
+    )
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    expect(value.rungs[0].reactFlowViewport).toEqual([800, 220])
+  })
+
+  it('prefers measured dimensions over declared width/height for the viewport', () => {
+    const pou = makeLdPou(
+      [
+        {
+          id: 'n1',
+          position: { x: 400, y: 0 },
+          width: 999,
+          height: 999,
+          measured: { width: 50, height: 30 },
+          draggable: true,
+          data: { draggable: true },
+        },
+      ],
+      { defaultBounds: [10, 10], reactFlowViewport: [1, 1] },
+    )
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    expect(value.rungs[0].reactFlowViewport).toEqual([450, 60])
+  })
+
+  it('passes the stored viewport through when the rung has no defaultBounds', () => {
+    const pou = makeLdPou([], { reactFlowViewport: [111, 222] })
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    expect(value.rungs[0].reactFlowViewport).toEqual([111, 222])
+  })
+
+  it('expands the viewport for negative positions and tolerates nodes without geometry', () => {
+    const pou = makeLdPou(
+      [
+        { id: 'neg', position: { x: -50, y: -30 }, width: 10, height: 10, draggable: true, data: { draggable: true } },
+        { id: 'bare', draggable: true, data: { draggable: true } },
+      ],
+      { defaultBounds: [10, 10], reactFlowViewport: [1, 1] },
+    )
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    // minX=-50, minY=-30; max bounds stay at the synthetic 150x40 -> [200, 70+20]
+    expect(value.rungs[0].reactFlowViewport).toEqual([200, 90])
+  })
+
+  it('treats non-numeric defaultBounds entries as zero for the viewport floor', () => {
+    const pou = makeLdPou(
+      [{ id: 'n1', position: { x: 0, y: 0 }, width: 10, height: 10, draggable: true, data: { draggable: true } }],
+      { defaultBounds: ['not-a-number', null], reactFlowViewport: [9, 9] },
+    )
+    const value = sanitizePou(pou, undefined).body.value as { rungs: { reactFlowViewport: number[] }[] }
+    // Floors collapse to 0 -> pure content bounds (synthetic origin node 150x40).
+    expect(value.rungs[0].reactFlowViewport).toEqual([150, 60])
+  })
+
+  it('leaves non-array FBD rung nodes untouched', () => {
+    const pou = {
+      name: 'MyFbd',
+      pouType: 'program',
+      interface: { variables: [] },
+      body: {
+        language: 'fbd',
+        value: { name: 'MyFbd', rung: { nodes: 'not-an-array', edges: [], selectedNodes: [] } },
+      },
+      documentation: '',
+    } as unknown as PLCPou
+    const value = sanitizePou(pou, undefined).body.value as { rung: { nodes: unknown } }
+    expect(value.rung.nodes).toBe('not-an-array')
+  })
+
+  it('returns the POU unchanged when an LD body has no rungs array', () => {
+    const pou = {
+      name: 'NoRungs',
+      pouType: 'program',
+      interface: { variables: [] },
+      body: { language: 'ld', value: { name: 'NoRungs' } },
+      documentation: '',
+    } as unknown as PLCPou
+    expect(sanitizePou(pou, undefined)).toBe(pou)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // collectDebugVariables
 // ---------------------------------------------------------------------------
 

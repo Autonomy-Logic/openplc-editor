@@ -269,7 +269,7 @@ describe('ladderToXml (old-editor)', () => {
     expect(result.body.LD.coil[0].variable).toBe('A')
   })
 
-  it('skips variable nodes with empty name', () => {
+  it('still emits variable nodes with empty name (E1 fix — connections may already reference their localId)', () => {
     const rung = makeRung({
       nodes: [
         makeLeftRail() as unknown as Node,
@@ -298,7 +298,8 @@ describe('ladderToXml (old-editor)', () => {
       ],
     })
     const result = ladderToXml([rung])
-    expect(result.body.LD.inVariable).toHaveLength(0)
+    expect(result.body.LD.inVariable).toHaveLength(1)
+    expect(result.body.LD.inVariable[0]['@localId']).toBe('30')
     expect(result.body.LD.outVariable).toHaveLength(0)
   })
 

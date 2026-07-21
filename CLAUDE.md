@@ -39,7 +39,7 @@ src/
 ├── main/                  # Electron main process (Node.js)
 ├── frontend/              # React UI layer (renderer process)
 │   ├── components/        # Atomic Design: _atoms, _molecules, _organisms, _features, _templates
-│   ├── store/             # Zustand store (19 slices)
+│   ├── store/             # Zustand store (18 slices)
 │   ├── hooks/             # Custom React hooks
 │   ├── services/          # Business logic and side effects
 │   ├── utils/             # Domain utilities (PLC, graphical, debug, formatters)
@@ -47,7 +47,7 @@ src/
 │   ├── locales/           # i18next translations
 │   └── assets/            # Images, icons
 ├── backend/
-│   ├── editor/            # Main process modules (compiler, hardware, modbus, websocket, services)
+│   ├── editor/            # Main process modules (compiler, hardware, modbus, ethercat, library-manager, services)
 │   └── shared/            # Platform-agnostic utilities (XML generation, project parsing, simulator)
 ├── middleware/             # Ports & Adapters layer
 │   ├── shared/
@@ -131,7 +131,7 @@ Main and renderer processes communicate through typed IPC bridges:
 
 ### State Management (Zustand)
 
-Single store composed of 19 slices (`src/frontend/store/`), accessed via auto-generated selector hooks:
+Single store composed of 18 slices (`src/frontend/store/`), accessed via auto-generated selector hooks:
 
 ```typescript
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -160,7 +160,7 @@ const createPou = useOpenPLCStore((s) => s.projectActions.createPou)
 | `console` | Log output |
 | `library` | System + user function block libraries |
 | `file` | File save states (dirty tracking) |
-| `ai`, `clipboard`, `history`, `modal`, `search`, `shared`, `version-control`, `webrtc` | Supporting features |
+| `ai`, `history`, `modal`, `readme`, `search`, `shared`, `version-control`, `webrtc` | Supporting features |
 
 **Conventions:**
 - Actions are grouped under a `*Actions` namespace (e.g., `projectActions`, `deviceActions`)
@@ -217,7 +217,7 @@ Structured Text is generated in-process by the TS transpiler
 legacy `xml2st` binary path has been retired. `XmlGenerator` is kept only for
 the "Export Project as XML" feature.
 
-Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `/resources/sources/boards/hals.json`.
+Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 ### Debugging
 
@@ -246,8 +246,21 @@ When adding new code to covered directories, you must add corresponding tests to
 - ESLint flat config (`eslint.config.mjs`) with TypeScript strict type checking
 - Prettier: 120 char width, no semicolons, single quotes, trailing commas
 - Import sorting enforced via `simple-import-sort` plugin
-- Pre-commit hooks via Husky run lint-staged on `./src/**/*`
+- Pre-commit hooks via Husky run lint-staged on `./src/**/*.{ts,tsx}`
 - Path alias: `@root/*` -> `./src/*`
+
+### TypeScript Best Practices
+
+- No type assertions: `as` hides real type errors — fix the type at the source or narrow with type guards. `as const` is fine; `as unknown as T` is forbidden.
+- No non-null assertions (`!`): handle the undefined case or narrow explicitly.
+- For truly unknown data use `unknown` and narrow before use — never `any`.
+- No `@ts-ignore`/`@ts-expect-error` without a one-line justification.
+- Validate external data at the boundary (IPC payloads, project files, downloaded binaries metadata) with schemas (zod) or type guards instead of casting.
+- No floating promises: `await` or handle rejection explicitly — async errors must not disappear.
+- Prefer `??` over `||` for defaults when `0`, `''`, or `false` are valid values.
+- Model variant states as discriminated unions; make `switch` exhaustive with a `never` check.
+- Named exports over default exports.
+- Zustand state changes only through slice actions — never mutate store values from components.
 
 ## Key Technologies
 
@@ -267,6 +280,27 @@ When adding new code to covered directories, you must add corresponding tests to
 - **serialport** for serial communication
 
 ## Important Patterns
+
+### When bumping the app version:
+`APP_VERSION` in `src/frontend/data/constants/app-version.ts` is the **single
+source of truth** for the human-facing version, shared **byte-for-byte** between
+openplc-editor and openplc-web (enforced by the mirror gate / `compare-surfaces.py`).
+The About modal renders it directly; the web build writes it into `version.json`.
+
+**Bump `APP_VERSION` — never `package.json` alone.** Make the identical one-line
+edit in BOTH repos, and set `package.json.version` to the same value in both so
+they can't drift. Roles: `APP_VERSION` is what the user sees in the About dialog;
+`package.json.version` is what electron-builder stamps on the desktop binary and
+what the release tag `vX.Y.Z` must match. Bumping only `package.json` leaves the
+About dialog stuck on the old version — **this mistake shipped 4.2.7 and 4.2.8
+with About still showing 4.2.6.** If the two ever disagree, `APP_VERSION` is
+authoritative; fix it to match.
+
+Release order: bump `APP_VERSION` + `package.json` (both repos, same value) → PR
+to `development` → merge → promote `development`→`main` on both → tag `vX.Y.Z` on
+the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploys
+on its `main` push. (Ideally `package.json.version` should be derived from
+`APP_VERSION` in the release workflow so a single bump can never drift.)
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
@@ -295,7 +329,7 @@ When adding new code to covered directories, you must add corresponding tests to
 
 ### IEC address allocation + alias registry
 
-Located in `src/backend/shared/utils/iec-address/` (byte-identical on
+Located in `src/middleware/shared/utils/iec-address/` (byte-identical on
 openplc-web). Pure functions, no IPC, no electron coupling.
 
 - **Address pool** (`address-pool.ts`): producer-only, target-scoped
@@ -309,24 +343,43 @@ openplc-web). Pure functions, no IPC, no electron coupling.
     replaces the old `generateIecAddress` helper. Pass `alsoUsed` for
     in-flight allocations within a batch.
 - **Alias registry** (`alias-registry.ts`): derived index on top of
-  the pool. `byAlias` / `byAddress` maps plus `duplicateAliases`
-  (first-wins). Pure function — rebuild on demand, cost is
-  O(producers).
-- **Variable sync** (`sync-variable-aliases.ts`): pure function that
-  walks variables and either adopts (no alias bound but address
-  matches), refreshes (alias address moved), or orphans (alias gone).
-  Called from every producer-mutation site, target switch,
-  project load, and pre-compile via the
-  `projectActions.syncVariableAliases()` store action.
+  the pool. `byAlias` map plus `duplicateAliases` (first-wins). Pure
+  function — rebuild on demand, cost is O(producers).
+- **Compile-time resolution** (`registry/resolve.ts`): a variable's
+  `location` holds EITHER an alias name OR a literal `%addr`
+  (single-field model). `buildAliasIndex(registry)` builds the
+  `alias → address` map; `resolveLocation(field, index)` resolves a
+  variable's `location` for the compiler:
+  - literal `%…` → used verbatim (manual locations honoured exactly);
+  - alias that still exists → its current address;
+  - alias that is gone → `''` (variable becomes unlocated).
+  The compiler/runtime never see aliases: the editor resolves them in
+  a pre-compile snapshot via the
+  `projectActions.getCompileReadyProjectData()` store action. When a
+  producer alias is renamed, `projectActions.renameAlias(old, new)`
+  cascades onto every bound variable's `location`.
 
-The variable cell renders `alias ?? location` and shows an amber
-warning glyph + tooltip when the alias is orphaned. Aliases are
-intended to be unique system-wide; the registry's
-`isAliasNameAvailable(name, ignoring?)` is the system-wide validator.
+The variable cell renders `location` verbatim — the alias name when
+alias-bound, the `%addr` when a manual literal — and shows an amber
+warning glyph + tooltip when an alias-bound location no longer resolves
+(orphaned) or when a manual `%addr` collides with an alias another
+project variable is bound to (duplicate-location risk). Aliases are
+intended to be unique system-wide; every IO-mapping / pin /
+remote-device editor calls the registry's
+`validateAliasEdit(registry, name, ignoring)` gate before persisting a
+new alias.
 
 ## Environment
 
-- **Node.js:** >= 20.x < 24
+- **Node.js:** >= 22.x < 24
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
+
+## Git Workflow
+
+Follow the Workflow section in CONTRIBUTING.md (base branch, branch naming, Conventional Commits). `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`.
+
+## Issue Tracker
+
+Jira, project key `DOPE`. Fetch and update tickets via the Atlassian MCP tools. Reference the ticket key (`DOPE-<n>`) in branch names and PR descriptions. GitHub Issues (`.github/ISSUE_TEMPLATE/`) receives external bug reports; planned work lives in Jira.

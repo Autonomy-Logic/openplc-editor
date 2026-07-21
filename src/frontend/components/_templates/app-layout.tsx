@@ -12,6 +12,7 @@ import AboutModal from '../_organisms/about-modal'
 import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal } from '../_organisms/modals'
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
+import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
@@ -49,14 +50,23 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   // System initialization
   useEffect(() => {
     const initSystem = async () => {
-      const sysInfo = await system.getSystemInfo()
-      setSystemConfigs({
-        OS: sysInfo.OS,
-        arch: sysInfo.architecture,
-        isWindowMaximized: sysInfo.isWindowMaximized,
-      })
-      const recent = await projectPort.getRecentProjects()
-      setRecent(recent)
+      try {
+        const sysInfo = await system.getSystemInfo()
+        setSystemConfigs({
+          OS: sysInfo.OS,
+          arch: sysInfo.architecture,
+          isWindowMaximized: sysInfo.isWindowMaximized,
+        })
+      } catch (error) {
+        console.error('Failed to read system info during app layout initialization:', error)
+      }
+
+      try {
+        const recent = await projectPort.getRecentProjects()
+        setRecent(recent)
+      } catch (error) {
+        console.error('Failed to read recent projects during app layout initialization:', error)
+      }
     }
     void initSystem()
   }, [system, projectPort, setSystemConfigs, setRecent])
@@ -116,6 +126,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           )}
           {modals?.['confirm-delete-project']?.open === true && (
             <ConfirmDeleteProjectModal isOpen={modals['confirm-delete-project'].open} />
+          )}
+          {modals?.['confirm-plcopen-import']?.open === true && (
+            <ConfirmPlcopenImportModal isOpen={modals['confirm-plcopen-import'].open} />
           )}
           {modals?.['quit-application']?.open === true && (
             <QuitApplicationModal isOpen={modals['quit-application'].open} />

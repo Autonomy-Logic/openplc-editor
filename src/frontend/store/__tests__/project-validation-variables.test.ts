@@ -180,6 +180,11 @@ describe('checkVariableName', () => {
 // ===========================================================================
 
 describe('createVariableValidation', () => {
+  it('strips the location when creating an interface-class variable (issue #904)', () => {
+    const result = createVariableValidation([], makeVariable('Q1', 'BOOL', '%QX0.0', 'output'))
+    expect(result).toEqual({ name: 'Q1', location: '' })
+  })
+
   it('returns unchanged name and location when no conflicts', () => {
     const variable = makeVariable('NewVar', 'INT', '')
     const result = createVariableValidation([], variable)
@@ -410,10 +415,19 @@ describe('createVariableValidation', () => {
 describe('updateVariableValidation', () => {
   const existingVars = [makeVariable('Var1', 'INT', '%QW0'), makeVariable('Var2', 'BOOL', '%QX0.0')]
 
-  it('returns ok: true when updating class only', () => {
+  it('clears an existing location when class changes to an interface class (issue #904)', () => {
+    // Var1 holds location '%QW0'; a located VAR_OUTPUT entry is invalid IEC
+    // and would fail to parse on project reopen, so the class change must
+    // clear the location in the same update.
     const result = updateVariableValidation(existingVars, { class: 'output' }, existingVars[0])
     expect(result.ok).toBe(true)
-    expect(result.data).toEqual({ class: 'output' })
+    expect(result.data).toEqual({ class: 'output', location: '' })
+  })
+
+  it('keeps the location when class changes to local', () => {
+    const result = updateVariableValidation(existingVars, { class: 'local' }, existingVars[0])
+    expect(result.ok).toBe(true)
+    expect(result.data).toEqual({ class: 'local' })
   })
 
   // -- Name validation --
@@ -441,6 +455,27 @@ describe('updateVariableValidation', () => {
   })
 
   // -- Location validation --
+  it('rejects a location on an interface-class variable (issue #904)', () => {
+    const outputVar = makeVariable('OutVar', 'BOOL', '', 'output')
+    const result = updateVariableValidation([outputVar], { location: '%QX0.1' }, outputVar)
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('Location is not allowed')
+    expect(result.message).toContain('OUTPUT')
+  })
+
+  it('rejects a combined update setting an interface class and a location together', () => {
+    const localVar = makeVariable('LVar', 'BOOL', '')
+    const result = updateVariableValidation([localVar], { class: 'input', location: '%IX0.0' }, localVar)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('INPUT')
+  })
+
+  it('accepts a location in a combined update that sets class local', () => {
+    const inputVar = makeVariable('IVar', 'BOOL', '', 'input')
+    const result = updateVariableValidation([], { class: 'local', location: '%QX0.0' }, inputVar)
+    expect(result.ok).toBe(true)
+  })
+
   it('returns error when location already exists', () => {
     const result = updateVariableValidation(existingVars, { location: '%QW0' }, existingVars[1])
     expect(result.ok).toBe(false)
@@ -491,75 +526,94 @@ describe('updateVariableValidation', () => {
   })
 
   // -- Location error messages for specific types --
+  // A literal `%` address of the wrong width triggers the type-specific
+  // hint.  (A NON-`%` string is now treated as an alias name and accepted;
+  // see the "accepts a non-% location as an alias name" cases below.)
   it('returns BOOL location hint', () => {
     const boolVar = makeVariable('Test', 'BOOL', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, boolVar)
+    const result = updateVariableValidation([], { location: '%MD0' }, boolVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%QX')
   })
 
   it('returns WORD location hint for INT type', () => {
     const intVar = makeVariable('Test', 'INT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, intVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, intVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%QW')
   })
 
   it('returns WORD location hint for UINT type', () => {
     const uintVar = makeVariable('Test', 'UINT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, uintVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, uintVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%IW')
   })
 
   it('returns DWORD location hint for DINT type', () => {
     const dintVar = makeVariable('Test', 'DINT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, dintVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, dintVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%MD')
   })
 
   it('returns DWORD location hint for UDINT type', () => {
     const udintVar = makeVariable('Test', 'UDINT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, udintVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, udintVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%MD')
   })
 
   it('returns DWORD location hint for REAL type', () => {
     const realVar = makeVariable('Test', 'REAL', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, realVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, realVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%MD')
   })
 
   it('returns LWORD location hint for LINT type', () => {
     const lintVar = makeVariable('Test', 'LINT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, lintVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, lintVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%ML')
   })
 
   it('returns LWORD location hint for ULINT type', () => {
     const ulintVar = makeVariable('Test', 'ULINT', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, ulintVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, ulintVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%ML')
   })
 
   it('returns LWORD location hint for LREAL type', () => {
     const lrealVar = makeVariable('Test', 'LREAL', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, lrealVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, lrealVar)
     expect(result.ok).toBe(false)
     expect(result.message).toContain('%ML')
   })
 
   it('returns empty message for unknown type location', () => {
     const unknownVar = makeVariable('Test', 'STRING', '')
-    const result = updateVariableValidation([], { location: 'INVALID' }, unknownVar)
+    const result = updateVariableValidation([], { location: '%QX0.0' }, unknownVar)
     expect(result.ok).toBe(false)
     // Default case returns empty string for the error message detail
     expect(result.message).toContain('Please make sure that the location is valid.')
+  })
+
+  // -- Alias-name locations (single-field model) --
+  // A non-`%` location is an alias binding; its concrete address (and thus
+  // its type match) is resolved at compile time, so validation accepts any
+  // non-empty non-`%` string regardless of the variable's type.
+  it('accepts a non-% location as an alias name (BOOL)', () => {
+    const boolVar = makeVariable('Test', 'BOOL', '')
+    const result = updateVariableValidation([], { location: 'push_button' }, boolVar)
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts a non-% location as an alias name (unknown/STRING type)', () => {
+    const stringVar = makeVariable('Test', 'STRING', '')
+    const result = updateVariableValidation([], { location: 'some_alias' }, stringVar)
+    expect(result.ok).toBe(true)
   })
 
   // -- BOOL location validation edge cases --

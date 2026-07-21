@@ -171,6 +171,20 @@ export const useRuntimePolling = () => {
     }
   }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setTimingStats, setEthercatStatus])
 
+  // Keep the store's connection token in lock-step with the platform's token
+  // authority. When the authority transparently refreshes an expired token
+  // (editor main process, or the web adapter's RuntimeTokenManager), it emits
+  // onTokenRefreshed; adopting it here means every store-reading consumer — the
+  // compile/upload pipeline, the connection-status UI — uses the live token
+  // instead of the one captured at login. Without this, an upload kicked off
+  // after the token aged out would use a stale token and 401.
+  useEffect(() => {
+    const unsubscribe = runtime.onTokenRefreshed?.((newToken) => {
+      useOpenPLCStore.getState().deviceActions.setRuntimeJwtToken(newToken)
+    })
+    return unsubscribe
+  }, [runtime])
+
   useEffect(() => {
     const { workspaceActions } = useOpenPLCStore.getState()
 

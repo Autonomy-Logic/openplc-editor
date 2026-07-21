@@ -64,17 +64,12 @@ const searchLibraryByPouName = (
 const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: BlockElementProps<T>) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    editorActions: { updateModelVariables },
-    fbdFlows,
-    fbdFlowActions: { setNodes, setEdges },
-    project: {
-      data: { pous },
-    },
-    projectActions: { updateVariable, deleteVariable },
-    libraries,
-    modalActions: { onOpenChange },
-  } = useOpenPLCStore()
+  const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
+  const { setNodes, setEdges } = useOpenPLCStore((state) => state.fbdFlowActions)
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const { updateVariable, deleteVariable } = useOpenPLCStore((state) => state.projectActions)
+  const libraries = useOpenPLCStore((state) => state.libraries)
+  const onOpenChange = useOpenPLCStore((state) => state.modalActions.onOpenChange)
 
   const maxInputs = 20
 
@@ -362,6 +357,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
+    const { fbdFlows } = useOpenPLCStore.getState()
     const { rung, edges, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: selectedNode.id,
     })

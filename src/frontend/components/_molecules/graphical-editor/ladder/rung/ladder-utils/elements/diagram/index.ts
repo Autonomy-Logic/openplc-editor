@@ -396,6 +396,10 @@ const applyDynamicBlockHandleOffsets = (rung: RungLadderState): Node[] => {
 export const updateDiagramElementsPosition = (
   rung: RungLadderState,
   defaultBounds: [number, number],
+  /** Fallback identity source for the variable-node rebuild — pass the
+   *  pre-strip node set when `rung.nodes` had its variable nodes removed
+   *  earlier in the pipeline (see updateVariableBlockPosition). */
+  previousNodes?: Node[],
 ): { nodes: Node[]; edges: Edge[] } => {
   // Pre-expand block dimensions BEFORE the main layout loop. findAllParallelsDepthAndNodes
   // and the parallel-path Y formulas both read block.height; if blocks haven't been
@@ -450,14 +454,17 @@ export const updateDiagramElementsPosition = (
     /**
      * Find the previous nodes and edges of the current node
      */
-    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
-    if (!previousNodes || !previousEdges) return { nodes: rung.nodes, edges: rung.edges }
+    const { nodes: previousLinkedNodes, edges: previousEdges } = getPreviousElementsByEdge(
+      { ...rung, nodes: newNodes },
+      node,
+    )
+    if (!previousLinkedNodes || !previousEdges) return { nodes: rung.nodes, edges: rung.edges }
 
-    if (previousNodes.all.length === 1) {
+    if (previousLinkedNodes.all.length === 1) {
       /**
        * Nodes that only have one edge connecting to them
        */
-      const previousNode = previousNodes.all[0]
+      const previousNode = previousLinkedNodes.all[0]
       if (
         isNodeOfType(previousNode, 'parallel') &&
         (previousNode as ParallelNode).data.type === 'open' &&
@@ -482,8 +489,8 @@ export const updateDiagramElementsPosition = (
        * This is used to calculate the position of the new node
        */
       let acc = newNodePosition
-      for (let j = 0; j < previousNodes.all.length; j++) {
-        const previousNode = previousNodes.all[j]
+      for (let j = 0; j < previousLinkedNodes.all.length; j++) {
+        const previousNode = previousLinkedNodes.all[j]
         const position = getNodePositionBasedOnPreviousNode(previousNode, node, 'serial')
         acc = {
           posX: Math.max(acc.posX, position.posX),
@@ -689,10 +696,13 @@ export const updateDiagramElementsPosition = (
     defaultBounds,
   )
 
-  const variablesNodes = updateVariableBlockPosition({
-    ...rung,
-    nodes: changedRailNodes,
-  })
+  const variablesNodes = updateVariableBlockPosition(
+    {
+      ...rung,
+      nodes: changedRailNodes,
+    },
+    previousNodes,
+  )
 
   return { nodes: variablesNodes.nodes, edges: variablesNodes.edges }
 }

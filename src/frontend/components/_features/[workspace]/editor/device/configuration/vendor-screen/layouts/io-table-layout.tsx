@@ -10,6 +10,7 @@ import {
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -18,6 +19,33 @@ import type { ModuleSystem, ScreenSection } from '../index'
 type IoTableLayoutProps = {
   section: ScreenSection
   moduleSystem: ModuleSystem
+}
+
+/**
+ * Alias cell with local state so the value commits on blur (focus change),
+ * not on every keystroke. Committing per keystroke fires the alias-rename
+ * cascade for every intermediate string while editing — e.g. clearing "flow"
+ * would cascade through "flo", "fl", "f" onto bound variables. Committing on
+ * blur means a single rename (old → final) reaches the store, and clearing the
+ * field to empty leaves bound variables orphaned rather than partially renamed.
+ */
+function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => {
+    setLocal(value)
+  }, [value])
+  return (
+    <input
+      type='text'
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== value) onCommit(local)
+      }}
+      placeholder='Alias...'
+      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+    />
+  )
 }
 
 function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
@@ -142,11 +170,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       }
     }
 
-    setEntries(newEntries)
+    // Write the freshly-derived channel structure, then let the central
+    // registry own the FINAL addresses (VPP + Modbus packed together,
+    // aliases restored from the session memory) and pull its result back
+    // into local state so the table renders the compacted addresses.
     setVendorScreenData(persistenceKey, { entries: newEntries })
-    // Producer mutation: addresses were just re-allocated for every
-    // VPP-active slot. Refresh variables bound to those aliases.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    setEntries(getStoreState().storedMapping?.entries ?? newEntries)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -184,10 +214,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       return
     }
 
-    // Phase 2 — cascade rename onto bound variables BEFORE writing
-    // so the subsequent `syncVariableAliases()` sees variables
-    // pointing at the new alias and takes the refresh path instead
-    // of orphan.
+    // Cascade the rename onto bound variables: any variable whose
+    // `location` holds the old alias name follows to the new one, so it
+    // stays located (resolved at compile time) rather than orphaning.
     const oldAlias = target.alias ?? ''
     if (oldAlias) {
       useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
@@ -197,8 +226,13 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     updated[index] = { ...updated[index], alias }
     setEntries(updated)
     setVendorScreenData(persistenceKey, { entries: updated })
-    // Refresh variables against any allocator-driven address shifts.
-    useOpenPLCStore.getState().projectActions.syncVariableAliases()
+    // Record in the session alias-memory so the alias returns if this module
+    // is removed and re-added on the same slot within the session.
+    useOpenPLCStore
+      .getState()
+      .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
+    // Variables bound to this channel hold its alias NAME (resolved at
+    // compile); the `renameAlias` above already cascaded any rename to them.
   }
 
   const groups = useMemo(() => {
@@ -328,12 +362,9 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
                         {entry.iecAddress}
                       </td>
                       <td className='px-1 py-1'>
-                        <input
-                          type='text'
-                          value={entry.alias}
-                          onChange={(e) => handleAliasChange(entry.globalIndex, e.target.value)}
-                          placeholder='Alias...'
-                          className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
+                        <AliasInputCell
+                          value={entry.alias ?? ''}
+                          onCommit={(next) => handleAliasChange(entry.globalIndex, next)}
                         />
                       </td>
                     </tr>

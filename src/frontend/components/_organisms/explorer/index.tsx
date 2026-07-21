@@ -1,5 +1,4 @@
-import { LegacyRef, ReactElement, useMemo, useState } from 'react'
-import { ImperativePanelHandle } from 'react-resizable-panels'
+import { ReactElement, useMemo, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../store'
 import type { BlockVariant } from '../../_atoms/graphical-editor/types/block'
@@ -9,12 +8,7 @@ import { Info } from './info'
 import { Library } from './library'
 import { Project } from './project'
 
-type ExplorerProps = {
-  collapse: LegacyRef<ImperativePanelHandle> | undefined
-  defaultSize?: number
-}
-
-const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement => {
+const Explorer = (): ReactElement => {
   const {
     editor,
     project: {
@@ -96,16 +90,7 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
   }, [selectedFileKey, system, pous])
 
   return (
-    <ResizablePanel
-      ref={collapse}
-      id='explorerPanel'
-      order={1}
-      collapsible={true}
-      minSize={13}
-      defaultSize={defaultSize}
-      maxSize={80}
-      className="flex h-full w-[200px] max-w-lg flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
-    >
+    <>
       <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='h-full flex-1'>
         <ResizablePanel id='projectExplorerPanel' order={1} defaultSize={50} minSize={25} collapsible>
           <Project />
@@ -126,7 +111,7 @@ const Explorer = ({ collapse, defaultSize = 16 }: ExplorerProps): ReactElement =
         </ResizablePanel>
       </ResizablePanelGroup>
       <Info selectedPouDocumentation={selectedPouDocumentation} />
-    </ResizablePanel>
+    </>
   )
 }
 
