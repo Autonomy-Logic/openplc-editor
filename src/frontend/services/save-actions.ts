@@ -322,9 +322,10 @@ export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // Run any pending debounced graphical write-backs before reading state:
-  // a save landing inside the debounce window must serialize the fresh
-  // POU bodies, not the pre-edit ones.
+  // Full-project save: unconditionally flush EVERY graphical flow into its
+  // POU body before reading state, so we serialize exactly what's on the
+  // canvas — never a pre-edit body stranded by a missed/reset debounced
+  // write-back (see flow-writeback: the flush ignores the `updated` flag).
   flushFlowWriteBacks(openPLCStoreBase.getState)
   const state = openPLCStoreBase.getState()
   // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
@@ -496,8 +497,10 @@ export async function executeSaveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // See executeSaveProject — same pending write-back flush requirement.
-  flushFlowWriteBacks(openPLCStoreBase.getState)
+  // Single-file save: unconditionally flush just this POU's graphical flow
+  // into its body before serializing, so disk gets exactly what's on the
+  // canvas (see flow-writeback — the flush ignores the `updated` flag).
+  flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {

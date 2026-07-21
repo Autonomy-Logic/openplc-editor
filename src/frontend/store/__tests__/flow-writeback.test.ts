@@ -210,13 +210,37 @@ describe('flow write-back scheduler', () => {
       expect(ladderBody('B')?.rungs).toHaveLength(1)
     })
 
-    it('is a no-op when nothing is pending', () => {
+    // Regression: the stranded-edit bug. An edit that reached the flow slice
+    // (on screen) but whose write-back was never scheduled / was reset leaves
+    // `updated === false`. The debounced path skips it; the flush must NOT —
+    // otherwise the compiler/disk keep the pre-edit body (DOPE: TO_UINT →
+    // renamed output-variable compiled with the old typo).
+    it('flushes a flow whose write-back was stranded (updated === false, no pending timer)', () => {
       makeDirtyLadderPou('Main')
-      const bodyBefore = ladderBody('Main')
+      // Simulate the strand: the edit is on the canvas but the flag was
+      // cleared without the body ever being written, and nothing is pending.
+      store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Main', updated: false })
+      expect(ladderBody('Main')?.rungs).toHaveLength(0)
 
       flushFlowWriteBacks(getState)
 
-      expect(ladderBody('Main')).toBe(bodyBefore)
+      expect(ladderBody('Main')?.rungs).toHaveLength(1)
+    })
+
+    it('flushes fbd flows unconditionally too (not just ladder)', () => {
+      store.getState().pouActions.create({ type: 'program', name: 'FbdMain', language: 'fbd' })
+      // startFBDRung seeds the flow (updated=true); nothing is scheduled.
+      store.getState().fbdFlowActions.startFBDRung({ editorName: 'FbdMain' })
+
+      flushFlowWriteBacks(getState)
+
+      const fbdBody = store.getState().project.data.pous.find((p) => p.name === 'FbdMain')?.body.value as
+        | { rung?: unknown; updated?: unknown }
+        | undefined
+      expect(fbdBody?.rung).toBeDefined()
+      expect(fbdBody && 'updated' in fbdBody).toBe(false)
+      // The flush ran (and reset the flag) even though nothing was scheduled.
+      expect(store.getState().fbdFlows.find((f) => f.name === 'FbdMain')?.updated).toBe(false)
     })
   })
 

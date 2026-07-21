@@ -3,28 +3,36 @@ import { zodLadderFlowSchema } from '../ladder'
 import type { SharedRootState } from './types'
 
 /**
- * Debounced write-back of graphical flow state (ladder / FBD) into
+ * Write-back of graphical flow state (ladder / FBD) into
  * `project.data.pous[].body.value`.
  *
- * Every graphical edit used to trigger an immediate whole-flow
- * `structuredClone` into the project slice (plus a monaco-model-sync sweep
- * per write). Edits inside the debounce window now coalesce into a single
- * write-back that persists the flow **by reference** — the store is
- * immer-managed (frozen, copy-on-write), so the project copy and the live
- * flow safely share structure.
+ * The flow slices (`ladderFlows` / `fbdFlows`) are the on-screen source of
+ * truth — the canvas renders directly from them and every edit updates them
+ * synchronously. The POU `body` is a projection that must be re-derived from
+ * the flow before it is read by anything that persists or compiles. Two paths
+ * keep it in sync:
  *
- * A pending timer means `pou.body.value` is momentarily stale, so the rest
- * of the app must cooperate:
- *   - save paths call `flushFlowWriteBacks` before serializing, so a save
- *     landing inside the debounce window still persists the fresh body;
- *   - undo/redo and snapshot capture flush the affected POU so a history
- *     entry never pairs a stale body with a fresh flow;
- *   - project open cancels pending timers outright — a write-back scheduled
- *     against the previous project must not fire into the new one.
+ *   - `scheduleFlowWriteBack` — a debounced, per-POU write during editing.
+ *     Purely a responsiveness/UX optimization (keeps the body roughly current
+ *     for the diff view, undo snapshots, dirty tracking). It is gated on the
+ *     transient `flow.updated` flag and is NOT relied on for correctness.
+ *   - `flushFlowWriteBacks` — an UNCONDITIONAL, content-based flush used at
+ *     the critical save / compile boundary. It ignores `flow.updated` and any
+ *     pending timer and copies the current flow(s) straight into the body, so
+ *     what goes to disk / S3 and what is handed to the transpiler is exactly
+ *     what is on the canvas. This is the correctness guarantee.
  *
- * Execution re-reads the store at fire time and is guarded on
- * `flow.updated`, so a flush after save/undo already cleared the flag is a
- * no-op.
+ * Why the flush must be unconditional: `flow.updated` is a boolean edge that
+ * write-back scheduling (a React effect) and the post-save reset both toggle.
+ * An edit could set the flag, have its scheduled write-back cleared by a
+ * concurrent save's reset, and be stranded on the canvas but never written to
+ * the body — the compiler then sees pre-edit graphics. Making the save/compile
+ * flush ignore the flag removes that entire class of race by construction.
+ *
+ * `writeFlowToBody` persists the RAW flow object (minus the transient
+ * `updated` flag) — see DOPE-477. `sanitizePou` normalizes selection/viewport
+ * state at serialize time, so re-flushing an unchanged POU is byte-identical
+ * and never produces a phantom "Modified" in Source Control.
  */
 
 export const FLOW_WRITEBACK_DEBOUNCE_MS = 200
@@ -34,13 +42,19 @@ type GetWriteBackState = () => SharedRootState
 
 const pendingWriteBacks = new Map<string, { language: FlowLanguage; timer: ReturnType<typeof setTimeout> }>()
 
-function runWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
+/**
+ * Copy one POU's current flow into its project body — UNCONDITIONALLY, without
+ * gating on `flow.updated`. Persists the raw flow object (minus the transient
+ * `updated` flag); a zod parse guards against writing a malformed flow (in
+ * which case the flow is left dirty so a later pass can retry).
+ */
+function writeFlowToBody(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
   const state = getState()
   const flow =
     language === 'ld'
       ? state.ladderFlows.find((f) => f.name === pouName)
       : state.fbdFlows.find((f) => f.name === pouName)
-  if (!flow?.updated) return
+  if (!flow) return
 
   // Validate with zod but persist the raw object (minus the transient
   // `updated` flag). Using the parsed result would silently strip every
@@ -58,9 +72,24 @@ function runWriteBack(getState: GetWriteBackState, pouName: string, language: Fl
 }
 
 /**
- * Mark the POU dirty now and queue its write-back. Edits landing while a
- * timer is pending coalesce into it — the executor reads the store at fire
- * time, so it always persists the latest flow.
+ * The debounced write-back body. Gated on `flow.updated` purely as an
+ * optimization: a flush or undo/redo that already cleared the flag makes this
+ * a no-op. Correctness does not depend on it — `flushFlowWriteBacks` does.
+ */
+function runScheduledWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
+  const state = getState()
+  const flow =
+    language === 'ld'
+      ? state.ladderFlows.find((f) => f.name === pouName)
+      : state.fbdFlows.find((f) => f.name === pouName)
+  if (!flow?.updated) return
+  writeFlowToBody(getState, pouName, language)
+}
+
+/**
+ * Mark the POU dirty now and queue its debounced write-back. Edits landing
+ * while a timer is pending coalesce into it — the executor reads the store at
+ * fire time, so it always persists the latest flow.
  */
 export function scheduleFlowWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
   const state = getState()
@@ -73,18 +102,36 @@ export function scheduleFlowWriteBack(getState: GetWriteBackState, pouName: stri
   if (pendingWriteBacks.has(pouName)) return
   const timer = setTimeout(() => {
     pendingWriteBacks.delete(pouName)
-    runWriteBack(getState, pouName, language)
+    runScheduledWriteBack(getState, pouName, language)
   }, FLOW_WRITEBACK_DEBOUNCE_MS)
   pendingWriteBacks.set(pouName, { language, timer })
 }
 
-/** Run pending write-backs immediately — all of them, or a single POU's. */
+/**
+ * Unconditionally flush graphical flow(s) into the project body — every flow,
+ * or a single POU's when `pouName` is given. Cancels any pending debounced
+ * timers for the targeted POU(s) first (they'd be redundant), then writes the
+ * current flow content regardless of the `updated` flag. Call this at every
+ * save / compile boundary so persisted / compiled bytes always match the
+ * canvas, for all graphical languages.
+ */
 export function flushFlowWriteBacks(getState: GetWriteBackState, pouName?: string): void {
+  // Cancel in-flight debounced timers for the targeted POU(s) so they can't
+  // fire redundantly after this pass.
   for (const [name, pending] of [...pendingWriteBacks]) {
     if (pouName !== undefined && name !== pouName) continue
     clearTimeout(pending.timer)
     pendingWriteBacks.delete(name)
-    runWriteBack(getState, name, pending.language)
+  }
+
+  const state = getState()
+  const targets: Array<{ name: string; language: FlowLanguage }> = [
+    ...state.ladderFlows.map((flow) => ({ name: flow.name, language: 'ld' as const })),
+    ...state.fbdFlows.map((flow) => ({ name: flow.name, language: 'fbd' as const })),
+  ]
+  for (const target of targets) {
+    if (pouName !== undefined && target.name !== pouName) continue
+    writeFlowToBody(getState, target.name, target.language)
   }
 }
 
