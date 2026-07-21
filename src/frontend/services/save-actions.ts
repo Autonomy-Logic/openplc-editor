@@ -16,6 +16,7 @@ import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middl
 import type { PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
+import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
@@ -321,6 +322,10 @@ export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
+  // Run any pending debounced graphical write-backs before reading state:
+  // a save landing inside the debounce window must serialize the fresh
+  // POU bodies, not the pre-edit ones.
+  flushFlowWriteBacks(openPLCStoreBase.getState)
   const state = openPLCStoreBase.getState()
   // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
   // a rename/delete, the AI panel — funnels through here.  When the viewer
@@ -491,6 +496,8 @@ export async function executeSaveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
+  // See executeSaveProject — same pending write-back flush requirement.
+  flushFlowWriteBacks(openPLCStoreBase.getState)
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {

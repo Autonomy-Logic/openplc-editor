@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 
 import { useOpenPLCStore } from '../store'
+import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 
 /**
  * Convenience hook wrapping snapshotActions.pushToHistory().
@@ -9,25 +10,32 @@ import { useOpenPLCStore } from '../store'
  *
  * State is read via getState() at capture time (not subscribed): the hook
  * never re-renders its consumers and `captureAndPush` keeps a stable identity.
+ *
+ * Snapshots hold plain references into the store state — no deep clone. The
+ * store is immer-managed (frozen, copy-on-write), so later edits produce new
+ * objects and can never reach a captured snapshot. The previous JSON
+ * round-trips cloned the full body, both flows and all globals on every
+ * capture (~150-200 MB of transient garbage per edit burst on large
+ * projects).
  */
 export function usePouSnapshot() {
   const { pushToHistory, undo, redo } = useOpenPLCStore((state) => state.snapshotActions)
 
   const captureAndPush = useCallback(
     (pouName: string) => {
+      // A debounced graphical write-back may still be pending — flush it so
+      // the snapshot can't pair a stale body with a fresh flow.
+      flushFlowWriteBacks(useOpenPLCStore.getState, pouName)
       const { project, ladderFlows, fbdFlows } = useOpenPLCStore.getState()
       const pou = project.data.pous.find((p) => p.name === pouName)
       if (!pou) return
 
-      const ladderFlow = ladderFlows.find((f) => f.name === pouName)
-      const fbdFlow = fbdFlows.find((f) => f.name === pouName)
-
       pushToHistory(pouName, {
-        variables: JSON.parse(JSON.stringify(pou.interface?.variables ?? [])),
-        body: JSON.parse(JSON.stringify(pou.body.value)),
-        ladderFlow: ladderFlow ? JSON.parse(JSON.stringify(ladderFlow)) : undefined,
-        fbdFlow: fbdFlow ? JSON.parse(JSON.stringify(fbdFlow)) : undefined,
-        globalVariables: JSON.parse(JSON.stringify(project.data.configurations.resource.globalVariables)),
+        variables: pou.interface?.variables ?? [],
+        body: pou.body.value,
+        ladderFlow: ladderFlows.find((f) => f.name === pouName),
+        fbdFlow: fbdFlows.find((f) => f.name === pouName),
+        globalVariables: project.data.configurations.resource.globalVariables,
       })
     },
     [pushToHistory],
