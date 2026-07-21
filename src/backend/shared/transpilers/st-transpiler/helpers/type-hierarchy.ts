@@ -1,22 +1,15 @@
 /**
- * IEC 61131-3 type hierarchy + compatibility predicate.
+ * IEC 61131-3 type hierarchy.
  *
- * Mirrors ``plcopen/definitions.py:84-119`` (`TypeHierarchy_list`),
- * ``plcopen/structures.py:36-48`` (`IsOfType`), and
+ * Mirrors ``plcopen/definitions.py:84-119`` (`TypeHierarchy_list`) and
  * ``plcopen/structures.py:51-59`` (`GetSubTypes`).
  *
  * The hierarchy is a tree rooted at `"ANY"` with each concrete IEC type
  * (`"INT"`, `"BOOL"`, `"REAL"`, …) attached under its ANY-prefixed
- * meta-parent. `isOfType(child, ancestor)` is true when walking parent
- * pointers from `child` eventually reaches `ancestor`.
- *
- * This is used by `GetBlockType`'s overload resolution: given a call like
- * `ADD(myInt, myInt)` with signature `(ANY_NUM, ANY_NUM) -> ANY_NUM`, each
- * input is type-checked via `isOfType("INT", "ANY_NUM")`.
+ * meta-parent.
  *
  * Note on WSTRING: Python's hierarchy comments-out `("WSTRING", "ANY_STRING")`
- * with a TODO. We preserve that — WSTRING returns false for any IsOfType
- * lookup against ancestors except itself.
+ * with a TODO. We preserve that — WSTRING is absent from the table.
  */
 
 /**
@@ -57,5 +50,8 @@ export const TypeHierarchy: Readonly<Record<string, string | null>> = {
   WORD: 'ANY_NBIT',
   DWORD: 'ANY_NBIT',
   LWORD: 'ANY_NBIT',
+  // Platform-width address type (strucpp/CODESYS parity); strucpp resolves the
+  // concrete width per target.
+  __XWORD: 'ANY_NBIT',
   // WSTRING intentionally absent — matches Python's `# TODO` comment.
 }
