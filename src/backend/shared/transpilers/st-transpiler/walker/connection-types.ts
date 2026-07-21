@@ -4,10 +4,9 @@
  *
  * Two passes over the flattened body graph. Pass 1 seeds concrete
  * types from declared variables, literals, contacts/coils/rails and
- * single-signature blocks; blocks whose signature is ambiguous are
- * deferred. Pass 2 resolves deferred blocks by overload match against
- * the now-known input types (permissive all-ANY synthesis when
- * unknown), then unifies each ANY-class pin group with any concrete
+ * resolvable blocks; blocks with no known signature are deferred.
+ * Pass 2 gives each deferred block a permissive all-ANY synthesized
+ * signature and unifies each ANY-class pin group with any concrete
  * connected type. Pins known to share a type but still untyped live
  * in `related` groups that collapse when one member gets typed.
  */
@@ -123,15 +122,7 @@ export function computeConnectionTypes(body: RFBody, ctx: TypeContext): Map<stri
       }
       case 'contact':
       case 'coil':
-      case 'parallel': {
-        pt.assign(pt.extractRelated(pinOut(node.id)), 'BOOL')
-        pt.types.set(pinIn(node.id), 'BOOL')
-        for (const edge of graph.incoming.get(node.id) ?? []) {
-          const source = edgeSourcePin(graph, edge)
-          if (!pt.types.has(source)) pt.assign(pt.extractRelated(source), 'BOOL')
-        }
-        break
-      }
+      case 'parallel':
       case 'powerRail': {
         pt.assign(pt.extractRelated(pinOut(node.id)), 'BOOL')
         pt.types.set(pinIn(node.id), 'BOOL')
@@ -194,7 +185,7 @@ export function computeConnectionTypes(body: RFBody, ctx: TypeContext): Map<stri
   }
 
   for (const { node, data } of deferred) {
-    const infos = ctx.resolveBlock(data.typeName) ?? synthesizePermissiveBlockInfos(graph, node, data)
+    const infos = synthesizePermissiveBlockInfos(graph, node, data)
     computeBlockInputTypes(graph, pt, node, data, infos)
   }
 
@@ -280,6 +271,7 @@ function wiredInputHandles(graph: Graph, node: RFNode, data: BlockData): string[
   const handles: string[] = []
   if (wired.has('EN')) handles.push('EN')
   for (const name of data.inputs) {
+    if (name === 'EN') continue
     if (wired.has(name)) handles.push(name)
   }
   return handles

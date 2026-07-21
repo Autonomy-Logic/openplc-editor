@@ -27,7 +27,7 @@ export interface BlockInfos {
   usage: string
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
@@ -64,7 +64,8 @@ export function blockInfosFromVariant(variant: unknown): BlockInfos | null {
 
   return {
     name,
-    type: variant.type === 'function-block' ? 'functionBlock' : 'function',
+    type:
+      variant.type === 'function-block' || variant.type === 'function-block-instance' ? 'functionBlock' : 'function',
     extensible: variant.extensible === true,
     inputs,
     outputs,

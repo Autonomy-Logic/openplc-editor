@@ -10,7 +10,7 @@
  */
 
 import { PLC_BASE_TYPES } from '../helpers/base-types'
-import { type BlockInfos, blockInfosFromVariant } from '../helpers/block-library'
+import { type BlockInfos, blockInfosFromVariant, isRecord } from '../helpers/block-library'
 import type { ProgramChunk } from '../helpers/program'
 import { computePouName } from '../helpers/text-helpers'
 import { varTypeNames } from '../helpers/type-text'
@@ -100,13 +100,11 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
 
 /* ────────────────────────── helpers ─────────────────────────────────────── */
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
 // Block signatures from every graphical block instance's variant — the
 // co-located equivalent of xml2st's embedded <libraryBlocks> payload. Deduped
-// by name; user POUs are excluded (they resolve from their own interface).
+// by name, first instance wins — deliberately mirroring the oracle's
+// <libraryBlocks> dedup; user POUs are excluded (they resolve from their
+// own interface).
 function collectBlockSignatures(project: TranspileProject): Map<string, BlockInfos> {
   const userPouNames = new Set(project.pous.map((p) => p.name))
   const registry = new Map<string, BlockInfos>()

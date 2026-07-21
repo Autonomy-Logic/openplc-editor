@@ -48,19 +48,15 @@ import type { RFBody, RFEdge, RFNode, RFRung } from './types'
  * must declare in the POU's trailing local `VAR` section.  Two
  * flavours flow through this shape:
  *   - Trigger instances (`R_TRIG1`, `F_TRIG1`, …) — `type` is
- *     already the resolved `'R_TRIG'`/`'F_TRIG'` name.  `origin*`
- *     fields are absent.
+ *     already the resolved `'R_TRIG'`/`'F_TRIG'` name.
  *   - Function-call output temps (`_TMP_<typeName><numericId>_<param>`)
- *     — `type` is `'BOOL'` for `ENO`, otherwise the literal string
- *     `'ANY'`.  When `'ANY'`, the caller resolves it against the
- *     standard block catalog or the project's POU table using
- *     `originBlockTypeName` + `originFormalParameter`.
+ *     — `type` is `'BOOL'` for `ENO`, otherwise the graph-inferred
+ *     pin type from `connection-types.ts` (literal `'ANY'` when no
+ *     concrete type reaches the pin, matching Python).
  */
 export interface SyntheticVar {
   name: string
   type: string
-  originBlockTypeName?: string
-  originFormalParameter?: string
 }
 
 export interface EmitResult {
@@ -82,15 +78,11 @@ interface WalkerState {
   declaredVars: Set<string>
   triggerVars: { name: string; type: 'R_TRIG' | 'F_TRIG' }[]
   /** `_TMP_<typeName><numericId>_<param>` temps synthesised by
-   *  function-call emission.  `originBlockTypeName` +
-   *  `originFormalParameter` let the caller resolve `'ANY'` types
-   *  against the standard block catalog or a project POU's declared
-   *  `returnType` after the walk completes. */
+   *  function-call emission.  Types come from the pre-computed
+   *  connection-type inference (`'ANY'` terminal fallback). */
   functionTempVars: {
     name: string
     type: string
-    originBlockTypeName: string
-    originFormalParameter: string
   }[]
   emittedBlocks: Set<string>
   /** Output-write sinks (coil / output / inOut variable) keyed by the
@@ -315,6 +307,8 @@ function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
 function blockFedSink(state: WalkerState, node: RFNode): string | null {
   if (node.type !== 'coil' && !isVariableNode(node)) return null
   const edges = state.incoming.get(node.id) ?? []
+  // Only direct block->sink edges couple; sinks fed through a
+  // passthrough node or with extra wires stay on the positional sweep.
   if (edges.length !== 1) return null
   const src = state.byId.get(edges[0].source)
   if (src === undefined || src.type !== 'block') return null
@@ -847,8 +841,6 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
     state.functionTempVars.push({
       name: tempName,
       type: tempType,
-      originBlockTypeName: data.typeName,
-      originFormalParameter: out,
     })
     const isPrimary = data.outputs.length === 1 || out === '' || out === 'OUT'
     if (isPrimary && primaryName === null) {
