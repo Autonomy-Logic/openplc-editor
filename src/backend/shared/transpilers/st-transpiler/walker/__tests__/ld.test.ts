@@ -136,6 +136,26 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
     expect(result.bodySt).toContain('TO_INT()')
   })
 
+  it("leaves the shorthand unchanged when the input is another block's output", () => {
+    const body: RFBody = {
+      rungs: [
+        {
+          nodes: [
+            conversionBlockNode('source', 'TRUNC', '41'),
+            conversionBlockNode('conversion', 'TO_INT', '42'),
+            outputVariableNode('out1', 'OFFICE_TEMP'),
+          ],
+          edges: [edge('e1', 'source', 'conversion', 'OUT', 'IN'), edge('e2', 'conversion', 'out1', 'OUT', undefined)],
+        },
+      ],
+    }
+
+    const result = emitLdBody(body, new Map([['_TMP_TRUNC41_OUT', 'REAL']]))
+
+    expect(result.bodySt).toContain('TO_INT(_TMP_TRUNC41_OUT)')
+    expect(result.bodySt).not.toContain('REAL_TO_INT(_TMP_TRUNC41_OUT)')
+  })
+
   it('leaves the shorthand name unchanged when there is no known conversion from the source type to the target', () => {
     const body: RFBody = {
       rungs: [
@@ -214,7 +234,13 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['A', 'REAL'], ['B', 'REAL']]))
+    const result = emitLdBody(
+      body,
+      new Map([
+        ['A', 'REAL'],
+        ['B', 'REAL'],
+      ]),
+    )
 
     expect(result.bodySt).toContain('TO_INT(')
   })

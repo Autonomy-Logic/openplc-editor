@@ -106,7 +106,9 @@ describe('generateGraphicalPou — polymorphic conversion call resolution (issue
     const pou: TranspilePou = {
       name: 'main',
       pouType: 'program',
-      interface: { variables: [{ name: 'OFFICE_TEMP', type: { definition: 'base-type', value: 'INT' }, class: 'local' }] },
+      interface: {
+        variables: [{ name: 'OFFICE_TEMP', type: { definition: 'base-type', value: 'INT' }, class: 'local' }],
+      },
       body: {
         language: 'fbd',
         value: {
@@ -135,5 +137,40 @@ describe('generateGraphicalPou — polymorphic conversion call resolution (issue
     const text = chunks.map((c) => c[0]).join('')
 
     expect(text).toContain('REAL_TO_INT(G_TEMP)')
+  })
+
+  it('does not index derived variable types as conversion sources', () => {
+    const pou: TranspilePou = {
+      name: 'main',
+      pouType: 'program',
+      interface: {
+        variables: [
+          { name: 'DERIVED_TEMP', type: { definition: 'derived', value: 'REAL_ALIAS' }, class: 'local' },
+          { name: 'OFFICE_TEMP', type: { definition: 'base-type', value: 'INT' }, class: 'local' },
+        ],
+      },
+      body: {
+        language: 'fbd',
+        value: {
+          rung: {
+            nodes: [
+              inputVariableNode('in1', 'DERIVED_TEMP'),
+              conversionBlockNode('blk1', 'TO_INT', '43'),
+              outputVariableNode('out1', 'OFFICE_TEMP'),
+            ],
+            edges: [
+              { id: 'e1', source: 'in1', target: 'blk1', targetHandle: 'IN' },
+              { id: 'e2', source: 'blk1', target: 'out1', sourceHandle: 'OUT' },
+            ],
+          },
+        },
+      },
+    }
+
+    const chunks = generateGraphicalPou(pou, emptyProject([pou]))
+    const text = chunks.map((c) => c[0]).join('')
+
+    expect(text).toContain('TO_INT(DERIVED_TEMP)')
+    expect(text).not.toContain('REAL_ALIAS_TO_INT(DERIVED_TEMP)')
   })
 })
