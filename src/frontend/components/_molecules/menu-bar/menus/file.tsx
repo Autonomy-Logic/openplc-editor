@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useCapabilities, useProject } from '../../../../../middleware/shared/providers'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
+import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
@@ -83,12 +84,19 @@ export const FileMenu = () => {
               </MenuPrimitive.Item>
             </>
           )}
-          {capabilities.hasProjectExport && (
+          {(capabilities.hasProjectExport || capabilities.hasProjectImport) && (
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />
-              <MenuPrimitive.Item className={ITEM} disabled>
-                <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
-              </MenuPrimitive.Item>
+              {capabilities.hasProjectExport && (
+                <MenuPrimitive.Item className={ITEM} onClick={() => void executeExportPlcopen(projectPort)}>
+                  <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
+                </MenuPrimitive.Item>
+              )}
+              {capabilities.hasProjectImport && (
+                <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-plcopen-import')}>
+                  <span>{i18n.t('menu:file.submenu.importFromPLCOpenXml')}</span>
+                </MenuPrimitive.Item>
+              )}
             </>
           )}
           <MenuPrimitive.Separator className={SEPARATOR} />

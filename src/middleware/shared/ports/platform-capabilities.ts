@@ -48,6 +48,9 @@ export interface PlatformCapabilities {
   /** True if the app supports exporting projects as XML files (Codesys, old-editor formats). */
   hasProjectExport: boolean
 
+  /** True if the app supports importing a project from a PLCopen XML file. */
+  hasProjectImport: boolean
+
   /** True if the app supports version control (branches, commits, change tracking). */
   hasVersionControl: boolean
 
@@ -121,6 +124,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasInProcessSimulator: true,
   hasLocalFilesystem: true,
   hasProjectExport: true,
+  hasProjectImport: true,
   hasVersionControl: false,
   hasAboutDialog: true,
   hasPythonLSP: true,
@@ -147,7 +151,10 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasWebRTC: true,
   hasInProcessSimulator: true,
   hasLocalFilesystem: false,
-  hasProjectExport: false,
+  // Browser-download implementation makes export just as viable on web
+  // as on desktop — no reason to keep this gated off.
+  hasProjectExport: true,
+  hasProjectImport: true,
   hasVersionControl: true,
   hasAboutDialog: true,
   // `monaco-pyright-lsp` ships its own ESM worker via
