@@ -390,9 +390,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         itemsProcessed = positionsConsumed
       }
 
-      // Only write to store when values actually changed
-      if (changedBool.size > 0) workspaceActions.setDebugBoolValues(changedBool)
-      if (changedNonBool.size > 0) workspaceActions.setDebugNonBoolValues(changedNonBool)
+      // Only write to store when values actually changed — one commit per poll cycle
+      if (changedBool.size > 0 || changedNonBool.size > 0) {
+        workspaceActions.setDebugValues({ boolValues: changedBool, nonBoolValues: changedNonBool })
+      }
     }
 
     // Advance offset for next poll cycle (wraps around)

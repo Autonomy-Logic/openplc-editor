@@ -109,6 +109,8 @@ type LadderFlowActions = {
      *  focusing/blurring an element never dirties the POU. */
     transient?: boolean
   }) => void
+  /** Batched updateNode: applies every update in a single store commit. */
+  updateNodes: (updates: { node: Node; nodeId: string; rungId: string; editorName: string }[]) => void
   addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
   removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
   setSelectedNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void

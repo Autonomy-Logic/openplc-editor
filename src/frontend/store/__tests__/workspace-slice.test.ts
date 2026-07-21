@@ -311,26 +311,34 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugVariableIndexes).toEqual(indexes)
   })
 
-  it('setDebugBoolValues merges values into existing map', () => {
-    const initial = new Map([['var1', 'TRUE']])
-    store.getState().workspaceActions.setDebugBoolValues(initial)
+  it('setDebugValues merges bool and non-bool values into their maps in one commit', () => {
+    store.getState().workspaceActions.setDebugValues({
+      boolValues: new Map([['var1', 'TRUE']]),
+      nonBoolValues: new Map([['var2', '42']]),
+    })
     expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
+    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('42')
 
-    const update = new Map([['var2', 'FALSE']])
-    store.getState().workspaceActions.setDebugBoolValues(update)
+    store.getState().workspaceActions.setDebugValues({
+      boolValues: new Map([['var3', 'FALSE']]),
+      nonBoolValues: new Map([['var4', '3.14']]),
+    })
     expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
-    expect(store.getState().workspace.debugBoolValues.get('var2')).toBe('FALSE')
+    expect(store.getState().workspace.debugBoolValues.get('var3')).toBe('FALSE')
+    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('42')
+    expect(store.getState().workspace.debugNonBoolValues.get('var4')).toBe('3.14')
   })
 
-  it('setDebugNonBoolValues merges values into existing map', () => {
-    const initial = new Map([['var1', '42']])
-    store.getState().workspaceActions.setDebugNonBoolValues(initial)
-    expect(store.getState().workspace.debugNonBoolValues.get('var1')).toBe('42')
+  it('setDebugValues tolerates missing maps', () => {
+    store.getState().workspaceActions.setDebugValues({ boolValues: new Map([['var1', 'TRUE']]) })
+    expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
 
-    const update = new Map([['var2', '3.14']])
-    store.getState().workspaceActions.setDebugNonBoolValues(update)
-    expect(store.getState().workspace.debugNonBoolValues.get('var1')).toBe('42')
-    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('3.14')
+    store.getState().workspaceActions.setDebugValues({ nonBoolValues: new Map([['var2', '42']]) })
+    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('42')
+
+    store.getState().workspaceActions.setDebugValues({})
+    expect(store.getState().workspace.debugBoolValues.get('var1')).toBe('TRUE')
+    expect(store.getState().workspace.debugNonBoolValues.get('var2')).toBe('42')
   })
 
   it('setDebugForcedVariables', () => {
@@ -444,7 +452,7 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebuggerTargetIp('192.168.0.1')
     store.getState().workspaceActions.setDebugCContent('code')
     store.getState().workspaceActions.setDebugVariableIndexes(new Map([['x', 1]]))
-    store.getState().workspaceActions.setDebugBoolValues(new Map([['x', 'true']]))
+    store.getState().workspaceActions.setDebugValues({ boolValues: new Map([['x', 'true']]) })
     store.getState().workspaceActions.setDebugForcedVariables(new Map([['x', true]]))
     store.getState().workspaceActions.setDebugTick(100)
     store
@@ -531,7 +539,7 @@ describe('createWorkspaceSlice', () => {
   it('removeDebugVariable removes from all relevant maps', () => {
     const key = 'PROGRAM0::myVar'
     store.getState().workspaceActions.setDebugVariableIndexes(new Map([[key, 5]]))
-    store.getState().workspaceActions.setDebugNonBoolValues(new Map([[key, '42']]))
+    store.getState().workspaceActions.setDebugValues({ nonBoolValues: new Map([[key, '42']]) })
     store.getState().workspaceActions.setDebugForcedVariables(new Map([[key, true]]))
     store
       .getState()

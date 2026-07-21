@@ -757,14 +757,14 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
       if (language === 'ld') {
         const pouFlows = openPLCStoreBase.getState().ladderFlows.filter((f) => f.name === pouName)
         if (pouFlows.length > 0) {
-          syncNodesWithVariables(reparsedVars, pouFlows, openPLCStoreBase.getState().ladderFlowActions.updateNode)
+          syncNodesWithVariables(reparsedVars, pouFlows, openPLCStoreBase.getState().ladderFlowActions.updateNodes)
         }
-        // Reset flow updated flag (syncNodesWithVariables triggers updateNode which sets updated=true)
+        // Reset flow updated flag (syncNodesWithVariables triggers updateNodes which sets updated=true)
         openPLCStoreBase.getState().ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
       } else if (language === 'fbd') {
         const pouFlows = openPLCStoreBase.getState().fbdFlows.filter((f) => f.name === pouName)
         if (pouFlows.length > 0) {
-          syncNodesWithVariablesFBD(reparsedVars, pouFlows, openPLCStoreBase.getState().fbdFlowActions.updateNode)
+          syncNodesWithVariablesFBD(reparsedVars, pouFlows, openPLCStoreBase.getState().fbdFlowActions.updateNodes)
         }
         openPLCStoreBase.getState().fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
       }

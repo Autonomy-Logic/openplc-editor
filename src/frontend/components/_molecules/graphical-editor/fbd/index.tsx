@@ -16,6 +16,8 @@ import {
 import { debounce, isEqual } from 'lodash'
 import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { mapsEqual, useContentStable } from '../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import {
   useDebugBoolValuesMap,
@@ -54,6 +56,151 @@ const SNAP_GRID: SnapGrid = [16, 16]
 const PRO_OPTIONS = { hideAttribution: true }
 const CONTROLS_CONFIG = { showInteractive: false }
 
+// --- Debug edge coloring ---
+
+type FBDDebugContext = {
+  isFunctionBlockPou: boolean
+  hasProgramInstance: boolean
+  getCompositeKey: (variableName: string) => string
+  boolValues: Map<string, string>
+  forcedValues: Map<string, boolean>
+  pouVariables: PLCVariable[] | undefined
+}
+
+const computeFBDEdgeStates = (
+  nodes: FBDRungState['nodes'],
+  edges: FBDRungState['edges'],
+  ctx: FBDDebugContext,
+): Map<string, boolean> => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const edgeById = new Map(edges.map((edge) => [edge.id, edge]))
+  const edgesByTarget = new Map<string, FBDRungState['edges']>()
+  for (const edge of edges) {
+    const list = edgesByTarget.get(edge.target)
+    if (list) list.push(edge)
+    else edgesByTarget.set(edge.target, [edge])
+  }
+  const variablesByName = new Map<string, PLCVariable>()
+  for (const variable of ctx.pouVariables ?? []) {
+    const key = variable.name.toLowerCase()
+    if (!variablesByName.has(key)) variablesByName.set(key, variable)
+  }
+
+  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
+    const node = nodeById.get(nodeId)
+    if (!node) return undefined
+
+    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+      const variableData = node.data as { variable?: { name: string } }
+      const variableName = variableData.variable?.name
+      if (!variableName) return undefined
+
+      const variable = variablesByName.get(variableName.toLowerCase())
+      if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
+
+      const compositeKey = ctx.getCompositeKey(variableName)
+
+      if (ctx.forcedValues.has(compositeKey)) {
+        return ctx.forcedValues.get(compositeKey)
+      }
+
+      const value = ctx.boolValues.get(compositeKey)
+      if (value === undefined) return undefined
+
+      return value === '1' || value.toUpperCase() === 'TRUE'
+    }
+
+    if (node.type === 'block') {
+      const blockData = node.data as {
+        variable?: { name: string }
+        variant?: { name: string; type: string; variables: Array<{ name: string; type: { value: string } }> }
+      }
+      if (!sourceHandle) return undefined
+
+      if (!ctx.isFunctionBlockPou && !ctx.hasProgramInstance) return undefined
+
+      const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
+      if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined
+
+      if (blockData.variant?.type === 'function-block') {
+        const blockVariableName = blockData.variable?.name
+        if (!blockVariableName) return undefined
+
+        const compositeKey = ctx.getCompositeKey(`${blockVariableName}.${sourceHandle}`)
+        const value = ctx.boolValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        return value === '1' || value.toUpperCase() === 'TRUE'
+      } else if (blockData.variant?.type === 'function') {
+        const blockName = blockData.variant.name.toUpperCase()
+        const numericId = (node.data as { numericId?: string }).numericId
+        if (!numericId) return undefined
+
+        const compositeKey = ctx.getCompositeKey(`_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`)
+        const value = ctx.boolValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        return value === '1' || value.toUpperCase() === 'TRUE'
+      }
+
+      return undefined
+    }
+
+    return undefined
+  }
+
+  const isPassThroughNode = (node: FBDRungState['nodes'][number]): boolean => {
+    return node.type === 'connector' || node.type === 'continuation'
+  }
+
+  const edgeStates = new Map<string, boolean>()
+
+  const determineEdgeState = (edgeId: string, visited: Set<string>): boolean => {
+    if (edgeStates.has(edgeId)) {
+      return edgeStates.get(edgeId)!
+    }
+
+    if (visited.has(edgeId)) {
+      return false
+    }
+    visited.add(edgeId)
+
+    const edge = edgeById.get(edgeId)
+    if (!edge) {
+      visited.delete(edgeId)
+      return false
+    }
+
+    const sourceNode = nodeById.get(edge.source)
+    if (!sourceNode) {
+      visited.delete(edgeId)
+      return false
+    }
+
+    const incomingEdges = edgesByTarget.get(edge.source) ?? []
+    const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id, visited))
+
+    const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
+
+    const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
+
+    edgeStates.set(edgeId, isGreen)
+    visited.delete(edgeId)
+    return isGreen
+  }
+
+  edges.forEach((edge) => {
+    determineEdgeState(edge.id, new Set())
+  })
+
+  return edgeStates
+}
+
+const fbdEdgeStatesEqual = (previous: Map<string, boolean> | null, next: Map<string, boolean> | null): boolean =>
+  previous !== null && next !== null && mapsEqual(previous, next)
+
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   // Bound POU + editor model — every multi-mounted FBDBody reads
   // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
@@ -66,7 +213,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const { closeModal, openModal } = useOpenPLCStore((state) => state.modalActions)
   const blockElementModal = useOpenPLCStore((state) => state.modals['block-fbd-element'])
   const pous = useOpenPLCStore((state) => state.project.data.pous)
-  const resourceInstances = useOpenPLCStore((state) => state.project.data.configurations.resource.instances)
+  const hasProgramInstance = useOpenPLCStore((state) =>
+    state.project.data.configurations.resource.instances.some((instance) => instance.program === pouName),
+  )
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
@@ -80,11 +229,14 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  const [insideViewport, setInsideViewport] = useState(false)
-  const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
+  // Refs, not state: the values are only read inside the paste handler, and
+  // state here re-rendered the whole FBDBody on every pointer move over the
+  // canvas (~75 commits/s of pure overhead while idle).
+  const insideViewportRef = useRef(false)
+  const mousePositionRef = useRef<XYPosition>({ x: 0, y: 0 })
   useFBDClipboard({
-    mousePosition,
-    insideViewport,
+    mousePositionRef,
+    insideViewportRef,
     reactFlowInstance,
     rung,
     viewportRef: reactFlowViewportRef,
@@ -109,137 +261,42 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   // --- Debug edge coloring and node lockdown ---
 
-  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
-    if (!isDebuggerVisible) return undefined
+  const debugEdgeStates = useMemo(
+    () =>
+      isDebuggerVisible
+        ? computeFBDEdgeStates(rungLocal.nodes, rungLocal.edges, {
+            isFunctionBlockPou: pouRef?.pouType === 'function-block',
+            hasProgramInstance,
+            getCompositeKey,
+            boolValues: debugVariableValues,
+            forcedValues: debugForcedVariables,
+            pouVariables: pouRef?.interface?.variables,
+          })
+        : null,
+    [
+      isDebuggerVisible,
+      rungLocal.nodes,
+      rungLocal.edges,
+      pouRef?.pouType,
+      hasProgramInstance,
+      getCompositeKey,
+      debugVariableValues,
+      debugForcedVariables,
+      pouRef?.interface?.variables,
+    ],
+  )
 
-    const node = rungLocal.nodes.find((n) => n.id === nodeId)
-    if (!node) return undefined
-
-    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
-      const variableData = node.data as { variable?: { name: string } }
-      const variableName = variableData.variable?.name
-      if (!variableName) return undefined
-
-      if (!pouRef) return undefined
-      const variable = (pouRef.interface?.variables ?? []).find(
-        (v) => v.name.toLowerCase() === variableName.toLowerCase(),
-      )
-      if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
-
-      const compositeKey = getCompositeKey(variableName)
-
-      if (debugForcedVariables.has(compositeKey)) {
-        return debugForcedVariables.get(compositeKey)
-      }
-
-      const value = debugVariableValues.get(compositeKey)
-      if (value === undefined) return undefined
-
-      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      return isTrue
-    }
-
-    if (node.type === 'block') {
-      const blockData = node.data as {
-        variable?: { name: string }
-        variant?: { name: string; type: string; variables: Array<{ name: string; type: { value: string } }> }
-      }
-      if (!sourceHandle) return undefined
-
-      if (pouRef?.pouType !== 'function-block') {
-        const programInstance = resourceInstances.find((inst: { program: string }) => inst.program === pouName)
-        if (!programInstance) return undefined
-      }
-
-      const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
-      if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined
-
-      if (blockData.variant?.type === 'function-block') {
-        const blockVariableName = blockData.variable?.name
-        if (!blockVariableName) return undefined
-
-        const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = getCompositeKey(outputVariableName)
-        const value = debugVariableValues.get(compositeKey)
-
-        if (value === undefined) return undefined
-
-        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-        return isTrue
-      } else if (blockData.variant?.type === 'function') {
-        const blockName = blockData.variant.name.toUpperCase()
-        const numericId = (node.data as { numericId?: string }).numericId
-        if (!numericId) return undefined
-
-        const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = getCompositeKey(tempVarName)
-        const value = debugVariableValues.get(compositeKey)
-
-        if (value === undefined) return undefined
-
-        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-        return isTrue
-      }
-
-      return undefined
-    }
-
-    return undefined
-  }
+  // Identity-stable across polls that didn't change this flow's edge states,
+  // so styledEdges keeps its identity and the canvas skips re-render.
+  const stableDebugEdgeStates = useContentStable(debugEdgeStates, fbdEdgeStatesEqual)
 
   const styledEdges = useMemo(() => {
-    if (!isDebuggerVisible) {
+    if (!stableDebugEdgeStates) {
       return rungLocal.edges
     }
 
-    const edgeStateMap = new Map<string, boolean>()
-
-    const isPassThroughNode = (node: (typeof rungLocal.nodes)[number]): boolean => {
-      return node.type === 'connector' || node.type === 'continuation'
-    }
-
-    const determineEdgeState = (edgeId: string, visited: Set<string> = new Set()): boolean => {
-      if (edgeStateMap.has(edgeId)) {
-        return edgeStateMap.get(edgeId)!
-      }
-
-      if (visited.has(edgeId)) {
-        return false
-      }
-      visited.add(edgeId)
-
-      const edge = rungLocal.edges.find((e) => e.id === edgeId)
-      if (!edge) {
-        visited.delete(edgeId)
-        return false
-      }
-
-      const sourceNode = rungLocal.nodes.find((n) => n.id === edge.source)
-      if (!sourceNode) {
-        visited.delete(edgeId)
-        return false
-      }
-
-      const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
-      const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id, visited))
-
-      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
-
-      const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
-
-      edgeStateMap.set(edgeId, isGreen)
-      visited.delete(edgeId)
-      return isGreen
-    }
-
-    rungLocal.edges.forEach((edge) => {
-      determineEdgeState(edge.id, new Set())
-    })
-
     return rungLocal.edges.map((edge) => {
-      const isGreen = edgeStateMap.get(edge.id)
-
-      if (isGreen === true) {
+      if (stableDebugEdgeStates.get(edge.id) === true) {
         return {
           ...edge,
           style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
@@ -248,16 +305,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       return edge
     })
-  }, [
-    rungLocal.edges,
-    rungLocal.nodes,
-    isDebuggerVisible,
-    debugVariableValues,
-    debugForcedVariables,
-    pouName,
-    pouRef?.interface?.variables,
-    resourceInstances,
-  ])
+  }, [rungLocal.edges, stableDebugEdgeStates])
 
   const styledNodes = useMemo(() => {
     if (isDebuggerActive) {
@@ -705,14 +753,14 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
       ref={reactFlowViewportRef}
       onMouseEnter={() => {
-        setInsideViewport(true)
+        insideViewportRef.current = true
       }}
       onMouseLeave={() => {
-        setInsideViewport(false)
-        setMousePosition({ x: 0, y: 0 })
+        insideViewportRef.current = false
+        mousePositionRef.current = { x: 0, y: 0 }
       }}
       onMouseMove={(event) => {
-        setMousePosition({ x: event.clientX, y: event.clientY })
+        mousePositionRef.current = { x: event.clientX, y: event.clientY }
       }}
     >
       <ReactFlowPanel

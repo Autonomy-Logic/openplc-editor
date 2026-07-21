@@ -61,6 +61,8 @@ type FBDFlowActions = {
 
   setNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
   updateNode: ({ node, nodeId, editorName }: { node: Node; nodeId: string; editorName: string }) => void
+  /** Batched updateNode: applies every update in a single store commit. */
+  updateNodes: (updates: { node: Node; nodeId: string; editorName: string }[]) => void
 
   addNode: ({ node, editorName }: { node: Node; editorName: string }) => void
   removeNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
