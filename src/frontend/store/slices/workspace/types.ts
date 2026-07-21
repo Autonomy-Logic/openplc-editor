@@ -171,8 +171,8 @@ export type WorkspaceActions = {
   setDebuggerTargetIp: (targetIp: string | null) => void
   setDebugCContent: (content: string | null) => void
   setDebugVariableIndexes: (indexes: Map<string, number>) => void
-  setDebugBoolValues: (values: Map<string, string>) => void
-  setDebugNonBoolValues: (values: Map<string, string>) => void
+  /** Merges polled values into both maps in a single store commit per poll cycle. */
+  setDebugValues: (values: { boolValues?: Map<string, string>; nonBoolValues?: Map<string, string> }) => void
   setDebugForcedVariables: (forced: Map<string, boolean>) => void
   setDebugTick: (tick: number) => void
   setDebugVariableTree: (tree: Map<string, DebugTreeNode>) => void

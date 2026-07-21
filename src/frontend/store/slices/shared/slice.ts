@@ -732,8 +732,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           const freshLadderFlows = freshState.ladderFlows
           const freshFBDFlows = freshState.fbdFlows
           const freshPous = freshState.project.data.pous
-          const updateLadderNode = freshState.ladderFlowActions.updateNode
-          const updateFBDNode = freshState.fbdFlowActions.updateNode
+          const updateLadderNodes = freshState.ladderFlowActions.updateNodes
+          const updateFBDNodes = freshState.fbdFlowActions.updateNodes
 
           try {
             ladderPous.forEach((pou) => {
@@ -743,7 +743,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
                 const pouFlow = freshLadderFlows.filter((flow) => flow.name === pou.name)
                 /* istanbul ignore next -- defensive: flow always exists since we just added it */
                 if (pouFlow.length > 0) {
-                  syncNodesWithVariables(freshPou.interface?.variables ?? [], pouFlow, updateLadderNode)
+                  syncNodesWithVariables(freshPou.interface?.variables ?? [], pouFlow, updateLadderNodes)
                 }
               }
             })
@@ -755,7 +755,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
                 const pouFlow = freshFBDFlows.filter((flow) => flow.name === pou.name)
                 /* istanbul ignore next -- defensive: flow always exists since we just added it */
                 if (pouFlow.length > 0) {
-                  syncNodesWithVariablesFBD(freshPou.interface?.variables ?? [], pouFlow, updateFBDNode)
+                  syncNodesWithVariablesFBD(freshPou.interface?.variables ?? [], pouFlow, updateFBDNodes)
                 }
               }
             })

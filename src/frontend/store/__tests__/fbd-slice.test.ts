@@ -265,6 +265,42 @@ describe('createFBDFlowSlice', () => {
   })
 
   // -------------------------------------------------------------------------
+  // updateNodes
+  // -------------------------------------------------------------------------
+  it('updateNodes applies a batch of node replacements and marks the flow as updated', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'old-1' } }), makeNode({ id: 'n2', data: { label: 'old-2' } })],
+    })
+
+    store.getState().fbdFlowActions.updateNodes([
+      { editorName: 'editor-1', nodeId: 'n1', node: makeNode({ id: 'n1', data: { label: 'new-1' } }) },
+      { editorName: 'editor-1', nodeId: 'n2', node: makeNode({ id: 'n2', data: { label: 'new-2' } }) },
+    ])
+
+    const nodes = store.getState().fbdFlows[0].rung.nodes
+    expect(nodes.find((n) => n.id === 'n1')?.data.label).toBe('new-1')
+    expect(nodes.find((n) => n.id === 'n2')?.data.label).toBe('new-2')
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
+  it('updateNodes skips entries whose editor or node does not exist', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'old' } })],
+    })
+
+    store.getState().fbdFlowActions.updateNodes([
+      { editorName: 'missing-editor', nodeId: 'n1', node: makeNode({ id: 'n1' }) },
+      { editorName: 'editor-1', nodeId: 'missing', node: makeNode({ id: 'missing' }) },
+    ])
+
+    expect(store.getState().fbdFlows[0].rung.nodes.find((n) => n.id === 'n1')?.data.label).toBe('old')
+  })
+
+  // -------------------------------------------------------------------------
   // addNode
   // -------------------------------------------------------------------------
   it('addNode pushes a node and selects it', () => {

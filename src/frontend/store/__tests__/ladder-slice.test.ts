@@ -526,6 +526,52 @@ describe('createLadderFlowSlice', () => {
   })
 
   // -------------------------------------------------------------------------
+  // updateNodes
+  // -------------------------------------------------------------------------
+  it('updateNodes applies a batch of node replacements and marks the flow as updated', () => {
+    const rung = makeRung({
+      nodes: [makeNode({ id: 'n1', data: { label: 'old-1' } }), makeNode({ id: 'n2', data: { label: 'old-2' } })],
+    })
+    seedFlowWithRung(store, 'editor-1', rung)
+    store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().ladderFlowActions.updateNodes([
+      {
+        editorName: 'editor-1',
+        rungId: 'rung-1',
+        nodeId: 'n1',
+        node: makeNode({ id: 'n1', data: { label: 'new-1' } }),
+      },
+      {
+        editorName: 'editor-1',
+        rungId: 'rung-1',
+        nodeId: 'n2',
+        node: makeNode({ id: 'n2', data: { label: 'new-2' } }),
+      },
+    ])
+
+    const nodes = store.getState().ladderFlows[0].rungs[0].nodes
+    expect(nodes.find((n) => n.id === 'n1')?.data.label).toBe('new-1')
+    expect(nodes.find((n) => n.id === 'n2')?.data.label).toBe('new-2')
+    expect(store.getState().ladderFlows[0].updated).toBe(true)
+  })
+
+  it('updateNodes skips entries whose editor, rung or node does not exist', () => {
+    const rung = makeRung({ nodes: [makeNode({ id: 'n1', data: { label: 'old' } })] })
+    seedFlowWithRung(store, 'editor-1', rung)
+    store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().ladderFlowActions.updateNodes([
+      { editorName: 'missing-editor', rungId: 'rung-1', nodeId: 'n1', node: makeNode({ id: 'n1' }) },
+      { editorName: 'editor-1', rungId: 'missing-rung', nodeId: 'n1', node: makeNode({ id: 'n1' }) },
+      { editorName: 'editor-1', rungId: 'rung-1', nodeId: 'missing', node: makeNode({ id: 'missing' }) },
+    ])
+
+    expect(store.getState().ladderFlows[0].rungs[0].nodes.find((n) => n.id === 'n1')?.data.label).toBe('old')
+    expect(store.getState().ladderFlows[0].updated).toBe(false)
+  })
+
+  // -------------------------------------------------------------------------
   // addNode
   // -------------------------------------------------------------------------
   it('addNode pushes a node and selects it, deselects others', () => {
