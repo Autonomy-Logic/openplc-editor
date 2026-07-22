@@ -26,6 +26,7 @@ import {
   TRUE_NODE,
 } from '../core/path-tree'
 import { resolveConversionFunctionName } from '../helpers/block-library'
+import { computeConnectionTypes, pinOut, type TypeContext } from './connection-types'
 import {
   asBlockData,
   asCoilData,
@@ -48,19 +49,15 @@ import type { RFBody, RFEdge, RFNode, RFRung } from './types'
  * must declare in the POU's trailing local `VAR` section.  Two
  * flavours flow through this shape:
  *   - Trigger instances (`R_TRIG1`, `F_TRIG1`, …) — `type` is
- *     already the resolved `'R_TRIG'`/`'F_TRIG'` name.  `origin*`
- *     fields are absent.
+ *     already the resolved `'R_TRIG'`/`'F_TRIG'` name.
  *   - Function-call output temps (`_TMP_<typeName><numericId>_<param>`)
- *     — `type` is `'BOOL'` for `ENO`, otherwise the literal string
- *     `'ANY'`.  When `'ANY'`, the caller resolves it against the
- *     standard block catalog or the project's POU table using
- *     `originBlockTypeName` + `originFormalParameter`.
+ *     — `type` is `'BOOL'` for `ENO`, otherwise the graph-inferred
+ *     pin type from `connection-types.ts` (literal `'ANY'` when no
+ *     concrete type reaches the pin, matching Python).
  */
 export interface SyntheticVar {
   name: string
   type: string
-  originBlockTypeName?: string
-  originFormalParameter?: string
 }
 
 export interface EmitResult {
@@ -82,17 +79,20 @@ interface WalkerState {
   declaredVars: Set<string>
   triggerVars: { name: string; type: 'R_TRIG' | 'F_TRIG' }[]
   /** `_TMP_<typeName><numericId>_<param>` temps synthesised by
-   *  function-call emission.  `originBlockTypeName` +
-   *  `originFormalParameter` let the caller resolve `'ANY'` types
-   *  against the standard block catalog or a project POU's declared
-   *  `returnType` after the walk completes. */
+   *  function-call emission.  Types come from the pre-computed
+   *  connection-type inference (`'ANY'` terminal fallback). */
   functionTempVars: {
     name: string
     type: string
-    originBlockTypeName: string
-    originFormalParameter: string
   }[]
   emittedBlocks: Set<string>
+  /** Output-write sinks (coil / output / inOut variable) keyed by the
+   *  block that feeds them — emitted right after the block's call so a
+   *  downstream block reads the written value, not a stale one (#830). */
+  consumersByBlock: Map<string, RFNode[]>
+  /** Sinks already emitted — by block coupling or the main sweep — so
+   *  the other path skips them. */
+  emittedSinks: Set<string>
   /** Connector expressions cached by name, consumed by continuation
    *  visits later in the same rung (FBD-only). */
   connectorExprs: Map<string, ProgramChunk[]>
@@ -103,15 +103,8 @@ interface WalkerState {
    *  in the same coordinate space the python oracle sees. */
   yOffset: Map<string, number>
   warnings: string[]
-  /** Declared base-type of every known variable name, keyed by name
-   *  (see `emit/pou-graphical.ts`'s `buildVariableTypeIndex`).  Used
-   *  only to resolve a polymorphic `TO_<TYPE>` conversion block's
-   *  concrete call name from the type of whatever's wired into its
-   *  input — see `resolveConversionCallName`.  Empty when the caller
-   *  doesn't have (or doesn't pass) project/POU variable context;
-   *  conversion blocks simply keep their as-placed name in that case,
-   *  same as before this lookup existed. */
-  variableTypes: ReadonlyMap<string, string>
+  /** Pin types from computeConnectionTypes; empty without a TypeContext. */
+  connTypes: Map<string, string>
 }
 
 function rungHeight(rung: RFRung): number {
@@ -162,7 +155,7 @@ function isVariableNode(node: RFNode): boolean {
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
-export function emitLdBody(body: RFBody, variableTypes?: ReadonlyMap<string, string>): EmitResult {
+export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult {
   // POU name doesn't influence body emission today (it's only the
   // first element of the `Location` tuples used for source-map back-
   // references).  Hard-code a sentinel; the orchestrator can pass a
@@ -179,10 +172,12 @@ export function emitLdBody(body: RFBody, variableTypes?: ReadonlyMap<string, str
     triggerVars: [],
     functionTempVars: [],
     emittedBlocks: new Set(),
+    consumersByBlock: new Map(),
+    emittedSinks: new Set(),
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
-    variableTypes: variableTypes ?? new Map(),
+    connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map<string, string>(),
   }
 
   // Index every node + edge from every rung up front.  Sinks are then
@@ -257,8 +252,24 @@ export function emitLdBody(body: RFBody, variableTypes?: ReadonlyMap<string, str
   ordered.sort((a, b) => nodeExecutionOrder(a) - nodeExecutionOrder(b))
   others.sort((a, b) => compareNodePosition(state, a, b))
 
-  for (const sink of ordered) emitSink(state, sink)
-  for (const sink of others) emitSink(state, sink)
+  // Index each block's output-write sinks (coils / output / inOut
+  // variables fed solely by that block).  These are emitted right after
+  // the block's call by `emitBlockConsumers` — wherever the call lands,
+  // eager or lazy — and skipped in the sweep below.  Otherwise a block
+  // numbered ahead of its output variable (write left at
+  // executionOrderId 0) emits its call in the ordered pass while the
+  // assignment waits for the unordered pass, so a later block in the
+  // rung reads the variable before it is written (#830).
+  for (const node of [...ordered, ...others]) {
+    const blockId = blockFedSink(state, node)
+    if (blockId === null) continue
+    const list = state.consumersByBlock.get(blockId) ?? []
+    list.push(node)
+    state.consumersByBlock.set(blockId, list)
+  }
+
+  emitSinksWithCoilGrouping(state, ordered)
+  emitSinksWithCoilGrouping(state, others)
 
   const bodySt = '\n' + state.program.map((c) => c[0]).join('')
   const syntheticVars: SyntheticVar[] = [
@@ -286,6 +297,25 @@ function compareNodePosition(state: WalkerState, a: RFNode, b: RFNode): number {
   return ax - bx
 }
 
+/**
+ * If `node` is an output-write sink (coil / output- or inOut-variable)
+ * whose value comes solely from a single block, return that block's id.
+ * Such a sink is the block's output binding — it must emit right after
+ * the block's call so downstream blocks read the written value, not a
+ * stale one (#830).  Returns null for anything else (multi-source
+ * sinks, non-block sources, blocks, connectors).
+ */
+function blockFedSink(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil' && !isVariableNode(node)) return null
+  const edges = state.incoming.get(node.id) ?? []
+  // Only direct block->sink edges couple; sinks fed through a
+  // passthrough node or with extra wires stay on the positional sweep.
+  if (edges.length !== 1) return null
+  const src = state.byId.get(edges[0].source)
+  if (src === undefined || src.type !== 'block') return null
+  return src.id
+}
+
 function emitSink(state: WalkerState, node: RFNode): void {
   // Top-level sink walks ALWAYS use order=false — the sink's own
   // executionOrderId doesn't propagate into its upstream walks
@@ -304,7 +334,110 @@ function emitSink(state: WalkerState, node: RFNode): void {
   if (node.type === 'connector') return emitConnectorNode(state, node)
 }
 
+/**
+ * Emit sinks in order, collapsing SET/RESET coils that branch off the
+ * SAME upstream source into a single `IF`.  Parallel coils share one
+ * energization path, so the rung condition must be evaluated ONCE and
+ * applied to every branch — emitting a separate `IF` per coil
+ * re-evaluates the condition between assignments, which is wrong when
+ * the condition reads a coil an earlier branch just set
+ * (e.g. `IF NOT(coils1)... coils1 := TRUE`).
+ *
+ * Same-source coils are gathered even when they are NOT adjacent in
+ * emission order: a coil fed by their merge (so it shares neither
+ * source) can sort between two parallel branches by position, yet the
+ * branches must still collapse into one `IF`.  The group is emitted at
+ * the first branch's slot; the intervening sink (and any other
+ * downstream work) follows after — which is also its dataflow order,
+ * since a merge-fed sink is downstream of the branches it consumes.
+ */
+function emitSinksWithCoilGrouping(state: WalkerState, sinks: RFNode[]): void {
+  for (let i = 0; i < sinks.length; i++) {
+    if (state.emittedSinks.has(sinks[i].id)) continue
+    const key = setResetCoilGroupKey(state, sinks[i])
+    if (key === null) {
+      state.emittedSinks.add(sinks[i].id)
+      emitSink(state, sinks[i])
+      continue
+    }
+    const group: RFNode[] = [sinks[i]]
+    for (let j = i + 1; j < sinks.length; j++) {
+      if (state.emittedSinks.has(sinks[j].id)) continue
+      if (setResetCoilGroupKey(state, sinks[j]) === key) group.push(sinks[j])
+    }
+    for (const g of group) state.emittedSinks.add(g.id)
+    if (group.length === 1) emitCoilNode(state, sinks[i])
+    else emitCoilGroup(state, group)
+  }
+}
+
+/**
+ * Emit a block's output-write sinks (coils / output / inOut variables
+ * fed solely by it) right after its call — wherever that call lands.
+ * Reuses the coil-grouping sweep so parallel SET/RESET coils off the
+ * same block still collapse into one `IF`.  Idempotent via
+ * `state.emittedSinks`, so the main sweep skips what is emitted here.
+ */
+function emitBlockConsumers(state: WalkerState, blockId: string): void {
+  const consumers = state.consumersByBlock.get(blockId)
+  if (consumers === undefined) return
+  emitSinksWithCoilGrouping(state, consumers)
+}
+
+/**
+ * Group identity for a SET/RESET coil: the sorted set of its upstream
+ * source node ids.  Two coils with the same key branch off the same
+ * point (parallel rails) and therefore share a condition.  Returns
+ * null for anything not groupable (non-coils, plain/negated/edge
+ * coils, or an unconnected coil).
+ */
+function setResetCoilGroupKey(state: WalkerState, node: RFNode): string | null {
+  if (node.type !== 'coil') return null
+  const data = asCoilData(node.data)
+  if (data === null || (data.variant !== 'set' && data.variant !== 'reset')) return null
+  const sources = (state.incoming.get(node.id) ?? []).map((e) => e.source).sort()
+  if (sources.length === 0) return null
+  return sources.join('|')
+}
+
 /* ─────────────────────────── coil emission ──────────────────────────────── */
+
+/**
+ * Emit a group of parallel SET/RESET coils under one shared `IF`.
+ * The condition is computed once from the first coil's upstream (all
+ * coils in the group share it by construction), then each branch's
+ * assignment is written inside the single `THEN` body.
+ */
+function emitCoilGroup(state: WalkerState, coils: RFNode[]): void {
+  const first = coils[0]
+  const paths = pathsFromIncoming(state, first.id, /*order=*/ false)
+  if (paths.length === 0) {
+    // Shared upstream resolved to nothing — fall back to per-coil
+    // emission so each surfaces its own "must be connected" warning.
+    for (const coil of coils) emitCoilNode(state, coil)
+    return
+  }
+  const expr = pathsToChunks(paths)
+  const firstData = asCoilData(first.data)
+  const firstInfo: Location = [state.tagName, 'coil', locId(first)]
+
+  state.program.push([`${state.currentIndent}IF `, [...firstInfo, firstData?.variant ?? 'set']])
+  for (const chunk of expr) state.program.push(chunk)
+  state.program.push([' THEN\n', []])
+
+  const inner = state.currentIndent + '  '
+  for (const coil of coils) {
+    const data = asCoilData(coil.data)
+    if (data === null) continue
+    const storage = data.variant === 'reset' ? 'reset' : 'set'
+    const value = storage === 'set' ? 'TRUE' : 'FALSE'
+    const info: Location = [state.tagName, 'coil', locId(coil)]
+    state.program.push([inner, []])
+    state.program.push([data.variable, [...info, 'reference']])
+    state.program.push([` := ${value}; (*${storage}*)\n`, []])
+  }
+  state.program.push([`${state.currentIndent}END_IF;\n`, []])
+}
 
 function emitCoilNode(state: WalkerState, node: RFNode): void {
   const data = asCoilData(node.data)
@@ -681,6 +814,7 @@ function emitFunctionBlockCall(state: WalkerState, node: RFNode, data: BlockData
     for (const chunk of parts[i]) state.program.push(chunk)
   }
   state.program.push([');\n', []])
+  emitBlockConsumers(state, node.id)
 }
 
 function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): void {
@@ -689,7 +823,8 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
 
   const info: Location = [state.tagName, 'block', locId(node)]
   const wiredInputs = data.inputs.filter((name) => firstIncomingForHandle(state, node.id, name) !== undefined)
-  const allInputConnected = wiredInputs.length === data.inputs.length
+  // python only ever sees wired pins for extensible blocks (DIV-18)
+  const allInputConnected = data.extensible || wiredInputs.length === data.inputs.length
   const useNamedArgs = data.outputs.length > 1 || !allInputConnected
 
   const recurseOrdered = data.executionOrder > 0
@@ -703,12 +838,10 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   for (let i = 0; i < data.outputs.length; i++) {
     const out = data.outputs[i]
     const tempName = `_TMP_${data.typeName}${data.numericId}_${out}`
-    const tempType = out === 'ENO' ? 'BOOL' : 'ANY'
+    const tempType = state.connTypes.get(pinOut(node.id, out)) ?? (out === 'ENO' ? 'BOOL' : 'ANY')
     state.functionTempVars.push({
       name: tempName,
       type: tempType,
-      originBlockTypeName: data.typeName,
-      originFormalParameter: out,
     })
     const isPrimary = data.outputs.length === 1 || out === '' || out === 'OUT'
     if (isPrimary && primaryName === null) {
@@ -747,6 +880,7 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   }
   state.program.push([');\n', []])
   void primaryFormal
+  emitBlockConsumers(state, node.id)
 }
 
 function buildInputArgs(
@@ -828,19 +962,11 @@ function firstIncomingForHandle(state: WalkerState, blockId: string, handle: str
 
 /**
  * Resolve a polymorphic `TO_<TYPE>` block's concrete ST call name
- * (e.g. `REAL_TO_INT`) from the declared type of whatever is wired
- * directly into its single input.  Returns `null` for anything that
+ * (e.g. `REAL_TO_INT`) from the inferred type of whatever is wired into
+ * its single input. Returns `null` for anything that
  * isn't a `TO_<TYPE>` block, has zero or more than one formal input
- * (every real conversion function in the catalog takes exactly one),
- * an unconnected/non-variable upstream, or a source type with no
- * known type index entry / no matching catalog entry.
- *
- * Deliberately narrow: only the direct "input wired straight to a
- * declared variable" case is resolved.  A chain through another
- * block's output would need that block's own output type, which is
- * the harder general connection-type-inference problem the python
- * oracle's `ComputeConnectionTypes` solves and this walker hasn't
- * ported (see `emit/pou-graphical.ts`'s ANY-resolution comment).
+ * (every supported conversion function takes exactly one),
+ * an unconnected upstream, or a source type with no supported conversion.
  */
 function resolveConversionCallName(state: WalkerState, node: RFNode, data: BlockData): string | null {
   if (data.inputs.length !== 1) return null
@@ -848,9 +974,8 @@ function resolveConversionCallName(state: WalkerState, node: RFNode, data: Block
   if (edge === undefined) return null
   const upstream = state.byId.get(edge.source)
   if (upstream === undefined) return null
-  const variableName = asVariableData(upstream.data)?.variable ?? asVariableExpressionData(upstream.data)?.expression
-  if (variableName === undefined || variableName === '') return null
-  const sourceType = state.variableTypes.get(variableName)
+  const sourcePin = upstream.type === 'block' ? pinOut(edge.source, edge.sourceHandle ?? '') : pinOut(edge.source)
+  const sourceType = state.connTypes.get(sourcePin)
   if (sourceType === undefined) return null
   return resolveConversionFunctionName(data.typeName, sourceType)
 }

@@ -149,6 +149,22 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
         }),
       )
     },
+    updateNodes(updates) {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          for (const { editorName, node, nodeId } of updates) {
+            const flow = fbdFlows.find((flow) => flow.name === editorName)
+            if (!flow) continue
+
+            const nodeIndex = flow.rung.nodes.findIndex((n) => n.id === nodeId)
+            if (nodeIndex === -1) continue
+
+            flow.rung.nodes[nodeIndex] = node
+            flow.updated = true
+          }
+        }),
+      )
+    },
     addNode({ editorName, node }) {
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {

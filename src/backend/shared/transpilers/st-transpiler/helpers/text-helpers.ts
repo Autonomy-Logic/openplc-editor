@@ -46,16 +46,11 @@ export function reIndentText(text: string, nbSpaces: number): string {
   return compute
 }
 
-/**
- * Mirror of Python's `str.splitlines()` for the line separators we encounter.
- *
- * Key difference from `String.prototype.split('\n')`: Python drops the final
- * empty element when the string ends with a separator. PLCOpen-loaded text
- * is normalized to `\n` by lxml, so we only need to handle that form here.
- */
+// Mirrors str.splitlines(): consumes CR forms (RF body text is raw editor
+// bytes, no lxml EOL normalization) and drops the trailing empty element.
 function pySplitLines(text: string): string[] {
   if (text.length === 0) return []
-  const lines = text.split('\n')
+  const lines = text.split(/\r\n|\r|\n/)
   if (lines[lines.length - 1] === '') lines.pop()
   return lines
 }

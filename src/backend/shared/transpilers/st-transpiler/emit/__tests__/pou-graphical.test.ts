@@ -35,6 +35,7 @@ function outputVariableNode(id: string, name: string): RFNode {
 }
 
 function conversionBlockNode(id: string, typeName: string, numericId: string): RFNode {
+  const destinationType = typeName.match(/^TO_([A-Z][A-Z0-9]*)$/)?.[1] ?? 'ANY'
   return {
     id,
     type: 'block',
@@ -44,8 +45,8 @@ function conversionBlockNode(id: string, typeName: string, numericId: string): R
         name: typeName,
         type: 'function',
         variables: [
-          { name: 'IN', class: 'input' },
-          { name: 'OUT', class: 'output' },
+          { name: 'IN', class: 'input', type: { definition: 'base-type', value: 'ANY' } },
+          { name: 'OUT', class: 'output', type: { definition: 'base-type', value: destinationType } },
         ],
       },
       numericId,

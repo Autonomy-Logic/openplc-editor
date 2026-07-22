@@ -15,7 +15,16 @@
  */
 
 import { emitLdBody } from '../ld'
+import type { TypeContext } from '../connection-types'
 import type { RFBody, RFEdge, RFNode } from '../types'
+
+function typeContext(entries: [string, string][]): TypeContext {
+  const variableTypes = new Map(entries)
+  return {
+    variableType: (expression) => variableTypes.get(expression) ?? null,
+    resolveBlock: () => null,
+  }
+}
 
 function inputVariableNode(id: string, name: string): RFNode {
   return {
@@ -95,7 +104,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['O_R', 'REAL']]))
+    const result = emitLdBody(body, typeContext([['O_R', 'REAL']]))
 
     expect(result.bodySt).toContain('REAL_TO_INT(O_R)')
     expect(result.bodySt).not.toMatch(/:=\s*TO_INT\(/)
@@ -131,7 +140,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['O_R', 'REAL']]))
+    const result = emitLdBody(body, typeContext([['O_R', 'REAL']]))
 
     expect(result.bodySt).toContain('TO_INT()')
   })
@@ -150,7 +159,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['_TMP_TRUNC41_OUT', 'REAL']]))
+    const result = emitLdBody(body, typeContext([['_TMP_TRUNC41_OUT', 'REAL']]))
 
     expect(result.bodySt).toContain('TO_INT(_TMP_TRUNC41_OUT)')
     expect(result.bodySt).not.toContain('REAL_TO_INT(_TMP_TRUNC41_OUT)')
@@ -170,9 +179,9 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    // `NOT_A_REAL_TYPE_TO_INT` isn't a catalog entry — resolution must
+    // `NOT_A_REAL_TYPE_TO_INT` isn't a supported compiler conversion —
     // fall back to the shorthand rather than emit that non-existent name.
-    const result = emitLdBody(body, new Map([['WEIRD_SOURCE', 'NOT_A_REAL_TYPE']]))
+    const result = emitLdBody(body, typeContext([['WEIRD_SOURCE', 'NOT_A_REAL_TYPE']]))
 
     expect(result.bodySt).toContain('TO_INT(WEIRD_SOURCE)')
   })
@@ -191,7 +200,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['A', 'REAL']]))
+    const result = emitLdBody(body, typeContext([['A', 'REAL']]))
 
     expect(result.bodySt).toContain('TRUNC(A)')
   })
@@ -210,7 +219,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
       ],
     }
 
-    const result = emitLdBody(body, new Map([['FLAG', 'BOOL']]))
+    const result = emitLdBody(body, typeContext([['FLAG', 'BOOL']]))
 
     expect(result.bodySt).toContain('BOOL_TO_DINT(FLAG)')
   })
@@ -236,7 +245,7 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
 
     const result = emitLdBody(
       body,
-      new Map([
+      typeContext([
         ['A', 'REAL'],
         ['B', 'REAL'],
       ]),

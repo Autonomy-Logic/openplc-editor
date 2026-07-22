@@ -15,14 +15,15 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
-import { RungLadderState, zodLadderFlowSchema } from '../../../../../../store/slices/ladder'
-import type { PouHistorySnapshot } from '../../../../../../store/slices/shared/types'
+import { useOpenPLCStore } from '../../../../../../store'
+import { RungLadderState } from '../../../../../../store/slices/ladder'
+import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
@@ -51,27 +52,11 @@ export default function LadderEditor() {
   const contactElementModal = useOpenPLCStore((state) => state.modals['contact-ladder-element'])
   const coilElementModal = useOpenPLCStore((state) => state.modals['coil-ladder-element'])
   const pous = useOpenPLCStore((state) => state.project.data.pous)
-  const updatePou = useOpenPLCStore((state) => state.projectActions.updatePou)
   const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
-  const handleFileAndWorkspaceSavedState = useOpenPLCStore(
-    (state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState,
-  )
-  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
-  const captureSnapshot = useCallback(
-    (pouName: string): PouHistorySnapshot | null => {
-      const pou = pous.find((p) => p.name === pouName)
-      if (!pou) return null
-      return {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        globalVariables: openPLCStoreBase.getState().project.data.configurations.resource.globalVariables,
-      }
-    },
-    [pous],
-  )
+  const { captureAndPush } = usePouSnapshot()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
@@ -150,36 +135,15 @@ export default function LadderEditor() {
   }, [searchNodePosition])
 
   /**
-   * Update the flow state to project JSON.
-   *
-   * Validate the flow with Zod but persist the raw object (minus the
-   * transient `updated` flag). Using the parsed result would silently strip
-   * every field not declared in `zodLadderFlowSchema` (e.g. `handleBranches`,
-   * `positionAbsolute`, `zIndex`) and reorder keys to schema order, which
-   * makes `serializeGraphicalPouToString` produce byte-drift vs. the loaded
-   * disk copy — surfacing as phantom "Modified" entries in Source Control
-   * for POUs the user never edited.
+   * Queue the flow → project JSON write-back. The scheduler debounces it
+   * (edits inside the window coalesce), persists the raw flow object, and
+   * clears the `updated` flag; save paths flush it so a save landing inside
+   * the window still serializes the fresh body. Validation and the DOPE-477
+   * raw-object policy live in store/slices/shared/flow-writeback.ts.
    */
   useEffect(() => {
-    if (!flowUpdated || !flow) return
-
-    const flowSchema = zodLadderFlowSchema.safeParse(flow)
-    if (!flowSchema.success) return
-
-    const { updated: _updated, ...flowBody } = flow
-    updatePou({
-      name: pouName,
-      content: {
-        language: 'ld',
-        value: structuredClone(flowBody),
-      },
-    })
-
-    ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
-
-    if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(pouName)
-    }
+    if (!flowUpdated) return
+    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'ld')
   }, [flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
@@ -195,8 +159,7 @@ export default function LadderEditor() {
   const handleAddNewRung = () => {
     if (isDebuggerVisible) return
 
-    const snapshot = captureSnapshot(pouName)
-    if (snapshot) pushToHistory(pouName, snapshot)
+    captureAndPush(pouName)
 
     const defaultViewport: [number, number] = [300, 100]
 
@@ -255,8 +218,7 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      const snapshot = captureSnapshot(pouName)
-      if (snapshot) pushToHistory(pouName, snapshot)
+      captureAndPush(pouName)
       ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)

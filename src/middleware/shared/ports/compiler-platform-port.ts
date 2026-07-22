@@ -2,17 +2,17 @@
  * Thin platform-bridge for the shared compile pipeline.
  *
  * The shared compile pipeline orchestrator (`backend/shared/compile/
- * pipeline.ts`) drives the full editor-canonical build flow — XML
- * generation, ST transpile, strucpp compile, conf authoring, defines
- * authoring, firmware-bundle composition, arduino-cli invocation,
- * runtime upload.  Every step is shared and pure EXCEPT for three
- * places that genuinely depend on the platform:
+ * pipeline.ts`) drives the full editor-canonical build flow — ST
+ * transpile, strucpp compile, conf authoring, defines authoring,
+ * firmware-bundle composition, arduino-cli invocation, runtime
+ * upload.  ST transpilation runs in-process on both platforms (the
+ * shared `st-transpiler/`); the only places that genuinely depend on
+ * the platform are:
  *
- *  1. `xml2st` transpile — editor spawns the bundled binary,
- *     web HTTP-POSTs to the centralised compiler-service backend.
- *  2. `arduino-cli` compile — editor spawns arduino-cli, web POSTs
- *     to the same backend (which spawns it server-side).
- *  3. Runtime upload — editor HTTPS-POSTs to the device's
+ *  1. `arduino-cli` compile — editor spawns arduino-cli, web POSTs
+ *     to the centralised compiler-service backend (which spawns it
+ *     server-side).
+ *  2. Runtime upload — editor HTTPS-POSTs to the device's
  *     `/api/upload`, web pipes through the orchestrator
  *     (WebRTC data channel with HTTP fallback).
  *
@@ -80,33 +80,13 @@ export type PlatformDeviceContext =
 // Per-method I/O contracts
 // ---------------------------------------------------------------------------
 
-/** `xml2st` input: a single XML string (the IEC 61131-3 PLC XML the
- *  shared `XmlGenerator` produces) plus an array of extra CLI tokens
- *  to append to the xml2st invocation.  Defined here (not on either
- *  adapter) because xml2st flag drift was the root cause of the
- *  initial cross-platform STRUCT bug — editor's local xml2st passed
- *  `--keep-structs` but the web's compile-service `/generate-st`
- *  endpoint hardcoded an unflagged invocation, so structs declared
- *  in the project compiled fine on the desktop and blew up on the
- *  web with `Undefined type 'MY_STRUCT'` errors out of strucpp.
- *  Pushing the flag set into a single shared field means any future
- *  xml2st option is a one-line pipeline change with no per-platform
- *  drift possible.
- *
- *  Editor's adapter passes `xml2stArgs` verbatim to the local
- *  binary (trusted).  Web's adapter filters against its own
- *  known-args allowlist before forwarding to the compile-service
- *  `/generate-st` endpoint, logging a warning for anything it
- *  doesn't recognise (defence in depth — service has its own
- *  allowlist too). */
 /**
  * Input to the in-process JSON → ST transpiler.  Each adapter
  * projects this into the transpiler's `TranspileProject` IR with
  * its own helper — editor: `fromSchemaShape` (IPC schema-shape);
  * web: `fromPortShape` after a port→schema conversion at the
- * adapter boundary.  Replaces the legacy XML-fed surface that
- * routed through a bundled `xml2st` binary; transpilation now
- * runs in-process against the JSON IR.
+ * adapter boundary.  Transpilation runs in-process against the
+ * JSON IR on both platforms.
  *
  * The declared type is port-shape because that's the renderer
  * store's shape; pipeline callers that hold schema-shape data

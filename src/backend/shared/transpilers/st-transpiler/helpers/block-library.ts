@@ -1,21 +1,15 @@
 /**
- * Standard block-library resolution against the pre-built catalog.
+ * Block-library signatures, sourced from the project's own block variants.
  *
- * The full python pipeline resolves block types from three sources —
- * TC6 function-block library XMLs, `iec_std.csv` overloads, and
- * project-local POUs.  The first two are baked into
- * `data/std_block_catalog.json` at build time
- * (`tools/build_std_catalog.py`); the third is intentionally dropped
- * here because the only caller (`emit/pou-graphical.ts`) resolves
- * project POUs separately via `project.pous.find(...)`.
- *
- * Overload behaviour mirrors the python oracle's display mode: when
- * a name has multiple catalog entries (ADD, GT, …), the result has
- * all I/O collapsed to `'ANY'`.  The wrap then narrows via its own
- * type-resolution pass.
+ * openplc-web is co-located with strucpp and the user's installed libraries,
+ * so every placed block already carries its full typed signature in
+ * `node.data.variant` (the editor stamps it from the library on placement and
+ * `restamp-library-variants` keeps it fresh). The transpiler resolves block
+ * types from those variants — the same source `collect-library-blocks.ts`
+ * feeds the Python oracle as the embedded `<libraryBlocks>` payload — instead
+ * of bundling a separate catalog. Unknown blocks degrade to permissive
+ * synthesis in `connection-types.ts`.
  */
-
-import stdCatalog from '../data/std_block_catalog.json'
 
 export interface BlockIO {
   name: string
@@ -33,72 +27,57 @@ export interface BlockInfos {
   usage: string
 }
 
-export interface BlockResolution {
-  source: 'standard'
-  infos: BlockInfos
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
-
-interface CatalogEntry {
-  section: string
-  infos: BlockInfos
-}
-
-const CATALOG: ReadonlyMap<string, readonly CatalogEntry[]> = (() => {
-  const map = new Map<string, CatalogEntry[]>()
-  for (const [name, entries] of Object.entries(stdCatalog as Record<string, CatalogEntry[]>)) {
-    map.set(name, entries)
-  }
-  return map
-})()
 
 /**
- * Look the block name up in the standard catalog.  Single match →
- * return its infos.  Multiple matches → return the first entry with
- * all I/O types collapsed to `'ANY'` (the wrap re-narrows).  No
- * match → `null`.
+ * Build a block signature from a placed block's `node.data.variant`.
+ *
+ * Mirrors `collect-library-blocks.ts` / xml2st's `_pou_to_block_infos`:
+ * EN/ENO are implicit control pins (dropped); inOut params appear on both
+ * sides; a function's return is already a class-`output` variable named `OUT`.
+ * Generic IEC meta-types (`ANY`, `ANY_NUM`, …) are kept verbatim and resolved
+ * from the wired connections during type inference.
  */
-export function resolveBlockType(typename: string): BlockResolution | null {
-  const entries = CATALOG.get(typename) ?? []
-  let result: BlockInfos | null = null
-  for (const entry of entries) {
-    if (result !== null) return { source: 'standard', infos: collapseToAny(result) }
-    result = cloneBlockInfos(entry.infos)
-  }
-  return result === null ? null : { source: 'standard', infos: result }
-}
+export function blockInfosFromVariant(variant: unknown): BlockInfos | null {
+  if (!isRecord(variant)) return null
+  const name = typeof variant.name === 'string' ? variant.name : null
+  if (name === null) return null
 
-function cloneBlockInfos(infos: BlockInfos): BlockInfos {
-  return {
-    name: infos.name,
-    type: infos.type,
-    extensible: infos.extensible,
-    inputs: infos.inputs.map((i) => ({ ...i })),
-    outputs: infos.outputs.map((o) => ({ ...o })),
-    comment: infos.comment,
-    usage: infos.usage,
+  const inputs: BlockIO[] = []
+  const outputs: BlockIO[] = []
+  const variables = Array.isArray(variant.variables) ? variant.variables : []
+  for (const v of variables) {
+    if (!isRecord(v)) continue
+    const vName = typeof v.name === 'string' ? v.name : null
+    if (vName === null || vName === 'EN' || vName === 'ENO') continue
+    const type = isRecord(v.type) && typeof v.type.value === 'string' ? v.type.value : 'ANY'
+    const io: BlockIO = { name: vName, type, qualifier: 'none' }
+    if (v.class === 'input') inputs.push(io)
+    else if (v.class === 'output') outputs.push(io)
+    else if (v.class === 'inOut' || v.class === 'inout') {
+      inputs.push(io)
+      outputs.push(io)
+    }
   }
-}
 
-function collapseToAny(infos: BlockInfos): BlockInfos {
   return {
-    ...infos,
-    inputs: infos.inputs.map((i) => ({ ...i, type: 'ANY' })),
-    outputs: infos.outputs.map((o) => ({ ...o, type: 'ANY' })),
+    name,
+    type:
+      variant.type === 'function-block' || variant.type === 'function-block-instance' ? 'functionBlock' : 'function',
+    extensible: variant.extensible === true,
+    inputs,
+    outputs,
+    comment: '',
+    usage: '',
   }
 }
 
 /**
  * Destination types of the IEC 61131-3 polymorphic conversion family
- * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …).  Hard-coded here rather than
- * derived at runtime from the catalog so any future addition is visible
- * in code review.  Kept in sync with `data/std_block_catalog.json` — any
- * `<SRC>_TO_<X>` entry in the catalog implies `TO_<X>` is a valid
- * polymorphic conversion target.
- *
- * Shared by both consumers that need to resolve a `TO_<X>` shorthand:
- * `emit/pou-graphical.ts` (output-temp declared type — destination side
- * only) and `walker/ld.ts` (the actual ST function-call name — needs
- * both source and destination).
+ * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …). Kept explicit so additions to the
+ * supported compiler conversion family remain visible in code review.
  */
 export const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
   'BCD',
@@ -124,6 +103,26 @@ export const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
   'WORD',
 ])
 
+const TEMPORAL_TYPES: ReadonlySet<string> = new Set(['DATE', 'DT', 'TIME', 'TOD'])
+const UNSIGNED_INTEGER_TYPES: ReadonlySet<string> = new Set(['UDINT', 'UINT', 'ULINT', 'USINT'])
+const GENERAL_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
+  'BYTE',
+  'DINT',
+  'DWORD',
+  'INT',
+  'LINT',
+  'LREAL',
+  'LWORD',
+  'REAL',
+  'SINT',
+  'STRING',
+  'UDINT',
+  'UINT',
+  'ULINT',
+  'USINT',
+  'WORD',
+])
+
 /**
  * Resolve a polymorphic `TO_<TYPE>` block name (e.g. `TO_INT`) to the
  * concrete, fully-qualified IEC 61131-3 conversion function (e.g.
@@ -131,24 +130,33 @@ export const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
  * input.
  *
  * IEC 61131-3 does not define a generic `TO_INT` — only the fully
- * qualified `<SRC>_TO_<DST>` family exists (see `std_block_catalog.json`,
- * which enumerates ~20 source variants per destination type but never a
- * bare `TO_<TYPE>` entry).  A block instance whose type name is still the
- * generic shorthand at code-generation time hasn't been resolved to a
- * concrete variant — a real ST/C compiler (matiec, STruC++) rejects the
- * bare name as an undefined function.
+ * qualified `<SRC>_TO_<DST>` family exists. A block instance whose type name
+ * is still the generic shorthand at code-generation time hasn't been
+ * resolved to a concrete variant — a real ST/C compiler (matiec, STruC++)
+ * rejects the bare name as an undefined function.
  *
  * Returns `null` when `blockTypeName` isn't a recognised polymorphic
- * shorthand, or when `<sourceType>_TO_<DST>` isn't an actual catalog
- * entry (e.g. the source type doesn't have a defined conversion to the
- * destination) — callers should fall back to the original name so an
- * unresolvable case still surfaces the same "undefined function" error
- * it would have before, rather than silently emitting a different wrong
- * name.
+ * shorthand, or when the supported compiler conversion family does not
+ * contain the source/destination pair. Callers should fall back to the
+ * original name so an unresolvable case still surfaces the same "undefined
+ * function" error it would have before, rather than silently emitting a
+ * different wrong name.
  */
 export function resolveConversionFunctionName(blockTypeName: string, sourceType: string): string | null {
   const match = blockTypeName.match(/^TO_([A-Z][A-Z0-9]*)$/)
   if (match === null || !TO_CONVERSION_TARGETS.has(match[1])) return null
-  const candidate = `${sourceType.toUpperCase()}_TO_${match[1]}`
-  return resolveBlockType(candidate) !== null ? candidate : null
+  const source = sourceType.toUpperCase()
+  const destination = match[1]
+  if (!isSupportedConversionPair(source, destination)) return null
+  return `${source}_TO_${destination}`
+}
+
+function isSupportedConversionPair(source: string, destination: string): boolean {
+  if (destination === 'BCD') return UNSIGNED_INTEGER_TYPES.has(source)
+  if (source === 'BCD') return UNSIGNED_INTEGER_TYPES.has(destination)
+  if (destination === 'DATE' && source === 'DATE_AND_TIME') return true
+  if (!TO_CONVERSION_TARGETS.has(source) || source === destination) return false
+  if (GENERAL_CONVERSION_TARGETS.has(destination)) return true
+  if (destination === 'BOOL') return !TEMPORAL_TYPES.has(source)
+  return TEMPORAL_TYPES.has(destination) && !TEMPORAL_TYPES.has(source)
 }

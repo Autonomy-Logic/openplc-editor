@@ -283,19 +283,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setDebugBoolValues: (values: Map<string, string>) => {
+    setDebugValues: (values: { boolValues?: Map<string, string>; nonBoolValues?: Map<string, string> }) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          for (const [key, val] of values) {
+          for (const [key, val] of values.boolValues ?? []) {
             workspace.debugBoolValues.set(key, val)
           }
-        }),
-      )
-    },
-    setDebugNonBoolValues: (values: Map<string, string>) => {
-      setState(
-        produce(({ workspace }: WorkspaceSlice) => {
-          for (const [key, val] of values) {
+          for (const [key, val] of values.nonBoolValues ?? []) {
             workspace.debugNonBoolValues.set(key, val)
           }
         }),

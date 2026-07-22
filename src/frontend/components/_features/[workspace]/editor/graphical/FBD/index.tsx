@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 
 import { useOpenPLCStore } from '../../../../../../store'
-import { zodFBDFlowSchema } from '../../../../../../store/slices/fbd'
+import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
@@ -19,11 +19,6 @@ export default function FbdEditor() {
   const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
-  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
-  const updatePou = useOpenPLCStore((state) => state.projectActions.updatePou)
-  const handleFileAndWorkspaceSavedState = useOpenPLCStore(
-    (state) => state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState,
-  )
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const flow = fbdFlows.find((flow) => flow.name === pouName)
@@ -84,35 +79,15 @@ export default function FbdEditor() {
   }, [flow?.rung.nodes, userLibraries, pous])
 
   /**
-   * Update the flow state to project JSON.
-   *
-   * Validate the flow with Zod but persist the raw object (minus the
-   * transient `updated` flag). Using the parsed result would silently strip
-   * every field not declared in `zodFBDFlowSchema` and reorder keys to
-   * schema order, which makes `serializeGraphicalPouToString` produce
-   * byte-drift vs. the loaded disk copy — surfacing as phantom "Modified"
-   * entries in Source Control for POUs the user never edited.
+   * Queue the flow → project JSON write-back. The scheduler debounces it
+   * (edits inside the window coalesce), persists the raw flow object, and
+   * clears the `updated` flag; save paths flush it so a save landing inside
+   * the window still serializes the fresh body. Validation and the DOPE-477
+   * raw-object policy live in store/slices/shared/flow-writeback.ts.
    */
   useEffect(() => {
-    if (!flowUpdated || !flow) return
-
-    const flowSchema = zodFBDFlowSchema.safeParse(flow)
-    if (!flowSchema.success) return
-
-    const { updated: _updated, ...flowBody } = flow
-    updatePou({
-      name: pouName,
-      content: {
-        language: 'fbd',
-        value: structuredClone(flowBody),
-      },
-    })
-
-    fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
-
-    if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(pouName)
-    }
+    if (!flowUpdated) return
+    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'fbd')
   }, [flowUpdated])
 
   return (

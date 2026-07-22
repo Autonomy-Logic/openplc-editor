@@ -121,6 +121,8 @@ beforeEach(() => {
     onFileExternalChange: jest.fn().mockImplementation((_cb: unknown) => {
       return () => {}
     }),
+    pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
+    exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
   } as unknown as typeof window.bridge
 })
 
@@ -549,6 +551,62 @@ describe('createEditorProjectAdapter', () => {
 
       expect(window.bridge.fileWatchStopAll).toHaveBeenCalledTimes(1)
       expect(result).toEqual({ success: true })
+    })
+  })
+
+  describe('pickPlcopenImportFile', () => {
+    it('delegates to window.bridge.pickPlcopenImportFile and returns content', async () => {
+      const result = await adapter.pickPlcopenImportFile()
+
+      expect(window.bridge.pickPlcopenImportFile).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({ success: true, content: '<project/>' })
+    })
+
+    it('flattens the error object to a string on failure', async () => {
+      ;(window.bridge.pickPlcopenImportFile as jest.Mock).mockResolvedValue({
+        success: false,
+        error: { title: 'Operation canceled', description: 'Operation canceled by the user.' },
+      })
+
+      const result = await adapter.pickPlcopenImportFile()
+
+      expect(result).toEqual({ success: false, error: 'Operation canceled by the user.' })
+    })
+
+    it('returns undefined error when the bridge reports failure without an error object', async () => {
+      ;(window.bridge.pickPlcopenImportFile as jest.Mock).mockResolvedValue({ success: false })
+
+      const result = await adapter.pickPlcopenImportFile()
+
+      expect(result).toEqual({ success: false, error: undefined })
+    })
+  })
+
+  describe('exportPlcopenFile', () => {
+    it('delegates to window.bridge.exportPlcopenFile with the file name and xml content', async () => {
+      const result = await adapter.exportPlcopenFile('my-project.xml', '<project/>')
+
+      expect(window.bridge.exportPlcopenFile).toHaveBeenCalledWith('my-project.xml', '<project/>')
+      expect(result).toEqual({ success: true })
+    })
+
+    it('flattens the error object to a string on failure', async () => {
+      ;(window.bridge.exportPlcopenFile as jest.Mock).mockResolvedValue({
+        success: false,
+        error: { title: 'Error writing file', description: 'Failed to write the PLCopen XML file.' },
+      })
+
+      const result = await adapter.exportPlcopenFile('my-project.xml', '<project/>')
+
+      expect(result).toEqual({ success: false, error: 'Failed to write the PLCopen XML file.' })
+    })
+
+    it('returns undefined error when the bridge reports failure without an error object', async () => {
+      ;(window.bridge.exportPlcopenFile as jest.Mock).mockResolvedValue({ success: false })
+
+      const result = await adapter.exportPlcopenFile('my-project.xml', '<project/>')
+
+      expect(result).toEqual({ success: false, error: undefined })
     })
   })
 

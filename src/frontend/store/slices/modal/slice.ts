@@ -27,6 +27,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'public-catalog-browser',
   'confirm-install-libraries',
   'project-readme',
+  'confirm-plcopen-import',
 ]
 
 function createDefaultModals() {
