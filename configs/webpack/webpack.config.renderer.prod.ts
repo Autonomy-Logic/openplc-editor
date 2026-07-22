@@ -141,6 +141,10 @@ const configuration: webpack.Configuration = {
       // (`https://api.autonomylogic.com`) wins.  Local/staging
       // builds can prepend `VPP_CATALOG_URL=...` to override.
       VPP_CATALOG_URL: '',
+      // Optional override for the Edge web app host (VPP `/buy` page).
+      // Unset in shipped builds → `mock-license.ts`'s production default
+      // (`https://edge.autonomylogic.com`) wins.
+      EDGE_WEB_URL: '',
     }),
 
     new MiniCssExtractPlugin({

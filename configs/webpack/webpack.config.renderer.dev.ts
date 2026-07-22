@@ -173,6 +173,12 @@ const configuration: webpack.Configuration = {
       // `npm run dev` to point at staging or localhost:
       //   `VPP_CATALOG_URL=http://localhost:3333 npm run dev`
       VPP_CATALOG_URL: '',
+      // Override for the Edge web app host (where the VPP `/buy` page
+      // lives). Falsy default → the license flow falls back to the
+      // production host hardcoded in `mock-license.ts`. Point it at your
+      // local Edge frontend for testing:
+      //   `EDGE_WEB_URL=http://localhost:5173 npm run dev`
+      EDGE_WEB_URL: '',
     }),
 
     new webpack.DefinePlugin({

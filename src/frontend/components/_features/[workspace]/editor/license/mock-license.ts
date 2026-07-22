@@ -53,10 +53,16 @@ export const mockHardwareId = (seed: string): string => {
 }
 
 // Base URL of the Autonomy Edge web app (where the /buy page lives). Same host
-// used by the Help menu links. For local testing point this at your dev Edge
-// (e.g. http://localhost:5173).
-// TODO(E8): source from config instead of hardcoding.
-export const EDGE_WEB_URL = 'https://edge.autonomylogic.com'
+// used by the Help menu links.
+//
+// Resolution (mirrors `package-adapter.ts`'s VPP_CATALOG_URL):
+//   1. `process.env.EDGE_WEB_URL` — injected at webpack build time via
+//      `EnvironmentPlugin` (renderer dev + prod). Set it before `npm run dev`
+//      to point at a local Edge:  `EDGE_WEB_URL=http://localhost:5173 npm run dev`.
+//      Empty in shipped builds (CI leaves it unset) → falls through to (2).
+//   2. `PRODUCTION_EDGE_WEB_URL` — the hardcoded production host below.
+const PRODUCTION_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
+export const EDGE_WEB_URL = process.env.EDGE_WEB_URL || PRODUCTION_EDGE_WEB_URL
 
 // The purchase link the editor opens in the browser: the Edge /buy page,
 // carrying the VPP + device so the Edge can start the (guest or account)

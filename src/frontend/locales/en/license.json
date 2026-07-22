@@ -1,0 +1,54 @@
+{
+  "sectionLabel": "License",
+  "demo": {
+    "warning": "⚠ Demo mode — the driver stops after {{minutes}} min.",
+    "cta": "Get a license",
+    "caption": "One-time payment · {{price}} · tied to this device"
+  },
+  "pending": {
+    "title": "Purchase started in your browser",
+    "body": "Once payment completes, the license activates on the next upload to this device (online). You stay in demo until then.",
+    "checkNow": "I've paid — check now",
+    "noChecks": "No background checks",
+    "simulateOffline": "Simulate offline (demo)"
+  },
+  "licensed": {
+    "title": "✓ Driver licensed to this device",
+    "badge": "Active",
+    "body": "Stored on the hardware — works offline, no time limit, tied to this device (not your account).",
+    "hwId": "HW-ID {{deviceId}}"
+  },
+  "modal": {
+    "titles": {
+      "confirm": "Get a license",
+      "browser": "We opened your browser",
+      "success": "License activated on this device",
+      "error": "No internet to verify"
+    },
+    "confirm": {
+      "subtitle": "One-time payment. No subscription.",
+      "driver": "Driver",
+      "device": "Device",
+      "price": "Price",
+      "priceValue": "{{price}} · one-time",
+      "note": "You'll finish in your browser, on a secure page. No account needed — just an email. The license is tied to this device and activates on the next upload.",
+      "cancel": "Continue in demo",
+      "buy": "Buy · {{price}}"
+    },
+    "browser": {
+      "body": "Finish the payment in the browser tab we opened, on a secure page. No account needed — just an email. The license activates on the next upload to this device.",
+      "ack": "Got it"
+    },
+    "success": {
+      "body": "License written to the hardware.",
+      "note": "The driver now works offline, with no time limit. HW-ID {{deviceId}}",
+      "done": "Done"
+    },
+    "error": {
+      "body": "You need an internet connection to activate the license.",
+      "note": "Connect and upload to the device again — your purchase isn't lost and applies as soon as you're online.",
+      "close": "Close",
+      "retry": "Try again"
+    }
+  }
+}

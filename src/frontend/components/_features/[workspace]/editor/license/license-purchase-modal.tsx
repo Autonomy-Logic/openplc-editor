@@ -1,4 +1,5 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
+import { i18n } from '@root/frontend/locales/i18n'
 
 import { LICENSE_PRICE } from './mock-license'
 
@@ -21,15 +22,21 @@ interface LicensePurchaseModalProps {
 }
 
 const primaryBtn =
-  'inline-flex h-8 items-center justify-center gap-2 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
+  'inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white hover:bg-brand-medium-dark'
 const secondaryBtn =
-  'inline-flex h-8 items-center justify-center gap-2 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
+  'inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md bg-neutral-100 px-4 font-caption text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-white dark:hover:bg-neutral-800'
 
-const TITLES: Record<PurchaseStep, string> = {
-  confirm: 'Buy driver license',
-  browser: 'We opened your browser',
-  success: 'License activated on this device',
-  error: 'No internet to verify',
+const titleFor = (step: PurchaseStep): string => {
+  switch (step) {
+    case 'confirm':
+      return i18n.t('license:modal.titles.confirm')
+    case 'browser':
+      return i18n.t('license:modal.titles.browser')
+    case 'success':
+      return i18n.t('license:modal.titles.success')
+    case 'error':
+      return i18n.t('license:modal.titles.error')
+  }
 }
 
 /**
@@ -58,38 +65,43 @@ export const LicensePurchaseModal = ({
     >
       <ModalContent className='h-fit w-[430px]'>
         <ModalHeader>
-          <ModalTitle>{step ? TITLES[step] : ''}</ModalTitle>
+          <ModalTitle>{step ? titleFor(step) : ''}</ModalTitle>
         </ModalHeader>
 
         {step === 'confirm' && (
           <>
             <div className='flex flex-col gap-3 text-sm text-neutral-700 dark:text-neutral-300'>
-              <p>One-time payment. No subscription.</p>
+              <p>{i18n.t('license:modal.confirm.subtitle')}</p>
               <div className='flex flex-col gap-1 rounded-md bg-neutral-100 p-3 text-xs dark:bg-neutral-850'>
                 <div className='flex justify-between gap-4'>
-                  <span className='text-neutral-500 dark:text-neutral-400'>Driver</span>
+                  <span className='text-neutral-500 dark:text-neutral-400'>
+                    {i18n.t('license:modal.confirm.driver')}
+                  </span>
                   <span className='font-medium text-neutral-850 dark:text-neutral-200'>{vppName}</span>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span className='text-neutral-500 dark:text-neutral-400'>Device</span>
+                  <span className='text-neutral-500 dark:text-neutral-400'>
+                    {i18n.t('license:modal.confirm.device')}
+                  </span>
                   <span className='truncate font-mono text-neutral-850 dark:text-neutral-200'>{deviceId}</span>
                 </div>
                 <div className='flex justify-between gap-4'>
-                  <span className='text-neutral-500 dark:text-neutral-400'>Price</span>
-                  <span className='font-medium text-neutral-850 dark:text-neutral-200'>{LICENSE_PRICE} · one-time</span>
+                  <span className='text-neutral-500 dark:text-neutral-400'>
+                    {i18n.t('license:modal.confirm.price')}
+                  </span>
+                  <span className='font-medium text-neutral-850 dark:text-neutral-200'>
+                    {i18n.t('license:modal.confirm.priceValue', { price: LICENSE_PRICE })}
+                  </span>
                 </div>
               </div>
-              <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                You&apos;ll finish in your browser, on a secure page. No account needed — just an email. The license is
-                tied to this device and activates on the next upload.
-              </p>
+              <p className='text-xs text-neutral-500 dark:text-neutral-400'>{i18n.t('license:modal.confirm.note')}</p>
             </div>
             <ModalFooter className='flex justify-end gap-2'>
               <button type='button' className={secondaryBtn} onClick={onClose}>
-                Continue in demo
+                {i18n.t('license:modal.confirm.cancel')}
               </button>
               <button type='button' className={primaryBtn} onClick={onConfirm}>
-                Buy · {LICENSE_PRICE}
+                {i18n.t('license:modal.confirm.buy', { price: LICENSE_PRICE })}
               </button>
             </ModalFooter>
           </>
@@ -97,13 +109,10 @@ export const LicensePurchaseModal = ({
 
         {step === 'browser' && (
           <>
-            <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-              Finish the payment in the browser tab we opened, on a secure page. No account needed — just an email. The
-              license activates on the next upload to this device.
-            </p>
+            <p className='text-sm text-neutral-700 dark:text-neutral-300'>{i18n.t('license:modal.browser.body')}</p>
             <ModalFooter className='flex justify-end'>
               <button type='button' className={primaryBtn} onClick={onBrowserAck}>
-                Got it
+                {i18n.t('license:modal.browser.ack')}
               </button>
             </ModalFooter>
           </>
@@ -114,15 +123,15 @@ export const LicensePurchaseModal = ({
             <div className='flex flex-col gap-3 text-sm text-neutral-700 dark:text-neutral-300'>
               <div className='flex items-center gap-2 font-medium text-green-600 dark:text-green-400'>
                 <span>✓</span>
-                <span>License written to the hardware.</span>
+                <span>{i18n.t('license:modal.success.body')}</span>
               </div>
               <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                The driver now works offline, with no time limit. HW-ID {deviceId}
+                {i18n.t('license:modal.success.note', { deviceId })}
               </p>
             </div>
             <ModalFooter className='flex justify-end'>
               <button type='button' className={primaryBtn} onClick={onFinish}>
-                Done
+                {i18n.t('license:modal.success.done')}
               </button>
             </ModalFooter>
           </>
@@ -133,19 +142,16 @@ export const LicensePurchaseModal = ({
             <div className='flex flex-col gap-3 text-sm text-neutral-700 dark:text-neutral-300'>
               <div className='flex items-start gap-2 text-amber-600 dark:text-amber-400'>
                 <span>⚠</span>
-                <span>You need an internet connection to activate the license.</span>
+                <span>{i18n.t('license:modal.error.body')}</span>
               </div>
-              <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                Connect and upload to the device again — your purchase isn&apos;t lost and applies as soon as
-                you&apos;re online.
-              </p>
+              <p className='text-xs text-neutral-500 dark:text-neutral-400'>{i18n.t('license:modal.error.note')}</p>
             </div>
             <ModalFooter className='flex justify-end gap-2'>
               <button type='button' className={secondaryBtn} onClick={onClose}>
-                Close
+                {i18n.t('license:modal.error.close')}
               </button>
               <button type='button' className={primaryBtn} onClick={onRetry}>
-                Try again
+                {i18n.t('license:modal.error.retry')}
               </button>
             </ModalFooter>
           </>
