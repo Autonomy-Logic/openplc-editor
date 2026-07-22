@@ -1,7 +1,7 @@
 // import * as PrimitiveSwitch from '@radix-ui/react-switch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
@@ -15,6 +15,7 @@ import { generateIecVariablesToString } from '../../../utils/generate-iec-variab
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
+import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const GlobalVariablesEditor = () => {
@@ -62,6 +63,14 @@ const GlobalVariablesEditor = () => {
   const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
   const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData))
   const [parseError, setParseError] = useState<string | null>(null)
+
+  // Pending confirmation when the global being deleted is used as `VAR_EXTERNAL`
+  // in one or more POUs — deleting it will also remove those external declarations.
+  const [pendingGlobalDelete, setPendingGlobalDelete] = useState<{
+    variable: PLCVariable
+    selectedRow: number
+    pous: string[]
+  } | null>(null)
 
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
@@ -267,26 +276,51 @@ const GlobalVariablesEditor = () => {
     handleFileAndWorkspaceSavedState('Resource')
   }
 
-  const handleRemoveVariable = () => {
-    if (editorVariables.display === 'code') return
-
+  const performGlobalDelete = (variableToDelete: PLCVariable, selectedRow: number, force: boolean) => {
     pushToHistory(editor.meta.name)
+    removeDebugVariable(`resource:${variableToDelete.name}`)
 
-    const selectedRow = parseInt(editorVariables.selectedRow)
-    const variableToDelete = globalVariables.filter((v) => v.name)[selectedRow]
-    if (variableToDelete) {
-      removeDebugVariable(`resource:${variableToDelete.name}`)
+    const result = deleteVariable({ scope: 'global', variableName: variableToDelete.name, force })
+    if (!result.ok) {
+      toast({ title: result.title ?? 'Error', description: result.message, variant: 'fail' })
+      return
     }
-    deleteVariable({ scope: 'global', rowId: selectedRow })
 
     const variables = globalVariables.filter((variable) => variable.name)
     if (selectedRow === variables.length - 1) {
-      updateModelVariables({
-        display: 'table',
-        selectedRow: selectedRow - 1,
-      })
+      updateModelVariables({ display: 'table', selectedRow: selectedRow - 1 })
     }
     handleFileAndWorkspaceSavedState('Resource')
+  }
+
+  const handleRemoveVariable = () => {
+    if (editorVariables.display === 'code') return
+
+    const selectedRow = parseInt(editorVariables.selectedRow)
+    const variableToDelete = globalVariables.filter((v) => v.name)[selectedRow]
+    if (!variableToDelete) return
+
+    // If any POU declares this global as VAR_EXTERNAL, confirm the cascade first.
+    const referencingPous = snapshotPous
+      .filter((pou) =>
+        pou.interface?.variables?.some(
+          (v) => v.class === 'external' && v.name.toLowerCase() === variableToDelete.name.toLowerCase(),
+        ),
+      )
+      .map((pou) => pou.name)
+
+    if (referencingPous.length > 0) {
+      setPendingGlobalDelete({ variable: variableToDelete, selectedRow, pous: referencingPous })
+      return
+    }
+
+    performGlobalDelete(variableToDelete, selectedRow, false)
+  }
+
+  const confirmGlobalDelete = () => {
+    if (!pendingGlobalDelete) return
+    performGlobalDelete(pendingGlobalDelete.variable, pendingGlobalDelete.selectedRow, true)
+    setPendingGlobalDelete(null)
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -427,6 +461,39 @@ const GlobalVariablesEditor = () => {
           {parseError && <p className='mt-2 text-xs text-red-500'>Erro: {parseError}</p>}
         </div>
       )}
+
+      <Modal
+        open={pendingGlobalDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingGlobalDelete(null)
+        }}
+      >
+        <ModalContent className='flex h-fit min-h-0 w-[440px] select-none flex-col items-center justify-start rounded-lg p-6'>
+          <ModalTitle className='mb-4 text-lg font-semibold'>Delete global variable?</ModalTitle>
+          <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>
+            <span className='font-medium'>{pendingGlobalDelete?.variable.name}</span> is used as an external variable in{' '}
+            {pendingGlobalDelete?.pous.join(', ')}. Deleting it will also remove{' '}
+            {pendingGlobalDelete && pendingGlobalDelete.pous.length > 1
+              ? 'those external references'
+              : 'that external reference'}
+            . Continue?
+          </p>
+          <div className='flex w-full gap-3'>
+            <button
+              onClick={confirmGlobalDelete}
+              className='flex-1 rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600'
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setPendingGlobalDelete(null)}
+              className='flex-1 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100'
+            >
+              Cancel
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }
