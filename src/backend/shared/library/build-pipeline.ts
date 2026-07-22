@@ -7,15 +7,14 @@
  *   1. `prepareXmlForLibraryBuild(project, manifest)` — synthesizes
  *      a stub main program / task / instance into a transient
  *      PLCProject (the on-disk project remains untouched) and runs
- *      the canonical XmlGenerator on it.  xml2st rejects programless
+ *      the canonical XmlGenerator on it.  the ST transpiler rejects programless
  *      projects, so the stub is mandatory; the stub's POU body is
  *      intentionally non-empty (`LocalVar := 3;` against a single
- *      INT local) because some xml2st codepaths also reject empty
+ *      INT local) because some ST-transpiler codepaths also reject empty
  *      program bodies.
  *
- *   2. *(caller runs xml2st on the resulting plc.xml — Electron
- *      spawns a local binary, web backend posts to its xml2st
- *      service — produces `program.st`.)*
+ *   2. *(the in-process ST transpiler runs on the project and
+ *      produces `program.st`.)*
  *
  *   3. `libraryBuildFromTranspiledSt(programSt, knownPous, manifest)`
  *      — splits `program.st` per-POU via the shared splitter, drops
@@ -74,8 +73,8 @@ export interface LibraryBuildManifest {
  * console can render through the existing diagnostic pipeline.
  *
  * Strucpp itself validates manifests during compile, but doing it
- * here lets the build fail BEFORE running xml2st when the manifest
- * is obviously broken — saves a slow xml2st spawn on every
+ * here lets the build fail early when the manifest
+ * is obviously broken — saves wasted transpile work on every
  * mis-edited save.
  */
 function parseLibraryManifest(json: string): ManifestParseResult {
@@ -128,7 +127,7 @@ function parseLibraryManifest(json: string): ManifestParseResult {
 }
 
 // ---------------------------------------------------------------------------
-// Stub program — makes xml2st accept a programless library project
+// Stub program — makes the ST transpiler accept a programless library project
 // ---------------------------------------------------------------------------
 
 /**
@@ -147,14 +146,14 @@ const STUB_INSTANCE_NAME = '__openplc_library_stub_instance__'
 /**
  * Build a transient PLCProject with a stub main program added on
  * top of the library's POUs / data types.  The stub is what
- * satisfies xml2st (and strucpp's main-program assumption later in
+ * satisfies the ST transpiler (and strucpp's main-program assumption later in
  * the verification path).  Caller drops the stub's per-POU output
  * before handing the remaining sources to compileStlib.
  *
- * The stub's body is non-empty (`LocalVar := 3;`) because xml2st
+ * The stub's body is non-empty (`LocalVar := 3;`) because the ST transpiler
  * has been observed to reject programs with completely empty bodies
  * — a single trivial assignment + a single INT local is the smallest
- * shape that gets accepted across every xml2st version.
+ * shape that gets accepted across transpiler versions.
  */
 function stubProgramFor(project: PLCProject): PLCProject {
   return {
@@ -204,14 +203,14 @@ function stubProgramFor(project: PLCProject): PLCProject {
  * Synthetic filename the splitter emits for the stub program.  The
  * splitter writes its file keys using the caller-side POU name
  * verbatim (case preserved), so this matches what `splitProgramSt`
- * returns regardless of how xml2st upper-cases identifiers in the
+ * returns regardless of how the transpiler upper-cases identifiers in the
  * monolithic ST output.  Caller drops this entry before feeding the
  * rest to compileStlib.
  */
 const STUB_SPLIT_FILENAME = `${STUB_PROGRAM_NAME}.st`
 
 // ---------------------------------------------------------------------------
-// Stage 1: pre-xml2st (pure)
+// Stage 1: pre-transpile (pure)
 // ---------------------------------------------------------------------------
 
 export interface PrepareXmlResult {
@@ -257,7 +256,7 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
 }
 
 // ---------------------------------------------------------------------------
-// Stage 2: post-xml2st (pure)
+// Stage 2: post-transpile (pure)
 // ---------------------------------------------------------------------------
 
 export interface LibraryBuildResult {
@@ -337,7 +336,7 @@ export interface LibraryBuildAux {
 }
 
 /**
- * Stage 2.  Given xml2st's monolithic `program.st`, the POU
+ * Stage 2.  Given the transpiler's monolithic `program.st`, the POU
  * inventory from Stage 1, and the parsed manifest: split program.st
  * per-POU, drop the stub, hand the remaining sources to strucpp's
  * compileStlib.
@@ -369,7 +368,7 @@ export function libraryBuildFromTranspiledSt(
   //
   //   - The stub program's `.st` file (the library doesn't ship
   //     the stub).
-  //   - `_config.st` (xml2st's CONFIGURATION block references the
+  //   - `_config.st` (the transpiler's CONFIGURATION block references the
   //     stub program, which we've just removed — leaving it in
   //     causes strucpp to emit "Unknown program type 'MAIN'"
   //     diagnostics).  Libraries don't carry configurations

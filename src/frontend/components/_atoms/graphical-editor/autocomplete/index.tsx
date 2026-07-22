@@ -230,7 +230,13 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         <Popover.Portal>
           {selectableValues.length > 0 && (
             <Popover.Content
-              className='box flex w-36 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
+              // Auto-size to the widest suggestion (Radix sets the wrapper to
+              // `min-width: max-content`), clamped to [9rem, 16rem]. Item text
+              // uses `break-words` (overflow-wrap) — NOT `break-all` — so the
+              // max-content stays the full name in Safari/WebKit too; `break-all`
+              // (word-break) collapses WebKit's max-content and cropped long
+              // names onto a second line.
+              className='box flex min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
               side='bottom'
               sideOffset={5}
               ref={popoverRef}
@@ -249,17 +255,34 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
             >
               {variables && variables.length > 0 && (
                 <>
-                  <div className='h-fit w-full p-1'>
-                    <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={variablesDivRef}>
+                  <div className='h-fit w-full shrink-0 p-1'>
+                    {/* `scrollbar-gutter: stable` reserves the scrollbar's
+                        width so the content-based auto-size accounts for it —
+                        otherwise, when the list overflows and the scrollbar
+                        appears, it steals horizontal space and the widest name
+                        wraps its last character. */}
+                    <div
+                      className='flex max-h-32 w-full flex-col overflow-y-auto [scrollbar-gutter:stable]'
+                      ref={variablesDivRef}
+                    >
                       {variables.map((variable) => (
                         <div
                           key={variable.name}
                           className={cn(
-                            'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                            // `shrink-0`: keep each row at its full (possibly
+                            // wrapped) height. Without it, Safari vertically
+                            // shrinks rows in this flex-column scroll list, so a
+                            // wrapped name's second line overflows its box and
+                            // renders on top of the "Add variable" button below.
+                            'flex h-fit w-full shrink-0 cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                             {
                               'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
                           )}
+                          // Long variable names (e.g. struct member refs like
+                          // `some_global_complex.structureVar`) wrap to multiple
+                          // lines instead of being cropped; the popover grows to
+                          // fit up to its max-width (see Popover.Content above).
                           // Keep the editor textarea focused through the click: some
                           // consumers (LD contact/coil) refocus their container on the
                           // textarea's blur, which would close this popover before the
@@ -274,7 +297,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                             })
                           }}
                         >
-                          {variable.name}
+                          <span className='w-full break-words text-center'>{variable.name}</span>
                         </div>
                       ))}
                     </div>
@@ -288,7 +311,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                 <>
                   <div
                     className={cn(
-                      'flex h-fit w-full cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                      'flex h-fit w-full shrink-0 cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                       {
                         'bg-neutral-400 dark:bg-neutral-800': newBlock.canCreate
                           ? selectedVariable.positionInArray === selectableValues.length - 2
@@ -315,7 +338,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
               {newBlock.canCreate && (
                 <div
                   className={cn(
-                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                    'flex h-fit w-full shrink-0 cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                     {
                       'bg-neutral-400 dark:bg-neutral-800':
                         selectedVariable.positionInArray === selectableValues.length - 1,

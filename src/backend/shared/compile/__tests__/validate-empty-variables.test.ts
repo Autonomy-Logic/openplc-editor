@@ -2,7 +2,7 @@
  * Tests for the pre-compile blank-FBD-variable guard.
  *
  * An unnamed FBD input/output variable block becomes an empty
- * `<expression/>` in the PLCopen XML, which crashes xml2st with
+ * `<expression/>` in the PLCopen XML, which the compiler rejects with
  * `'NoneType' object has no attribute 'split'`.  These tests pin the
  * detector that lets the pipeline bail with a clear message — naming
  * what the block is wired to, or its position when it is wired to

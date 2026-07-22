@@ -41,7 +41,7 @@ export function leafNode(chunks: ProgramChunk[]): PathNode {
 /**
  * Stable structural key for a PathNode — used by `factorizePaths` to
  * detect common terms.  Identical to the Python `repr` output the
- * original xml2st pipeline keys on.
+ * original PLCopen pipeline keys on.
  */
 export function pythonReprNode(node: PathNode): string {
   switch (node.kind) {

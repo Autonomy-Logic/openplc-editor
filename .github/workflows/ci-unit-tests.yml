@@ -23,7 +23,7 @@ jobs:
       # --ignore-scripts skips the postinstall, so strucpp (a GitHub-release
       # package, not an npm dep) is never fetched — yet the TS sources import
       # `strucpp/libs/iec-types.json` and its runtime headers. Install just
-      # strucpp (no xml2st platform binary, no native rebuild) so the suites
+      # strucpp (no native rebuild) so the suites
       # can load and the coverage gate actually runs.
       - name: Install strucpp
         run: npm run setup:strucpp

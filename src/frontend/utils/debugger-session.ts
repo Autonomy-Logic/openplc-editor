@@ -29,7 +29,7 @@ import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from 
  *
  * Plain progress messages get split on newlines into one log entry
  * per line — keeps the existing scroll/wrap/copy behaviour intact for
- * the long Arduino-CLI / xml2st outputs.
+ * the long Arduino-CLI / compiler outputs.
  *
  * Events that carry a structured `compileError` are emitted as a
  * single multi-line entry instead, with the structured field attached.
