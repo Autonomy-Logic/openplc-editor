@@ -230,7 +230,12 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         <Popover.Portal>
           {selectableValues.length > 0 && (
             <Popover.Content
-              className='box flex min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
+              // `w-max` (width: max-content) pins the dropdown to the widest
+              // item's full single-line width, clamped by min/max. Without it,
+              // Safari's shrink-to-fit collapses the width toward min-content
+              // when items use `break-all`, cropping long names onto a second
+              // line (Chrome sizes to max-content, so it doesn't reproduce there).
+              className='box flex w-max min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
               side='bottom'
               sideOffset={5}
               ref={popoverRef}
@@ -249,7 +254,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
             >
               {variables && variables.length > 0 && (
                 <>
-                  <div className='h-fit w-full p-1'>
+                  <div className='h-fit w-full shrink-0 p-1'>
                     {/* `scrollbar-gutter: stable` reserves the scrollbar's
                         width so the content-based auto-size accounts for it —
                         otherwise, when the list overflows and the scrollbar
@@ -263,7 +268,12 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                         <div
                           key={variable.name}
                           className={cn(
-                            'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                            // `shrink-0`: keep each row at its full (possibly
+                            // wrapped) height. Without it, Safari vertically
+                            // shrinks rows in this flex-column scroll list, so a
+                            // wrapped name's second line overflows its box and
+                            // renders on top of the "Add variable" button below.
+                            'flex h-fit w-full shrink-0 cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                             {
                               'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
@@ -300,7 +310,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                 <>
                   <div
                     className={cn(
-                      'flex h-fit w-full cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                      'flex h-fit w-full shrink-0 cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                       {
                         'bg-neutral-400 dark:bg-neutral-800': newBlock.canCreate
                           ? selectedVariable.positionInArray === selectableValues.length - 2
@@ -327,7 +337,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
               {newBlock.canCreate && (
                 <div
                   className={cn(
-                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                    'flex h-fit w-full shrink-0 cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                     {
                       'bg-neutral-400 dark:bg-neutral-800':
                         selectedVariable.positionInArray === selectableValues.length - 1,
