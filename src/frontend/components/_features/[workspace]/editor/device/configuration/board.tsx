@@ -22,6 +22,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { LicenseStatusBlock } from '../../license/license-status-block'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
@@ -689,6 +690,9 @@ const Board = memo(function () {
                 ))}
               </div>
             </div>
+          )}
+          {currentBoardInfo?.vpp && (
+            <LicenseStatusBlock vppKey={currentBoardInfo.vpp.packageId} vppName={deviceBoard} />
           )}
         </div>
         <div id='board-preview-container' className='flex flex-shrink-0 items-start'>

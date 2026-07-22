@@ -2,7 +2,15 @@ import { useSystem } from '@root/middleware/shared/providers/platform-context'
 import { useEffect, useState } from 'react'
 
 import { LicensePurchaseModal, type PurchaseStep } from './license-purchase-modal'
-import { DEMO_MINUTES, getPhase, LICENSE_PRICE, type LicensePhase, mockHardwareId, setPhase } from './mock-license'
+import {
+  buildBuyUrl,
+  DEMO_MINUTES,
+  getPhase,
+  LICENSE_PRICE,
+  type LicensePhase,
+  mockHardwareId,
+  setPhase,
+} from './mock-license'
 
 interface LicenseStatusBlockProps {
   /** Stable VPP identifier (the package id). */
@@ -37,12 +45,12 @@ export const LicenseStatusBlock = ({ vppKey, vppName }: LicenseStatusBlockProps)
   }
 
   const confirmBuy = async () => {
-    // Opens the buyer's browser at the Edge/Paddle checkout (mocked URL).
-    const url = `https://example.com/paddle-checkout-mock?device=${encodeURIComponent(deviceId)}`
+    // Opens the buyer's browser at the Edge /buy page (C2), passing the VPP +
+    // device so the Edge can start the checkout (guest or account).
     try {
-      await system.openExternalLink(url)
+      await system.openExternalLink(buildBuyUrl(vppKey, deviceId))
     } catch {
-      // mock: ignore failures to open the browser
+      // ignore failures to open the browser
     }
     changePhase('pending')
     setStep('browser')
