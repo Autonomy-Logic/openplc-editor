@@ -230,12 +230,13 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         <Popover.Portal>
           {selectableValues.length > 0 && (
             <Popover.Content
-              // `w-max` (width: max-content) pins the dropdown to the widest
-              // item's full single-line width, clamped by min/max. Without it,
-              // Safari's shrink-to-fit collapses the width toward min-content
-              // when items use `break-all`, cropping long names onto a second
-              // line (Chrome sizes to max-content, so it doesn't reproduce there).
-              className='box flex w-max min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
+              // Auto-size to the widest suggestion (Radix sets the wrapper to
+              // `min-width: max-content`), clamped to [9rem, 16rem]. Item text
+              // uses `break-words` (overflow-wrap) — NOT `break-all` — so the
+              // max-content stays the full name in Safari/WebKit too; `break-all`
+              // (word-break) collapses WebKit's max-content and cropped long
+              // names onto a second line.
+              className='box flex min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
               side='bottom'
               sideOffset={5}
               ref={popoverRef}
@@ -296,7 +297,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                             })
                           }}
                         >
-                          <span className='w-full break-all text-center'>{variable.name}</span>
+                          <span className='w-full break-words text-center'>{variable.name}</span>
                         </div>
                       ))}
                     </div>
