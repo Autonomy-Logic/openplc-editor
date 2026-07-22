@@ -21,6 +21,7 @@ import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -214,20 +215,78 @@ class MainProcessBridge implements MainIpcModule {
     ipAddress: string,
     username: string,
     password: string,
+    role?: RuntimeUserRole,
   ) => {
     try {
+      // `role` is only honoured by the runtime for authenticated (admin) creation;
+      // the unauthenticated first-user bootstrap always becomes an admin regardless.
+      const body: { username: string; password: string; role?: RuntimeUserRole } = { username, password }
+      if (role) body.role = role
+      const payload = JSON.stringify(body)
+
+      // First-user bootstrap runs before any login (no token yet) and the
+      // runtime allows it unauthenticated. Once a session exists this is an
+      // admin adding an account, which the runtime requires to be authenticated
+      // — route it through the token authority so an expired token is refreshed.
+      if (this.tokens.hasToken()) {
+        const res = await this.makeRuntimeApiPostRequest(ipAddress, '/api/create-user', payload, () => undefined)
+        return res.success ? { success: true } : { success: false, error: res.error }
+      }
+
       const res = await this.httpRequest({
         method: 'POST',
         url: this.runtimeUrl(ipAddress, '/api/create-user'),
-        body: JSON.stringify({ username, password, role: 'user' }),
+        body: payload,
       })
-      if (res.statusCode === 201) {
-        return { success: true }
-      }
+      if (res.statusCode === 201) return { success: true }
       return { success: false, error: res.data }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(
+      ipAddress,
+      '/api/get-users-info',
+      (data) => JSON.parse(data) as RuntimeUser[],
+    )
+    return res.success ? { success: true, users: res.data } : { success: false, error: res.error }
+  }
+
+  handleRuntimeWhoAmI = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    const res = await this.makeRuntimeApiRequest<RuntimeUser>(
+      ipAddress,
+      '/api/whoami',
+      (data) => JSON.parse(data) as RuntimeUser,
+    )
+    return res.success ? { success: true, user: res.data } : { success: false, error: res.error }
+  }
+
+  handleRuntimeUpdateUser = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    userId: number,
+    params: UpdateUserParams,
+  ) => {
+    // The runtime expects snake_case `current_password`; only send provided fields.
+    const body: Record<string, string> = {}
+    if (params.username !== undefined) body.username = params.username
+    if (params.password !== undefined) body.password = params.password
+    if (params.currentPassword !== undefined) body.current_password = params.currentPassword
+    if (params.role !== undefined) body.role = params.role
+    const res = await this.makeRuntimeApiMutation(
+      'PUT',
+      ipAddress,
+      `/api/update-user/${userId}`,
+      JSON.stringify(body),
+    )
+    return res.success ? { success: true } : { success: false, error: res.error }
+  }
+
+  handleRuntimeDeleteUser = async (_event: IpcMainInvokeEvent, ipAddress: string, userId: number) => {
+    const res = await this.makeRuntimeApiMutation('DELETE', ipAddress, `/api/delete-user/${userId}`)
+    return res.success ? { success: true } : { success: false, error: res.error }
   }
 
   private async performAuthentication(
@@ -400,6 +459,72 @@ class MainProcessBridge implements MainIpcModule {
         (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
       )
       .then(stripStatus)
+  }
+
+  /**
+   * Authenticated PUT/DELETE against the runtime API, going through the token
+   * authority. Unlike the GET/POST helpers this retries only on 401 (a genuine
+   * expired token): the user-management endpoints use 403 as a legitimate
+   * business response (e.g. "current password incorrect", "admin required"),
+   * so retrying on 403 would trigger a pointless re-authentication. Any 2xx is
+   * success; the raw body is returned so callers can surface error messages.
+   */
+  private makeRuntimeApiMutation(
+    method: 'PUT' | 'DELETE',
+    ipAddress: string,
+    endpoint: string,
+    body?: string,
+  ): Promise<{ success: true; data: string } | { success: false; error: string }> {
+    type R = { success: true; data: string } | { success: false; error: string; statusCode?: number }
+
+    const doRequest = (token: string): Promise<R> =>
+      new Promise((resolve) => {
+        const headers: Record<string, string | number> = { Authorization: `Bearer ${token}` }
+        if (body !== undefined) {
+          headers['Content-Type'] = 'application/json'
+          headers['Content-Length'] = Buffer.byteLength(body)
+        }
+        const req = https.request(
+          {
+            hostname: ipAddress,
+            port: this.RUNTIME_API_PORT,
+            path: endpoint,
+            method,
+            headers,
+            ...getRuntimeHttpsOptions(),
+          },
+          (res: IncomingMessage) => {
+            let data = ''
+            res.on('data', (chunk: Buffer) => {
+              data += chunk.toString()
+            })
+            res.on('end', () => {
+              const statusCode = res.statusCode ?? 0
+              if (statusCode >= 200 && statusCode < 300) {
+                resolve({ success: true, data })
+              } else {
+                resolve({ success: false, error: data || `Unexpected status: ${statusCode}`, statusCode })
+              }
+            })
+          },
+        )
+        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+          req.destroy()
+          resolve({ success: false, error: 'Connection timeout' })
+        })
+        req.on('error', (error: Error) => {
+          resolve({ success: false, error: error.message })
+        })
+        if (body !== undefined) req.write(body)
+        req.end()
+      })
+
+    return this.tokens
+      .withAuth<R>(
+        (token) => doRequest(token),
+        (r) => !r.success && r.statusCode === 401,
+      )
+      .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
   }
 
   /**
@@ -903,6 +1028,10 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
+    this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
+    this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
+    this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
+    this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
     this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)

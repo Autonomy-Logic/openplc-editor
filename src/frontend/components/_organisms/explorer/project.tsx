@@ -56,6 +56,10 @@ const Project = () => {
   // endpoint requires edit access, so gate the affordance here too.
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
+  // Runtime User Management is only meaningful while connected to a runtime
+  // (it reads/writes the runtime's account list over the authenticated API).
+  const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
+
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
   // Data Types plus the manifest tab; Programs / Resource / Devices /
@@ -370,6 +374,21 @@ const Project = () => {
                       name: 'Orchestrators',
                       path: `/device/orchestrators`,
                       elementType: { type: 'device', derivation: 'orchestrators' },
+                    })
+                  }
+                />
+              )}
+              {runtimeConnected && (
+                <ProjectTreeLeaf
+                  key='User Management'
+                  leafLang='userManagement'
+                  leafType='user-management'
+                  label='User Management'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'User Management',
+                      path: `/device/user-management`,
+                      elementType: { type: 'user-management' },
                     })
                   }
                 />
