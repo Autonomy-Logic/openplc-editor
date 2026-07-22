@@ -8,6 +8,18 @@ describe('blockInfosFromVariant', () => {
     expect(blockInfosFromVariant({ name: 42 })).toBeNull()
   })
 
+  it('defaults omitted fields on a valid function variant', () => {
+    expect(blockInfosFromVariant({ name: 'CUSTOM_FUNCTION' })).toEqual({
+      name: 'CUSTOM_FUNCTION',
+      type: 'function',
+      extensible: false,
+      inputs: [],
+      outputs: [],
+      comment: '',
+      usage: '',
+    })
+  })
+
   it('normalizes valid variable records and ignores malformed or control-pin entries', () => {
     expect(
       blockInfosFromVariant({
