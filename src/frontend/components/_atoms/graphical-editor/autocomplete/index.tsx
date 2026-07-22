@@ -250,7 +250,15 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
               {variables && variables.length > 0 && (
                 <>
                   <div className='h-fit w-full p-1'>
-                    <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={variablesDivRef}>
+                    {/* `scrollbar-gutter: stable` reserves the scrollbar's
+                        width so the content-based auto-size accounts for it —
+                        otherwise, when the list overflows and the scrollbar
+                        appears, it steals horizontal space and the widest name
+                        wraps its last character. */}
+                    <div
+                      className='flex max-h-32 w-full flex-col overflow-y-auto [scrollbar-gutter:stable]'
+                      ref={variablesDivRef}
+                    >
                       {variables.map((variable) => (
                         <div
                           key={variable.name}
