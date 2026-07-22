@@ -2,15 +2,15 @@ import type { PLCProjectData } from '@root/middleware/shared/ports/open-plc-type
 
 /**
  * Collect the signatures of every *library* block a project uses and emit them
- * as a PLCopen `<addData>` payload that the xml2st transpiler reads.
+ * as a PLCopen `<addData>` payload embedded in the exported project XML.
  *
- * Why: xml2st emits a local temporary per FUNCTION output and must declare it
- * with a concrete type. It infers that type from the wired connections, but
- * cannot when a function has no typed pin to borrow from (e.g. a nullary
- * `CURRENT_DT` whose output is unconnected) — it then falls back to the illegal
- * type `ANY`, which STruC++ rejects. Rather than make xml2st carry a block
- * library (which would diverge from the real STruC++ library), we hand it the
- * exact signatures the project uses, embedded in the project file itself.
+ * Why: an ST generator emits a local temporary per FUNCTION output and must
+ * declare it with a concrete type. It infers that type from the wired
+ * connections, but cannot when a function has no typed pin to borrow from
+ * (e.g. a nullary `CURRENT_DT` whose output is unconnected) — it would then
+ * fall back to the illegal type `ANY`, which STruC++ rejects. Embedding the
+ * exact signatures the project uses avoids carrying a separate block library
+ * that could diverge from the real STruC++ library.
  *
  * Every graphical block instance already carries its full typed signature in
  * `node.data.variant` (the editor stamps it from the library on placement), so
@@ -19,10 +19,10 @@ import type { PLCProjectData } from '@root/middleware/shared/ports/open-plc-type
  * identical across the desktop and web builds.
  *
  * Output shape feeds xmlbuilder2 (see XmlGenerator); it is inserted as
- * `<project>/<addData>` after `<instances>`. Contract: xml2st/docs/library-blocks.md.
+ * `<project>/<addData>` after `<instances>`.
  */
 
-const DATA_NAME = 'openplc.org/xml2st/library-blocks'
+const DATA_NAME = 'openplc.org/library-blocks'
 
 type XmlElement = Record<string, unknown>
 
@@ -41,7 +41,7 @@ type BlockVariant = {
   variables: VariantVariable[]
 }
 
-/** `<INT/>`, `<ANY_NUM/>`, ... — xml2st reads the (upper-cased) tag name. */
+/** `<INT/>`, `<ANY_NUM/>`, ... — the consumer reads the (upper-cased) tag name. */
 const typeElement = (variable: VariantVariable): XmlElement => ({ [variable.type.value]: '' })
 
 const variableElement = (variable: VariantVariable): XmlElement => ({
@@ -78,7 +78,7 @@ const collectBlockVariants = (project: PLCProjectData): BlockVariant[] => {
 
 const variantToPou = (variant: BlockVariant): XmlElement => {
   const isFunctionBlock = variant.type === 'function-block'
-  // EN/ENO are implicit control pins; xml2st adds them itself.
+  // EN/ENO are implicit control pins; the ST generator adds them itself.
   const vars = variant.variables.filter((v) => v.name !== 'EN' && v.name !== 'ENO')
   const inputs = vars.filter((v) => v.class === 'input')
   const inouts = vars.filter((v) => v.class === 'inOut')
@@ -113,7 +113,7 @@ const variantToPou = (variant: BlockVariant): XmlElement => {
  * project references no library blocks (e.g. text-only POUs).
  *
  * User-defined POUs are excluded: their definitions already travel in
- * `<types><pous>` and xml2st resolves them directly.
+ * `<types><pous>` and the generator resolves them directly.
  */
 export const collectLibraryBlocks = (project: PLCProjectData): XmlElement | null => {
   const userPouNames = new Set(project.pous.map((pou) => pou.data?.name))

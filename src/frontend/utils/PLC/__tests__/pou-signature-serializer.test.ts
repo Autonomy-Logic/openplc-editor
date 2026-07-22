@@ -140,7 +140,7 @@ describe('serializePouSignatureToST', () => {
         body: { language: 'fbd', value: {} as never },
       })
       const result = serializePouSignatureToST(pou)
-      // Block keywords carry the xml2st-parity 2-space indent.
+      // Block keywords carry the legacy-parity 2-space indent.
       expect(result).toContain('  VAR\n  END_VAR')
     })
 

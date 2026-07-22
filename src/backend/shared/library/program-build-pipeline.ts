@@ -28,7 +28,7 @@
  *     pre-computes the hash and passes it in; strucpp embeds it
  *     into the debug map for stale-layout detection.
  *
- *   - No external-process orchestration — `xml2st` (XML→ST) and
+ *   - No external-process orchestration — the ST transpiler and
  *     `arduino-cli` (firmware compile) stay in the platform-specific
  *     orchestrator that wraps this pipeline.  This module is purely
  *     about the strucpp invocation slice.

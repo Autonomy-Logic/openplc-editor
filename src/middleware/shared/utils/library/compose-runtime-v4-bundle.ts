@@ -45,7 +45,7 @@
  */
 
 export interface ComposeRuntimeV4BundleInput {
-  /** Concatenated ST program emitted by xml2st. */
+  /** Concatenated ST program emitted by the ST transpiler. */
   programSt: string
   /** MD5 of `programSt` — written to `defines.h` so the v4 runtime
    *  shim (`runtime_v4_entry.cpp`) can report it via FC 0x45. */
@@ -100,7 +100,7 @@ export interface ComposeRuntimeV4BundleInput {
 export function composeRuntimeV4Bundle(input: ComposeRuntimeV4BundleInput): Record<string, string> {
   const files: Record<string, string> = {}
 
-  // 1. Concatenated ST program (xml2st output)
+  // 1. Concatenated ST program (ST transpiler output)
   files['program.st'] = input.programSt
 
   // 2. Strucpp emitted artefacts at the zip root

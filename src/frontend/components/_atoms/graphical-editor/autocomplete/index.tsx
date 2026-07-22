@@ -230,7 +230,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
         <Popover.Portal>
           {selectableValues.length > 0 && (
             <Popover.Content
-              className='box flex w-36 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
+              className='box flex min-w-36 max-w-[16rem] flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
               side='bottom'
               sideOffset={5}
               ref={popoverRef}
@@ -260,6 +260,10 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                               'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
                           )}
+                          // Long variable names (e.g. struct member refs like
+                          // `some_global_complex.structureVar`) wrap to multiple
+                          // lines instead of being cropped; the popover grows to
+                          // fit up to its max-width (see Popover.Content above).
                           // Keep the editor textarea focused through the click: some
                           // consumers (LD contact/coil) refocus their container on the
                           // textarea's blur, which would close this popover before the
@@ -274,7 +278,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                             })
                           }}
                         >
-                          {variable.name}
+                          <span className='w-full break-all text-center'>{variable.name}</span>
                         </div>
                       ))}
                     </div>
