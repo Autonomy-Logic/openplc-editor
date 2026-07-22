@@ -1052,7 +1052,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
           {editorVariables.display === 'table' && (
             <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
-              {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
+              {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
                 <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
                   <label
                     htmlFor='return type'
