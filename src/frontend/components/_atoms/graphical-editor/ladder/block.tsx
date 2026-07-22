@@ -8,6 +8,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
+import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
@@ -602,6 +603,13 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
+        // An entry that can't be a new variable NAME — a member/array reference,
+        // a typed literal (`T#500ms`), a reserved word — is bound to the block
+        // verbatim as a constant/reference instead of erroring.
+        if (!isLegalIdentifier(variableNameToSubmit)[0]) {
+          updateNodeVariable({ name: variableNameToSubmit })
+          return
+        }
         const project = useOpenPLCStore.getState().project
         const currentPou = project.data.pous.find((p) => p.name === pouName)
         pushToHistory(pouName, {
