@@ -145,6 +145,21 @@ describe('emitLdBody — polymorphic TO_<TYPE> conversion call resolution', () =
     expect(result.bodySt).toContain('TO_INT()')
   })
 
+  it('leaves the shorthand unchanged when an incoming edge references a missing upstream node', () => {
+    const body: RFBody = {
+      rungs: [
+        {
+          nodes: [conversionBlockNode('blk1', 'TO_INT', '6913197'), outputVariableNode('out1', 'OFFICE_TEMP')],
+          edges: [edge('e1', 'missing', 'blk1', undefined, 'IN'), edge('e2', 'blk1', 'out1', 'OUT', undefined)],
+        },
+      ],
+    }
+
+    const result = emitLdBody(body, typeContext([]))
+
+    expect(result.bodySt).toContain('TO_INT()')
+  })
+
   it("leaves the shorthand unchanged when the input is another block's output", () => {
     const body: RFBody = {
       rungs: [

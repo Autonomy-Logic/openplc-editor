@@ -140,6 +140,48 @@ describe('generateGraphicalPou — polymorphic conversion call resolution (issue
     expect(text).toContain('REAL_TO_INT(G_TEMP)')
   })
 
+  it('prefers a POU-local variable over a project global with the same name', () => {
+    const pou: TranspilePou = {
+      name: 'main',
+      pouType: 'program',
+      interface: {
+        variables: [
+          { name: 'SHADOWED', type: { definition: 'base-type', value: 'BOOL' }, class: 'local' },
+          { name: 'OFFICE_TEMP', type: { definition: 'base-type', value: 'INT' }, class: 'local' },
+        ],
+      },
+      body: {
+        language: 'fbd',
+        value: {
+          rung: {
+            nodes: [
+              inputVariableNode('in1', 'SHADOWED'),
+              conversionBlockNode('blk1', 'TO_INT', '44'),
+              outputVariableNode('out1', 'OFFICE_TEMP'),
+            ],
+            edges: [
+              { id: 'e1', source: 'in1', target: 'blk1', targetHandle: 'IN' },
+              { id: 'e2', source: 'blk1', target: 'out1', sourceHandle: 'OUT' },
+            ],
+          },
+        },
+      },
+    }
+    const project = emptyProject([pou])
+    project.configuration.globalVariables.push({
+      name: 'SHADOWED',
+      type: { definition: 'base-type', value: 'REAL' },
+      class: 'external',
+    })
+
+    const text = generateGraphicalPou(pou, project)
+      .map((chunk) => chunk[0])
+      .join('')
+
+    expect(text).toContain('BOOL_TO_INT(SHADOWED)')
+    expect(text).not.toContain('REAL_TO_INT(SHADOWED)')
+  })
+
   it('does not index derived variable types as conversion sources', () => {
     const pou: TranspilePou = {
       name: 'main',
