@@ -8,7 +8,11 @@ vi.mock('@root/frontend/components/_organisms/variables-code-editor', () => ({
 import { useOpenPLCStore } from '../../../../store'
 import { VariablesEditor } from '../index'
 
-const createPou = (name: string, type: 'program' | 'function' | 'function-block', language: 'st' | 'fbd' | 'ld') => {
+const createPou = (
+  name: string,
+  type: 'program' | 'function' | 'function-block',
+  language: 'st' | 'fbd' | 'ld' | 'sfc',
+) => {
   const result = useOpenPLCStore.getState().pouActions.create({ type, name, language })
   expect(result.ok).toBe(true)
 }
@@ -25,6 +29,19 @@ describe('VariablesEditor return type selector', () => {
     createPou('LdFunction', 'function', 'ld')
     render(<VariablesEditor name='LdFunction' />)
     expect(screen.getByText('Return type :')).toBeTruthy()
+  })
+
+  it('shows the return type selector for a function written in SFC', () => {
+    createPou('SfcFunction', 'function', 'sfc')
+    render(<VariablesEditor name='SfcFunction' />)
+    expect(screen.getByText('Return type :')).toBeTruthy()
+  })
+
+  it('associates the return type label with its select trigger', () => {
+    createPou('LabeledFunction', 'function', 'fbd')
+    render(<VariablesEditor name='LabeledFunction' />)
+    const trigger = screen.getByLabelText('Return type :')
+    expect(trigger.id).toBe('return-type')
   })
 
   it('shows the return type selector for a function written in ST', () => {

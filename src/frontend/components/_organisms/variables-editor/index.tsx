@@ -1055,14 +1055,14 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
               {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
                 <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
                   <label
-                    htmlFor='return type'
+                    htmlFor='return-type'
                     className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
                   >
                     Return type :
                   </label>
                   <Select value={returnType} onValueChange={handleReturnTypeChange}>
                     <SelectTrigger
-                      id='class-filter'
+                      id='return-type'
                       placeholder={returnType}
                       withIndicator
                       className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
