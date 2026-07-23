@@ -56,8 +56,8 @@ jobs:
 
           # If the build is triggered by a tag, use the tag's commit date as the release date.
           # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%cs "$GITHUB_REF_NAME")
           else
             RELEASE_DATE=$(date +%Y-%m-%d)
           fi
@@ -170,8 +170,8 @@ jobs:
 
           # If the build is triggered by a tag, use the tag's commit date as the release date.
           # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%cs "$GITHUB_REF_NAME")
           else
             RELEASE_DATE=$(date +%Y-%m-%d)
           fi
@@ -240,8 +240,8 @@ jobs:
 
           # If the build is triggered by a tag, use the tag's commit date as the release date.
           # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%cs "$GITHUB_REF_NAME")
           else
             RELEASE_DATE=$(date +%Y-%m-%d)
           fi
@@ -321,8 +321,8 @@ jobs:
 
           # If the build is triggered by a tag, use the tag's commit date as the release date.
           # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%cs "$GITHUB_REF_NAME")
           else
             RELEASE_DATE=$(date +%Y-%m-%d)
           fi
@@ -387,8 +387,8 @@ jobs:
 
           # If the build is triggered by a tag, use the tag's commit date as the release date.
           # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%cs "$GITHUB_REF_NAME")
           else
             RELEASE_DATE=$(date +%Y-%m-%d)
           fi
