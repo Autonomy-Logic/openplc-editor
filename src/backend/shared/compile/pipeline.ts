@@ -4,7 +4,7 @@
  * Single source of truth for the full compile flow (Steps 0–13 in
  * the editor's canonical pipeline).  Editor and web both drive this
  * function through a `CompilerPlatformPort`; the platform port
- * abstracts the three places where platform truly differs (xml2st
+ * abstracts the three places where platform truly differs (ST transpiler
  * transport, arduino-cli transport, runtime upload transport).
  * Everything else — preprocessing, XML generation, strucpp compile,
  * conf authoring, defines authoring, bundle composition, ordering,
@@ -238,7 +238,7 @@ export interface RunCompilePipelineArgs {
 
 export interface RunCompilePipelineResult {
   success: boolean
-  /** Structured strucpp + xml2st diagnostics from this run.  Carries
+  /** Structured strucpp diagnostics from this run.  Carries
    *  the per-error events the renderer's navigation keys off. */
   errors?: StructuredCompileError[]
   /** Compiled firmware bytes when the pipeline reached the
@@ -385,10 +385,9 @@ async function runCompilePipelineInner(
   // ---------------------------------------------------------------------
   // Step 0b: Reject blank FBD variable blocks before XML generation.
   //
-  // An unnamed FBD in/out variable serialises to an empty
-  // `<expression/>`, which makes xml2st crash with the opaque
-  // `'NoneType' object has no attribute 'split'`.  Catch it here and
-  // tell the user exactly which POU to fix.
+  // An unnamed FBD in/out variable has no expression for the ST
+  // transpiler to emit, producing invalid code downstream.  Catch it
+  // here and tell the user exactly which POU to fix.
   // ---------------------------------------------------------------------
   const emptyVariables = findEmptyFbdVariables(processedData)
   if (emptyVariables.length > 0) {
@@ -411,7 +410,7 @@ async function runCompilePipelineInner(
   // so this hop never builds PLCOpen XML.  Native STRUCT declarations
   // are the only emission mode the transpiler supports — the legacy
   // matiec struct→FB rewrite isn't ported, so there are no
-  // equivalents of the old `xml2stArgs` flags.
+  // equivalents of the old struct-rewrite flags.
   // ---------------------------------------------------------------------
   emit({ stage: 'st', message: 'Generating Structured Text...', level: 'info' })
   // The pipeline carries the editor's schema-shape `PLCProjectData`,

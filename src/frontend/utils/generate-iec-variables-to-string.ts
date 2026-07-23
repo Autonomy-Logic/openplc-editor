@@ -10,8 +10,8 @@ const classToVarBlock: Record<string, string> = {
   temp: 'VAR_TEMP',
 }
 
-// Indentation mirrors xml2st's `PLCGenerator.PouProgramGenerator.GenerateProgram`
-// output (see `~/Documents/Code/xml2st/PLCGenerator.py:2414-2478`): two
+// Indentation mirrors the legacy PLCGenerator's `PouProgramGenerator.GenerateProgram`
+// output: two
 // spaces before the var-block keywords, four spaces before each
 // declaration line.  Matching that format keeps the editor's
 // variables-text view byte-identical to the per-POU `.st` file the
@@ -72,7 +72,7 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
         textualDeclaration += line + '\n'
       })
 
-      // xml2st emits consecutive var-class blocks back-to-back with no
+      // the legacy generator emits consecutive var-class blocks back-to-back with no
       // blank line between them — `  END_VAR\n  VAR_INPUT\n...`.  Drop
       // the prior `END_VAR\n\n` that left a separator behind.
       textualDeclaration += `${VAR_BLOCK_INDENT}END_VAR\n`

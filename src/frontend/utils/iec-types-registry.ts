@@ -138,7 +138,7 @@ const XML_ELEMENT_INDEX: ReadonlyMap<string, IECTypeMetadata> = (() => {
  * IEC type metadata. Case-sensitive — unlike `lookupBaseType`, callers here
  * already have the exact tag fast-xml-parser handed them, and PLCopen XML
  * element names are case-significant (`<string>` vs `<STRING>` are not
- * interchangeable — xml2st rejects the latter).
+ * interchangeable — STruC++ rejects the latter).
  */
 export function lookupBaseTypeByXmlElement(elementName: string): IECTypeMetadata | undefined {
   return XML_ELEMENT_INDEX.get(elementName)

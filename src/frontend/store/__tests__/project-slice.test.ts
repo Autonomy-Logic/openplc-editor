@@ -3260,6 +3260,56 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
       expect(result.title).toBe('Cannot Delete Global Variable')
       expect(result.message).toContain('Consumer')
+      expect((result.data as { referencingPous: string[] }).referencingPous).toEqual(['Consumer'])
+      // Not forced → nothing was deleted.
+      expect(
+        store.getState().project.data.configurations.resource.globalVariables.some((v) => v.name === 'SharedVar'),
+      ).toBe(true)
+    })
+
+    it('deleteVariable global with force cascades: removes the global + external refs from every POU', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('SharedVar', 'global') })
+      for (const name of ['Consumer', 'Consumer2']) {
+        seedPou(store, {
+          ...makePou(name, 'program'),
+          interface: {
+            variables: [
+              {
+                name: 'SharedVar',
+                class: 'external',
+                type: { definition: 'base-type', value: 'INT' },
+                location: '',
+                documentation: '',
+              },
+              {
+                name: 'keep_me',
+                class: 'local',
+                type: { definition: 'base-type', value: 'BOOL' },
+                location: '',
+                documentation: '',
+              },
+            ],
+          },
+        })
+      }
+
+      const result = store.getState().projectActions.deleteVariable({
+        scope: 'global',
+        variableName: 'SharedVar',
+        force: true,
+      })
+
+      expect(result.ok).toBe(true)
+      // The global itself is gone.
+      expect(
+        store.getState().project.data.configurations.resource.globalVariables.some((v) => v.name === 'SharedVar'),
+      ).toBe(false)
+      // The external declaration is removed from every referencing POU; unrelated locals stay.
+      for (const name of ['Consumer', 'Consumer2']) {
+        const vars = store.getState().project.data.pous.find((p) => p.name === name)?.interface?.variables ?? []
+        expect(vars.some((v) => v.name === 'SharedVar')).toBe(false)
+        expect(vars.some((v) => v.name === 'keep_me')).toBe(true)
+      }
     })
 
     it('updateOpcUaServerConfig with top-level updates (cycleTimeMs)', () => {

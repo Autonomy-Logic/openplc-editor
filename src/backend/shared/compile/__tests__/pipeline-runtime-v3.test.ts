@@ -10,7 +10,7 @@
  * core).  These tests lock that ordering in.
  *
  * Kept in a separate file from `pipeline.test.ts` (which is stale from
- * the xml2st→JSON-transpiler migration and references the removed
+ * the XML→JSON-transpiler migration and references the removed
  * `transpileXmlToSt` port method) so the v3 coverage compiles + runs
  * against the current `transpileToSt` contract.
  */

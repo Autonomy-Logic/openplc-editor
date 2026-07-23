@@ -39,12 +39,6 @@ else
   echo "  WARNING: matiec binary not found at $BIN_DIR/iec2c"
 fi
 
-if [ -f "$BIN_DIR/xml2st" ]; then
-  echo "  xml2st binary ($NODE_ARCH): OK"
-else
-  echo "  WARNING: xml2st binary not found at $BIN_DIR/xml2st"
-fi
-
 # Fix Electron sandbox for container (chrome-sandbox needs SUID root + mode 4755)
 CHROME_SANDBOX="node_modules/electron/dist/chrome-sandbox"
 if [ -f "$CHROME_SANDBOX" ]; then

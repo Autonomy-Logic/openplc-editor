@@ -71,7 +71,7 @@ const XmlGenerator = (
   }
 
   /**
-   * Embed the signatures of every library block the project uses, so xml2st
+   * Embed the signatures of every library block the project uses, so an ST generator
    * can type the temporaries it generates for FUNCTION outputs without
    * carrying a block library of its own.  Added last so it serialises after
    * <instances>, as the PLCopen schema requires for <addData>.

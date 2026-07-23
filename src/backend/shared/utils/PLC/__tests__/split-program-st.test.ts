@@ -49,8 +49,8 @@ describe('splitProgramSt', () => {
       expect(result!.files.get('Main.st')).toBe(source)
     })
 
-    it('matches POU names case-insensitively (xml2st may upper-case)', () => {
-      // The editor's project model has the user-typed casing; xml2st
+    it('matches POU names case-insensitively (the transpiler may upper-case)', () => {
+      // The editor's project model has the user-typed casing; the transpiler
       // sometimes upper-cases identifiers.  The splitter must handle
       // either direction.
       const source = 'PROGRAM MAIN\n  VAR x : INT; END_VAR\n  x := 1;\nEND_PROGRAM\n'
@@ -186,7 +186,7 @@ describe('splitProgramSt', () => {
       expect(result!.files.has('State_Display.st')).toBe(false)
     })
 
-    it('emits `.st` for ST and graphical POUs (xml2st renders them as ST)', () => {
+    it('emits `.st` for ST and graphical POUs (the transpiler renders them as ST)', () => {
       const source =
         'PROGRAM Main_LD\n  VAR x : INT; END_VAR\n  x := 1;\nEND_PROGRAM\n' +
         'PROGRAM Main_ST\n  VAR y : INT; END_VAR\n  y := 2;\nEND_PROGRAM\n'
@@ -243,9 +243,9 @@ describe('splitProgramSt', () => {
     })
   })
 
-  describe('realistic xml2st-shaped output', () => {
+  describe('realistic transpiler-shaped output', () => {
     it('handles a multi-POU + TYPE + CONFIGURATION program', () => {
-      // Mimics the shape xml2st emits for a typical project.
+      // Mimics the shape the transpiler emits for a typical project.
       const source = `TYPE
   TrafficState : (RED, YELLOW, GREEN);
 END_TYPE
