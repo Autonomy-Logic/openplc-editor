@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import { useRuntime } from '../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../store'
 import { getErrorMessage } from '../../../utils/get-error-message'
@@ -10,10 +12,21 @@ import { RuntimeUserModal, type RuntimeUserModalSubmit } from './runtime-user-mo
  * always makes this first account an admin).
  */
 const RuntimeCreateUserModal = () => {
-  const { modals, modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
+  const { modals, modalActions, deviceActions } = useOpenPLCStore()
   const runtime = useRuntime()
 
   const isOpen = modals['runtime-create-user']?.open || false
+
+  // Tracks whether this run successfully created + logged in. A ref (not the
+  // store's connectionStatus) because handleSubmit sets the status and the
+  // modal then calls onOpenChange(false) synchronously — before a re-render —
+  // so reading connectionStatus from the render closure would be stale and the
+  // close handler would wrongly tear down the just-established connection.
+  const succeededRef = useRef(false)
+
+  useEffect(() => {
+    if (isOpen) succeededRef.current = false
+  }, [isOpen])
 
   const handleSubmit = async ({ username, password }: RuntimeUserModalSubmit): Promise<string | null> => {
     if (!password) return 'Password is required'
@@ -27,6 +40,7 @@ const RuntimeCreateUserModal = () => {
         deviceActions.setRuntimeJwtToken(loginResult.accessToken)
         deviceActions.setRuntimeConnectionStatus('connected')
         deviceActions.setStoredCredentials({ username, password })
+        succeededRef.current = true
         return null
       }
       return 'User created but login failed: ' + (loginResult.error || 'Unknown error')
@@ -37,10 +51,9 @@ const RuntimeCreateUserModal = () => {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      // On success `handleSubmit` has already logged in and set the status to
-      // 'connected'; closing then must NOT tear that down. Only a genuine
-      // cancel (still connecting/disconnected) abandons the connection attempt.
-      if (isOpen && runtimeConnection.connectionStatus !== 'connected') {
+      // Only a genuine cancel (no successful login this run) abandons the
+      // connection attempt; a success close must keep the 'connected' status.
+      if (isOpen && !succeededRef.current) {
         deviceActions.setRuntimeConnectionStatus('disconnected')
       }
       modalActions.closeModal()
