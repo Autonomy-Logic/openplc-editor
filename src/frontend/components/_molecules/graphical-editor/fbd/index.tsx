@@ -634,17 +634,19 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   /**
    * When the node drag stops, update the fbd rung state
    */
-  const onNodeDragStop = useStableCallback((_e: globalThis.MouseEvent | globalThis.TouchEvent, _node: FlowNode, nodes: FlowNode[]) => {
-    setDragging(false)
-    fbdFlowActions.setRung({
-      editorName: pouName,
-      rung: {
-        ...rungLocal,
-        nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
-        edges: rungLocal.edges,
-      },
-    })
-  })
+  const onNodeDragStop = useStableCallback(
+    (_e: globalThis.MouseEvent | globalThis.TouchEvent, _node: FlowNode, nodes: FlowNode[]) => {
+      setDragging(false)
+      fbdFlowActions.setRung({
+        editorName: pouName,
+        rung: {
+          ...rungLocal,
+          nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
+          edges: rungLocal.edges,
+        },
+      })
+    },
+  )
 
   /**
    * Handle the drag enter of the viewport
