@@ -62,7 +62,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
   // workspace members get `publishDiagnostics` — without these
   // notifications the document buffer is populated but never
   // enters the analysis queue.
-  let pyrightConnection: import('vscode-jsonrpc/browser').MessageConnection | null = null
+  let pyrightConnection: import('vscode-languageserver-protocol/browser').MessageConnection | null = null
 
   // Per-URI registry, keyed by Monaco model URI.  Holds the
   // preamble Pyright sees concatenated with the user body, the LSP
