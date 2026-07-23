@@ -634,7 +634,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   /**
    * When the node drag stops, update the fbd rung state
    */
-  const onNodeDragStop = useStableCallback((_e: MouseEvent, _node: FlowNode, nodes: FlowNode[]) => {
+  const onNodeDragStop = useStableCallback((_e: globalThis.MouseEvent | globalThis.TouchEvent, _node: FlowNode, nodes: FlowNode[]) => {
     setDragging(false)
     fbdFlowActions.setRung({
       editorName: pouName,

@@ -680,8 +680,8 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   /**
    * Handle the drag of a node
    */
-  const handleNodeDrag = (event: MouseEvent) => {
-    if (!reactFlowInstance) return
+  const handleNodeDrag = (event: globalThis.MouseEvent | globalThis.TouchEvent) => {
+    if (!reactFlowInstance || !('clientX' in event)) return
     const closestPlaceholder = onElementDragOver(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
     if (!closestPlaceholder) return
 
@@ -753,13 +753,13 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {
     handleRemoveNode(nodes)
   })
-  const onNodeDragStart = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+  const onNodeDragStart = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
     handleNodeStartDrag(node)
   })
-  const onNodeDrag = useStableCallback((event: MouseEvent) => {
+  const onNodeDrag = useStableCallback((event: globalThis.MouseEvent | globalThis.TouchEvent) => {
     handleNodeDrag(event)
   })
-  const onNodeDragStop = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+  const onNodeDragStop = useStableCallback((_event: globalThis.MouseEvent | globalThis.TouchEvent, node: FlowNode) => {
     handleNodeDragStop(node)
   })
   const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
@@ -978,7 +978,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               onDragOver: onDragOver,
               onDrop: onDrop,
 
-              nodeExtent: reactFlowPanelExtent,
+              // No nodeExtent here: node positions belong to the ladder layout engine. xyflow ≥12.9
+              // stopped recomputing drag-clamped positionAbsolute when the extent later grows, so a
+              // mid-drag clamp against the stale extent would freeze nodes at wrong positions (DOPE-492).
               translateExtent: reactFlowPanelExtent,
               panActivationKeyCode: null,
               panOnDrag: false,
