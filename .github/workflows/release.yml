@@ -53,10 +53,18 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          BUILD_DATE=$(date +%Y-%m-%d)
+
+          # If the build is triggered by a tag, use the tag's commit date as the release date.
+          # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          else
+            RELEASE_DATE=$(date +%Y-%m-%d)
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+          echo "build_date=$RELEASE_DATE" >> $GITHUB_OUTPUT # Keep the output variable name for simplicity
+          echo "Building version: $VERSION (Release date: $RELEASE_DATE)"
 
       - name: Update package.json version
         run: |
@@ -159,10 +167,18 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          BUILD_DATE=$(date +%Y-%m-%d)
+
+          # If the build is triggered by a tag, use the tag's commit date as the release date.
+          # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          else
+            RELEASE_DATE=$(date +%Y-%m-%d)
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+          echo "build_date=$RELEASE_DATE" >> $GITHUB_OUTPUT # Keep the output variable name for simplicity
+          echo "Building version: $VERSION (Release date: $RELEASE_DATE)"
 
       - name: Update package.json version
         run: |
@@ -221,10 +237,18 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          BUILD_DATE=$(date +%Y-%m-%d)
+
+          # If the build is triggered by a tag, use the tag's commit date as the release date.
+          # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          else
+            RELEASE_DATE=$(date +%Y-%m-%d)
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+          echo "build_date=$RELEASE_DATE" >> $GITHUB_OUTPUT # Keep the output variable name for simplicity
+          echo "Building version: $VERSION (Release date: $RELEASE_DATE)"
 
       - name: Update package.json version
         run: |
@@ -294,10 +318,18 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          BUILD_DATE=$(date +%Y-%m-%d)
+
+          # If the build is triggered by a tag, use the tag's commit date as the release date.
+          # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          else
+            RELEASE_DATE=$(date +%Y-%m-%d)
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+          echo "build_date=$RELEASE_DATE" >> $GITHUB_OUTPUT # Keep the output variable name for simplicity
+          echo "Building version: $VERSION (Release date: $RELEASE_DATE)"
 
       - name: Update package.json version
         run: |
@@ -352,10 +384,18 @@ jobs:
           else
             VERSION=$(node -p "require('./package.json').version")
           fi
-          BUILD_DATE=$(date +%Y-%m-%d)
+
+          # If the build is triggered by a tag, use the tag's commit date as the release date.
+          # Otherwise, fall back to the current date for non-release builds (e.g., manual dispatch).
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_DATE=$(git log -1 --format=%as ${{ github.ref_name }})
+          else
+            RELEASE_DATE=$(date +%Y-%m-%d)
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (Build date: $BUILD_DATE)"
+          echo "build_date=$RELEASE_DATE" >> $GITHUB_OUTPUT # Keep the output variable name for simplicity
+          echo "Building version: $VERSION (Release date: $RELEASE_DATE)"
 
       - name: Update package.json version
         run: |
