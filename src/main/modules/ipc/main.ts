@@ -247,11 +247,13 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(
-      ipAddress,
-      '/api/get-users-info',
-      (data) => JSON.parse(data) as RuntimeUser[],
-    )
+    const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
+      // With a valid admin token this is a user array; without one the runtime
+      // answers the existence-only {"msg":"Users found"} object — coerce that
+      // (or any non-array) to an empty list so the caller never gets a non-array.
+      const parsed: unknown = JSON.parse(data)
+      return Array.isArray(parsed) ? (parsed as RuntimeUser[]) : []
+    })
     return res.success ? { success: true, users: res.data } : { success: false, error: res.error }
   }
 

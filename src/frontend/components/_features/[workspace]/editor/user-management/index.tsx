@@ -38,7 +38,10 @@ const UserManagementEditor = () => {
       setLoadError(listResult.error || 'Failed to load users')
       setUsers([])
     } else {
-      setUsers(listResult.users ?? [])
+      // Guard against a non-array payload (e.g. the runtime's existence-only
+      // {"msg":"Users found"} reply when the token is no longer valid), which
+      // would otherwise crash the table on `users.map`.
+      setUsers(Array.isArray(listResult.users) ? listResult.users : [])
     }
     if (meResult.success && meResult.user) {
       setCurrentUser(meResult.user)
@@ -111,6 +114,20 @@ const UserManagementEditor = () => {
   const canEditRow = (user: RuntimeUser) => isAdmin || user.id === currentUser?.id
   const canDeleteRow = (user: RuntimeUser) => isAdmin && user.id !== currentUser?.id
 
+  // When not connected (e.g. after changing your own password signs you out),
+  // show a neutral placeholder instead of the table + actions — those would
+  // hit the runtime unauthenticated and, worse, could render a non-array list.
+  if (connectionStatus !== 'connected') {
+    return (
+      <div className='flex h-full w-full select-none flex-col items-center justify-center gap-2 p-8 text-center'>
+        <h2 className='text-lg font-semibold text-neutral-1000 dark:text-white'>User Management</h2>
+        <p className='text-sm text-neutral-500 dark:text-neutral-400'>
+          You are not connected to a runtime. Connect to the runtime to manage its users.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className='flex h-full w-full select-none flex-col overflow-auto p-8'>
       <div className='mb-6 flex items-start justify-between'>
@@ -133,10 +150,12 @@ const UserManagementEditor = () => {
             <button
               type='button'
               onClick={() => setCreateOpen(true)}
-              className='flex h-9 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-medium leading-none text-white hover:bg-brand-medium-dark'
+              className='flex h-9 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-medium text-white hover:bg-brand-medium-dark'
             >
-              <PlusIcon className='h-4 w-4' />
-              <span>New User</span>
+              {/* PlusIcon strokes `inherit`; without a stroke color it renders
+                  invisibly and its empty box pushed the label off-center. */}
+              <PlusIcon className='h-4 w-4 stroke-current' />
+              <span className='leading-none'>New User</span>
             </button>
           )}
         </div>
