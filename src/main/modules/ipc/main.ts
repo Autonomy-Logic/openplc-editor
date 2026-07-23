@@ -278,12 +278,7 @@ class MainProcessBridge implements MainIpcModule {
     if (params.password !== undefined) body.password = params.password
     if (params.currentPassword !== undefined) body.current_password = params.currentPassword
     if (params.role !== undefined) body.role = params.role
-    const res = await this.makeRuntimeApiMutation(
-      'PUT',
-      ipAddress,
-      `/api/update-user/${userId}`,
-      JSON.stringify(body),
-    )
+    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, `/api/update-user/${userId}`, JSON.stringify(body))
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 

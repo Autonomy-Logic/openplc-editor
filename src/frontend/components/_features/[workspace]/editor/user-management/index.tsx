@@ -4,7 +4,10 @@ import { RefreshIcon } from '@root/frontend/assets/icons/interface/Refresh'
 import { TrashCanIcon } from '@root/frontend/assets/icons/interface/TrashCan'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
-import { RuntimeUserModal, type RuntimeUserModalSubmit } from '@root/frontend/components/_organisms/modals/runtime-user-modal'
+import {
+  RuntimeUserModal,
+  type RuntimeUserModalSubmit,
+} from '@root/frontend/components/_organisms/modals/runtime-user-modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { RuntimeUser, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import { useRuntime } from '@root/middleware/shared/providers'
@@ -181,10 +184,7 @@ const UserManagementEditor = () => {
               {users.map((user) => {
                 const isSelf = user.id === currentUser?.id
                 return (
-                  <tr
-                    key={user.id}
-                    className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-850'
-                  >
+                  <tr key={user.id} className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-850'>
                     <td className='px-4 py-2 text-neutral-850 dark:text-neutral-200'>
                       {user.username}
                       {isSelf && <span className='ml-2 text-xs text-neutral-400'>(you)</span>}
