@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 
+import { useOpenPLCStore } from '../../../../store'
 import { ProjectTreeExpandableLeaf, ProjectTreeLeaf } from '../index'
 
 // https://github.com/Autonomy-Logic/openplc-editor/issues/640
@@ -36,6 +37,20 @@ describe('ProjectTreeLeaf search highlight', () => {
 
     expect(container.textContent).toBe('Taktgeber')
     expect(container.textContent).not.toContain('<span')
+  })
+
+  it('keeps the plain name as the element identity while highlighted', () => {
+    const { container } = render(
+      <ProjectTreeLeaf leafLang='fbd' leafType='function-block' label='Taktgeber' highlightQuery='Takt' />,
+    )
+
+    const leaf = container.querySelector('li')
+    expect(leaf).not.toBeNull()
+    if (leaf) fireEvent.click(leaf)
+
+    // Selection must record the real POU name, never the decorated display string.
+    const { selectedProjectTreeLeaf } = useOpenPLCStore.getState().workspace
+    expect(selectedProjectTreeLeaf.label).toBe('Taktgeber')
   })
 
   it('applies the same safe highlighting on expandable leaves', () => {
