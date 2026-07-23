@@ -96,6 +96,7 @@ describe('Device slice types', () => {
         connectionStatus: 'disconnected',
         plcStatus: null,
         ipAddress: null,
+        runtimeVersion: null,
         selectedDevice: null,
         storedCredentials: null,
         timingStats: null,
@@ -137,6 +138,7 @@ describe('Device slice types', () => {
         connectionStatus: 'connected',
         plcStatus: 'RUNNING',
         ipAddress: '192.168.1.1',
+        runtimeVersion: 'v4.1.9',
         selectedDevice: {
           orchestratorId: 'o',
           orchestratorAgentId: 'a',
@@ -177,6 +179,7 @@ describe('Device slice types', () => {
           connectionStatus: 'disconnected',
           plcStatus: null,
           ipAddress: null,
+          runtimeVersion: null,
           selectedDevice: null,
           storedCredentials: null,
           timingStats: null,

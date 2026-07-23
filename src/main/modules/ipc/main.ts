@@ -227,9 +227,10 @@ class MainProcessBridge implements MainIpcModule {
       // First-user bootstrap runs before any login (no token yet) and the
       // runtime allows it unauthenticated. Once a session exists this is an
       // admin adding an account, which the runtime requires to be authenticated
-      // — route it through the token authority so an expired token is refreshed.
+      // — route it through the token authority (mutation helper accepts the
+      // runtime's 201 Created and refreshes an expired token).
       if (this.tokens.hasToken()) {
-        const res = await this.makeRuntimeApiPostRequest(ipAddress, '/api/create-user', payload, () => undefined)
+        const res = await this.makeRuntimeApiMutation('POST', ipAddress, '/api/create-user', payload)
         return res.success ? { success: true } : { success: false, error: res.error }
       }
 
@@ -470,7 +471,7 @@ class MainProcessBridge implements MainIpcModule {
    * success; the raw body is returned so callers can surface error messages.
    */
   private makeRuntimeApiMutation(
-    method: 'PUT' | 'DELETE',
+    method: 'POST' | 'PUT' | 'DELETE',
     ipAddress: string,
     endpoint: string,
     body?: string,

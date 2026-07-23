@@ -7,6 +7,7 @@ import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import { isUserManagementCapableRuntime } from '../../../utils/device'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -57,8 +58,11 @@ const Project = () => {
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
 
   // Runtime User Management is only meaningful while connected to a runtime
-  // (it reads/writes the runtime's account list over the authenticated API).
+  // (it reads/writes the runtime's account list over the authenticated API)
+  // AND only exists on runtimes ≥ v4.1.9 — older runtimes lack the endpoints.
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
+  const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
+  const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -378,7 +382,7 @@ const Project = () => {
                   }
                 />
               )}
-              {runtimeConnected && (
+              {showUserManagement && (
                 <ProjectTreeLeaf
                   key='User Management'
                   leafLang='userManagement'

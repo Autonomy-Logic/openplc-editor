@@ -64,6 +64,10 @@ export type RuntimeConnection = {
   connectionStatus: ConnectionStatus
   plcStatus: PlcStatus | null
   ipAddress: string | null
+  /** Version string reported by the connected runtime (from
+   *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
+   *  when unknown. Gates version-dependent UI like User Management. */
+  runtimeVersion: string | null
   selectedDevice: SelectedDevice | null
   storedCredentials: StoredCredentials | null
   timingStats: TimingStats | null
@@ -144,6 +148,7 @@ export type DeviceActions = {
   setRuntimeIpAddress: (ipAddress: string) => void
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
+  setRuntimeVersion: (version: string | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   setStoredCredentials: (credentials: StoredCredentials | null) => void

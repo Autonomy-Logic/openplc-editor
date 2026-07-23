@@ -15,6 +15,8 @@ type EditTarget = { user: RuntimeUser; isSelf: boolean }
 const UserManagementEditor = () => {
   const runtime = useRuntime()
   const connectionStatus = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus)
+  const setRuntimeConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setRuntimeConnectionStatus)
+  const setRuntimeJwtToken = useOpenPLCStore((s) => s.deviceActions.setRuntimeJwtToken)
 
   const [users, setUsers] = useState<RuntimeUser[]>([])
   const [currentUser, setCurrentUser] = useState<RuntimeUser | null>(null)
@@ -69,8 +71,24 @@ const UserManagementEditor = () => {
       if (values.currentPassword) params.currentPassword = values.currentPassword
     }
     if (values.roleChanged) params.role = values.role
+    const changingOwnPassword = editTarget.isSelf && values.passwordChanged
     const result = await runtime.updateUser(editTarget.user.id, params)
     if (!result.success) return result.error || 'Failed to update user'
+
+    if (changingOwnPassword) {
+      // The runtime invalidates your token when you change your own password,
+      // so drop the local session and force a fresh login with the new one.
+      await runtime.clearCredentials()
+      setRuntimeJwtToken(null)
+      setRuntimeConnectionStatus('disconnected')
+      toast({
+        title: 'Password changed',
+        description: 'You have been signed out. Reconnect with your new password.',
+        variant: 'default',
+      })
+      return null
+    }
+
     toast({ title: 'User updated', description: `"${values.username}" was updated.`, variant: 'default' })
     void refresh()
     return null
@@ -115,10 +133,10 @@ const UserManagementEditor = () => {
             <button
               type='button'
               onClick={() => setCreateOpen(true)}
-              className='flex h-9 items-center gap-2 rounded-md bg-brand px-3 text-sm font-medium text-white hover:bg-brand-medium-dark'
+              className='flex h-9 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-medium leading-none text-white hover:bg-brand-medium-dark'
             >
               <PlusIcon className='h-4 w-4' />
-              New User
+              <span>New User</span>
             </button>
           )}
         </div>
@@ -162,7 +180,9 @@ const UserManagementEditor = () => {
                             onClick={() => setEditTarget({ user, isSelf })}
                             className='flex h-7 w-7 items-center justify-center rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-850'
                           >
-                            <PencilIcon className='h-4 w-4' />
+                            {/* pointer-events-none so the button's `title` tooltip wins
+                                over the icon SVG's own <title> ("Pencil Icon"). */}
+                            <PencilIcon className='pointer-events-none h-4 w-4' />
                           </button>
                         )}
                         {canDeleteRow(user) && (
@@ -172,7 +192,7 @@ const UserManagementEditor = () => {
                             onClick={() => setDeleteTarget(user)}
                             className='flex h-7 w-7 items-center justify-center rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950'
                           >
-                            <TrashCanIcon className='h-4 w-4 stroke-current' />
+                            <TrashCanIcon className='pointer-events-none h-4 w-4 stroke-current' />
                           </button>
                         )}
                       </div>

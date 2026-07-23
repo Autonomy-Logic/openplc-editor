@@ -209,25 +209,6 @@ const RuntimeUserModal = (props: RuntimeUserModalProps) => {
             </div>
           )}
 
-          {isEdit && requireCurrentPassword && passwordTouched && (
-            <div>
-              <Label htmlFor='runtime-user-current-pass' className='mb-2 block text-sm'>
-                Current password
-              </Label>
-              <input
-                id='runtime-user-current-pass'
-                name='runtime-user-current-pass'
-                type='password'
-                autoComplete='off'
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder='Enter your current password'
-                className={inputClass}
-                disabled={isLoading}
-              />
-            </div>
-          )}
-
           <div>
             <Label htmlFor='runtime-user-pass' className='mb-2 block text-sm'>
               {isEdit ? 'New password' : 'Password'}
@@ -263,6 +244,28 @@ const RuntimeUserModal = (props: RuntimeUserModalProps) => {
               disabled={isLoading}
             />
           </div>
+
+          {/* Rendered last, and only once the password is actually being
+              changed, so adding it doesn't shove the field the user just
+              clicked (the new-password field) down the form. */}
+          {isEdit && requireCurrentPassword && passwordTouched && (
+            <div>
+              <Label htmlFor='runtime-user-current-pass' className='mb-2 block text-sm'>
+                Current password
+              </Label>
+              <input
+                id='runtime-user-current-pass'
+                name='runtime-user-current-pass'
+                type='password'
+                autoComplete='off'
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder='Enter your current password'
+                className={inputClass}
+                disabled={isLoading}
+              />
+            </div>
+          )}
 
           {error && <p className='text-sm text-red-600 dark:text-red-400'>{error}</p>}
 

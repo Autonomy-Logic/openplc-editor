@@ -10,7 +10,7 @@ import { RuntimeUserModal, type RuntimeUserModalSubmit } from './runtime-user-mo
  * always makes this first account an admin).
  */
 const RuntimeCreateUserModal = () => {
-  const { modals, modalActions, deviceActions } = useOpenPLCStore()
+  const { modals, modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
   const runtime = useRuntime()
 
   const isOpen = modals['runtime-create-user']?.open || false
@@ -37,8 +37,12 @@ const RuntimeCreateUserModal = () => {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      // Cancelling the first-user setup abandons the connection attempt.
-      if (isOpen) deviceActions.setRuntimeConnectionStatus('disconnected')
+      // On success `handleSubmit` has already logged in and set the status to
+      // 'connected'; closing then must NOT tear that down. Only a genuine
+      // cancel (still connecting/disconnected) abandons the connection attempt.
+      if (isOpen && runtimeConnection.connectionStatus !== 'connected') {
+        deviceActions.setRuntimeConnectionStatus('disconnected')
+      }
       modalActions.closeModal()
     }
     modalActions.onOpenChange('runtime-create-user', open)
