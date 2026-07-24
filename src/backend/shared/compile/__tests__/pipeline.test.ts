@@ -161,7 +161,7 @@ describe('runCompilePipeline — simulator path', () => {
     expect(result.uploaded).toBe(false)
     expect(port.transpileToSt).toHaveBeenCalledTimes(1)
     // The pipeline hands the in-process transpiler the project IR plus
-    // a log callback — no XML / xml2st flags flow through anymore.
+    // a log callback — no XML / transpiler flags flow through anymore.
     expect(port.transpileToSt).toHaveBeenCalledWith(
       expect.objectContaining({ projectData: expect.anything() }),
       expect.any(Function),

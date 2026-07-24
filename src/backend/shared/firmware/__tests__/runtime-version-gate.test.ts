@@ -1,9 +1,41 @@
 import {
   describeIncompatibleRuntime,
   isStrucppCompatibleRuntime,
+  isUserManagementCapableRuntime,
   MIN_STRUCPP_RUNTIME_VERSION,
+  MIN_USER_MANAGEMENT_RUNTIME_VERSION,
   parseRuntimeVersion,
 } from '../runtime-version-gate'
+
+describe('isUserManagementCapableRuntime', () => {
+  it('is exposed with the documented minimum version', () => {
+    expect(MIN_USER_MANAGEMENT_RUNTIME_VERSION).toBe('4.1.9')
+  })
+
+  it('accepts v4.1.9 and newer', () => {
+    expect(isUserManagementCapableRuntime('v4.1.9')).toBe(true)
+    expect(isUserManagementCapableRuntime('4.1.10')).toBe(true)
+    expect(isUserManagementCapableRuntime('v4.2.0')).toBe(true)
+    expect(isUserManagementCapableRuntime('v5.0.0')).toBe(true)
+  })
+
+  it('accepts a pre-release on the target patch', () => {
+    expect(isUserManagementCapableRuntime('v4.1.9-rc.1')).toBe(true)
+  })
+
+  it('rejects versions older than 4.1.9', () => {
+    expect(isUserManagementCapableRuntime('v4.1.8')).toBe(false)
+    expect(isUserManagementCapableRuntime('v4.0.9')).toBe(false)
+    expect(isUserManagementCapableRuntime('v3.9.9')).toBe(false)
+  })
+
+  it('rejects unparseable / legacy version strings', () => {
+    expect(isUserManagementCapableRuntime('v4')).toBe(false)
+    expect(isUserManagementCapableRuntime('dev')).toBe(false)
+    expect(isUserManagementCapableRuntime(null)).toBe(false)
+    expect(isUserManagementCapableRuntime(undefined)).toBe(false)
+  })
+})
 
 describe('parseRuntimeVersion', () => {
   it('parses tagged release versions (with and without leading v)', () => {

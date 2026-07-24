@@ -11,7 +11,7 @@ import {
 } from '../../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
-import { getLiteralType } from '../../../../../utils/keywords'
+import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
@@ -186,6 +186,21 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return
+
+      // If the entry can't be a new variable NAME — a member/array reference
+      // (`some_struct.field`, `arr[3]`), a typed literal (`T#500ms`), a reserved
+      // word, etc. — don't try to create a variable. Bind it to the node
+      // verbatim as a constant/reference; strucpp validates the expression. New
+      // local-variable creation is only for plain, legal identifiers.
+      if (!isLegalIdentifier(variableName)[0]) {
+        updateNode({
+          editorName: pouName,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: { ...node, data: { ...node.data, variable: { name: variableName } } },
+        })
+        return
+      }
 
       const variableType = newVariableTypeForExpected(expectedType)
 

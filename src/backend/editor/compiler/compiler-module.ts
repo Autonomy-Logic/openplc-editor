@@ -2316,7 +2316,7 @@ class CompilerModule {
    * Main compile entry point.  Drives the full Step 0-13 flow
    * through the shared `runCompilePipeline` orchestrator
    * (`backend/shared/compile/pipeline.ts`); platform-specific bits
-   * (xml2st spawn, arduino-cli spawn, runtime upload) are abstracted
+   * (arduino-cli spawn, runtime upload) are abstracted
    * behind `EditorCompilerPlatformPort`.  Single source of truth
    * for compile behaviour shared with openplc-web.
    */

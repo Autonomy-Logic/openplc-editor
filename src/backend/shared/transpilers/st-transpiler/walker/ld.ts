@@ -3,7 +3,7 @@
  *
  * Walks `RFBody.rungs[*].nodes/edges` directly — no PLCOpen
  * intermediate.  Output must match the python oracle
- * (`xml2st.py --keep-structs --no-complex-parser`) byte-for-byte;
+ * byte-for-byte against the python oracle;
  * `tests/per_case.test.ts` is the per-case validation loop, and
  * `tests/golden_react_flow.test.ts` covers the larger harvested
  * corpus once it lands.

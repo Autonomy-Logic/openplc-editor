@@ -23,8 +23,17 @@ import type { PLCVariable } from '../../middleware/shared/ports/types'
 import { getVariableRestrictionType, validateVariableType } from '../utils/PLC/validate-variable-type'
 import { getScopedQueryApi } from './st-lsp'
 
-/** LSP `CompletionItemKind.Variable` — strucpp's kind for in-scope variables and instance/struct members. */
+/**
+ * LSP `CompletionItemKind`s that denote a value symbol bindable to a box.
+ * strucpp emits `Variable` (6) for in-scope variables and FUNCTION_BLOCK
+ * instance members (`TON0.Q`), but `Field` (5) for STRUCT members
+ * (`my_struct.field`). Both must be accepted, or struct-member access never
+ * autocompletes or validates.
+ */
 const LSP_KIND_VARIABLE = 6
+const LSP_KIND_FIELD = 5
+const isValueCompletionKind = (kind: number | undefined): boolean =>
+  kind === LSP_KIND_VARIABLE || kind === LSP_KIND_FIELD
 
 /** Max instance/struct variables to drill into when a type-filtered search has no direct hits. */
 const SCOPE_EXPAND_LIMIT = 8
@@ -92,7 +101,7 @@ export async function getScopeCompletions(
   const { anchor, segment } = splitExpression(value)
   const items = await api.completeInScope(pouName, anchor)
   const needle = segment.toLowerCase()
-  const matching = items.filter((item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase().includes(needle))
+  const matching = items.filter((item) => isValueCompletionKind(item.kind) && item.label.toLowerCase().includes(needle))
 
   const direct = matching
     .filter((item) => {
@@ -120,7 +129,7 @@ export async function getScopeCompletions(
       const memberAnchor = `${anchor}${instance.label}.`
       const members = await api.completeInScope(pouName, memberAnchor)
       return members
-        .filter((m) => m.kind === LSP_KIND_VARIABLE && m.type && validateVariableType(m.type, expectedType).isValid)
+        .filter((m) => isValueCompletionKind(m.kind) && m.type && validateVariableType(m.type, expectedType).isValid)
         .map((m) => ({ label: `${instance.label}.${m.label}`, insertText: memberAnchor + m.label, type: m.type }))
     }),
   )
@@ -146,7 +155,9 @@ export async function resolveScopeExpressionType(pouName: string, expression: st
   if (items.length === 0) return { status: 'unavailable' }
 
   const { name, indexed } = stripSubscript(segment)
-  const match = items.find((item) => item.kind === LSP_KIND_VARIABLE && item.label.toLowerCase() === name.toLowerCase())
+  const match = items.find(
+    (item) => isValueCompletionKind(item.kind) && item.label.toLowerCase() === name.toLowerCase(),
+  )
   if (!match || !match.type) return { status: 'unknown' }
 
   if (indexed) {

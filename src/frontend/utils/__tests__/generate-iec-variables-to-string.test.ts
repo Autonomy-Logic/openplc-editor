@@ -11,7 +11,7 @@ const makeVariable = (overrides: Partial<PLCVariable> & Pick<PLCVariable, 'name'
   debug: overrides.debug ?? false,
 })
 
-// Format matches xml2st's PouProgramGenerator output:
+// Format matches the legacy PouProgramGenerator output:
 //   * VAR / END_VAR keywords are indented by 2 spaces
 //   * variable declaration lines by 4 spaces
 //   * consecutive var-class blocks have no blank line between them
@@ -150,8 +150,8 @@ describe('generateIecVariablesToString', () => {
     expect(result.split('VAR_INPUT').length).toBe(2) // one occurrence = 2 parts
   })
 
-  it('emits consecutive var-class blocks with no blank line between them (xml2st parity)', () => {
-    // xml2st walks `self.Interface` and emits each var-class block
+  it('emits consecutive var-class blocks with no blank line between them (legacy parity)', () => {
+    // the legacy generator walks `self.Interface` and emits each var-class block
     // back-to-back, immediately closing one END_VAR before opening the
     // next header.  The vars-text editor needs to mirror that exactly
     // so a manual edit of the text view doesn't get re-formatted into

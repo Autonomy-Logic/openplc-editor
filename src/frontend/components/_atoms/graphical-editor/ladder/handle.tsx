@@ -3,6 +3,8 @@ import { Handle, HandleProps } from '@xyflow/react'
 import { cn } from '../../../../utils/cn'
 
 export type CustomHandleProps = HandleProps & {
+  /** ladder handles always carry an explicit id — strip the `null` xyflow ≥12.11 allows */
+  id?: string
   glbPosition: {
     x: number
     y: number
@@ -37,7 +39,7 @@ export const CustomHandle = ({
   )
 }
 
-type BuildHandleProps = HandleProps & {
+type BuildHandleProps = Omit<CustomHandleProps, 'glbPosition' | 'relPosition'> & {
   glbX: number
   glbY: number
   relX: number
@@ -51,7 +53,7 @@ type BuildHandleProps = HandleProps & {
  * @param relY: number - The y coordinate of the handle based on the relative position (inside the node)
  * @returns CustomHandleProps
  */
-export const buildHandle = ({ glbX, glbY, relX, relY, ...rest }: BuildHandleProps) => {
+export const buildHandle = ({ glbX, glbY, relX, relY, ...rest }: BuildHandleProps): CustomHandleProps => {
   return {
     glbPosition: {
       x: glbX,

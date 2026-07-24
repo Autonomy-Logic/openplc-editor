@@ -101,7 +101,7 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
 /* ────────────────────────── helpers ─────────────────────────────────────── */
 
 // Block signatures from every graphical block instance's variant — the
-// co-located equivalent of xml2st's embedded <libraryBlocks> payload. Deduped
+// co-located equivalent of the embedded <libraryBlocks> payload. Deduped
 // by name, first instance wins — deliberately mirroring the oracle's
 // <libraryBlocks> dedup; user POUs are excluded (they resolve from their
 // own interface).

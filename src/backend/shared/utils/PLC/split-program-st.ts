@@ -1,14 +1,14 @@
 /**
- * Split the monolithic `program.st` produced by xml2st into one
+ * Split the monolithic `program.st` produced by the ST transpiler into one
  * synthetic source file per POU, plus auxiliary files for the project-
  * level sections (`_types.st`, `_globals.st`, `_config.st`).  The
  * editor feeds the result to strucpp via `additionalSources`, so error
  * reports come back with `error.file === '<pouName>.st'` instead of a
  * generic `program.st` line.
  *
- * Why post-process here instead of changing xml2st: xml2st is being
- * abandoned, and Runtime v3 (MatIEC era) ingests the monolithic
- * `program.st` verbatim — splitting upstream would break that target.
+ * Why post-process here rather than upstream: Runtime v3 (MatIEC era)
+ * ingests the monolithic `program.st` verbatim — splitting upstream
+ * would break that target.
  * The editor already knows the project's POU list (it produced the XML
  * the splitter consumes), so the operation is name-anchored and
  * deterministic, not a generic ST parse.
@@ -22,7 +22,7 @@
 
 export interface KnownPou {
   /** POU name as the user knows it.  Strucpp uppercases internally; we
-   *  match case-insensitively against xml2st output. */
+   *  match case-insensitively against the transpiler output. */
   name: string
   kind: 'PROGRAM' | 'FUNCTION' | 'FUNCTION_BLOCK'
   /**
@@ -62,7 +62,7 @@ interface RangeMatch {
  * Find the line index (1-indexed, inclusive) where a POU header for
  * `(name, kind)` starts in `lines`.  Returns -1 when no match is found.
  *
- * The header pattern is intentionally tight: xml2st always emits the
+ * The header pattern is intentionally tight: the transpiler always emits the
  * keyword at column 0 followed by the POU name and either a colon
  * (functions return-type), whitespace, or end-of-line.  This rules out
  * matches on identifiers that contain the POU name as a substring

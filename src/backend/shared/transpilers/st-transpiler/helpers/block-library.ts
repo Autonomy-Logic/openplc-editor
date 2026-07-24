@@ -34,7 +34,7 @@ export function isRecord(v: unknown): v is Record<string, unknown> {
 /**
  * Build a block signature from a placed block's `node.data.variant`.
  *
- * Mirrors `collect-library-blocks.ts` / xml2st's `_pou_to_block_infos`:
+ * Mirrors `collect-library-blocks.ts`'s block-info derivation:
  * EN/ENO are implicit control pins (dropped); inOut params appear on both
  * sides; a function's return is already a class-`output` variable named `OUT`.
  * Generic IEC meta-types (`ANY`, `ANY_NUM`, …) are kept verbatim and resolved

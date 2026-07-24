@@ -16,7 +16,7 @@ describe('convertTypeToXml', () => {
 
   // Regression: project data canonicalizes base types to uppercase
   // (baseTypes constant emits 'STRING'). The xml emitter must still
-  // produce <string> — xml2st rejects <STRING> outright.
+  // produce <string> — STruC++ rejects <STRING> outright.
   it('converts uppercase STRING base-type to lowercase tag', () => {
     const result = convertTypeToXml({ definition: 'base-type', value: 'STRING' })
     expect(result).toEqual({ string: '' })
