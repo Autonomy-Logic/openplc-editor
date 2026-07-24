@@ -29,6 +29,7 @@ import { ResourcesEditor } from '../components/_features/[workspace]/editor/reso
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
+import { UserManagementEditor } from '../components/_features/[workspace]/editor/user-management'
 import { VendorScreenEditor } from '../components/_features/[workspace]/editor/vendor-screen'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
@@ -580,6 +581,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
+                        {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
