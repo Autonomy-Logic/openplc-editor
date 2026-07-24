@@ -11,6 +11,13 @@ beforeEach(() => {
     runtimeLogin: jest.fn().mockResolvedValue({ success: true, accessToken: 'jwt-token-123' }),
     runtimeCreateUser: jest.fn().mockResolvedValue({ success: true }),
     runtimeGetUsersInfo: jest.fn().mockResolvedValue({ hasUsers: true, runtimeVersion: '4.0.0' }),
+    runtimeListUsers: jest.fn().mockResolvedValue({
+      success: true,
+      users: [{ id: 1, username: 'admin', role: 'admin' }],
+    }),
+    runtimeWhoAmI: jest.fn().mockResolvedValue({ success: true, user: { id: 1, username: 'admin', role: 'admin' } }),
+    runtimeUpdateUser: jest.fn().mockResolvedValue({ success: true }),
+    runtimeDeleteUser: jest.fn().mockResolvedValue({ success: true }),
     runtimeGetStatus: jest.fn().mockResolvedValue({ success: true, status: 'RUNNING' }),
     runtimeStartPlc: jest.fn().mockResolvedValue({ success: true }),
     runtimeStopPlc: jest.fn().mockResolvedValue({ success: true }),
@@ -83,11 +90,17 @@ describe('login', () => {
 // ---------------------------------------------------------------------------
 
 describe('createUser', () => {
-  it('delegates to bridge with IP and credentials', async () => {
+  it('delegates to bridge with IP and credentials (no role forwards undefined)', async () => {
     const result = await adapter.createUser({ username: 'newuser', password: 'pass123' })
 
-    expect(window.bridge.runtimeCreateUser).toHaveBeenCalledWith('192.168.1.100', 'newuser', 'pass123')
+    expect(window.bridge.runtimeCreateUser).toHaveBeenCalledWith('192.168.1.100', 'newuser', 'pass123', undefined)
     expect(result).toEqual({ success: true })
+  })
+
+  it('forwards the role when provided', async () => {
+    await adapter.createUser({ username: 'newuser', password: 'pass123', role: 'admin' })
+
+    expect(window.bridge.runtimeCreateUser).toHaveBeenCalledWith('192.168.1.100', 'newuser', 'pass123', 'admin')
   })
 
   it('returns error when no IP configured', async () => {
@@ -102,6 +115,91 @@ describe('createUser', () => {
     const result = await adapter.createUser({ username: 'newuser', password: 'pass123' })
 
     expect(result).toEqual({ success: false, error: 'Connection refused' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// listUsers / whoAmI / updateUser / deleteUser
+// ---------------------------------------------------------------------------
+
+describe('listUsers', () => {
+  it('delegates to bridge with IP', async () => {
+    const result = await adapter.listUsers()
+    expect(window.bridge.runtimeListUsers).toHaveBeenCalledWith('192.168.1.100')
+    expect(result).toEqual({ success: true, users: [{ id: 1, username: 'admin', role: 'admin' }] })
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.listUsers()
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeListUsers as jest.Mock).mockRejectedValue(new Error('list failed'))
+    const result = await adapter.listUsers()
+    expect(result).toEqual({ success: false, error: 'list failed' })
+  })
+})
+
+describe('whoAmI', () => {
+  it('delegates to bridge with IP', async () => {
+    const result = await adapter.whoAmI()
+    expect(window.bridge.runtimeWhoAmI).toHaveBeenCalledWith('192.168.1.100')
+    expect(result).toEqual({ success: true, user: { id: 1, username: 'admin', role: 'admin' } })
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.whoAmI()
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeWhoAmI as jest.Mock).mockRejectedValue(new Error('whoami failed'))
+    const result = await adapter.whoAmI()
+    expect(result).toEqual({ success: false, error: 'whoami failed' })
+  })
+})
+
+describe('updateUser', () => {
+  it('delegates to bridge with IP, id and params', async () => {
+    const params = { username: 'bobby', password: 'np', currentPassword: 'op', role: 'user' as const }
+    const result = await adapter.updateUser(7, params)
+    expect(window.bridge.runtimeUpdateUser).toHaveBeenCalledWith('192.168.1.100', 7, params)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.updateUser(7, { username: 'x' })
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeUpdateUser as jest.Mock).mockRejectedValue(new Error('update failed'))
+    const result = await adapter.updateUser(7, { username: 'x' })
+    expect(result).toEqual({ success: false, error: 'update failed' })
+  })
+})
+
+describe('deleteUser', () => {
+  it('delegates to bridge with IP and id', async () => {
+    const result = await adapter.deleteUser(9)
+    expect(window.bridge.runtimeDeleteUser).toHaveBeenCalledWith('192.168.1.100', 9)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.deleteUser(9)
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeDeleteUser as jest.Mock).mockRejectedValue(new Error('delete failed'))
+    const result = await adapter.deleteUser(9)
+    expect(result).toEqual({ success: false, error: 'delete failed' })
   })
 })
 

@@ -30,6 +30,7 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { UsersIcon } from '../../../assets/icons/project/Users'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
@@ -459,6 +460,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'ethercatDevice'
     | 'softMotionDrive'
     | 'libraryManifest'
+    | 'userManagement'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   /**
@@ -498,6 +500,7 @@ const LeafSources = {
   // render the same glyph — the manifest is the user's entry point
   // into a library project, so it earns a dedicated mark.
   libraryManifest: { LeafIcon: LibraryManifestIcon },
+  userManagement: { LeafIcon: UsersIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,
@@ -778,7 +781,7 @@ const ProjectTreeLeaf = ({
         </span>
       )}
 
-      {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
+      {leafLang === 'devPin' || leafLang === 'devConfig' || leafLang === 'userManagement' ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}
