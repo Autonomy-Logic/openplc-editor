@@ -338,7 +338,7 @@ describe('oldEditorParseDataTypesToXML', () => {
     // Regression: struct creation seeds new variables with an
     // `initialValue: { simpleValue: { value: '' } }` wrapper instead
     // of `undefined`.  The XML emitter must treat the empty inner
-    // value the same as absence — otherwise xml2st turns it into
+    // value the same as absence — otherwise the ST generator turns it into
     // a stray `:= ` in the ST output and breaks compilation.
     it('omits initialValue for an array struct variable whose inner value is empty', () => {
       const xml = makeBaseXml()

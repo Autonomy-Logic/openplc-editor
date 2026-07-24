@@ -1,4 +1,4 @@
-import { FocusEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports'
@@ -8,6 +8,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
+import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { updateDiagramElementsPosition } from '../../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
@@ -59,17 +60,10 @@ export const BlockNodeElement = <T extends object>({
 }) => {
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    editorActions: { updateModelVariables },
-    libraries,
-    ladderFlows,
-    ladderFlowActions: { setNodes, setEdges, setHandleBranches },
-    project: {
-      data: { pous },
-    },
-    projectActions: { updateVariable, deleteVariable },
-    snapshotActions: { pushToHistory },
-  } = useOpenPLCStore()
+  const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
+  const { setNodes, setEdges, setHandleBranches } = useOpenPLCStore((state) => state.ladderFlowActions)
+  const { updateVariable, deleteVariable } = useOpenPLCStore((state) => state.projectActions)
+  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
 
   const {
     name: blockName,
@@ -166,6 +160,8 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
+    const { project, libraries, ladderFlows } = useOpenPLCStore.getState()
+    const pous = project.data.pous
     const libraryBlock = resolveLibraryBlock(blockNameValue, libraries, pous)
 
     if (!libraryBlock) {
@@ -401,30 +397,25 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>(block: BlockProps<T>) => {
+const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
 
   const pouName = useBoundPou()
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+  const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
   const {
-    project: {
-      data: { pous },
-    },
-    projectActions: { createVariable },
-    snapshotActions: { pushToHistory },
-    libraries: { user: userLibraries },
-    ladderFlows,
-    ladderFlowActions: { updateNode, setNodes, setEdges, setHandleBranches: setHandleBranchesBlock },
-  } = useOpenPLCStore()
+    updateNode,
+    setNodes,
+    setEdges,
+    setHandleBranches: setHandleBranchesBlock,
+  } = useOpenPLCStore((state) => state.ladderFlowActions)
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as newBlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
-
-  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-    nodeId: id,
-  })
 
   const connectedOutputNames = useMemo(() => {
     const names = new Set<string>()
@@ -461,6 +452,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
+            const { project, ladderFlows } = useOpenPLCStore.getState()
+            const { variables } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
+              nodeId: id,
+            })
             const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
 
             handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
@@ -485,6 +480,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
+    const { ladderFlows } = useOpenPLCStore.getState()
     const {
       variables: freshVariables,
       rung: freshRung,
@@ -551,8 +547,20 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
+    const { ladderFlows } = useOpenPLCStore.getState()
+    const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+      nodeId: id,
+    })
+
     if (!rung || !node) {
       toast({ title: 'Error', description: 'Could not find the related rung or node', variant: 'fail' })
+      return
+    }
+
+    // Blur with an unchanged name is not an edit — skip the write so merely
+    // clicking in and out of a block never marks the POU as modified. The
+    // autocomplete's explicit create action (createIfNotFound) still proceeds.
+    if (!createIfNotFound && variableNameToSubmit === (node.data as { variable?: { name?: string } }).variable?.name) {
       return
     }
 
@@ -595,6 +603,13 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
+        // An entry that can't be a new variable NAME — a member/array reference,
+        // a typed literal (`T#500ms`), a reserved word — is bound to the block
+        // verbatim as a constant/reference instead of erroring.
+        if (!isLegalIdentifier(variableNameToSubmit)[0]) {
+          updateNodeVariable({ name: variableNameToSubmit })
+          return
+        }
         const project = useOpenPLCStore.getState().project
         const currentPou = project.data.pous.find((p) => p.name === pouName)
         pushToHistory(pouName, {
@@ -634,6 +649,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
+    const { ladderFlows, libraries } = useOpenPLCStore.getState()
     const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
@@ -643,7 +659,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
     if (!variant) return
 
-    const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+    const libMatch = libraries.user.find((lib) => lib.name === variant.name && lib.type === variant.type)
     if (!libMatch) return
 
     const libPou = pous.find((pou) => pou.name === libMatch.name)
@@ -872,7 +888,13 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
+              const { ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+                nodeId: id,
+              })
               if (!node || !rung) return
+              // Drag-lock while typing is UI state, not an edit — transient
+              // so focusing the input never marks the flow as modified.
               updateNode({
                 editorName: pouName,
                 nodeId: node.id,
@@ -881,10 +903,15 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                   ...node,
                   draggable: false,
                 },
+                transient: true,
               })
               return
             }}
             onBlur={() => {
+              const { ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+                nodeId: id,
+              })
               if (!node || !rung) return
               updateNode({
                 editorName: pouName,
@@ -894,6 +921,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                   ...node,
                   draggable: node.data.draggable as boolean,
                 },
+                transient: true,
               })
               return
             }}
@@ -924,3 +952,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     </div>
   )
 }
+
+// Cast keeps the generic call signature `memo` would otherwise widen away.
+const exportBlock = memo(Block) as typeof Block
+
+export { exportBlock as Block }

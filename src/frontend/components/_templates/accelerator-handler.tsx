@@ -9,7 +9,7 @@ import {
   useWindow,
 } from '../../../middleware/shared/providers'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
-import { useOpenPLCStore } from '../../store'
+import { openPLCStoreBase, useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
 import { toast } from '../_features/[app]/toast/use-toast'
 
@@ -403,6 +403,35 @@ const AcceleratorHandler = () => {
     openModal,
     windowPort,
   ])
+
+  /**
+   * beforeunload warning on web (tab close / refresh / hard navigation away).
+   *
+   * Browsers only permit the generic native "Leave site?" prompt here — no
+   * custom dialog and no async save — so this is the best-effort backstop for
+   * raw browser exits. In-app navigation (the sidebar back button) still gets
+   * the real save-changes dialog via closeProject(). Desktop is handled by the
+   * Electron close lifecycle in the effect above; this one is web-only.
+   */
+  useEffect(() => {
+    if (capabilities.isNativeApplication) return
+
+    const handler = (e: BeforeUnloadEvent) => {
+      // Read the live store value, not the React closure: an intentional in-app
+      // exit (save-changes modal → clearAndClose sets editingState) updates the
+      // Zustand store synchronously right before navigating, so reading it here
+      // avoids double-prompting (custom dialog + generic prompt) on that path.
+      if (openPLCStoreBase.getState().workspace.editingState !== 'unsaved') return
+      // Setting returnValue (and calling preventDefault) is what triggers the
+      // browser's generic unsaved-changes prompt; the string is ignored by
+      // modern browsers.
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [capabilities.isNativeApplication])
 
   return <></>
 }

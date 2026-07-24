@@ -493,6 +493,26 @@ export interface ConfiguredEtherCATDevice {
   slaveType?: string
   /** SDO startup parameters extracted from CoE Object Dictionary */
   sdoConfigurations?: SDOConfigurationEntry[]
+  /** CiA 402 SoftMotion axis configuration (present when recognized as a drive) */
+  cia402?: Cia402AxisConfig
+}
+
+/**
+ * Per-axis CiA 402 SoftMotion configuration persisted on a recognized drive.
+ * Mirrors the AXIS_REF_SM3 scaling fields; increments-per-unit is derived as
+ * scaleFactor * scaleNum / scaleDenom. When `enabled`, the compile step
+ * generates the AXIS_REF_SM3 global, located PDO scalars, and the per-scan
+ * SM_Drive_GenericDS402 bridge for this device.
+ */
+export interface Cia402AxisConfig {
+  /** TRUE = treat this EtherCAT device as a SoftMotion axis. */
+  enabled: boolean
+  /** iRatioTechUnitsNum (CODESYS param 1052). */
+  scaleNum: number
+  /** dwRatioTechUnitsDenom (CODESYS param 1051). */
+  scaleDenom: number
+  /** fScalefactor (CODESYS param 1054) — increments per user unit. */
+  scaleFactor: number
 }
 
 // ===================== PER-SLAVE CONFIGURATION =====================

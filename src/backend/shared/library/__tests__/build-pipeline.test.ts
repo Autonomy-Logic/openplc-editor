@@ -2,7 +2,7 @@
  * Tests for the library build pipeline.
  *
  * `prepareXmlForLibraryBuild` no longer generates PLCopen XML — the
- * old xml2st flow was replaced by an in-process JSON → ST transpiler.
+ * the legacy XML→ST flow was replaced by an in-process JSON → ST transpiler.
  * The function now only validates the manifest and returns the stubbed
  * project data (plus the POU inventory the splitter needs); the actual
  * transpile happens later via `LibraryBuildPort.transpileToSt`.
@@ -422,7 +422,7 @@ describe('libraryBuildFromTranspiledSt', () => {
 
   it('drops `_config.st` so strucpp does not error on the stub configuration', () => {
     // The stub program (which the splitter recognises and the
-    // pipeline drops) is referenced by xml2st's emitted
+    // pipeline drops) is referenced by the transpiler's emitted
     // CONFIGURATION block.  Leaving `_config.st` in the strucpp
     // inputs makes strucpp emit "Unknown program type 'MAIN'"
     // diagnostics because the stub source isn't there anymore.
@@ -637,7 +637,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect(res.success).toBe(true)
   })
 
-  it('matches POU docs case-insensitively (xml2st upper-cases identifiers)', () => {
+  it('matches POU docs case-insensitively (the transpiler upper-cases identifiers)', () => {
     const archive = {
       manifest: {
         name: 'demo_lib',

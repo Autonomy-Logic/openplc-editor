@@ -38,6 +38,10 @@ export type ModalTypes =
    *  commit-message override.  Available only when the project port
    *  exposes the README slot (web adapter against the Edge API). */
   | 'project-readme'
+  /** Confirm-overwrite gate for the File → "Import PLCopen XML" menu
+   *  item. Acts on whatever project is currently open — no targeted
+   *  data payload (unlike `confirm-delete-project`). */
+  | 'confirm-plcopen-import'
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

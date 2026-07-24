@@ -842,6 +842,58 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
     })
 
+    it('syncs a VAR_EXTERNAL debug toggle to the global and every other reference', () => {
+      // One global, referenced via VAR_EXTERNAL from a program and an FB.
+      seedGlobals(store, [makeVariable('test_global', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('test_global', 'external')]))
+      seedPou(store, makePou('Mover', 'function-block', [makeVariable('test_global', 'external')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'test_global',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBe(true)
+      for (const pou of st.data.pous) {
+        expect(pou.interface?.variables[0].debug).toBe(true)
+      }
+    })
+
+    it('syncs a global debug toggle down to every VAR_EXTERNAL reference (case-insensitive)', () => {
+      seedGlobals(store, [makeVariable('Test_Global', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('TEST_GLOBAL', 'external')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'Test_Global',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBe(true)
+      expect(st.data.pous[0].interface?.variables[0].debug).toBe(true)
+    })
+
+    it('does not propagate a local (non-external) debug toggle to a same-named global', () => {
+      seedGlobals(store, [makeVariable('x', 'global')])
+      seedPou(store, makePou('Main', 'program', [makeVariable('x', 'local')]))
+
+      store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'x',
+        data: { debug: true },
+      })
+
+      const st = store.getState().project
+      expect(st.data.pous[0].interface?.variables[0].debug).toBe(true)
+      // The unrelated same-named global must stay untouched.
+      expect(st.data.configurations.resource.globalVariables[0].debug).toBeFalsy()
+    })
+
     it('stores the location binding verbatim (alias name or literal) and never auto-adopts', () => {
       // Single-field model: `location` is the binding. A manual literal is
       // stored verbatim; an alias name is stored verbatim (NOT auto-resolved
@@ -3208,6 +3260,56 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(false)
       expect(result.title).toBe('Cannot Delete Global Variable')
       expect(result.message).toContain('Consumer')
+      expect((result.data as { referencingPous: string[] }).referencingPous).toEqual(['Consumer'])
+      // Not forced → nothing was deleted.
+      expect(
+        store.getState().project.data.configurations.resource.globalVariables.some((v) => v.name === 'SharedVar'),
+      ).toBe(true)
+    })
+
+    it('deleteVariable global with force cascades: removes the global + external refs from every POU', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('SharedVar', 'global') })
+      for (const name of ['Consumer', 'Consumer2']) {
+        seedPou(store, {
+          ...makePou(name, 'program'),
+          interface: {
+            variables: [
+              {
+                name: 'SharedVar',
+                class: 'external',
+                type: { definition: 'base-type', value: 'INT' },
+                location: '',
+                documentation: '',
+              },
+              {
+                name: 'keep_me',
+                class: 'local',
+                type: { definition: 'base-type', value: 'BOOL' },
+                location: '',
+                documentation: '',
+              },
+            ],
+          },
+        })
+      }
+
+      const result = store.getState().projectActions.deleteVariable({
+        scope: 'global',
+        variableName: 'SharedVar',
+        force: true,
+      })
+
+      expect(result.ok).toBe(true)
+      // The global itself is gone.
+      expect(
+        store.getState().project.data.configurations.resource.globalVariables.some((v) => v.name === 'SharedVar'),
+      ).toBe(false)
+      // The external declaration is removed from every referencing POU; unrelated locals stay.
+      for (const name of ['Consumer', 'Consumer2']) {
+        const vars = store.getState().project.data.pous.find((p) => p.name === name)?.interface?.variables ?? []
+        expect(vars.some((v) => v.name === 'SharedVar')).toBe(false)
+        expect(vars.some((v) => v.name === 'keep_me')).toBe(true)
+      }
     })
 
     it('updateOpcUaServerConfig with top-level updates (cycleTimeMs)', () => {

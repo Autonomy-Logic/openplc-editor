@@ -139,7 +139,17 @@ export function serializePouScopeForQuery(
     pou.pouType === 'function' && pou.interface?.returnType
       ? `${startKeyword} ${name} : ${pou.interface.returnType}`
       : `${startKeyword} ${name}`
-  const variables = generateIecVariablesToString(pou.interface?.variables ?? [])
+  // External variables (`VAR_EXTERNAL`) reference resource globals declared in a
+  // separate CONFIGURATION document. This throwaway query doc isn't part of that
+  // configuration, so strucpp can't resolve a bare `VAR_EXTERNAL` here — the
+  // global and its struct/array members would come back unknown (the box shows
+  // yellow, no autocomplete). Re-emit externals as plain `VAR`: they carry their
+  // real type inline, so the symbol and its members resolve self-containedly.
+  // Scope-query-only — the POU's real stub keeps `VAR_EXTERNAL`.
+  const scopeVariables = (pou.interface?.variables ?? []).map((variable) =>
+    variable.class === 'external' ? { ...variable, class: 'local' as const } : variable,
+  )
+  const variables = generateIecVariablesToString(scopeVariables)
   const prefix = `${declaration}\n${variables}\n`
   // `prefix` ends with '\n', so split length - 1 is the 0-indexed line
   // the body expression sits on.

@@ -48,7 +48,7 @@ export interface GenerateDefinesInput {
    *  category (`DIN` / `AIN` / `DOUT` / `AOUT`) plus matching
    *  count defines (`NUM_DISCRETE_INPUT` etc.). */
   devicePinMapping: DevicePin[]
-  /** Concatenated ST program content (the output of xml2st).
+  /** Concatenated ST program content (the output of the ST transpiler).
    *  Scanned with `String.prototype.includes` for the marker
    *  function-block names that toggle the Arduino-library
    *  `USE_*_BLOCK` defines.  The set of marker strings here is

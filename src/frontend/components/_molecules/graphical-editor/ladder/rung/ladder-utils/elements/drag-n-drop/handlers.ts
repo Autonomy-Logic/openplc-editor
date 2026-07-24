@@ -178,6 +178,10 @@ function layoutAndReturn(
       ...(handleBranches && { handleBranches }),
     },
     oldStateRung.defaultBounds as [number, number],
+    // `nodes` may have had its variable nodes stripped by prepareDropState;
+    // the pre-drop rung still holds them, so pass it as the identity source
+    // to keep variable-node ids stable across the rebuild.
+    oldStateRung.nodes,
   )
   return { nodes: diagramNodes, edges: diagramEdges, handleBranches }
 }
@@ -252,10 +256,13 @@ export function handleMainParallel(ctx: DropContext, sourceIsBranch: boolean): D
     ctx.node,
   )
 
-  // Remove the copycat node
+  // Remove the copycat node. `parallelNodes` derives from preparedNodes
+  // (variables stripped) — pass the pre-drop rung as identity source so the
+  // variable-node rebuild keeps stable ids.
   const { nodes: cleanedNodes, edges: cleanedEdges } = removeElement(
     { ...ctx.rung, nodes: parallelNodes, edges: parallelEdges },
     ctx.copycatNode,
+    ctx.oldStateRung.nodes,
   )
 
   return { nodes: cleanedNodes, edges: cleanedEdges }
@@ -380,10 +387,13 @@ export function handleMainSerial(ctx: DropContext, sourceIsBranch: boolean): Dro
     ctx.node,
   )
 
-  // Remove the copycat node
+  // Remove the copycat node. `serialNodes` derives from preparedNodes
+  // (variables stripped) — pass the pre-drop rung as identity source so the
+  // variable-node rebuild keeps stable ids.
   const { nodes: cleanedNodes, edges: cleanedEdges } = removeElement(
     { ...ctx.rung, nodes: serialNodes, edges: serialEdges },
     ctx.copycatNode,
+    ctx.oldStateRung.nodes,
   )
 
   return { nodes: cleanedNodes, edges: cleanedEdges }

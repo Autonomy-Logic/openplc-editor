@@ -10,7 +10,7 @@ import {
 } from '../../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
-import { getLiteralType } from '../../../../../utils/keywords'
+import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { buildGenericNode } from '../../../../_molecules/graphical-editor/fbd/fbd-utils/nodes'
@@ -31,14 +31,10 @@ type FBDBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProps>(
   ({ block: unknownBlock, isOpen, setIsOpen, keyPressed, valueToSearch }: FBDBlockAutoCompleteProps, ref) => {
     const pouName = useBoundPou()
-    const {
-      project: {
-        data: { pous },
-      },
-      projectActions: { createVariable },
-      fbdFlows,
-      fbdFlowActions: { updateNode, addNode },
-    } = useOpenPLCStore()
+    const pous = useOpenPLCStore((state) => state.project.data.pous)
+    const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+    const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
+    const { updateNode, addNode } = useOpenPLCStore((state) => state.fbdFlowActions)
 
     const block = unknownBlock as Node<BasicNodeData> & { positionAbsoluteX?: number; positionAbsoluteY?: number }
     const { edges, rung } = useMemo(() => {
@@ -131,6 +127,16 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           description: 'Variable name cannot be empty',
           variant: 'fail',
         })
+        return
+      }
+
+      // If the entry can't be a new variable NAME — a member/array reference
+      // (`some_struct.field`, `arr[3]`), a typed literal (`T#500ms`), a reserved
+      // word, etc. — don't try to create a variable. Bind it to the block
+      // verbatim as a constant/reference; strucpp validates the expression. New
+      // local-variable creation is only for plain, legal identifiers.
+      if (!isLegalIdentifier(variableName)[0]) {
+        submitVariableToBlock({ name: variableName } as PLCVariable)
         return
       }
 

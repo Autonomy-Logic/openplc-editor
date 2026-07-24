@@ -7,6 +7,9 @@
  *
  * `WSTRING` is intentionally absent — matches python's `# TODO`
  * comment at `definitions.py:118`.
+ *
+ * `__XWORD` is the platform-width address type carried by strucpp library
+ * block signatures; declarable and emitted verbatim.
  */
 
 export const PLC_BASE_TYPES: ReadonlySet<string> = new Set([

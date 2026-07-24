@@ -369,6 +369,31 @@ function applyVppEntries(
   })
 }
 
+/**
+ * Mirror a shared global's debug (watch) flag across every reference to it.
+ *
+ * A VAR_EXTERNAL is a pointer to one CONFIGURATION VAR_GLOBAL, so "watch this
+ * global in the debugger" is a property of the global, not of any single
+ * reference. Toggling the debug icon on the global's own definition or on any
+ * POU's VAR_EXTERNAL therefore updates them all in lockstep — so every table
+ * shows the same icon state and the global polls/displays as one entity
+ * (matching the canonical Config0:<name> key used by the debug tree and poller).
+ *
+ * Mutates the produce draft in place. Case-insensitive on the global name,
+ * consistent with global-variable lookup elsewhere in this slice.
+ */
+function syncGlobalDebugFlag(slice: ProjectSlice, globalName: string, debug: boolean): void {
+  const lower = globalName.toLowerCase()
+  for (const g of slice.project.data.configurations.resource.globalVariables) {
+    if (g.name.toLowerCase() === lower) g.debug = debug
+  }
+  for (const pou of slice.project.data.pous) {
+    for (const v of pou.interface?.variables ?? []) {
+      if (v.class === 'external' && v.name.toLowerCase() === lower) v.debug = debug
+    }
+  }
+}
+
 const reconcileVariablesText = (
   pouName: string | undefined,
   getState: ProjectGetState,
@@ -772,6 +797,16 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             ...(validationResponse.data ? validationResponse.data : {}),
           }
           response.data = variables[found.index]
+
+          // A shared global's watch flag belongs to the global, not to any one
+          // reference — keep the global's definition and every VAR_EXTERNAL to it
+          // in sync so the debug icon toggles everywhere at once.
+          if (updates.debug !== undefined) {
+            const target = variables[found.index]
+            if (scope === 'global' || target.class === 'external') {
+              syncGlobalDebugFlag(slice, target.name, updates.debug)
+            }
+          }
         }),
       )
       if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
@@ -787,36 +822,43 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
       return found?.variable
     },
-    deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName }) => {
+    deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName, force }) => {
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
       }
 
+      // Deleting a global that POUs declare as `VAR_EXTERNAL` must handle those
+      // references too. Without `force`, refuse and report the referencing POUs
+      // (the editor surfaces a confirmation). With `force`, cascade-delete: drop
+      // the global AND the matching external declaration from every such POU.
+      let cascade: { globalName: string; pous: string[] } | null = null
       if (scope === 'global') {
         const state = getState()
         const globalVars = state.project.data.configurations.resource.globalVariables
-
-        let variableToDelete: PLCVariable | undefined
-        if (variableName) {
-          variableToDelete = globalVars.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
-        } else {
-          variableToDelete = getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)?.variable
-        }
+        const variableToDelete = variableName
+          ? globalVars.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
+          : getVariableBasedOnRowIdOrVariableId(globalVars, rowId, variableId)?.variable
 
         if (variableToDelete) {
-          const externalReferences = state.project.data.pous.filter((pou) =>
-            pou.interface?.variables?.some(
-              (v) => v.class === 'external' && v.name.toLowerCase() === variableToDelete.name.toLowerCase(),
-            ),
-          )
-
-          if (externalReferences.length > 0) {
-            const pouNames = externalReferences.map((pou) => pou.name).join(', ')
-            return fail(
-              `The global variable "${variableToDelete.name}" is referenced by external variables in the following POUs: ${pouNames}. Please remove these references before deleting the global variable.`,
-              'Cannot Delete Global Variable',
+          const referencingPous = state.project.data.pous
+            .filter((pou) =>
+              pou.interface?.variables?.some(
+                (v) => v.class === 'external' && v.name.toLowerCase() === variableToDelete.name.toLowerCase(),
+              ),
             )
+            .map((pou) => pou.name)
+
+          if (referencingPous.length > 0) {
+            if (!force) {
+              return {
+                ok: false,
+                title: 'Cannot Delete Global Variable',
+                message: `The global variable "${variableToDelete.name}" is used as an external variable in the following POUs: ${referencingPous.join(', ')}.`,
+                data: { referencingPous },
+              }
+            }
+            cascade = { globalName: variableToDelete.name, pous: referencingPous }
           }
         }
       }
@@ -840,17 +882,34 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
               return
             }
             variables.splice(idx, 1)
-            return
+          } else {
+            const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
+            if (!found) {
+              response = fail('Variable not found')
+              return
+            }
+            variables.splice(found.index, 1)
           }
-          const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
-          if (!found) {
-            response = fail('Variable not found')
-            return
+
+          // Cascade: remove the matching VAR_EXTERNAL from every referencing POU.
+          if (cascade) {
+            const { globalName, pous } = cascade
+            for (const pouName of pous) {
+              const pouVars = slice.project.data.pous.find((p) => p.name === pouName)?.interface?.variables
+              const extIdx =
+                pouVars?.findIndex(
+                  (v) => v.class === 'external' && v.name.toLowerCase() === globalName.toLowerCase(),
+                ) ?? -1
+              if (pouVars && extIdx !== -1) pouVars.splice(extIdx, 1)
+            }
           }
-          variables.splice(found.index, 1)
         }),
       )
       if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
+      // Refresh the vars-text of every POU whose external declaration we removed.
+      if (response.ok && cascade) {
+        for (const pouName of cascade.pous) regenerateVariablesText(pouName, getState)
+      }
       return response
     },
     rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {

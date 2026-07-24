@@ -160,10 +160,8 @@ describe('runCompilePipeline — simulator path', () => {
     expect(result.binary).toBeInstanceOf(Uint8Array)
     expect(result.uploaded).toBe(false)
     expect(port.transpileToSt).toHaveBeenCalledTimes(1)
-    // The pipeline hands the transpiler the (preprocessed) project IR and a
-    // log callback; the port impl owns xml2st-vs-JSON backend selection and any
-    // format-specific flags internally (see transpiler-mode.ts). The pipeline
-    // stays format-agnostic — it only passes { projectData }.
+    // The pipeline hands the in-process transpiler the project IR plus
+    // a log callback — no XML / transpiler flags flow through anymore.
     expect(port.transpileToSt).toHaveBeenCalledWith(
       expect.objectContaining({ projectData: expect.anything() }),
       expect.any(Function),
@@ -264,7 +262,7 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
     const result = await runCompilePipeline(makeArgs({ projectData }), port, emit)
 
     expect(result.success).toBe(false)
-    // Validation runs before the transpile step.
+    // Validation runs before transpilation.
     expect(port.transpileToSt).not.toHaveBeenCalled()
     // The user-facing error names the POU and the kind of block.
     const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
@@ -1041,15 +1039,15 @@ describe('runCompilePipeline — side effects', () => {
     // lambda body uncovered — this test pins the wiring explicitly.
     const port = makePort({
       transpileToSt: jest.fn().mockImplementation(async (_args, log) => {
-        log('xml2st spawned subprocess', 'info')
-        log('xml2st: parsed 5 POUs', 'info')
+        log('transpiler started', 'info')
+        log('transpiler: parsed 5 POUs', 'info')
         return { ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }
       }),
     })
     const { events, emit } = captureEvents()
     await runCompilePipeline(makeArgs(), port, emit)
     const stEvents = events.filter((e) => e.stage === 'st')
-    expect(stEvents.some((e) => e.message === 'xml2st spawned subprocess' && e.level === 'info')).toBe(true)
-    expect(stEvents.some((e) => e.message === 'xml2st: parsed 5 POUs' && e.level === 'info')).toBe(true)
+    expect(stEvents.some((e) => e.message === 'transpiler started' && e.level === 'info')).toBe(true)
+    expect(stEvents.some((e) => e.message === 'transpiler: parsed 5 POUs' && e.level === 'info')).toBe(true)
   })
 })

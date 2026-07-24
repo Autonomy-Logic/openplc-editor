@@ -181,6 +181,14 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** Runtime User Management screen. A device-scoped singleton shown
+         *  under the Device tree branch while connected to a runtime. */
+        type: 'plc-user-management'
+        meta: {
+          name: string
+        }
+      }
+    | {
         /** The Library Project's manifest tab — Monaco-wrapped
          *  `library.json` at the project root.  Only ever opened
          *  when `meta.type === 'plc-library'`.  Always present

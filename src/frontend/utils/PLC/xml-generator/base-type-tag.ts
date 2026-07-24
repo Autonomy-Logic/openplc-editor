@@ -6,7 +6,7 @@ import { lookupBaseType } from '../../iec-types-registry'
  * For PLCopen TC6 elementaryTypes (closed `<choice>` in the XSD), use
  * the canonical XML element name from strucpp's iec-types registry —
  * mixed-case on purpose: `<string>` / `<wstring>` are lowercase,
- * everything else uppercase. xml2st (MatIEC's TC6 schema validator)
+ * everything else uppercase. MatIEC's TC6 schema validator
  * rejects `<STRING>` outright with the same "expected one of (BOOL,
  * BYTE, ...)" error users see when a case is wrong.
  *

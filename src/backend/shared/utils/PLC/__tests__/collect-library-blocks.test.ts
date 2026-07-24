@@ -1,6 +1,6 @@
 /**
  * Tests for collectLibraryBlocks — the pure project→<addData> collector that
- * embeds used library-block signatures for the xml2st transpiler.
+ * embeds used library-block signatures.
  */
 
 import type { PLCProjectData } from '@root/middleware/shared/ports/open-plc-types'
@@ -75,7 +75,7 @@ describe('collectLibraryBlocks', () => {
     ])
 
     const result = collectLibraryBlocks(project) as any
-    expect(result.data['@name']).toBe('openplc.org/xml2st/library-blocks')
+    expect(result.data['@name']).toBe('openplc.org/library-blocks')
     const pous = result.data.libraryBlocks.pou
     expect(pous).toHaveLength(1)
     expect(pous[0]).toMatchObject({

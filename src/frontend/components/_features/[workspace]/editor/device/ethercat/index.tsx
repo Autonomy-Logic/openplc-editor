@@ -17,6 +17,7 @@ import type {
 } from '@root/middleware/shared/ports/esi-types'
 import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { sanitizeAxisName } from '@root/middleware/shared/utils/ethercat'
 import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -450,7 +451,9 @@ const EtherCATEditor = () => {
         for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
       }
 
-      const baseName = getShortDeviceName(bestMatch.esiDevice)
+      // SoftMotion drive names become axis variable names — keep them valid.
+      const rawName = getShortDeviceName(bestMatch.esiDevice)
+      const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
       const uniqueName = generateUniqueSlaveName(baseName, takenNames)
       takenNames.add(uniqueName)
 
@@ -523,7 +526,10 @@ const EtherCATEditor = () => {
       const nextPosition =
         configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
 
-      const baseName = getShortDeviceName(device)
+      // A SoftMotion drive's name becomes the axis variable name in generated
+      // code, so it must be a valid IEC identifier from the start.
+      const rawName = getShortDeviceName(device)
+      const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
       const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
 
       const newDevice: ConfiguredEtherCATDevice = {

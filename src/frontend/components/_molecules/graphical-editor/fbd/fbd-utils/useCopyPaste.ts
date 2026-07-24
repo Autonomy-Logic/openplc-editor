@@ -13,15 +13,20 @@ import {
 } from '../../../../_features/[workspace]/editor/graphical/active-context'
 
 export const useFBDClipboard = ({
-  mousePosition,
-  insideViewport,
+  mousePositionRef,
+  insideViewportRef,
   reactFlowInstance,
   rung,
   viewportRef,
   handleDeleteNodes,
 }: {
-  mousePosition: { x: number; y: number }
-  insideViewport: boolean
+  /**
+   * Refs, not values: mouse position and hover state change on every pointer
+   * move, and they're only read at paste time — passing them as refs keeps
+   * the FBD container from re-rendering while the mouse travels the canvas.
+   */
+  mousePositionRef: RefObject<{ x: number; y: number }>
+  insideViewportRef: RefObject<boolean>
   reactFlowInstance: ReactFlowInstance | null
   rung: FBDRungState
   /**
@@ -39,7 +44,7 @@ export const useFBDClipboard = ({
 }) => {
   const pouName = useBoundPou()
   const isActive = useIsGraphicalEditorActive()
-  const { fbdFlowActions } = useOpenPLCStore()
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
 
   // True when the clipboard event originated from a DOM node inside
   // this FBD instance's viewport.  Used to scope **copy** and **cut**
@@ -172,8 +177,9 @@ export const useFBDClipboard = ({
         return
       }
 
+      const mousePosition = mousePositionRef.current ?? { x: 0, y: 0 }
       const nodePosition: XYPosition = reactFlowInstance
-        ? insideViewport
+        ? insideViewportRef.current
           ? reactFlowInstance.screenToFlowPosition({
               x: mousePosition.x,
               y: mousePosition.y,
@@ -214,7 +220,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isActive, insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rung],
+    [isActive, reactFlowInstance, fbdFlowActions, rung],
   )
 
   useEffect(() => {

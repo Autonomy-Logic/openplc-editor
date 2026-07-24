@@ -119,7 +119,7 @@ export function enrichErrorWithPouContext(
       if (/^\s*END_VAR\b/i.test(lines[i])) lastEndVar = i + 1 // 1-indexed
     }
     // Body starts after the last END_VAR, but the ST generator
-    // (`pou-text-serializer.ts` and xml2st on the compile path)
+    // (`pou-text-serializer.ts` and the ST transpiler on the compile path)
     // inserts blank separator lines between END_VAR and the body
     // content.  Those blank lines exist in the per-POU file the
     // splitter handed strucpp but NOT in `pou.body.value`, which is

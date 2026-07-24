@@ -1,10 +1,12 @@
+import { memo } from 'react'
+
 import { PlaceholderNodeFilled } from '../../../../assets/icons/flow/Placeholder'
 import { cn } from '../../../../utils/cn'
 import { CustomHandle } from './handle'
 import { DEFAULT_PLACEHOLDER_HEIGHT, DEFAULT_PLACEHOLDER_WIDTH } from './utils/constants'
 import { PlaceholderProps } from './utils/types'
 
-export const Placeholder = ({ selected, data }: PlaceholderProps) => {
+const Placeholder = ({ selected, data }: PlaceholderProps) => {
   return (
     <>
       <PlaceholderNodeFilled
@@ -18,3 +20,7 @@ export const Placeholder = ({ selected, data }: PlaceholderProps) => {
     </>
   )
 }
+
+const exportPlaceholder = memo(Placeholder)
+
+export { exportPlaceholder as Placeholder }

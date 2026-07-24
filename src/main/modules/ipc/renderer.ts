@@ -15,6 +15,12 @@ import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type {
+  ListUsersResult,
+  RuntimeUserRole,
+  UpdateUserParams,
+  WhoAmIResult,
+} from '@root/middleware/shared/ports/runtime-port'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
@@ -73,6 +79,16 @@ const rendererProcessBridge = {
   openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:open-path-picker'),
   readProjectFiles: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:read-files', projectPath),
+  pickPlcopenImportFile: (): Promise<{
+    success: boolean
+    content?: string
+    error?: { title: string; description: string }
+  }> => ipcRenderer.invoke('project:pick-plcopen-import-file'),
+  exportPlcopenFile: (
+    defaultFileName: string,
+    xml: string,
+  ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
+    ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
@@ -445,8 +461,20 @@ const rendererProcessBridge = {
     ipAddress: string,
     username: string,
     password: string,
+    role?: RuntimeUserRole,
   ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('runtime:create-user', ipAddress, username, password),
+    ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
+  runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
+    ipcRenderer.invoke('runtime:list-users', ipAddress),
+  runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
+  runtimeUpdateUser: (
+    ipAddress: string,
+    userId: number,
+    params: UpdateUserParams,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:update-user', ipAddress, userId, params),
+  runtimeDeleteUser: (ipAddress: string, userId: number): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('runtime:delete-user', ipAddress, userId),
   runtimeLogin: (
     ipAddress: string,
     username: string,

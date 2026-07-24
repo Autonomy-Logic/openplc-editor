@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { DISALLOWED_LOCATION_CLASSES } from '../../../../utils/generate-iec-string-to-variables'
 import {
   BOOL_LOCATION_REGEX,
   DWORD_LOCATION_REGEX,
@@ -308,7 +309,12 @@ const createVariableValidation = (
   variables: PLCVariable[],
   variable: PLCVariable,
 ): { name: string; location: string } => {
-  const { name: variableName, location: variableLocation } = variable
+  const { name: variableName } = variable
+  // Interface-class variables cannot carry a physical location — the ST
+  // parser rejects such declarations when the project is reopened
+  // (GitHub issue #904). Strip the location instead of rejecting so
+  // creation flows that clone an existing row as a template still succeed.
+  const variableLocation = DISALLOWED_LOCATION_CLASSES.includes(variable.class) ? '' : variable.location
   const response = { name: variableName, location: variableLocation }
 
   if (checkIfVariableExists(variables, variableName)) {
@@ -351,7 +357,16 @@ const updateVariableValidation = (
 ) => {
   let response: ProjectResponse = { ok: true }
 
-  if (dataToBeUpdated.class) response.data = { class: dataToBeUpdated.class }
+  if (dataToBeUpdated.class) {
+    // Switching to an interface class makes an existing physical location
+    // invalid IEC — the saved declaration would fail to parse on reopen
+    // (GitHub issue #904) — so clear the location in the same update.
+    // Enforced here (not only in the table UI) so every caller keeps the
+    // invariant.
+    response.data = DISALLOWED_LOCATION_CLASSES.includes(dataToBeUpdated.class)
+      ? { class: dataToBeUpdated.class, location: '' }
+      : { class: dataToBeUpdated.class }
+  }
 
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
@@ -385,6 +400,21 @@ const updateVariableValidation = (
 
   if (dataToBeUpdated.location) {
     const { location } = dataToBeUpdated
+
+    // A physical location is only valid on `local` (VAR) and `global`
+    // (VAR_GLOBAL) declarations — mirrors the parser rule that makes a
+    // located interface-class variable un-parseable on project reopen
+    // (GitHub issue #904).
+    const effectiveClass = dataToBeUpdated.class ?? variableToUpdate.class
+    if (effectiveClass && DISALLOWED_LOCATION_CLASSES.includes(effectiveClass)) {
+      response = {
+        ok: false,
+        title: 'Location is not allowed.',
+        message: `Variables of class "${effectiveClass.toUpperCase()}" cannot have a physical location ("AT"). Use class LOCAL for located variables.`,
+      }
+      return response
+    }
+
     // Exclude the variable being updated so re-setting its own
     // location (e.g. re-picking the same address to refresh a
     // renamed alias) doesn't trip the uniqueness check on itself.

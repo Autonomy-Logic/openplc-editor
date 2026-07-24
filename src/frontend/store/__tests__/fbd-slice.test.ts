@@ -265,6 +265,45 @@ describe('createFBDFlowSlice', () => {
   })
 
   // -------------------------------------------------------------------------
+  // updateNodes
+  // -------------------------------------------------------------------------
+  it('updateNodes applies a batch of node replacements and marks the flow as updated', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'old-1' } }), makeNode({ id: 'n2', data: { label: 'old-2' } })],
+    })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.updateNodes([
+      { editorName: 'editor-1', nodeId: 'n1', node: makeNode({ id: 'n1', data: { label: 'new-1' } }) },
+      { editorName: 'editor-1', nodeId: 'n2', node: makeNode({ id: 'n2', data: { label: 'new-2' } }) },
+    ])
+
+    const nodes = store.getState().fbdFlows[0].rung.nodes
+    expect(nodes.find((n) => n.id === 'n1')?.data.label).toBe('new-1')
+    expect(nodes.find((n) => n.id === 'n2')?.data.label).toBe('new-2')
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
+  it('updateNodes skips entries whose editor or node does not exist', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'old' } })],
+    })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.updateNodes([
+      { editorName: 'missing-editor', nodeId: 'n1', node: makeNode({ id: 'n1' }) },
+      { editorName: 'editor-1', nodeId: 'missing', node: makeNode({ id: 'missing' }) },
+    ])
+
+    expect(store.getState().fbdFlows[0].rung.nodes.find((n) => n.id === 'n1')?.data.label).toBe('old')
+    expect(store.getState().fbdFlows[0].updated).toBe(false)
+  })
+
+  // -------------------------------------------------------------------------
   // addNode
   // -------------------------------------------------------------------------
   it('addNode pushes a node and selects it', () => {
@@ -396,6 +435,21 @@ describe('createFBDFlowSlice', () => {
     expect(flow.rung.nodes.find((n) => n.id === 'n2')?.selected).toBe(true)
     expect(flow.rung.selectedNodes).toHaveLength(1)
     expect(flow.rung.selectedNodes[0].id).toBe('n2')
+  })
+
+  it('setSelectedNodes keeps unchanged nodes identity-stable on repeated selection', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    const n1 = makeNode({ id: 'n1', data: { draggable: true } })
+    const n2 = makeNode({ id: 'n2', data: { draggable: true } })
+    store.getState().fbdFlowActions.setNodes({ editorName: 'editor-1', nodes: [n1, n2] })
+
+    // First call normalizes selected flags on both nodes.
+    store.getState().fbdFlowActions.setSelectedNodes({ editorName: 'editor-1', nodes: [n1] })
+    const nodesAfterFirst = store.getState().fbdFlows[0].rung.nodes
+
+    // A repeated identical selection must not rebuild the nodes array.
+    store.getState().fbdFlowActions.setSelectedNodes({ editorName: 'editor-1', nodes: [n1] })
+    expect(store.getState().fbdFlows[0].rung.nodes).toBe(nodesAfterFirst)
   })
 
   it('removeSelectedNode does nothing for nonexistent editor', () => {

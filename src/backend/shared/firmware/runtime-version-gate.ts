@@ -75,6 +75,26 @@ export function isStrucppCompatibleRuntime(raw: string | null | undefined): bool
   return v.minor >= 1
 }
 
+/** Minimum runtime version that ships the user-management API
+ *  (roles, whoami, unified update-user, delete/last-admin guards). */
+export const MIN_USER_MANAGEMENT_RUNTIME_VERSION = '4.1.9'
+
+/**
+ * Returns true iff the runtime version string represents a runtime
+ * that ships the user-management API (≥ 4.1.9). Older runtimes lack
+ * `whoami` / `update-user` and the RBAC guards, so the editor hides
+ * the User Management screen for them. Pre-release tags on the target
+ * patch (e.g. `v4.1.9-rc.1`) count as capable, matching the strucpp
+ * gate's treatment of the rc lineage.
+ */
+export function isUserManagementCapableRuntime(raw: string | null | undefined): boolean {
+  const v = parseRuntimeVersion(raw)
+  if (!v) return false
+  if (v.major !== 4) return v.major > 4
+  if (v.minor !== 1) return v.minor > 1
+  return v.patch >= 9
+}
+
 /**
  * Human-readable explanation suitable for surfacing as an error
  * when the gate rejects a runtime.  The reported version (or

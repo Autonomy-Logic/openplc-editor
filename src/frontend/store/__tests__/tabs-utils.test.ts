@@ -291,6 +291,13 @@ describe('tabs/utils', () => {
       expect(result.type).toBe('plc-server')
     })
 
+    it('creates editor from user-management tab', () => {
+      const tab: TabsProps = { name: 'User Management', elementType: { type: 'user-management' } }
+      const result = CreateEditorObjectFromTab(tab)
+      expect(result.type).toBe('plc-user-management')
+      expect(result.meta.name).toBe('User Management')
+    })
+
     it('creates editor from diff-viewer tab', () => {
       const tab: TabsProps = {
         name: 'Diff: devices/configuration.json',

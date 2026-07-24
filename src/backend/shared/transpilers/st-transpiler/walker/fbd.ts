@@ -14,6 +14,7 @@
  * sink sort) all live in the LD walker — they're no-ops for LD
  * bodies that don't exercise them.
  */
+import type { TypeContext } from './connection-types'
 import { emitLdBody, type EmitResult } from './ld'
 import type { RFRung } from './types'
 
@@ -24,6 +25,6 @@ export interface RFFbdBody {
   rung: RFRung
 }
 
-export function emitFbdBody(body: RFFbdBody): EmitResult {
-  return emitLdBody({ rungs: [body.rung] })
+export function emitFbdBody(body: RFFbdBody, typeContext?: TypeContext): EmitResult {
+  return emitLdBody({ rungs: [body.rung] }, typeContext)
 }

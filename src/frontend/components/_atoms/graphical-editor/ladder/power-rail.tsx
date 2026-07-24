@@ -1,11 +1,11 @@
 import { useUpdateNodeInternals } from '@xyflow/react'
-import { useEffect, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 
 import { CustomHandle } from './handle'
 import { DEFAULT_POWER_RAIL_HEIGHT, DEFAULT_POWER_RAIL_WIDTH } from './utils/constants'
 import { PowerRailProps } from './utils/types'
 
-export const PowerRail = ({ id, data }: PowerRailProps) => {
+const PowerRail = ({ id, data }: PowerRailProps) => {
   const updateNodeInternals = useUpdateNodeInternals()
 
   // Calculate dynamic height to cover all handles (including branch handles)
@@ -43,3 +43,7 @@ export const PowerRail = ({ id, data }: PowerRailProps) => {
     </>
   )
 }
+
+const exportPowerRail = memo(PowerRail)
+
+export { exportPowerRail as PowerRail }

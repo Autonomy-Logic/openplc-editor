@@ -7,6 +7,7 @@ import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import { isUserManagementCapableRuntime } from '../../../utils/device'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -55,6 +56,13 @@ const Project = () => {
   // Read-only / forked projects can't be renamed — the backend rename
   // endpoint requires edit access, so gate the affordance here too.
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
+
+  // Runtime User Management is only meaningful while connected to a runtime
+  // (it reads/writes the runtime's account list over the authenticated API)
+  // AND only exists on runtimes ≥ v4.1.9 — older runtimes lack the endpoints.
+  const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
+  const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
+  const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -374,6 +382,21 @@ const Project = () => {
                   }
                 />
               )}
+              {showUserManagement && (
+                <ProjectTreeLeaf
+                  key='User Management'
+                  leafLang='userManagement'
+                  leafType='user-management'
+                  label='User Management'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'User Management',
+                      path: `/device/user-management`,
+                      elementType: { type: 'user-management' },
+                    })
+                  }
+                />
+              )}
             </ProjectTreeBranch>
           )}
 
@@ -445,7 +468,7 @@ const Project = () => {
                       {device.ethercatConfig?.devices?.map((child) => (
                         <ProjectTreeLeaf
                           key={child.id}
-                          leafLang='ethercatDevice'
+                          leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
                           leafType='ethercat-device'
                           busName={device.name}
                           deviceId={child.id}

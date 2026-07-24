@@ -15,14 +15,15 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
-import { RungLadderState, zodLadderFlowSchema } from '../../../../../../store/slices/ladder'
-import type { PouHistorySnapshot } from '../../../../../../store/slices/shared/types'
+import { useOpenPLCStore } from '../../../../../../store'
+import { RungLadderState } from '../../../../../../store/slices/ladder'
+import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
@@ -35,49 +36,92 @@ import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
 
+const EMPTY_DIVERGENCES: string[] = []
+
 export default function LadderEditor() {
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  Mirrors `FbdEditor` — see that
   // file for the multi-mount rationale.
   const pouName = useBoundPou()
-  const {
-    ladderFlows,
-    ladderFlowActions,
-    searchNodePosition,
-    modals,
-    project: {
-      data: { pous },
-    },
-    projectActions: { updatePou },
-    modalActions: { closeModal },
-    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
-    snapshotActions: { pushToHistory },
-    libraries: { user: userLibraries },
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  // Pou-scoped subscription: immer's structural sharing keeps this flow's
+  // identity stable when other POUs' flows (or unrelated slices) change.
+  const flow = useOpenPLCStore((state) => state.ladderFlows.find((f) => f.name === pouName))
+  const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
+  const searchNodePosition = useOpenPLCStore((state) => state.searchNodePosition)
+  const blockElementModal = useOpenPLCStore((state) => state.modals['block-ladder-element'])
+  const contactElementModal = useOpenPLCStore((state) => state.modals['contact-ladder-element'])
+  const coilElementModal = useOpenPLCStore((state) => state.modals['coil-ladder-element'])
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
+  const userLibraries = useOpenPLCStore((state) => state.libraries.user)
+  const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
-  const captureSnapshot = useCallback(
-    (pouName: string): PouHistorySnapshot | null => {
-      const pou = pous.find((p) => p.name === pouName)
-      if (!pou) return null
-      return {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        globalVariables: openPLCStoreBase.getState().project.data.configurations.resource.globalVariables,
-      }
-    },
-    [pous],
-  )
+  const { captureAndPush } = usePouSnapshot()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const flow = ladderFlows.find((flow) => flow.name === pouName)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated || false
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
-  const nodeDivergences = getLibraryDivergences()
+
+  const nodeDivergences = useMemo(() => {
+    if (!flow) return EMPTY_DIVERGENCES
+
+    const divergences = []
+
+    for (const rung of flow.rungs) {
+      for (const node of rung.nodes) {
+        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+        if (!variant) continue
+
+        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+        if (!libMatch) continue
+
+        const originalPou = pous.find((pou) => pou.name === libMatch.name)
+        if (!originalPou) continue
+
+        const originalVariables = originalPou.interface?.variables ?? []
+        const originalInOut = originalVariables.filter((variable) =>
+          ['input', 'output', 'inOut'].includes(variable.class || ''),
+        )
+
+        const currentVariables = variant.variables.filter(
+          (variable) =>
+            ['input', 'output', 'inOut'].includes(variable.class || '') &&
+            !['OUT', 'EN', 'ENO'].includes(variable.name),
+        )
+
+        const formatVariable = (variable: {
+          name: string
+          class?: string
+          type: { definition: string; value: string }
+        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
+
+        if (originalPou.pouType === 'function') {
+          const outVariable = variant.variables.find((v) => v.name === 'OUT')
+          const outType = outVariable?.type?.value?.toUpperCase()
+          const returnType = originalPou.interface?.returnType?.toUpperCase()
+          if (!outType || !returnType || outType !== returnType) {
+            divergences.push(`${rung.id}:${node.id}`)
+            continue
+          }
+        }
+
+        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+        const hasDivergence =
+          originalInOut?.length !== currentVariables.length ||
+          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
+
+        if (hasDivergence) {
+          divergences.push(`${rung.id}:${node.id}`)
+        }
+      }
+    }
+
+    return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
+  }, [flow?.rungs, userLibraries, pous])
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -91,27 +135,15 @@ export default function LadderEditor() {
   }, [searchNodePosition])
 
   /**
-   * Update the flow state to project JSON.
+   * Queue the flow → project JSON write-back. The scheduler debounces it
+   * (edits inside the window coalesce), persists the raw flow object, and
+   * clears the `updated` flag; save paths flush it so a save landing inside
+   * the window still serializes the fresh body. Validation and the DOPE-477
+   * raw-object policy live in store/slices/shared/flow-writeback.ts.
    */
   useEffect(() => {
     if (!flowUpdated) return
-
-    const flowSchema = zodLadderFlowSchema.safeParse(flow)
-    if (!flowSchema.success) return
-
-    updatePou({
-      name: pouName,
-      content: {
-        language: 'ld',
-        value: flowSchema.data,
-      },
-    })
-
-    ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
-
-    if (!isDebuggerVisible) {
-      handleFileAndWorkspaceSavedState(pouName)
-    }
+    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'ld')
   }, [flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
@@ -127,8 +159,7 @@ export default function LadderEditor() {
   const handleAddNewRung = () => {
     if (isDebuggerVisible) return
 
-    const snapshot = captureSnapshot(pouName)
-    if (snapshot) pushToHistory(pouName, snapshot)
+    captureAndPush(pouName)
 
     const defaultViewport: [number, number] = [300, 100]
 
@@ -187,8 +218,7 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      const snapshot = captureSnapshot(pouName)
-      if (snapshot) pushToHistory(pouName, snapshot)
+      captureAndPush(pouName)
       ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
@@ -204,63 +234,6 @@ export default function LadderEditor() {
    */
   const handleModalClose = () => {
     closeModal()
-  }
-
-  function getLibraryDivergences() {
-    if (!flow) return []
-
-    const divergences = []
-
-    for (const rung of flow.rungs) {
-      for (const node of rung.nodes) {
-        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
-        if (!variant) continue
-
-        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
-        if (!libMatch) continue
-
-        const originalPou = pous.find((pou) => pou.name === libMatch.name)
-        if (!originalPou) continue
-
-        const originalVariables = originalPou.interface?.variables ?? []
-        const originalInOut = originalVariables.filter((variable) =>
-          ['input', 'output', 'inOut'].includes(variable.class || ''),
-        )
-
-        const currentVariables = variant.variables.filter(
-          (variable) =>
-            ['input', 'output', 'inOut'].includes(variable.class || '') &&
-            !['OUT', 'EN', 'ENO'].includes(variable.name),
-        )
-
-        const formatVariable = (variable: {
-          name: string
-          class?: string
-          type: { definition: string; value: string }
-        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
-
-        if (originalPou.pouType === 'function') {
-          const outVariable = variant.variables.find((v) => v.name === 'OUT')
-          const outType = outVariable?.type?.value?.toUpperCase()
-          const returnType = originalPou.interface?.returnType?.toUpperCase()
-          if (!outType || !returnType || outType !== returnType) {
-            divergences.push(`${rung.id}:${node.id}`)
-            continue
-          }
-        }
-
-        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
-        const hasDivergence =
-          originalInOut?.length !== currentVariables.length ||
-          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
-
-        if (hasDivergence) {
-          divergences.push(`${rung.id}:${node.id}`)
-        }
-      }
-    }
-
-    return divergences
   }
 
   return (
@@ -299,25 +272,25 @@ export default function LadderEditor() {
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
-          {modals['block-ladder-element']?.open && (
+          {blockElementModal?.open && (
             <BlockElement
               onClose={handleModalClose}
-              selectedNode={modals['block-ladder-element'].data as BlockNode<BlockVariant>}
-              isOpen={modals['block-ladder-element'].open}
+              selectedNode={blockElementModal.data as BlockNode<BlockVariant>}
+              isOpen={blockElementModal.open}
             />
           )}
-          {modals['contact-ladder-element']?.open && (
+          {contactElementModal?.open && (
             <ContactElement
               onClose={handleModalClose}
-              node={modals['contact-ladder-element'].data as ContactNode}
-              isOpen={modals['contact-ladder-element'].open}
+              node={contactElementModal.data as ContactNode}
+              isOpen={contactElementModal.open}
             />
           )}
-          {modals['coil-ladder-element']?.open && (
+          {coilElementModal?.open && (
             <CoilElement
               onClose={handleModalClose}
-              node={modals['coil-ladder-element'].data as CoilNode}
-              isOpen={modals['coil-ladder-element'].open}
+              node={coilElementModal.data as CoilNode}
+              isOpen={coilElementModal.open}
             />
           )}
         </Portal.Root>

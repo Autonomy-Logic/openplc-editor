@@ -52,8 +52,8 @@ const SelectableTypeCell = ({
     project: {
       data: { dataTypes },
     },
-    ladderFlowActions: { updateNode },
-    fbdFlowActions: { updateNode: updateFBDNode },
+    ladderFlowActions: { updateNodes },
+    fbdFlowActions: { updateNodes: updateFBDNodes },
     libraries: sliceLibraries,
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
@@ -187,11 +187,11 @@ const SelectableTypeCell = ({
     const newVars = pou?.interface?.variables ?? []
 
     if (language === 'fbd') {
-      syncNodesWithVariablesFBD(newVars, freshFBDFlows, updateFBDNode, editor.meta.name)
+      syncNodesWithVariablesFBD(newVars, freshFBDFlows, updateFBDNodes, editor.meta.name)
     }
 
     if (language === 'ld') {
-      syncNodesWithVariables(newVars, freshLadderFlows, updateNode, editor.meta.name)
+      syncNodesWithVariables(newVars, freshLadderFlows, updateNodes, editor.meta.name)
     }
 
     setCellValue(value)
