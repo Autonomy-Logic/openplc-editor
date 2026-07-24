@@ -35,6 +35,7 @@ import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
+import { HighlightedText } from '../../_atoms/highlighted-text'
 import { toast } from '../../_features/[app]/toast/use-toast'
 
 const pousAllLanguages = ['il', 'st', 'python', 'cpp', 'ld', 'sfc', 'fbd'] as const
@@ -245,6 +246,12 @@ type IProjectTreeExpandableLeafProps = ComponentPropsWithoutRef<'li'> & {
   leafLang: IProjectTreeLeafProps['leafLang']
   leafType: WorkspaceProjectTreeLeafType
   label?: string
+  /**
+   * Search query used only to highlight matches in the displayed label.
+   * Kept separate from `label`, which must stay the element's real name:
+   * rename/duplicate/delete and selection all use `label` as identity.
+   */
+  highlightQuery?: string
   children?: ReactNode
 }
 
@@ -252,6 +259,7 @@ const ProjectTreeExpandableLeaf = ({
   leafLang,
   leafType,
   label,
+  highlightQuery,
   children,
   onClick: handleLeafClick,
   ...res
@@ -373,7 +381,7 @@ const ProjectTreeExpandableLeaf = ({
               )}
               onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
             >
-              {handleLabel(label) || ''}
+              <HighlightedText text={handleLabel(label) || ''} searchQuery={highlightQuery} />
             </span>
           )}
         </div>
@@ -455,6 +463,12 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'userManagement'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
+  /**
+   * Search query used only to highlight matches in the displayed label.
+   * Kept separate from `label`, which must stay the element's real name:
+   * rename/duplicate/delete and selection all use `label` as identity.
+   */
+  highlightQuery?: string
   busName?: string
   deviceId?: string
 }
@@ -492,6 +506,7 @@ const ProjectTreeLeaf = ({
   leafLang,
   leafType,
   label,
+  highlightQuery,
   busName,
   deviceId,
   onClick: handleLeafClick,
@@ -762,7 +777,7 @@ const ProjectTreeLeaf = ({
           )}
           onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
         >
-          {handleLabel(label) || ''}
+          <HighlightedText text={handleLabel(label) || ''} searchQuery={highlightQuery} />
         </span>
       )}
 

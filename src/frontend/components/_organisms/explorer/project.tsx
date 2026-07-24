@@ -4,7 +4,6 @@ import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useOpenPLCStore } from '../../../store'
-import { extractSearchQuery } from '../../../store/slices/search/utils'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
 import { isUserManagementCapableRuntime } from '../../../utils/device'
@@ -212,7 +211,8 @@ const Project = () => {
                   key={pou.name}
                   leafLang={pou.body.language as PouLeafLang}
                   leafType='function'
-                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
+                  label={pou.name}
+                  highlightQuery={searchQuery}
                   onClick={() =>
                     handleCreateTab({
                       name: pou.name,
@@ -234,7 +234,8 @@ const Project = () => {
                   key={pou.name}
                   leafLang={pou.body.language as PouLeafLang}
                   leafType='function-block'
-                  label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
+                  label={pou.name}
+                  highlightQuery={searchQuery}
                   onClick={() =>
                     handleCreateTab({
                       name: pou.name,
@@ -258,7 +259,8 @@ const Project = () => {
                     key={pou.name}
                     leafLang={pou.body.language as PouLeafLang}
                     leafType='program'
-                    label={searchQuery ? extractSearchQuery(pou.name, searchQuery) : pou.name}
+                    label={pou.name}
+                    highlightQuery={searchQuery}
                     onClick={() =>
                       handleCreateTab({
                         name: pou.name,
@@ -281,7 +283,8 @@ const Project = () => {
                   key={name}
                   leafLang='arr'
                   leafType='data-type'
-                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  label={name}
+                  highlightQuery={searchQuery}
                   onClick={() =>
                     handleCreateTab({
                       name,
@@ -299,7 +302,8 @@ const Project = () => {
                   key={name}
                   leafLang='enum'
                   leafType='data-type'
-                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  label={name}
+                  highlightQuery={searchQuery}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
@@ -318,7 +322,8 @@ const Project = () => {
                   key={name}
                   leafLang='str'
                   leafType='data-type'
-                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  label={name}
+                  highlightQuery={searchQuery}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
@@ -432,7 +437,8 @@ const Project = () => {
                     key={server.name}
                     leafLang='server'
                     leafType='server'
-                    label={searchQuery ? extractSearchQuery(server.name, searchQuery) : server.name}
+                    label={server.name}
+                    highlightQuery={searchQuery}
                     onClick={() =>
                       handleCreateTab({
                         name: server.name,
@@ -456,7 +462,8 @@ const Project = () => {
                       key={device.name}
                       leafLang='remoteDevice'
                       leafType='remote-device'
-                      label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
+                      label={device.name}
+                      highlightQuery={searchQuery}
                       onClick={() =>
                         handleCreateTab({
                           name: device.name,
@@ -472,7 +479,8 @@ const Project = () => {
                           leafType='ethercat-device'
                           busName={device.name}
                           deviceId={child.id}
-                          label={searchQuery ? extractSearchQuery(child.name, searchQuery) : child.name}
+                          label={child.name}
+                          highlightQuery={searchQuery}
                           onClick={() =>
                             handleCreateTab({
                               name: child.name,
@@ -488,7 +496,8 @@ const Project = () => {
                       key={device.name}
                       leafLang='remoteDevice'
                       leafType='remote-device'
-                      label={searchQuery ? extractSearchQuery(device.name, searchQuery) : device.name}
+                      label={device.name}
+                      highlightQuery={searchQuery}
                       onClick={() =>
                         handleCreateTab({
                           name: device.name,
