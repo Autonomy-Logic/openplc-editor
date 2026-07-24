@@ -260,7 +260,7 @@ const Project = () => {
                     leafLang={pou.body.language as PouLeafLang}
                     leafType='program'
                     label={pou.name}
-                  highlightQuery={searchQuery}
+                    highlightQuery={searchQuery}
                     onClick={() =>
                       handleCreateTab({
                         name: pou.name,

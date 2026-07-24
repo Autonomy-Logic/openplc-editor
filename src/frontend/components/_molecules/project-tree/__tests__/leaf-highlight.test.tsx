@@ -55,7 +55,12 @@ describe('ProjectTreeLeaf search highlight', () => {
 
   it('applies the same safe highlighting on expandable leaves', () => {
     const { container } = render(
-      <ProjectTreeExpandableLeaf leafLang='remoteDevice' leafType='remote-device' label='EtherBus' highlightQuery='Ether' />,
+      <ProjectTreeExpandableLeaf
+        leafLang='remoteDevice'
+        leafType='remote-device'
+        label='EtherBus'
+        highlightQuery='Ether'
+      />,
     )
 
     expect(container.textContent).toContain('EtherBus')
