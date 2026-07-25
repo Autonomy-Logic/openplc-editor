@@ -507,6 +507,15 @@ describe('updateVariableValidation', () => {
     expect(result.ok).toBe(true)
   })
 
+  it.each(['%QX0.0', '%IX0.0', '%MX0.0', '%MX3.7'])(
+    'accepts every valid IEC area prefix for BOOL locations (%s)',
+    (location) => {
+      const boolVar = makeVariable('Test', 'BOOL', '')
+      const result = updateVariableValidation([], { location }, boolVar)
+      expect(result.ok).toBe(true)
+    },
+  )
+
   it('returns ok: true when location is valid for WORD type', () => {
     const wordVar = makeVariable('Test', 'WORD', '')
     const result = updateVariableValidation([], { location: '%QW0' }, wordVar)
