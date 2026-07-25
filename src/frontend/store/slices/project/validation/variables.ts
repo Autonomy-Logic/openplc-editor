@@ -153,7 +153,7 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
 const variableLocationValidationErrorMessage = (variableType: string) => {
   switch (variableType.toUpperCase()) {
     case 'BOOL':
-      return 'Valid locations: %QX0.0..7, %IX0.0..7 (change the number to the desired location)'
+      return 'Valid locations: %QX0.0..7, %IX0.0..7, %MX0.0..7 (change the number to the desired location)'
     case 'INT':
     case 'UINT':
     case 'WORD':
