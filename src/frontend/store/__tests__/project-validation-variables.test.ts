@@ -516,6 +516,28 @@ describe('updateVariableValidation', () => {
     },
   )
 
+  it.each([
+    ['BYTE', '%IB0'],
+    ['BYTE', '%QB1'],
+    ['BYTE', '%MB2'],
+    ['SINT', '%IB3'],
+    ['USINT', '%MB4'],
+  ])('accepts byte locations (I/Q/M) for %s type (%s)', (type, location) => {
+    const v = makeVariable('Test', type, '')
+    const result = updateVariableValidation([], { location }, v)
+    expect(result.ok).toBe(true)
+  })
+
+  it.each([
+    ['BYTE', '%IX0.0'], // bit location, wrong width for a byte type
+    ['SINT', '%IW0'], // word location, wrong width
+    ['BOOL', '%IB0'], // byte location, wrong width for a bit type
+  ])('rejects a cross-width location for %s (%s)', (type, location) => {
+    const v = makeVariable('Test', type, '')
+    const result = updateVariableValidation([], { location }, v)
+    expect(result.ok).toBe(false)
+  })
+
   it('returns ok: true when location is valid for WORD type', () => {
     const wordVar = makeVariable('Test', 'WORD', '')
     const result = updateVariableValidation([], { location: '%QW0' }, wordVar)
