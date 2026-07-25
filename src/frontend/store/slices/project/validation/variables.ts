@@ -2,6 +2,7 @@ import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { DISALLOWED_LOCATION_CLASSES } from '../../../../utils/generate-iec-string-to-variables'
 import {
   BOOL_LOCATION_REGEX,
+  BYTE_LOCATION_REGEX,
   DWORD_LOCATION_REGEX,
   LWORD_LOCATION_REGEX,
   PLC_ADDRESS_PREFIX,
@@ -131,6 +132,10 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
       const boolMatch = BOOL_LOCATION_REGEX.test(variableLocation) && variableLocation.split('.')[1] <= '7'
       return boolMatch
     }
+    case 'BYTE':
+    case 'SINT':
+    case 'USINT':
+      return BYTE_LOCATION_REGEX.test(variableLocation)
     case 'INT':
     case 'UINT':
     case 'WORD':
@@ -154,6 +159,10 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
   switch (variableType.toUpperCase()) {
     case 'BOOL':
       return 'Valid locations: %QX0.0..7, %IX0.0..7, %MX0.0..7 (change the number to the desired location)'
+    case 'BYTE':
+    case 'SINT':
+    case 'USINT':
+      return 'Valid locations: %QB0, %IB0, %MB0 (change the number to the desired location)'
     case 'INT':
     case 'UINT':
     case 'WORD':
