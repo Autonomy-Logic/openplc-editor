@@ -20,6 +20,14 @@ function mockTransport(over: Partial<LicenseCapableTransport> = {}): LicenseCapa
   }
 }
 
+/**
+ * `deriveDeviceId` of the mock transport's anchor `[1,2,3,4]`, computed
+ * independently (sha256 of the ASCII prefix + the 4 bytes, first 16 bytes hex).
+ * Hardcoded on purpose: calling the module under test to build the expectation
+ * would assert nothing about the value the renderer is handed.
+ */
+const DEVICE_ID_OF_01020304 = 'af572de307790e5f5e9091f8d7435f70'
+
 beforeEach(() => jest.clearAllMocks())
 
 describe('probeAndRecover', () => {
@@ -33,7 +41,11 @@ describe('probeAndRecover', () => {
 
   it('connects a non-licensable board without a license step', async () => {
     const r = await probeAndRecover(mockTransport(), { isLicensable: false })
-    expect(r).toEqual({ status: 'connected-with-firmware', anchorHex: '01020304' })
+    expect(r).toEqual({
+      status: 'connected-with-firmware',
+      anchorHex: '01020304',
+      deviceId: DEVICE_ID_OF_01020304,
+    })
     expect(mockCheckDeviceActivation).not.toHaveBeenCalled()
   })
 
@@ -123,6 +135,34 @@ describe('probeAndRecover', () => {
     expect(r).toMatchObject({ licenseStatus: 'unlicensed', activation: 'demo' })
   })
 
+  // The renderer cannot derive the device id (node:crypto is main-only), so it
+  // shows and copies whatever this returns. A branch that omits it leaves the
+  // popover with no id and the buy link with nothing to bind a purchase to.
+  it.each([
+    ['already licensed (no recover ran)', { readLicense: jest.fn(async () => ({ success: true, status: 0x7e })) }, undefined],
+    ['no storage backend', { readLicense: jest.fn(async () => ({ success: true, status: 0x85, unsupported: true })) }, undefined],
+    ['demo', {}, { licensed: false }],
+    ['activation error', {}, { licensed: false, error: 'Activation request failed: 503 Service Unavailable' }],
+    ['activated', {}, { licensed: true, license: new Array(98).fill(0) }],
+  ])('carries the derived deviceId on a connected result — %s', async (_label, over, activation) => {
+    if (activation) mockCheckDeviceActivation.mockResolvedValue(activation)
+    const r = await probeAndRecover(mockTransport(over), { isLicensable: true, packageId: 'com.vendor.board' })
+    expect(r.deviceId).toBe(DEVICE_ID_OF_01020304)
+  })
+
+  it('carries the deviceId even with no packageId to recover against', async () => {
+    const r = await probeAndRecover(mockTransport(), { isLicensable: true })
+    expect(r.deviceId).toBe(DEVICE_ID_OF_01020304)
+  })
+
+  // Showing one id while asking the backend about another would send users
+  // chasing a license bound to an id they never saw.
+  it('reports the same deviceId it asked the backend about', async () => {
+    mockCheckDeviceActivation.mockResolvedValue({ licensed: false })
+    const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+    expect(mockCheckDeviceActivation).toHaveBeenCalledWith(expect.objectContaining({ deviceId: r.deviceId }))
+  })
+
   it('resolves to error when a transport read throws', async () => {
     const r = await probeAndRecover(
       mockTransport({ readLicense: jest.fn(async () => { throw new Error('serial timeout') }) }),
@@ -196,6 +236,24 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         activation: 'unsupported',
       }),
     ).toEqual({ success: true, outcome: 'error', anchorHex: '01020304', error: 'no on-device storage backend' })
+  })
+
+  // The runtime-v4 (WebSocket) license check reaches the license popover through
+  // this shape; dropping the id here would leave network targets without one.
+  it.each([
+    ['already-licensed'],
+    ['activated'],
+    ['demo'],
+    ['unsupported'],
+    ['error'],
+  ] as const)('carries the deviceId through the legacy shape (%s)', (activation) => {
+    const out = toLegacyActivationOutcome({
+      status: 'connected-with-firmware',
+      anchorHex: '01020304',
+      deviceId: DEVICE_ID_OF_01020304,
+      activation,
+    })
+    expect(out.deviceId).toBe(DEVICE_ID_OF_01020304)
   })
 
   it('maps a write-error activation to success:true, outcome:error with the write error message', () => {

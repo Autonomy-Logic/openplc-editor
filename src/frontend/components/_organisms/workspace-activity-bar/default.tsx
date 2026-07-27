@@ -405,6 +405,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               useOpenPLCStore.getState().deviceActions.setDeviceProbeResult({
                 status: reconnect.status,
                 anchorHex: reconnect.anchorHex,
+                deviceId: reconnect.deviceId,
                 licenseStatus: reconnect.licenseStatus,
               })
             } catch {

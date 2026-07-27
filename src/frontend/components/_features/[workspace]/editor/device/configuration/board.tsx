@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { Copy } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
@@ -63,9 +64,60 @@ function ShieldUnlicensedIcon({ size = 14 }: { size?: number }) {
   )
 }
 
-/** Truncate the raw hardware anchor for display: `a1b2c3d4…e5f6`. */
-function shortAnchor(hex: string): string {
+/** Truncate a long hex identifier for display: `a1b2c3d4…e5f6`. */
+function shortHex(hex: string): string {
   return hex.length > 14 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex
+}
+
+/**
+ * A hex identifier shown truncated but copied in FULL.
+ *
+ * The device id is what a purchase is bound to and what a support ticket has to
+ * quote, so a value the user can only read off the screen — truncated, at that —
+ * is not usable. `title` carries the whole string for hover; the button puts it
+ * on the clipboard.
+ */
+function CopyableHex({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        setCopied(true)
+        timeoutRef.current = setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => setCopied(false))
+  }, [value])
+
+  return (
+    <span className='flex items-center justify-end gap-1'>
+      <span className='font-mono text-neutral-800 dark:text-neutral-300' title={value}>
+        {shortHex(value)}
+      </span>
+      <button
+        type='button'
+        onClick={handleCopy}
+        aria-label={`Copy ${label}`}
+        title={copied ? 'Copied!' : `Copy full ${label}`}
+        className={cn(
+          'flex h-4 w-4 flex-none items-center justify-center rounded',
+          copied
+            ? 'text-green-600 dark:text-green-400'
+            : 'text-neutral-500 hover:text-neutral-800 dark:text-neutral-500 dark:hover:text-white',
+        )}
+      >
+        <Copy className='h-3 w-3' />
+      </button>
+    </span>
+  )
 }
 
 /**
@@ -99,7 +151,7 @@ function DeviceLicenseStatus({
     return <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
   }
 
-  const { licenseStatus, anchorHex } = probeInfo.result
+  const { licenseStatus, anchorHex, deviceId } = probeInfo.result
 
   // Firmware doesn't support the licensing FCs — we genuinely can't tell.
   if (licenseStatus === 'unsupported') {
@@ -156,10 +208,26 @@ function DeviceLicenseStatus({
           </div>
 
           <dl className='mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 font-caption text-cp-sm'>
-            {anchorHex && (
+            {/* Two DIFFERENT identifiers, deliberately labelled apart: the
+                device id is the licensing identity the backend binds a license
+                to (derived in main), the hardware id is the raw serial the
+                firmware reports over 0x48. This row used to show the anchor
+                under the "Device ID" label — quoting it in a support ticket or
+                a purchase would have named the wrong thing. */}
+            {deviceId && (
               <>
                 <dt className='text-neutral-600 dark:text-neutral-400'>Device ID</dt>
-                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300'>{shortAnchor(anchorHex)}</dd>
+                <dd className='text-right'>
+                  <CopyableHex value={deviceId} label='device ID' />
+                </dd>
+              </>
+            )}
+            {anchorHex && (
+              <>
+                <dt className='text-neutral-600 dark:text-neutral-400'>Hardware ID</dt>
+                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300' title={anchorHex}>
+                  {shortHex(anchorHex)}
+                </dd>
               </>
             )}
             {!licensed && (

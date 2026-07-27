@@ -124,7 +124,12 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     })
 
     // Land the classification for the badge (main already ran the recover).
-    setDeviceProbeResult({ status: result.status, anchorHex: result.anchorHex, licenseStatus: result.licenseStatus })
+    setDeviceProbeResult({
+      status: result.status,
+      anchorHex: result.anchorHex,
+      deviceId: result.deviceId,
+      licenseStatus: result.licenseStatus,
+    })
 
     if (result.status === 'no-response') {
       openModal('debugger-message', {
@@ -214,6 +219,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     setDeviceProbeResult({
       status: 'connected-with-firmware',
       anchorHex: act.anchorHex,
+      deviceId: act.deviceId,
       licenseStatus: licensed ? 'licensed' : 'unlicensed',
     })
 

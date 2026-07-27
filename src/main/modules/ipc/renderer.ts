@@ -525,6 +525,7 @@ const rendererProcessBridge = {
   ): Promise<{
     status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
     anchorHex?: string
+    deviceId?: string
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     error?: string

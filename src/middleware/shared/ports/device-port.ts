@@ -39,6 +39,15 @@ export interface DeviceProbeResult {
   status: DeviceProbeStatus
   /** Present when a firmware answered 0x48: the raw hardware id, lowercase hex. */
   anchorHex?: string
+  /**
+   * The licensing identity, `sha256("openplc-dev-v1|" || anchor)[:16]` hex —
+   * what the backend stores a license against, and what a purchase must be
+   * bound to. Distinct from `anchorHex` (the raw hardware serial): the two are
+   * NOT interchangeable and must not be labelled the same in the UI. Derived in
+   * the main process (`node:crypto`), so the renderer receives it rather than
+   * computing it.
+   */
+  deviceId?: string
   /** On-device license state — only present for a licensable connected device. */
   licenseStatus?: DeviceLicenseStatus
   error?: string
@@ -70,6 +79,8 @@ export type DeviceActivationSummary = 'already-licensed' | 'activated' | 'demo' 
 export interface DeviceConnectResult {
   status: DeviceProbeStatus
   anchorHex?: string
+  /** See `DeviceProbeResult.deviceId` — the licensing identity, not the anchor. */
+  deviceId?: string
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
   error?: string

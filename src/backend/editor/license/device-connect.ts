@@ -23,6 +23,15 @@ export interface DeviceConnectResult {
   status: DeviceConnectStatus
   /** Present when a firmware answered 0x48: the raw hardware id, lowercase hex. */
   anchorHex?: string
+  /**
+   * The licensing identity derived from the anchor (`deriveDeviceId`), 32 hex
+   * chars — the id the backend stores a license against and the one a purchase
+   * must be bound to. Derived here, in main, because `node:crypto` is main-only;
+   * the renderer cannot compute it and must be handed the value (it feeds the
+   * license detail popover and the buy deep link). Present whenever `anchorHex`
+   * is, licensable or not: it is a pure function of the anchor.
+   */
+  deviceId?: string
   /** On-device license state after the (optional) recover. */
   licenseStatus?: DeviceLicenseStatus
   /** What the recover attempt concluded (licensable targets only). */
@@ -51,24 +60,39 @@ export async function probeAndRecover(
       return { status: 'no-firmware' }
     }
     const anchorHex = anchor.anchorHex
+    // Derived up front, not inside the recover branch: every connected result
+    // carries it, so the renderer can show and copy the licensing identity even
+    // when no recover ran (already licensed, unsupported storage, no packageId).
+    const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor))
 
     // Free VPP — no licensing step.
-    if (!opts.isLicensable) return { status: 'connected-with-firmware', anchorHex }
+    if (!opts.isLicensable) return { status: 'connected-with-firmware', anchorHex, deviceId }
 
     const lic = await client.readLicense()
     if (lic.status === LIC_STATUS_SUCCESS) {
       // A valid license blob is already stored — nothing to recover.
-      return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'licensed', activation: 'already-licensed' }
+      return {
+        status: 'connected-with-firmware',
+        anchorHex,
+        deviceId,
+        licenseStatus: 'licensed',
+        activation: 'already-licensed',
+      }
     }
     if (lic.status === LIC_STATUS_UNSUPPORTED || lic.unsupported) {
       // Declares isLicensable but has no on-device storage backend.
-      return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unsupported', activation: 'unsupported' }
+      return {
+        status: 'connected-with-firmware',
+        anchorHex,
+        deviceId,
+        licenseStatus: 'unsupported',
+        activation: 'unsupported',
+      }
     }
 
     // Empty / corrupt on-device license -> attempt recover. Needs the package id.
-    if (!opts.packageId) return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unlicensed' }
+    if (!opts.packageId) return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed' }
 
-    const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor))
     const vppId = deriveVppId(opts.packageId)
     const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId, keyId: opts.keyId })
 
@@ -84,28 +108,48 @@ export async function probeAndRecover(
         return {
           status: 'connected-with-firmware',
           anchorHex,
+          deviceId,
           licenseStatus: 'unlicensed',
           activation: 'error',
           error: act.error,
         }
       }
       // Genuinely no license for this device -> demo. The renderer prompts buy.
-      return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unlicensed', activation: 'demo' }
+      return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
     }
 
     if (act.license) {
       const write = await client.writeLicense(Uint8Array.from(act.license))
       if (write.unsupported) {
-        return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unsupported', activation: 'unsupported' }
+        return {
+          status: 'connected-with-firmware',
+          anchorHex,
+          deviceId,
+          licenseStatus: 'unsupported',
+          activation: 'unsupported',
+        }
       }
       if (write.success) {
-        return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'licensed', activation: 'activated' }
+        return {
+          status: 'connected-with-firmware',
+          anchorHex,
+          deviceId,
+          licenseStatus: 'licensed',
+          activation: 'activated',
+        }
       }
-      return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unlicensed', activation: 'error', error: write.error }
+      return {
+        status: 'connected-with-firmware',
+        anchorHex,
+        deviceId,
+        licenseStatus: 'unlicensed',
+        activation: 'error',
+        error: write.error,
+      }
     }
 
     // Licensed but the backend returned no blob — nothing to write; run as demo.
-    return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unlicensed', activation: 'demo' }
+    return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
   } catch (error) {
     return { status: 'error', error: getErrorMessage(error) }
   }
@@ -117,6 +161,7 @@ export interface LegacyActivationOutcome {
   success: boolean
   outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
   anchorHex?: string
+  deviceId?: string
   license?: { present: boolean }
   error?: string
 }
@@ -125,9 +170,12 @@ export interface LegacyActivationOutcome {
  * Adapt a `probeAndRecover` result to the legacy one-shot activation outcome
  * (`handleActivateDeviceLicense`), so both IPC handlers share one
  * classify+recover implementation instead of two independently-maintained
- * copies. `deviceId`/`vppId`/`license.blob` are dropped: `DeviceActivationResult`
+ * copies. `deviceId` IS carried through: the runtime-v4 (WebSocket) license
+ * check goes through this shape, and its result feeds the same license popover
+ * the serial path does — dropping it would leave network targets with no id to
+ * show or copy. `vppId`/`license.blob` stay dropped: `DeviceActivationResult`
  * declares them optional and no consumer (frontend or tests) reads them off
- * this response — only `outcome`/`anchorHex` drive the UI.
+ * this response — only `outcome`/`anchorHex`/`deviceId` drive the UI.
  */
 export function toLegacyActivationOutcome(result: DeviceConnectResult): LegacyActivationOutcome {
   switch (result.status) {
@@ -144,23 +192,24 @@ export function toLegacyActivationOutcome(result: DeviceConnectResult): LegacyAc
 
 function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOutcome {
   const anchorHex = result.anchorHex
+  const deviceId = result.deviceId
   switch (result.activation) {
     case 'already-licensed':
-      return { success: true, outcome: 'already-licensed', anchorHex, license: { present: true } }
+      return { success: true, outcome: 'already-licensed', anchorHex, deviceId, license: { present: true } }
     case 'activated':
-      return { success: true, outcome: 'activated', anchorHex, license: { present: true } }
+      return { success: true, outcome: 'activated', anchorHex, deviceId, license: { present: true } }
     case 'demo':
-      return { success: true, outcome: 'demo', anchorHex }
+      return { success: true, outcome: 'demo', anchorHex, deviceId }
     case 'unsupported':
-      return { success: true, outcome: 'error', anchorHex, error: 'no on-device storage backend' }
+      return { success: true, outcome: 'error', anchorHex, deviceId, error: 'no on-device storage backend' }
     case 'error':
-      return { success: true, outcome: 'error', anchorHex, error: result.error ?? 'License write failed' }
+      return { success: true, outcome: 'error', anchorHex, deviceId, error: result.error ?? 'License write failed' }
     default:
       // Reachable: `probeAndRecover` returns without `activation` when it has
       // no packageId to derive from (an empty string from the renderer passes
       // the `packageId: string` type — IPC arguments are not validated at the
       // boundary). Treated as an error rather than demo: we never asked the
       // backend anything, so we know nothing about this device's entitlement.
-      return { success: true, outcome: 'error', anchorHex, error: 'no package id: cannot check licensing' }
+      return { success: true, outcome: 'error', anchorHex, deviceId, error: 'no package id: cannot check licensing' }
   }
 }
