@@ -5,7 +5,7 @@ jest.mock('../license-activation-client', () => ({
   checkDeviceActivation: (...args: unknown[]) => mockCheckDeviceActivation(...args),
 }))
 
-import { probeAndRecover } from '../device-connect'
+import { probeAndRecover, toLegacyActivationOutcome } from '../device-connect'
 
 function mockTransport(over: Partial<LicenseCapableTransport> = {}): LicenseCapableTransport {
   return {
@@ -110,5 +110,83 @@ describe('probeAndRecover', () => {
     )
     expect(r.status).toBe('error')
     expect(r.error).toContain('serial timeout')
+  })
+})
+
+describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense over probeAndRecover)', () => {
+  it('maps no-firmware to the legacy no-id outcome', () => {
+    expect(toLegacyActivationOutcome({ status: 'no-firmware' })).toEqual({ success: true, outcome: 'no-id' })
+  })
+
+  it('maps no-response to a failed error outcome', () => {
+    expect(toLegacyActivationOutcome({ status: 'no-response', error: 'port busy' })).toEqual({
+      success: false,
+      outcome: 'error',
+      error: 'port busy',
+    })
+  })
+
+  it('maps a thrown-exception error status to success:false (matches the old outer-catch behavior)', () => {
+    expect(toLegacyActivationOutcome({ status: 'error', error: 'serial timeout' })).toEqual({
+      success: false,
+      outcome: 'error',
+      error: 'serial timeout',
+    })
+  })
+
+  it('maps already-licensed to success:true with license.present', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        licenseStatus: 'licensed',
+        activation: 'already-licensed',
+      }),
+    ).toEqual({ success: true, outcome: 'already-licensed', anchorHex: '01020304', license: { present: true } })
+  })
+
+  it('maps activated to success:true with license.present', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        licenseStatus: 'licensed',
+        activation: 'activated',
+      }),
+    ).toEqual({ success: true, outcome: 'activated', anchorHex: '01020304', license: { present: true } })
+  })
+
+  it('maps demo to success:true without a license field', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+      }),
+    ).toEqual({ success: true, outcome: 'demo', anchorHex: '01020304' })
+  })
+
+  it('maps unsupported to success:true, outcome:error (business state, not a transport failure)', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        licenseStatus: 'unsupported',
+        activation: 'unsupported',
+      }),
+    ).toEqual({ success: true, outcome: 'error', anchorHex: '01020304', error: 'no on-device storage backend' })
+  })
+
+  it('maps a write-error activation to success:true, outcome:error with the write error message', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        licenseStatus: 'unlicensed',
+        activation: 'error',
+        error: 'crc mismatch',
+      }),
+    ).toEqual({ success: true, outcome: 'error', anchorHex: '01020304', error: 'crc mismatch' })
   })
 })

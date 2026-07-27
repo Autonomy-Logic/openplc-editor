@@ -94,3 +94,55 @@ export async function probeAndRecover(
     return { status: 'error', error: getErrorMessage(error) }
   }
 }
+
+/** The legacy `device:activate-license` (P0-2/D62) outcome shape, kept for
+ *  `DeviceActivationResult` (shared port surface) back-compat. */
+export interface LegacyActivationOutcome {
+  success: boolean
+  outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+  anchorHex?: string
+  license?: { present: boolean }
+  error?: string
+}
+
+/**
+ * Adapt a `probeAndRecover` result to the legacy one-shot activation outcome
+ * (`handleActivateDeviceLicense`), so both IPC handlers share one
+ * classify+recover implementation instead of two independently-maintained
+ * copies. `deviceId`/`vppId`/`license.blob` are dropped: `DeviceActivationResult`
+ * declares them optional and no consumer (frontend or tests) reads them off
+ * this response — only `outcome`/`anchorHex` drive the UI.
+ */
+export function toLegacyActivationOutcome(result: DeviceConnectResult): LegacyActivationOutcome {
+  switch (result.status) {
+    case 'no-firmware':
+      return { success: true, outcome: 'no-id' }
+    case 'no-response':
+      return { success: false, outcome: 'error', error: result.error ?? 'device did not respond' }
+    case 'error':
+      return { success: false, outcome: 'error', error: result.error }
+    case 'connected-with-firmware':
+      return mapConnectedActivation(result)
+  }
+}
+
+function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOutcome {
+  const anchorHex = result.anchorHex
+  switch (result.activation) {
+    case 'already-licensed':
+      return { success: true, outcome: 'already-licensed', anchorHex, license: { present: true } }
+    case 'activated':
+      return { success: true, outcome: 'activated', anchorHex, license: { present: true } }
+    case 'demo':
+      return { success: true, outcome: 'demo', anchorHex }
+    case 'unsupported':
+      return { success: true, outcome: 'error', anchorHex, error: 'no on-device storage backend' }
+    case 'error':
+      return { success: true, outcome: 'error', anchorHex, error: result.error ?? 'License write failed' }
+    default:
+      // Unreachable from handleActivateDeviceLicense (always calls with
+      // isLicensable: true), which always sets `activation` for a connected
+      // licensable target. Kept for exhaustiveness against the shared type.
+      return { success: true, outcome: 'error', anchorHex, error: 'unexpected: no activation outcome' }
+  }
+}

@@ -38,10 +38,12 @@ import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { type DeviceConnectResult, probeAndRecover } from '../../../backend/editor/license/device-connect'
-import { deriveDeviceId, deriveVppId } from '../../../backend/editor/license/device-identity'
-import { checkDeviceActivation } from '../../../backend/editor/license/license-activation-client'
-import { connectWithRetries, readBoardIdWithRetries } from '../../../backend/editor/license/license-probe'
+import {
+  type DeviceConnectResult,
+  probeAndRecover,
+  toLegacyActivationOutcome,
+} from '../../../backend/editor/license/device-connect'
+import { connectWithRetries } from '../../../backend/editor/license/license-probe'
 import { buildLicenseTransport, type LicenseTransportParams } from '../../../backend/editor/license/license-transport-factory'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
@@ -58,8 +60,8 @@ import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
-// connectWithRetries / readBoardIdWithRetries live in
-// backend/editor/license/license-probe.ts, shared with `probeAndRecover`.
+// connectWithRetries lives in backend/editor/license/license-probe.ts,
+// shared with `probeAndRecover` (device-connect.ts).
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -2135,11 +2137,12 @@ class MainProcessBridge implements MainIpcModule {
    * One-shot post-flash license-activation routine (D62 — extends the D61 probe).
    *
    * Runs right after a successful arduino-cli serial upload to a licensable
-   * direct-USB board. Reads the freshly-flashed device's hardware id (FC 0x48)
-   * and any existing license (FC 0x4A); when no license is present it derives
-   * the device/VPP identifiers and asks the backend (`checkDeviceActivation`)
-   * whether the device is entitled to one, writing the returned blob back
-   * (FC 0x49). The user-facing `outcome` drives the renderer's demo notice.
+   * direct-USB board, and (F7) for the runtime-v4 check over the debug
+   * WebSocket. Opens its OWN transient client, then delegates the classify +
+   * on-device license read (0x4A) + recover (derive -> backend -> write 0x49)
+   * to `probeAndRecover` — the SAME body `device:connect` uses — mapped back
+   * to this handler's legacy `outcome` shape via `toLegacyActivationOutcome`
+   * (P0-2 dedup: one classify+recover implementation, not two).
    *
    * This is deliberately independent of the always-on debugger session: it
    * spins up a TRANSIENT local `ModbusRtuClient` (never `this.debuggerModbusClient`
@@ -2194,71 +2197,11 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     try {
-      // Readiness probe: retry the id read while the board finishes booting
-      // (the serial open auto-reset it). 6 attempts x 500ms rides an ESP8266 boot.
-      const anchor = await readBoardIdWithRetries(client, { attempts: 6, backoffMs: 500 })
-      const hasId = anchor.success && !!anchor.anchor && anchor.anchor.length > 0
-      if (!hasId) {
-        // Device never answered the id read — nothing to activate. best-effort.
-        return { success: true, probedAt, outcome: 'no-id' }
-      }
-
-      const lic = await client.readLicense()
-      // Already licensed (status 0x7E) — nothing to do; do NOT call the backend.
-      if (lic.status === 0x7e) {
-        return {
-          success: true,
-          probedAt,
-          outcome: 'already-licensed',
-          anchorHex: anchor.anchorHex,
-          license: { present: true, blob: lic.blob ? Array.from(lic.blob) : undefined },
-        }
-      }
-      // Unsupported (status 0x85): the target declares `isLicensable` but has no
-      // on-device storage backend — a misconfiguration. Surface it and stop.
-      if (lic.status === 0x85) {
-        return { success: true, probedAt, outcome: 'error', error: 'no on-device storage backend' }
-      }
-
-      // Empty / corrupt → attempt activation. Derive the identifiers from the
-      // hardware anchor + the selected VPP's package id, then ask the backend.
-      const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor ?? []))
-      const vppId = deriveVppId(opts.packageId)
-      // keyId (manifest hal.licenseKeyId) names the per-VPP signing key for the
-      // backend/KMS; forwarded so the activation request is KMS-ready (D69f).
-      const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId, keyId: opts.keyId })
-
-      if (!act.licensed) {
-        return { success: true, probedAt, outcome: 'demo', deviceId, vppId, anchorHex: anchor.anchorHex }
-      }
-
-      if (act.license) {
-        const write = await client.writeLicense(Uint8Array.from(act.license))
-        // LIC_UNSUPPORTED is success:true (a valid device state, not a transport
-        // failure) — but nothing was stored, so it is NOT an activation. Mirror
-        // the 0x4A unsupported branch instead of falsely reporting 'activated'.
-        if (write.unsupported) {
-          return { success: true, probedAt, outcome: 'error', error: 'no on-device storage backend' }
-        }
-        if (write.success) {
-          return {
-            success: true,
-            probedAt,
-            outcome: 'activated',
-            deviceId,
-            vppId,
-            anchorHex: anchor.anchorHex,
-            license: { present: true, blob: act.license },
-          }
-        }
-        return { success: true, probedAt, outcome: 'error', error: write.error ?? 'License write failed' }
-      }
-
-      // Licensed but the backend returned no blob — nothing to write; treat as
-      // demo so the device still runs (best-effort).
-      return { success: true, probedAt, outcome: 'demo', deviceId, vppId, anchorHex: anchor.anchorHex }
-    } catch (error) {
-      return { success: false, probedAt, outcome: 'error', error: getErrorMessage(error) }
+      // Same classify+recover body `device:connect` uses (probeAndRecover),
+      // just over a transient client this handler owns end-to-end instead of
+      // a held one. Mapped back to the legacy outcome shape below.
+      const result = await probeAndRecover(client, { isLicensable: true, packageId: opts.packageId, keyId: opts.keyId })
+      return { probedAt, ...toLegacyActivationOutcome(result) }
     } finally {
       // Always release the transport (serial/TCP/WS) — the debugger opens its
       // own session on demand later.

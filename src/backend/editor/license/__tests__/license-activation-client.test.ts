@@ -3,7 +3,28 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { EventEmitter } from 'events'
+import https from 'https'
+
 import { checkDeviceActivation } from '../license-activation-client'
+
+/** Fake `https.request`: invokes the response callback synchronously and
+ *  emits the given status/body when `req.end()` is called, so `postJson`'s
+ *  promise resolves without a real socket. Returns the `req` mock so tests
+ *  can assert on the body written via `req.write`. */
+function mockHttpsResponse(statusCode: number, jsonBody: unknown) {
+  const req = Object.assign(new EventEmitter(), { write: jest.fn(), end: jest.fn(), setTimeout: jest.fn() })
+  jest.spyOn(https, 'request').mockImplementation(((_options: unknown, callback: (res: unknown) => void) => {
+    const res = Object.assign(new EventEmitter(), { statusCode, statusMessage: 'OK', setEncoding: jest.fn() })
+    callback(res)
+    req.end.mockImplementation(() => {
+      res.emit('data', JSON.stringify(jsonBody))
+      res.emit('end')
+    })
+    return req as unknown as ReturnType<typeof https.request>
+  }) as typeof https.request)
+  return req
+}
 
 const INPUT = { deviceId: '659a3520540f803625ddc34081e893d3', vppId: '29a17c7c2486d355', packageId: 'com.openplc.espressif' }
 
@@ -103,5 +124,71 @@ describe('checkDeviceActivation (signed mock, keyId keystore — D69f/P1-3)', ()
     expect(result.licensed).toBe(true)
     expect(result.license).toHaveLength(98)
     rmSync(fileDir, { recursive: true, force: true })
+  })
+})
+
+describe('checkDeviceActivation (real edge client, no mock toggle)', () => {
+  const original = process.env.OPLC_LICENSE_MOCK
+
+  beforeEach(() => {
+    delete process.env.OPLC_LICENSE_MOCK
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+    if (original === undefined) delete process.env.OPLC_LICENSE_MOCK
+    else process.env.OPLC_LICENSE_MOCK = original
+  })
+
+  it('sends ONLY { deviceId, packageId } to the edge -- no vppId, no keyId on the wire', async () => {
+    const licenseB64 = Buffer.from(GOLDEN_HEX, 'hex').toString('base64')
+    const req = mockHttpsResponse(200, {
+      statusCode: 200,
+      data: { licensed: true, deviceId: INPUT.deviceId, vppId: INPUT.packageId, license: licenseB64 },
+    })
+
+    const result = await checkDeviceActivation({ ...INPUT, keyId: 'should-never-be-sent' })
+
+    expect(result.licensed).toBe(true)
+    const sentBody = JSON.parse((req.write as jest.Mock).mock.calls[0][0] as string)
+    expect(sentBody).toEqual({ deviceId: INPUT.deviceId, packageId: INPUT.packageId })
+  })
+
+  it('base64-decodes the license blob from the edge response into 98 bytes', async () => {
+    const licenseB64 = Buffer.from(GOLDEN_HEX, 'hex').toString('base64')
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: true, license: licenseB64 } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.license).toHaveLength(98)
+    expect(Buffer.from(result.license!).toString('hex')).toBe(GOLDEN_HEX)
+  })
+
+  it('passes through licensed:false with a reason (no purchase/entitlement)', async () => {
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: false, reason: 'no active subscription' } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.licensed).toBe(false)
+    expect(result.reason).toBe('no active subscription')
+    expect(result.license).toBeUndefined()
+  })
+
+  it('resolves licensed:false with an error when licensed:true but license is missing', async () => {
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: true } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.licensed).toBe(false)
+    expect(result.error).toMatch(/missing license blob/)
+  })
+
+  it('resolves licensed:false on a non-2xx response instead of throwing', async () => {
+    mockHttpsResponse(404, { statusCode: 404, data: { message: 'Unknown VPP' } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.licensed).toBe(false)
+    expect(result.error).toMatch(/404/)
   })
 })

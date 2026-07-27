@@ -3,11 +3,16 @@
  *
  * HYBRID design (design.md §4): the **real** autonomy-edge client is wired
  * up now, behind a dev **toggle** that injects a mocked response so both
- * code paths are testable today — the real `vpp-licenses/activate` route
- * does not exist on the edge yet (only billing/Paddle/subscriptions do).
+ * code paths are testable today. The real `POST vpp-licenses/activate` route
+ * exists on the `feat/vpp-tables` branch (not yet merged to `development`):
+ * `{ deviceId, packageId }` -> `{ licensed, deviceId, vppId, license }` with
+ * `license` base64-encoded (98 bytes). Public + rate-limited — no auth token
+ * (authorization is the seat/entitlement check server-side, not a login).
+ * `vppId`/`keyId` are LOCAL-ONLY (the mock signer's key selector below); the
+ * real edge derives its own product/key material from `packageId`.
  *
  * TODO(D49/D51): remover o toggle quando o modulo vpp-licenses do
- * autonomy-edge existir.
+ * autonomy-edge existir em development.
  *
  * Runs main-side: uses `node:https` + the same base-URL / `{ statusCode,
  * data }` envelope conventions as the library catalog client.
@@ -22,21 +27,34 @@ import https from 'https'
 import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
 import { getEdgeApiBaseUrl } from '../library-manager/desktop-catalog-transport'
 
-/** Request payload sent to the edge activation endpoint. */
+/**
+ * Input to `checkDeviceActivation`. Only `deviceId` + `packageId` are ever
+ * sent over the wire to the real edge (`ActivateVppLicenseDto` has no
+ * `vppId`/`keyId` field — the backend derives product/key material from
+ * `packageId` itself); `vppId`/`keyId` exist here purely for the LOCAL mock
+ * signer, which has no backend to derive them for it.
+ */
 export interface DeviceActivationInput {
   /** 16-byte device id, hex (from `deriveDeviceId`). */
   deviceId: string
-  /** 8-byte VPP id, hex (from `deriveVppId`). */
+  /** 8-byte VPP id, hex (from `deriveVppId`). Mock-signer only — never sent to the edge. */
   vppId: string
-  /** VPP package id (e.g. `com.openplc.espressif`). */
+  /** VPP package id (e.g. `com.openplc.espressif`). The only VPP identifier the edge wire accepts. */
   packageId: string
   /**
    * Per-VPP signing key id (manifest `hal.licenseKeyId`, e.g.
-   * `raspberry-pi-licensed-2026`). Names which key the backend/KMS signs this
-   * VPP's license with; makes the request contract KMS-ready (D69f). Optional
-   * for backward compatibility: absent means "resolve the key from packageId".
+   * `raspberry-pi-licensed-2026`), used ONLY to select the mock signer's
+   * keystore entry (D69f/P1-3) when `OPLC_LICENSE_MOCK_KEY` is a directory.
+   * Mock-signer only — never sent to the edge, which resolves its own signing
+   * key from `packageId`.
    */
   keyId?: string
+}
+
+/** The exact JSON body the real edge `ActivateVppLicenseDto` accepts. */
+interface EdgeActivationRequestBody {
+  deviceId: string
+  packageId: string
 }
 
 /** Result of an activation check. Best-effort: transport / backend errors
@@ -97,19 +115,34 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
 // Real edge client (best-effort)
 // ---------------------------------------------------------------------------
 
+/** Response shape from the real edge activation/recover endpoints. */
+interface EdgeActivationResponse {
+  licensed: boolean
+  /** 98-byte license blob, base64-encoded. */
+  license?: string
+  reason?: string
+}
+
 /**
  * POST `{base}/vpp-licenses/activate`, unwrapping the edge `{ statusCode,
  * data }` envelope. Any failure (route missing → 404, network, non-2xx,
- * bad JSON) resolves to `{ licensed: false, error }` — never throws.
+ * bad JSON) resolves to `{ licensed: false, error }` — never throws. Sends
+ * ONLY `{ deviceId, packageId }` — the real `ActivateVppLicenseDto` has no
+ * `vppId`/`keyId` field.
  */
 async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActivationResult> {
   try {
-    const raw = await postJson(`${getEdgeApiBaseUrl()}${ACTIVATE_PATH}`, input)
-    const data = unwrapHttpEnvelope(raw) as Partial<DeviceActivationResult> | undefined
+    const body: EdgeActivationRequestBody = { deviceId: input.deviceId, packageId: input.packageId }
+    const raw = await postJson(`${getEdgeApiBaseUrl()}${ACTIVATE_PATH}`, body)
+    const data = unwrapHttpEnvelope(raw) as Partial<EdgeActivationResponse> | undefined
     if (!data || typeof data.licensed !== 'boolean') {
       return { licensed: false, error: 'Unexpected activation response shape' }
     }
-    return { licensed: data.licensed, license: data.license, reason: data.reason }
+    if (!data.licensed) return { licensed: false, reason: data.reason }
+    if (typeof data.license !== 'string') {
+      return { licensed: false, error: 'Activation response missing license blob' }
+    }
+    return { licensed: true, license: Array.from(Buffer.from(data.license, 'base64')), reason: data.reason }
   } catch (err) {
     return { licensed: false, error: err instanceof Error ? err.message : String(err) }
   }
