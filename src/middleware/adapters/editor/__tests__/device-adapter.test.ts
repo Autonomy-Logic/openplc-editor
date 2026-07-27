@@ -29,7 +29,6 @@ beforeEach(() => {
     refreshAvailableBoards: jest.fn().mockResolvedValue(mockRefreshResult),
     refreshCommunicationPorts: jest.fn().mockResolvedValue(mockPorts),
     getPreviewImage: jest.fn().mockResolvedValue('data:image/png;base64,abc123'),
-    connectDeviceProbe: jest.fn().mockResolvedValue({ status: 'connected-with-firmware', anchorHex: 'deadbeef' }),
     activateDeviceLicense: jest
       .fn()
       .mockResolvedValue({ success: true, probedAt: '2026-07-22T00:00:00.000Z', outcome: 'activated' }),
@@ -81,13 +80,6 @@ describe('createEditorDeviceAdapter', () => {
   it('forwards vppPackagePath to window.bridge for VPP-shipped previews', async () => {
     await adapter.getPreviewImage('motor-shield.png', '/path/to/pkg')
     expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('motor-shield.png', '/path/to/pkg')
-  })
-
-  it('delegates connectProbe to window.bridge with params and opts', async () => {
-    const params = { connectionType: 'rtu' as const, port: 'COM5', baudRate: 115200 }
-    const result = await adapter.connectProbe(params, { isLicensable: true })
-    expect(window.bridge.connectDeviceProbe).toHaveBeenCalledWith(params, { isLicensable: true })
-    expect(result).toEqual({ status: 'connected-with-firmware', anchorHex: 'deadbeef' })
   })
 
   it('delegates activateLicense to window.bridge with params and opts', async () => {

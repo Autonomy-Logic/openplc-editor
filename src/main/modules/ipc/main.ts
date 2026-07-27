@@ -41,12 +41,7 @@ import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { type DeviceConnectResult, probeAndRecover } from '../../../backend/editor/license/device-connect'
 import { deriveDeviceId, deriveVppId } from '../../../backend/editor/license/device-identity'
 import { checkDeviceActivation } from '../../../backend/editor/license/license-activation-client'
-import {
-  connectWithRetries,
-  type DeviceProbeResult,
-  probeDevice,
-  readBoardIdWithRetries,
-} from '../../../backend/editor/license/license-probe'
+import { connectWithRetries, readBoardIdWithRetries } from '../../../backend/editor/license/license-probe'
 import { buildLicenseTransport, type LicenseTransportParams } from '../../../backend/editor/license/license-transport-factory'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
@@ -63,8 +58,8 @@ import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
-// connectWithRetries / readBoardIdWithRetries moved to
-// backend/editor/license/license-probe.ts (shared with the connect-probe, F1).
+// connectWithRetries / readBoardIdWithRetries live in
+// backend/editor/license/license-probe.ts, shared with `probeAndRecover`.
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -924,7 +919,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
     this.registerHandle('device:get-anchor', this.handleGetDeviceAnchor)
     this.registerHandle('device:activate-license', this.handleActivateDeviceLicense)
-    this.registerHandle('device:connect-probe', this.handleDeviceConnectProbe)
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
 
@@ -2158,23 +2152,6 @@ class MainProcessBridge implements MainIpcModule {
    * `{ success: false, outcome: 'error', error }` rather than throwing, so the
    * upload flow in the renderer is never broken by an activation hiccup.
    */
-  /**
-   * Connect-time probe (F1/D72): open the channel for the given transport and
-   * classify the device — `no-response` (couldn't open), `no-firmware` (opened
-   * but no OpenPLC debug reply), or `connected-with-firmware` (+ on-device
-   * `licenseStatus` for a licensable target, read-only). Transient, never touches
-   * the debugger session. Best-effort: failures resolve to a status.
-   */
-  handleDeviceConnectProbe = async (
-    _event: IpcMainInvokeEvent,
-    connectionParams: LicenseTransportParams,
-    opts: { isLicensable?: boolean } = {},
-  ): Promise<DeviceProbeResult> => {
-    const built = buildLicenseTransport(connectionParams, this.RUNTIME_API_PORT)
-    if ('error' in built) return { status: 'error', error: built.error }
-    return probeDevice(built.client, opts)
-  }
-
   handleActivateDeviceLicense = async (
     _event: IpcMainInvokeEvent,
     connectionParams: {

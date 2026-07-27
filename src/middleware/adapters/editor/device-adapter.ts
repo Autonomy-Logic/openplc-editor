@@ -19,7 +19,6 @@ import type {
   DeviceConnectParams,
   DeviceConnectResult,
   DevicePort,
-  DeviceProbeResult,
 } from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort } from '../../shared/ports/types'
 
@@ -43,10 +42,6 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     getPreviewImage(imageName: string, packagePath?: string): Promise<string> {
       return window.bridge.getPreviewImage(imageName, packagePath)
-    },
-
-    connectProbe(params: DeviceConnectParams, opts?: { isLicensable?: boolean }): Promise<DeviceProbeResult> {
-      return window.bridge.connectDeviceProbe(params, opts)
     },
 
     activateLicense(

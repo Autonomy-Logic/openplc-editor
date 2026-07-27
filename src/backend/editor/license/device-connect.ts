@@ -1,10 +1,9 @@
 /**
  * Persistent-connection probe + license recover (D72), operating over an
- * ALREADY-CONNECTED `LicenseCapableTransport`. Unlike `probeDevice` (read-only,
- * opens/closes its own transient client) this neither connects nor disconnects —
- * the caller holds the client open for the live serial link, so classification,
- * the on-device license read (0x4A), and the auto-recover (derive -> backend ->
- * write 0x49) all happen over a SINGLE port open.
+ * ALREADY-CONNECTED `LicenseCapableTransport`: it neither connects nor
+ * disconnects — the caller holds the client open for the live serial link, so
+ * classification, the on-device license read (0x4A), and the auto-recover
+ * (derive -> backend -> write 0x49) all happen over a SINGLE port open.
  *
  * Pure orchestration over the transport + the activation client, so it is
  * unit-testable with mocks. Never throws — failures resolve to a status.

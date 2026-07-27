@@ -494,25 +494,6 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('device:activate-license', connectionParams, opts),
 
-  // Connect-time probe (D72): classify the device on connect (no-response /
-  // no-firmware / connected-with-firmware) + read-only license status.
-  connectDeviceProbe: (
-    connectionParams: {
-      connectionType?: 'rtu' | 'tcp' | 'websocket'
-      port?: string | number
-      baudRate?: number
-      slaveId?: number
-      host?: string
-      token?: string
-    },
-    opts?: { isLicensable?: boolean },
-  ): Promise<{
-    status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
-    anchorHex?: string
-    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
-    error?: string
-  }> => ipcRenderer.invoke('device:connect-probe', connectionParams, opts),
-
   // Persistent serial connection (D72): open + HOLD the RTU link. Returns the
   // same classification as the probe, plus what the recover step concluded.
   deviceConnect: (

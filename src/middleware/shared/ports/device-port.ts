@@ -24,10 +24,9 @@
 import type { BoardInfo, CommunicationPort } from './types'
 
 // ---------------------------------------------------------------------------
-// Connect-time probe (D72) — platform contract shared by the port, its editor
-// adapter, and the `deviceProbeInfo` store slice. Mirrors the backend
-// `DeviceProbeResult` (backend/editor/license/license-probe.ts) byte-for-byte;
-// the store can't reach into `backend/`, so the canonical shape lives here.
+// Connect-time classification (D72) — platform contract shared by the port,
+// its editor adapter, and the `deviceProbeInfo` store slice. The store can't
+// reach into `backend/`, so the canonical shape lives here.
 // ---------------------------------------------------------------------------
 
 /** How a freshly-opened channel classified. */
@@ -126,19 +125,6 @@ export interface DevicePort {
    * Web: returns URL to bundled image asset.
    */
   getPreviewImage(imageName: string, packagePath?: string): Promise<string>
-
-  /**
-   * Connect-time probe (D72): open the channel for the given transport and
-   * classify the device — `no-response` (couldn't open), `no-firmware` (opened
-   * but no OpenPLC debug reply), or `connected-with-firmware` (+ read-only
-   * on-device `licenseStatus` when the target is licensable). Never throws:
-   * failures resolve to `{ status: 'error' | 'no-response', ... }`. Transient —
-   * opens and closes its own channel, never touches the debugger session.
-   *
-   * Editor: main process picks the transport and runs 0x48 -> 0x4A.
-   * Web: not applicable locally (may be a no-op / unsupported).
-   */
-  connectProbe(params: DeviceConnectParams, opts?: { isLicensable?: boolean }): Promise<DeviceProbeResult>
 
   /**
    * License activation / auto-recover (D51/D62): open the channel, read the
