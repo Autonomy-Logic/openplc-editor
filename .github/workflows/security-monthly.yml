@@ -1,0 +1,134 @@
+name: Security — monthly SBOM & VEX report
+
+# Runs on GitHub's servers (not on anyone's laptop). Every month it regenerates
+# the SBOM, scans dependencies, has Claude triage any NEW advisory and write the
+# report from the versioned template, drops everything into security/<YYYY-MM>/,
+# and opens a PR for the team to review. Nothing is merged automatically.
+#
+# Auth: Claude runs on your Claude subscription via CLAUDE_CODE_OAUTH_TOKEN
+# (from `claude setup-token`) — no pay-per-token API key. See security/README.md.
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"     # 06:00 UTC on the 1st of every month
+  workflow_dispatch: {}      # manual "Run workflow" button
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write   # required by claude-code-action (OIDC)
+
+concurrency:
+  group: security-monthly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    # Mapped here because the `secrets` context is NOT allowed in a step-level
+    # `if:` — the Claude step gates on `env.CLAUDE_CODE_OAUTH_TOKEN` instead.
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    steps:
+      - name: Checkout (with submodules for vendored C libs)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Month stamp
+        id: m
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Enable pnpm
+        run: corepack enable
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      # ---- deterministic: SBOM (CycloneDX + SPDX + components.csv) ----
+      - name: Generate SBOM
+        run: bash scripts/generate-sbom.sh
+
+      # ---- deterministic: vulnerability scan (OSV, honoring the VEX baseline) ----
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+      - name: Scan
+        run: |
+          CFG=""; [ -f osv-scanner.toml ] && CFG="--config=osv-scanner.toml"
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/osv.json . || true
+          node scripts/scan-vulns.mjs /tmp/osv.json sbom/vulnerabilities.csv
+
+      # ---- judgment: Claude triages the delta + updates the report data ----
+      # Runs on YOUR subscription (no API key). Skipped gracefully if the token
+      # isn't configured yet — the deterministic report still builds below.
+      - name: Claude — triage new advisories & update report data
+        if: ${{ env.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: >
+            You are updating this repository's monthly security report DATA only.
+            Inputs: the fresh scan at /tmp/osv.json and the SBOM under sbom/.
+            For every advisory present in /tmp/osv.json that is NOT already listed
+            in osv-scanner.toml, read the source code and decide reachability
+            (is the vulnerable function called? is its input attacker-controlled?).
+            Then:
+             (a) if NOT exploitable, add an [[IgnoredVulns]] entry to osv-scanner.toml
+                 with a CISA VEX reason and an ignoreUntil date ~3 months out;
+             (b) if exploitable, add/refresh the corresponding entry in
+                 security/report-config.json (affected[]) with the fix version;
+             (c) keep the counts and the notAffected[]/mitigated[] arrays in
+                 security/report-config.json consistent with the scan.
+            EDIT ONLY these two files: osv-scanner.toml and
+            security/report-config.json. Do not touch anything else. If there are
+            no new advisories, make no changes.
+
+      # ---- deterministic: render the report from the (possibly updated) data ----
+      - name: Build report (md + html)
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          node scripts/build-report.mjs \
+            --config security/report-config.json \
+            --cdx "sbom/$NAME.cdx.json" \
+            --out "security/${{ steps.m.outputs.month }}" \
+            --date "${{ steps.m.outputs.month }}"
+
+      - name: Render PDF
+        uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - name: Assemble dated folder
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          MONTH="${{ steps.m.outputs.month }}"
+          DIR="security/$MONTH"; mkdir -p "$DIR/sbom"
+          cp "sbom/$NAME".cdx.json "sbom/$NAME".spdx.json "sbom/$NAME".components.csv sbom/vulnerabilities.csv "$DIR/sbom/"
+          REPORT="$DIR/$(ls "$DIR" | grep -E 'Security-Report\.html$')"
+          # --no-sandbox / --disable-dev-shm-usage: Chrome's zygote sandbox aborts
+          # (SIGABRT) on GitHub runners; required for headless Chrome in CI.
+          "${{ steps.chrome.outputs.chrome-path }}" --headless=new --no-sandbox --disable-dev-shm-usage \
+            --disable-gpu --no-pdf-header-footer \
+            --run-all-compositor-stages-before-draw --virtual-time-budget=5000 \
+            --print-to-pdf="${REPORT%.html}.pdf" "file://$PWD/$REPORT"
+          ln -sfn "$MONTH" security/latest
+
+      # ---- delivery: open the PR for review ----
+      - name: Open Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/security-${{ steps.m.outputs.month }}
+          title: "chore(security): monthly SBOM & VEX report — ${{ steps.m.outputs.month }}"
+          labels: supply-chain, security
+          commit-message: "chore(security): SBOM & VEX report ${{ steps.m.outputs.month }}"
+          body: |
+            Automated monthly supply-chain snapshot for **${{ github.event.repository.name }}** — `security/${{ steps.m.outputs.month }}/`.
+
+            - SBOM regenerated (CycloneDX + SPDX) from the current lockfile.
+            - Dependencies scanned against OSV (same source as Dependabot), honoring `osv-scanner.toml` (the VEX baseline).
+            - New advisories (if any) were triaged by Claude and reflected in `report-config.json` / `osv-scanner.toml` — **review those diffs**.
+
+            Nothing is merged automatically. Approve to archive this month's snapshot.

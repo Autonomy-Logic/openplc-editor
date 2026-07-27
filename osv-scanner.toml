@@ -1,0 +1,740 @@
+# osv-scanner suppression baseline for openplc-editor = our VEX "not affected"
+# (+ mitigated) decisions from the SBOM & Vulnerability Report. The advisories
+# that REQUIRE action (ws, socket.io-parser — debug-WebSocket DoS via socket.io-
+# client) are intentionally NOT listed here so they keep alerting until bumped.
+# electron-builder prunes devDependencies from the shipped asar; the hardened
+# Electron config and default-config DOMPurify constrain the reachable surface.
+#
+# Regenerated from a live osv-scanner scan of the CycloneDX SBOM.
+# Each entry expires (ignoreUntil) so suppressions are re-reviewed quarterly.
+# Full rationale: security/<YYYY-MM>/OpenPLC-Editor-Desktop-Security-Report.md.
+
+[[IgnoredVulns]]
+id = "GHSA-2328-f5f3-gj25"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-23c5-xmqv-rm74"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [minimatch] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-23hp-3jrh-7fpw"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-25h7-pfq9-p65f"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [flatted] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-2g4f-4pwh-qvx6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [ajv] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-2p49-hgcm-8545"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [svgo] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-34x7-hfp2-rc4v"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-35jp-ww65-95wh"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-37ch-88jc-xwx2"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [path-to-regexp] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-38r7-794h-5758"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-395f-4hp3-45gv"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [shell-quote] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-39q2-94rc-95cp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3c8v-cfp5-9885"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3g43-6gmg-66jw"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3jxr-9vmj-r5cp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [brace-expansion] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3p68-rc4w-qgx5"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3ppc-4f35-3m26"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [minimatch] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3v7f-55p6-f55p"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [picomatch] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-3w6x-2g7m-8v23"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-42h9-826w-cgv3"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-445q-vr5w-6q77"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-4p4r-m79c-wq3v"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-4x5r-pxfx-6jf8"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [@babel/core] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-52cp-r559-cp3m"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [js-yaml] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-52f5-9888-hmc6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tmp] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-532v-xpq5-8h95"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-554w-wpv2-vw27"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5c6j-r48x-rmvq"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [serialize-javascript] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5c9x-8gcm-mpgx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5gfm-wpxj-wjgq"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5j98-mcp5-4vw2"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [glob] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5m6q-g25r-mvwx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5rqw-r77c-jp79"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-5wm8-gmm8-39j9"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [fast-xml-builder] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-62hf-57xw-28j9"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-64mm-vxmg-q3vj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [http-proxy-middleware] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-65ch-62r8-g69g"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-6chq-wfr3-2hj9"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-6g55-p6wh-862q"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [postcss] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-6rw7-vpxm-498p"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [qs] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-76mc-f452-cxcm"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-777c-7fjr-54vf"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-79cf-xcqc-c78w"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack-dev-server] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-7g7r-gx96-252g"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [app-builder-lib] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-7h2j-956f-4vf2"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [@isaacs/brace-expansion] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-7mvr-c777-76hp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [playwright] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-7q8q-rj6j-mhjq"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-7r86-cg39-jmmj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [minimatch] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-8337-3p73-46f4"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-83g3-92jg-28cx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-848j-6mx2-7j84"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [elliptic] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-898c-q2cr-xwhg"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-8fgc-7cc6-rx7x"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-8qq5-rm4j-mr97"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-8x5q-pvf5-64mp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-8x88-c5mf-7j5w"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-9899-m83m-qhpj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-9ppj-qmqm-q256"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-9w97-2464-8783"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-9wfr-w7mm-pc7f"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-c27g-q93r-2cwf"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [launch-editor] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-c2c7-rcm5-vvqj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [picomatch] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-c2j3-45gr-mqc4"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-cj63-jhhr-wcxv"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-cjmm-f4jc-qw8r"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-cmwh-pvxp-8882"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-crv5-9vww-q3g8"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-f23m-r3pf-42rh"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [lodash] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-f37v-82c4-4x64"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-f3pv-wv63-48x8"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-f5vj-f2hx-8m93"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack-dev-server] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-f886-m6hf-6m8v"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [brace-expansion] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-fv7c-fp4j-7gwp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [@babel/plugin-transform-modules-systemjs] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-fvcv-3m26-pcqx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-gh4j-gqv2-49f6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [fast-xml-parser] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-gvmj-g25r-r7wr"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-gvwx-54wh-qm9j"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [js-yaml] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-h7mw-gpvr-xq4m"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-h8r8-wccr-v5f2"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-hfxv-24rg-xrqf"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-hmw2-7cc7-3qxx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [form-data] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-hpcv-96wg-7vj8"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-j5f8-grm9-p9fc"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-jfqx-fxh3-c62j"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-jjp3-mq3x-295m"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-jqh4-m9w3-8hp9"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-m28w-2pqf-7qgj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack-dev-server] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-m7pr-hjqh-92cm"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mh29-5h37-fv8m"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [js-yaml] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mh99-v99m-4gvg"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [brace-expansion] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mmx7-hfxf-jppx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mp7j-qc5w-4988"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [websocket-driver] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mwf2-3pr3-8698"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mwmh-mq4g-g6gr"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-mx8g-39q3-5c79"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [webpack-dev-server] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-p2f4-r6v6-j797"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [builder-util-runtime] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-p92q-9vqr-4j8v"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-pf86-5x62-jrwf"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-ph9p-34f9-6g65"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tmp] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-pmv8-rq9r-6j72"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-pmwg-cvhr-8vh7"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-ppp5-5v6c-4jwp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-q67f-28xg-22rw"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [node-forge] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-q8mj-m7cp-5q26"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [qs] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-q8qp-cvcw-x6jj"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-qffp-2rhf-9h96"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-qj8w-gfj5-8c6v"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [serialize-javascript] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-qx2v-qp2m-jg93"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [postcss] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r28c-9q8g-f849"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [postcss] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r292-9mhp-454m"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r47g-fvhr-h676"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r4q5-vmmm-2653"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [follow-redirects] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r5fr-rjxr-66jc"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [lodash] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r5p7-gp4j-qhrx"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-r6q2-hw4h-h46w"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-rf6f-7fwh-wjgh"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [flatted] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-rp9w-3fw7-7cwq"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v2v4-37r5-5v8g"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [ip-address] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v2wj-7wpq-c8vv"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v422-hmwv-36x6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_cannot_be_controlled_by_adversary]: Node/build-only code path not exercised with adversary input in the running application [body-parser] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v56q-mh7h-f735"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [immutable] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v6wh-96g9-6wx3"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [launch-editor] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v8jm-5vwx-cfxm"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-v9jr-rg53-9pgp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vf2m-468p-8v99"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vhxf-7vqr-mrjg"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vmf3-w455-68vh"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vmqv-hx8q-j7mg"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vpq2-c234-7xj6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [@tootallnate/once] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-vxr8-fq34-vvx9"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [uuid] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w7fw-mjwx-w883"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [qs] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w7jw-789q-3m8p"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [shell-quote] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w8wr-v893-vjvp"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [tar] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-w9j2-pvgh-6h63"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-wf6x-7x77-mvgw"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [immutable] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-x4vx-rjvf-j5p4"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: called with the default configuration over app-generated markup (search highlights); keep >= 3.4.12 [dompurify] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xhjh-pmcv-23jw"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xj5x-m3f3-5x3h"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xpqw-6gx7-v673"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [svgo] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xv26-6w52-cph6"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [websocket-driver] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xvcm-6775-5m9r"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [component_not_present]: build/packaging/lint/test tooling pruned from the shipped asar by electron-builder [immutable] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xwr5-m59h-vwqr"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX mitigated: hardened Electron config (sandbox:true, contextIsolation, nodeIntegration:false, local file:// only) neutralizes the renderer CVE class; update recommended as defense-in-depth [electron] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xx6v-rp6x-q39c"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [axios] — see security report"
+
+[[IgnoredVulns]]
+id = "GHSA-xxjr-mmjv-4gpg"
+ignoreUntil = "2026-10-01T00:00:00Z"
+reason = "VEX not_affected [vulnerable_code_not_in_execute_path]: package (or the specific vulnerable function) present but never executed with attacker-controlled input in the shipped app [lodash] — see security report"

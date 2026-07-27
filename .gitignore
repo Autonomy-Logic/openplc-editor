@@ -58,3 +58,6 @@ resources/strucpp/
 playwright-report
 /blob-report/
 /playwright/.cache/
+
+# transient SBOM build output (canonical copy lives in security/<YYYY-MM>/sbom/)
+/sbom/
