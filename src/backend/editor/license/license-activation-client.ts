@@ -14,7 +14,9 @@
  */
 
 import { sign as cryptoSign } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
 import https from 'https'
 
 import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
@@ -28,6 +30,13 @@ export interface DeviceActivationInput {
   vppId: string
   /** VPP package id (e.g. `com.openplc.espressif`). */
   packageId: string
+  /**
+   * Per-VPP signing key id (manifest `hal.licenseKeyId`, e.g.
+   * `raspberry-pi-licensed-2026`). Names which key the backend/KMS signs this
+   * VPP's license with; makes the request contract KMS-ready (D69f). Optional
+   * for backward compatibility: absent means "resolve the key from packageId".
+   */
+  keyId?: string
 }
 
 /** Result of an activation check. Best-effort: transport / backend errors
@@ -62,9 +71,14 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
     // With OPLC_LICENSE_MOCK_KEY set to a per-VPP private key PEM, sign a REAL
     // blob for this device so on-device verify passes -> FULL. Without it, fall
     // back to the unsigned golden (exercises the write path only -> device demo).
-    const keyPath = process.env.OPLC_LICENSE_MOCK_KEY?.trim()
-    if (keyPath) {
+    const mockKey = process.env.OPLC_LICENSE_MOCK_KEY?.trim()
+    if (mockKey) {
       try {
+        // keyId (D69f) is the KMS selector: when OPLC_LICENSE_MOCK_KEY is a
+        // keystore directory it picks <keyId>.private.pem; a single-file value
+        // stays supported for back-compat. This mirrors how the real backend
+        // will resolve the per-VPP signing key by keyId.
+        const keyPath = resolveMockKeyPath(mockKey, input.keyId)
         return { licensed: true, license: signedMockLicense(input, keyPath) }
       } catch (err) {
         return { licensed: false, error: `mock sign failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -141,7 +155,7 @@ function postJson(url: string, body: unknown): Promise<unknown> {
           try {
             resolve(JSON.parse(responseBody))
           } catch (err) {
-            reject(new Error(`Activation response was not valid JSON: ${err instanceof Error ? err.message : err}`))
+            reject(new Error(`Activation response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`))
           }
         })
       },
@@ -204,17 +218,48 @@ function hexToBytes(hex: string): Uint8Array {
  * on-device against the VPP's public key baked in the .a -> FULL. Dev-only; the
  * private key is a local file, never committed.
  */
+/**
+ * Resolve the private-key file the mock signs with. `OPLC_LICENSE_MOCK_KEY` is
+ * either a single PEM file (back-compat) or a KEYSTORE DIRECTORY, in which case
+ * the request's `keyId` (D69f, the KMS selector) names the key:
+ * `<dir>/<keyId>.private.pem`. This makes `keyId` the effective selector when a
+ * store is provided, exactly as the real backend/KMS will resolve it.
+ */
+function resolveMockKeyPath(mockKey: string, keyId: string | undefined): string {
+  let isDir = false
+  try {
+    isDir = statSync(mockKey).isDirectory()
+  } catch {
+    /* not stat-able -> treat as a plain file path below */
+  }
+  if (isDir) {
+    if (!keyId) {
+      throw new Error('OPLC_LICENSE_MOCK_KEY is a keystore directory but the request carries no keyId to select the per-VPP key')
+    }
+    return join(mockKey, `${keyId}.private.pem`)
+  }
+  return mockKey
+}
+
 function signedMockLicense(input: DeviceActivationInput, keyPath: string): number[] {
   const privateKeyPem = readFileSync(keyPath, 'utf8')
   const deviceId = hexToBytes(input.deviceId) // 16 bytes (from deriveDeviceId)
   const productId = hexToBytes(input.vppId) //    8 bytes (from deriveVppId)
 
+  // NOTE: the blob's `keyId` byte is the INDEX into the VPP's embedded
+  // trusted_keys.h (one key per VPP today -> index 0), which is distinct from
+  // the request's `keyId` STRING (the KMS key name that selected this private
+  // key). Rotation would bump this index; per-VPP single key stays 0.
+  //
   // Serialize once with a placeholder signature so we sign the EXACT payload the
   // serializer lays out (offsets 0..29), independent of layout details.
   const draft = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: new Uint8Array(64), crc32: 0 })
   const payload = draft.subarray(0, LIC_PAYLOAD_SIZE)
 
-  const sig = new Uint8Array(cryptoSign('sha256', Buffer.from(payload), { key: privateKeyPem, dsaEncoding: 'ieee-p1363' }))
+  // `payload` is already a Uint8Array (BinaryLike); pass it directly. Wrapping it
+  // in Buffer.from tripped a @types/node<->TS ArrayBufferView mismatch that broke
+  // this module's type-check (and its test suite).
+  const sig = new Uint8Array(cryptoSign('sha256', payload, { key: privateKeyPem, dsaEncoding: 'ieee-p1363' }))
   if (sig.length !== 64) throw new Error(`expected 64-byte r||s signature, got ${sig.length}`)
 
   const blob = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: sig, crc32: 0 })

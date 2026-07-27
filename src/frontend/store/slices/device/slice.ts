@@ -58,6 +58,14 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     ethercatStatus: null,
     includeEthercatStatsInPolling: false,
   },
+  deviceProbeInfo: {
+    phase: 'idle',
+    result: null,
+  },
+  serialConnection: {
+    status: 'disconnected',
+    port: null,
+  },
 
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
@@ -108,7 +116,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceProbeInfo, serialConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pinsByBoard: {},
@@ -124,6 +132,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.includeTimingStatsInPolling = false
           runtimeConnection.ethercatStatus = null
           runtimeConnection.includeEthercatStatsInPolling = false
+          // A device screen's probe classification (firmware/license state) is
+          // meaningless once the project is closed — reset it alongside the
+          // connection so a stale badge can't leak into the next one.
+          deviceProbeInfo.phase = 'idle'
+          deviceProbeInfo.result = null
+          serialConnection.status = 'disconnected'
+          serialConnection.port = null
         }),
       )
     },
@@ -515,6 +530,46 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.includeTimingStatsInPolling = false
           runtimeConnection.ethercatStatus = null
           runtimeConnection.includeEthercatStatsInPolling = false
+        }),
+      )
+    },
+    startDeviceProbe: (): void => {
+      setState(
+        produce(({ deviceProbeInfo }: DeviceSlice) => {
+          deviceProbeInfo.phase = 'probing'
+          deviceProbeInfo.result = null
+        }),
+      )
+    },
+    setDeviceProbeResult: (result): void => {
+      setState(
+        produce(({ deviceProbeInfo }: DeviceSlice) => {
+          deviceProbeInfo.phase = 'done'
+          deviceProbeInfo.result = result
+        }),
+      )
+    },
+    clearDeviceProbe: (): void => {
+      setState(
+        produce(({ deviceProbeInfo }: DeviceSlice) => {
+          deviceProbeInfo.phase = 'idle'
+          deviceProbeInfo.result = null
+        }),
+      )
+    },
+    setSerialConnectionStatus: (status, port): void => {
+      setState(
+        produce(({ serialConnection }: DeviceSlice) => {
+          serialConnection.status = status
+          if (port !== undefined) serialConnection.port = port
+        }),
+      )
+    },
+    clearSerialConnection: (): void => {
+      setState(
+        produce(({ serialConnection }: DeviceSlice) => {
+          serialConnection.status = 'disconnected'
+          serialConnection.port = null
         }),
       )
     },

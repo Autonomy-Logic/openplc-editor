@@ -1,4 +1,11 @@
-import { buildGetBoardIdRequest, parseGetBoardIdResponse } from '@root/backend/shared/debug/modbus-pdu'
+import {
+  buildGetBoardIdRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
 import type { DebugBoardIdResult, Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -372,20 +379,17 @@ export class ModbusTcpClient {
     const transactionId = this.incrementTransactionId()
     const protocolId = 0x0000
     const unitId = 0x00
-    const functionCode = ModbusFunctionCode.DEBUG_WRITE_LICENSE
+    // buildWriteLicenseRequest() returns [FC][len:u16BE][blob]; the MBAP frame
+    // carries the PDU verbatim at offset 7.
+    const pdu = buildWriteLicenseRequest(blob)
 
-    // PDU: [FC][len:u16 BE][blob...]
-    const pduLength = 3 + blob.length
+    const pduLength = 1 + pdu.length // unitId + PDU
     const request = Buffer.alloc(6 + pduLength)
     request.writeUInt16BE(transactionId, 0)
     request.writeUInt16BE(protocolId, 2)
     request.writeUInt16BE(pduLength, 4)
     request.writeUInt8(unitId, 6)
-    request.writeUInt8(functionCode, 7)
-    request.writeUInt16BE(blob.length, 8)
-    for (let i = 0; i < blob.length; i++) {
-      request.writeUInt8(blob[i], 10 + i)
-    }
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
 
     try {
       const data = await this.sendTcpRequest(request)
@@ -393,25 +397,12 @@ export class ModbusTcpClient {
       if (data.length < 9) {
         return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
       }
-
-      const responseTransactionId = data.readUInt16BE(0)
-      const responseFunctionCode = data.readUInt8(7)
-      const statusCode = data.readUInt8(8)
-
-      if (responseTransactionId !== transactionId) {
+      if (data.readUInt16BE(0) !== transactionId) {
         return { success: false, error: 'Transaction ID mismatch' }
       }
-      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
-        return { success: true, status: statusCode, unsupported: true }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, status: statusCode, error: `Target returned error code: 0x${statusCode.toString(16)}` }
-      }
 
-      return { success: true, status: statusCode }
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseWriteLicenseResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
@@ -433,16 +424,15 @@ export class ModbusTcpClient {
     const transactionId = this.incrementTransactionId()
     const protocolId = 0x0000
     const unitId = 0x00
-    const functionCode = ModbusFunctionCode.DEBUG_READ_LICENSE
+    const pdu = buildReadLicenseRequest() // bare [FC]
 
-    // PDU: [FC] only.
-    const pduLength = 2
+    const pduLength = 1 + pdu.length // unitId + PDU
     const request = Buffer.alloc(6 + pduLength)
     request.writeUInt16BE(transactionId, 0)
     request.writeUInt16BE(protocolId, 2)
     request.writeUInt16BE(pduLength, 4)
     request.writeUInt8(unitId, 6)
-    request.writeUInt8(functionCode, 7)
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
 
     try {
       const data = await this.sendTcpRequest(request)
@@ -450,51 +440,12 @@ export class ModbusTcpClient {
       if (data.length < 9) {
         return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
       }
-
-      const responseTransactionId = data.readUInt16BE(0)
-      const responseFunctionCode = data.readUInt8(7)
-      const statusCode = data.readUInt8(8)
-
-      if (responseTransactionId !== transactionId) {
+      if (data.readUInt16BE(0) !== transactionId) {
         return { success: false, error: 'Transaction ID mismatch' }
       }
-      if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_READ_LICENSE as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
 
-      if (statusCode === (ModbusDebugResponse.LIC_EMPTY as number)) {
-        return { success: true, status: statusCode, empty: true }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
-        return { success: true, status: statusCode, corrupt: true }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
-        return { success: true, status: statusCode, unsupported: true }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      if (data.length < 11) {
-        return {
-          success: false,
-          status: statusCode,
-          error: `Incomplete license response (${data.length} bytes, expected at least 11)`,
-        }
-      }
-
-      // [len:u16 BE] at offset 9..10, blob at 11+
-      const len = data.readUInt16BE(9)
-      if (data.length < 11 + len) {
-        return {
-          success: false,
-          status: statusCode,
-          error: `Incomplete license blob (expected ${len} bytes, got ${data.length - 11})`,
-        }
-      }
-
-      const blob = Uint8Array.prototype.slice.call(data, 11, 11 + len)
-      return { success: true, status: statusCode, blob }
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseReadLicenseResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

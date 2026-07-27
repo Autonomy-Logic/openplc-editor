@@ -155,6 +155,75 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
+
+    it('has an idle, empty device probe', () => {
+      const store = makeStore()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
+
+    it('has a disconnected serial connection', () => {
+      const store = makeStore()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
+  describe('serial connection', () => {
+    it('setSerialConnectionStatus updates status and port', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connecting', 'COM5')
+      expect(store.getState().serialConnection).toEqual({ status: 'connecting', port: 'COM5' })
+    })
+
+    it('setSerialConnectionStatus leaves the port unchanged when omitted', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connecting', 'COM5')
+      store.getState().deviceActions.setSerialConnectionStatus('connected')
+      expect(store.getState().serialConnection).toEqual({ status: 'connected', port: 'COM5' })
+    })
+
+    it('setSerialConnectionStatus can explicitly clear the port with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.setSerialConnectionStatus('error', null)
+      expect(store.getState().serialConnection).toEqual({ status: 'error', port: null })
+    })
+
+    it('clearSerialConnection resets to disconnected/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearSerialConnection()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // connect-time probe (D72)
+  // -----------------------------------------------------------------------
+  describe('device probe', () => {
+    it('startDeviceProbe marks phase=probing and clears any previous result', () => {
+      const store = makeStore()
+      // Seed a stale result first so the clear is observable.
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'no-response' })
+      store.getState().deviceActions.startDeviceProbe()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'probing', result: null })
+    })
+
+    it('setDeviceProbeResult lands phase=done with the classification', () => {
+      const store = makeStore()
+      const result = { status: 'connected-with-firmware' as const, anchorHex: 'deadbeef', licenseStatus: 'licensed' as const }
+      store.getState().deviceActions.setDeviceProbeResult(result)
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'done', result })
+    })
+
+    it('clearDeviceProbe resets to idle/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'no-firmware' })
+      store.getState().deviceActions.clearDeviceProbe()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -303,6 +372,20 @@ describe('createDeviceSlice', () => {
       expect(rc.includeTimingStatsInPolling).toBe(false)
       expect(rc.ethercatStatus).toBeNull()
       expect(rc.includeEthercatStatsInPolling).toBe(false)
+    })
+
+    it('resets the device probe', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'connected-with-firmware', licenseStatus: 'licensed' })
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
+
+    it('resets the serial connection', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
     })
   })
 

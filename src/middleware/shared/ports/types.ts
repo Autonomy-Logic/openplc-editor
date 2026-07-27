@@ -709,6 +709,10 @@ export interface VppMetadata {
   vendor: string
   deviceId: string
   packagePath: string
+  /** Per-VPP signing key id (manifest `hal.licenseKeyId`, D69f). Forwarded as
+   *  `keyId` in the license activation request so the backend/mock picks the
+   *  right per-VPP signing key. Absent for VPPs without on-device licensing. */
+  licenseKeyId?: string
   screens: Record<string, unknown>
   moduleSystem: {
     enabled: boolean
@@ -799,6 +803,10 @@ export interface PackageManifest {
        * `LIC_STORE_UNSUPPORTED`.
        */
       licenseStore?: string | string[]
+      /** Per-VPP signing key id (D69f). Names the KMS/per-VPP key the backend
+       *  signs this VPP's licenses with; the editor forwards it as `keyId` in
+       *  the activation request so the contract is KMS-ready. */
+      licenseKeyId?: string
     }
     defaults?: {
       runtimeIpAddress?: string

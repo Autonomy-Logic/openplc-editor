@@ -24,14 +24,29 @@ import { io, type Socket } from 'socket.io-client'
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
+  buildGetBoardIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
+  buildReadLicenseRequest,
   buildSetVariableRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
+  parseReadLicenseResponse,
   parseSetVariableResponse,
+  parseWriteLicenseResponse,
 } from './modbus-pdu'
-import type { DebugSetResult, DebugTransport, DebugTransportResult, Md5ProbeResult } from './types'
+import type {
+  DebugBoardIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugSetResult,
+  DebugTransport,
+  DebugTransportResult,
+  LicenseCapableTransport,
+  Md5ProbeResult,
+} from './types'
 
 const REQUEST_TIMEOUT_MS = 5000
 const CONNECT_TIMEOUT_MS = 5000
@@ -67,7 +82,7 @@ function hexSpacedToBytes(hex: string): Uint8Array {
   return out
 }
 
-export class WebSocketDebugTransport implements DebugTransport {
+export class WebSocketDebugTransport implements DebugTransport, LicenseCapableTransport {
   private host: string
   private port: number
   private token: string
@@ -145,6 +160,28 @@ export class WebSocketDebugTransport implements DebugTransport {
     )
   }
 
+  // License function codes (0x48/0x49/0x4A), byte-identical to the serial/TCP
+  // clients: the runtime answers them at the webserver level (D70a), but the
+  // editor sees one transport-agnostic contract (LicenseCapableTransport).
+
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildGetBoardIdRequest(), (bytes) => parseGetBoardIdResponse(bytes), 'resolve')
+  }
+
+  async readLicense(): Promise<DebugLicenseReadResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildReadLicenseRequest(), (bytes) => parseReadLicenseResponse(bytes), 'resolve')
+  }
+
+  async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildWriteLicenseRequest(blob), (bytes) => parseWriteLicenseResponse(bytes), 'resolve')
+  }
+
   /**
    * Send a Modbus PDU over the `debug_command` event and parse the
    * matching `debug_response`.  `errorMode` controls whether a
@@ -157,11 +194,9 @@ export class WebSocketDebugTransport implements DebugTransport {
    * client method routes through here, so the hex encoding /
    * timeout / event registration logic lives in exactly one place.
    */
-  private sendCommand<T extends DebugTransportResult | DebugSetResult>(
-    pdu: Uint8Array,
-    parse: (bytes: Uint8Array) => T,
-    errorMode: 'resolve',
-  ): Promise<T>
+  private sendCommand<
+    T extends DebugTransportResult | DebugSetResult | DebugBoardIdResult | DebugLicenseReadResult | DebugLicenseWriteResult,
+  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve'): Promise<T>
   private sendCommand<T extends Md5ProbeResult>(
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,

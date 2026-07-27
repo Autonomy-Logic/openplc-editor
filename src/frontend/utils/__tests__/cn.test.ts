@@ -25,4 +25,16 @@ describe('cn', () => {
   it('handles array inputs', () => {
     expect(cn(['foo', 'bar'])).toBe('foo bar')
   })
+
+  it('keeps custom cp-* font sizes alongside a text color (not treated as conflicting)', () => {
+    // Regression: tailwind-merge, unaware of our `cp-*` size scale, used to drop
+    // `text-cp-xs` when a `text-<color>` shared the class list. The extended
+    // config must keep both.
+    expect(cn('text-cp-xs', 'text-neutral-700')).toBe('text-cp-xs text-neutral-700')
+  })
+
+  it('resolves conflicts within the custom cp-* font-size group last-wins', () => {
+    expect(cn('text-cp-sm', 'text-cp-base')).toBe('text-cp-base')
+    expect(cn('text-xs', 'text-cp-base')).toBe('text-cp-base')
+  })
 })

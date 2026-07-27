@@ -1,6 +1,13 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import { buildGetBoardIdRequest, parseGetBoardIdResponse } from '@root/backend/shared/debug/modbus-pdu'
+import {
+  buildGetBoardIdRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
 import type { DebugBoardIdResult, Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -519,36 +526,20 @@ export class ModbusRtuClient {
     blob: Uint8Array,
   ): Promise<{ success: boolean; status?: number; unsupported?: boolean; error?: string }> {
     try {
-      const functionCode = ModbusFunctionCode.DEBUG_WRITE_LICENSE
-
-      // PDU payload: [len:u16 BE][blob...]
-      const data = Buffer.alloc(2 + blob.length)
-      data.writeUInt16BE(blob.length, 0)
-      for (let i = 0; i < blob.length; i++) {
-        data.writeUInt8(blob[i], 2 + i)
-      }
-
-      const request = this.assembleRequest(functionCode, data)
+      // buildWriteLicenseRequest() returns [FC][len:u16BE][blob]; assembleRequest
+      // writes the FC + slaveId itself, so hand it only the trailing payload.
+      const pdu = buildWriteLicenseRequest(blob)
+      const payload = Buffer.from(pdu.subarray(1))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_WRITE_LICENSE, payload)
       const response = await this.sendRequest(request)
 
       if (response.length < 9) {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
 
-      const functionCodeResponse = response.readUInt8(7)
-      const statusCode = response.readUInt8(8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_WRITE_LICENSE as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
-        return { success: true, status: statusCode, unsupported: true }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, status: statusCode, error: `Target returned error code: 0x${statusCode.toString(16)}` }
-      }
-
-      return { success: true, status: statusCode }
+      // Strip the 6-byte TCP-compat padding; the pure PDU starts at offset 7.
+      const pduResponse = Uint8Array.prototype.slice.call(response, 7)
+      return parseWriteLicenseResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
@@ -564,7 +555,9 @@ export class ModbusRtuClient {
     error?: string
   }> {
     try {
-      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, Buffer.alloc(0))
+      const pdu = buildReadLicenseRequest()
+      const payload = Buffer.from(pdu.subarray(1)) // bare [FC]; no trailing payload
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, payload)
       const response = await this.sendRequest(request, {
         // Raw RTU frame: id@0, FC@1, STATUS@2, len u16BE @3..4, blob @5.., crc 2.
         // SUCCESS → total = 1+1+1+2+len+2 = 7+len. A non-SUCCESS response carries
@@ -581,46 +574,9 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
 
-      const functionCodeResponse = response.readUInt8(7)
-      const statusCode = response.readUInt8(8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_READ_LICENSE as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-
-      if (statusCode === (ModbusDebugResponse.LIC_EMPTY as number)) {
-        return { success: true, status: statusCode, empty: true }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_CORRUPT as number)) {
-        return { success: true, status: statusCode, corrupt: true }
-      }
-      if (statusCode === (ModbusDebugResponse.LIC_UNSUPPORTED as number)) {
-        return { success: true, status: statusCode, unsupported: true }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, status: statusCode, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      if (response.length < 11) {
-        return {
-          success: false,
-          status: statusCode,
-          error: `Incomplete license response (${response.length} bytes, expected at least 11)`,
-        }
-      }
-
-      // [len:u16 BE] at payload offset 9..10, blob at 11+
-      const len = response.readUInt16BE(9)
-      if (response.length < 11 + len) {
-        return {
-          success: false,
-          status: statusCode,
-          error: `Incomplete license blob (expected ${len} bytes, got ${response.length - 11})`,
-        }
-      }
-
-      const blob = Uint8Array.prototype.slice.call(response, 11, 11 + len)
-      return { success: true, status: statusCode, blob }
+      // Strip the 6-byte TCP-compat padding; parse the pure PDU from offset 7.
+      const pduResponse = Uint8Array.prototype.slice.call(response, 7)
+      return parseReadLicenseResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

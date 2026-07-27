@@ -114,3 +114,18 @@ export interface DebugTransport {
   getVariablesList(indexes: number[]): Promise<DebugTransportResult>
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult>
 }
+
+/**
+ * The license function codes (0x48 board-id / 0x49 write / 0x4A read) as a
+ * transport-agnostic contract. The same PDU rides serial (ModbusRtuClient),
+ * TCP (ModbusTcpClient) and the runtime-v4 debug WebSocket
+ * (WebSocketDebugTransport) — so device activation runs identically on every
+ * target (D70c). connect/disconnect are shared with the debug session.
+ */
+export interface LicenseCapableTransport {
+  connect(): Promise<void>
+  disconnect(): void
+  getBoardId(): Promise<DebugBoardIdResult>
+  readLicense(): Promise<DebugLicenseReadResult>
+  writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+}

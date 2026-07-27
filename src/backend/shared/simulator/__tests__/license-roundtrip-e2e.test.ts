@@ -58,11 +58,9 @@ function goldenInput(): LicenseBlob {
   return {
     magic: golden.input.magic,
     fmtVersion: golden.input.fmtVersion,
-    flags: golden.input.flags,
+    keyId: golden.input.keyId,
     deviceId: Uint8Array.from(golden.input.deviceId),
     productId: Uint8Array.from(golden.input.productId),
-    issuedAt: golden.input.issuedAt,
-    expiresAt: golden.input.expiresAt,
     signature: Uint8Array.from(golden.input.signature),
     crc32: golden.input.crc32,
   }

@@ -304,6 +304,9 @@ class HardwareModule {
               vendor: manifest.package.vendor.name,
               deviceId: device.id,
               packagePath: pkg.path,
+              // Per-VPP signing key id (manifest hal.licenseKeyId, D69f) — the
+              // KMS selector the activation request forwards as `keyId`.
+              licenseKeyId: device.hal.licenseKeyId,
               screens,
               moduleSystem: device.moduleSystem
                 ? {

@@ -24,6 +24,7 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
+import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -288,6 +289,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // aliases.
       const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
 
+      // Serial handoff (D72): a held device connection owns the serial port that
+      // arduino-cli needs for a direct-USB upload. Release it before the build so
+      // the upload can take the port; reconnect afterwards (auto-reconnect).
+      const caps = resolveTargetCapabilities(currentBoardInfo)
+      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      const serialWasConnected = willUpload && useOpenPLCStore.getState().serialConnection.status === 'connected'
+      if (serialWasConnected) {
+        try {
+          await window.bridge.deviceDisconnect()
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
+
       try {
         // Track whether the compile stream already surfaced an error so we
         // don't log a second, generic "Compilation failed" after a failed
@@ -361,62 +376,47 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // One-shot post-flash license-activation routine (D62). After a
-        // successful arduino-cli serial upload to a licensable direct-USB board,
-        // open a transient RTU connection, read any existing license and — when
-        // absent — derive the device/VPP ids and ask the backend whether the
-        // device is licensed, writing the returned blob (FC 0x49). Strictly
-        // best-effort and self-contained: nothing is persisted, and only the
-        // demo outcome surfaces a notice — every other outcome is silent and can
-        // never affect the upload result above.
-        const caps = resolveTargetCapabilities(currentBoardInfo)
-        // Gate on `isLicensable`: a board with no on-device licensing declared
-        // never opens the serial for activation.
-        if (result.success && caps.directUsbUpload && caps.isLicensable) {
-          // Resolve the SAME RTU params the debugger uses (baud / port /
-          // slaveId come from the board debug spec — e.g. espressif's
-          // `rtu_baud_rate`, default "115200"), instead of hard-coding
-          // 115200/slaveId 1 which fails for boards configured otherwise.
-          // Non-interactive: no picker/prompt dialogs during a build; if a
-          // direct RTU config doesn't resolve, skip (best-effort, the upload
-          // is never affected).
+        // Serial handoff (D72): if we released a held device connection for this
+        // upload, reconnect it now that arduino-cli is done with the port. The
+        // recover runs again in the main process; refresh the license badge from
+        // the result. Silent (no dialogs) — the user just flashed on purpose.
+        if (serialWasConnected && result.success) {
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
           const resolved = spec
             ? resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), undefined)
             : undefined
-          // The selected VPP's package id (from its installed manifest) — needed
-          // to derive the vppId and to key the backend activation request.
-          const packageId = currentBoardInfo?.vpp?.packageId
-          if (resolved?.kind === 'config' && resolved.config.connectionType === 'rtu' && packageId) {
+          if (resolved?.kind === 'config' && resolved.config.connectionType === 'rtu') {
             const cp = resolved.config.connectionParams
             try {
-              // Spec params may be strings (e.g. baudRate default "115200");
-              // coerce to numbers for the bridge (baudRate?: number,
-              // slaveId?: number), and the port to a string.
-              const activation = await window.bridge.activateDeviceLicense(
+              const reconnect = await window.bridge.deviceConnect(
                 {
+                  connectionType: 'rtu',
                   port: String(cp.port),
                   baudRate: cp.baudRate != null ? Number(cp.baudRate) : undefined,
                   slaveId: cp.slaveId != null ? Number(cp.slaveId) : undefined,
                 },
-                { packageId },
+                {
+                  isLicensable: caps.isLicensable,
+                  packageId: currentBoardInfo?.vpp?.packageId,
+                  keyId: currentBoardInfo?.vpp?.licenseKeyId,
+                },
               )
-              // Only the demo outcome is surfaced to the user (a product notice);
-              // already-licensed / activated / no-id / error are all silent.
-              if (activation.outcome === 'demo') {
-                const vppName = boardTarget
-                addLog({
-                  id: crypto.randomUUID(),
-                  level: 'warning',
-                  message: `No license found for "${vppName}". Running in demo mode. Purchase a license to unlock the full version.`,
-                })
-              }
+              useOpenPLCStore.getState().deviceActions.setDeviceProbeResult({
+                status: reconnect.status,
+                anchorHex: reconnect.anchorHex,
+                licenseStatus: reconnect.licenseStatus,
+              })
             } catch {
-              // best-effort: never interrupt the upload flow.
+              // best-effort: the user can press Connect again.
             }
           }
         }
+
+        // License activation for runtime-v4 (network) targets has MOVED to the
+        // CONNECT flow (D72 / Q-H / F7): the device screen runs the license check
+        // over the debug WebSocket when the runtime connection is established, so
+        // the build no longer activates after upload.
       } catch (err: unknown) {
         addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
       } finally {
@@ -425,7 +425,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
     [
       compiler,
-      projectData,
       projectMeta,
       deviceDefinitions,
       currentBoardInfo,
@@ -445,6 +444,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
+
+  // CONNECT flow (D72): the device screen's "No Firmware Detected" dialog lives
+  // in board.tsx but Build & Upload lives here. When the user chooses to flash,
+  // that dialog fires a decoupled event we answer by running the same build.
+  useEffect(() => {
+    return onDeviceFlashRequest(() => {
+      void handleBuildRef.current()
+    })
+  }, [])
 
   // ---------------------------------------------------------------------------
   // Build Library (.stlib)

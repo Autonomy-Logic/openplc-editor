@@ -1,3 +1,4 @@
+import type { DeviceProbeResult } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
   BoardInfo,
@@ -73,6 +74,42 @@ export type RuntimeConnection = {
 }
 
 // ---------------------------------------------------------------------------
+// Persistent serial connection (D72) — baremetal "stay connected"
+// ---------------------------------------------------------------------------
+
+export type SerialConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+
+/**
+ * Live link state for a baremetal (USB/serial) target, mirroring the runtime's
+ * `connectionStatus`. After Connect the main process HOLDS the RTU client open
+ * and a liveness poll keeps this fresh; the port yields to upload/debug and
+ * reconnects afterwards. Distinct from `deviceProbeInfo` (which is the license
+ * classification) — this is purely whether the serial link is up.
+ */
+export type SerialConnection = {
+  status: SerialConnectionStatus
+  /** The communication port the link is on (or was last attempted on). */
+  port: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Connect-time probe (D72)
+// ---------------------------------------------------------------------------
+
+/**
+ * UI state for the CONNECT step (D72): "Connect" opens the device channel,
+ * runs the Modbus/debug probe, and lands a classification the device screens
+ * react to — a flash-firmware dialog on `no-firmware`, a buy/demo prompt from
+ * `licenseStatus`, and a FULL/DEMO badge. The `result` is the last landed probe
+ * (null before the first Connect); `phase` drives the button's spinner and
+ * guards against overlapping probes.
+ */
+export type DeviceProbeInfo = {
+  phase: 'idle' | 'probing' | 'done'
+  result: DeviceProbeResult | null
+}
+
+// ---------------------------------------------------------------------------
 // Device state
 // ---------------------------------------------------------------------------
 
@@ -87,6 +124,8 @@ export type DeviceState = {
     updated: boolean
   }
   runtimeConnection: RuntimeConnection
+  deviceProbeInfo: DeviceProbeInfo
+  serialConnection: SerialConnection
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +192,17 @@ export type DeviceActions = {
   setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
+  /** Mark a connect probe as in flight — `phase='probing'`, clears the last
+   *  result so the UI shows a spinner, not stale state, while it runs. */
+  startDeviceProbe: () => void
+  /** Land a finished connect probe — `phase='done'`, stores the classification. */
+  setDeviceProbeResult: (result: DeviceProbeResult) => void
+  /** Reset the probe to `idle`/null. Called on disconnect and project close. */
+  clearDeviceProbe: () => void
+  /** Set the persistent serial link state (optionally the port it's on). */
+  setSerialConnectionStatus: (status: SerialConnectionStatus, port?: string | null) => void
+  /** Reset the serial link to disconnected/null. */
+  clearSerialConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

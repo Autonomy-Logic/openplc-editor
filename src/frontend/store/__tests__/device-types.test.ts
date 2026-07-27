@@ -4,11 +4,14 @@ import type {
   DeviceActions,
   DeviceAvailableOptions,
   DevicePinMapping,
+  DeviceProbeInfo,
   DeviceSlice,
   DeviceState,
   PinUpdateResponse,
   RuntimeConnection,
   SelectedDevice,
+  SerialConnection,
+  SerialConnectionStatus,
   StoredCredentials,
 } from '../slices/device'
 
@@ -184,11 +187,44 @@ describe('Device slice types', () => {
           ethercatStatus: null,
           includeEthercatStatsInPolling: false,
         },
+        deviceProbeInfo: { phase: 'idle', result: null },
+        serialConnection: { status: 'disconnected', port: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
       expect(state.deviceUpdated).toBeDefined()
       expect(state.runtimeConnection).toBeDefined()
+      expect(state.deviceProbeInfo).toBeDefined()
+      expect(state.serialConnection).toBeDefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // SerialConnection
+  // -----------------------------------------------------------------------
+  describe('SerialConnection', () => {
+    it('accepts every status', () => {
+      const statuses: SerialConnectionStatus[] = ['disconnected', 'connecting', 'connected', 'error']
+      const conns: SerialConnection[] = statuses.map((status) => ({ status, port: status === 'connected' ? 'COM5' : null }))
+      expect(conns).toHaveLength(4)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // DeviceProbeInfo
+  // -----------------------------------------------------------------------
+  describe('DeviceProbeInfo', () => {
+    it('accepts an idle, empty probe', () => {
+      const info: DeviceProbeInfo = { phase: 'idle', result: null }
+      expect(info.result).toBeNull()
+    })
+
+    it('accepts a landed, connected+licensed probe', () => {
+      const info: DeviceProbeInfo = {
+        phase: 'done',
+        result: { status: 'connected-with-firmware', anchorHex: 'deadbeef', licenseStatus: 'licensed' },
+      }
+      expect(info.result?.licenseStatus).toBe('licensed')
     })
   })
 

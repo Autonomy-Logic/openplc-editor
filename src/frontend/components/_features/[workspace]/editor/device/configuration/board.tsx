@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import * as Popover from '@radix-ui/react-popover'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -8,11 +9,14 @@ import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifie
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
+import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
+import type { DeviceProbeInfo } from '../../../../../../store/slices/device/types'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
@@ -23,6 +27,175 @@ import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { PinMappingTable } from './components/pin-mapping-table'
+
+/** Filled shield + check — "this device holds a license". */
+function ShieldLicensedIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox='0 0 24 24' width={size} height={size} className='flex-none'>
+      <path
+        d='M12 2l8 3v6.5c0 5-3.4 8.2-8 9.5-4.6-1.3-8-4.5-8-9.5V5l8-3z'
+        fill='currentColor'
+        fillOpacity='0.18'
+      />
+      <path d='M12 2l8 3v6.5c0 5-3.4 8.2-8 9.5-4.6-1.3-8-4.5-8-9.5V5l8-3z' fill='none' stroke='currentColor' strokeWidth='1.6' />
+      <path d='M8.5 12l2.3 2.3L15.5 9.5' fill='none' stroke='currentColor' strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round' />
+    </svg>
+  )
+}
+
+/** Outline shield + dash — "no license on this device". */
+function ShieldUnlicensedIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      viewBox='0 0 24 24'
+      width={size}
+      height={size}
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.7'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      className='flex-none'
+    >
+      <path d='M12 2l8 3v6.5c0 5-3.4 8.2-8 9.5-4.6-1.3-8-4.5-8-9.5V5l8-3z' />
+      <path d='M9 12h6' />
+    </svg>
+  )
+}
+
+/** Truncate the raw hardware anchor for display: `a1b2c3d4…e5f6`. */
+function shortAnchor(hex: string): string {
+  return hex.length > 14 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex
+}
+
+/**
+ * Device license status for the CONNECT flow (D72), design "C3": a quiet,
+ * monochrome status line (shield + "Licensed" / "Not licensed") that opens a
+ * detail popover. No colored flags — state reads from glyph + fill + words; the
+ * brand blue is spent only on the "Buy license" action. Renders nothing until a
+ * probe lands on a connected device.
+ *
+ * NOTE (accuracy): "Licensed" reflects the on-device `0x4A` read, i.e. a valid
+ * license blob is present and intact (magic + crc32). It is not the closed
+ * gate's runtime signature/binding verdict; those agree in practice, but a
+ * tampered/foreign blob could read "Licensed" here while the device still runs
+ * demo. Surfacing the gate verdict over the wire is a separate improvement.
+ */
+function DeviceLicenseStatus({
+  probeInfo,
+  boardIsLicensable,
+  onBuy,
+  onRecheck,
+}: {
+  probeInfo: DeviceProbeInfo
+  boardIsLicensable: boolean
+  onBuy: () => void
+  onRecheck: () => void
+}) {
+  if (probeInfo.phase !== 'done' || probeInfo.result?.status !== 'connected-with-firmware') return null
+
+  // Free VPP — licensing doesn't apply. Just confirm the link.
+  if (!boardIsLicensable) {
+    return <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
+  }
+
+  const { licenseStatus, anchorHex } = probeInfo.result
+
+  // Firmware doesn't support the licensing FCs — we genuinely can't tell.
+  if (licenseStatus === 'unsupported') {
+    return (
+      <span
+        className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'
+        title='This firmware does not support license checks. Update the firmware to verify.'
+      >
+        License unknown
+      </span>
+    )
+  }
+
+  const licensed = licenseStatus === 'licensed'
+
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type='button'
+          aria-label='License status'
+          className={cn(
+            'flex items-center gap-1.5 font-caption text-cp-xs font-medium outline-none',
+            licensed
+              ? 'text-neutral-950 dark:text-white'
+              : 'text-neutral-700 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white',
+          )}
+        >
+          {licensed ? <ShieldLicensedIcon size={10} /> : <ShieldUnlicensedIcon size={10} />}
+          <span className={cn(!licensed && 'border-b border-dashed border-neutral-400 dark:border-neutral-700')}>
+            {licensed ? 'Licensed' : 'Not licensed'}
+          </span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side='bottom'
+          align='start'
+          sideOffset={8}
+          className='box z-50 flex w-[300px] flex-col rounded-lg bg-white p-4 dark:bg-neutral-950'
+        >
+          <div className='flex items-center gap-2.5'>
+            <span className='flex h-[30px] w-[30px] flex-none items-center justify-center rounded-md border border-neutral-100 text-neutral-950 dark:border-neutral-850 dark:text-white'>
+              {licensed ? <ShieldLicensedIcon /> : <ShieldUnlicensedIcon />}
+            </span>
+            <div>
+              <p className='font-caption text-cp-base font-semibold text-neutral-950 dark:text-white'>
+                {licensed ? 'Licensed' : 'Not licensed'}
+              </p>
+              <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
+                {licensed ? 'Full version unlocked' : 'Running in demo mode'}
+              </p>
+            </div>
+          </div>
+
+          <dl className='mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 font-caption text-cp-sm'>
+            {anchorHex && (
+              <>
+                <dt className='text-neutral-600 dark:text-neutral-400'>Device ID</dt>
+                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300'>{shortAnchor(anchorHex)}</dd>
+              </>
+            )}
+            {!licensed && (
+              <>
+                <dt className='text-neutral-600 dark:text-neutral-400'>Demo limit</dt>
+                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300'>15 min / run</dd>
+              </>
+            )}
+          </dl>
+
+          <div className='mt-4 flex gap-2'>
+            {!licensed && (
+              <button
+                type='button'
+                onClick={onBuy}
+                className='flex-1 rounded-md bg-brand px-3 py-1.5 font-caption text-cp-sm font-semibold text-white hover:bg-brand-medium-dark'
+              >
+                Buy license
+              </button>
+            )}
+            <button
+              type='button'
+              onClick={onRecheck}
+              className={cn(
+                'rounded-md border border-neutral-100 px-3 py-1.5 font-caption text-cp-sm font-semibold text-neutral-800 hover:bg-neutral-100 dark:border-neutral-850 dark:text-neutral-300 dark:hover:bg-neutral-900',
+                licensed && 'flex-1',
+              )}
+            >
+              Re-check
+            </button>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
 
 const Board = memo(function () {
   const capabilities = useCapabilities()
@@ -50,10 +223,28 @@ const Board = memo(function () {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
+  // CONNECT flow (D72): open the serial channel, probe the device, and drive the
+  // flash / license follow-ups. The landed classification feeds the badge below.
+  const {
+    connect: connectDevice,
+    disconnect: disconnectDevice,
+    checkRuntimeLicense,
+    isConnecting,
+    isConnected,
+    status: serialStatus,
+    buyLicense,
+  } = useDeviceConnect(currentBoardInfo)
+  const deviceProbeInfo = useOpenPLCStore((state): DeviceProbeInfo => state.deviceProbeInfo)
+  const clearDeviceProbe = useOpenPLCStore((state) => state.deviceActions.clearDeviceProbe)
+
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
   // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
+
+  // Licensable targets get a FULL/DEMO badge next to Connect; free VPPs just
+  // show "Connected". Drives whether the connect flow runs the license step.
+  const licensableSelectedBoard = resolveTargetCapabilities(currentBoardInfo).isLicensable
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -449,6 +640,22 @@ const Board = memo(function () {
     }
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
+  // Drop the FULL/DEMO badge whenever the target board or port changes — a
+  // classification from a previous Connect describes a different device.
+  useEffect(() => {
+    clearDeviceProbe()
+  }, [deviceBoard, communicationPort, clearDeviceProbe])
+
+  // Runtime-v4 license parity (F7): the runtime owns its own connection (login +
+  // JWT + polling), so run the license check when that connection comes up for a
+  // licensable target, and clear the badge when it drops. Serial targets drive
+  // their own badge through the Connect button instead.
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensableSelectedBoard) return
+    if (connectionStatus === 'connected') void checkRuntimeLicense()
+    else clearDeviceProbe()
+  }, [connectionStatus, currentBoardInfo, licensableSelectedBoard, checkRuntimeLicense, clearDeviceProbe])
+
   return (
     <DeviceEditorSlot>
       <div id='board-selection-container' className='flex w-full flex-wrap items-start gap-8 lg:gap-16'>
@@ -607,6 +814,12 @@ const Board = memo(function () {
                     {plcStatus && (
                       <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
                     )}
+                    <DeviceLicenseStatus
+                      probeInfo={deviceProbeInfo}
+                      boardIsLicensable={licensableSelectedBoard}
+                      onBuy={buyLicense}
+                      onRecheck={checkRuntimeLicense}
+                    />
                   </div>
                 )}
                 {connectionStatus === 'error' && (
@@ -615,6 +828,7 @@ const Board = memo(function () {
               </div>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
+            <>
             <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
               <Label
                 id='communication-ports-selector-label'
@@ -643,7 +857,9 @@ const Board = memo(function () {
                   viewportRef={communicationSelectRef}
                 >
                   {availableCommunicationPorts.map((port) => {
-                    const displayName = port.name?.trim() || port.address
+                    // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
+                    // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
+                    const { label, title } = serialPortDisplay(port)
                     return (
                       <SelectItem
                         key={port.address}
@@ -652,9 +868,10 @@ const Board = memo(function () {
                           'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
                         )}
                         value={port.address}
+                        title={title}
                       >
                         <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {displayName}
+                          {label}
                         </span>
                       </SelectItem>
                     )
@@ -672,6 +889,36 @@ const Board = memo(function () {
                 <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
               </button>
             </div>
+            <div id='device-connect-button-container' className='flex w-full items-center justify-start gap-2'>
+              <button
+                type='button'
+                onClick={isConnected ? disconnectDevice : connectDevice}
+                disabled={isConnecting || (!isConnected && !communicationPort)}
+                title={
+                  !isConnected && !communicationPort ? 'Select a communication port first' : 'Connect to the device'
+                }
+                className={cn(
+                  'h-[30px] rounded-md px-4 py-1 font-caption text-cp-sm font-medium text-white disabled:opacity-50',
+                  isConnected
+                    ? 'bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-850 dark:hover:bg-neutral-800'
+                    : 'bg-brand hover:bg-brand-medium-dark',
+                )}
+              >
+                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+              </button>
+              {serialStatus === 'error' && (
+                <span className='font-caption text-cp-xs font-medium text-red-600 dark:text-red-400'>
+                  ● Connection failed
+                </span>
+              )}
+              <DeviceLicenseStatus
+                probeInfo={deviceProbeInfo}
+                boardIsLicensable={licensableSelectedBoard}
+                onBuy={buyLicense}
+                onRecheck={connectDevice}
+              />
+            </div>
+            </>
           ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>

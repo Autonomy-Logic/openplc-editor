@@ -279,6 +279,10 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
+  // via the shared `resolveDebugConnection` resolver, same as the activity bar's
+  // debugger/post-flash paths.
+  'frontend/hooks/use-device-connect.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------
