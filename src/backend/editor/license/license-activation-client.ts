@@ -22,10 +22,9 @@ import { sign as cryptoSign } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-import https from 'https'
-
-import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
+import { LIC_BLOB_SIZE, LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
 import { getEdgeApiBaseUrl } from '../library-manager/desktop-catalog-transport'
+import { defaultPortFor, httpModuleFor } from '../utils/http-module'
 
 /**
  * Input to `checkDeviceActivation`. Only `deviceId` + `packageId` are ever
@@ -142,7 +141,19 @@ async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActi
     if (typeof data.license !== 'string') {
       return { licensed: false, error: 'Activation response missing license blob' }
     }
-    return { licensed: true, license: Array.from(Buffer.from(data.license, 'base64')), reason: data.reason }
+    // `Buffer.from(s, 'base64')` NEVER throws: the decoder silently skips
+    // invalid characters and tolerates missing padding, so a truncated or
+    // corrupted field yields a short buffer instead of an error. Writing that
+    // to the device produces a LIC_CORRUPT rejection whose message points at
+    // the hardware, giving no hint that the backend sent something malformed.
+    const blob = Buffer.from(data.license, 'base64')
+    if (blob.length !== LIC_BLOB_SIZE) {
+      return {
+        licensed: false,
+        error: `Activation response license blob is ${blob.length} bytes, expected ${LIC_BLOB_SIZE}`,
+      }
+    }
+    return { licensed: true, license: Array.from(blob), reason: data.reason }
   } catch (err) {
     return { licensed: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -165,10 +176,12 @@ function postJson(url: string, body: unknown): Promise<unknown> {
     const token = process.env.OPENPLC_EDGE_TOKEN?.trim()
     if (token) headers.Authorization = `Bearer ${token}`
 
-    const req = https.request(
+    // Scheme-driven, so OPENPLC_EDGE_API_URL can point at a local http backend
+    // for end-to-end testing. Production hosts stay https either way.
+    const req = httpModuleFor(parsed).request(
       {
         hostname: parsed.hostname,
-        port: parsed.port || undefined,
+        port: parsed.port || defaultPortFor(parsed),
         path: parsed.pathname + parsed.search,
         method: 'POST',
         headers,

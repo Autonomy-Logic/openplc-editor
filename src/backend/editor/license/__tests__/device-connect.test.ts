@@ -68,6 +68,26 @@ describe('probeAndRecover', () => {
     expect(mockCheckDeviceActivation).toHaveBeenCalledTimes(1)
   })
 
+  // A transport/backend failure is not a missing purchase. Reporting `demo`
+  // here makes the renderer prompt a user who already owns a license to buy
+  // one -- the activate endpoint is throttled, so a few quick reconnects are
+  // enough to trigger it.
+  it.each([
+    ['rate limited', 'Activation request failed: 429 Too Many Requests'],
+    ['signer unconfigured', 'Activation request failed: 503 Service Unavailable'],
+    ['network down', 'getaddrinfo ENOTFOUND api.autonomylogic.com'],
+  ])('reports an error, not demo, when activation fails (%s)', async (_label, error) => {
+    mockCheckDeviceActivation.mockResolvedValue({ licensed: false, error })
+    const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+    expect(r).toMatchObject({ licenseStatus: 'unlicensed', activation: 'error', error })
+  })
+
+  it('still reports demo when the backend answers with a business reason', async () => {
+    mockCheckDeviceActivation.mockResolvedValue({ licensed: false, reason: 'no active subscription' })
+    const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+    expect(r).toMatchObject({ licenseStatus: 'unlicensed', activation: 'demo' })
+  })
+
   it('recovers and writes a license the backend returns (activated)', async () => {
     mockCheckDeviceActivation.mockResolvedValue({ licensed: true, license: new Array(98).fill(0) })
     const writeLicense = jest.fn(async () => ({ success: true }))

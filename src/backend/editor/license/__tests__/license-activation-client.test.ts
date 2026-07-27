@@ -191,4 +191,28 @@ describe('checkDeviceActivation (real edge client, no mock toggle)', () => {
     expect(result.licensed).toBe(false)
     expect(result.error).toMatch(/404/)
   })
+
+  // Buffer.from(s, 'base64') never throws -- it skips invalid characters and
+  // tolerates missing padding -- so without an explicit length check a
+  // truncated field reaches the device as a short blob and comes back as a
+  // LIC_CORRUPT rejection that blames the hardware.
+  it('rejects a license blob that does not decode to exactly 98 bytes', async () => {
+    const truncated = Buffer.from(GOLDEN_HEX, 'hex').subarray(0, 40).toString('base64')
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: true, license: truncated } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.licensed).toBe(false)
+    expect(result.error).toMatch(/40 bytes, expected 98/)
+    expect(result.license).toBeUndefined()
+  })
+
+  it('rejects a license field that is not valid base64 at all', async () => {
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: true, license: '!!!not base64!!!' } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.licensed).toBe(false)
+    expect(result.error).toMatch(/expected 98/)
+  })
 })

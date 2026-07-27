@@ -73,7 +73,23 @@ export async function probeAndRecover(
     const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId, keyId: opts.keyId })
 
     if (!act.licensed) {
-      // Backend has no license for this device -> demo. The renderer prompts buy.
+      // A transport/backend failure is NOT the same as "no purchase on record".
+      // Collapsing both into `demo` makes the renderer tell someone who already
+      // owns a license to buy one: the activate endpoint is rate-limited (429),
+      // answers 503 when no signer is configured, 404 for an unknown package,
+      // and any dropped connection lands here too. `checkDeviceActivation`
+      // already separates `reason` (business) from `error` (transport) -- honour
+      // the distinction instead of discarding it one layer up.
+      if (act.error) {
+        return {
+          status: 'connected-with-firmware',
+          anchorHex,
+          licenseStatus: 'unlicensed',
+          activation: 'error',
+          error: act.error,
+        }
+      }
+      // Genuinely no license for this device -> demo. The renderer prompts buy.
       return { status: 'connected-with-firmware', anchorHex, licenseStatus: 'unlicensed', activation: 'demo' }
     }
 
@@ -140,9 +156,11 @@ function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOu
     case 'error':
       return { success: true, outcome: 'error', anchorHex, error: result.error ?? 'License write failed' }
     default:
-      // Unreachable from handleActivateDeviceLicense (always calls with
-      // isLicensable: true), which always sets `activation` for a connected
-      // licensable target. Kept for exhaustiveness against the shared type.
-      return { success: true, outcome: 'error', anchorHex, error: 'unexpected: no activation outcome' }
+      // Reachable: `probeAndRecover` returns without `activation` when it has
+      // no packageId to derive from (an empty string from the renderer passes
+      // the `packageId: string` type — IPC arguments are not validated at the
+      // boundary). Treated as an error rather than demo: we never asked the
+      // backend anything, so we know nothing about this device's entitlement.
+      return { success: true, outcome: 'error', anchorHex, error: 'no package id: cannot check licensing' }
   }
 }
