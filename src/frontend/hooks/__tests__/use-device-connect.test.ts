@@ -3,14 +3,23 @@ import { renderHook } from '@testing-library/react'
 // `mock*`-prefixed refs are hoisted into the jest.mock factories below.
 const mockOpenModal = jest.fn()
 const mockStartDeviceProbe = jest.fn()
-const mockSetDeviceProbeResult = jest.fn()
+// Lands the result in `mockState` the way the real slice action does. The buy
+// deep link reads the device id back out of the store, so a stub that swallowed
+// the write would make the whole connect -> prompt -> buy chain untestable.
+const mockSetDeviceProbeResult = jest.fn((result: unknown) => {
+  mockState.deviceProbeInfo = { phase: 'done', result }
+})
 const mockClearDeviceProbe = jest.fn()
 const mockSetSerialConnectionStatus = jest.fn()
+
+/** A real derived device id (32 hex) — the `/buy` page rejects anything else. */
+const DEVICE_ID = '7146518f9842adacfadc731ee7f546e5'
 
 const mockState: Record<string, unknown> = {
   deviceDefinitions: { configuration: { deviceBoard: 'Test Board', communicationPort: 'COM5', vendorScreenData: {} } },
   serialConnection: { status: 'disconnected', port: null },
   runtimeConnection: { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' },
+  deviceProbeInfo: { phase: 'idle', result: null },
   modalActions: { openModal: mockOpenModal },
   deviceActions: {
     startDeviceProbe: mockStartDeviceProbe,
@@ -47,7 +56,7 @@ jest.mock('@root/middleware/shared/providers/platform-context', () => ({
     activateLicense: mockActivateLicense,
     onConnectionStatus: mockOnConnectionStatus,
   }),
-  useSystem: () => ({ openExternalLink: mockOpenExternalLink }),
+  useSystem: () => ({ openExternalLink: mockOpenExternalLink, getEdgeFrontendUrl: () => 'https://edge.test' }),
 }))
 jest.mock('@root/middleware/shared/utils/target-capabilities', () => ({
   resolveTargetCapabilities: () => mockCaps,
@@ -73,6 +82,7 @@ beforeEach(() => {
   mockCaps = { isLicensable: true }
   mockState.serialConnection = { status: 'disconnected', port: null }
   mockState.runtimeConnection = { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' }
+  mockState.deviceProbeInfo = { phase: 'idle', result: null }
   mockResolveOutcome = {
     kind: 'config',
     channelLabel: 'RTU',
@@ -156,13 +166,22 @@ describe('useDeviceConnect', () => {
     expect(mockOpenModal).not.toHaveBeenCalled()
   })
 
-  it('prompts Buy/Demo on a demo recover and opens the store when Buy is chosen', async () => {
-    mockConnect.mockResolvedValue({ status: 'connected-with-firmware', licenseStatus: 'unlicensed', activation: 'demo' })
+  it('prompts Buy/Demo on a demo recover and buys FOR THIS DEVICE when Buy is chosen', async () => {
+    mockConnect.mockResolvedValue({
+      status: 'connected-with-firmware',
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+      deviceId: DEVICE_ID,
+    })
     const { result } = renderHook(() => useDeviceConnect(board))
     await result.current.connect()
     expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'License Required' })
     latestOnResponse()(0)
-    expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+    // The id landed by the connect probe must reach the purchase link — this is
+    // the whole chain the flow was missing.
+    expect(mockOpenExternalLink).toHaveBeenCalledWith(
+      `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
+    )
     latestOnResponse()(1)
     expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
   })
@@ -183,10 +202,36 @@ describe('useDeviceConnect', () => {
     expect(result.current.status).toBe('connected')
   })
 
-  it('exposes buyLicense, which opens the store', () => {
-    const { result } = renderHook(() => useDeviceConnect(board))
-    result.current.buyLicense()
-    expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+  describe('buyLicense (D68a deep link)', () => {
+    // The whole point of the link: a purchase can only be bound to a device the
+    // page was told about. Opening a bare store page sold nothing.
+    it('opens /buy carrying this VPP and this device', () => {
+      mockState.deviceProbeInfo = { phase: 'done', result: { status: 'connected-with-firmware', deviceId: DEVICE_ID } }
+      const { result } = renderHook(() => useDeviceConnect(board))
+      result.current.buyLicense()
+      expect(mockOpenExternalLink).toHaveBeenCalledWith(
+        `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
+      )
+    })
+
+    it('reads the device id at call time, not from a stale closure', () => {
+      mockState.deviceProbeInfo = { phase: 'idle', result: null }
+      const { result } = renderHook(() => useDeviceConnect(board))
+      mockState.deviceProbeInfo = { phase: 'done', result: { status: 'connected-with-firmware', deviceId: DEVICE_ID } }
+      result.current.buyLicense()
+      expect(mockOpenExternalLink).toHaveBeenCalledWith(
+        `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
+      )
+    })
+
+    it('explains itself instead of opening a link the page would reject', () => {
+      mockState.deviceProbeInfo = { phase: 'idle', result: null }
+      const { result } = renderHook(() => useDeviceConnect(board))
+      result.current.buyLicense()
+      expect(mockOpenExternalLink).not.toHaveBeenCalled()
+      expect(mockOpenModal).toHaveBeenCalledTimes(1)
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'Cannot Open Purchase Page' })
+    })
   })
 
   describe('checkRuntimeLicense (F7)', () => {
@@ -221,15 +266,18 @@ describe('useDeviceConnect', () => {
     })
 
     it('lands DEMO and prompts Buy on a demo outcome', async () => {
-      mockActivateLicense.mockResolvedValue({ success: true, probedAt: 't', outcome: 'demo' })
+      mockActivateLicense.mockResolvedValue({ success: true, probedAt: 't', outcome: 'demo', deviceId: DEVICE_ID })
       const { result } = renderHook(() => useDeviceConnect(board))
       await result.current.checkRuntimeLicense()
       expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'connected-with-firmware', licenseStatus: 'unlicensed' }),
+        expect.objectContaining({ status: 'connected-with-firmware', licenseStatus: 'unlicensed', deviceId: DEVICE_ID }),
       )
       expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'License Required' })
       latestOnResponse()(0)
-      expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+      // Network targets get the same device-bound link the serial path does.
+      expect(mockOpenExternalLink).toHaveBeenCalledWith(
+        `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
+      )
     })
 
     it('clears the badge when the runtime does not answer the license FCs', async () => {

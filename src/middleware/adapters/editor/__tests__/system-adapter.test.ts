@@ -69,3 +69,40 @@ describe('log', () => {
     expect(window.bridge.log).toHaveBeenCalledWith('error', 'error message')
   })
 })
+
+describe('getEdgeFrontendUrl', () => {
+  /**
+   * The host is captured at module evaluation (webpack's `EnvironmentPlugin`
+   * inlines it at build time), so the env has to be set BEFORE the module loads
+   * — re-import under `jest.resetModules` instead of mutating after the fact.
+   */
+  function loadWith(override: string | undefined): SystemPort {
+    const previous = process.env.OPENPLC_EDGE_WEB_URL
+    if (override === undefined) delete process.env.OPENPLC_EDGE_WEB_URL
+    else process.env.OPENPLC_EDGE_WEB_URL = override
+    try {
+      jest.resetModules()
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require('../system-adapter') as typeof import('../system-adapter')
+      return mod.createEditorSystemAdapter()
+    } finally {
+      if (previous === undefined) delete process.env.OPENPLC_EDGE_WEB_URL
+      else process.env.OPENPLC_EDGE_WEB_URL = previous
+      jest.resetModules()
+    }
+  }
+
+  it('returns the production Edge web host when no override is built in', () => {
+    expect(loadWith(undefined).getEdgeFrontendUrl()).toBe('https://edge.autonomylogic.com')
+  })
+
+  // Release builds leave the env unset, so webpack inlines an empty string.
+  it('treats an empty override as unset rather than emitting a relative URL', () => {
+    expect(loadWith('').getEdgeFrontendUrl()).toBe('https://edge.autonomylogic.com')
+  })
+
+  // Without this, the buy flow can only ever be exercised against production.
+  it('honours the override so a dev build can target a local Edge app', () => {
+    expect(loadWith('http://localhost:5173').getEdgeFrontendUrl()).toBe('http://localhost:5173')
+  })
+})

@@ -25,12 +25,7 @@ import { type DebugResolverContext, resolveDebugConnection } from '../../backend
 import type { DeviceConnectParams } from '../../middleware/shared/ports/device-port'
 import { useOpenPLCStore } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
-
-/**
- * Where "Buy License" sends the user (Q-F). Stub for now — the real Edge
- * checkout is the other team's (D68a).
- */
-const EDGE_BUY_URL = 'https://autonomylogic.com/store'
+import { buildLicenseBuyUrl } from '../utils/license-buy-url'
 
 /** Build the debug resolver context for a USB connect (serial port + baud only). */
 function buildUsbResolverContext(): DebugResolverContext {
@@ -85,9 +80,37 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     })
   }, [device, setSerialConnectionStatus, clearDeviceProbe])
 
+  /**
+   * Send the user to the Edge purchase page FOR THIS DEVICE (D68a). The page
+   * needs the VPP and the device id in the link — without them it can only show
+   * "Invalid purchase link", and a purchase can't be bound to any device.
+   *
+   * Both ids are read at call time (not closed over): the probe result lands in
+   * the store just before the demo prompt opens, and the popover's Buy button
+   * fires arbitrarily later.
+   */
   const buyLicense = useCallback((): void => {
-    void system.openExternalLink(EDGE_BUY_URL)
-  }, [system])
+    const url = buildLicenseBuyUrl({
+      baseUrl: system.getEdgeFrontendUrl(),
+      vppId: boardInfo?.vpp?.packageId,
+      deviceId: useOpenPLCStore.getState().deviceProbeInfo.result?.deviceId,
+    })
+    if (!url) {
+      // Better to say why than to open a page that rejects the link. Reachable
+      // only if Buy is offered without a completed probe (the device id comes
+      // from the hardware read), so name that as the fix.
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'Cannot Open Purchase Page',
+        message:
+          'The purchase page needs the Device ID, which is read from the hardware. Connect the device first, then try again.',
+        buttons: ['OK'],
+        onResponse: () => undefined,
+      })
+      return
+    }
+    void system.openExternalLink(url)
+  }, [boardInfo, openModal, system])
 
   const connect = useCallback(async (): Promise<void> => {
     const caps = resolveTargetCapabilities(boardInfo)

@@ -141,6 +141,10 @@ const configuration: webpack.Configuration = {
       // (`https://api.autonomylogic.com`) wins.  Local/staging
       // builds can prepend `VPP_CATALOG_URL=...` to override.
       VPP_CATALOG_URL: '',
+      // Same for the Edge WEB app host (the `/buy` license page) — a
+      // different origin from the API above.  Unset in release builds →
+      // `system-adapter.ts` falls back to https://edge.autonomylogic.com.
+      OPENPLC_EDGE_WEB_URL: '',
     }),
 
     new MiniCssExtractPlugin({
