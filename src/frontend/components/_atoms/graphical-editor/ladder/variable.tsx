@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../../middleware/shared/ports'
 import { useDebugger } from '../../../../../middleware/shared/providers'
@@ -34,13 +34,8 @@ import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNod
 const VariableElement = (block: VariableProps) => {
   const { id, data } = block
   const pouName = useBoundPou()
-  const {
-    project: {
-      data: { pous },
-    },
-    ladderFlows,
-    ladderFlowActions: { updateNode },
-  } = useOpenPLCStore()
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
   const debugger_ = useDebugger()
   const isDebuggerVisible = useIsDebuggerVisible()
   const getCompositeKey = useDebugCompositeKey()
@@ -165,7 +160,8 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
     const variableNameToSubmit = currentValue ?? variableValue
 
-    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
@@ -238,7 +234,7 @@ const VariableElement = (block: VariableProps) => {
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, { nodeId: id })
+    const pou = pous.find((pou) => pou.name === pouName)
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -555,4 +551,6 @@ const VariableElement = (block: VariableProps) => {
   )
 }
 
-export { VariableElement }
+const exportVariableElement = memo(VariableElement)
+
+export { exportVariableElement as VariableElement }

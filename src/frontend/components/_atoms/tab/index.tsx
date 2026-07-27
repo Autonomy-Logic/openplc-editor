@@ -21,6 +21,7 @@ import { ServerIcon } from '../../../assets/icons/project/Server'
 import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { UsersIcon } from '../../../assets/icons/project/Users'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { cn } from '../../../utils/cn'
@@ -56,6 +57,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
+  'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
   'diff-viewer': <GitCompare className='h-4 w-4 flex-shrink-0 text-[#0464FB]' />,
 }
 
@@ -87,6 +89,7 @@ const Tab = (props: ITabProps) => {
     | 'ethercat-device'
     | 'library-manager'
     | 'library-manifest'
+    | 'user-management'
     | 'diff-viewer' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
@@ -122,6 +125,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'library-manifest') {
     languageOrDerivation = 'library-manifest'
+  }
+  if (fileDerivation?.type === 'user-management') {
+    languageOrDerivation = 'user-management'
   }
   if (fileDerivation?.type === 'diff-viewer') {
     languageOrDerivation = 'diff-viewer'

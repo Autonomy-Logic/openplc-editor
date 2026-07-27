@@ -315,16 +315,20 @@ describe('deriveVariableIndexMap', () => {
 
     const { indexMap } = derive([pou], instances, map)
 
-    expect(indexMap.get('Main:START_PB')).toBe(addr(0, 0))
+    // Externals resolve under the canonical, POU-independent global key.
+    expect(indexMap.get('Config0:START_PB')).toBe(addr(0, 0))
     expect(indexMap.get('Main:LOCAL_X')).toBe(addr(0, 1))
-    // The instance-prefixed path must NOT resolve the global.
+    // Neither the instance-prefixed nor the program-scoped path resolves the
+    // global — every reference dedups to the one canonical key.
     expect(indexMap.has('INSTANCE0.START_PB')).toBe(false)
+    expect(indexMap.has('Main:START_PB')).toBe(false)
   })
 
-  it('maps a global shared by two programs to the same index under both keys', () => {
+  it('maps a global shared by two programs to one canonical global key', () => {
     // The regression this whole refactor targets: a VAR_GLOBAL referenced (as
-    // VAR_EXTERNAL) by two programs must resolve to ONE address under BOTH
-    // composite keys, so force + value display work on every referencing POU.
+    // VAR_EXTERNAL) by two programs must resolve to ONE address so force + value
+    // display work on every referencing POU. Both references now collapse onto
+    // the single canonical `Config0:*` key.
     const main = makePou('Main', 'program', [makeBaseVariable('START_PB', 'BOOL', 'external')])
     const another = makePou('Another', 'program', [makeBaseVariable('START_PB', 'BOOL', 'external')])
     const instances = [makeInstance('INSTANCE0', 'Main'), makeInstance('INSTANCE1', 'Another')]
@@ -332,8 +336,10 @@ describe('deriveVariableIndexMap', () => {
 
     const { indexMap } = derive([main, another], instances, map)
 
-    expect(indexMap.get('Main:START_PB')).toBe(addr(0, 0))
-    expect(indexMap.get('Another:START_PB')).toBe(addr(0, 0))
+    expect(indexMap.get('Config0:START_PB')).toBe(addr(0, 0))
+    // Per-program keys no longer exist — that collapse IS the dedup.
+    expect(indexMap.has('Main:START_PB')).toBe(false)
+    expect(indexMap.has('Another:START_PB')).toBe(false)
   })
 
   it('falls back to raw debug path for unmatched leaves (nested fields)', () => {

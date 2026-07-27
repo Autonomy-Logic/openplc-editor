@@ -283,6 +283,13 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
   'frontend/hooks/use-device-connect.ts': ['backend-shared'],
+  // PLCopen export — needs the shared XmlGenerator composing function
+  // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
+  // project data into XML before handing it to the platform port. No
+  // frontend-reachable layer re-exports this function today; the
+  // conversion logic itself stays local (mirrors compiler-adapter.ts's
+  // portToSchemaProjectData) and has no other backend-shared dependency.
+  'frontend/services/export-actions.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------

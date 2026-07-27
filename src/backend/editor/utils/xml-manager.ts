@@ -4,11 +4,11 @@ import { join } from 'path'
 /**
  * Create an xml file with the given params.  Synchronous on
  * purpose, same reason `CreateJSONFile` is: every caller chains
- * the next step (running xml2st on the file) immediately after,
+ * the next step (reading the file) immediately after,
  * and the previous async-fire-and-forget form returned success
  * before libuv had actually flushed the bytes — a fast subsequent
  * spawn could read 0 bytes.  The compile pipeline never observed
- * this in practice because xml2st spawns slowly enough that the
+ * this in practice because the read happened slowly enough that the
  * write usually won the race, but the API contract has always
  * been wrong.
  *

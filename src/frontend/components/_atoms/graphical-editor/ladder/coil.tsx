@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { useDebugger } from '../../../../../middleware/shared/providers'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
@@ -18,16 +18,11 @@ import type { CoilProps } from './utils/types'
 
 export type { CoilNode } from './utils/types'
 
-export const Coil = (block: CoilProps) => {
+const Coil = (block: CoilProps) => {
   const { selected, data, id } = block
   const pouName = useBoundPou()
-  const {
-    project: {
-      data: { pous },
-    },
-    ladderFlows,
-    ladderFlowActions: { updateNode },
-  } = useOpenPLCStore()
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
 
   const debugger_ = useDebugger()
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -149,7 +144,8 @@ export const Coil = (block: CoilProps) => {
    */
   const handleSubmitCoilVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || coilVariableValue
-    const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -215,7 +211,8 @@ export const Coil = (block: CoilProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -234,7 +231,8 @@ export const Coil = (block: CoilProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -334,3 +332,7 @@ export const Coil = (block: CoilProps) => {
     </div>
   )
 }
+
+const exportCoil = memo(Coil)
+
+export { exportCoil as Coil }

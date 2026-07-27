@@ -68,9 +68,9 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const editor = useOpenPLCStore((s) => selectEditorForPou(s, propName))
   const {
     ladderFlows,
-    ladderFlowActions: { updateNode },
+    ladderFlowActions: { updateNode, updateNodes },
     fbdFlows,
-    fbdFlowActions: { updateNode: updateFBDNode },
+    fbdFlowActions: { updateNode: updateFBDNode, updateNodes: updateFBDNodes },
     workspace: {
       systemConfigs: { shouldUseDarkMode },
       isDebuggerVisible,
@@ -924,11 +924,11 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       const freshVariables = freshPou?.interface?.variables ?? []
 
       if (language === 'ld') {
-        syncNodesWithVariablesUtil(freshVariables, freshLadderFlows, updateNode)
+        syncNodesWithVariablesUtil(freshVariables, freshLadderFlows, updateNodes)
       }
 
       if (language === 'fbd') {
-        syncNodesWithVariablesFBDUtil(freshVariables, freshFBDFlows, updateFBDNode)
+        syncNodesWithVariablesFBDUtil(freshVariables, freshFBDFlows, updateFBDNodes)
       }
 
       for (const pair of renamedPairsToPropagate) {

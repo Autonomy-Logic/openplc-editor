@@ -41,7 +41,7 @@ export function leafNode(chunks: ProgramChunk[]): PathNode {
 /**
  * Stable structural key for a PathNode — used by `factorizePaths` to
  * detect common terms.  Identical to the Python `repr` output the
- * original xml2st pipeline keys on.
+ * original PLCopen pipeline keys on.
  */
 export function pythonReprNode(node: PathNode): string {
   switch (node.kind) {
@@ -110,7 +110,9 @@ export function pythonReprString(s: string): string {
 /**
  * Boolean simplification — `(A AND B) OR (A AND C)` → `A AND (B OR C)`.
  *
- * Strategy mirrors `FactorizePaths` (PLCGenerator.py:1429):
+ * Strategy mirrors `FactorizePaths` (PLCGenerator.py:1429), with one
+ * deliberate divergence — duplicate-path dedup (see below):
+ *   0. Drop byte-identical duplicate paths (`X OR X` → `X`).
  *   1. Sort the paths by their Python `repr`.
  *   2. For each pair, find common head/tail prefixes/suffixes between
  *      adjacent AND nodes.
@@ -119,8 +121,25 @@ export function pythonReprString(s: string): string {
 export function factorizePaths(paths: readonly PathNode[]): PathNode[] {
   if (paths.length <= 1) return [...paths]
 
+  // Collapse byte-identical parallel paths (`X OR X` = `X`).  The
+  // python oracle keeps duplicates (parallel coils feeding a merged
+  // sink emit `FirstScan OR FirstScan`); we drop them, a deliberate
+  // divergence that yields the cleaner condition with no behavioural
+  // change.  Paths are equal only when their full repr — text AND
+  // source locations — matches, so two distinct contacts on the same
+  // variable still survive as separate OR terms.
+  const seenRepr = new Set<string>()
+  const unique: PathNode[] = []
+  for (const p of paths) {
+    const k = pythonReprNode(p)
+    if (seenRepr.has(k)) continue
+    seenRepr.add(k)
+    unique.push(p)
+  }
+  if (unique.length <= 1) return unique
+
   // Sort by stable repr key — same order Python produces.
-  const sorted = pythonStableSort(paths)
+  const sorted = pythonStableSort(unique)
 
   // Walk sorted list, group adjacent paths sharing head AND.
   const out: PathNode[] = []

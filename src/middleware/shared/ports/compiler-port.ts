@@ -1,7 +1,7 @@
 /**
  * CompilerPort — Abstracts the PLC compilation pipeline.
  *
- * Editor adapter: Delegates to main process via IPC (local tools: xml2st, STruC++, arduino-cli).
+ * Editor adapter: Delegates to main process via IPC (local tools: STruC++, arduino-cli).
  * Web adapter:    Delegates to remote API at compile.getedge.me (callGenerateSt, callCompileSt, etc.).
  *
  * The UI only knows "compile this project" and receives progress events.
@@ -80,7 +80,7 @@ export interface CompileLibraryArgs {
   /**
    * Skip the verification-result cache for this run.  The MD5 cache
    * normally short-circuits the slow simulator-target verification
-   * when the program.st coming out of xml2st hasn't changed since
+   * when the program.st coming out of the ST transpiler hasn't changed since
    * the last successful (or failed) verify; `cleanBuild: true`
    * forces a fresh compile.
    *
@@ -115,7 +115,7 @@ export interface CompilerPort {
 
   /**
    * Build a `.stlib` archive from a Library Project on disk.
-   * Editor: validates the manifest, runs the local xml2st binary,
+   * Editor: validates the manifest, runs the in-process ST transpiler,
    *   pipes the result through strucpp's library compiler, and
    *   writes the archive to `<projectPath>/build/<name>.stlib`.
    * Web (future): posts the project + manifest to a remote service

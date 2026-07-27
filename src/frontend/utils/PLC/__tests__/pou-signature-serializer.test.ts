@@ -140,7 +140,7 @@ describe('serializePouSignatureToST', () => {
         body: { language: 'fbd', value: {} as never },
       })
       const result = serializePouSignatureToST(pou)
-      // Block keywords carry the xml2st-parity 2-space indent.
+      // Block keywords carry the legacy-parity 2-space indent.
       expect(result).toContain('  VAR\n  END_VAR')
     })
 
@@ -183,6 +183,34 @@ describe('serializePouSignatureToST', () => {
       expect(position.character).toBe('in1.'.length)
       // The body line is after the declaration + VAR blocks.
       expect(text.split('\n')[position.line]).toBe('in1.')
+    })
+
+    it('re-emits external variables as plain VAR so globals resolve in the throwaway doc', () => {
+      const pou = makePou({
+        name: 'Main',
+        pouType: 'program',
+        interface: {
+          variables: [
+            {
+              id: 'g1',
+              name: 'some_global_complex',
+              class: 'external',
+              type: { definition: 'derived', value: 'testing_arr' },
+              documentation: '',
+              debug: false,
+              location: '',
+            },
+          ],
+        },
+        body: { language: 'fbd', value: {} as never },
+      })
+      const { text } = serializePouScopeForQuery(pou, 'some_global_complex.')
+      // The external is rewritten to a self-contained local VAR (type inline)
+      // so strucpp resolves the global + its struct/array members without a
+      // matching VAR_GLOBAL in this throwaway document.
+      expect(text).toContain('some_global_complex : testing_arr;')
+      expect(text).not.toContain('VAR_EXTERNAL')
+      expect(text).toContain('some_global_complex.')
     })
 
     it('keeps the function return type while swapping only the name', () => {

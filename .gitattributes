@@ -15,5 +15,4 @@
 # Identification for binary files used as compilers/transpilers
 ##########################
 iec2c   binary
-xml2st  binary
 resources/bin/**/*  binary

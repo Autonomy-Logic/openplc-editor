@@ -212,6 +212,24 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
+  it('derives the fallback name from the basename even for Windows backslash paths', () => {
+    // The desktop reader builds relativePaths with path.join → backslashes on
+    // Windows. A parse failure must still yield the bare basename, not the whole
+    // `pous\functions\...` path (the origin of the deleting-function corruption).
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      {
+        relativePath: 'pous\\functions\\Siren_FC.st',
+        // Missing END_FUNCTION / return type → parser throws → fallback.
+        content: 'FUNCTION Siren_FC\nVAR_INPUT\n  x : INT;\nEND_VAR\nbody',
+      },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    expect(result.projectData.pous).toHaveLength(1)
+    expect(result.projectData.pous[0].name).toBe('Siren_FC')
+    consoleSpy.mockRestore()
+  })
+
   it('warns and preserves declarations when a PROGRAM has a located interface-class variable (issue #904)', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [

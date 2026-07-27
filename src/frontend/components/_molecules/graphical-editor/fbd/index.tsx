@@ -3,18 +3,21 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   Connection,
+  DefaultEdgeOptions,
   Edge as FlowEdge,
   Node as FlowNode,
   OnEdgesChange,
-  OnNodeDrag,
   OnNodesChange,
   ReactFlowInstance,
   SelectionMode,
+  SnapGrid,
   XYPosition,
 } from '@xyflow/react'
 import { debounce, isEqual } from 'lodash'
-import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { mapsEqual, useContentStable } from '../../../../hooks/use-content-stable'
 import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import {
   useDebugBoolValuesMap,
@@ -22,6 +25,7 @@ import {
   useIsDebuggerVisible,
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { useStableCallback } from '../../../../hooks/use-stable-callback'
 import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
@@ -45,27 +49,178 @@ interface FBDProps {
 
 const EDGE_COLOR_TRUE = '#00FF00'
 
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
+  type: 'smoothstep',
+}
+const SNAP_GRID: SnapGrid = [16, 16]
+const PRO_OPTIONS = { hideAttribution: true }
+const CONTROLS_CONFIG = { showInteractive: false }
+
+// --- Debug edge coloring ---
+
+type FBDDebugContext = {
+  isFunctionBlockPou: boolean
+  hasProgramInstance: boolean
+  getCompositeKey: (variableName: string) => string
+  boolValues: Map<string, string>
+  forcedValues: Map<string, boolean>
+  pouVariables: PLCVariable[] | undefined
+}
+
+const computeFBDEdgeStates = (
+  nodes: FBDRungState['nodes'],
+  edges: FBDRungState['edges'],
+  ctx: FBDDebugContext,
+): Map<string, boolean> => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const edgeById = new Map(edges.map((edge) => [edge.id, edge]))
+  const edgesByTarget = new Map<string, FBDRungState['edges']>()
+  for (const edge of edges) {
+    const list = edgesByTarget.get(edge.target)
+    if (list) list.push(edge)
+    else edgesByTarget.set(edge.target, [edge])
+  }
+  const variablesByName = new Map<string, PLCVariable>()
+  for (const variable of ctx.pouVariables ?? []) {
+    const key = variable.name.toLowerCase()
+    if (!variablesByName.has(key)) variablesByName.set(key, variable)
+  }
+
+  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
+    const node = nodeById.get(nodeId)
+    if (!node) return undefined
+
+    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+      const variableData = node.data as { variable?: { name: string } }
+      const variableName = variableData.variable?.name
+      if (!variableName) return undefined
+
+      const variable = variablesByName.get(variableName.toLowerCase())
+      if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
+
+      const compositeKey = ctx.getCompositeKey(variableName)
+
+      if (ctx.forcedValues.has(compositeKey)) {
+        return ctx.forcedValues.get(compositeKey)
+      }
+
+      const value = ctx.boolValues.get(compositeKey)
+      if (value === undefined) return undefined
+
+      return value === '1' || value.toUpperCase() === 'TRUE'
+    }
+
+    if (node.type === 'block') {
+      const blockData = node.data as {
+        variable?: { name: string }
+        variant?: { name: string; type: string; variables: Array<{ name: string; type: { value: string } }> }
+      }
+      if (!sourceHandle) return undefined
+
+      if (!ctx.isFunctionBlockPou && !ctx.hasProgramInstance) return undefined
+
+      const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
+      if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined
+
+      if (blockData.variant?.type === 'function-block') {
+        const blockVariableName = blockData.variable?.name
+        if (!blockVariableName) return undefined
+
+        const compositeKey = ctx.getCompositeKey(`${blockVariableName}.${sourceHandle}`)
+        const value = ctx.boolValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        return value === '1' || value.toUpperCase() === 'TRUE'
+      } else if (blockData.variant?.type === 'function') {
+        const blockName = blockData.variant.name.toUpperCase()
+        const numericId = (node.data as { numericId?: string }).numericId
+        if (!numericId) return undefined
+
+        const compositeKey = ctx.getCompositeKey(`_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`)
+        const value = ctx.boolValues.get(compositeKey)
+
+        if (value === undefined) return undefined
+
+        return value === '1' || value.toUpperCase() === 'TRUE'
+      }
+
+      return undefined
+    }
+
+    return undefined
+  }
+
+  const isPassThroughNode = (node: FBDRungState['nodes'][number]): boolean => {
+    return node.type === 'connector' || node.type === 'continuation'
+  }
+
+  const edgeStates = new Map<string, boolean>()
+
+  const determineEdgeState = (edgeId: string, visited: Set<string>): boolean => {
+    if (edgeStates.has(edgeId)) {
+      return edgeStates.get(edgeId)!
+    }
+
+    if (visited.has(edgeId)) {
+      return false
+    }
+    visited.add(edgeId)
+
+    const edge = edgeById.get(edgeId)
+    if (!edge) {
+      visited.delete(edgeId)
+      return false
+    }
+
+    const sourceNode = nodeById.get(edge.source)
+    if (!sourceNode) {
+      visited.delete(edgeId)
+      return false
+    }
+
+    const incomingEdges = edgesByTarget.get(edge.source) ?? []
+    const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id, visited))
+
+    const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
+
+    const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
+
+    edgeStates.set(edgeId, isGreen)
+    visited.delete(edgeId)
+    return isGreen
+  }
+
+  edges.forEach((edge) => {
+    determineEdgeState(edge.id, new Set())
+  })
+
+  return edgeStates
+}
+
+const fbdEdgeStatesEqual = (previous: Map<string, boolean> | null, next: Map<string, boolean> | null): boolean =>
+  previous !== null && next !== null && mapsEqual(previous, next)
+
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   // Bound POU + editor model — every multi-mounted FBDBody reads
   // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
   // tab store mutations don't fire effects against the wrong flow.
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
-  const {
-    editorActions: { updateModelVariables },
-    fbdFlowActions,
-    libraries,
-    project,
-    projectActions: { deleteVariable },
-    modals,
-    modalActions: { closeModal, openModal },
-  } = useOpenPLCStore()
+  const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
+  const deleteVariable = useOpenPLCStore((state) => state.projectActions.deleteVariable)
+  const { closeModal, openModal } = useOpenPLCStore((state) => state.modalActions)
+  const blockElementModal = useOpenPLCStore((state) => state.modals['block-fbd-element'])
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
+  const hasProgramInstance = useOpenPLCStore((state) =>
+    state.project.data.configurations.resource.instances.some((instance) => instance.program === pouName),
+  )
   const isDebuggerVisible = useIsDebuggerVisible()
   const debugVariableValues = useDebugBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
   const { captureAndPush } = usePouSnapshot()
 
-  const { pous } = project.data
   const pouRef = pous.find((pou) => pou.name === pouName)
   const getCompositeKey = useDebugCompositeKey()
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
@@ -74,11 +229,14 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  const [insideViewport, setInsideViewport] = useState(false)
-  const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
+  // Refs, not state: the values are only read inside the paste handler, and
+  // state here re-rendered the whole FBDBody on every pointer move over the
+  // canvas (~75 commits/s of pure overhead while idle).
+  const insideViewportRef = useRef(false)
+  const mousePositionRef = useRef<XYPosition>({ x: 0, y: 0 })
   useFBDClipboard({
-    mousePosition,
-    insideViewport,
+    mousePositionRef,
+    insideViewportRef,
     reactFlowInstance,
     rung,
     viewportRef: reactFlowViewportRef,
@@ -103,138 +261,42 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
   // --- Debug edge coloring and node lockdown ---
 
-  const getNodeOutputState = (nodeId: string, sourceHandle: string | null | undefined): boolean | undefined => {
-    if (!isDebuggerVisible) return undefined
+  const debugEdgeStates = useMemo(
+    () =>
+      isDebuggerVisible
+        ? computeFBDEdgeStates(rungLocal.nodes, rungLocal.edges, {
+            isFunctionBlockPou: pouRef?.pouType === 'function-block',
+            hasProgramInstance,
+            getCompositeKey,
+            boolValues: debugVariableValues,
+            forcedValues: debugForcedVariables,
+            pouVariables: pouRef?.interface?.variables,
+          })
+        : null,
+    [
+      isDebuggerVisible,
+      rungLocal.nodes,
+      rungLocal.edges,
+      pouRef?.pouType,
+      hasProgramInstance,
+      getCompositeKey,
+      debugVariableValues,
+      debugForcedVariables,
+      pouRef?.interface?.variables,
+    ],
+  )
 
-    const node = rungLocal.nodes.find((n) => n.id === nodeId)
-    if (!node) return undefined
-
-    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
-      const variableData = node.data as { variable?: { name: string } }
-      const variableName = variableData.variable?.name
-      if (!variableName) return undefined
-
-      if (!pouRef) return undefined
-      const variable = (pouRef.interface?.variables ?? []).find(
-        (v) => v.name.toLowerCase() === variableName.toLowerCase(),
-      )
-      if (!variable || variable.type.value.toUpperCase() !== 'BOOL') return undefined
-
-      const compositeKey = getCompositeKey(variableName)
-
-      if (debugForcedVariables.has(compositeKey)) {
-        return debugForcedVariables.get(compositeKey)
-      }
-
-      const value = debugVariableValues.get(compositeKey)
-      if (value === undefined) return undefined
-
-      const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-      return isTrue
-    }
-
-    if (node.type === 'block') {
-      const blockData = node.data as {
-        variable?: { name: string }
-        variant?: { name: string; type: string; variables: Array<{ name: string; type: { value: string } }> }
-      }
-      if (!sourceHandle) return undefined
-
-      if (pouRef?.pouType !== 'function-block') {
-        const instances = project.data.configurations.resource.instances
-        const programInstance = instances.find((inst: { program: string }) => inst.program === pouName)
-        if (!programInstance) return undefined
-      }
-
-      const outputVariable = blockData.variant?.variables.find((v) => v.name === sourceHandle)
-      if (!outputVariable || outputVariable.type.value.toUpperCase() !== 'BOOL') return undefined
-
-      if (blockData.variant?.type === 'function-block') {
-        const blockVariableName = blockData.variable?.name
-        if (!blockVariableName) return undefined
-
-        const outputVariableName = `${blockVariableName}.${sourceHandle}`
-        const compositeKey = getCompositeKey(outputVariableName)
-        const value = debugVariableValues.get(compositeKey)
-
-        if (value === undefined) return undefined
-
-        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-        return isTrue
-      } else if (blockData.variant?.type === 'function') {
-        const blockName = blockData.variant.name.toUpperCase()
-        const numericId = (node.data as { numericId?: string }).numericId
-        if (!numericId) return undefined
-
-        const tempVarName = `_TMP_${blockName}${numericId}_${sourceHandle.toUpperCase()}`
-        const compositeKey = getCompositeKey(tempVarName)
-        const value = debugVariableValues.get(compositeKey)
-
-        if (value === undefined) return undefined
-
-        const isTrue = value === '1' || value.toUpperCase() === 'TRUE'
-        return isTrue
-      }
-
-      return undefined
-    }
-
-    return undefined
-  }
+  // Identity-stable across polls that didn't change this flow's edge states,
+  // so styledEdges keeps its identity and the canvas skips re-render.
+  const stableDebugEdgeStates = useContentStable(debugEdgeStates, fbdEdgeStatesEqual)
 
   const styledEdges = useMemo(() => {
-    if (!isDebuggerVisible) {
+    if (!stableDebugEdgeStates) {
       return rungLocal.edges
     }
 
-    const edgeStateMap = new Map<string, boolean>()
-
-    const isPassThroughNode = (node: (typeof rungLocal.nodes)[number]): boolean => {
-      return node.type === 'connector' || node.type === 'continuation'
-    }
-
-    const determineEdgeState = (edgeId: string, visited: Set<string> = new Set()): boolean => {
-      if (edgeStateMap.has(edgeId)) {
-        return edgeStateMap.get(edgeId)!
-      }
-
-      if (visited.has(edgeId)) {
-        return false
-      }
-      visited.add(edgeId)
-
-      const edge = rungLocal.edges.find((e) => e.id === edgeId)
-      if (!edge) {
-        visited.delete(edgeId)
-        return false
-      }
-
-      const sourceNode = rungLocal.nodes.find((n) => n.id === edge.source)
-      if (!sourceNode) {
-        visited.delete(edgeId)
-        return false
-      }
-
-      const incomingEdges = rungLocal.edges.filter((e) => e.target === edge.source)
-      const isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id, visited))
-
-      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle)
-
-      const isGreen = isPassThroughNode(sourceNode) ? isInputGreen : sourceOutputState === true
-
-      edgeStateMap.set(edgeId, isGreen)
-      visited.delete(edgeId)
-      return isGreen
-    }
-
-    rungLocal.edges.forEach((edge) => {
-      determineEdgeState(edge.id, new Set())
-    })
-
     return rungLocal.edges.map((edge) => {
-      const isGreen = edgeStateMap.get(edge.id)
-
-      if (isGreen === true) {
+      if (stableDebugEdgeStates.get(edge.id) === true) {
         return {
           ...edge,
           style: { stroke: EDGE_COLOR_TRUE, strokeWidth: 2 },
@@ -243,16 +305,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       return edge
     })
-  }, [
-    rungLocal.edges,
-    rungLocal.nodes,
-    isDebuggerVisible,
-    debugVariableValues,
-    debugForcedVariables,
-    pouName,
-    pouRef?.interface?.variables,
-    project.data.configurations.resource.instances,
-  ])
+  }, [rungLocal.edges, stableDebugEdgeStates])
 
   const styledNodes = useMemo(() => {
     if (isDebuggerActive) {
@@ -371,6 +424,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   ) => {
     captureAndPush(pouName)
 
+    const { libraries } = useOpenPLCStore.getState()
     let pouLibrary = undefined
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')
@@ -519,75 +573,69 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * This function is called every time the nodes change
    * It is used to update the local rung state
    */
-  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
-    (changes) => {
-      setRungLocal((newRung) => {
-        let nodes = newRung.nodes
-        let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
+  const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
+    setRungLocal((newRung) => {
+      let nodes = newRung.nodes
+      let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
 
-        changes.forEach((change) => {
-          switch (change.type) {
-            case 'select': {
-              const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
-              if (change.selected) {
-                selectedNodes.push(node)
-                return
-              }
-              selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+      changes.forEach((change) => {
+        switch (change.type) {
+          case 'select': {
+            const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
+            if (change.selected) {
+              selectedNodes.push(node)
               return
             }
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            return
+          }
 
-            case 'dimensions': {
-              if (change.resizing)
-                nodes = newRung.nodes.map((n) => {
-                  if (n.id === change.id) {
-                    return {
-                      ...n,
+          case 'dimensions': {
+            if (change.resizing)
+              nodes = newRung.nodes.map((n) => {
+                if (n.id === change.id) {
+                  return {
+                    ...n,
+                    width: change.dimensions?.width,
+                    height: change.dimensions?.height,
+                    measured: {
                       width: change.dimensions?.width,
                       height: change.dimensions?.height,
-                      measured: {
-                        width: change.dimensions?.width,
-                        height: change.dimensions?.height,
-                      },
-                    }
+                    },
                   }
-                  return n
-                })
-              return
-            }
+                }
+                return n
+              })
+            return
           }
-        })
-
-        return {
-          ...newRung,
-          nodes: applyNodeChanges(changes, nodes),
-          selectedNodes: selectedNodes,
         }
       })
-    },
-    [rungLocal, dragging],
-  )
 
-  const onEdgesChange: OnEdgesChange<FlowEdge> = useCallback(
-    (changes) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        edges: applyEdgeChanges(changes, rung.edges),
-      }))
-    },
-    [rungLocal, dragging],
-  )
+      return {
+        ...newRung,
+        nodes: applyNodeChanges(changes, nodes),
+        selectedNodes: selectedNodes,
+      }
+    })
+  })
 
-  const onNodeDragStart = useCallback(() => {
+  const onEdgesChange: OnEdgesChange<FlowEdge> = useStableCallback((changes) => {
+    setRungLocal((rung) => ({
+      ...rung,
+      edges: applyEdgeChanges(changes, rung.edges),
+    }))
+  })
+
+  const onNodeDragStart = useStableCallback(() => {
     captureAndPush(pouName)
     setDragging(true)
-  }, [rungLocal, dragging, captureAndPush, pouName])
+  })
 
   /**
    * When the node drag stops, update the fbd rung state
    */
-  const onNodeDragStop: OnNodeDrag = useCallback(
-    (_e, _node, nodes) => {
+  const onNodeDragStop = useStableCallback(
+    (_e: globalThis.MouseEvent | globalThis.TouchEvent, _node: FlowNode, nodes: FlowNode[]) => {
       setDragging(false)
       fbdFlowActions.setRung({
         editorName: pouName,
@@ -598,97 +646,75 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         },
       })
     },
-    [rungLocal, dragging],
   )
 
   /**
    * Handle the drag enter of the viewport
    * This function is called when a dragged element enters the viewport
    */
-  const onDragEnterViewport = useCallback<DragEventHandler>(
-    (event) => {
-      event.preventDefault()
-      // Check if the dragged element is not an FBD block (cross-browser compatible)
-      if (!isFbdBlockDrag(event.dataTransfer)) {
-        return
-      }
-    },
-    [reactFlowViewportRef],
-  )
+  const onDragEnterViewport = useStableCallback((event: DragEvent) => {
+    event.preventDefault()
+    // Check if the dragged element is not an FBD block (cross-browser compatible)
+    if (!isFbdBlockDrag(event.dataTransfer)) {
+      return
+    }
+  })
 
   /**
    * Handle the drag leave of the viewport
    * This function is called when a dragged element leaves the viewport
    */
-  const onDragLeaveViewport = useCallback<DragEventHandler>(
-    (event) => {
-      // Check if the dragged element is a child of the flow viewport
-      const { relatedTarget } = event
-      if (
-        !reactFlowViewportRef.current ||
-        !relatedTarget ||
-        reactFlowViewportRef.current.contains(relatedTarget as Node)
-      ) {
-        return
-      }
-    },
-    [reactFlowViewportRef],
-  )
+  const onDragLeaveViewport = useStableCallback((event: DragEvent) => {
+    // Check if the dragged element is a child of the flow viewport
+    const { relatedTarget } = event
+    if (
+      !reactFlowViewportRef.current ||
+      !relatedTarget ||
+      reactFlowViewportRef.current.contains(relatedTarget as Node)
+    ) {
+      return
+    }
+  })
 
   /**
    * Handle the drag over of the viewport
    * This function is called when a dragged element is over the viewport
    */
-  const onDragOver = useCallback<DragEventHandler>(
-    (event) => {
-      if (!reactFlowInstance) return
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-    },
-    [reactFlowInstance],
-  )
+  const onDragOver = useStableCallback((event: DragEvent) => {
+    if (!reactFlowInstance) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  })
 
   /**
    * Handle the drop of the viewport
    * This function is called when a dragged element is dropped in the viewport
    */
-  const onDrop = useCallback<DragEventHandler>(
-    (event) => {
-      event.preventDefault()
-      // Check if there is an FBD block in the dragged data (cross-browser compatible)
-      const blockType = getFbdBlockType(event.dataTransfer)
+  const onDrop = useStableCallback((event: DragEvent) => {
+    event.preventDefault()
+    // Check if there is an FBD block in the dragged data (cross-browser compatible)
+    const blockType = getFbdBlockType(event.dataTransfer)
 
-      if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
-        return
-      }
+    if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
+      return
+    }
 
-      // Check if there is a library in the dragged data
-      const library =
-        event.dataTransfer.getData('application/library') === ''
-          ? undefined
-          : event.dataTransfer.getData('application/library')
+    // Check if there is a library in the dragged data
+    const library =
+      event.dataTransfer.getData('application/library') === ''
+        ? undefined
+        : event.dataTransfer.getData('application/library')
 
-      const position = reactFlowInstance?.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      }) ?? {
-        x: 0,
-        y: 0,
-      }
+    const position = reactFlowInstance?.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    }) ?? {
+      x: 0,
+      y: 0,
+    }
 
-      handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
-    },
-    // `libraries.system`, `libraries.user`, and `pous` aren't read
-    // directly in onDrop's body — `handleAddElementByDropping` closes
-    // over all three.  Omitting any one means the memoized callback
-    // keeps a reference to the pre-update handler, so a freshly
-    // installed system library / freshly created user FB / freshly
-    // saved POU stays invisible until something else forces a re-bind
-    // (full project save resets `rung`, which is why "Save Project"
-    // used to mask this — and why catalog-installed libs threw
-    // "block type ... does not exist" on first drop).
-    [rung, reactFlowInstance, libraries.system, libraries.user, pous],
-  )
+    handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
+  })
 
   /**
    * Handle the double click of a node
@@ -699,6 +725,23 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
     openModal(modalToOpen, node)
   }
+
+  const onDelete = useStableCallback(({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
+    handleOnDelete(nodes, edges)
+  })
+  const onConnect = useStableCallback((connection: Connection) => {
+    handleOnConnect(connection)
+  })
+  const onNodeDoubleClick = useStableCallback((_event: MouseEvent, node: FlowNode) => {
+    handleNodeDoubleClick(node)
+  })
+
+  // Per-POU pattern id.  Without this, every <Background> SVG <pattern>
+  // shares the library default id="pattern"; SVG ids are document-scoped, so
+  // opening a second FBD POU makes its <rect fill="url(#pattern)"> resolve
+  // against the first instance's pattern and the grid disappears on the
+  // second editor.  Scoping by POU name keeps each grid independent.
+  const backgroundConfig = useMemo(() => ({ id: `fbd-bg-${pouName}` }), [pouName])
 
   /**
    * Handle the close of the modal
@@ -712,30 +755,22 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
       ref={reactFlowViewportRef}
       onMouseEnter={() => {
-        setInsideViewport(true)
+        insideViewportRef.current = true
       }}
       onMouseLeave={() => {
-        setInsideViewport(false)
-        setMousePosition({ x: 0, y: 0 })
+        insideViewportRef.current = false
+        mousePositionRef.current = { x: 0, y: 0 }
       }}
       onMouseMove={(event) => {
-        setMousePosition({ x: event.clientX, y: event.clientY })
+        mousePositionRef.current = { x: event.clientX, y: event.clientY }
       }}
     >
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}
-        // Per-POU pattern id.  Without this, every <Background> SVG
-        // <pattern> shares the library default id="pattern"; SVG ids
-        // are document-scoped, so opening a second FBD POU makes its
-        // <rect fill="url(#pattern)"> resolve against the first
-        // instance's pattern and the grid disappears on the second
-        // editor.  Scoping by POU name keeps each grid independent.
-        backgroundConfig={{ id: `fbd-bg-${pouName}` }}
+        backgroundConfig={backgroundConfig}
         controls={true}
-        controlsConfig={{
-          showInteractive: false,
-        }}
+        controlsConfig={CONTROLS_CONFIG}
         viewportConfig={{
           onInit: setReactFlowInstance,
 
@@ -743,29 +778,15 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           nodes: styledNodes,
           edges: styledEdges,
 
-          defaultEdgeOptions: {
-            type: 'smoothstep',
-          },
+          defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
 
           nodesDraggable: !isDebuggerActive,
           nodesConnectable: !isDebuggerActive,
           elementsSelectable: true,
 
-          onDelete: isDebuggerActive
-            ? undefined
-            : ({ nodes, edges }) => {
-                handleOnDelete(nodes, edges)
-              },
-          onConnect: isDebuggerActive
-            ? undefined
-            : (connection) => {
-                handleOnConnect(connection)
-              },
-          onNodeDoubleClick: isDebuggerActive
-            ? undefined
-            : (_event, node) => {
-                handleNodeDoubleClick(node)
-              },
+          onDelete: isDebuggerActive ? undefined : onDelete,
+          onConnect: isDebuggerActive ? undefined : onConnect,
+          onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
 
           onDragEnter: isDebuggerActive ? undefined : onDragEnterViewport,
           onDragLeave: isDebuggerActive ? undefined : onDragLeaveViewport,
@@ -782,19 +803,17 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           preventScrolling: canZoom,
           panOnDrag: canPan,
 
-          snapGrid: [16, 16],
+          snapGrid: SNAP_GRID,
           snapToGrid: true,
 
-          proOptions: {
-            hideAttribution: true,
-          },
+          proOptions: PRO_OPTIONS,
         }}
       />
-      {modals['block-fbd-element']?.open && (
+      {blockElementModal?.open && (
         <BlockElement
           onClose={handleModalClose}
-          selectedNode={modals['block-fbd-element'].data as BlockNode<object>}
-          isOpen={modals['block-fbd-element'].open}
+          selectedNode={blockElementModal.data as BlockNode<object>}
+          isOpen={blockElementModal.open}
         />
       )}
     </div>

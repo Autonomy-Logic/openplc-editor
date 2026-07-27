@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
+import { promisify } from 'node:util'
 
 import { app as electronApp } from 'electron'
 import { produce } from 'immer'
@@ -12,7 +14,10 @@ import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
+import { mergeSerialPortList } from './serial-port-list'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
+
+const execFileAsync = promisify(execFile)
 
 // interface MethodsResult<T> {
 //   success: boolean
@@ -94,22 +99,74 @@ class HardwareModule {
 
   // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<SerialPort[]> {
-    // Native `serialport` package replaces the legacy `xml2st
-    // --list-ports` subprocess (xml2st was retired when the JSON
-    // transpiler landed in-process; see
-    // `editor-compiler-platform-port.transpileToSt`).  `NodeSerialPort.list()`
-    // returns each port's `path` plus optional vendor metadata; map
-    // it onto the `{name, address}` shape the renderer expects.
+    // Two independent, best-effort scans merged by device path. The path is
+    // always the primary, unique label (mirrors the Arduino IDE); the
+    // parenthetical descriptor is the arduino-cli-identified board name when
+    // known, falling back to `serialport`'s manufacturer/vendor string. See
+    // `mergeSerialPortList` for the labelling rules. Running both scans is
+    // cheap here: the list is static after build and only re-scanned on an
+    // explicit user refresh.
+    const [boardNamesByPath, manufacturersByPath] = await Promise.all([
+      this.#identifyBoardsByPath(),
+      this.#listSerialPortManufacturers(),
+    ])
+    return mergeSerialPortList(boardNamesByPath, manufacturersByPath)
+  }
+
+  /**
+   * `serialport` enumeration → `path → manufacturer`. This is the reliable,
+   * instant, cross-platform source for the *set* of ports; arduino-cli only
+   * enriches it. Best-effort: any failure yields an empty map (never throws)
+   * so arduino-cli-discovered ports still come through.
+   */
+  async #listSerialPortManufacturers(): Promise<Map<string, string | undefined>> {
     try {
       const ports = await NodeSerialPort.list()
-      return ports.map((port) => ({
-        name: port.manufacturer ?? port.path,
-        address: port.path,
-      }))
+      return new Map(ports.map((port) => [port.path, port.manufacturer]))
     } catch (error: unknown) {
       logger.error(`Failed to enumerate serial ports: ${String(error)}`)
-      return []
+      return new Map()
     }
+  }
+
+  /**
+   * `arduino-cli board list --format json` → `path → board name`. arduino-cli
+   * matches each port's USB VID/PID against the installed cores' `boards.txt`
+   * — the exact identification the Arduino IDE surfaces (e.g. `Arduino Uno`,
+   * `Opta`). A detected-but-unmatched port maps to `undefined` (it will fall
+   * back to the manufacturer descriptor). Best-effort: a missing binary, no
+   * installed cores, a spawn error, or malformed JSON all yield an empty map
+   * so plain `serialport` enumeration still works. Reuses the same binary and
+   * `--config-file` as compile/upload, so it sees the same installed cores.
+   */
+  async #identifyBoardsByPath(): Promise<Map<string, string | undefined>> {
+    const boardNamesByPath = new Map<string, string | undefined>()
+    try {
+      let binaryPath = this.arduinoCliBinaryPath
+      if (HardwareModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+      const { stdout } = await execFileAsync(
+        binaryPath,
+        ['board', 'list', '--format', 'json', ...this.arduinoCliBaseParameters],
+        { timeout: 15_000, maxBuffer: 16 * 1024 * 1024 },
+      )
+
+      const parsed = JSON.parse(stdout) as {
+        detected_ports?: Array<{
+          matching_boards?: Array<{ name?: string }>
+          port?: { address?: string }
+        }>
+      }
+
+      for (const detected of parsed.detected_ports ?? []) {
+        const address = detected.port?.address
+        if (!address) continue
+        boardNamesByPath.set(address, detected.matching_boards?.[0]?.name)
+      }
+    } catch (error: unknown) {
+      logger.warn(`arduino-cli board list failed; serial ports will show without board names: ${String(error)}`)
+    }
+    return boardNamesByPath
   }
 
   /**

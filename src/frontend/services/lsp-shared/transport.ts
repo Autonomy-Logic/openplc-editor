@@ -26,7 +26,11 @@ import {
   BrowserMessageWriter,
   createMessageConnection,
   type MessageConnection,
-} from 'vscode-jsonrpc/browser'
+  // Import via the protocol package so the connection and the message types
+  // (InitializeRequest, DidOpen…, ParameterStructures) share ONE vscode-jsonrpc
+  // copy — a second copy fails ParameterStructures identity checks at runtime
+  // ("Unknown parameter structure byName"). See DOPE-505.
+} from 'vscode-languageserver-protocol/browser'
 
 export interface LspTransport {
   /** JSON-RPC connection.  Caller is responsible for `listen()`. */

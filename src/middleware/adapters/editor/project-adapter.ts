@@ -332,6 +332,22 @@ export function createEditorProjectAdapter(): ProjectPort {
         callback(data.filePath)
       })
     },
+
+    async pickPlcopenImportFile(): Promise<{ success: boolean; content?: string; error?: string }> {
+      const response = await window.bridge.pickPlcopenImportFile()
+      if (!response.success) {
+        return { success: false, error: response.error?.description }
+      }
+      return { success: true, content: response.content }
+    },
+
+    async exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }> {
+      const response = await window.bridge.exportPlcopenFile(defaultFileName, xml)
+      if (!response.success) {
+        return { success: false, error: response.error?.description }
+      }
+      return { success: true }
+    },
   }
 }
 

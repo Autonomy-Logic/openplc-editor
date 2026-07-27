@@ -11,7 +11,7 @@ import {
 } from '../../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
-import { getLiteralType } from '../../../../../utils/keywords'
+import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
@@ -54,14 +54,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     ref,
   ) => {
     const pouName = useBoundPou()
-    const {
-      project: {
-        data: { pous },
-      },
-      projectActions: { createVariable },
-      ladderFlows,
-      ladderFlowActions: { updateNode },
-    } = useOpenPLCStore()
+    const pous = useOpenPLCStore((state) => state.project.data.pous)
+    const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
+    const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
 
     const expectedType = expectedTypeForBlock(block, blockType)
 
@@ -84,9 +79,15 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }, [pouName, valueToSearch, expectedType, blockType, pous])
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-        nodeId: (block as Node<BasicNodeData>).id,
-      })
+      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(
+        pouName,
+        project.data.pous,
+        ladderFlows,
+        {
+          nodeId: (block as Node<BasicNodeData>).id,
+        },
+      )
       if (!rung || !variableNode) return
 
       updateNode({
@@ -143,13 +144,19 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
+      const { project, ladderFlows } = useOpenPLCStore.getState()
       if (!variableName.trim()) {
         // For variable nodes on block handles, clearing the name resets the variable
         // so that a branch (contacts/coils) can be placed on the handle instead.
         if (blockType === 'variable') {
-          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
-            nodeId: (block as Node<BasicNodeData>).id,
-          })
+          const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(
+            pouName,
+            project.data.pous,
+            ladderFlows,
+            {
+              nodeId: (block as Node<BasicNodeData>).id,
+            },
+          )
           if (rung && variableNode) {
             updateNode({
               editorName: pouName,
@@ -175,10 +182,25 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return
+
+      // If the entry can't be a new variable NAME — a member/array reference
+      // (`some_struct.field`, `arr[3]`), a typed literal (`T#500ms`), a reserved
+      // word, etc. — don't try to create a variable. Bind it to the node
+      // verbatim as a constant/reference; strucpp validates the expression. New
+      // local-variable creation is only for plain, legal identifiers.
+      if (!isLegalIdentifier(variableName)[0]) {
+        updateNode({
+          editorName: pouName,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: { ...node, data: { ...node.data, variable: { name: variableName } } },
+        })
+        return
+      }
 
       const variableType = newVariableTypeForExpected(expectedType)
 

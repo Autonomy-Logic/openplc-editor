@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { useDebugger } from '../../../../../middleware/shared/providers'
@@ -41,14 +41,9 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
   const pouName = useBoundPou()
-  const {
-    editorActions: { updateModelFBD },
-    fbdFlows,
-    fbdFlowActions: { updateNode },
-    project: {
-      data: { pous },
-    },
-  } = useOpenPLCStore()
+  const updateModelFBD = useOpenPLCStore((state) => state.editorActions.updateModelFBD)
+  const updateNode = useOpenPLCStore((state) => state.fbdFlowActions.updateNode)
+  const pous = useOpenPLCStore((state) => state.project.data.pous)
 
   const debugger_ = useDebugger()
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -87,7 +82,7 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Get the connection type
    */
-  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === pouName), [fbdFlows, pouName])
+  const flow = useOpenPLCStore((state) => state.fbdFlows.find((flow) => flow.name === pouName))
 
   const connections = useMemo(() => {
     const rung = flow?.rung
@@ -277,7 +272,7 @@ const VariableElement = (block: VariableProps) => {
 
   const getVariableType = (): string | undefined => {
     if (!data.variable || !data.variable.name) return undefined
-    const { pou } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, { nodeId: id })
+    const pou = pous.find((pou) => pou.name === pouName)
     if (!pou) return undefined
     const variable = (pou.interface?.variables ?? []).find(
       (v: PLCVariable) => v.name.toLowerCase() === data.variable.name.toLowerCase(),
@@ -421,7 +416,8 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
+    const { project, fbdFlows } = useOpenPLCStore.getState()
+    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, fbdFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return
@@ -700,4 +696,6 @@ const VariableElement = (block: VariableProps) => {
   )
 }
 
-export { VariableElement }
+const exportVariableElement = memo(VariableElement)
+
+export { exportVariableElement as VariableElement }

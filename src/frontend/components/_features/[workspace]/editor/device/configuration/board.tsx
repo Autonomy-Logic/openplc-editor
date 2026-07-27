@@ -251,6 +251,7 @@ const Board = memo(function () {
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
+  const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
@@ -555,6 +556,10 @@ const Board = memo(function () {
         setRuntimeConnectionStatus('error')
         return
       }
+
+      // Remember the runtime version so version-gated UI (e.g. User
+      // Management) can react to it for the lifetime of the connection.
+      setRuntimeVersion(result.runtimeVersion ?? null)
 
       // Validate runtime version matches the selected board target
       const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)

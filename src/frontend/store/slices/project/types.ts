@@ -137,6 +137,14 @@ export type ProjectActions = {
     rowId?: number
     variableId?: string
     variableName?: string
+    /**
+     * Global scope only. When a global is referenced as `VAR_EXTERNAL` by any
+     * POU, deletion is refused by default and the response carries the
+     * referencing POU names in `data.referencingPous`. Pass `force: true` to
+     * cascade-delete: remove the global AND the matching external declaration
+     * from every referencing POU.
+     */
+    force?: boolean
   }) => ProjectResponse
   rearrangeVariables: (args: {
     scope: 'global' | 'local'

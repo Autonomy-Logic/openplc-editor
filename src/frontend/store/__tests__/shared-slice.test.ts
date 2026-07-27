@@ -119,6 +119,12 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('POU already exists')
       })
 
+      it('rejects a POU name that is not a valid IEC identifier', () => {
+        const result = store.getState().pouActions.create({ type: 'program', name: 'Siren FC', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toContain("'Siren FC'")
+      })
+
       it('creates multiple POUs', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Prog1', language: 'st' })
         store.getState().pouActions.create({ type: 'function', name: 'Func1', language: 'il' })
@@ -180,6 +186,12 @@ describe('createSharedSlice', () => {
         expect(state.libraries.user).toHaveLength(0)
       })
 
+      it('flags the workspace dirty after delete (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.delete('Main')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('clears editor if current editor matches deleted POU', () => {
         // Main should be the current editor after create
         expect(store.getState().editor.meta.name).toBe('Main')
@@ -223,11 +235,22 @@ describe('createSharedSlice', () => {
         expect(state.libraries.user[0].name).toBe('NewName')
       })
 
+      it('flags the workspace dirty after rename (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.rename('OldName', 'NewName')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('returns error when new name already exists', () => {
         store.getState().pouActions.create({ type: 'function', name: 'Existing', language: 'st' })
         const result = store.getState().pouActions.rename('OldName', 'Existing')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('POU name already exists')
+      })
+
+      it('rejects renaming to a name with path separators (the deleting-function bug)', () => {
+        const result = store.getState().pouActions.rename('OldName', 'pous\\functions\\Siren FC')
+        expect(result.ok).toBe(false)
       })
 
       it('updates editor name if current editor matches old name', () => {
@@ -260,6 +283,12 @@ describe('createSharedSlice', () => {
         expect(state.files['Copy'].isNew).toBe(true)
       })
 
+      it('flags the workspace dirty after duplicate (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().pouActions.duplicate('Source', 'Copy')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('returns error when source POU does not exist', () => {
         const result = store.getState().pouActions.duplicate('NonExistent', 'Copy')
         expect(result.ok).toBe(false)
@@ -271,6 +300,11 @@ describe('createSharedSlice', () => {
         const result = store.getState().pouActions.duplicate('Source', 'Existing')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('POU name already exists')
+      })
+
+      it('rejects duplicating to an invalid IEC identifier', () => {
+        const result = store.getState().pouActions.duplicate('Source', 'bad name')
+        expect(result.ok).toBe(false)
       })
 
       it('duplicates a function and preserves returnType', () => {
@@ -446,6 +480,11 @@ describe('createSharedSlice', () => {
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type already exists')
       })
+
+      it('rejects a data type name that is not a valid IEC identifier', () => {
+        const result = store.getState().datatypeActions.create({ name: 'bad name', derivation: 'array' })
+        expect(result.ok).toBe(false)
+      })
     })
 
     // -----------------------------------------------------------------------
@@ -555,6 +594,12 @@ describe('createSharedSlice', () => {
         expect(state.files['CopyDT']).toBeDefined()
       })
 
+      it('flags the workspace dirty after duplicate (persist only on save)', () => {
+        store.getState().workspaceActions.setEditingState('saved')
+        store.getState().datatypeActions.duplicate('SourceDT', 'CopyDT')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('returns error when source data type does not exist', () => {
         const result = store.getState().datatypeActions.duplicate('NonExistent', 'Copy')
         expect(result.ok).toBe(false)
@@ -566,6 +611,11 @@ describe('createSharedSlice', () => {
         const result = store.getState().datatypeActions.duplicate('SourceDT', 'Existing')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
+      })
+
+      it('rejects duplicating to an invalid IEC identifier', () => {
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'bad name')
+        expect(result.ok).toBe(false)
       })
     })
   })
@@ -590,6 +640,13 @@ describe('createSharedSlice', () => {
     // -----------------------------------------------------------------------
     // deleteRequest
     // -----------------------------------------------------------------------
+    describe('create', () => {
+      it('rejects a server name that is not a valid IEC identifier', () => {
+        const result = store.getState().serverActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
+        expect(result.ok).toBe(false)
+      })
+    })
+
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with server elementType', () => {
         store.getState().serverActions.deleteRequest('Server1')
@@ -694,6 +751,13 @@ describe('createSharedSlice', () => {
     // -----------------------------------------------------------------------
     // deleteRequest
     // -----------------------------------------------------------------------
+    describe('create', () => {
+      it('rejects a remote device name that is not a valid IEC identifier', () => {
+        const result = store.getState().remoteDeviceActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
+        expect(result.ok).toBe(false)
+      })
+    })
+
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with remote-device elementType', () => {
         store.getState().remoteDeviceActions.deleteRequest('Device1')
@@ -931,6 +995,18 @@ describe('createSharedSlice', () => {
       it('returns error when the slave id does not exist', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'missing-slave', 'X')
         expect(result).toEqual({ ok: false, message: 'EtherCAT device not found' })
+      })
+
+      it('rejects an invalid IEC identifier for a SoftMotion (CiA 402) drive', () => {
+        addEthercatBus('bus3', [
+          { id: 'axis-1', name: 'X_Axis', cia402: { enabled: true, scaleNum: 1, scaleDenom: 1, scaleFactor: 1 } },
+        ] as never)
+        const bad = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'ASDA-A2-E')
+        expect(bad.ok).toBe(false)
+        expect(bad.message).toContain('valid axis name')
+        // A valid identifier is accepted.
+        const good = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'Y_Axis')
+        expect(good.ok).toBe(true)
       })
     })
   })

@@ -21,8 +21,7 @@
  *     `error.line` — which is the line in the per-POU `.st` file the
  *     editor's vars-text Monaco view roughly aligns with.  The slight
  *     offset that can creep in for multi-block variable lists is
- *     accepted as-is per the prior decision; we'll revisit when
- *     xml2st is retired.
+ *     accepted as-is per the prior decision.
  *
  *   • anything else (interface, no POU context, unknown POU)  →  open
  *     the POU tab if we can identify it, otherwise no-op.  Better

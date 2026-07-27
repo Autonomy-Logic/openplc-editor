@@ -377,7 +377,7 @@ describe('codeSysParseDataTypesToXML', () => {
     // `initialValue: { simpleValue: { value: '' } }` wrapper instead
     // of `undefined`.  The XML emitter must treat the empty inner
     // value the same as absence — otherwise it emits
-    // `<simpleValue value=""/>` which xml2st turns into a stray `:= `
+    // `<simpleValue value=""/>` which the ST generator turns into a stray `:= `
     // in the ST output, breaking compilation.
     it('omits initialValue for an array struct variable whose inner value is empty', () => {
       const xml = makeBaseXml()

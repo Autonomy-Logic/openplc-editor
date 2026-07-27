@@ -121,15 +121,17 @@ describe('buildDebugTree', () => {
   })
 
   describe('external variables', () => {
-    it('builds a leaf node for an external base-type variable using  prefix', () => {
+    it('builds a leaf node for an external base-type variable with a canonical global key', () => {
       const variable = makeBaseVariable('GLOBAL_FLAG', 'BOOL', 'external')
       const debugVars = [makeDebugVar('GLOBAL_FLAG', 'BOOL_ENUM', 5)]
       const projectData = { dataTypes: [], pous: [] }
 
       const node = buildDebugTree(variable, 'Main', INSTANCE_NAME, debugVars, projectData, SYSTEM_LIBS)
 
+      // fullPath resolves to the shared global; compositeKey is POU-independent
+      // (Config0:*) so the same global watched from any POU dedups to one entry.
       expect(node.fullPath).toBe('GLOBAL_FLAG')
-      expect(node.compositeKey).toBe('Main:GLOBAL_FLAG')
+      expect(node.compositeKey).toBe('Config0:GLOBAL_FLAG')
       expect(node.debugIndex).toBe(5)
       expect(node.isComplex).toBe(false)
     })

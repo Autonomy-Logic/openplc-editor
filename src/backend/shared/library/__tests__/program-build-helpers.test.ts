@@ -235,7 +235,7 @@ describe('enrichErrorWithPouContext', () => {
   })
 
   it('skips blank separator lines between END_VAR and the body', () => {
-    // The ST generators (`pou-text-serializer.ts` and xml2st on the
+    // The ST generators (`pou-text-serializer.ts` and the ST transpiler on the
     // compile path) insert blank lines after END_VAR for readability.
     // Those blanks live in the per-POU file the splitter feeds
     // strucpp but NOT in `pou.body.value`, which is what the body

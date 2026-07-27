@@ -202,6 +202,29 @@ describe('buildActiveIndexSet', () => {
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([])
     })
+
+    it('polls a program VAR_EXTERNAL watch by its canonical global key', () => {
+      const pou = makePou('Main', 'program', [makeVariable('SHARED', 'external', true)])
+      // The debug tree exposes the shared global under Config0:SHARED.
+      const allLeaves = new Map([[42, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
+      const state = makeState({ pous: [pou] })
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([42])
+    })
+
+    it('polls an FB VAR_EXTERNAL watch even with no instance selected (globals are instance-independent)', () => {
+      const fbPou = makePou('MyFB', 'function-block', [
+        makeVariable('SHARED', 'external', true),
+        makeVariable('OUT', 'output', true),
+      ])
+      const allLeaves = new Map([[7, [{ compositeKey: 'Config0:SHARED', type: 'INT' }]]])
+      const state = makeState({ pous: [fbPou] })
+
+      // OUT (local) is skipped for want of an instance; the external still polls.
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([7])
+    })
   })
 
   describe('forced variables', () => {
