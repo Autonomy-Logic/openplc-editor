@@ -297,15 +297,20 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     await scopeWarmReady
     const connection = serviceConnection
     if (!connection) return []
-    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === pouName)
+    const { project, projectActions } = openPLCStoreBase.getState()
+    const pou = project.data.pous.find((p) => p.name === pouName)
     if (!pou) return []
+    // Alias-bound locations must be resolved to literal `%…` addresses or the
+    // query doc's VAR block fails to parse and strucpp returns no candidates
+    // for the whole POU. See `serializePouScopeForQuery`.
+    const aliasIndex = projectActions.getAliasIndex()
 
     // Once warm, fresh per-query docs resolve instantly; a single short retry
     // covers a rare transient miss. Each attempt uses a unique URI + unique
     // synthetic POU name so docs never collide.
     for (let attempt = 0; attempt < SCOPE_QUERY_MAX_ATTEMPTS; attempt += 1) {
       const id = (scopeQuerySeq += 1)
-      const { text, position } = serializePouScopeForQuery(pou, prefix, id)
+      const { text, position } = serializePouScopeForQuery(pou, prefix, id, aliasIndex)
       const uri = `inmemory://scopequery/${id}.st`
       const items = await requestOnce(connection, uri, text, position)
       if (items.length > 0) return items
@@ -345,10 +350,11 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     }
     await new Promise((r) => setTimeout(r, SCOPE_WARMUP_INITIAL_DELAY_MS))
     for (let poll = 0; poll < SCOPE_WARMUP_MAX_POLLS; poll += 1) {
-      const pou = openPLCStoreBase.getState().project.data.pous[0]
+      const { project, projectActions } = openPLCStoreBase.getState()
+      const pou = project.data.pous[0]
       if (pou) {
         const id = (scopeQuerySeq += 1)
-        const { text, position } = serializePouScopeForQuery(pou, '', id)
+        const { text, position } = serializePouScopeForQuery(pou, '', id, projectActions.getAliasIndex())
         const uri = `inmemory://scopequery/warmup-${id}.st`
         const items = await requestOnce(connection, uri, text, position)
         if (items.length > 0) {
