@@ -2252,6 +2252,54 @@ class CompilerModule {
         `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
+
+      // --- Step 3: Forward the package signature so the runtime can verify ---
+      //
+      // checksum.sha256 above is a recompilation cache key, nothing more: we
+      // compute it over files we just copied, and it travels in the same upload
+      // as those files. It is self-attestation and the runtime treats it as
+      // such.
+      //
+      // The real provenance record is the package's own signature.json: an
+      // Ed25519 signature over a sha256-per-file map, produced by
+      // openplc-packages at publish time with a private key that never leaves
+      // CI. It sits at the package ROOT, so copying the plugin directory alone
+      // left it behind and the runtime had nothing to check the plugin against
+      // -- which is why editing the uploaded Makefile (adding a license_gate.c
+      // stub that always answers "licensed") used to compile and run.
+      //
+      // We forward it VERBATIM, whole, rather than a slice covering only the
+      // files that travel: the signature is over the canonical payload of the
+      // entire file, so a filtered map is not the thing that was signed and
+      // could never verify. `pluginDir` tells the runtime which subtree of that
+      // map the uploaded files correspond to; the runtime verifies the
+      // signature over the whole payload first, then compares hashes for the
+      // files it actually received.
+      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      let packageSignature: unknown
+      try {
+        packageSignature = JSON.parse(await readFile(packageSignaturePath, 'utf-8'))
+      } catch (err) {
+        // Fail loudly here rather than silently shipping an unverifiable
+        // plugin: the runtime refuses an upload whose vpp_plugin/ has no
+        // signature, so the user needs to know why before the upload fails.
+        handleOutputData(
+          `VPP package has no readable signature.json (${getErrorMessage(err)}). The runtime will ` +
+            `refuse this plugin -- re-install the package from a signed .vpp.`,
+          'error',
+        )
+        return
+      }
+
+      // POSIX separators: the signed hash map is keyed by POSIX-relative paths
+      // (package-signing.ts), and this string is prefixed onto those keys.
+      const signedPluginDir = pluginDirRelPath.replace(/\\/g, '/')
+      await writeFile(
+        join(sourceTargetFolderPath, 'vpp_signature.json'),
+        JSON.stringify({ pluginDir: signedPluginDir, package: packageSignature }, null, 2),
+        'utf-8',
+      )
+      handleOutputData(`Forwarded VPP package signature for ${signedPluginDir}`, 'info')
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
