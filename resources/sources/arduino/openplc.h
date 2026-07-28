@@ -81,10 +81,22 @@ extern "C" {
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
-// Raw I/O ops provided by the VPP's open HAL; gated by the license-core.
-// updateInput/OutputBuffers above come from the license-core .a (strong,
-// gated wrappers) or from a weak default (license_io_weak.cpp) that maps
-// them to these raw ops unenforced.
+// Raw I/O ops, declared for licensable VPP targets only. Two mutually
+// exclusive shapes exist and there is NO weak fallback for the wrappers:
+//   - Licensable VPP HAL: defines ONLY these raw ops. The gated
+//     updateInput/OutputBuffers above come from license_gate.c inside the
+//     closed license-core .a, which calls license_gate_actuation_allowed()
+//     and then hal_read_inputs / hal_write_outputs (or
+//     hal_disable_all_outputs when the demo has expired).
+//   - Every other HAL (bundled resources/sources/hal/*.cpp and unlicensed
+//     VPPs): defines updateInput/OutputBuffers itself and leaves these raw
+//     ops undeclared-but-unused. No gate is involved.
+// Consequence: dropping the license-core .a from a licensable VPP does not
+// silently degrade to unenforced I/O — the firmware fails to link with
+// undefined updateInputBuffers / updateOutputBuffers. The only weak defaults
+// shipped are license_gate_weak.cpp (gate query API -> UNSUPPORTED, actuation
+// allowed) and license_store_weak.cpp (blob store -> UNSUPPORTED), which keep
+// NON-licensable boards linking; neither provides these wrappers.
 void hal_read_inputs(void);
 void hal_write_outputs(void);
 void hal_disable_all_outputs(void);
