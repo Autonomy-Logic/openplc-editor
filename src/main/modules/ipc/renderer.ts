@@ -503,6 +503,8 @@ const rendererProcessBridge = {
     success: boolean
     probedAt: string
     outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+    activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     deviceId?: string
     vppId?: string
     anchorHex?: string

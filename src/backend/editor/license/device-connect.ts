@@ -162,6 +162,10 @@ export interface LegacyActivationOutcome {
   outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
   anchorHex?: string
   deviceId?: string
+  /** Carried verbatim from the probe so the network path can land the SAME
+   *  badge state the serial path does — `outcome` is too coarse for that. */
+  licenseStatus?: DeviceLicenseStatus
+  activation?: DeviceActivationSummary
   license?: { present: boolean }
   error?: string
 }
@@ -193,23 +197,48 @@ export function toLegacyActivationOutcome(result: DeviceConnectResult): LegacyAc
 function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOutcome {
   const anchorHex = result.anchorHex
   const deviceId = result.deviceId
+  // Passed through on every branch: the renderer decides what to show from
+  // these, not from `outcome`, which cannot express "storage unsupported" and
+  // "the backend never answered" as different things.
+  const carried = { licenseStatus: result.licenseStatus, activation: result.activation }
   switch (result.activation) {
     case 'already-licensed':
-      return { success: true, outcome: 'already-licensed', anchorHex, deviceId, license: { present: true } }
+      return { success: true, outcome: 'already-licensed', anchorHex, deviceId, ...carried, license: { present: true } }
     case 'activated':
-      return { success: true, outcome: 'activated', anchorHex, deviceId, license: { present: true } }
+      return { success: true, outcome: 'activated', anchorHex, deviceId, ...carried, license: { present: true } }
     case 'demo':
-      return { success: true, outcome: 'demo', anchorHex, deviceId }
+      return { success: true, outcome: 'demo', anchorHex, deviceId, ...carried }
     case 'unsupported':
-      return { success: true, outcome: 'error', anchorHex, deviceId, error: 'no on-device storage backend' }
+      return {
+        success: true,
+        outcome: 'error',
+        anchorHex,
+        deviceId,
+        ...carried,
+        error: 'no on-device storage backend',
+      }
     case 'error':
-      return { success: true, outcome: 'error', anchorHex, deviceId, error: result.error ?? 'License write failed' }
+      return {
+        success: true,
+        outcome: 'error',
+        anchorHex,
+        deviceId,
+        ...carried,
+        error: result.error ?? 'License write failed',
+      }
     default:
       // Reachable: `probeAndRecover` returns without `activation` when it has
       // no packageId to derive from (an empty string from the renderer passes
       // the `packageId: string` type — IPC arguments are not validated at the
       // boundary). Treated as an error rather than demo: we never asked the
       // backend anything, so we know nothing about this device's entitlement.
-      return { success: true, outcome: 'error', anchorHex, deviceId, error: 'no package id: cannot check licensing' }
+      return {
+        success: true,
+        outcome: 'error',
+        anchorHex,
+        deviceId,
+        ...carried,
+        error: 'no package id: cannot check licensing',
+      }
   }
 }

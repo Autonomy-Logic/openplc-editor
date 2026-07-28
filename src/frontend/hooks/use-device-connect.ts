@@ -69,6 +69,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const setDeviceProbeResult = useOpenPLCStore((s) => s.deviceActions.setDeviceProbeResult)
   const clearDeviceProbe = useOpenPLCStore((s) => s.deviceActions.clearDeviceProbe)
   const setSerialConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setSerialConnectionStatus)
+  const addLog = useOpenPLCStore((s) => s.consoleActions.addLog)
   const status = useOpenPLCStore((s) => s.serialConnection.status)
 
   // Mirror main-process link status (liveness failure, upload/debug handoff).
@@ -147,11 +148,16 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     })
 
     // Land the classification for the badge (main already ran the recover).
+    // `activation` + `error` travel with it: without them the badge cannot tell
+    // a confirmed "no license" from a check that never got an answer, and the
+    // main process's careful distinction dies here.
     setDeviceProbeResult({
       status: result.status,
       anchorHex: result.anchorHex,
       deviceId: result.deviceId,
       licenseStatus: result.licenseStatus,
+      activation: result.activation,
+      error: result.error,
     })
 
     if (result.status === 'no-response') {
@@ -215,14 +221,32 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
    * own persistent connection (login + JWT + polling), so this is a transient
    * probe + recover over the debug WebSocket — not a held link. Runs the same
    * 0x48 -> derive -> backend -> 0x49 recover the serial path does and lands the
-   * result in the FULL/DEMO badge. A runtime that doesn't answer the license FCs
-   * (plugin not loaded yet / debugger disabled) leaves the badge cleared rather
-   * than showing a misleading state (Q-B: runtime failures are connectivity).
+   * result in the license badge.
+   *
+   * What separates "clear the badge" from "show a state" (Q-B, refined): if the
+   * device answered at all, whatever it said is landed — including a failed
+   * check. The badge is only cleared when we never got a device-level answer
+   * (no firmware on 0x48, or the transport died), because that is connectivity,
+   * not a license state. Clearing on a FAILED CHECK was the bug: it made the
+   * main process's error-vs-demo distinction invisible, trading a wrong prompt
+   * for silence.
    */
   const checkRuntimeLicense = useCallback(async (): Promise<void> => {
     const caps = resolveTargetCapabilities(boardInfo)
+    if (!caps.isLicensable) return
     const packageId = boardInfo?.vpp?.packageId
-    if (!caps.isLicensable || !packageId) return
+    if (!packageId) {
+      // A licensable board whose VPP declares no packageId: we cannot ask the
+      // backend anything, so the badge would be a guess. Nothing to show the
+      // user, but it IS a packaging defect — leave a trail instead of vanishing.
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'error',
+        message:
+          'License check skipped: this board is licensable but its VPP declares no package id. The badge cannot be determined.',
+      })
+      return
+    }
     const rt = useOpenPLCStore.getState().runtimeConnection
     if (!rt.ipAddress || !rt.jwtToken) return
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
@@ -233,20 +257,26 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       { packageId, keyId: boardInfo?.vpp?.licenseKeyId },
     )
 
-    if (act.outcome === 'no-id' || act.outcome === 'error') {
+    // No device-level answer -> connectivity, not a license state.
+    if (act.outcome === 'no-id' || !act.activation) {
       clearDeviceProbe()
       return
     }
 
-    const licensed = act.outcome === 'already-licensed' || act.outcome === 'activated'
+    // Land exactly what the device/backend concluded — the same fields, with the
+    // same meanings, the serial path lands. This is also what makes the two
+    // paths agree on `unsupported` instead of one showing "License unknown" and
+    // the other showing nothing at all.
     setDeviceProbeResult({
       status: 'connected-with-firmware',
       anchorHex: act.anchorHex,
       deviceId: act.deviceId,
-      licenseStatus: licensed ? 'licensed' : 'unlicensed',
+      licenseStatus: act.licenseStatus,
+      activation: act.activation,
+      error: act.error,
     })
 
-    if (act.outcome === 'demo') {
+    if (act.activation === 'demo') {
       openModal('debugger-message', {
         type: 'warning',
         title: 'License Required',
@@ -257,7 +287,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
         },
       })
     }
-  }, [boardInfo, device, startDeviceProbe, setDeviceProbeResult, clearDeviceProbe, openModal, buyLicense])
+  }, [boardInfo, device, startDeviceProbe, setDeviceProbeResult, clearDeviceProbe, openModal, buyLicense, addLog])
 
   return {
     connect,

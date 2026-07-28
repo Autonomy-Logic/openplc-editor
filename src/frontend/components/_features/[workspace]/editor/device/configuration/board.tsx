@@ -64,6 +64,27 @@ function ShieldUnlicensedIcon({ size = 14 }: { size?: number }) {
   )
 }
 
+/** Outline shield + question mark — "the check failed, so we don't know". */
+function ShieldUnknownIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      viewBox='0 0 24 24'
+      width={size}
+      height={size}
+      fill='none'
+      stroke='currentColor'
+      strokeWidth='1.7'
+      strokeLinecap='round'
+      strokeLinejoin='round'
+      className='flex-none'
+    >
+      <path d='M12 2l8 3v6.5c0 5-3.4 8.2-8 9.5-4.6-1.3-8-4.5-8-9.5V5l8-3z' />
+      <path d='M10.4 9.6a1.7 1.7 0 113.2.8c0 1.1-1.6 1.4-1.6 2.6' />
+      <path d='M12 16.1h.01' />
+    </svg>
+  )
+}
+
 /** Truncate a long hex identifier for display: `a1b2c3d4…e5f6`. */
 function shortHex(hex: string): string {
   return hex.length > 14 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex
@@ -132,6 +153,12 @@ function CopyableHex({ value, label }: { value: string; label: string }) {
  * gate's runtime signature/binding verdict; those agree in practice, but a
  * tampered/foreign blob could read "Licensed" here while the device still runs
  * demo. Surfacing the gate verdict over the wire is a separate improvement.
+ *
+ * THREE distinct states, deliberately not two: "Not licensed" is an ANSWER (the
+ * backend has no license for this device), while "License check failed" is the
+ * ABSENCE of one (throttled, signer unconfigured, network down). Collapsing them
+ * either tells a paying customer to buy again, or — as this component used to do
+ * by rendering nothing — says nothing at all.
  */
 function DeviceLicenseStatus({
   probeInfo,
@@ -151,7 +178,7 @@ function DeviceLicenseStatus({
     return <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
   }
 
-  const { licenseStatus, anchorHex, deviceId } = probeInfo.result
+  const { licenseStatus, anchorHex, deviceId, activation, error } = probeInfo.result
 
   // Firmware doesn't support the licensing FCs — we genuinely can't tell.
   if (licenseStatus === 'unsupported') {
@@ -166,6 +193,8 @@ function DeviceLicenseStatus({
   }
 
   const licensed = licenseStatus === 'licensed'
+  /** The check never returned an answer — do NOT present this as "no license". */
+  const checkFailed = activation === 'error'
 
   return (
     <Popover.Root>
@@ -180,9 +209,15 @@ function DeviceLicenseStatus({
               : 'text-neutral-700 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white',
           )}
         >
-          {licensed ? <ShieldLicensedIcon size={10} /> : <ShieldUnlicensedIcon size={10} />}
+          {checkFailed ? (
+            <ShieldUnknownIcon size={10} />
+          ) : licensed ? (
+            <ShieldLicensedIcon size={10} />
+          ) : (
+            <ShieldUnlicensedIcon size={10} />
+          )}
           <span className={cn(!licensed && 'border-b border-dashed border-neutral-400 dark:border-neutral-700')}>
-            {licensed ? 'Licensed' : 'Not licensed'}
+            {checkFailed ? 'License check failed' : licensed ? 'Licensed' : 'Not licensed'}
           </span>
         </button>
       </Popover.Trigger>
@@ -195,14 +230,21 @@ function DeviceLicenseStatus({
         >
           <div className='flex items-center gap-2.5'>
             <span className='flex h-[30px] w-[30px] flex-none items-center justify-center rounded-md border border-neutral-100 text-neutral-950 dark:border-neutral-850 dark:text-white'>
-              {licensed ? <ShieldLicensedIcon /> : <ShieldUnlicensedIcon />}
+              {checkFailed ? <ShieldUnknownIcon /> : licensed ? <ShieldLicensedIcon /> : <ShieldUnlicensedIcon />}
             </span>
-            <div>
+            <div className='min-w-0'>
               <p className='font-caption text-cp-base font-semibold text-neutral-950 dark:text-white'>
-                {licensed ? 'Licensed' : 'Not licensed'}
+                {checkFailed ? 'License check failed' : licensed ? 'Licensed' : 'Not licensed'}
               </p>
-              <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-                {licensed ? 'Full version unlocked' : 'Running in demo mode'}
+              {/* On failure the reason IS the useful part: a 429 means try again,
+                  a 503 means the service is down, a network error means check the
+                  connection. Hiding it would leave the user with no next step. */}
+              <p className='break-words font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
+                {checkFailed
+                  ? (error ?? 'Could not reach the licensing service.')
+                  : licensed
+                    ? 'Full version unlocked'
+                    : 'Running in demo mode'}
               </p>
             </div>
           </div>
@@ -238,25 +280,29 @@ function DeviceLicenseStatus({
             )}
           </dl>
 
+          {/* Emphasis follows what we actually know. On a failed check, Re-check
+              is the primary action and Buy stays available but demoted: pushing a
+              purchase when the entitlement is UNKNOWN is how someone ends up
+              paying twice for the same device. */}
           <div className='mt-4 flex gap-2'>
             {!licensed && (
               <button
                 type='button'
-                onClick={onBuy}
+                onClick={checkFailed ? onRecheck : onBuy}
                 className='flex-1 rounded-md bg-brand px-3 py-1.5 font-caption text-cp-sm font-semibold text-white hover:bg-brand-medium-dark'
               >
-                Buy license
+                {checkFailed ? 'Re-check' : 'Buy license'}
               </button>
             )}
             <button
               type='button'
-              onClick={onRecheck}
+              onClick={checkFailed ? onBuy : onRecheck}
               className={cn(
                 'rounded-md border border-neutral-100 px-3 py-1.5 font-caption text-cp-sm font-semibold text-neutral-800 hover:bg-neutral-100 dark:border-neutral-850 dark:text-neutral-300 dark:hover:bg-neutral-900',
                 licensed && 'flex-1',
               )}
             >
-              Re-check
+              {checkFailed ? 'Buy license' : 'Re-check'}
             </button>
           </div>
         </Popover.Content>

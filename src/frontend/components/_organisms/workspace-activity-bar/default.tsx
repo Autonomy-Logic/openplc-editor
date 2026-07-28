@@ -407,6 +407,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 anchorHex: reconnect.anchorHex,
                 deviceId: reconnect.deviceId,
                 licenseStatus: reconnect.licenseStatus,
+                activation: reconnect.activation,
+                error: reconnect.error,
               })
             } catch {
               // best-effort: the user can press Connect again.

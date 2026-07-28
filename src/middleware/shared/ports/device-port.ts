@@ -50,6 +50,16 @@ export interface DeviceProbeResult {
   deviceId?: string
   /** On-device license state — only present for a licensable connected device. */
   licenseStatus?: DeviceLicenseStatus
+  /**
+   * What the license check CONCLUDED, which is not the same question as
+   * `licenseStatus` (what is stored on the device). The pair that matters:
+   * `unlicensed` + `demo` means the backend confirmed there is no license,
+   * while `unlicensed` + `error` means we never got an answer — the request was
+   * throttled, the signer was unconfigured, the network was down. Telling those
+   * apart is the difference between "buy a license" and "we could not check".
+   */
+  activation?: DeviceActivationSummary
+  /** Transport/backend failure text when `activation === 'error'`. */
   error?: string
 }
 
@@ -93,6 +103,14 @@ export interface DeviceActivationResult {
   success: boolean
   probedAt: string
   outcome: DeviceActivationOutcome
+  /**
+   * The same two fields the serial connect result carries. `outcome` alone is
+   * lossy — it folds "no on-device storage" and "the backend never answered"
+   * into a single `'error'`, which is why the network path used to show a
+   * different (or blank) badge than serial for the same device.
+   */
+  licenseStatus?: DeviceLicenseStatus
+  activation?: DeviceActivationSummary
   deviceId?: string
   vppId?: string
   anchorHex?: string

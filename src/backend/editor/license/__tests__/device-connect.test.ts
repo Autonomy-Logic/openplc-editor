@@ -202,7 +202,14 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         licenseStatus: 'licensed',
         activation: 'already-licensed',
       }),
-    ).toEqual({ success: true, outcome: 'already-licensed', anchorHex: '01020304', license: { present: true } })
+    ).toEqual({
+      success: true,
+      outcome: 'already-licensed',
+      anchorHex: '01020304',
+      licenseStatus: 'licensed',
+      activation: 'already-licensed',
+      license: { present: true },
+    })
   })
 
   it('maps activated to success:true with license.present', () => {
@@ -213,7 +220,14 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         licenseStatus: 'licensed',
         activation: 'activated',
       }),
-    ).toEqual({ success: true, outcome: 'activated', anchorHex: '01020304', license: { present: true } })
+    ).toEqual({
+      success: true,
+      outcome: 'activated',
+      anchorHex: '01020304',
+      licenseStatus: 'licensed',
+      activation: 'activated',
+      license: { present: true },
+    })
   })
 
   it('maps demo to success:true without a license field', () => {
@@ -224,7 +238,13 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         licenseStatus: 'unlicensed',
         activation: 'demo',
       }),
-    ).toEqual({ success: true, outcome: 'demo', anchorHex: '01020304' })
+    ).toEqual({
+      success: true,
+      outcome: 'demo',
+      anchorHex: '01020304',
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+    })
   })
 
   it('maps unsupported to success:true, outcome:error (business state, not a transport failure)', () => {
@@ -235,7 +255,14 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         licenseStatus: 'unsupported',
         activation: 'unsupported',
       }),
-    ).toEqual({ success: true, outcome: 'error', anchorHex: '01020304', error: 'no on-device storage backend' })
+    ).toEqual({
+      success: true,
+      outcome: 'error',
+      anchorHex: '01020304',
+      licenseStatus: 'unsupported',
+      activation: 'unsupported',
+      error: 'no on-device storage backend',
+    })
   })
 
   // The runtime-v4 (WebSocket) license check reaches the license popover through
@@ -265,6 +292,13 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
         activation: 'error',
         error: 'crc mismatch',
       }),
-    ).toEqual({ success: true, outcome: 'error', anchorHex: '01020304', error: 'crc mismatch' })
+    ).toEqual({
+      success: true,
+      outcome: 'error',
+      anchorHex: '01020304',
+      licenseStatus: 'unlicensed',
+      activation: 'error',
+      error: 'crc mismatch',
+    })
   })
 })

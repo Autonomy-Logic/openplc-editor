@@ -11,6 +11,7 @@ const mockSetDeviceProbeResult = jest.fn((result: unknown) => {
 })
 const mockClearDeviceProbe = jest.fn()
 const mockSetSerialConnectionStatus = jest.fn()
+const mockAddLog = jest.fn()
 
 /** A real derived device id (32 hex) — the `/buy` page rejects anything else. */
 const DEVICE_ID = '7146518f9842adacfadc731ee7f546e5'
@@ -21,6 +22,7 @@ const mockState: Record<string, unknown> = {
   runtimeConnection: { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' },
   deviceProbeInfo: { phase: 'idle', result: null },
   modalActions: { openModal: mockOpenModal },
+  consoleActions: { addLog: mockAddLog },
   deviceActions: {
     startDeviceProbe: mockStartDeviceProbe,
     setDeviceProbeResult: mockSetDeviceProbeResult,
@@ -186,6 +188,29 @@ describe('useDeviceConnect', () => {
     expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
   })
 
+  // The main process distinguishes a transport/backend failure from a confirmed
+  // "no license". If the renderer drops `activation`/`error` on the way to the
+  // store, the badge cannot tell them apart and that work is wasted.
+  it('carries the failed-check verdict into the store instead of dropping it', async () => {
+    mockConnect.mockResolvedValue({
+      status: 'connected-with-firmware',
+      licenseStatus: 'unlicensed',
+      activation: 'error',
+      deviceId: DEVICE_ID,
+      error: 'Activation request failed: 503 Service Unavailable',
+    })
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+    expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activation: 'error',
+        error: 'Activation request failed: 503 Service Unavailable',
+      }),
+    )
+    // And no buy prompt: we never learned whether this device is entitled.
+    expect(mockOpenModal).not.toHaveBeenCalled()
+  })
+
   it('disconnect closes the held link and clears the probe', async () => {
     const { result } = renderHook(() => useDeviceConnect(board))
     await result.current.disconnect()
@@ -250,7 +275,14 @@ describe('useDeviceConnect', () => {
     })
 
     it('activates over the WebSocket and lands FULL when already licensed', async () => {
-      mockActivateLicense.mockResolvedValue({ success: true, probedAt: 't', outcome: 'already-licensed', anchorHex: 'aa' })
+      mockActivateLicense.mockResolvedValue({
+        success: true,
+        probedAt: 't',
+        outcome: 'already-licensed',
+        licenseStatus: 'licensed',
+        activation: 'already-licensed',
+        anchorHex: 'aa',
+      })
       const { result } = renderHook(() => useDeviceConnect(board))
       await result.current.checkRuntimeLicense()
       expect(mockActivateLicense).toHaveBeenCalledWith(
@@ -260,13 +292,23 @@ describe('useDeviceConnect', () => {
       expect(mockSetDeviceProbeResult).toHaveBeenCalledWith({
         status: 'connected-with-firmware',
         anchorHex: 'aa',
+        deviceId: undefined,
         licenseStatus: 'licensed',
+        activation: 'already-licensed',
+        error: undefined,
       })
       expect(mockOpenModal).not.toHaveBeenCalled()
     })
 
     it('lands DEMO and prompts Buy on a demo outcome', async () => {
-      mockActivateLicense.mockResolvedValue({ success: true, probedAt: 't', outcome: 'demo', deviceId: DEVICE_ID })
+      mockActivateLicense.mockResolvedValue({
+        success: true,
+        probedAt: 't',
+        outcome: 'demo',
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+        deviceId: DEVICE_ID,
+      })
       const { result } = renderHook(() => useDeviceConnect(board))
       await result.current.checkRuntimeLicense()
       expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(
@@ -286,6 +328,74 @@ describe('useDeviceConnect', () => {
       await result.current.checkRuntimeLicense()
       expect(mockClearDeviceProbe).toHaveBeenCalled()
       expect(mockSetDeviceProbeResult).not.toHaveBeenCalled()
+    })
+
+    // The regression this pass fixes: the device DID answer, the licensing
+    // service did not. Clearing the badge here turned a wrong prompt into
+    // silence — the user saw nothing at all and had no way to retry.
+    it('lands a failed check instead of clearing the badge', async () => {
+      mockActivateLicense.mockResolvedValue({
+        success: true,
+        probedAt: 't',
+        outcome: 'error',
+        licenseStatus: 'unlicensed',
+        activation: 'error',
+        deviceId: DEVICE_ID,
+        error: 'Activation request failed: 429 Too Many Requests',
+      })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.checkRuntimeLicense()
+      expect(mockClearDeviceProbe).not.toHaveBeenCalled()
+      expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          licenseStatus: 'unlicensed',
+          activation: 'error',
+          error: 'Activation request failed: 429 Too Many Requests',
+        }),
+      )
+      // A failed check is not a missing purchase: do NOT prompt to buy.
+      expect(mockOpenModal).not.toHaveBeenCalled()
+    })
+
+    // Same physical device, same conclusion, same badge — this used to show
+    // "License unknown" on serial and nothing at all over the network.
+    it('lands unsupported storage the same way the serial path does', async () => {
+      mockActivateLicense.mockResolvedValue({
+        success: true,
+        probedAt: 't',
+        outcome: 'error',
+        licenseStatus: 'unsupported',
+        activation: 'unsupported',
+        error: 'no on-device storage backend',
+      })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.checkRuntimeLicense()
+      expect(mockClearDeviceProbe).not.toHaveBeenCalled()
+      expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(
+        expect.objectContaining({ licenseStatus: 'unsupported', activation: 'unsupported' }),
+      )
+    })
+
+    // A transport that died before reaching the device carries no `activation`.
+    // That is connectivity, not a license state, so the badge still clears.
+    it('still clears when the transport failed before any device answer', async () => {
+      mockActivateLicense.mockResolvedValue({ success: false, probedAt: 't', outcome: 'error', error: 'socket closed' })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.checkRuntimeLicense()
+      expect(mockClearDeviceProbe).toHaveBeenCalled()
+      expect(mockSetDeviceProbeResult).not.toHaveBeenCalled()
+    })
+
+    // Used to return with no probe, no log, no badge — indistinguishable from
+    // "everything is fine" while a packaging defect went unreported.
+    it('logs instead of vanishing when a licensable board declares no package id', async () => {
+      const noPackage = { debug: {}, vpp: {} } as unknown as BoardInfo
+      const { result } = renderHook(() => useDeviceConnect(noPackage))
+      await result.current.checkRuntimeLicense()
+      expect(mockActivateLicense).not.toHaveBeenCalled()
+      expect(mockAddLog).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'error', message: expect.stringContaining('no package id') }),
+      )
     })
   })
 })
