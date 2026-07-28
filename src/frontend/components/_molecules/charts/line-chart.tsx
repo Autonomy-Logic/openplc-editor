@@ -46,7 +46,10 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
     return {
       chart: {
         id: chartId,
-        animations: { enabled: true, easing: 'linear' as const, dynamicAnimation: { speed: 500 } },
+        // ctx.update() clears and rebuilds the whole SVG on every update. Tweening that rebuild replays partial
+        // states through rAF, which is what reads as flicker — so redraw atomically and let the sample rate
+        // (RENDER_INTERVAL_MS in the debugger) carry the motion instead.
+        animations: { enabled: false },
         toolbar: { show: false },
         zoom: { enabled: false },
         background: 'transparent',
@@ -81,7 +84,8 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
         xaxis: { lines: { show: false } },
         yaxis: { lines: { show: true } },
       },
-      stroke: { curve: isBool ? ('stepline' as const) : ('smooth' as const), width: 2 },
+      // Debug values are sampled per scan, so hold each value until the next sample and jump vertically.
+      stroke: { curve: 'stepline' as const, width: 2 },
       tooltip: { enabled: false },
       states: {
         hover: { filter: { type: 'none' } },
