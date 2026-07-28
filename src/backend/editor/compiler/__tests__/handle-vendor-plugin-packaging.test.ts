@@ -60,6 +60,32 @@ function makeManifest(hal: Record<string, unknown>) {
 }
 
 /**
+ * `BoardInfoResolver.resolve` only classifies a device as `source: 'vpp'`
+ * once it can read `manifest.package.id` (board-info-resolver.ts:290) — the
+ * bare `makeManifest()` above omits `package` entirely, so `super.resolve()`
+ * throws internally and `verifyBoardPackage` treats that as "can't tell,
+ * don't block" (its own documented contract), not as untrusted. That's why
+ * every other test in this file passes despite `signature.json` never
+ * holding a real signature: the verify guard never actually engages for
+ * them. This variant supplies `package.id` so the resolver CAN classify the
+ * board as VPP-sourced and therefore genuinely run `verifyPackageSignature`
+ * against the on-disk (fake, non-cryptographic) signature.
+ */
+function makeVerifiableManifest(hal: Record<string, unknown>, packageId: string) {
+  return {
+    package: { id: packageId },
+    devices: [
+      {
+        name: BOARD,
+        target: { type: 'runtime-v4' },
+        hal,
+        moduleSystem: undefined,
+      },
+    ],
+  }
+}
+
+/**
  * The package's `signature.json`, as openplc-packages emits it: payload plus a
  * detached Ed25519 signature. The bytes here are not a real signature and are
  * not verified by anything in this test — what is under test is that the file
@@ -230,23 +256,73 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
       expect(sidecar.pluginDir).toBe('hal/runtime-v4/plugin')
     })
 
-    it('reports an error and writes no sidecar when the package is unsigned', async () => {
+    it('throws and writes no sidecar when the package is unsigned', async () => {
       rmSync(join(pkgDir, 'signature.json'))
 
-      await runFor({
-        type: 'runtime-v4-plugin',
-        pluginType: 'native',
-        provisioning: 'prebuilt',
-        pluginEntry: 'hal/runtime-v4/plugin',
-        configTemplate: 'hal/runtime-v4/plugin/config_template.json',
-      })
+      // Must actually abort the build, not just log and continue: a caught-
+      // and-logged-only failure here used to mean the packager returned
+      // normally, `packageVppPlugin` (editor-compiler-platform-port.ts) saw no
+      // thrown error, and the pipeline's `if (vppResult.errors...) bailError`
+      // — which is correct and needs no change — never fired. The result was
+      // a build that silently shipped with no VPP driver at all.
+      await expect(
+        runFor({
+          type: 'runtime-v4-plugin',
+          pluginType: 'native',
+          provisioning: 'prebuilt',
+          pluginEntry: 'hal/runtime-v4/plugin',
+          configTemplate: 'hal/runtime-v4/plugin/config_template.json',
+        }),
+      ).rejects.toThrow(/runtime will refuse/)
 
       expect(existsSync(join(targetDir, 'vpp_signature.json'))).toBe(false)
       // The runtime will refuse this upload; the user has to be told why here,
-      // where the cause (an unsigned package) is still visible.
+      // where the cause (an unsigned package) is still visible — the thrown
+      // error surfaces in the structured `errors` array, but this log line is
+      // what the user watches scroll by in real time during the build.
       const error = logs.find((l) => l.level === 'error' && /signature\.json/.test(l.message))
       expect(error).toBeDefined()
       expect(error?.message).toMatch(/runtime will refuse/)
+    })
+  })
+
+  describe('board-package signature verification (defense in depth)', () => {
+    /**
+     * `compileProgram`/`compileForDebugger` already gate the whole build on
+     * `VerifiedBoardInfoResolver` before this ever runs, so an untrusted
+     * package reaching here is not a live path today. This proves the
+     * second, independent gate this function now carries on its own: if it
+     * is ever reached with a package whose signature does not verify, it
+     * refuses BEFORE touching the filesystem, rather than trusting that the
+     * caller already checked.
+     */
+    it('refuses and copies nothing when the board package fails signature verification', async () => {
+      listInstalled.mockReturnValue([{ packageId: 'com.openplc.rpi', path: pkgDir }])
+      getInstalledPackageManifest.mockReturnValue(
+        makeVerifiableManifest(
+          {
+            type: 'runtime-v4-plugin',
+            pluginType: 'native',
+            provisioning: 'prebuilt',
+            pluginEntry: 'hal/runtime-v4/plugin',
+            configTemplate: 'hal/runtime-v4/plugin/config_template.json',
+          },
+          'com.openplc.rpi',
+        ),
+      )
+
+      await expect(
+        handler.call({} as CompilerModule, BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
+          logs.push({ message: String(message), level: level ?? '' })
+        }),
+      ).rejects.toThrow(/Refusing to build/)
+
+      // Refused before any of the copy/checksum/signature-forwarding steps —
+      // nothing should exist under vpp_plugin/ or the sidecar signature file.
+      expect(existsSync(join(targetDir, 'vpp_plugin'))).toBe(false)
+      expect(existsSync(join(targetDir, 'vpp_signature.json'))).toBe(false)
+      const error = logs.find((l) => l.level === 'error' && /Refusing to build/.test(l.message))
+      expect(error).toBeDefined()
     })
   })
 })
