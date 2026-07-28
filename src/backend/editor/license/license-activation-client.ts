@@ -2,8 +2,11 @@
  * Device license-activation client (PLA-06).
  *
  * HYBRID design (design.md §4): the **real** autonomy-edge client is wired
- * up now, behind a dev **toggle** that injects a mocked response so both
- * code paths are testable today. The real `POST vpp-licenses/activate` route
+ * up now, behind a **dev-build-only** toggle that injects a mocked response so
+ * both code paths are testable today. That toggle is compiled OUT of packaged
+ * builds — see `MOCK_ENABLED` below and the security note there; a shipped
+ * editor must not contain a license-minting path. The real
+ * `POST vpp-licenses/activate` route
  * exists on the `feat/vpp-tables` branch (not yet merged to `development`):
  * `{ deviceId, packageId }` -> `{ licensed, deviceId, vppId, license }` with
  * `license` base64-encoded (98 bytes). Public + rate-limited — no auth token
@@ -73,38 +76,72 @@ const ACTIVATE_PATH = '/vpp-licenses/activate'
 const REQUEST_TIMEOUT_MS = 30_000
 
 /**
+ * Whether the dev mock signer below exists AT ALL in this build.
+ *
+ * SECURITY (audit 2026-07-28): this used to be a bare `process.env` read with no
+ * build or packaging guard, which meant a SHIPPED editor contained a working
+ * license-minting path — `OPLC_LICENSE_MOCK=licensed` plus
+ * `OPLC_LICENSE_MOCK_KEY=<private key>` signs a real, device-bound blob that
+ * passes the on-device verify. Our private keys are not public, so that was not
+ * an immediate break; but it put the mint path in every customer's hands, one key
+ * leak away from unlimited offline licenses outside purchase and outside
+ * revocation, and it handed an attacker a ready-made harness.
+ *
+ * A runtime `app.isPackaged` check would still ship the code. This is compared
+ * against a LITERAL: webpack's `EnvironmentPlugin` inlines `NODE_ENV` into the
+ * main bundle (see `configs/webpack/webpack.config.main.prod.ts`), so in a
+ * production build this folds to `false` and the whole mock branch is dead code
+ * the minifier removes. Under jest `NODE_ENV` is `test`, so the mock's own tests
+ * still exercise it.
+ *
+ * TODO(D49/D51): delete the mock outright. Its stated condition — "when the
+ * autonomy-edge vpp-licenses module exists" — is now met, and the local test
+ * environment (`.specs/features/hardware-licensing/local-test/`) runs the real
+ * backend, so the mock no longer buys anything a developer needs.
+ */
+const MOCK_ENABLED = process.env.NODE_ENV !== 'production'
+
+/**
  * Check whether a device is entitled to a license for the given VPP.
  *
- * `process.env.OPLC_LICENSE_MOCK` short-circuits the network:
+ * In non-production builds ONLY, `process.env.OPLC_LICENSE_MOCK` short-circuits
+ * the network:
  *   - `'licensed'` → `{ licensed: true, license: <golden 98-byte blob> }`
- *     (exercises the on-device write path; 98-byte blob).
+ *     (exercises the on-device write path; the device rejects it and runs demo),
+ *     or a REAL signed blob when `OPLC_LICENSE_MOCK_KEY` supplies a private key.
  *   - `'demo'`     → `{ licensed: false }`.
  *   - absent       → calls the real edge client (§4).
  */
 export async function checkDeviceActivation(input: DeviceActivationInput): Promise<DeviceActivationResult> {
-  // TODO(D49/D51): remover o toggle quando o modulo vpp-licenses do autonomy-edge existir.
-  const mock = process.env.OPLC_LICENSE_MOCK
-  if (mock === 'licensed') {
-    // With OPLC_LICENSE_MOCK_KEY set to a per-VPP private key PEM, sign a REAL
-    // blob for this device so on-device verify passes -> FULL. Without it, fall
-    // back to the unsigned golden (exercises the write path only -> device demo).
-    const mockKey = process.env.OPLC_LICENSE_MOCK_KEY?.trim()
-    if (mockKey) {
-      try {
-        // keyId (D69f) is the KMS selector: when OPLC_LICENSE_MOCK_KEY is a
-        // keystore directory it picks <keyId>.private.pem; a single-file value
-        // stays supported for back-compat. This mirrors how the real backend
-        // will resolve the per-VPP signing key by keyId.
-        const keyPath = resolveMockKeyPath(mockKey, input.keyId)
-        return { licensed: true, license: signedMockLicense(input, keyPath) }
-      } catch (err) {
-        return { licensed: false, error: `mock sign failed: ${err instanceof Error ? err.message : String(err)}` }
-      }
+  if (MOCK_ENABLED) {
+    const mock = process.env.OPLC_LICENSE_MOCK
+    if (mock === 'licensed' || mock === 'demo') {
+      // Loud on purpose: a dev build left with this set silently stops talking to
+      // the real backend, which has already cost debugging time.
+      console.warn(`[license] OPLC_LICENSE_MOCK=${mock} — bypassing the real activation endpoint (dev builds only).`)
     }
-    return { licensed: true, license: goldenLicenseBytes() }
-  }
-  if (mock === 'demo') {
-    return { licensed: false }
+    if (mock === 'licensed') {
+      // With OPLC_LICENSE_MOCK_KEY set to a per-VPP private key PEM, sign a REAL
+      // blob for this device so on-device verify passes -> FULL. Without it, fall
+      // back to the unsigned golden (exercises the write path only -> device demo).
+      const mockKey = process.env.OPLC_LICENSE_MOCK_KEY?.trim()
+      if (mockKey) {
+        try {
+          // keyId (D69f) is the KMS selector: when OPLC_LICENSE_MOCK_KEY is a
+          // keystore directory it picks <keyId>.private.pem; a single-file value
+          // stays supported for back-compat. This mirrors how the real backend
+          // will resolve the per-VPP signing key by keyId.
+          const keyPath = resolveMockKeyPath(mockKey, input.keyId)
+          return { licensed: true, license: signedMockLicense(input, keyPath) }
+        } catch (err) {
+          return { licensed: false, error: `mock sign failed: ${err instanceof Error ? err.message : String(err)}` }
+        }
+      }
+      return { licensed: true, license: goldenLicenseBytes() }
+    }
+    if (mock === 'demo') {
+      return { licensed: false }
+    }
   }
 
   return activateViaEdge(input)

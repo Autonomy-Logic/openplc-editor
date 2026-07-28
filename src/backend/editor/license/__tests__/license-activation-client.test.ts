@@ -57,6 +57,43 @@ describe('checkDeviceActivation (mock toggle)', () => {
   })
 })
 
+/**
+ * SECURITY (audit 2026-07-28): a shipped editor must not contain a
+ * license-minting path. `MOCK_ENABLED` is compared against a literal that
+ * webpack inlines, so the branch is dead code in a production build — but only
+ * if nothing reintroduces a runtime read. This asserts the module honours
+ * NODE_ENV at LOAD time, which is the property the build relies on.
+ */
+describe('checkDeviceActivation (mock is compiled out of production builds)', () => {
+  const originalEnv = process.env.NODE_ENV
+  const originalMock = process.env.OPLC_LICENSE_MOCK
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv
+    if (originalMock === undefined) delete process.env.OPLC_LICENSE_MOCK
+    else process.env.OPLC_LICENSE_MOCK = originalMock
+    jest.restoreAllMocks()
+    jest.resetModules()
+  })
+
+  it('ignores OPLC_LICENSE_MOCK and calls the real endpoint when NODE_ENV=production', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.OPLC_LICENSE_MOCK = 'licensed'
+    jest.resetModules()
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('../license-activation-client') as typeof import('../license-activation-client')
+
+    // The backend answers "not licensed"; if the mock were still reachable we
+    // would get the golden blob instead.
+    mockHttpsResponse(200, { statusCode: 200, data: { licensed: false } })
+    const result = await mod.checkDeviceActivation(INPUT)
+
+    expect(https.request).toHaveBeenCalled()
+    expect(result.licensed).toBe(false)
+    expect(result.license).toBeUndefined()
+  })
+})
+
 describe('checkDeviceActivation (signed mock, keyId keystore — D69f/P1-3)', () => {
   const originalMock = process.env.OPLC_LICENSE_MOCK
   const originalKey = process.env.OPLC_LICENSE_MOCK_KEY
