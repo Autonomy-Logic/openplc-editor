@@ -1,7 +1,5 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
-  expandArrayVariable,
-  expandArrayVariables,
   parseArrayAccess,
   parseDimensionRange,
   resolveArrayElement,
@@ -200,96 +198,6 @@ describe('resolveArrayElement', () => {
     const base = makeArrayVar('Sensor', 'base-type', 'INT', ['0..5'])
     const access = { baseName: 'Sensor', indices: [10] }
     expect(resolveArrayElement(base, access)).toBeNull()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// expandArrayVariable
-// ---------------------------------------------------------------------------
-describe('expandArrayVariable', () => {
-  it('expands a 1D array into indexed elements', () => {
-    const v = makeArrayVar('arr', 'base-type', 'INT', ['0..2'])
-    const result = expandArrayVariable(v)
-    expect(result.length).toBe(3)
-    expect(result.map((r) => r.name)).toEqual(['arr[0]', 'arr[1]', 'arr[2]'])
-    expect(result[0].type.definition).toBe('base-type')
-    expect(result[0].type.value).toBe('INT')
-  })
-
-  it('expands a 2D array with comma notation', () => {
-    const v = makeArrayVar('matrix', 'base-type', 'REAL', ['0..1', '0..1'])
-    const result = expandArrayVariable(v)
-    expect(result.length).toBe(4)
-    expect(result.map((r) => r.name)).toEqual(['matrix[0,0]', 'matrix[0,1]', 'matrix[1,0]', 'matrix[1,1]'])
-  })
-
-  it('returns the original variable for non-array types', () => {
-    const v = makeScalarVar('x')
-    const result = expandArrayVariable(v)
-    expect(result).toEqual([v])
-  })
-
-  it('returns the original variable for array without data', () => {
-    const v: PLCVariable = {
-      name: 'arr',
-      class: 'local',
-      type: { definition: 'array', value: 'ARRAY[0..5] OF INT' },
-      location: '',
-      documentation: '',
-    }
-    const result = expandArrayVariable(v)
-    expect(result).toEqual([v])
-  })
-
-  it('returns the original variable when total elements exceed MAX_EXPANSION (100)', () => {
-    // 0..100 = 101 elements > 100
-    const v = makeArrayVar('big', 'base-type', 'INT', ['0..100'])
-    const result = expandArrayVariable(v)
-    expect(result).toEqual([v])
-  })
-
-  it('returns the original variable when a dimension range is invalid', () => {
-    const v: PLCVariable = {
-      name: 'arr',
-      class: 'local',
-      type: {
-        definition: 'array',
-        value: 'ARRAY[bad] OF INT',
-        data: {
-          baseType: { definition: 'base-type', value: 'INT' },
-          dimensions: [{ dimension: 'bad' }],
-        },
-      },
-      location: '',
-      documentation: '',
-    }
-    const result = expandArrayVariable(v)
-    expect(result).toEqual([v])
-  })
-
-  it('expands exactly 100 elements (at the limit)', () => {
-    // 0..99 = 100 elements
-    const v = makeArrayVar('big', 'base-type', 'INT', ['0..99'])
-    const result = expandArrayVariable(v)
-    expect(result.length).toBe(100)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// expandArrayVariables
-// ---------------------------------------------------------------------------
-describe('expandArrayVariables', () => {
-  it('expands all arrays and passes scalars through', () => {
-    const vars = [makeScalarVar('x'), makeArrayVar('arr', 'base-type', 'INT', ['0..1'])]
-    const result = expandArrayVariables(vars)
-    expect(result.length).toBe(3) // 1 scalar + 2 array elements
-    expect(result[0].name).toBe('x')
-    expect(result[1].name).toBe('arr[0]')
-    expect(result[2].name).toBe('arr[1]')
-  })
-
-  it('handles empty list', () => {
-    expect(expandArrayVariables([])).toEqual([])
   })
 })
 
