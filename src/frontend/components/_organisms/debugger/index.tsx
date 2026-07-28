@@ -17,10 +17,8 @@ type Point = { t: number; y: number }
 type SeriesEntry = { points: Point[]; isBool: boolean; compositeKey: string }
 
 const MAX_BUFFER_SECONDS = 600 // Keep 10 minutes of data regardless of displayed range
-const SAMPLE_INTERVAL_MS = 100 // Trend sampling clock, independent of the poll rate
-// ApexCharts clears and rebuilds the entire SVG on every update, so repaint less often than we sample. The chart
-// redraws without animation, so this interval alone sets how fluid the window slide looks — raise it if the
-// rebuilds become visible, lower it if the motion looks stepped.
+const SAMPLE_INTERVAL_MS = 100
+// ApexCharts rebuilds the entire SVG per update, so repaint slower than we sample.
 const RENDER_INTERVAL_MS = 200
 
 const Debugger = ({ graphList }: DebuggerData) => {
@@ -37,7 +35,6 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const debugBoolValues = useDebugBoolValuesMap()
   const debugNonBoolValues = useDebugNonBoolValuesMap()
 
-  // Latest polled values, so the sampling clock can read them without re-arming on every change.
   const valuesRef = useRef({ bool: debugBoolValues, nonBool: debugNonBoolValues })
   valuesRef.current = { bool: debugBoolValues, nonBool: debugNonBoolValues }
 
@@ -71,8 +68,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
     }
   }, [graphList])
 
-  // Sample on a fixed clock rather than on value change: the poller only commits to the store when a
-  // value differs, so a variable holding steady stops emitting samples and the trend freezes mid-window.
+  // The poller only writes to the store when a value changes, so sample on a clock or steady values freeze the trend.
   useEffect(() => {
     if (isPaused || graphList.length === 0) return
     const sample = () => {
