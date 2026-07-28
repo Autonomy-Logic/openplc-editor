@@ -118,13 +118,13 @@ import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
-import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
+import { VerifiedBoardInfoResolver, vppSignatureRefusalMessage } from './verified-board-info-resolver'
 
 interface MethodsResult<T> {
   success: boolean
@@ -249,10 +249,17 @@ class CompilerModule {
    * browser-friendly path strings + a real (or no-op) package
    * manager; the shared `BoardInfoResolver` is byte-identical
    * between repos.
+   *
+   * SECURITY: every compile/upload path resolves its board through
+   * here, so this returns the signature-verifying subclass rather than
+   * the bare shared resolver.  A VPP package that no longer matches its
+   * Ed25519 signature can't feed HAL sources, prebuilt archives,
+   * license-store backends or compiler flags into a build — see
+   * `verified-board-info-resolver.ts` for the rationale and cost model.
    */
-  async #createBoardInfoResolver(): Promise<BoardInfoResolver> {
+  async #createBoardInfoResolver(): Promise<VerifiedBoardInfoResolver> {
     const halsContent = await readHalsFile<HalsFile>()
-    return new BoardInfoResolver({
+    return new VerifiedBoardInfoResolver({
       halsContent,
       packageManager: new PackageManagerModule(),
       resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
@@ -2385,6 +2392,26 @@ class CompilerModule {
     // because `boardHalsContent` below needs the raw entry slice.
     const halsContent = await readHalsFile<HalsFile>()
     const resolver = await this.#createBoardInfoResolver()
+
+    // SECURITY GATE (fails closed): re-verify the Ed25519 signature of the VPP
+    // package that provides `boardTarget` before ANY of its content reaches the
+    // toolchain. Import-time and open-project verification don't cover this
+    // path, and the package chooses the prebuilt archives, HAL sources,
+    // license-store backends and compiler flags of the firmware we're about to
+    // build and flash. Probed explicitly (rather than letting the resolver
+    // throw) because `resolveBoardSelection` flattens every resolver throw into
+    // a generic "board not found", which would hide the real reason.
+    const signatureRejection = resolver.verifyBoardPackage(boardTarget)
+    if (signatureRejection !== null) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: vppSignatureRefusalMessage(boardTarget, signatureRejection),
+      })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+      _mainProcessPort.close()
+      return
+    }
+
     const selection = resolveBoardSelection(resolver, boardTarget)
     if (!selection.ok) {
       _mainProcessPort.postMessage({ logLevel: 'error', message: selection.error })
@@ -2770,6 +2797,21 @@ class CompilerModule {
     const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
 
     const debugResolver = await this.#createBoardInfoResolver()
+
+    // Same fail-closed package-signature gate as `compileProgram` — the debug
+    // build compiles and flashes the very same firmware, just with debug
+    // symbols, so it can't be a way around the check.
+    const debugSignatureRejection = debugResolver.verifyBoardPackage(boardTarget)
+    if (debugSignatureRejection !== null) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: vppSignatureRefusalMessage(boardTarget, debugSignatureRejection),
+      })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping debug compilation process.' })
+      _mainProcessPort.close()
+      return
+    }
+
     const { boardRuntime } = debugResolver.resolve(boardTarget)
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
