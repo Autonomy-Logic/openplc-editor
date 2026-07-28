@@ -2900,6 +2900,38 @@ describe('createProjectSlice', () => {
     })
   })
 
+  describe('getAliasIndex', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    it('exposes the live alias → address map', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0, %IW1
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow')
+
+      expect(store.getState().projectActions.getAliasIndex().get('flow')).toBe('%IW0')
+    })
+
+    it('returns the same reference until producer state changes', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const first = store.getState().projectActions.getAliasIndex()
+      // A POU edit must NOT invalidate the memo — the LSP calls this on every
+      // reconcile, i.e. on every keystroke in an ST editor.
+      seedPou(store, makePou('Prog', 'program', [locVar('x', '')]))
+      expect(store.getState().projectActions.getAliasIndex()).toBe(first)
+
+      // A producer change must.
+      const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow')
+      const second = store.getState().projectActions.getAliasIndex()
+      expect(second).not.toBe(first)
+      expect(second.get('flow')).toBe('%IW0')
+    })
+  })
+
   // -------------------------------------------------------------------------
   // Defensive guard coverage — operations on servers missing expected configs
   // -------------------------------------------------------------------------
