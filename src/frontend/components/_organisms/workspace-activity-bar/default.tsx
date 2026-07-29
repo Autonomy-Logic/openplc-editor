@@ -195,9 +195,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         capabilities: {
           runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
           jwtToken: Boolean(rtConn.jwtToken),
-          // Baremetal: the debugger shares the held serial link, so it can only
-          // start once that link is up.
-          deviceConnected: useOpenPLCStore.getState().serialConnection.status === 'connected',
         },
       }
     },
@@ -984,6 +981,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
 
     if (isDebuggerProcessing) return
+
+    // Baremetal targets debug OVER the device connection: the debug session
+    // shares the client the Connect flow holds open, because the OS will not
+    // grant a second handle on the same serial port. So require the connection
+    // first, the same way Runtime v4 requires a runtime connection.
+    //
+    // This gate lives here rather than as a debug-spec precondition: the Connect
+    // flow resolves the SAME spec to derive the port and baud rate, so gating
+    // the spec would mean Connect required a connection to establish one.
+    if (
+      resolveTargetCapabilities(currentBoardInfo).directUsbUpload &&
+      useOpenPLCStore.getState().serialConnection.status !== 'connected'
+    ) {
+      await showDebuggerMessage(
+        'warning',
+        'Connection Required',
+        'Connect to the device first. Debugging runs over the device connection, so the device must be connected before the debugger can start.',
+        ['OK'],
+      )
+      return
+    }
+
     setIsDebuggerProcessing(true)
 
     try {
@@ -1058,8 +1077,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     canEdit,
     executeSave,
     addLog,
-    resolveDebugConfigWithUx,
-  ])
+    resolveDebugConfigWithUx, currentBoardInfo])
 
   // ---------------------------------------------------------------------------
   // JSX

@@ -75,13 +75,6 @@ export interface DebugResolverCapabilities {
   /** Result of each precondition the platform supports. */
   runtimeConnected: boolean
   jwtToken: boolean
-  /** A baremetal target's serial link is open and holding the port.
-   *
-   *  Serial debugging runs OVER that connection — it shares the one open client
-   *  rather than opening a second handle the OS will not grant — so this is the
-   *  same kind of gate `runtimeConnected` is for Runtime v4, not an extra
-   *  restriction. */
-  deviceConnected?: boolean
 }
 
 export interface DebugResolverContext {
@@ -185,13 +178,6 @@ export function resolveDebugConnection(
     if (!context.capabilities[precondition]) {
       if (precondition === 'runtimeConnected') {
         return { kind: 'error', title: 'Connection Required', body: 'Connect to the target runtime first.' }
-      }
-      if (precondition === 'deviceConnected') {
-        return {
-          kind: 'error',
-          title: 'Connection Required',
-          body: 'Connect to the device first. Serial debugging runs over the device connection, so the device must be connected before the debugger can start.',
-        }
       }
       if (precondition === 'jwtToken') {
         return {
