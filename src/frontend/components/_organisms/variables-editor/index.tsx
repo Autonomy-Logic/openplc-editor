@@ -1052,42 +1052,43 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
           {editorVariables.display === 'table' && (
             <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
-              {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
-                <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
-                  <label
-                    htmlFor='return-type'
-                    className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-                  >
-                    Return type :
-                  </label>
-                  <Select value={returnType} onValueChange={handleReturnTypeChange}>
-                    <SelectTrigger
-                      id='return-type'
-                      placeholder={returnType}
-                      withIndicator
-                      className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                    />
-                    <SelectContent
-                      position='popper'
-                      sideOffset={3}
-                      align='center'
-                      className='box h-fit min-w-44 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+              {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+                editor.meta.pouType === 'function' && (
+                  <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
+                    <label
+                      htmlFor='return-type'
+                      className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
                     >
-                      {returnTypeOptions.map((filter) => (
-                        <SelectItem
-                          key={filter}
-                          value={filter}
-                          className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        >
-                          <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                            {filter}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+                      Return type :
+                    </label>
+                    <Select value={returnType} onValueChange={handleReturnTypeChange}>
+                      <SelectTrigger
+                        id='return-type'
+                        placeholder={returnType}
+                        withIndicator
+                        className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                      />
+                      <SelectContent
+                        position='popper'
+                        sideOffset={3}
+                        align='center'
+                        className='box h-fit min-w-44 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                      >
+                        {returnTypeOptions.map((filter) => (
+                          <SelectItem
+                            key={filter}
+                            value={filter}
+                            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          >
+                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                              {filter}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
               <div
                 id='Pou documentation'
