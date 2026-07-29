@@ -30,7 +30,7 @@ import type { DebugConnectionType } from './types'
  * matching platform shim) — intentionally narrow so packages can't
  * gate on arbitrary platform internals.
  */
-export type DebugPrecondition = 'runtimeConnected' | 'jwtToken'
+export type DebugPrecondition = 'runtimeConnected' | 'jwtToken' | 'deviceConnected'
 
 /**
  * `$ref` pointer plus optional defaulting / coercion / validation.

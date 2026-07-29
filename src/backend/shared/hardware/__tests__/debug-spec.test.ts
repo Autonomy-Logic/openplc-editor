@@ -30,6 +30,27 @@ describe('resolveDebugConnection', () => {
   })
 
   describe('preconditions', () => {
+    describe('deviceConnected (baremetal serial)', () => {
+      const serialSpec: DebugSpec = {
+        preconditions: ['deviceConnected'],
+        channels: [{ label: 'RTU', channel: 'rtu', enabledWhen: true, params: {} }],
+      }
+
+      it('errors with "Connection Required" when the device link is down', () => {
+        // Serial debugging shares the held connection's client, so it cannot
+        // start before that link exists — the same gate runtimeConnected is for
+        // Runtime v4.
+        const result = resolveDebugConnection(serialSpec, makeContext({ capabilities: { deviceConnected: false } }))
+        expect(result.kind).toBe('error')
+        expect(result).toMatchObject({ title: 'Connection Required' })
+      })
+
+      it('resolves once the device is connected', () => {
+        const result = resolveDebugConnection(serialSpec, makeContext({ capabilities: { deviceConnected: true } }))
+        expect(result.kind).not.toBe('error')
+      })
+    })
+
     const spec: DebugSpec = {
       preconditions: ['runtimeConnected'],
       channels: [{ label: 'WS', channel: 'websocket', enabledWhen: true, params: {} }],

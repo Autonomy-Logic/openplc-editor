@@ -63,7 +63,7 @@ import {
 } from '../../../backend/shared/debug/device-anchor'
 import type { LicenseCapableTransport } from '../../../backend/shared/debug/types'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
-import type { PlcControlResult } from '@root/backend/shared/debug/types'
+import type { DebugStatusResult, PlcControlResult } from '@root/backend/shared/debug/types'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -82,6 +82,10 @@ class MainProcessBridge implements MainIpcModule {
   hardwareModule
   private registeredHandleChannels: string[] = []
   private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
+  // True when `debuggerModbusClient` IS the held device link rather than a
+  // client the debugger opened. Borrowed clients must never be disconnected by
+  // the debugger — the device connection still owns the port.
+  private debuggerBorrowedDeviceClient = false
   private debuggerWebSocketClient: WebSocketDebugTransport | null = null
   private debuggerTargetIp: string | null = null
   private debuggerReconnecting: boolean = false
@@ -1749,28 +1753,21 @@ class MainProcessBridge implements MainIpcModule {
           return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
         }
 
-        // Handoff (D72): a held device connection owns this serial port. Release
-        // it so the debugger can take the port; the device link reconnects on
-        // demand afterwards. No-op when nothing is held on this port.
-        this.releaseDeviceSerialForPort(connectionParams.port)
+        // Reuse whatever already owns this port: the debug client from a live
+        // session, or the held device link (which is the normal case, since
+        // serial debugging requires being connected).
+        const existing =
+          this.debuggerModbusClient && this.debuggerConnectionType === 'rtu' && this.debuggerRtuPort === connectionParams.port
+            ? this.debuggerModbusClient
+            : this.adoptHeldSerialClientForDebug(connectionParams.port)
 
-        // Reuse existing RTU client if already connected to the same port
-        if (
-          this.debuggerModbusClient &&
-          this.debuggerConnectionType === 'rtu' &&
-          this.debuggerRtuPort === connectionParams.port
-        ) {
-          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
-          const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-          return { success: true, match, targetMd5, targetEndian }
+        if (!existing) {
+          return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION }
         }
 
-        client = new ModbusRtuClient({
-          port: connectionParams.port,
-          baudRate: connectionParams.baudRate,
-          slaveId: connectionParams.slaveId,
-          timeout: 5000,
-        })
+        const { md5: targetMd5, targetEndian } = await existing.getMd5Hash()
+        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+        return { success: true, match, targetMd5, targetEndian }
       }
 
       await client.connect()
@@ -2012,18 +2009,20 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerReconnecting = false
             return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
           }
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: this.debuggerRtuPort,
-            baudRate: this.debuggerRtuBaudRate,
-            slaveId: this.debuggerRtuSlaveId,
-            timeout: 5000,
-          })
+          // Re-adopt the held device link; if the device was disconnected the
+          // session cannot continue, which the renderer surfaces as a reconnect.
+          if (!this.adoptHeldSerialClientForDebug(this.debuggerRtuPort)) {
+            this.debuggerReconnecting = false
+            return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION, needsReconnect: true }
+          }
         } else {
           this.debuggerReconnecting = false
           return { success: false, error: 'No connection type stored', needsReconnect: true }
         }
 
-        await this.debuggerModbusClient.connect()
+        // A borrowed client is already open — the device connection owns it, and
+        // connect() would re-open the port and re-wait the bootloader delay.
+        if (!this.debuggerBorrowedDeviceClient) await this.debuggerModbusClient?.connect()
         this.debuggerReconnecting = false
       } catch (error) {
         this.debuggerModbusClient = null
@@ -2032,8 +2031,13 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
 
+    const client = this.debuggerModbusClient
+    if (!client) {
+      return { success: false, error: 'Debugger not connected', needsReconnect: true }
+    }
+
     try {
-      const result = await this.debuggerModbusClient.getVariablesList(variableIndexes)
+      const result = await client.getVariablesList(variableIndexes)
 
       if (result.success && result.data) {
         return {
@@ -2053,6 +2057,70 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
+
+  /**
+   * Read the run/stop state over an already-open client and push it to the
+   * renderer. Throttled, because its two callers tick at very different rates:
+   * the device liveness poll (2.5s) and the debugger's variable poll (fast).
+   *
+   * Whichever client currently owns the serial port drives this, which is what
+   * keeps the Start/Stop button live across the debug handoff — the held device
+   * link is released while debugging, so a poll bound only to that link would go
+   * silent exactly when the user is most likely watching.
+   */
+  private plcStatePushedAt = 0
+
+  private async pushPlcState(
+    client: { getStatus?: () => Promise<DebugStatusResult> },
+    port: string,
+    minIntervalMs = 2000,
+  ): Promise<void> {
+    if (!client.getStatus) return
+    const now = Date.now()
+    if (now - this.plcStatePushedAt < minIntervalMs) return
+    this.plcStatePushedAt = now
+
+    const r = await client.getStatus()
+    if (!r.success) return
+    this.mainWindow?.webContents?.send('device:plc-state', {
+      port,
+      plcState: r.plcState,
+      switchPosition: r.switchPosition,
+    })
+  }
+
+
+  /**
+   * Adopt the held device link as the debug client (D72 + run/stop).
+   *
+   * Debugging a baremetal target REQUIRES being connected, mirroring how
+   * Runtime v4 requires a runtime connection. That is not a restriction so much
+   * as the thing that makes serial debugging work at all: the Connect flow
+   * already holds this port open, so the debugger shares that one client instead
+   * of opening a second handle on a port the OS will not lock twice ("Resource
+   * temporarily unavailable"). It also means the device link is never torn down
+   * mid-session, so its liveness tick — and therefore the run/stop state feeding
+   * the Start/Stop button — keeps running while debugging.
+   *
+   * Returns null when nothing is held for `port`; callers surface that as
+   * "connect first" rather than silently opening a competing client.
+   */
+  private adoptHeldSerialClientForDebug(port: string | undefined): ModbusRtuClient | null {
+    if (!port || !this.deviceSerialClient || this.deviceSerialPort !== port) return null
+    // The serial branch of the transport factory builds a ModbusRtuClient, which
+    // is the full debug surface; the interface it is typed as is the narrower
+    // licensing one.
+    const held = this.deviceSerialClient as unknown as ModbusRtuClient
+    this.debuggerModbusClient = held
+    this.debuggerBorrowedDeviceClient = true
+    this.debuggerConnectionType = 'rtu'
+    this.debuggerRtuPort = port
+    return held
+  }
+
+  /** Message shown when a serial debug session is attempted while disconnected. */
+  private static readonly DEBUG_REQUIRES_CONNECTION =
+    'Connect to the device first: serial debugging runs over the same connection, so the device must be connected before starting the debugger.'
 
   /**
    * Ensure a Modbus debug client is connected, reconnecting from stored
@@ -2102,18 +2170,20 @@ class MainProcessBridge implements MainIpcModule {
             this.debuggerReconnecting = false
             return { error: 'No RTU connection parameters stored', needsReconnect: true }
           }
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: this.debuggerRtuPort,
-            baudRate: this.debuggerRtuBaudRate,
-            slaveId: this.debuggerRtuSlaveId,
-            timeout: 5000,
-          })
+          // Re-adopt the held device link; if the device was disconnected the
+          // session cannot continue, which the renderer surfaces as a reconnect.
+          if (!this.adoptHeldSerialClientForDebug(this.debuggerRtuPort)) {
+            this.debuggerReconnecting = false
+            return { error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION, needsReconnect: true }
+          }
         } else {
           this.debuggerReconnecting = false
           return { error: 'No connection type stored', needsReconnect: true }
         }
 
-        await this.debuggerModbusClient.connect()
+        // A borrowed client is already open — the device connection owns it, and
+        // connect() would re-open the port and re-wait the bootloader delay.
+        if (!this.debuggerBorrowedDeviceClient) await this.debuggerModbusClient?.connect()
         this.debuggerReconnecting = false
       } catch (error) {
         this.debuggerModbusClient = null
@@ -2122,6 +2192,9 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
 
+    if (!this.debuggerModbusClient) {
+      return { error: 'Debugger not connected', needsReconnect: true }
+    }
     return { client: this.debuggerModbusClient }
   }
 
@@ -2336,18 +2409,14 @@ class MainProcessBridge implements MainIpcModule {
           return { success: true }
         }
 
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
+        // Serial debugging runs over the device connection, so adopt the held
+        // client rather than opening a competing handle on the same port.
+        if (!this.adoptHeldSerialClientForDebug(connectionParams.port)) {
+          this.debuggerReconnecting = false
+          return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION }
         }
-
-        this.debuggerModbusClient = new ModbusRtuClient({
-          port: connectionParams.port,
-          baudRate: connectionParams.baudRate,
-          slaveId: connectionParams.slaveId,
-          timeout: 5000,
-        })
-        await this.debuggerModbusClient.connect()
+        // Already open and already proven live by the connect probe — nothing to
+        // connect here.
         this.debuggerRtuPort = connectionParams.port
         this.debuggerRtuBaudRate = connectionParams.baudRate
         this.debuggerRtuSlaveId = connectionParams.slaveId
@@ -2372,8 +2441,13 @@ class MainProcessBridge implements MainIpcModule {
 
   handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
     if (this.debuggerModbusClient) {
-      this.debuggerModbusClient.disconnect()
+      // A borrowed client belongs to the held device connection: drop the
+      // reference but leave it open. Closing it here would tear down the user's
+      // device connection (and its liveness / run-stop polling) just because
+      // they stopped debugging.
+      if (!this.debuggerBorrowedDeviceClient) this.debuggerModbusClient.disconnect()
       this.debuggerModbusClient = null
+      this.debuggerBorrowedDeviceClient = false
     }
     if (this.debuggerWebSocketClient) {
       this.debuggerWebSocketClient.disconnect()
@@ -2485,6 +2559,14 @@ class MainProcessBridge implements MainIpcModule {
     }
     this.deviceLivenessFailures = 0
     this.deviceLivenessInFlight = false
+    // A debug session borrowing this client must not keep using it once it is
+    // closed. Dropping the reference makes the next debug read report
+    // needsReconnect, which the renderer already handles, instead of talking to
+    // a dead port.
+    if (this.debuggerBorrowedDeviceClient) {
+      this.debuggerModbusClient = null
+      this.debuggerBorrowedDeviceClient = false
+    }
     this.deviceSerialClient?.disconnect()
     this.deviceSerialClient = null
     this.deviceSerialPort = null
@@ -2529,14 +2611,12 @@ class MainProcessBridge implements MainIpcModule {
             const r = await client.getStatus()
             if (!r.success) throw new Error('no status reply')
             this.deviceLivenessFailures = 0
-            // Push the run/stop state to the renderer on every tick. Cheap and
-            // idempotent: the store ignores a value it already holds, so a
-            // switch flipped by hand at the panel shows up within one interval.
-            this.mainWindow?.webContents?.send('device:plc-state', {
-              port,
-              plcState: r.plcState,
-              switchPosition: r.switchPosition,
-            })
+            // This tick IS the state poll: the status frame carries it, so a
+            // switch flipped by hand shows up within one interval at no extra
+            // cost. `minIntervalMs: 0` because the 2.5s timer is already the
+            // rate limit here.
+            this.plcStatePushedAt = 0
+            await this.pushPlcState(client, port, 0)
             return
           }
           const r = await client.getBoardId()

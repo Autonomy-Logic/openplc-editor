@@ -195,6 +195,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         capabilities: {
           runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
           jwtToken: Boolean(rtConn.jwtToken),
+          // Baremetal: the debugger shares the held serial link, so it can only
+          // start once that link is up.
+          deviceConnected: useOpenPLCStore.getState().serialConnection.status === 'connected',
         },
       }
     },
