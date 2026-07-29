@@ -128,6 +128,12 @@ void setup()
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 
+    // Establish the run/stop state. Must follow hardwareInit() so the HAL has
+    // already configured its mode-switch pin: a board powered up with the
+    // switch in STOP must never execute a scan. Boards with no mode switch
+    // read RUN and start immediately, as they always have.
+    runtime_init_plc_state();
+
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
             #ifdef MBSERIAL_TXPIN

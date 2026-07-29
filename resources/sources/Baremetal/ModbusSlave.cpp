@@ -11,6 +11,10 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // strucpp::debug::handle_* inside arduino_runtime_glue.cpp, which is part
 // of the precompiled OpenPLCUserLib archive built with -std=gnu++17.
 #include "arduino_runtime_glue.h"
+// PLC_STATE_* / PLC_SWITCH_* and runtime_get_plc_state(), used by the FC 0x49
+// handler. Declarations only -- no macro collisions with Arduino.h, which is
+// why the HALs already include both headers side by side.
+#include "openplc.h"
 
 //Global Modbus vars
 struct MBinfo modbus;
@@ -452,6 +456,8 @@ static int32_t mb_rtu_frame_len(const uint8_t *f, uint16_t n)
             return 10 + (int32_t)(((uint16_t)f[6] << 8) | f[7]);
         case MB_FC_DEBUG_GET_MD5:
             return 8;                                   // [id][fc][endian:2][00:2][crc:2]
+        case MB_FC_PLC_CONTROL:
+            return 6;                                   // [id][fc][subcmd:1][arg:1][crc:2]
         default:
             return -1;                                  // not one of our function codes
     }
@@ -677,6 +683,11 @@ void process_mbpacket()
 
         case MB_FC_DEBUG_GET_MD5:
             debugGetMd5(endianness_check);
+        break;
+
+        case MB_FC_PLC_CONTROL:
+            // PDU: [FC:1][subcmd:u8][arg:u8]
+            plcControl(mb_frame[2], mb_frame[3]);
         break;
 
         default:
@@ -1437,6 +1448,45 @@ void debugGetMd5(void * /*endianness*/)
     mb_frame[md5_len + 3] = sentinel_bytes[0];
     mb_frame[md5_len + 4] = sentinel_bytes[1];
     mb_frame_len = md5_len + 5;
+}
+
+/**
+ * FC 0x49 -- query or set the runtime run/stop state.
+ *
+ * Request:  [FC][subcmd:u8][arg:u8]
+ * Response: [FC][status:u8][plc_state:u8][switch_position:u8]
+ *
+ * QUERY never fails and never changes state -- it is the editor's pre-check
+ * before it offers to start the PLC. SET_STATE RUN while the mode switch
+ * reads STOP answers MB_PLC_CTRL_REFUSED_SWITCH: the request is refused, not
+ * queued, so the editor tells the user to flip the switch instead of leaving
+ * a start pending. Stop requests are always honoured.
+ *
+ * The reported state is read back AFTER the request is applied, but the
+ * runtime derives it inside runtime_plc_cycle() -- so on a SET_STATE the
+ * value here is the state as of the last cycle, and the caller sees the new
+ * one on its next poll (at most one scan period later).
+ */
+void plcControl(uint8_t subcmd, uint8_t arg)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+
+    if (subcmd == MB_PLC_CTRL_SET_STATE)
+    {
+        uint8_t desired = (arg == 0x01) ? PLC_STATE_RUNNING : PLC_STATE_STOPPED;
+        if (runtime_request_plc_state(desired) == PLC_CTRL_REFUSED_SWITCH_STOP)
+            status = MB_PLC_CTRL_REFUSED_SWITCH;
+    }
+    else if (subcmd != MB_PLC_CTRL_QUERY)
+    {
+        status = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
+    }
+
+    mb_frame[1] = MB_FC_PLC_CONTROL;
+    mb_frame[2] = status;
+    mb_frame[3] = runtime_get_plc_state();
+    mb_frame[4] = runtime_get_switch_position();
+    mb_frame_len = 5;
 }
 
 uint16_t calcCrc()

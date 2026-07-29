@@ -79,6 +79,11 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #define MB_DEBUG_ERROR_OUT_OF_BOUNDS     0x81
 #define MB_DEBUG_ERROR_OUT_OF_MEMORY     0x82
 
+// FC 0x49 only: a request to RUN was refused because the hardware mode
+// switch reads STOP. The editor turns this into a "flip the switch to RUN"
+// warning rather than a generic failure.
+#define MB_PLC_CTRL_REFUSED_SWITCH       0x83
+
 //Modbus registers struct
 struct MBinfo {
     uint8_t slaveid;
@@ -111,7 +116,14 @@ enum {
     MB_FC_DEBUG_GET        = 0x43, // Debug get trace (read variables)
     MB_FC_DEBUG_GET_LIST   = 0x44, // Debug get trace list (read list of variables)
     MB_FC_DEBUG_GET_MD5    = 0x45, // Debug get current program MD5
+    // 0x46-0x48 are reserved for the planned debug subscription/streaming
+    // codes, so run/stop control starts at 0x49.
+    MB_FC_PLC_CONTROL      = 0x49, // Query / set the runtime run-stop state
 };
+
+// FC 0x49 sub-commands (request byte 2).
+#define MB_PLC_CTRL_QUERY      0x00 // Report state + switch, change nothing
+#define MB_PLC_CTRL_SET_STATE  0x01 // Byte 3: 0 = STOP, 1 = RUN
 
 //Exception Codes
 enum {
@@ -185,6 +197,7 @@ void debugSetTrace(uint8_t arr, uint16_t elem, uint8_t flag,
 void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx);
 void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray);
 void debugGetMd5(void *endianness);
+void plcControl(uint8_t subcmd, uint8_t arg);
 
 
 /* Table of CRC values for high-order byte */
