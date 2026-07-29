@@ -295,6 +295,55 @@ function buildIecRegistry(live: ProjectSliceRoot): IecAddressRegistry {
   return recalculateRegistry(unpinAllocatableChannels(restored, ALLOCATED_KINDS), { activeKinds }).registry
 }
 
+/**
+ * Single-entry memo for the `alias → address` index.
+ *
+ * The LSP asks for this index on every project reconcile — which fires on
+ * every POU mutation, i.e. every keystroke in an ST editor — while
+ * `buildIecRegistry` does a full migrate + reallocate over every producer.
+ * The index depends only on producer state (pins, VPP entries, remote
+ * devices, active board, alias memory), none of which a POU edit touches, so
+ * an identity-keyed cache turns the hot path into a handful of `===` checks.
+ *
+ * Zustand/Immer guarantee reference stability when a slice didn't change, so
+ * identity comparison is sound; when any input's identity moves, the next
+ * call rebuilds and replaces the entry.
+ */
+interface AliasIndexCache {
+  /** Raw `pinsByBoard[board]` — NOT defaulted to `[]`, which would mint a new
+   *  array identity on every call and defeat the cache. */
+  pins: ProjectSliceRoot['deviceDefinitions']['pinMapping']['pinsByBoard'][string] | undefined
+  vendorScreenData: ProjectSliceRoot['deviceDefinitions']['configuration']['vendorScreenData']
+  remoteDevices: ProjectSliceRoot['project']['data']['remoteDevices']
+  board: ProjectSliceRoot['deviceDefinitions']['configuration']['deviceBoard']
+  aliasMemory: ProjectSliceRoot['iecAliasMemory']
+  index: ReadonlyMap<string, string>
+}
+let aliasIndexCache: AliasIndexCache | null = null
+
+function getMemoizedAliasIndex(live: ProjectSliceRoot): ReadonlyMap<string, string> {
+  const board = live.deviceDefinitions.configuration.deviceBoard
+  const pins = live.deviceDefinitions.pinMapping.pinsByBoard[board]
+  const vendorScreenData = live.deviceDefinitions.configuration.vendorScreenData
+  const remoteDevices = live.project.data.remoteDevices
+  const aliasMemory = live.iecAliasMemory
+
+  if (
+    aliasIndexCache &&
+    aliasIndexCache.pins === pins &&
+    aliasIndexCache.vendorScreenData === vendorScreenData &&
+    aliasIndexCache.remoteDevices === remoteDevices &&
+    aliasIndexCache.board === board &&
+    aliasIndexCache.aliasMemory === aliasMemory
+  ) {
+    return aliasIndexCache.index
+  }
+
+  const index = buildAliasIndex(buildIecRegistry(live))
+  aliasIndexCache = { pins, vendorScreenData, remoteDevices, board, aliasMemory, index }
+  return index
+}
+
 /** Flatten the registry into a `channelKey -> { address, alias }` index for
  *  writing results back onto each producer. */
 function indexRegistry(registry: IecAddressRegistry): Map<string, { address?: string; alias: string }> {
@@ -1616,7 +1665,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // The store keeps the alias-name form for display; only this snapshot is
       // resolved.
       const live = getState()
-      const aliasIndex = buildAliasIndex(buildIecRegistry(live))
+      const aliasIndex = getMemoizedAliasIndex(live)
       const data = structuredClone(live.project.data)
       const resolveAll = (variables: PLCVariable[] | undefined): void => {
         if (!variables) return
@@ -1626,6 +1675,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       resolveAll(data.configurations?.resource?.globalVariables)
       return data
     },
+    getAliasIndex: () => getMemoizedAliasIndex(getState()),
     addIOGroup: (deviceName, group) => {
       // Read producer state from the live store before entering produce
       // so the pool reflects every active source (pin-mapping, VPP,

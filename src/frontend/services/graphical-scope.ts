@@ -71,19 +71,6 @@ function splitExpression(value: string): { anchor: string; segment: string } {
   return { anchor: value.slice(0, lastDot + 1), segment: value.slice(lastDot + 1) }
 }
 
-/** Strip a trailing array subscript (`foo[3]` → `foo`). Returns the name and whether a subscript was present. */
-function stripSubscript(segment: string): { name: string; indexed: boolean } {
-  const bracket = segment.indexOf('[')
-  if (bracket < 0) return { name: segment, indexed: false }
-  return { name: segment.slice(0, bracket), indexed: true }
-}
-
-/** Pull the element type out of an `ARRAY [..] OF <type>` detail string. */
-function arrayElementType(type: string): string | undefined {
-  const match = type.match(/\bOF\s+([A-Za-z_][A-Za-z0-9_]*)/i)
-  return match ? match[1] : undefined
-}
-
 /**
  * Autocomplete candidates for `value` typed into a box in `pouName`'s
  * scope. `value` is the full current box text (e.g. `TON0.Q`, `mo`).
@@ -138,8 +125,14 @@ export async function getScopeCompletions(
 
 /**
  * Resolve the IEC type of `expression` in `pouName`'s scope. Handles bare
- * identifiers, member chains (`TON0.Q`, `s.a.b`) and 1-D array element
- * access (`arr[3]`). See {@link ScopeTypeResult} for the tri-state result.
+ * identifiers, member chains (`TON0.Q`, `s.a.b`) and array element access
+ * (`arr[3]`, `grid[1,2]`). See {@link ScopeTypeResult} for the tri-state result.
+ *
+ * Array elements need no special casing: strucpp lists each in-bounds element
+ * as its own symbol typed as the element type, so `arr[3]` matches by label
+ * like any other. That also makes the bounds authoritative — `arr[99]` simply
+ * isn't a symbol, so it resolves `unknown` and the box is flagged, which a
+ * client-side subscript-stripping heuristic could never detect.
  */
 export async function resolveScopeExpressionType(pouName: string, expression: string): Promise<ScopeTypeResult> {
   const api = getScopedQueryApi()
@@ -154,16 +147,11 @@ export async function resolveScopeExpressionType(pouName: string, expression: st
   // context yet — treat as unavailable rather than flag a false invalid.
   if (items.length === 0) return { status: 'unavailable' }
 
-  const { name, indexed } = stripSubscript(segment)
   const match = items.find(
-    (item) => isValueCompletionKind(item.kind) && item.label.toLowerCase() === name.toLowerCase(),
+    (item) => isValueCompletionKind(item.kind) && item.label.toLowerCase() === segment.toLowerCase(),
   )
   if (!match || !match.type) return { status: 'unknown' }
 
-  if (indexed) {
-    const element = arrayElementType(match.type)
-    return element ? { status: 'resolved', type: element } : { status: 'unknown' }
-  }
   return { status: 'resolved', type: match.type }
 }
 

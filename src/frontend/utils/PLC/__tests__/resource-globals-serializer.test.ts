@@ -35,4 +35,28 @@ describe('serializeResourceGlobalsToST', () => {
     const st = serializeResourceGlobalsToST([global('counter', 'INT', { location: '%MW0', initialValue: '5' })])
     expect(st).toContain('counter : INT AT %MW0 := 5;')
   })
+
+  // A global bound to a producer alias stores the alias NAME in `location`.
+  // `AT <alias>` is not valid IEC ST and would take the whole VAR_GLOBAL block
+  // — and every VAR_EXTERNAL that resolves against it — down with it.
+  it('resolves an alias-bound location to its IEC address', () => {
+    const st = serializeResourceGlobalsToST(
+      [global('pressure', 'INT', { location: 'tank_alias' })],
+      new Map([['tank_alias', '%IW4']]),
+    )
+    expect(st).toContain('pressure : INT AT %IW4;')
+    expect(st).not.toContain('AT tank_alias')
+  })
+
+  it('drops an alias that no longer resolves instead of emitting invalid ST', () => {
+    const st = serializeResourceGlobalsToST([global('pressure', 'INT', { location: 'gone' })], new Map())
+    expect(st).toContain('pressure : INT;')
+    expect(st).not.toContain('AT gone')
+  })
+
+  it('never emits a bare alias identifier when no index is supplied', () => {
+    const st = serializeResourceGlobalsToST([global('pressure', 'INT', { location: 'tank_alias' })])
+    expect(st).toContain('pressure : INT;')
+    expect(st).not.toContain('AT tank_alias')
+  })
 })

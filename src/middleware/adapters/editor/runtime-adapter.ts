@@ -21,12 +21,15 @@ import type {
   DiscoverDevicesOptions,
   DiscoverDevicesResult,
   DiscoveredRuntimeDevice,
+  ListUsersResult,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
+  UpdateUserParams,
   UsersInfoResult,
+  WhoAmIResult,
 } from '../../shared/ports/runtime-port'
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
 
@@ -62,7 +65,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     async createUser(params) {
       try {
         const ip = requireIp()
-        return await window.bridge.runtimeCreateUser(ip, params.username, params.password)
+        return await window.bridge.runtimeCreateUser(ip, params.username, params.password, params.role)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
@@ -74,6 +77,42 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return await window.bridge.runtimeGetUsersInfo(ip)
       } catch (err) {
         return { hasUsers: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async listUsers(): Promise<ListUsersResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeListUsers(ip)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async whoAmI(): Promise<WhoAmIResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeWhoAmI(ip)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async updateUser(userId: number, params: UpdateUserParams) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeUpdateUser(ip, userId, params)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async deleteUser(userId: number) {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeDeleteUser(ip, userId)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
       }
     },
 

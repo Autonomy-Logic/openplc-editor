@@ -51,6 +51,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     connectionStatus: 'disconnected',
     plcStatus: null,
     ipAddress: null,
+    runtimeVersion: null,
     selectedDevice: null,
     storedCredentials: null,
     timingStats: null,
@@ -118,6 +119,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.connectionStatus = 'disconnected'
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
+          runtimeConnection.runtimeVersion = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
@@ -445,6 +447,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setRuntimeVersion: (version): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.runtimeVersion = version
+        }),
+      )
+    },
     setPlcRuntimeStatus: (status): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -508,6 +517,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.connectionStatus = 'disconnected'
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
+          runtimeConnection.runtimeVersion = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null

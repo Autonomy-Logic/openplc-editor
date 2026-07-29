@@ -1220,6 +1220,24 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // setRuntimeVersion
+  // -----------------------------------------------------------------------
+  describe('setRuntimeVersion', () => {
+    it('stores the runtime version', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setRuntimeVersion('v4.1.9')
+      expect(store.getState().runtimeConnection.runtimeVersion).toBe('v4.1.9')
+    })
+
+    it('clears the runtime version with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setRuntimeVersion('v4.1.9')
+      store.getState().deviceActions.setRuntimeVersion(null)
+      expect(store.getState().runtimeConnection.runtimeVersion).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setPlcRuntimeStatus
   // -----------------------------------------------------------------------
   describe('setPlcRuntimeStatus', () => {
@@ -1401,6 +1419,7 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setIncludeTimingStatsInPolling(true)
       store.getState().deviceActions.setEthercatStatus(makeEthercatStatus())
       store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
+      store.getState().deviceActions.setRuntimeVersion('v4.1.9')
 
       store.getState().deviceActions.clearRuntimeConnection()
       const rc = store.getState().runtimeConnection
@@ -1408,6 +1427,7 @@ describe('createDeviceSlice', () => {
       expect(rc.connectionStatus).toBe('disconnected')
       expect(rc.plcStatus).toBeNull()
       expect(rc.ipAddress).toBeNull()
+      expect(rc.runtimeVersion).toBeNull()
       expect(rc.selectedDevice).toBeNull()
       expect(rc.storedCredentials).toBeNull()
       expect(rc.timingStats).toBeNull()

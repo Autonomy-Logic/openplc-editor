@@ -127,6 +127,11 @@ const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
   meta: { name },
 })
 
+const CreateUserManagementEditor = (name = 'User Management'): EditorModel => ({
+  type: 'plc-user-management',
+  meta: { name },
+})
+
 /** Canonical tab name + factory for the Library Project's manifest
  *  editor.  Display label (also the file-slice key the dirty
  *  tracker + save flow look up under); intentionally NOT the on-
@@ -177,6 +182,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateLibraryManagerEditor(name)
     case 'library-manifest':
       return CreateLibraryManifestEditor(name)
+    case 'user-management':
+      return CreateUserManagementEditor(name)
     case 'diff-viewer':
       return CreateDiffViewerEditor(name, elementType.filePath)
   }
@@ -196,6 +203,7 @@ export {
   CreateRemoteDeviceEditor,
   CreateResourceEditor,
   CreateServerEditor,
+  CreateUserManagementEditor,
   CreateVendorScreenEditor,
   LIBRARY_MANIFEST_TAB_NAME,
 }

@@ -4,6 +4,7 @@ import {
   SCOPE_QUERY_POU_NAME,
   serializePouScopeForQuery,
   serializePouSignatureToST,
+  serializePouSignatureToSTWithBodyOffset,
 } from '../pou-signature-serializer'
 
 function makePou(overrides: Partial<PLCPou> = {}): PLCPou {
@@ -256,6 +257,129 @@ describe('serializePouSignatureToST', () => {
       expect(varIdx).toBeGreaterThan(declIdx)
       expect(bodyIdx).toBeGreaterThan(varIdx)
       expect(endIdx).toBeGreaterThan(bodyIdx)
+    })
+  })
+
+  // A variable's `location` holds EITHER a producer alias name OR a literal
+  // `%addr`. `AT <alias>` is not valid IEC ST — strucpp abandons the whole VAR
+  // block on it, taking every later symbol in the POU out of scope (the bug:
+  // no autocomplete + red boxes in the LD/FBD editors). The LSP projection
+  // must therefore resolve aliases exactly like the compiler does.
+  describe('alias-bound locations', () => {
+    const ALIAS_INDEX: ReadonlyMap<string, string> = new Map([
+      ['label2', '%IW0'],
+      ['label3', '%IW1'],
+    ])
+
+    const aliasPou = (): PLCPou =>
+      makePou({
+        name: 'main',
+        pouType: 'program',
+        body: { language: 'ld', value: {} as never },
+        interface: {
+          variables: [
+            {
+              id: '1',
+              name: 'label2',
+              class: 'local',
+              type: { definition: 'base-type', value: 'INT' },
+              documentation: '',
+              debug: false,
+              location: 'label2',
+            },
+            {
+              id: '2',
+              name: 'orphan',
+              class: 'local',
+              type: { definition: 'base-type', value: 'INT' },
+              documentation: '',
+              debug: false,
+              location: 'gone_alias',
+            },
+            {
+              id: '3',
+              name: 'manual',
+              class: 'local',
+              type: { definition: 'base-type', value: 'INT' },
+              documentation: '',
+              debug: false,
+              location: '%QW7',
+            },
+            {
+              id: '4',
+              name: 'ligado',
+              class: 'local',
+              type: { definition: 'base-type', value: 'BOOL' },
+              documentation: '',
+              debug: false,
+              location: '',
+            },
+          ],
+        },
+      })
+
+    it('resolves an alias to its address, keeps a literal verbatim, drops an orphan', () => {
+      const text = serializePouSignatureToST(aliasPou(), ALIAS_INDEX)
+      expect(text).toContain('label2 : INT AT %IW0;')
+      expect(text).toContain('manual : INT AT %QW7;')
+      expect(text).toContain('orphan : INT;')
+      expect(text).toContain('ligado : BOOL;')
+      expect(text).not.toContain('AT label2')
+      expect(text).not.toContain('AT gone_alias')
+    })
+
+    it('emits no alias identifier when no index is supplied', () => {
+      // The empty-index default must still produce parseable ST rather than
+      // leaking `AT <alias>` — this is the safety net for boot / test callers.
+      const text = serializePouSignatureToST(aliasPou())
+      expect(text).toContain('label2 : INT;')
+      expect(text).toContain('manual : INT AT %QW7;')
+      expect(text).not.toContain('AT label2')
+    })
+
+    it('keeps the body line offset stable — resolution never adds or drops lines', () => {
+      const withIndex = serializePouSignatureToSTWithBodyOffset(aliasPou(), ALIAS_INDEX)
+      const withoutIndex = serializePouSignatureToSTWithBodyOffset(aliasPou())
+      expect(withIndex.bodyLineOffset).toBe(withoutIndex.bodyLineOffset)
+      expect(withIndex.text.split('\n')).toHaveLength(withoutIndex.text.split('\n').length)
+    })
+
+    it('does not mutate the source variables', () => {
+      const pou = aliasPou()
+      serializePouSignatureToST(pou, ALIAS_INDEX)
+      serializePouScopeForQuery(pou, 'lab', 1, ALIAS_INDEX)
+      expect(pou.interface?.variables.map((v) => v.location)).toEqual(['label2', 'gone_alias', '%QW7', ''])
+    })
+
+    it('resolves aliases in the scope-query document too', () => {
+      const { text } = serializePouScopeForQuery(aliasPou(), 'lab', 7, ALIAS_INDEX)
+      expect(text).toContain('label2 : INT AT %IW0;')
+      expect(text).not.toContain('AT label2')
+      expect(text).not.toContain('AT gone_alias')
+    })
+
+    it('resolves an alias on an external variable while still rewriting it to a plain VAR', () => {
+      const pou = makePou({
+        name: 'main',
+        pouType: 'program',
+        body: { language: 'ld', value: {} as never },
+        interface: {
+          variables: [
+            {
+              id: 'g1',
+              name: 'shared',
+              class: 'external',
+              type: { definition: 'base-type', value: 'INT' },
+              documentation: '',
+              debug: false,
+              location: 'label3',
+            },
+          ],
+        },
+      })
+      const { text } = serializePouScopeForQuery(pou, 'sh', 2, ALIAS_INDEX)
+      expect(text).toContain('shared : INT AT %IW1;')
+      expect(text).not.toContain('VAR_EXTERNAL')
     })
   })
 })
