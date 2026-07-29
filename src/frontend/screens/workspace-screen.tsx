@@ -53,6 +53,7 @@ import {
   useIsDebuggerVisible,
 } from '../hooks/use-debug-value'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
+import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
@@ -151,6 +152,9 @@ const WorkspaceScreen = () => {
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
+  // Mirrors a baremetal target's run/stop state from the held device link's
+  // existing liveness tick (no timer of its own).
+  useDevicePlcState()
 
   // Build debug variables from POUs with debug=true
   const allDebugVariables = useMemo(() => {

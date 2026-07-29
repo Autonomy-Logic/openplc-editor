@@ -32,6 +32,12 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: true,
   plcStateControl: false,
   directUsbUpload: true,
+  // No shipped Simulator VPP declares a license-store backend today, so
+  // the licensing UX stays hidden. Follows the manifest, not the kind —
+  // a Simulator VPP that shipped one would flip this to `true`.
+  licenseStore: false,
+  // No shipped Simulator VPP is a paid/licensed product.
+  isLicensable: false,
 }
 
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
@@ -49,6 +55,10 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: false,
   directUsbUpload: false,
+  // Runtime v3 has no VPP layer and thus no license-store backend.
+  licenseStore: false,
+  // Runtime v3 has no VPP layer and is not a licensed product.
+  isLicensable: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
@@ -68,6 +78,14 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: true,
   directUsbUpload: false,
+  // "Plain" Runtime v4 has no VPP backplane and no license-store
+  // backend. A VPP board (SLM-RP4 etc.) whose manifest declares
+  // `hal.licenseStore` overrides this to `true` via the merged
+  // capability block — same path as `vppIo`.
+  licenseStore: false,
+  // "Plain" Runtime v4 is not a licensed product; a paid VPP board flips
+  // this to `true` via its merged manifest capability block, like `vppIo`.
+  isLicensable: false,
 }
 
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
@@ -88,4 +106,11 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: true,
   directUsbUpload: true,
+  // Arduino-CLI VPP boards (Opta, P1AM) that ship a `hal.licenseStore`
+  // backend flip this on via their merged capability block; the plain
+  // preset stays `false`.
+  licenseStore: false,
+  // Plain Arduino targets are not licensed products; a paid Arduino-CLI VPP
+  // board flips this to `true` via its merged manifest capability block.
+  isLicensable: false,
 }

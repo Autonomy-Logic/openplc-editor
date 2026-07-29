@@ -23,6 +23,101 @@
 
 import type { BoardInfo, CommunicationPort } from './types'
 
+// ---------------------------------------------------------------------------
+// Connect-time classification (D72) — platform contract shared by the port,
+// its editor adapter, and the `deviceProbeInfo` store slice. The store can't
+// reach into `backend/`, so the canonical shape lives here.
+// ---------------------------------------------------------------------------
+
+/** How a freshly-opened channel classified. */
+export type DeviceProbeStatus = 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
+
+/** On-device license state read (0x4A) for a licensable target. */
+export type DeviceLicenseStatus = 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+
+export interface DeviceProbeResult {
+  status: DeviceProbeStatus
+  /** Present when a firmware answered 0x48: the raw hardware id, lowercase hex. */
+  anchorHex?: string
+  /**
+   * The licensing identity, `sha256("openplc-dev-v1|" || anchor)[:16]` hex —
+   * what the backend stores a license against, and what a purchase must be
+   * bound to. Distinct from `anchorHex` (the raw hardware serial): the two are
+   * NOT interchangeable and must not be labelled the same in the UI. Derived in
+   * the main process (`node:crypto`), so the renderer receives it rather than
+   * computing it.
+   */
+  deviceId?: string
+  /** On-device license state — only present for a licensable connected device. */
+  licenseStatus?: DeviceLicenseStatus
+  /**
+   * What the license check CONCLUDED, which is not the same question as
+   * `licenseStatus` (what is stored on the device). The pair that matters:
+   * `unlicensed` + `demo` means the backend confirmed there is no license,
+   * while `unlicensed` + `error` means we never got an answer — the request was
+   * throttled, the signer was unconfigured, the network was down. Telling those
+   * apart is the difference between "buy a license" and "we could not check".
+   */
+  activation?: DeviceActivationSummary
+  /** Transport/backend failure text when `activation === 'error'`. */
+  error?: string
+}
+
+/**
+ * Transport selector for a connect probe. `connectionType` picks the underlying
+ * `LicenseCapableTransport` in the main process (serial RTU for USB boards, TCP,
+ * or the runtime-v4 debug WebSocket). Fields not relevant to the chosen type are
+ * ignored.
+ */
+export interface DeviceConnectParams {
+  connectionType?: 'rtu' | 'tcp' | 'websocket'
+  port?: string | number
+  baudRate?: number
+  slaveId?: number
+  host?: string
+  token?: string
+}
+
+/** What the connect-time recover step concluded (licensable targets only). */
+export type DeviceActivationSummary = 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
+
+/**
+ * Result of opening a persistent serial link (D72). Same classification as the
+ * probe, plus what the auto-recover concluded — all done over a single held
+ * client in the main process.
+ */
+export interface DeviceConnectResult {
+  status: DeviceProbeStatus
+  anchorHex?: string
+  /** See `DeviceProbeResult.deviceId` — the licensing identity, not the anchor. */
+  deviceId?: string
+  licenseStatus?: DeviceLicenseStatus
+  activation?: DeviceActivationSummary
+  error?: string
+}
+
+/** Outcome of a license activation attempt (0x48 -> derive -> backend -> 0x49). */
+export type DeviceActivationOutcome = 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+
+export interface DeviceActivationResult {
+  success: boolean
+  probedAt: string
+  outcome: DeviceActivationOutcome
+  /**
+   * The same two fields the serial connect result carries. `outcome` alone is
+   * lossy — it folds "no on-device storage" and "the backend never answered"
+   * into a single `'error'`, which is why the network path used to show a
+   * different (or blank) badge than serial for the same device.
+   */
+  licenseStatus?: DeviceLicenseStatus
+  activation?: DeviceActivationSummary
+  deviceId?: string
+  vppId?: string
+  anchorHex?: string
+  license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
+  error?: string
+}
+
 export interface DevicePort {
   /**
    * Get all available boards with their hardware specs and pin configurations.
@@ -59,4 +154,60 @@ export interface DevicePort {
    * Web: returns URL to bundled image asset.
    */
   getPreviewImage(imageName: string, packagePath?: string): Promise<string>
+
+  /**
+   * License activation / auto-recover (D51/D62): open the channel, read the
+   * hardware id (0x48) and any stored license (0x4A); when absent, derive the
+   * device/VPP ids and ask the backend whether the device is licensed, writing
+   * the returned blob (0x49). Best-effort — never throws; failures resolve to
+   * `{ outcome: 'error' }`. Used by the CONNECT flow to silently recover a
+   * license the backend already holds before prompting the user to buy.
+   *
+   * Editor: transient client picked by transport, same 0x48->0x4A->derive->
+   * backend->0x49 on serial / TCP / runtime-v4 WebSocket.
+   * Web: not applicable locally.
+   */
+  activateLicense(
+    params: DeviceConnectParams,
+    opts: { packageId: string; keyId?: string },
+  ): Promise<DeviceActivationResult>
+
+  /**
+   * Open and HOLD a persistent serial link (D72). The main process keeps the
+   * RTU client open with a liveness poll and pushes status changes; this call
+   * returns the initial classification + recover result. Only meaningful for
+   * serial (USB) targets. Editor: `device:connect`. Web: not applicable.
+   */
+  connect(
+    params: DeviceConnectParams,
+    opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
+  ): Promise<DeviceConnectResult>
+
+  /** Close a held serial link. Editor: `device:disconnect`. */
+  disconnect(): Promise<{ success: boolean }>
+
+  /**
+   * Subscribe to live serial-link status pushed by the main process (liveness
+   * failure, upload/debug handoff). Returns an unsubscribe function. Editor:
+   * `device:connection-status` IPC event. Web: no-op.
+   */
+  onConnectionStatus(
+    callback: (payload: {
+      status: 'disconnected' | 'connecting' | 'connected' | 'error'
+      port: string | null
+    }) => void,
+  ): () => void
+
+  /**
+   * Subscribe to run/stop state from the held device link (baremetal targets).
+   *
+   * Pushed on the same liveness tick that keeps the link honest — the status
+   * frame (FC 0x46) carries the run/stop state and the mode-switch position — so
+   * this costs no extra round trip and needs no second timer. `plcState` is
+   * 0/1/2 (STOPPED/RUNNING/ERROR); `switchPosition` is 0/1 (STOP/RUN) and is
+   * absent on firmware predating the run/stop state machine.
+   */
+  onPlcState?(
+    callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
+  ): () => void
 }

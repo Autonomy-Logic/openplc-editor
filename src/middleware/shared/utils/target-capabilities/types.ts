@@ -105,4 +105,27 @@ export interface TargetCapabilities {
    *  in-process Simulator. Runtime v3 / v4 require an established
    *  network connection. */
   directUsbUpload: boolean
+
+  /** The selected board's VPP ships an on-device license-storage
+   *  backend (`device.hal.licenseStore`, D60). Gate for the licensing
+   *  UX: only boards whose VPP declares the storage backend surface the
+   *  anchor -> activate -> write flow. `false` (the weak default ->
+   *  `LIC_STORE_UNSUPPORTED`) for every board that doesn't declare it —
+   *  including plain Runtime v4, Linux, and the Simulator, unless a
+   *  future VPP for one of them ships the backend. Derived from the same
+   *  manifest field that drives `-DVPP_HAS_LICENSE_STORE` on the build
+   *  side, mirroring how `vppIo` is resolved. */
+  licenseStore: boolean
+
+  /** The selected board's VPP participates in the paid licensing flow
+   *  (PLA-01). Gate for the post-flash activation routine: only boards
+   *  whose VPP manifest declares `capabilities.isLicensable: true` run the
+   *  `anchor -> derive -> activate -> write` flow after a successful upload.
+   *  `false` (the weak default) for every board that doesn't declare it —
+   *  including plain Runtime v3/v4, Linux, Arduino, and the Simulator.
+   *  Distinct from `licenseStore`: `licenseStore` is about whether the VPP
+   *  ships the on-device storage backend, `isLicensable` about whether the
+   *  VPP is sold as a licensed product. Flows verbatim from the manifest's
+   *  `capabilities` block, exactly like `vppIo`. */
+  isLicensable: boolean
 }

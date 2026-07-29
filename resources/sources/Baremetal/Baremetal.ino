@@ -29,9 +29,21 @@
 #include "openplc.h"
 #include "defines.h"
 #include "arduino_runtime_glue.h"
+#include "license_gate.h"
+#include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
 
-#ifdef MODBUS_ENABLED
+#if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
+#endif
+
+// Hardware anchor for the license gate: the SAME ArduinoUniqueID material the
+// debugger returns for FC 0x48 (see modbus_debug.cpp::debugGetBoardId). Mirror
+// that file's guard exactly so a core without UniqueID support — or a board
+// that opts out via OPENPLC_NO_UNIQUE_ID — still compiles; the anchor is simply
+// empty there and the license-core binds to whatever it gets.
+#ifndef OPENPLC_NO_UNIQUE_ID
+    #include <ArduinoUniqueID.h>
+    #define OPENPLC_HAS_UNIQUE_ID
 #endif
 
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
@@ -134,8 +146,45 @@ void setup()
     // read RUN and start immediately, as they always have.
     runtime_init_plc_state();
 
+    // -----------------------------------------------------------------------
+    // License gate (Slice C, D65). Hand the stored license blob and the
+    // hardware anchor to the license-core so it can verify the license and arm
+    // its demo timer. Without a license-core linked, license_gate_init() is the
+    // weak default (license_gate_weak.cpp) and this whole block is a harmless
+    // no-op — actuation then stays unconditionally allowed, i.e. behaviour is
+    // identical to boards that never had licensing. millis() gives the core the
+    // same time base the runtime uses (no esp_timer dependency).
+    // -----------------------------------------------------------------------
+    {
+        uint8_t lic_blob[LIC_BLOB_SIZE];
+        size_t  lic_len = 0;
+        if (license_store_read(lic_blob, sizeof(lic_blob), &lic_len) != LIC_STORE_OK)
+        {
+            // EMPTY / CORRUPT / UNSUPPORTED / any error: nothing usable was
+            // read, so present a zero-length blob. The core's verify rejects it
+            // and starts the demo window; with no core the weak gate ignores
+            // the args entirely.
+            lic_len = 0;
+        }
+
+    #ifdef OPENPLC_HAS_UNIQUE_ID
+        const uint8_t *anchor     = UniqueID;
+        size_t         anchor_len = (size_t)UniqueIDsize;
+    #else
+        const uint8_t *anchor     = NULL;
+        size_t         anchor_len = 0;
+    #endif
+
+        license_gate_init(lic_blob, lic_len, anchor, anchor_len, (uint32_t)millis());
+    }
+
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
+            #ifdef MBSERIAL_ON_SECONDARY
+                // Dual-serial: Modbus RTU runs on a secondary UART (below) while
+                // the always-on debugger keeps the default serial — bring it up.
+                DEBUG_IFACE.begin(DEBUG_BAUD);
+            #endif
             #ifdef MBSERIAL_TXPIN
                 // Disable TX pin from OpenPLC hardware layer
                 for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
@@ -161,6 +210,18 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
+            // NOTE (single-serial model): the debugger and Modbus RTU share one
+            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
+            // port IS the debugger's default serial, so this single begin() also
+            // brings up the debugger. Running the debugger on the default USB
+            // serial while RTU uses a *different* UART simultaneously would need
+            // a second serial handler — a documented follow-up.
+        #elif defined(DEBUGGER_ENABLED)
+            // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
+            // still needs the default serial up on mb_serialport to respond.
+            DEBUG_IFACE.begin(DEBUG_BAUD);
+            mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+            modbus.slaveid = DEBUG_SLAVE;
         #endif
 
         #ifdef MBTCP
@@ -184,6 +245,15 @@ void setup()
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
+    #elif defined(DEBUGGER_ENABLED)
+        // Always-on debugger without full Modbus: bring up the serial port and
+        // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
+        // variables directly through the strucpp debug table (openplc_debug_*),
+        // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
+        // deliberately not called here, saving SRAM on small boards.
+        DEBUG_IFACE.begin(DEBUG_BAUD);
+        mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+        modbus.slaveid = DEBUG_SLAVE;
     #endif
 
     setupCycleDelay(base_tick_ns);
@@ -375,8 +445,12 @@ void scheduler()
         sketch_loop();
     #endif
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
         modbusTask();
+    #elif defined(DEBUGGER_ENABLED)
+        // Debug-only: poll the serial transport for debugger requests. No buffer
+        // sync (modbusTask's mirror loops) because there are no operation buffers.
+        mbtask();
     #endif
 
     if (!first_cycle)
@@ -398,11 +472,17 @@ void loop()
         last_run += scan_cycle;
     }
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
     // Only run Modbus task again if we have at least 10ms gap until the next cycle
     if ((micros() - last_run) >= 10000)
     {
         modbusTask();
+    }
+    #elif defined(DEBUGGER_ENABLED)
+    // Debug-only: give the debugger extra serial-poll time between cycles too.
+    if ((micros() - last_run) >= 10000)
+    {
+        mbtask();
     }
     #endif
 

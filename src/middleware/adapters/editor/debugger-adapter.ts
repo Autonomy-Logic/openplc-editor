@@ -15,8 +15,11 @@ import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type {
   DebugConnectionConfig,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
+  DeviceAnchorResult,
   Md5VerifyResult,
   Unsubscribe,
 } from '../../shared/ports/types'
@@ -65,17 +68,43 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
       }
     },
 
-    async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
+    async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
       try {
-        return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
+        return await window.bridge.debuggerWriteLicense(blob)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }
     },
 
-    async getPlcState(config: DebugConnectionConfig): Promise<PlcControlResult> {
+    async readLicense(): Promise<DebugLicenseReadResult> {
       try {
-        return await window.bridge.debuggerPlcControl(config.connectionType, config.connectionParams, 'query')
+        const result = await window.bridge.debuggerReadLicense()
+        return {
+          ...result,
+          blob: result.blob ? Uint8Array.from(result.blob) : undefined,
+        }
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getDeviceAnchor(config: DebugConnectionConfig): Promise<DeviceAnchorResult> {
+      try {
+        const result = await window.bridge.getDeviceAnchor(config.connectionType, config.connectionParams)
+        return {
+          ...result,
+          // Rehydrate the anchor bytes defensively — the IPC boundary may hand
+          // back a plain array-like; normalize to a real number[].
+          anchor: result.anchor ? Array.from(result.anchor) : undefined,
+        }
+      } catch (err) {
+        return { success: false, source: config.connectionType === 'websocket' ? 'runtime' : 'arduino', error: getErrorMessage(err) }
+      }
+    },
+
+    async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
+      try {
+        return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }

@@ -383,6 +383,99 @@ describe('BoardInfoResolver', () => {
       expect(info.platformOptions).toBeUndefined()
     })
 
+    it('resolves a single-string hal.licenseStore to one traversal-guarded absolute path', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'esp32-generic',
+            name: 'ESP32 Generic',
+            preview: 'p.png',
+            target: { type: 'arduino-cli', core: 'esp32:esp32', platform: 'esp32:esp32:esp32' },
+            hal: {
+              type: 'arduino-hal',
+              source: 'hal/arduino/esp32.cpp',
+              licenseStore: 'hal/license/license_store_esp32.cpp',
+            },
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      const info = r.resolve('ESP32 Generic')
+      // `packageRelative` (the traversal-guarded fake) uses `resolve`, so the
+      // expected path is `resolve`-normalised too (matches the guard exactly
+      // and stays cross-platform: `resolve` adds the drive prefix on Windows).
+      expect(info.licenseStoreSourceFiles).toEqual([resolve(PKG_PATH, 'hal/license/license_store_esp32.cpp')])
+    })
+
+    it('resolves an array hal.licenseStore preserving order and distinctive basenames', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'espressif-multi',
+            name: 'Espressif Multi',
+            preview: 'p.png',
+            target: { type: 'arduino-cli', core: 'esp32:esp32', platform: 'esp32:esp32:esp32' },
+            hal: {
+              type: 'arduino-hal',
+              source: 'hal/arduino/esp32.cpp',
+              licenseStore: ['hal/license/license_store_esp32.cpp', 'hal/license/license_store_esp8266.cpp'],
+            },
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Espressif Multi')
+      expect(info.licenseStoreSourceFiles).toEqual([
+        resolve(PKG_PATH, 'hal/license/license_store_esp32.cpp'),
+        resolve(PKG_PATH, 'hal/license/license_store_esp8266.cpp'),
+      ])
+    })
+
+    it('leaves licenseStoreSourceFiles empty when the VPP device declares no hal.licenseStore', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'arduino-mega',
+            name: 'Arduino Mega',
+            preview: 'p.png',
+            target: { type: 'arduino-cli', core: 'arduino:avr', platform: 'arduino:avr:mega' },
+            hal: { type: 'arduino-hal', source: 'hal/arduino/mega.cpp' },
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      const info = r.resolve('Arduino Mega')
+      expect(info.licenseStoreSourceFiles).toEqual([])
+    })
+
+    it('applies the same anti-traversal guard to hal.licenseStore as to hal.source', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest({
+        devices: [
+          {
+            id: 'evil-board',
+            name: 'Evil Board',
+            preview: 'p.png',
+            target: { type: 'arduino-cli', core: 'arduino:avr', platform: 'arduino:avr:mega' },
+            hal: {
+              type: 'arduino-hal',
+              source: 'hal/arduino/mega.cpp',
+              licenseStore: '../../../../etc/passwd',
+            },
+          },
+        ],
+      })
+      const pm = makePackageManager([pkg], { [pkg.packageId]: manifest })
+      const r = makeResolver({}, pm)
+      expect(() => r.resolve('Evil Board')).toThrow(/escapes package directory/)
+    })
+
     it('propagates device.debug (DebugSpec) onto BoardBuildInfo for VPP devices', () => {
       // Same renderer-side consumer as the hals branch above (Debug
       // button enable state); the VPP path goes through `#fromVppDevice`,

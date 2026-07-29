@@ -12,12 +12,22 @@ if (typeof globalThis.TextDecoder === 'undefined') {
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../../simulator/types'
 import {
+  buildGetBoardIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
+  buildGetStatusRequest,
+  buildGetVersionRequest,
+  buildReadLicenseRequest,
   buildSetVariableRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
+  parseGetStatusResponse,
+  parseGetVersionResponse,
+  parseReadLicenseResponse,
   parseSetVariableResponse,
+  parseWriteLicenseResponse,
   responseFunctionCode,
 } from '../modbus-pdu'
 
@@ -190,6 +200,195 @@ describe('buildSetVariableRequest / parseSetVariableResponse', () => {
   })
 })
 
+describe('buildGetStatusRequest / parseGetStatusResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetStatusRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_STATUS)
+  })
+
+  it('parses running / tick / uptime on success', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_STATUS,
+      ModbusDebugResponse.SUCCESS,
+      0x01, // running = true
+      0x00,
+      0x00,
+      0x00,
+      0x2a, // tick = 42
+      0x00,
+      0x00,
+      0x01,
+      0x00, // uptime = 256
+    ])
+    const result = parseGetStatusResponse(buf)
+    // `plcState` is the same byte as `running`, surfaced as the tri-state the
+    // run/stop state machine actually has. An 11-byte frame (this one) carries
+    // no switch position, so the field is absent.
+    expect(result).toEqual({ success: true, running: true, plcState: 1, tick: 42, uptimeMs: 256 })
+  })
+
+  it('reports running=false when the flag byte is zero', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_STATUS,
+      ModbusDebugResponse.SUCCESS,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+    ])
+    expect(parseGetStatusResponse(buf).running).toBe(false)
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetStatusResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetStatusResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetStatusResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+  })
+
+  it('flags an incomplete success payload', () => {
+    const result = parseGetStatusResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_STATUS, ModbusDebugResponse.SUCCESS, 0x01]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete/)
+  })
+})
+
+describe('buildGetVersionRequest / parseGetVersionResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetVersionRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_VERSION)
+  })
+
+  it('parses the ASCII version string on success', () => {
+    const ver = new TextEnc().encode('4.2.7')
+    const buf = new Uint8Array(2 + ver.length)
+    buf[0] = ModbusFunctionCode.DEBUG_GET_VERSION
+    buf[1] = ModbusDebugResponse.SUCCESS
+    buf.set(ver, 2)
+    expect(parseGetVersionResponse(buf)).toEqual({ success: true, version: '4.2.7' })
+  })
+
+  it('strips a trailing NUL terminator', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_VERSION,
+      ModbusDebugResponse.SUCCESS,
+      0x31,
+      0x2e,
+      0x30,
+      0x00,
+    ])
+    expect(parseGetVersionResponse(buf).version).toBe('1.0')
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetVersionResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetVersionResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetVersionResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION, ModbusDebugResponse.ERROR_OUT_OF_MEMORY]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_MEMORY')
+  })
+})
+
+describe('buildGetBoardIdRequest / parseGetBoardIdResponse', () => {
+  it('builds a bare 1-byte FC PDU', () => {
+    const buf = buildGetBoardIdRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+  })
+
+  it('parses id bytes and hex on success', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x03, // id_len = 3
+      0x0a,
+      0xbc,
+      0x01,
+    ])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(true)
+    expect(Array.from(result.boardId!)).toEqual([0x0a, 0xbc, 0x01])
+    expect(result.boardIdHex).toBe('0abc01')
+  })
+
+  it('handles id_len = 0 (unsupported core) as success with empty id', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x00])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.boardIdHex).toBe('')
+    expect(Array.from(result.boardId!)).toEqual([])
+  })
+
+  it('flags too-short buffer', () => {
+    const result = parseGetBoardIdResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/too short/)
+  })
+
+  it('flags function code mismatch', () => {
+    const result = parseGetBoardIdResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/mismatch/)
+  })
+
+  it('surfaces error status', () => {
+    const result = parseGetBoardIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+  })
+
+  it('flags a missing id_len byte', () => {
+    const result = parseGetBoardIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/at least 3/)
+  })
+
+  it('flags truncated id bytes', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])
+    const result = parseGetBoardIdResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete board-id data/)
+  })
+})
+
 describe('responseFunctionCode', () => {
   it('returns the first byte', () => {
     expect(responseFunctionCode(new Uint8Array([0x45, 0x00]))).toBe(0x45)
@@ -197,5 +396,171 @@ describe('responseFunctionCode', () => {
 
   it('returns undefined for an empty buffer', () => {
     expect(responseFunctionCode(new Uint8Array(0))).toBeUndefined()
+  })
+})
+
+describe('buildWriteLicenseRequest', () => {
+  it('emits [FC][len:U16BE][blob] with big-endian length', () => {
+    // 260-byte blob proves the length is BE (0x01 0x04), not LE.
+    const blob = new Uint8Array(260).fill(0xab)
+    blob[0] = 0x4f // 'O' — magic first byte, sanity marker
+    const buf = buildWriteLicenseRequest(blob)
+    expect(buf).toHaveLength(3 + 260)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_WRITE_LICENSE)
+    expect(buf[1]).toBe(0x01) // len hi
+    expect(buf[2]).toBe(0x04) // len lo (260 = 0x0104)
+    expect(buf[3]).toBe(0x4f)
+    expect(buf[buf.length - 1]).toBe(0xab)
+  })
+
+  it('handles a zero-length blob', () => {
+    const buf = buildWriteLicenseRequest(new Uint8Array(0))
+    expect(buf).toHaveLength(3)
+    expect(buf[1]).toBe(0)
+    expect(buf[2]).toBe(0)
+  })
+})
+
+describe('parseWriteLicenseResponse', () => {
+  it('returns success on SUCCESS status', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.SUCCESS])
+    const result = parseWriteLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.status).toBe(ModbusDebugResponse.SUCCESS)
+  })
+
+  it('surfaces an out-of-bounds (TOO_LARGE, 0x81) status as failure', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])
+    const result = parseWriteLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_BOUNDS)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+  })
+
+  it('surfaces an out-of-memory (0x82) status as failure', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.ERROR_OUT_OF_MEMORY])
+    const result = parseWriteLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_MEMORY)
+    expect(result.error).toBe('ERROR_OUT_OF_MEMORY')
+  })
+
+  it('treats LIC_EMPTY / LIC_CORRUPT statuses on a WRITE response as failures (not valid write states)', () => {
+    // EMPTY/CORRUPT are read-side device states; a WRITE that echoes them is
+    // not SUCCESS, so the write must be reported as failed.
+    const empty = parseWriteLicenseResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.LIC_EMPTY]),
+    )
+    expect(empty.success).toBe(false)
+    expect(empty.status).toBe(ModbusDebugResponse.LIC_EMPTY)
+
+    const corrupt = parseWriteLicenseResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.LIC_CORRUPT]),
+    )
+    expect(corrupt.success).toBe(false)
+    expect(corrupt.status).toBe(ModbusDebugResponse.LIC_CORRUPT)
+  })
+
+  it('classifies LIC_UNSUPPORTED (0x85) as success + unsupported (no backend)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.LIC_UNSUPPORTED])
+    const result = parseWriteLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.status).toBe(ModbusDebugResponse.LIC_UNSUPPORTED)
+    expect(result.unsupported).toBe(true)
+  })
+
+  it('rejects a function-code mismatch', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.SUCCESS])
+    expect(parseWriteLicenseResponse(buf).success).toBe(false)
+  })
+
+  it('rejects a too-short frame', () => {
+    expect(parseWriteLicenseResponse(new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE])).success).toBe(false)
+  })
+})
+
+describe('buildReadLicenseRequest', () => {
+  it('emits a bare [FC] frame', () => {
+    const buf = buildReadLicenseRequest()
+    expect(buf).toHaveLength(1)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_READ_LICENSE)
+  })
+})
+
+describe('parseReadLicenseResponse', () => {
+  it('extracts the blob on SUCCESS using a BE length', () => {
+    const blob = new Uint8Array([0x4f, 0x50, 0x4c, 0x43, 0xde, 0xad])
+    const buf = new Uint8Array(4 + blob.length)
+    buf[0] = ModbusFunctionCode.DEBUG_READ_LICENSE
+    buf[1] = ModbusDebugResponse.SUCCESS
+    buf[2] = 0x00 // len hi
+    buf[3] = blob.length // len lo
+    buf.set(blob, 4)
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.empty).toBeUndefined()
+    expect(result.corrupt).toBeUndefined()
+    expect(Array.from(result.blob!)).toEqual(Array.from(blob))
+    // magic first byte survives the round-trip (endianness sanity)
+    expect(result.blob![0]).toBe(0x4f)
+  })
+
+  it('classifies LIC_EMPTY as success + empty (no blob)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.LIC_EMPTY])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.empty).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('classifies LIC_CORRUPT as success + corrupt (no blob)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.LIC_CORRUPT])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.corrupt).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('classifies LIC_UNSUPPORTED as success + unsupported (no blob)', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.LIC_UNSUPPORTED])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.unsupported).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('surfaces an out-of-bounds (TOO_LARGE, 0x81) status as failure with no blob', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_BOUNDS)
+    expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('surfaces an out-of-memory (0x82) status as failure', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.ERROR_OUT_OF_MEMORY])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.status).toBe(ModbusDebugResponse.ERROR_OUT_OF_MEMORY)
+  })
+
+  it('rejects a function-code mismatch', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_WRITE_LICENSE, ModbusDebugResponse.SUCCESS])
+    expect(parseReadLicenseResponse(buf).success).toBe(false)
+  })
+
+  it('flags a truncated blob', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.SUCCESS, 0x00, 0x08, 0x01])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete license blob/)
+  })
+
+  it('flags a success frame missing the length field', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE, ModbusDebugResponse.SUCCESS])
+    const result = parseReadLicenseResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/at least 4/)
   })
 })

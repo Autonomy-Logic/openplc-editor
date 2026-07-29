@@ -91,6 +91,13 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Per-board #defines, fed through to `generateDefinesContent` as
    *  the `// Board defines` section. */
   define?: string | string[]
+  /** VPP-declared on-device license-storage backend (`device.hal.licenseStore`).
+   *  Only its presence matters at this layer — it gates the
+   *  `VPP_HAS_LICENSE_STORE` capability define in `generateDefinesContent`.
+   *  The actual source injection happens in the editor's compiler-module
+   *  from `BoardBuildInfo.licenseStoreSourceFiles`. Absent for hals.json
+   *  builtins and VPP boards that don't ship a backend. */
+  licenseStore?: string | string[]
   /** Per-board arduino-cli library list.  Sourced from `hals.json`
    *  `extra_libraries` (static boards) and from VPP manifests'
    *  `device.hal.extraArduinoLibraries` (installed VPP boards) — the
@@ -699,6 +706,10 @@ async function runCompilePipelineInner(
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    // Presence of a VPP license-store backend → advertise the capability
+    // via `-DVPP_HAS_LICENSE_STORE`. Only presence matters here; the
+    // source injection happens platform-side (editor compiler-module).
+    hasLicenseStore: !!boardEntry.licenseStore,
   })
 
   // VPP config header — emitted only for arduino-cli targets whose

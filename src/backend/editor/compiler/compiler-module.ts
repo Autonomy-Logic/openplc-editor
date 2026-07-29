@@ -195,6 +195,10 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
+    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
+    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
+    // so the lib must be installed for every Arduino build.
+    'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
     'CONTROLLINO',
@@ -2517,6 +2521,30 @@ class CompilerModule {
           strucppRuntimeHeaders: v4Layout,
           boardHalContent,
         })
+
+        // VPP-provided license-store backend source(s).  Mirrors the
+        // HAL read above (`boardInfo.halSourceFile` @ ~2578): each path
+        // is an absolute key `BoardInfoResolver` produced from
+        // `device.hal.licenseStore` through the same traversal-guarded
+        // `resolvePackageRelativePath`.  Unlike the HAL (which lands at
+        // the canonical `src/arduino.cpp`), these keep their distinctive
+        // basenames and land in the sketch directory next to
+        // `license_store.h` / `license_blob.h` (`examples/Baremetal/`),
+        // so their `#include "license_store.h"` resolves and they define
+        // the STRONG `license_store_*` symbols that override the
+        // skeleton's `license_store_weak.cpp`.  Boards without a VPP
+        // backend inject nothing and link the weak default (→ UNSUPPORTED).
+        for (const licenseStoreFile of boardInfo.licenseStoreSourceFiles) {
+          try {
+            const content = await readFile(licenseStoreFile, 'utf-8')
+            firmwareSkeleton[`examples/Baremetal/${path.basename(licenseStoreFile)}`] = content
+          } catch (lsErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message: `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}`,
+            })
+          }
+        }
       }
       try {
         // `devices/pin-mapping.json` ships in one of two shapes (the
@@ -2614,6 +2642,8 @@ class CompilerModule {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         const vendorScreenData = deviceConfig.vendorScreenData ?? {}
         vppModbusState = {
+          serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
+          network: vendorScreenData['network'] as VppModbusScreenState['network'],
           modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
           modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }

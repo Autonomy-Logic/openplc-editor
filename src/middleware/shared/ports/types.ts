@@ -628,6 +628,18 @@ export interface BoardInfo {
    */
   platformOptions?: PlatformOption[]
   /**
+   * Hardware serial ports this board exposes (e.g. `['Serial', 'Serial1']`),
+   * mirrored from the VPP manifest device's `serialPorts`. Consumed by VPP
+   * screen `select` fields via `optionsRef: 'board.serialPorts'` (the Modbus
+   * RTU port picker) and by the always-on serial/debugger. Absent → the editor
+   * assumes a single `Serial`.
+   */
+  serialPorts?: string[]
+  /** Name of the default serial port (usually the USB CDC port) where the
+   *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
+   *  `Serial`. */
+  defaultSerial?: string
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
@@ -697,6 +709,10 @@ export interface VppMetadata {
   vendor: string
   deviceId: string
   packagePath: string
+  /** Per-VPP signing key id (manifest `hal.licenseKeyId`, D69f). Forwarded as
+   *  `keyId` in the license activation request so the backend/mock picks the
+   *  right per-VPP signing key. Absent for VPPs without on-device licensing. */
+  licenseKeyId?: string
   screens: Record<string, unknown>
   moduleSystem: {
     enabled: boolean
@@ -775,6 +791,22 @@ export interface PackageManifest {
       define?: string | string[]
       extraArduinoLibraries?: string[]
       libraries?: string
+      /**
+       * Optional on-device license-storage backend. The VPP ships the C++
+       * source(s) implementing `license_store_{write,read,erase}` (the STRONG
+       * symbols that override the editor's `license_store_weak.cpp` default);
+       * the editor injects them into the Baremetal sketch, recompiled against
+       * its own `license_blob.h`/`license_store.h` (no ABI drift). A single
+       * package-relative path or an array of them. Presence = the board
+       * supports the licensing flow (`-DVPP_HAS_LICENSE_STORE`); absence =
+       * the weak default links and the licensing FCs report
+       * `LIC_STORE_UNSUPPORTED`.
+       */
+      licenseStore?: string | string[]
+      /** Per-VPP signing key id (D69f). Names the KMS/per-VPP key the backend
+       *  signs this VPP's licenses with; the editor forwards it as `keyId` in
+       *  the activation request so the contract is KMS-ready. */
+      licenseKeyId?: string
     }
     defaults?: {
       runtimeIpAddress?: string
@@ -786,6 +818,13 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
+     *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
+     *  `select` fields via `optionsRef: 'board.serialPorts'`. */
+    serialPorts?: string[]
+    /** Name of the default serial port (usually the USB CDC port). Surfaced onto
+     *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
+    defaultSerial?: string
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
@@ -1042,6 +1081,46 @@ export interface DebugVariableResult {
 
 export interface DebugSetResult {
   success: boolean
+  error?: string
+}
+
+/**
+ * Result of writing a license blob to on-device storage (FC 0x49).
+ * `status` is the raw ModbusDebugResponse code the target returned.
+ */
+export interface DebugLicenseWriteResult {
+  success: boolean
+  status?: number
+  error?: string
+}
+
+/**
+ * Result of reading a license blob from on-device storage (FC 0x4A).
+ * `blob` is present only on success with a provisioned license. `empty`
+ * (virgin storage) and `corrupt` (magic ok, crc failed) are valid device
+ * states surfaced with `success: true` and the matching flag set.
+ */
+export interface DebugLicenseReadResult {
+  success: boolean
+  status?: number
+  empty?: boolean
+  corrupt?: boolean
+  blob?: Uint8Array
+  error?: string
+}
+
+/**
+ * Unified device-anchor (device-id) acquisition result. `source` records which
+ * target path produced the id: `runtime` (Linux v4 over the webserver HTTP API)
+ * or `arduino` (arduino-cli targets via the debugger FC 0x48). `anchorHex` is
+ * the lowercase hex of the raw hardware id; `anchor` is the same bytes as a
+ * plain number[] (IPC-safe), rehydrated to Uint8Array by the adapter.
+ */
+export interface DeviceAnchorResult {
+  success: boolean
+  source: 'runtime' | 'arduino'
+  anchorHex?: string
+  anchor?: number[]
   error?: string
 }
 

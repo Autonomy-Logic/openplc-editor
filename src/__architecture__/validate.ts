@@ -279,6 +279,10 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
+  // via the shared `resolveDebugConnection` resolver, same as the activity bar's
+  // debugger/post-flash paths.
+  'frontend/hooks/use-device-connect.ts': ['backend-shared'],
   // PLCopen export — needs the shared XmlGenerator composing function
   // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No

@@ -113,6 +113,9 @@ type VppMetadata = {
   vendor: string
   deviceId: string
   packagePath: string
+  /** Per-VPP signing key id (manifest hal.licenseKeyId, D69f); forwarded as
+   *  `keyId` in the activation request. Absent for VPPs without a declared key. */
+  licenseKeyId?: string
   screens: Record<string, unknown>
   moduleSystem: {
     enabled: boolean

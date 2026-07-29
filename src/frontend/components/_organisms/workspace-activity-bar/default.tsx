@@ -24,6 +24,7 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
+import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -103,6 +104,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const switchPosition = useOpenPLCStore((state) => state.runtimeConnection.switchPosition)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const canEdit = useOpenPLCStore((state) => state.workspace.canEdit)
@@ -152,6 +154,52 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     const result = await executeSaveProject(projectPort, capabilities)
     return result.success
   }, [projectPort])
+
+  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
+  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
+  // for hals.json entries) so two boards sharing a `cacheKey` value
+  // don't see each other's last-entered IP.  Lives on a ref so it
+  // survives across re-renders without triggering them.
+  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
+
+  // Build resolver context from current store state on each call —
+  // captures the user's freshest screen edits without forcing the
+  // user to save first. Shared by the interactive debugger flow
+  // (`resolveDebugConfigWithUx`) and the non-interactive post-flash
+  // probe so both resolve the SAME baud / port / slaveId the board's
+  // debug spec dictates. `boardTarget` selects the prompt-cache bucket.
+  const buildDebugResolverContext = useCallback(
+    (boardTarget: string): DebugResolverContext => {
+      const store = useOpenPLCStore.getState()
+      const cfg = store.deviceDefinitions.configuration
+      const rtConn = store.runtimeConnection
+      // `vendorScreenData` is already keyed by section ID (e.g.
+      // `modbus_rtu`); resolver state's `screens` shape matches
+      // 1:1 so we pass it straight through.
+      const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
+      const promptCache = promptCacheRef.current[boardTarget] ?? {}
+      return {
+        state: {
+          configuration: {
+            deviceBoard: cfg.deviceBoard,
+            ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
+            ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
+          },
+          screens,
+          runtimeConnection: {
+            ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
+            ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
+          },
+          promptCache,
+        },
+        capabilities: {
+          runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
+          jwtToken: Boolean(rtConn.jwtToken),
+        },
+      }
+    },
+    [runtime],
+  )
 
   // ---------------------------------------------------------------------------
   // Build (Compile)
@@ -247,6 +295,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // aliases.
       const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
 
+      // Serial handoff (D72): a held device connection owns the serial port that
+      // arduino-cli needs for a direct-USB upload. Release it before the build so
+      // the upload can take the port; reconnect afterwards (auto-reconnect).
+      const caps = resolveTargetCapabilities(currentBoardInfo)
+      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      const serialWasConnected = willUpload && useOpenPLCStore.getState().serialConnection.status === 'connected'
+      if (serialWasConnected) {
+        try {
+          await window.bridge.deviceDisconnect()
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
+
       try {
         // Track whether the compile stream already surfaced an error so we
         // don't log a second, generic "Compilation failed" after a failed
@@ -319,6 +381,51 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (!result.success && !streamedError) {
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
+
+        // Serial handoff (D72): if we released a held device connection for this
+        // upload, reconnect it now that arduino-cli is done with the port. The
+        // recover runs again in the main process; refresh the license badge from
+        // the result. Silent (no dialogs) — the user just flashed on purpose.
+        if (serialWasConnected && result.success) {
+          const boardTarget = deviceDefinitions.configuration.deviceBoard
+          const spec = currentBoardInfo?.debug
+          const resolved = spec
+            ? resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), undefined)
+            : undefined
+          if (resolved?.kind === 'config' && resolved.config.connectionType === 'rtu') {
+            const cp = resolved.config.connectionParams
+            try {
+              const reconnect = await window.bridge.deviceConnect(
+                {
+                  connectionType: 'rtu',
+                  port: String(cp.port),
+                  baudRate: cp.baudRate != null ? Number(cp.baudRate) : undefined,
+                  slaveId: cp.slaveId != null ? Number(cp.slaveId) : undefined,
+                },
+                {
+                  isLicensable: caps.isLicensable,
+                  packageId: currentBoardInfo?.vpp?.packageId,
+                  keyId: currentBoardInfo?.vpp?.licenseKeyId,
+                },
+              )
+              useOpenPLCStore.getState().deviceActions.setDeviceProbeResult({
+                status: reconnect.status,
+                anchorHex: reconnect.anchorHex,
+                deviceId: reconnect.deviceId,
+                licenseStatus: reconnect.licenseStatus,
+                activation: reconnect.activation,
+                error: reconnect.error,
+              })
+            } catch {
+              // best-effort: the user can press Connect again.
+            }
+          }
+        }
+
+        // License activation for runtime-v4 (network) targets has MOVED to the
+        // CONNECT flow (D72 / Q-H / F7): the device screen runs the license check
+        // over the debug WebSocket when the runtime connection is established, so
+        // the build no longer activates after upload.
       } catch (err: unknown) {
         addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
       } finally {
@@ -327,9 +434,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
     [
       compiler,
-      projectData,
       projectMeta,
       deviceDefinitions,
+      currentBoardInfo,
       isSimulatorBoard,
       simulator,
       debugSession,
@@ -340,11 +447,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       jwtToken,
       runtime,
       requestConsoleFollow,
+      buildDebugResolverContext,
     ],
   )
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
+
+  // CONNECT flow (D72): the device screen's "No Firmware Detected" dialog lives
+  // in board.tsx but Build & Upload lives here. When the user chooses to flash,
+  // that dialog fires a decoupled event we answer by running the same build.
+  useEffect(() => {
+    return onDeviceFlashRequest(() => {
+      void handleBuildRef.current()
+    })
+  }, [])
 
   // ---------------------------------------------------------------------------
   // Build Library (.stlib)
@@ -470,35 +587,29 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     // -----------------------------------------------------------------------
     // Baremetal (arduino-cli) targets: run/stop rides the debugger transport
-    // (Modbus FC 0x49).  No network connection or JWT involved.
+    // (Modbus FC 0x4b).  No network connection or JWT involved.
+    //
+    // Reads are NOT done here: the held device link's status poll keeps
+    // `plcStatus` / `switchPosition` in the store (see `useDevicePlcState`), so
+    // the pre-check is a store lookup rather than another round trip over a
+    // serial port the poll is already using.
     // -----------------------------------------------------------------------
     if (caps.directUsbUpload && !caps.isInProcessSimulator) {
-      if (!debuggerPort.getPlcState || !debuggerPort.setPlcState) return
+      if (!debuggerPort.setPlcState) return
       try {
-        const debugConfig = await resolveDebugConfigRef.current(boardTarget, boardInfo?.debug)
-        if (!debugConfig) return
-
         const wantRun = plcStatus !== 'RUNNING'
 
-        // Pre-check: never send a start to a device whose switch reads STOP.
-        // The device refuses it anyway, but blocking here means the user gets
-        // the explanation without a pointless round trip.
-        if (wantRun) {
-          const probe = await debuggerPort.getPlcState(debugConfig)
-          if (probe.unsupported) {
-            addLog({
-              id: crypto.randomUUID(),
-              level: 'info',
-              message:
-                'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
-            })
-            return
-          }
-          if (probe.success && probe.switchPosition === 0) {
-            await warnSwitchInStop(boardTarget, switchLabel)
-            return
-          }
+        // Never send a start to a device whose switch reads STOP. `null` means
+        // "unknown / no switch", which must NOT block: a board with no physical
+        // switch, or firmware predating the state machine, would otherwise be
+        // un-startable.
+        if (wantRun && switchPosition === 'stop') {
+          await warnSwitchInStop(boardTarget, switchLabel)
+          return
         }
+
+        const debugConfig = await resolveDebugConfigRef.current(boardTarget, boardInfo?.debug)
+        if (!debugConfig) return
 
         const result = await debuggerPort.setPlcState(debugConfig, wantRun ? 'RUNNING' : 'STOPPED')
         if (result.unsupported) {
@@ -509,8 +620,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           })
           return
         }
-        // Covers the race where the switch moved between the pre-check and the
-        // command: the device is authoritative, so its refusal wins.
+        // Covers the race where the switch moved between the store's last poll
+        // and this command: the device is authoritative, so its refusal wins.
         if (result.refusedBySwitch) {
           await warnSwitchInStop(boardTarget, switchLabel)
           return
@@ -524,14 +635,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
-        // Re-read rather than assuming: the runtime derives the new state on
-        // its next scan, so the value the command returned may still be stale.
-        const after = await debuggerPort.getPlcState(debugConfig)
-        if (after.success && after.state !== undefined) {
+        // No re-read: the runtime derives the new state on its next scan, and
+        // the status poll picks it up within one tick. Reflecting the
+        // acknowledgement optimistically keeps the button responsive without a
+        // second round trip that could still read the pre-change value.
+        if (result.state !== undefined) {
           useOpenPLCStore
             .getState()
             .deviceActions.setPlcRuntimeStatus(
-              (after.state === 1 ? 'RUNNING' : after.state === 2 ? 'ERROR' : 'STOPPED') as NonNullable<
+              (result.state === 1 ? 'RUNNING' : result.state === 2 ? 'ERROR' : 'STOPPED') as NonNullable<
                 RuntimeConnection['plcStatus']
               >,
             )
@@ -559,9 +671,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
       } else {
-        // Pre-check against the switch position the last status poll reported.
-        const probe = await runtime.getStatus()
-        if (probe.success && probe.switchPosition === 'stop') {
+        // Same store-backed pre-check as the baremetal path above; the v4 status
+        // poll fills it from `/api/status`.
+        if (switchPosition === 'stop') {
           await warnSwitchInStop(boardTarget, switchLabel)
           return
         }
@@ -597,6 +709,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     jwtToken,
     connectionStatus,
     plcStatus,
+    switchPosition,
     addLog,
     debuggerPort,
     deviceDefinitions,
@@ -789,13 +902,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // user cancelled or no config could be resolved.
   // ---------------------------------------------------------------------------
 
-  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
-  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
-  // for hals.json entries) so two boards sharing a `cacheKey` value
-  // don't see each other's last-entered IP.  Lives on a ref so it
-  // survives across re-renders without triggering them.
-  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
-
   const resolveDebugConfigWithUx = useCallback(
     async (boardTarget: string, spec: DebugSpec | undefined): Promise<DebugConnectionConfig | null> => {
       if (!spec) {
@@ -808,47 +914,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return null
       }
 
-      // Build resolver context from current store state on each call —
-      // captures the user's freshest screen edits without forcing the
-      // user to save first.
-      const buildContext = (): DebugResolverContext => {
-        const store = useOpenPLCStore.getState()
-        const cfg = store.deviceDefinitions.configuration
-        const rtConn = store.runtimeConnection
-        // `vendorScreenData` is already keyed by section ID (e.g.
-        // `modbus_rtu`); resolver state's `screens` shape matches
-        // 1:1 so we pass it straight through.
-        const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
-        const cacheBucketKey = `${cfg.deviceBoard}`
-        const promptCache = promptCacheRef.current[cacheBucketKey] ?? {}
-        return {
-          state: {
-            configuration: {
-              deviceBoard: cfg.deviceBoard,
-              ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
-              ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
-            },
-            screens,
-            runtimeConnection: {
-              ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
-              ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
-            },
-            promptCache,
-          },
-          capabilities: {
-            runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
-            jwtToken: Boolean(rtConn.jwtToken),
-          },
-        }
-      }
-
       let selectedChannelIndex: number | undefined
       // Loop: pickers/prompts re-invoke the resolver with extra state
       // until it returns config or error/unsupported/cancelled.
       // Capped at 8 iterations as a defensive guard against spec
       // bugs that could otherwise loop forever.
       for (let iteration = 0; iteration < 8; iteration += 1) {
-        const outcome = resolveDebugConnection(spec, buildContext(), selectedChannelIndex)
+        const outcome = resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), selectedChannelIndex)
         if (outcome.kind === 'config') {
           return outcome.config
         }
@@ -885,7 +957,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
       return null
     },
-    [runtime],
+    [buildDebugResolverContext],
   )
   resolveDebugConfigRef.current = resolveDebugConfigWithUx
 

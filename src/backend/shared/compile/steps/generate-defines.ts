@@ -79,6 +79,19 @@ export interface GenerateDefinesInput {
    *  fixed RTU-over-USART0 block.  Web passes `undefined` until
    *  VPP screens land on the web build. */
   vppModbusState?: VppModbusScreenState
+  /** Name of the board's default serial port (from the VPP manifest device's
+   *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
+   *  RTU "shares the debug serial" flag. Absent → `Serial`. */
+  defaultSerial?: string
+  /** `true` when the selected device's VPP declares `hal.licenseStore`
+   *  (a real on-device storage backend whose source the editor injects
+   *  into the sketch). Emits `#define VPP_HAS_LICENSE_STORE` so the
+   *  firmware can advertise the licensing capability. Linkage does not
+   *  depend on this define — `license_store_weak.cpp` covers boards
+   *  without a backend — so it is purely a capability signal. Absent /
+   *  false → no define, and the weak default reports
+   *  `LIC_STORE_UNSUPPORTED`. */
+  hasLicenseStore?: boolean
 }
 
 /**
@@ -100,7 +113,16 @@ export interface GenerateDefinesInput {
  * editor-produced and web-produced firmware comes out clean).
  */
 export function generateDefinesContent(input: GenerateDefinesInput): string {
-  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState } = input
+  const {
+    boardEntry,
+    devicePinMapping,
+    stProgramFileContent,
+    buildMD5Hash,
+    boardRuntime,
+    vppModbusState,
+    defaultSerial,
+    hasLicenseStore,
+  } = input
 
   let DEFINES_CONTENT = ''
 
@@ -155,11 +177,39 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState)
+    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'
     }
+  }
+
+  // 4b. Debugger — always-on serial debugger for baremetal Arduino targets.
+  //     The default serial port is ALWAYS initialised (DEBUG_IFACE @ DEBUG_BAUD)
+  //     so the debug function codes (0x41-0x48) respond over serial regardless
+  //     of whether Modbus is configured — without allocating operation buffers.
+  //     When Modbus RTU runs on that same default port, generateModbusDefines
+  //     emits MBSERIAL_SHARES_DEBUG_SERIAL so the firmware begins the port once.
+  //     Simulator uses its fixed MODBUS_ENABLED block above; openplc-compiler
+  //     runtimes don't use this firmware at all.
+  if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
+    DEFINES_CONTENT += '//Debugger\n'
+    DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
+    DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${vppModbusState?.serial?.baud_rate ?? '115200'}\n`
+    DEFINES_CONTENT += `\n\n`
+  }
+
+  // 4c. License-store capability — emitted when the selected device's
+  //     VPP ships an on-device storage backend (`hal.licenseStore`),
+  //     whose source the editor injects into the sketch. Linkage does
+  //     NOT depend on this define (the weak default always links); it
+  //     lets the firmware advertise the licensing capability. Boards
+  //     without a backend emit nothing and report UNSUPPORTED.
+  if (hasLicenseStore) {
+    DEFINES_CONTENT += '//License store\n'
+    DEFINES_CONTENT += '#define VPP_HAS_LICENSE_STORE\n'
+    DEFINES_CONTENT += `\n\n`
   }
 
   // 5. IO Config — derived from devicePinMapping.  Pin order is

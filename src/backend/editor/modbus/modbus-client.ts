@@ -1,7 +1,22 @@
-import { parsePlcControlResponse } from '@root/backend/shared/debug/modbus-pdu'
-import type { PlcControlResult } from '@root/backend/shared/debug/types'
-import { PlcControlSubcommand, PlcRuntimeState } from '@root/backend/shared/simulator/types'
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
+import {
+  buildGetBoardIdRequest,
+  buildGetStatusRequest,
+  buildPlcSetStateRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
+  parseGetStatusResponse,
+  parsePlcSetStateResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
+import type {
+  DebugBoardIdResult,
+  DebugStatusResult,
+  Md5ProbeResult,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { Socket } from 'net'
@@ -12,18 +27,26 @@ export enum ModbusFunctionCode {
   DEBUG_GET = 0x43,
   DEBUG_GET_LIST = 0x44,
   DEBUG_GET_MD5 = 0x45,
-  // 0x46-0x48 are reserved for the planned debug subscription/streaming
-  // codes, so run/stop control starts at 0x49.
-  PLC_CONTROL = 0x49,
+  DEBUG_GET_STATUS = 0x46,
+  DEBUG_GET_VERSION = 0x47,
+  DEBUG_GET_BOARD_ID = 0x48,
+  DEBUG_WRITE_LICENSE = 0x49,
+  DEBUG_READ_LICENSE = 0x4a,
+  /** Set the runtime run/stop state. Reads go through DEBUG_GET_STATUS (0x46),
+   *  which already reports it. */
+  PLC_SET_STATE = 0x4b,
 }
 
 export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
-  /** FC 0x49 only: a RUN request was refused because the hardware mode
+  LIC_EMPTY = 0x83,
+  LIC_CORRUPT = 0x84,
+  LIC_UNSUPPORTED = 0x85,
+  /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
-  REFUSED_BY_SWITCH = 0x83,
+  REFUSED_BY_SWITCH = 0x86,
 }
 
 interface ModbusTcpClientOptions {
@@ -355,51 +378,199 @@ export class ModbusTcpClient {
       return { success: false, error: getErrorMessage(error) }
     }
   }
+
   // -------------------------------------------------------------------------
-  // FC 0x49 -- run/stop control (Modbus TCP framing: MBAP header + PDU).
+  // On-device license storage (FC 0x49/0x4A). TCP frame: [MBAP:6][FC@7][...].
+  // The wire `len` is BIG-ENDIAN (matches the other FCs) while the blob content
+  // it frames is little-endian — do not confuse the two.
   // -------------------------------------------------------------------------
-  private async plcControl(subcmd: number, arg: number): Promise<PlcControlResult> {
+
+  async writeLicense(
+    blob: Uint8Array,
+  ): Promise<{ success: boolean; status?: number; unsupported?: boolean; error?: string }> {
     if (!this.socket) {
       return { success: false, error: 'Not connected to target' }
     }
 
-    try {
-      const transactionId = this.incrementTransactionId()
-      const request = Buffer.alloc(11)
-      request.writeUInt16BE(transactionId, 0)
-      request.writeUInt16BE(0x0000, 2) // protocol id
-      request.writeUInt16BE(5, 4) // length: unit + fc + subcmd + arg
-      request.writeUInt8(0x00, 6) // unit id
-      request.writeUInt8(ModbusFunctionCode.PLC_CONTROL, 7)
-      request.writeUInt8(subcmd, 8)
-      request.writeUInt8(arg, 9)
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    // buildWriteLicenseRequest() returns [FC][len:u16BE][blob]; the MBAP frame
+    // carries the PDU verbatim at offset 7.
+    const pdu = buildWriteLicenseRequest(blob)
 
+    const pduLength = 1 + pdu.length // unitId + PDU
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
+
+    try {
       const data = await this.sendTcpRequest(request)
-      if (data.length < 11) {
-        return { success: false, error: 'Invalid response: too short' }
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
       }
       if (data.readUInt16BE(0) !== transactionId) {
         return { success: false, error: 'Transaction ID mismatch' }
       }
-      // Shared parser over the PDU (skip the 7-byte MBAP header) so every
-      // transport agrees on the wire format.
-      return parsePlcControlResponse(new Uint8Array(data.subarray(7, 11)))
+
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseWriteLicenseResponse(pduResponse)
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
-  /** Read the runtime state and mode-switch position. Never changes state. */
-  async getPlcState(): Promise<PlcControlResult> {
-    return this.plcControl(PlcControlSubcommand.QUERY, 0)
+  async readLicense(): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    unsupported?: boolean
+    blob?: Uint8Array
+    error?: string
+  }> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    const pdu = buildReadLicenseRequest() // bare [FC]
+
+    const pduLength = 1 + pdu.length // unitId + PDU
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
+
+    try {
+      const data = await this.sendTcpRequest(request)
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseReadLicenseResponse(pduResponse)
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
   }
 
   /**
-   * Ask the runtime to run or stop. A RUN request is refused (not queued)
-   * while the mode switch reads STOP.
+   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). TCP frame is
+   * [MBAP:6][FC@7][...], so the pure PDU `[FC][status][id_len:u8][id_bytes...]`
+   * starts at offset 7 — hand it to the shared parseGetBoardIdResponse rather
+   * than parsing inline.
+   */
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    const transactionId = this.incrementTransactionId()
+    const protocolId = 0x0000
+    const unitId = 0x00
+    // buildGetBoardIdRequest() returns the [FC] PDU; the MBAP frame carries the
+    // function code + payload, empty for board-id.
+    const pdu = buildGetBoardIdRequest()
+
+    const pduLength = 1 + pdu.length // unitId + PDU (FC only)
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(protocolId, 2)
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(unitId, 6)
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
+
+    try {
+      const data = await this.sendTcpRequest(request)
+
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+
+      const responseTransactionId = data.readUInt16BE(0)
+      if (responseTransactionId !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(data, 7)
+      return parseGetBoardIdResponse(pduResponse)
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+  /**
+   * Wrap a pure PDU in a Modbus-TCP MBAP header, returning the frame and the
+   * transaction id to match against the reply.
+   *
+   * The older methods in this class build the same six bytes inline; new ones
+   * use this so the layout lives in one place. Migrating the rest is a
+   * mechanical follow-up, deliberately not done here.
+   */
+  private buildTcpFrame(pdu: Uint8Array): { request: Buffer; transactionId: number } {
+    const transactionId = this.incrementTransactionId()
+    const pduLength = 1 + pdu.length // unitId + PDU
+    const request = Buffer.alloc(6 + pduLength)
+    request.writeUInt16BE(transactionId, 0)
+    request.writeUInt16BE(0x0000, 2) // protocol id
+    request.writeUInt16BE(pduLength, 4)
+    request.writeUInt8(0x00, 6) // unit id
+    Buffer.from(pdu).copy(request as unknown as Uint8Array, 7)
+    return { request, transactionId }
+  }
+
+  /**
+   * FC 0x46 -- runtime status (run/stop state, scan counter, uptime).
+   * Single read path for run/stop; see the RTU client for the rationale.
+   */
+  async getStatus(): Promise<DebugStatusResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      const { request, transactionId } = this.buildTcpFrame(buildGetStatusRequest())
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      return parseGetStatusResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x4b -- ask the runtime to run or stop. Command only; reads go through
+   * `getStatus()`. Refused while the mode switch reads STOP.
    */
   async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
-    return this.plcControl(PlcControlSubcommand.SET_STATE, state === PlcRuntimeState.RUNNING ? 1 : 0)
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      const { request, transactionId } = this.buildTcpFrame(buildPlcSetStateRequest(state))
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 8) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      return parsePlcSetStateResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
   }
 
 }

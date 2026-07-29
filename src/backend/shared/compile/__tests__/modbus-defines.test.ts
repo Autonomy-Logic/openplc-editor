@@ -22,11 +22,64 @@ describe('generateModbusDefines', () => {
         '#define MBSERIAL_IFACE Serial',
         '#define MBSERIAL_BAUD 115200',
         '#define MBSERIAL_SLAVE 1',
+        '#define MBSERIAL_SHARES_DEBUG_SERIAL',
         '#define MBSERIAL',
         '#define MODBUS_ENABLED',
         '',
       ].join('\n'),
     )
+  })
+
+  it('Phase 2: RTU on the default port takes its baud from the Serial section and shares the debug serial', () => {
+    const out = generateModbusDefines({
+      serial: { baud_rate: '9600' },
+      modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
+    })
+    expect(out).toContain('#define MBSERIAL_IFACE Serial')
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    expect(out).not.toContain('MBSERIAL_ON_SECONDARY')
+  })
+
+  it('Phase 2: RTU on a secondary port uses its own baud and does NOT share the debug serial', () => {
+    const out = generateModbusDefines(
+      {
+        serial: { baud_rate: '9600' },
+        modbus_rtu: { enabled: true, serial_port: 'Serial1', baud_rate: '19200', rtu_slave_id: 1 },
+      },
+      'Serial',
+    )
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+    expect(out).not.toContain('MBSERIAL_SHARES_DEBUG_SERIAL')
+    // Distinct UART from the debugger's default → firmware services two serials.
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('Phase 2: honors a non-default `defaultSerial` when deciding the shares flag', () => {
+    const out = generateModbusDefines(
+      { serial: { baud_rate: '9600' }, modbus_rtu: { enabled: true, serial_port: 'Serial1' } },
+      'Serial1',
+    )
+    // serial_port === defaultSerial → shares, and baud from the Serial section.
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('Phase 2: reads TCP network config from the network section', () => {
+    const out = generateModbusDefines({
+      network: {
+        interface: 'Wi-Fi',
+        wifi_ssid: 'MyNet',
+        wifi_password: 'super-secret',
+        enable_dhcp: true,
+      },
+      modbus_tcp: { enabled: true, unit_id: 1 },
+    })
+    expect(out).toContain('#define MBTCP_SSID "MyNet"')
+    expect(out).toContain('#define MBTCP_PWD "super-secret"')
+    expect(out).toContain('#define MBTCP_WIFI')
   })
 
   it('applies RTU schema defaults when only `enabled: true` is persisted (form-layout writes only touched fields)', () => {

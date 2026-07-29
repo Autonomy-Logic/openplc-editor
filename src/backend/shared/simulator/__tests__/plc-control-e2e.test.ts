@@ -1,7 +1,7 @@
 /**
  * End-to-end validation of the baremetal run/stop state machine over avr8js.
  *
- * Boots simulator firmware in avr8js and exercises Modbus FC 0x49 against it:
+ * Boots simulator firmware in avr8js and exercises the run/stop wire protocol against it:
  * query, stop, output de-energisation, program re-initialisation, restart, and
  * that the debug channel survives a stop.
  *
@@ -60,7 +60,7 @@ function resolveDebugAddr(debugMapJson: string, pathSuffix: string): number {
   return (leaf.arrayIdx << 16) | leaf.elemIdx
 }
 
-describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr8js)', () => {
+describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x4b + 0x46 over avr8js)', () => {
   let sim: SimulatorModule
   let client: ModbusRtuClient
   let counterAddr: number
@@ -110,9 +110,9 @@ describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr
   })
 
   it('boots RUNNING with the virtual switch in RUN', async () => {
-    const state = await client.getPlcState()
+    const state = await client.getStatus()
     expect(state.success).toBe(true)
-    expect(state.state).toBe(PlcRuntimeState.RUNNING)
+    expect(state.plcState).toBe(PlcRuntimeState.RUNNING)
     // The simulator HAL implements no hardwareStateSwitch() override, so the
     // weak default must report RUN -- this is the "nothing changes for boards
     // that opt out" guarantee.
@@ -130,12 +130,12 @@ describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr
     expect(await readPulse()).toBe(1)
   }, 30000)
 
-  it('SET_STATE STOP transitions to STOPPED', async () => {
+  it('run/stop command STOPs the PLC to STOPPED', async () => {
     const res = await client.setPlcState(PlcRuntimeState.STOPPED)
     expect(res.success).toBe(true)
     await settle()
-    const state = await client.getPlcState()
-    expect(state.state).toBe(PlcRuntimeState.STOPPED)
+    const state = await client.getStatus()
+    expect(state.plcState).toBe(PlcRuntimeState.STOPPED)
   }, 30000)
 
   it('freezes the program while stopped', async () => {
@@ -154,14 +154,14 @@ describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr
     expect(await readCounter()).toBe(0)
   }, 30000)
 
-  it('SET_STATE RUN restarts execution from cycle 1', async () => {
+  it('run/stop command RUNs it again, from cycle 1', async () => {
     const res = await client.setPlcState(PlcRuntimeState.RUNNING)
     expect(res.success).toBe(true)
     expect(res.refusedBySwitch).toBeFalsy()
     await settle()
 
-    const state = await client.getPlcState()
-    expect(state.state).toBe(PlcRuntimeState.RUNNING)
+    const state = await client.getStatus()
+    expect(state.plcState).toBe(PlcRuntimeState.RUNNING)
 
     // Counting resumed, and the output is driven again.
     const first = await readCounter()
@@ -170,10 +170,10 @@ describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr
     expect(await readPulse()).toBe(1)
   }, 30000)
 
-  it('QUERY never changes state', async () => {
-    const before = await client.getPlcState()
-    const after = await client.getPlcState()
-    expect(after.state).toBe(before.state)
+  it('reading the status never changes state', async () => {
+    const before = await client.getStatus()
+    const after = await client.getStatus()
+    expect(after.plcState).toBe(before.plcState)
     expect(after.switchPosition).toBe(before.switchPosition)
   }, 30000)
 
@@ -189,7 +189,7 @@ describeIfEnabled('Baremetal run/stop state machine end-to-end (FC 0x49 over avr
   }, 60000)
 })
 
-describeIfSwitch('Hardware mode switch (HAL override, FC 0x49 over avr8js)', () => {
+describeIfSwitch('Hardware mode switch (HAL override, FC 0x4b + 0x46 over avr8js)', () => {
   let sim: SimulatorModule
   let client: ModbusRtuClient
 
@@ -209,10 +209,10 @@ describeIfSwitch('Hardware mode switch (HAL override, FC 0x49 over avr8js)', () 
   })
 
   it('boots STOPPED when the switch reads STOP, and reports the position', async () => {
-    const state = await client.getPlcState()
+    const state = await client.getStatus()
     expect(state.success).toBe(true)
     expect(state.switchPosition).toBe(PlcSwitchPosition.STOP)
-    expect(state.state).toBe(PlcRuntimeState.STOPPED)
+    expect(state.plcState).toBe(PlcRuntimeState.STOPPED)
   }, 30000)
 
   it('refuses a RUN request while the switch reads STOP', async () => {
@@ -225,8 +225,8 @@ describeIfSwitch('Hardware mode switch (HAL override, FC 0x49 over avr8js)', () 
     expect(res.switchPosition).toBe(PlcSwitchPosition.STOP)
 
     // Still stopped afterwards -- the refusal did not leave a pending start.
-    const after = await client.getPlcState()
-    expect(after.state).toBe(PlcRuntimeState.STOPPED)
+    const after = await client.getStatus()
+    expect(after.plcState).toBe(PlcRuntimeState.STOPPED)
   }, 30000)
 
   it('runs by itself on the STOP -> RUN rising edge, with no command sent', async () => {
@@ -234,21 +234,21 @@ describeIfSwitch('Hardware mode switch (HAL override, FC 0x49 over avr8js)', () 
     // between: the transition must come from the switch alone (rule 3).
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    const state = await client.getPlcState()
+    const state = await client.getStatus()
     expect(state.switchPosition).toBe(PlcSwitchPosition.RUN)
-    expect(state.state).toBe(PlcRuntimeState.RUNNING)
+    expect(state.plcState).toBe(PlcRuntimeState.RUNNING)
   }, 30000)
 
   it('accepts software stop and start once the switch reads RUN', async () => {
     const stopped = await client.setPlcState(PlcRuntimeState.STOPPED)
     expect(stopped.success).toBe(true)
     await new Promise((resolve) => setTimeout(resolve, 300))
-    expect((await client.getPlcState()).state).toBe(PlcRuntimeState.STOPPED)
+    expect((await client.getStatus()).plcState).toBe(PlcRuntimeState.STOPPED)
 
     const started = await client.setPlcState(PlcRuntimeState.RUNNING)
     expect(started.success).toBe(true)
     expect(started.refusedBySwitch).toBeFalsy()
     await new Promise((resolve) => setTimeout(resolve, 300))
-    expect((await client.getPlcState()).state).toBe(PlcRuntimeState.RUNNING)
+    expect((await client.getStatus()).plcState).toBe(PlcRuntimeState.RUNNING)
   }, 30000)
 })

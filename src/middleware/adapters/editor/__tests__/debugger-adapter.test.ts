@@ -22,6 +22,8 @@ beforeEach(() => {
       data: [1, 0, 255, 0, 1],
     }),
     debuggerSetVariable: jest.fn().mockResolvedValue({ success: true }),
+    debuggerWriteLicense: jest.fn().mockResolvedValue({ success: true, status: 0x7e }),
+    debuggerReadLicense: jest.fn().mockResolvedValue({ success: true, status: 0x7e, blob: [0x4f, 0x50, 0x4c, 0x43] }),
     debuggerVerifyMd5: jest.fn().mockResolvedValue({
       success: true,
       match: true,
@@ -34,6 +36,12 @@ beforeEach(() => {
     readDebugFile: jest.fn().mockResolvedValue({
       success: true,
       content: 'debug_vars[] = { ... }',
+    }),
+    getDeviceAnchor: jest.fn().mockResolvedValue({
+      success: true,
+      source: 'arduino',
+      anchorHex: '0abc01',
+      anchor: [0x0a, 0xbc, 0x01],
     }),
   } as unknown as typeof window.bridge
 
@@ -233,6 +241,57 @@ describe('setVariable', () => {
 })
 
 // ---------------------------------------------------------------------------
+// writeLicense
+// ---------------------------------------------------------------------------
+
+describe('writeLicense', () => {
+  it('delegates to bridge with the blob', async () => {
+    const blob = new Uint8Array([0x4f, 0x50, 0x4c, 0x43])
+    const result = await adapter.writeLicense(blob)
+
+    expect(window.bridge.debuggerWriteLicense).toHaveBeenCalledWith(blob)
+    expect(result).toEqual({ success: true, status: 0x7e })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.debuggerWriteLicense as jest.Mock).mockRejectedValue(new Error('Write failed'))
+    const result = await adapter.writeLicense(new Uint8Array([1]))
+
+    expect(result).toEqual({ success: false, error: 'Write failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// readLicense
+// ---------------------------------------------------------------------------
+
+describe('readLicense', () => {
+  it('rehydrates the blob into a Uint8Array', async () => {
+    const result = await adapter.readLicense()
+
+    expect(window.bridge.debuggerReadLicense).toHaveBeenCalled()
+    expect(result.success).toBe(true)
+    expect(result.blob).toBeInstanceOf(Uint8Array)
+    expect(Array.from(result.blob!)).toEqual([0x4f, 0x50, 0x4c, 0x43])
+  })
+
+  it('leaves blob undefined for empty/corrupt device states', async () => {
+    ;(window.bridge.debuggerReadLicense as jest.Mock).mockResolvedValue({ success: true, status: 0x83, empty: true })
+    const result = await adapter.readLicense()
+
+    expect(result.empty).toBe(true)
+    expect(result.blob).toBeUndefined()
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.debuggerReadLicense as jest.Mock).mockRejectedValue(new Error('Read failed'))
+    const result = await adapter.readLicense()
+
+    expect(result).toEqual({ success: false, error: 'Read failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // verifyMd5
 // ---------------------------------------------------------------------------
 
@@ -270,6 +329,45 @@ describe('verifyMd5', () => {
     const result = await adapter.verifyMd5('abc123', tcpConfig)
 
     expect(result).toEqual({ success: false, error: 'MD5 check failed' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// getDeviceAnchor
+// ---------------------------------------------------------------------------
+
+describe('getDeviceAnchor', () => {
+  it('delegates to bridge and rehydrates the anchor bytes', async () => {
+    const result = await adapter.getDeviceAnchor(tcpConfig)
+
+    expect(window.bridge.getDeviceAnchor).toHaveBeenCalledWith('tcp', { ipAddress: '192.168.1.100', port: '502' })
+    expect(result).toEqual({ success: true, source: 'arduino', anchorHex: '0abc01', anchor: [0x0a, 0xbc, 0x01] })
+  })
+
+  it('leaves anchor undefined when the bridge returns none', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockResolvedValue({
+      success: false,
+      source: 'runtime',
+      error: 'no id',
+    })
+    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: { ipAddress: '10.0.0.1' } })
+
+    expect(result.anchor).toBeUndefined()
+    expect(result.source).toBe('runtime')
+  })
+
+  it('catches bridge errors (arduino source)', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
+    const result = await adapter.getDeviceAnchor(tcpConfig)
+
+    expect(result).toEqual({ success: false, source: 'arduino', error: 'IPC boom' })
+  })
+
+  it('catches bridge errors (runtime source)', async () => {
+    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
+    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: {} })
+
+    expect(result).toEqual({ success: false, source: 'runtime', error: 'IPC boom' })
   })
 })
 

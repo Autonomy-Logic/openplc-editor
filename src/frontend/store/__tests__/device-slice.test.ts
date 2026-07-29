@@ -155,6 +155,75 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
+
+    it('has an idle, empty device probe', () => {
+      const store = makeStore()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
+
+    it('has a disconnected serial connection', () => {
+      const store = makeStore()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
+  describe('serial connection', () => {
+    it('setSerialConnectionStatus updates status and port', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connecting', 'COM5')
+      expect(store.getState().serialConnection).toEqual({ status: 'connecting', port: 'COM5' })
+    })
+
+    it('setSerialConnectionStatus leaves the port unchanged when omitted', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connecting', 'COM5')
+      store.getState().deviceActions.setSerialConnectionStatus('connected')
+      expect(store.getState().serialConnection).toEqual({ status: 'connected', port: 'COM5' })
+    })
+
+    it('setSerialConnectionStatus can explicitly clear the port with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.setSerialConnectionStatus('error', null)
+      expect(store.getState().serialConnection).toEqual({ status: 'error', port: null })
+    })
+
+    it('clearSerialConnection resets to disconnected/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearSerialConnection()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // connect-time probe (D72)
+  // -----------------------------------------------------------------------
+  describe('device probe', () => {
+    it('startDeviceProbe marks phase=probing and clears any previous result', () => {
+      const store = makeStore()
+      // Seed a stale result first so the clear is observable.
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'no-response' })
+      store.getState().deviceActions.startDeviceProbe()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'probing', result: null })
+    })
+
+    it('setDeviceProbeResult lands phase=done with the classification', () => {
+      const store = makeStore()
+      const result = { status: 'connected-with-firmware' as const, anchorHex: 'deadbeef', licenseStatus: 'licensed' as const }
+      store.getState().deviceActions.setDeviceProbeResult(result)
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'done', result })
+    })
+
+    it('clearDeviceProbe resets to idle/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'no-firmware' })
+      store.getState().deviceActions.clearDeviceProbe()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -303,6 +372,20 @@ describe('createDeviceSlice', () => {
       expect(rc.includeTimingStatsInPolling).toBe(false)
       expect(rc.ethercatStatus).toBeNull()
       expect(rc.includeEthercatStatsInPolling).toBe(false)
+    })
+
+    it('resets the device probe', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceProbeResult({ status: 'connected-with-firmware', licenseStatus: 'licensed' })
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceProbeInfo).toEqual({ phase: 'idle', result: null })
+    })
+
+    it('resets the serial connection', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setSerialConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().serialConnection).toEqual({ status: 'disconnected', port: null })
     })
   })
 
@@ -947,6 +1030,101 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.clearSelectedPlatformOptions()
       expect(store.getState().deviceDefinitions.configuration.selectedPlatformOptions).toEqual({})
       expect(store.getState().deviceUpdated.updated).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Phase 2 — serial / network / modbus split migration (on load)
+  // -----------------------------------------------------------------------
+  describe('setDeviceDefinitions — Phase 2 serial/network migration', () => {
+    const loadConfig = (vendorScreenData: Record<string, unknown>, deviceBoard = 'Test Board') => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard, vendorScreenData } })
+      return store.getState().deviceDefinitions.configuration
+    }
+
+    it('seeds serial.baud_rate from the legacy modbus_rtu.rtu_baud_rate', () => {
+      const cfg = loadConfig({ modbus_rtu: { enabled: true, rtu_baud_rate: '9600' } })
+      expect(cfg.vendorScreenData?.serial).toEqual({ baud_rate: '9600' })
+    })
+
+    it('does not seed serial when it already exists (idempotent)', () => {
+      const cfg = loadConfig({ serial: { baud_rate: '115200' }, modbus_rtu: { rtu_baud_rate: '9600' } })
+      expect(cfg.vendorScreenData?.serial).toEqual({ baud_rate: '115200' })
+    })
+
+    it('does not create serial when there is no legacy rtu baud', () => {
+      const cfg = loadConfig({ modbus_rtu: { enabled: false } })
+      expect(cfg.vendorScreenData?.serial).toBeUndefined()
+    })
+
+    it('lifts network fields out of modbus_tcp into a network section', () => {
+      const cfg = loadConfig({
+        modbus_tcp: {
+          enabled: true,
+          tcp_interface: 'Wi-Fi',
+          tcp_wifi_ssid: 'net',
+          tcp_wifi_password: 'pw',
+          enable_dhcp: true,
+          ip_address: '192.168.0.5',
+        },
+      })
+      expect(cfg.vendorScreenData?.network).toEqual({
+        enabled: true,
+        interface: 'Wi-Fi',
+        wifi_ssid: 'net',
+        wifi_password: 'pw',
+        enable_dhcp: true,
+        ip_address: '192.168.0.5',
+      })
+      // modbus_tcp keeps its own (non-network) fields, stripped of network keys.
+      expect(cfg.vendorScreenData?.modbus_tcp).toEqual({ enabled: true })
+    })
+
+    it('derives network.enabled=false from a disabled modbus_tcp', () => {
+      const cfg = loadConfig({ modbus_tcp: { enabled: false, tcp_interface: 'Ethernet' } })
+      expect((cfg.vendorScreenData?.network as Record<string, unknown>).enabled).toBe(false)
+    })
+
+    it('does not create network when it already exists (idempotent)', () => {
+      const cfg = loadConfig({
+        network: { enabled: true, interface: 'Ethernet' },
+        modbus_tcp: { enabled: true, tcp_interface: 'Wi-Fi' },
+      })
+      expect(cfg.vendorScreenData?.network).toEqual({ enabled: true, interface: 'Ethernet' })
+      // modbus_tcp is left as-is when network already exists.
+      expect(cfg.vendorScreenData?.modbus_tcp).toEqual({ enabled: true, tcp_interface: 'Wi-Fi' })
+    })
+
+    it('does not create network when modbus_tcp has no legacy network fields', () => {
+      const cfg = loadConfig({ modbus_tcp: { enabled: true } })
+      expect(cfg.vendorScreenData?.network).toBeUndefined()
+    })
+
+    it('migrates every board bucket and mirrors the active view from the deviceBoard bucket', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Board A',
+          vendorScreenDataByBoard: {
+            'Board A': { modbus_rtu: { rtu_baud_rate: '9600' } },
+            'Board B': { modbus_rtu: { rtu_baud_rate: '19200' } },
+          },
+        },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect((cfg.vendorScreenDataByBoard?.['Board A'].serial as Record<string, unknown>).baud_rate).toBe('9600')
+      expect((cfg.vendorScreenDataByBoard?.['Board B'].serial as Record<string, unknown>).baud_rate).toBe('19200')
+      // Invariant: the flat active view is the migrated deviceBoard bucket.
+      expect(cfg.vendorScreenData).toBe(cfg.vendorScreenDataByBoard?.['Board A'])
+    })
+
+    it('leaves configuration without vendorScreenData untouched', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'Test Board' } })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.vendorScreenData).toBeUndefined()
+      expect(cfg.vendorScreenDataByBoard).toBeUndefined()
     })
   })
 

@@ -153,6 +153,83 @@ describe('generateDefinesContent — simulator comms block', () => {
   })
 })
 
+describe('generateDefinesContent — Debugger block (always-on debug)', () => {
+  it('emits DEBUGGER_ENABLED for a baremetal arduino-cli target with no Modbus', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
+  })
+
+  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+  })
+
+  it('emits DEBUGGER_ENABLED even when full Modbus is enabled (always-on serial debugger)', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: {
+        serial: { baud_rate: '9600' },
+        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
+      },
+      defaultSerial: 'Serial',
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+    // RTU on the default serial → shares the debugger's port (single begin()).
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('emits DEBUG_IFACE from defaultSerial and DEBUG_BAUD from the Serial section', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: { baud_rate: '9600' } },
+    })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+  })
+
+  it('falls back to DEBUG_IFACE Serial and DEBUG_BAUD 115200 when unset', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 115200')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for the simulator (it uses the full Modbus path)', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for openplc-compiler runtimes', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'openplc-compiler' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+})
+
+describe('generateDefinesContent — License store capability define', () => {
+  it('emits VPP_HAS_LICENSE_STORE when hasLicenseStore is true', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, hasLicenseStore: true })
+    expect(out).toContain('//License store\n#define VPP_HAS_LICENSE_STORE\n')
+  })
+
+  it('omits VPP_HAS_LICENSE_STORE when hasLicenseStore is false', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, hasLicenseStore: false })
+    expect(out).not.toContain('VPP_HAS_LICENSE_STORE')
+    expect(out).not.toContain('//License store')
+  })
+
+  it('omits VPP_HAS_LICENSE_STORE when hasLicenseStore is absent (default)', () => {
+    const out = generateDefinesContent(EMPTY_INPUTS)
+    expect(out).not.toContain('VPP_HAS_LICENSE_STORE')
+    expect(out).not.toContain('//License store')
+  })
+})
+
 describe('generateDefinesContent — IO Config (pin masks)', () => {
   it('emits empty pin masks when devicePinMapping is empty', () => {
     const out = generateDefinesContent(EMPTY_INPUTS)
@@ -357,6 +434,12 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '//Program MD5',
         '#define PROGRAM_MD5 "ffffffffffffffffffffffffffffffff"',
+        '',
+        '//Debugger',
+        '#define DEBUGGER_ENABLED',
+        '#define DEBUG_IFACE Serial',
+        '#define DEBUG_BAUD 115200',
+        '',
         '',
         '//IO Config',
         '#define PINMASK_DIN ',

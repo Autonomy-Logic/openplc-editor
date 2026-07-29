@@ -1,3 +1,5 @@
+import type { PlcRuntimeState } from '../simulator/types'
+
 /**
  * Debug Transport Interface
  *
@@ -20,6 +22,79 @@ export interface DebugTransportResult {
 
 export interface DebugSetResult {
   success: boolean
+  error?: string
+}
+
+/**
+ * Result of the always-on debugger status probe (FC 0x46). `running` is the
+ * PLC scan liveness flag, `tick` the scan counter (advances each cycle), and
+ * `uptimeMs` the milliseconds since the board booted.
+ */
+export interface DebugStatusResult {
+  success: boolean
+  running?: boolean
+  tick?: number
+  uptimeMs?: number
+  /** Run/stop state (0 = STOPPED, 1 = RUNNING, 2 = ERROR). This is the single
+   *  read path for run/stop — there is no separate query FC. `running` above is
+   *  the same information as a boolean, kept for callers that only need
+   *  liveness. Absent on firmware predating the run/stop state machine. */
+  plcState?: number
+  /** Mode-switch position (0 = STOP, 1 = RUN). Boards with no physical switch
+   *  report RUN. Absent on firmware predating the run/stop state machine, which
+   *  callers should read as "no gating". */
+  switchPosition?: number
+  error?: string
+}
+
+/** Result of the runtime version probe (FC 0x47) — ASCII version string. */
+export interface DebugVersionResult {
+  success: boolean
+  version?: string
+  error?: string
+}
+
+/**
+ * Result of the board-id probe (FC 0x48). `boardId` is the raw unique-id bytes
+ * (empty when the target has no unique-id support); `boardIdHex` is the same
+ * bytes as a lowercase hex string for display.
+ */
+export interface DebugBoardIdResult {
+  success: boolean
+  boardId?: Uint8Array
+  boardIdHex?: string
+  error?: string
+}
+
+/**
+ * Result of a write-license call (FC 0x49). The device stores the raw blob
+ * bytes; `status` is the ModbusDebugResponse code the target returned
+ * (SUCCESS/ERROR_OUT_OF_BOUNDS/ERROR_OUT_OF_MEMORY). `unsupported` (status
+ * LIC_UNSUPPORTED) means the board has no license-store backend — a valid
+ * device state (`success: true`), not a transport failure.
+ */
+export interface DebugLicenseWriteResult {
+  success: boolean
+  status?: number
+  unsupported?: boolean
+  error?: string
+}
+
+/**
+ * Result of a read-license call (FC 0x4A). `blob` is present only on SUCCESS.
+ * `empty` (status LIC_EMPTY) means virgin storage — no license provisioned;
+ * `corrupt` (status LIC_CORRUPT) means the magic matched but the crc32 failed.
+ * `unsupported` (status LIC_UNSUPPORTED) means the board has no license-store
+ * backend at all. All three are `success: true` — they are valid device
+ * states, not transport failures — the caller distinguishes via the flags.
+ */
+export interface DebugLicenseReadResult {
+  success: boolean
+  status?: number
+  empty?: boolean
+  corrupt?: boolean
+  unsupported?: boolean
+  blob?: Uint8Array
   error?: string
 }
 
@@ -52,26 +127,52 @@ export interface DebugTransport {
 }
 
 /**
- * Result of an FC 0x49 run/stop query or command (baremetal targets).
+ * The license function codes (0x48 board-id / 0x49 write / 0x4A read) as a
+ * transport-agnostic contract. The same PDU rides serial (ModbusRtuClient),
+ * TCP (ModbusTcpClient) and the runtime-v4 debug WebSocket
+ * (WebSocketDebugTransport) — so device activation runs identically on every
+ * target (D70c). connect/disconnect are shared with the debug session.
+ */
+export interface LicenseCapableTransport {
+  connect(): Promise<void>
+  disconnect(): void
+  getBoardId(): Promise<DebugBoardIdResult>
+  readLicense(): Promise<DebugLicenseReadResult>
+  writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  /** Runtime status (FC 0x46): run/stop state, mode-switch position, scan
+   *  counter, uptime. Doubles as the liveness probe for a held link — any
+   *  successful reply proves the firmware is answering — so the device liveness
+   *  poll prefers it and gets the run/stop state for free.
+   *
+   *  Optional because run/stop is a BAREMETAL concern: the Modbus RTU/TCP
+   *  clients implement it, while the runtime-v4 WebSocket transport (which
+   *  implements this interface only for licensing) does not — v4 drives run/stop
+   *  over its REST API, so implementing it there would be dead code. */
+  getStatus?(): Promise<DebugStatusResult>
+  /** Run/stop command (FC 0x4b). Reads go through `getStatus()`. Optional for
+   *  the same reason as `getStatus`. */
+  setPlcState?(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+}
+
+/**
+ * Result of a run/stop command (FC 0x4b `PLC_SET_STATE`).
  *
- * The same shape is used for Runtime v4, whose REST surface carries the
- * equivalent fields (`status` + `switchPosition`), so the editor's PLC-control
- * UI has one result type regardless of target.
+ * Reads are NOT done through this — they come from `DebugStatusResult` via
+ * FC 0x46. This is the command's acknowledgement, which carries the resulting
+ * state so a caller can react without waiting for the next poll.
  */
 export interface PlcControlResult {
   success: boolean
-  /** Runtime state as of the target's last scan cycle. On a SET_STATE the
-   *  runtime derives the new state inside its next cycle, so the caller sees it
-   *  on the following poll (at most one scan period later). */
+  /** State as of the target's last scan cycle. The runtime derives the new
+   *  state inside its next cycle, so a caller that needs the settled value
+   *  reads it from the next status poll (at most one scan period later). */
   state?: number
-  /** Mode-switch position: 0 = STOP, 1 = RUN. Boards with no physical switch
-   *  always report RUN, so callers need no "absent" case. */
   switchPosition?: number
   /** A RUN request was refused because the switch reads STOP. Drives the
    *  "flip the switch to RUN" warning. */
   refusedBySwitch?: boolean
-  /** Firmware predates FC 0x49. Drives an informational "rebuild and upload"
-   *  message instead of an error. */
+  /** Firmware predates the run/stop state machine. Drives an informational
+   *  "rebuild and upload" message instead of an error. */
   unsupported?: boolean
   error?: string
 }

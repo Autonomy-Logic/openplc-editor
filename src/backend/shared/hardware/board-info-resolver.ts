@@ -145,6 +145,14 @@ export interface BoardBuildInfo {
    *  `resolveHalSourcePath` / `resolvePackageRelativePath`
    *  (filesystem path on editor; bundled-asset key on web). */
   halSourceFile?: string
+  /** Opaque key(s) for the VPP-provided license-store backend `.cpp`(s)
+   *  to inject into the Baremetal sketch, resolved the same way as
+   *  `halSourceFile` (per-package, traversal-guarded). Empty array when
+   *  the board declares no `hal.licenseStore`. Basenames are preserved
+   *  on injection so the distinctive `license_store_<arch>.cpp` names
+   *  never collide with the HAL's `esp*.cpp`. Presence drives the
+   *  `-DVPP_HAS_LICENSE_STORE` capability define. */
+  licenseStoreSourceFiles: string[]
   compilerFlags?: {
     c_flags?: string[]
     cxx_flags?: string[]
@@ -239,6 +247,10 @@ export class BoardInfoResolver {
     const info: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> = {
       source: 'hals',
       compiler: entry.compiler,
+      // hals.json builtins never ship a license-store backend — the
+      // capability arrives only via installed VPP packages. Empty array
+      // so the board falls back to the weak default (UNSUPPORTED).
+      licenseStoreSourceFiles: [],
     }
     if (entry.core) info.core = entry.core
     if (entry.platform) info.platform = entry.platform
@@ -278,6 +290,7 @@ export class BoardInfoResolver {
       vppPackageId: manifest.package.id,
       vppDeviceId: device.id,
       vppPackagePath: pkg.path,
+      licenseStoreSourceFiles: [],
     }
     if (device.target.core) info.core = device.target.core
     if (device.target.platform) info.platform = device.target.platform
@@ -289,6 +302,14 @@ export class BoardInfoResolver {
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)
+    // License-store backend source(s) — same per-package, traversal-guarded
+    // resolution as `hal.source` above (the `resolveRel` guard is shared).
+    // Accepts a single path or an array; each becomes an absolute key the
+    // compiler injects into the sketch preserving its basename.
+    if (device.hal.licenseStore) {
+      const rels = Array.isArray(device.hal.licenseStore) ? device.hal.licenseStore : [device.hal.licenseStore]
+      info.licenseStoreSourceFiles = rels.map((rel) => resolveRel(pkg.path, rel))
+    }
     if (device.hal.pluginEntry) info.pluginEntry = resolveRel(pkg.path, device.hal.pluginEntry)
     if (device.hal.configTemplate) info.configTemplate = resolveRel(pkg.path, device.hal.configTemplate)
     if (device.hal.requirements) info.requirements = resolveRel(pkg.path, device.hal.requirements)

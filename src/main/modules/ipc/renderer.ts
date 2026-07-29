@@ -416,8 +416,8 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
     ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
 
-  /** FC 0x49 run/stop control. `action` is 'query' (never changes state --
-   *  the editor's pre-check), 'run', or 'stop'. */
+  /** FC 0x4b run/stop command. Reads come from `onDevicePlcState` (the device
+   *  status poll), not from here. */
   debuggerPlcControl: (
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
@@ -427,7 +427,7 @@ const rendererProcessBridge = {
       slaveId?: number
       jwtToken?: string
     },
-    action: 'query' | 'run' | 'stop',
+    action: 'run' | 'stop',
   ): Promise<{
     success: boolean
     state?: number
@@ -461,6 +461,18 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
+  debuggerWriteLicense: (blob: Uint8Array): Promise<{ success: boolean; status?: number; error?: string }> =>
+    ipcRenderer.invoke('debugger:write-license', blob),
+
+  debuggerReadLicense: (): Promise<{
+    success: boolean
+    status?: number
+    empty?: boolean
+    corrupt?: boolean
+    blob?: number[]
+    error?: string
+  }> => ipcRenderer.invoke('debugger:read-license'),
+
   debuggerConnect: (
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
     connectionParams: {
@@ -474,6 +486,100 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
+
+  getDeviceAnchor: (
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+  ): Promise<{
+    success: boolean
+    source: 'runtime' | 'arduino'
+    anchorHex?: string
+    anchor?: number[]
+    error?: string
+  }> => ipcRenderer.invoke('device:get-anchor', connectionType, connectionParams),
+
+  // One-shot post-flash license-activation routine (D62): open a transient RTU
+  // connection with retries/backoff, read the hardware id (FC 0x48) and any
+  // existing license (FC 0x4A); when absent, derive the device/VPP ids and ask
+  // the backend whether the device is licensed, writing the returned blob back
+  // (FC 0x49), then close the serial. Best-effort: never throws in a way that
+  // breaks the upload flow; failures surface as `{ success: false, outcome: 'error' }`.
+  activateDeviceLicense: (
+    connectionParams: {
+      connectionType?: 'rtu' | 'tcp' | 'websocket'
+      port?: string | number
+      baudRate?: number
+      slaveId?: number
+      host?: string
+      token?: string
+    },
+    opts: { packageId: string; keyId?: string },
+  ): Promise<{
+    success: boolean
+    probedAt: string
+    outcome: 'already-licensed' | 'activated' | 'demo' | 'error' | 'no-id'
+    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+    activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
+    deviceId?: string
+    vppId?: string
+    anchorHex?: string
+    license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
+    error?: string
+  }> => ipcRenderer.invoke('device:activate-license', connectionParams, opts),
+
+  // Persistent serial connection (D72): open + HOLD the RTU link. Returns the
+  // same classification as the probe, plus what the recover step concluded.
+  deviceConnect: (
+    connectionParams: {
+      connectionType?: 'rtu' | 'tcp' | 'websocket'
+      port?: string | number
+      baudRate?: number
+      slaveId?: number
+      host?: string
+      token?: string
+    },
+    opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
+  ): Promise<{
+    status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
+    anchorHex?: string
+    deviceId?: string
+    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+    activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
+    error?: string
+  }> => ipcRenderer.invoke('device:connect', connectionParams, opts),
+
+  // Close the held serial link (Disconnect).
+  deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
+
+  // Main pushes live link status here (liveness failure, upload/debug handoff).
+  onDeviceConnectionStatus: (
+    callback: (payload: { status: 'disconnected' | 'connecting' | 'connected' | 'error'; port: string | null }) => void,
+  ): (() => void) => {
+    const listener = (_event: unknown, payload: { status: 'disconnected' | 'connecting' | 'connected' | 'error'; port: string | null }) =>
+      callback(payload)
+    ipcRenderer.on('device:connection-status', listener)
+    return () => ipcRenderer.removeListener('device:connection-status', listener)
+  },
+
+  /**
+   * Subscribe to run/stop state pushed from the held device link. Emitted on
+   * every liveness tick (FC 0x46 carries the state), so a switch flipped by hand
+   * at the panel surfaces within one interval without any extra traffic.
+   */
+  onDevicePlcState: (
+    callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
+  ): (() => void) => {
+    const listener = (_event: unknown, payload: { port: string; plcState?: number; switchPosition?: number }) =>
+      callback(payload)
+    ipcRenderer.on('device:plc-state', listener)
+    return () => ipcRenderer.removeListener('device:plc-state', listener)
+  },
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>

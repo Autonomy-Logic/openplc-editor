@@ -29,6 +29,14 @@ beforeEach(() => {
     refreshAvailableBoards: jest.fn().mockResolvedValue(mockRefreshResult),
     refreshCommunicationPorts: jest.fn().mockResolvedValue(mockPorts),
     getPreviewImage: jest.fn().mockResolvedValue('data:image/png;base64,abc123'),
+    activateDeviceLicense: jest
+      .fn()
+      .mockResolvedValue({ success: true, probedAt: '2026-07-22T00:00:00.000Z', outcome: 'activated' }),
+    deviceConnect: jest
+      .fn()
+      .mockResolvedValue({ status: 'connected-with-firmware', anchorHex: 'deadbeef', licenseStatus: 'licensed' }),
+    deviceDisconnect: jest.fn().mockResolvedValue({ success: true }),
+    onDeviceConnectionStatus: jest.fn().mockReturnValue(() => undefined),
   } as unknown as typeof window.bridge
 })
 
@@ -72,5 +80,39 @@ describe('createEditorDeviceAdapter', () => {
   it('forwards vppPackagePath to window.bridge for VPP-shipped previews', async () => {
     await adapter.getPreviewImage('motor-shield.png', '/path/to/pkg')
     expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('motor-shield.png', '/path/to/pkg')
+  })
+
+  it('delegates activateLicense to window.bridge with params and opts', async () => {
+    const params = { connectionType: 'rtu' as const, port: 'COM5', baudRate: 115200 }
+    const result = await adapter.activateLicense(params, { packageId: 'com.vendor.board', keyId: 'k1' })
+    expect(window.bridge.activateDeviceLicense).toHaveBeenCalledWith(params, {
+      packageId: 'com.vendor.board',
+      keyId: 'k1',
+    })
+    expect(result).toEqual({ success: true, probedAt: '2026-07-22T00:00:00.000Z', outcome: 'activated' })
+  })
+
+  it('delegates connect to window.bridge with params and opts', async () => {
+    const params = { connectionType: 'rtu' as const, port: 'COM5', baudRate: 115200 }
+    const result = await adapter.connect(params, { isLicensable: true, packageId: 'com.vendor.board', keyId: 'k1' })
+    expect(window.bridge.deviceConnect).toHaveBeenCalledWith(params, {
+      isLicensable: true,
+      packageId: 'com.vendor.board',
+      keyId: 'k1',
+    })
+    expect(result).toMatchObject({ status: 'connected-with-firmware', licenseStatus: 'licensed' })
+  })
+
+  it('delegates disconnect to window.bridge', async () => {
+    const result = await adapter.disconnect()
+    expect(window.bridge.deviceDisconnect).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('delegates onConnectionStatus subscription to window.bridge and returns its unsubscribe', () => {
+    const cb = jest.fn()
+    const unsub = adapter.onConnectionStatus(cb)
+    expect(window.bridge.onDeviceConnectionStatus).toHaveBeenCalledWith(cb)
+    expect(typeof unsub).toBe('function')
   })
 })
