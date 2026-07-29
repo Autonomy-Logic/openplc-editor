@@ -2510,6 +2510,33 @@ class CompilerModule {
             })
           }
         }
+        // An arduino-cli target CANNOT work without its HAL: `hardwareInit` /
+        // `updateInputBuffers` / `updateOutputBuffers` have no other definition,
+        // so the build either dies at link with an undefined-reference wall or —
+        // if anything ever weak-defines them — silently produces firmware that
+        // drives no I/O at all. Both were observed as "the program runs but the
+        // outputs never move", with the real cause (the board resolved without a
+        // HAL, e.g. a VPP whose manifest didn't load) reported only as a warning
+        // several hundred log lines earlier.
+        //
+        // Fail here instead, naming the board and the path, so the message says
+        // what is wrong rather than what it broke.
+        // Runtime v3 legitimately has no HAL (its on-device MatIEC compiles the
+        // ST itself and it never links Arduino firmware), so this only applies to
+        // targets that actually build a sketch.
+        if (!boardHalContent && !isRuntimeV3) {
+          const where = boardInfo.halSourceFile
+            ? `its HAL source could not be read from ${boardInfo.halSourceFile}`
+            : 'it did not resolve a HAL source file (a VPP package may have failed to load — try reinstalling it)'
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message:
+              `Board "${boardTarget}" cannot be compiled: ${where}. ` +
+              'Without a HAL the firmware has no hardware I/O layer.\nStopping compilation process.',
+          })
+          _mainProcessPort.close()
+          return
+        }
         // Re-key strucpp runtime headers from
         // `strucpp_runtime/include/X` into `src/X` so arduino-cli's
         // `--library src` pass finds them; also drop the board HAL

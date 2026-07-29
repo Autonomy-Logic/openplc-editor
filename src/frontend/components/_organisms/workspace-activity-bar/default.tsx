@@ -101,6 +101,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
   const [simulatorRunning, setSimulatorRunning] = useState(false)
   const pendingSimulatorDebugRef = useRef(false)
+  // Transport of the ACTIVE debug session, or null when none is running. Only a
+  // serial session is coupled to the device connection, so the drop handler below
+  // needs to know which kind is running — the board alone doesn't say, since a
+  // baremetal board can be debugged over either RTU or Modbus TCP.
+  const activeDebugTransportRef = useRef<'rtu' | 'tcp' | 'websocket' | 'simulator' | null>(null)
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
@@ -124,11 +129,35 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       setSimulatorRunning(false)
       const { workspace } = useOpenPLCStore.getState()
       if (workspace.isDebuggerVisible) {
+        activeDebugTransportRef.current = null
         void debugSession.stopSession()
       }
     })
     return unsub
   }, [simulator, debugSession])
+
+  // A serial debug session lives on the device connection: it shares that
+  // client, so when the link drops (unplug, reset, liveness failure, or the user
+  // pressing Disconnect) the session has no transport left and must end. Leaving
+  // it "active" would show a frozen variable table over a dead port and leave the
+  // debugger unable to reconnect.
+  //
+  // Modbus TCP sessions are deliberately untouched — they own their own socket
+  // and never depended on the serial link.
+  const serialConnectionStatus = useOpenPLCStore((state) => state.serialConnection.status)
+  useEffect(() => {
+    if (serialConnectionStatus === 'connected' || serialConnectionStatus === 'connecting') return
+    if (activeDebugTransportRef.current !== 'rtu') return
+    if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
+
+    addLog({
+      id: crypto.randomUUID(),
+      level: 'warning',
+      message: 'Device disconnected — stopping the debug session (serial debugging runs over the device connection).',
+    })
+    activeDebugTransportRef.current = null
+    void debugSession.stopSession()
+  }, [serialConnectionStatus, debugSession, addLog])
 
   // Stop simulator if the board is switched away while it's running
   const prevIsSimulatorBoardRef = useRef(isSimulatorBoard)
@@ -976,32 +1005,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
+      activeDebugTransportRef.current = null
       await debugSession.stopSession()
       return
     }
 
     if (isDebuggerProcessing) return
-
-    // Baremetal targets debug OVER the device connection: the debug session
-    // shares the client the Connect flow holds open, because the OS will not
-    // grant a second handle on the same serial port. So require the connection
-    // first, the same way Runtime v4 requires a runtime connection.
-    //
-    // This gate lives here rather than as a debug-spec precondition: the Connect
-    // flow resolves the SAME spec to derive the port and baud rate, so gating
-    // the spec would mean Connect required a connection to establish one.
-    if (
-      resolveTargetCapabilities(currentBoardInfo).directUsbUpload &&
-      useOpenPLCStore.getState().serialConnection.status !== 'connected'
-    ) {
-      await showDebuggerMessage(
-        'warning',
-        'Connection Required',
-        'Connect to the device first. Debugging runs over the device connection, so the device must be connected before the debugger can start.',
-        ['OK'],
-      )
-      return
-    }
 
     setIsDebuggerProcessing(true)
 
@@ -1026,6 +1035,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       const debugConfig = await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)
       if (!debugConfig) {
+        setIsDebuggerProcessing(false)
+        return
+      }
+
+      // Only a SERIAL session is tied to the device connection, and the reason is
+      // physical: it shares the one client holding the port open, because the OS
+      // will not grant a second handle on it. Modbus TCP has no such coupling —
+      // it opens its own socket to an address it already knows — so requiring a
+      // connection there would block a perfectly good debug path. Hence the gate
+      // keys off the RESOLVED transport, not off the board.
+      //
+      // It also cannot be a debug-spec precondition: the Connect flow resolves
+      // the same spec to derive the port and baud rate, so gating the spec would
+      // mean Connect needed a connection to establish one.
+      activeDebugTransportRef.current = debugConfig.connectionType
+
+      if (
+        debugConfig.connectionType === 'rtu' &&
+        useOpenPLCStore.getState().serialConnection.status !== 'connected'
+      ) {
+        await showDebuggerMessage(
+          'warning',
+          'Connection Required',
+          'Connect to the device first. Serial debugging runs over the device connection, so the device must be connected before the debugger can start.',
+          ['OK'],
+        )
         setIsDebuggerProcessing(false)
         return
       }
