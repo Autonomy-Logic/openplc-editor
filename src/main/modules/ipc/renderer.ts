@@ -347,11 +347,11 @@ const rendererProcessBridge = {
       }
     >
   > => ipcRenderer.invoke('hardware:get-available-boards'),
-  getAvailableCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+  getAvailableCommunicationPorts: (): Promise<{ address: string; boardName?: string; manufacturer?: string }[]> =>
     ipcRenderer.invoke('hardware:get-available-communication-ports'),
   refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-available-boards'),
-  refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+  refreshCommunicationPorts: (): Promise<{ address: string; boardName?: string; manufacturer?: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
   // ===================== PACKAGE MANAGER METHODS =====================

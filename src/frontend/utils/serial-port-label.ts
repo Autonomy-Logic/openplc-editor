@@ -1,51 +1,41 @@
 import type { CommunicationPort } from '../../middleware/shared/ports/types'
 
 /**
- * How a serial port should read in the communication-port picker:
- * `/dev/cu.usbmodem11101 (Arduino MKR)` — the OS-canonical path, with the
- * board/chip descriptor in parentheses when one is known.
+ * How a serial port reads in the communication-port picker:
+ * `/dev/cu.usbmodem11101 (Arduino MKR)`, `COM5 (Arduino Uno)`, `COM5 (wch.cn)`.
  *
- * Two invariants, and they pull in opposite directions:
+ * Two rules, and they used to pull against each other:
  *
- *  1. The path is ALWAYS present and always leads. It is what the user
- *     recognizes and what we actually open, so it must never be replaced by a
- *     vendor string — the bug where a NodeMCU read "wch.cn" instead of "COM5".
- *  2. The descriptor must survive. It is what tells two identical-looking
- *     `/dev/cu.usbmodem*` nodes apart, and dropping it was a regression.
+ *  1. The path always leads. It is what the user recognizes and what we
+ *     actually open — `COM5` on Windows, `/dev/ttyUSB0` on Linux,
+ *     `/dev/cu.usbmodem*` on macOS — so it is never replaced by a descriptor.
+ *     (The bug that motivated this: a NodeMCU reading "wch.cn" instead of
+ *     "COM5", because the label took a manufacturer string over the path.)
+ *  2. The descriptor survives, in parentheses. It is what distinguishes two
+ *     identical-looking `/dev/cu.usbmodem*` nodes, and dropping it was the
+ *     regression that followed.
  *
- * Satisfying both means composing, not choosing between them.
+ * Both hold because this composes rather than choosing, and it is the ONE place
+ * that decides — `CommunicationPort` carries facts (`address`, `boardName`,
+ * `manufacturer`), never a pre-composed string. That is what makes every
+ * platform behave identically: there is no second labelling path to drift.
  *
- * Two producer shapes are handled, because `name` is not consistently one
- * thing: `mergeSerialPortList` (the editor's enumerator) already returns
- * `name: "<address> (<descriptor>)"`, while a bare manufacturer string is what
- * `serialport` reports on its own. Detecting the pre-composed form instead of
- * assuming either one is what keeps this from double-wrapping into
- * `COM5 (COM5 (wch.cn))`.
+ * Descriptor precedence: arduino-cli's identified board name first (it is the
+ * specific, useful one), falling back to the OS vendor/manufacturer string, and
+ * to nothing at all when neither scan knew anything.
  */
 export function serialPortDisplay(port: CommunicationPort): { label: string; title?: string } {
   const address = port.address?.trim() ?? ''
-  const name = port.name?.trim() ?? ''
+  const descriptor = port.boardName?.trim() || port.manufacturer?.trim() || ''
 
-  // No path to lead with (shouldn't happen, but the enumerator's shape isn't
-  // guaranteed) — the name is all there is.
-  if (!address) return { label: name, title: undefined }
+  // No path to lead with (shouldn't happen — the enumerator keys on it) — the
+  // descriptor is all there is.
+  if (!address) return { label: descriptor, title: undefined }
 
-  // Already composed by the producer, or simply the path echoed back when no
-  // descriptor was known. Either way it starts with the path, so invariant 1
-  // holds and it can be used verbatim.
-  if (name === address || name.startsWith(`${address} `)) {
-    const label = name || address
-    // Offer the full string on hover too: a long composed label is the one most
-    // likely to be truncated by the dropdown's width.
-    return { label, title: label !== address ? label : undefined }
-  }
+  if (!descriptor) return { label: address, title: undefined }
 
-  // A bare descriptor (manufacturer / chip). Compose it behind the path so the
-  // path still leads.
-  if (name) {
-    const label = `${address} (${name})`
-    return { label, title: label }
-  }
-
-  return { label: address, title: undefined }
+  const label = `${address} (${descriptor})`
+  // Offer the full string on hover as well: a composed label is the one most
+  // likely to be truncated by the dropdown's width.
+  return { label, title: label }
 }

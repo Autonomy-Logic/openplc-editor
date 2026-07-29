@@ -4,8 +4,9 @@ import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-type
 import type { PlatformOption, TargetCapabilities } from '../../../middleware/shared/ports/types'
 
 const SerialPortSchema = z.object({
-  name: z.string(),
   address: z.string(),
+  boardName: z.string().optional(),
+  manufacturer: z.string().optional(),
 })
 
 type SerialPort = z.infer<typeof SerialPortSchema>

@@ -15,10 +15,7 @@ const mockBoards = new Map<string, BoardInfo>([
   ],
 ])
 
-const mockPorts: CommunicationPort[] = [
-  { name: '/dev/ttyUSB0', address: '/dev/ttyUSB0' },
-  { name: '/dev/ttyACM0', address: '/dev/ttyACM0' },
-]
+const mockPorts: CommunicationPort[] = [{ address: '/dev/ttyUSB0' }, { address: '/dev/ttyACM0' }]
 
 const mockRefreshResult = [{ board: 'Arduino Uno', version: '1.8.6' }]
 

@@ -242,7 +242,7 @@ describe('createDeviceSlice', () => {
 
     it('sets available communication ports', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM3', address: '/dev/ttyUSB0' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       expect(store.getState().deviceAvailableOptions.availableCommunicationPorts).toEqual(ports)
     })
@@ -254,14 +254,14 @@ describe('createDeviceSlice', () => {
       ])
       store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
       store.getState().deviceActions.setAvailableOptions({
-        availableCommunicationPorts: [{ name: 'COM1', address: '/dev/tty1' }],
+        availableCommunicationPorts: [{ address: '/dev/tty1' }],
       })
       expect(store.getState().deviceAvailableOptions.availableBoards.size).toBe(1)
     })
 
     it('does not overwrite ports when only boards given', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM1', address: '/dev/tty1' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/tty1' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       store.getState().deviceActions.setAvailableOptions({
         availableBoards: new Map<string, BoardInfo>(),
