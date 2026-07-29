@@ -28,6 +28,7 @@
  *   - DebugTransport interface implementations
  */
 
+import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import type { DebugConnectionConfig, DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
 
 export interface DebuggerPort {
@@ -85,6 +86,27 @@ export interface DebuggerPort {
    * Returns unsubscribe function.
    */
   onDisconnected(callback: () => void): Unsubscribe
+
+  /**
+   * Read the target's run/stop state and mode-switch position (Modbus FC
+   * 0x49).  Never changes state -- this is the editor's pre-check before it
+   * offers to start the PLC, so it can refuse locally instead of relying on
+   * the device's refusal alone.
+   *
+   * Opens a short-lived connection when no debug session is active, the same
+   * way `verifyMd5` does; reuses the live session when there is one.
+   */
+  getPlcState?(config: DebugConnectionConfig): Promise<PlcControlResult>
+
+  /**
+   * Ask the target to run or stop (Modbus FC 0x49).
+   *
+   * A RUN request is REFUSED, not queued, while the hardware mode switch reads
+   * STOP; the result carries `refusedBySwitch` so the caller shows the
+   * "flip the switch to RUN" warning.  `unsupported` means the firmware
+   * predates FC 0x49.
+   */
+  setPlcState?(config: DebugConnectionConfig, state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult>
 
   /** Check if the debugger is currently connected. */
   isConnected(): boolean

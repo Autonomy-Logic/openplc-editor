@@ -1,3 +1,6 @@
+import { parsePlcControlResponse } from '@root/backend/shared/debug/modbus-pdu'
+import type { PlcControlResult } from '@root/backend/shared/debug/types'
+import { PlcControlSubcommand, PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -9,12 +12,18 @@ export enum ModbusFunctionCode {
   DEBUG_GET = 0x43,
   DEBUG_GET_LIST = 0x44,
   DEBUG_GET_MD5 = 0x45,
+  // 0x46-0x48 are reserved for the planned debug subscription/streaming
+  // codes, so run/stop control starts at 0x49.
+  PLC_CONTROL = 0x49,
 }
 
 export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
+  /** FC 0x49 only: a RUN request was refused because the hardware mode
+   *  switch reads STOP. */
+  REFUSED_BY_SWITCH = 0x83,
 }
 
 interface ModbusTcpClientOptions {
@@ -346,4 +355,51 @@ export class ModbusTcpClient {
       return { success: false, error: getErrorMessage(error) }
     }
   }
+  // -------------------------------------------------------------------------
+  // FC 0x49 -- run/stop control (Modbus TCP framing: MBAP header + PDU).
+  // -------------------------------------------------------------------------
+  private async plcControl(subcmd: number, arg: number): Promise<PlcControlResult> {
+    if (!this.socket) {
+      return { success: false, error: 'Not connected to target' }
+    }
+
+    try {
+      const transactionId = this.incrementTransactionId()
+      const request = Buffer.alloc(11)
+      request.writeUInt16BE(transactionId, 0)
+      request.writeUInt16BE(0x0000, 2) // protocol id
+      request.writeUInt16BE(5, 4) // length: unit + fc + subcmd + arg
+      request.writeUInt8(0x00, 6) // unit id
+      request.writeUInt8(ModbusFunctionCode.PLC_CONTROL, 7)
+      request.writeUInt8(subcmd, 8)
+      request.writeUInt8(arg, 9)
+
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 11) {
+        return { success: false, error: 'Invalid response: too short' }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      // Shared parser over the PDU (skip the 7-byte MBAP header) so every
+      // transport agrees on the wire format.
+      return parsePlcControlResponse(new Uint8Array(data.subarray(7, 11)))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Read the runtime state and mode-switch position. Never changes state. */
+  async getPlcState(): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.QUERY, 0)
+  }
+
+  /**
+   * Ask the runtime to run or stop. A RUN request is refused (not queued)
+   * while the mode switch reads STOP.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.SET_STATE, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  }
+
 }

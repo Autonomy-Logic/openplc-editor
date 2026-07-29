@@ -1,7 +1,13 @@
 import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 
-import { ModbusDebugResponse, ModbusFunctionCode } from './types'
+import {
+  ModbusDebugResponse,
+  ModbusFunctionCode,
+  PlcControlSubcommand,
+  PlcRuntimeState,
+  PlcSwitchPosition,
+} from './types'
 
 export interface SerialPortLike {
   isOpen: boolean
@@ -22,6 +28,22 @@ interface ModbusRtuClientOptions {
   slaveId: number
   timeout: number
   serialPort: SerialPortLike
+}
+
+/** Result of an FC 0x49 run/stop query or command. */
+export interface PlcControlResult {
+  success: boolean
+  /** Runtime state as of the target's last scan cycle. On a SET_STATE the
+   *  runtime derives the new state inside its next cycle, so the caller sees
+   *  it on the following poll (at most one scan period later). */
+  state?: PlcRuntimeState
+  /** Mode-switch position. Boards with no physical switch report RUN. */
+  switchPosition?: PlcSwitchPosition
+  /** A RUN request was refused because the switch reads STOP. */
+  refusedBySwitch?: boolean
+  /** Firmware predates FC 0x49 (answered with the Modbus exception form). */
+  unsupported?: boolean
+  error?: string
 }
 
 const MD5_REQUEST_MAX_RETRIES = 3
@@ -462,4 +484,76 @@ export class ModbusRtuClient {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
+  // -------------------------------------------------------------------------
+  // FC 0x49 -- run/stop control.
+  //
+  // Request:  [id][0x49][subcmd][arg][crc:2]
+  // Response: [id][0x49][status][plc_state][switch_position][crc:2]
+  //
+  // `sendRequest` returns the PDU with the CRC stripped and 6 zero bytes of
+  // TCP-header padding prepended, so the fields land at offsets 7/8/9/10.
+  // -------------------------------------------------------------------------
+  private async plcControl(
+    subcmd: PlcControlSubcommand,
+    arg: number,
+  ): Promise<PlcControlResult> {
+    try {
+      const data = allocBytes(2)
+      writeUint8(data, 0, subcmd)
+      writeUint8(data, 1, arg)
+
+      const response = await this.sendRequest(this.assembleRequest(ModbusFunctionCode.PLC_CONTROL, data))
+
+      if (response.length < 11) {
+        return { success: false, error: 'Invalid response: too short' }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      // An older firmware that predates FC 0x49 answers with the exception
+      // form (fc | 0x80). Report that distinctly so the editor can say
+      // "rebuild and upload" instead of showing a protocol error.
+      if (functionCodeResponse === (ModbusFunctionCode.PLC_CONTROL as number) + 0x80) {
+        return { success: false, unsupported: true, error: 'Firmware does not implement FC 0x49' }
+      }
+      if (functionCodeResponse !== (ModbusFunctionCode.PLC_CONTROL as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+
+      const statusCode = readUint8(response, 8)
+      const state = readUint8(response, 9)
+      const position = readUint8(response, 10)
+
+      const result: PlcControlResult = {
+        success: statusCode === (ModbusDebugResponse.SUCCESS as number),
+        state: state as PlcRuntimeState,
+        switchPosition: position as PlcSwitchPosition,
+      }
+      if (statusCode === (ModbusDebugResponse.REFUSED_BY_SWITCH as number)) {
+        result.refusedBySwitch = true
+        result.error = 'Refused: hardware mode switch is in STOP'
+      } else if (!result.success) {
+        result.error = `Target returned error code: 0x${statusCode.toString(16)}`
+      }
+      return result
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Read the runtime state and mode-switch position. Never changes state. */
+  async getPlcState(): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.QUERY, 0)
+  }
+
+  /**
+   * Ask the runtime to run or stop.
+   *
+   * A RUN request is REFUSED (not queued) when the mode switch reads STOP --
+   * `refusedBySwitch` is set so the caller can tell the user to flip the
+   * switch. Stop requests are always honoured.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.SET_STATE, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  }
+
 }

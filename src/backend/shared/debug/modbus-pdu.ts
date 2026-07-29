@@ -26,6 +26,9 @@
  *   set request:   [FC=0x42] [arr: U8] [elem: U16BE] [force: U8] [dataLen: U16BE] [value...]
  *   set response:  [FC=0x42] [status]
  *
+ *   plcControl request:   [FC=0x49] [subcmd: U8] [arg: U8]
+ *   plcControl response:  [FC=0x49] [status] [plcState: U8] [switchPosition: U8]
+ *
  * The MD5 response's trailing 2 bytes are an endianness sentinel —
  * the runtime stores the literal value 0xDEAD through a native
  * `uint16_t*`, so the bytes on the wire reveal target byte order:
@@ -41,8 +44,14 @@
  */
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
-import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
-import type { DebugSetResult, DebugTransportResult, Md5ProbeResult } from './types'
+import {
+  ModbusDebugResponse,
+  ModbusFunctionCode,
+  PlcControlSubcommand,
+  PlcRuntimeState,
+  PlcSwitchPosition,
+} from '../simulator/types'
+import type { DebugSetResult, DebugTransportResult, Md5ProbeResult, PlcControlResult } from './types'
 
 // ---------------------------------------------------------------------------
 // Uint8Array helpers — host-endian-agnostic, no typed-array views on wire data.
@@ -254,4 +263,74 @@ export function parseSetVariableResponse(data: Uint8Array): DebugSetResult {
  */
 export function responseFunctionCode(data: Uint8Array): number | undefined {
   return data.length > 0 ? readU8(data, 0) : undefined
+}
+
+// ---------------------------------------------------------------------------
+// FC 0x49 — run/stop control
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a QUERY request: report state + switch position, change nothing.
+ * This is the editor's pre-check before it offers to start the PLC.
+ */
+export function buildPlcStateQueryRequest(): Uint8Array {
+  const pdu = alloc(3)
+  writeU8(pdu, 0, ModbusFunctionCode.PLC_CONTROL)
+  writeU8(pdu, 1, PlcControlSubcommand.QUERY)
+  writeU8(pdu, 2, 0)
+  return pdu
+}
+
+/** Build a SET_STATE request for RUNNING or STOPPED. */
+export function buildPlcStateSetRequest(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Uint8Array {
+  const pdu = alloc(3)
+  writeU8(pdu, 0, ModbusFunctionCode.PLC_CONTROL)
+  writeU8(pdu, 1, PlcControlSubcommand.SET_STATE)
+  writeU8(pdu, 2, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  return pdu
+}
+
+/**
+ * Parse an FC 0x49 response.
+ *
+ * Three outcomes the caller must distinguish:
+ *   - success: state + switchPosition are current.
+ *   - `refusedBySwitch`: a RUN request was rejected because the hardware mode
+ *     switch reads STOP. The editor turns this into the "flip the switch"
+ *     warning rather than a generic failure.
+ *   - `unsupported`: the target answered the Modbus exception form (FC | 0x80),
+ *     i.e. firmware built before FC 0x49 existed. The editor degrades to an
+ *     informational "rebuild and upload" message so old firmware in the field
+ *     never looks broken.
+ */
+export function parsePlcControlResponse(data: Uint8Array): PlcControlResult {
+  if (data.length < 1) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const fc = readU8(data, 0)
+  if (fc === (ModbusFunctionCode.PLC_CONTROL as number) + 0x80) {
+    return { success: false, unsupported: true, error: 'Firmware does not implement FC 0x49' }
+  }
+  if (fc !== (ModbusFunctionCode.PLC_CONTROL as number)) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+  if (data.length < 4) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const status = readU8(data, 1)
+  const result: PlcControlResult = {
+    success: status === (ModbusDebugResponse.SUCCESS as number),
+    state: readU8(data, 2) as PlcRuntimeState,
+    switchPosition: readU8(data, 3) as PlcSwitchPosition,
+  }
+
+  if (status === (ModbusDebugResponse.REFUSED_BY_SWITCH as number)) {
+    result.refusedBySwitch = true
+    result.error = 'Refused: the hardware mode switch is in STOP'
+  } else if (!result.success) {
+    result.error = statusError(status)
+  }
+  return result
 }

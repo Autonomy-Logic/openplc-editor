@@ -49,6 +49,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  plcStateControl: false,
   directUsbUpload: false,
 }
 

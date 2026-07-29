@@ -416,6 +416,27 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
     ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
 
+  /** FC 0x49 run/stop control. `action` is 'query' (never changes state --
+   *  the editor's pre-check), 'run', or 'stop'. */
+  debuggerPlcControl: (
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+    action: 'query' | 'run' | 'stop',
+  ): Promise<{
+    success: boolean
+    state?: number
+    switchPosition?: number
+    refusedBySwitch?: boolean
+    unsupported?: boolean
+    error?: string
+  }> => ipcRenderer.invoke('debugger:plc-control', connectionType, connectionParams, action),
+
   debuggerReadProgramStMd5: (
     projectPath: string,
     boardTarget: string,
@@ -503,6 +524,8 @@ const rendererProcessBridge = {
         overruns: number
       }>
     }
+    /** Run/stop mode-switch position; absent on older runtimes. */
+    switchPosition?: 'run' | 'stop'
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
   runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>

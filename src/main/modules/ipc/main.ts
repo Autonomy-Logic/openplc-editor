@@ -50,6 +50,8 @@ import {
   getProjectPath,
 } from '../../../backend/editor/utils'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
+import type { PlcControlResult } from '@root/backend/shared/debug/types'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
@@ -636,10 +638,14 @@ class MainProcessBridge implements MainIpcModule {
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: TimingStatsResponse
+        // Run/stop mode-switch position. Absent on runtimes older than the
+        // run/stop interface — treat undefined as "no gating".
+        switchPosition?: 'run' | 'stop'
       }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
+          switchPosition?: 'run' | 'stop'
         }
         return response
       })
@@ -664,6 +670,7 @@ class MainProcessBridge implements MainIpcModule {
           success: true,
           status: result.data.status,
           timingStats,
+          ...(result.data.switchPosition ? { switchPosition: result.data.switchPosition } : {}),
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
@@ -1017,6 +1024,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== DEBUGGER =====================
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.registerHandle('debugger:plc-control', this.handleDebuggerPlcControl)
     this.registerHandle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.registerHandle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
     this.registerHandle('debugger:set-variable', this.handleDebuggerSetVariable)
@@ -1751,6 +1759,105 @@ class MainProcessBridge implements MainIpcModule {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
+      }
+    }
+  }
+
+  /**
+   * FC 0x49 run/stop control for baremetal (arduino-cli) targets.
+   *
+   * Mirrors handleDebuggerVerifyMd5's transport dispatch, but deliberately
+   * REUSES an already-open debug client when one exists instead of opening a
+   * second connection: the PLC-control button can be pressed while a debug
+   * session is live, and two clients on one serial port would fight.
+   *
+   * `subcmd` is 0 for QUERY (never changes state -- the editor's pre-check) and
+   * 1 for SET_STATE, with `desiredState` naming the target state.
+   */
+  handleDebuggerPlcControl = async (
+    _event: IpcMainInvokeEvent,
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
+    connectionParams: {
+      ipAddress?: string
+      port?: string
+      baudRate?: number
+      slaveId?: number
+      jwtToken?: string
+    },
+    action: 'query' | 'run' | 'stop',
+  ): Promise<PlcControlResult> => {
+    const invoke = async (
+      target: {
+        getPlcState(): Promise<PlcControlResult>
+        setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+      },
+    ): Promise<PlcControlResult> => {
+      if (action === 'query') return target.getPlcState()
+      return target.setPlcState(action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED)
+    }
+
+    let transient: ModbusTcpClient | ModbusRtuClient | null = null
+    try {
+      // Reuse a live session first, whatever its transport.
+      if (this.debuggerWebSocketClient && connectionType === 'websocket') {
+        return await invoke(this.debuggerWebSocketClient)
+      }
+      if (this.debuggerModbusClient && (connectionType === 'rtu' || connectionType === 'simulator')) {
+        return await invoke(this.debuggerModbusClient)
+      }
+
+      if (connectionType === 'simulator') {
+        transient = new ModbusRtuClient({
+          port: 'simulator',
+          baudRate: 115200,
+          slaveId: 1,
+          timeout: 5000,
+          serialPort: new VirtualSerialPort(this.simulatorModule),
+        })
+      } else if (connectionType === 'websocket') {
+        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
+        }
+        const ws = new WebSocketDebugTransport({
+          host: connectionParams.ipAddress,
+          port: 8443,
+          token: connectionParams.jwtToken,
+          rejectUnauthorized: false,
+        })
+        await ws.connect()
+        try {
+          return await invoke(ws)
+        } finally {
+          ws.disconnect()
+        }
+      } else if (connectionType === 'tcp') {
+        if (!connectionParams.ipAddress) {
+          return { success: false, error: 'IP address is required for TCP connection' }
+        }
+        transient = new ModbusTcpClient({ host: connectionParams.ipAddress, port: 502, timeout: 5000 })
+      } else {
+        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
+          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
+        }
+        transient = new ModbusRtuClient({
+          port: connectionParams.port,
+          baudRate: connectionParams.baudRate,
+          slaveId: connectionParams.slaveId,
+          timeout: 5000,
+        })
+      }
+
+      await transient.connect()
+      try {
+        return await invoke(transient)
+      } finally {
+        transient.disconnect()
+      }
+    } catch (error) {
+      transient?.disconnect()
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during PLC control request',
       }
     }
   }

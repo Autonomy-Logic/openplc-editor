@@ -26,12 +26,16 @@ import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
   buildGetListRequest,
   buildGetMd5Request,
+  buildPlcStateQueryRequest,
+  buildPlcStateSetRequest,
   buildSetVariableRequest,
   parseGetListResponse,
   parseGetMd5Response,
   parseSetVariableResponse,
+  parsePlcControlResponse,
 } from './modbus-pdu'
-import type { DebugSetResult, DebugTransport, DebugTransportResult, Md5ProbeResult } from './types'
+import { PlcRuntimeState } from '../simulator/types'
+import type { DebugSetResult, DebugTransport, DebugTransportResult, Md5ProbeResult, PlcControlResult } from './types'
 
 const REQUEST_TIMEOUT_MS = 5000
 const CONNECT_TIMEOUT_MS = 5000
@@ -143,6 +147,27 @@ export class WebSocketDebugTransport implements DebugTransport {
       (bytes) => parseSetVariableResponse(bytes),
       'resolve',
     )
+  }
+
+  /**
+   * FC 0x49 QUERY — read the run/stop state and mode-switch position.
+   * Never changes state; this is the editor's pre-check before a start.
+   */
+  async getPlcState(): Promise<PlcControlResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildPlcStateQueryRequest(), (bytes) => parsePlcControlResponse(bytes), 'resolve')
+  }
+
+  /**
+   * FC 0x49 SET_STATE — ask the target to run or stop. A RUN request is
+   * refused (not queued) while the mode switch reads STOP; the result carries
+   * `refusedBySwitch` so the caller can explain why.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildPlcStateSetRequest(state), (bytes) => parsePlcControlResponse(bytes), 'resolve')
   }
 
   /**

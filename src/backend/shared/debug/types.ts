@@ -50,3 +50,28 @@ export interface DebugTransport {
   getVariablesList(indexes: number[]): Promise<DebugTransportResult>
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult>
 }
+
+/**
+ * Result of an FC 0x49 run/stop query or command (baremetal targets).
+ *
+ * The same shape is used for Runtime v4, whose REST surface carries the
+ * equivalent fields (`status` + `switchPosition`), so the editor's PLC-control
+ * UI has one result type regardless of target.
+ */
+export interface PlcControlResult {
+  success: boolean
+  /** Runtime state as of the target's last scan cycle. On a SET_STATE the
+   *  runtime derives the new state inside its next cycle, so the caller sees it
+   *  on the following poll (at most one scan period later). */
+  state?: number
+  /** Mode-switch position: 0 = STOP, 1 = RUN. Boards with no physical switch
+   *  always report RUN, so callers need no "absent" case. */
+  switchPosition?: number
+  /** A RUN request was refused because the switch reads STOP. Drives the
+   *  "flip the switch to RUN" warning. */
+  refusedBySwitch?: boolean
+  /** Firmware predates FC 0x49. Drives an informational "rebuild and upload"
+   *  message instead of an error. */
+  unsupported?: boolean
+  error?: string
+}

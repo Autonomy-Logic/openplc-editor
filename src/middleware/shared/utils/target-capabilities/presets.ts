@@ -30,6 +30,7 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: true,
+  plcStateControl: false,
   directUsbUpload: true,
 }
 
@@ -46,6 +47,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  plcStateControl: false,
   directUsbUpload: false,
 }
 
@@ -64,6 +66,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: true,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: false,
 }
 
@@ -83,5 +86,6 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: true,
 }

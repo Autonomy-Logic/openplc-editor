@@ -110,6 +110,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
 
+  // Baremetal targets drive run/stop over the debugger transport (USB serial or
+  // an ethernet shield), so they have no "connect to runtime" step to gate the
+  // Start/Stop button on. Runtime v3/v4 still do.
+  const plcControlNeedsConnection = !resolveTargetCapabilities(currentBoardInfo).directUsbUpload
+
   // Sync simulatorRunning when the simulator stops externally
   useEffect(() => {
     const unsub = simulator.onStopped(() => {
@@ -423,7 +428,123 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // PLC control (Start/Stop for runtime targets)
   // ---------------------------------------------------------------------------
 
+  // `resolveDebugConfigWithUx` is defined further down (it depends on state
+  // declared after this point).  Same forward-reference pattern as
+  // `handleBuildRef` above.
+  const resolveDebugConfigRef = useRef<
+    (boardTarget: string, spec: DebugSpec | undefined) => Promise<DebugConnectionConfig | null>
+  >(async () => null)
+
+  /**
+   * Tell the user the hardware mode switch is holding the device in STOP.
+   *
+   * Shown both when the editor blocks a start locally (pre-check) and when the
+   * device refuses one, so the two paths read identically. `switchLabel` comes
+   * from the VPP manifest's optional `stateControl.modeSwitch.label` when the
+   * package provides it, so a P1AM says "CPU switch" rather than the generic
+   * wording.
+   */
+  const warnSwitchInStop = useCallback(
+    async (deviceName: string, switchLabel?: string): Promise<void> => {
+      await showDebuggerMessage(
+        'warning',
+        'Device is in STOP',
+        `The ${switchLabel ?? 'mode switch'} on ${deviceName} is in the STOP position. ` +
+          'The PLC cannot be started from the editor while the switch is in STOP.\n\n' +
+          'Flip the switch to RUN and try again.',
+        ['OK'],
+      )
+    },
+    [],
+  )
+
   const handlePlcControl = useCallback(async (): Promise<void> => {
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const boardInfo = availableBoards.get(boardTarget)
+    const caps = resolveTargetCapabilities(boardInfo)
+    if (!caps.plcStateControl) return
+
+    const switchLabel = (
+      boardInfo as { stateControl?: { modeSwitch?: { label?: string } } } | undefined
+    )?.stateControl?.modeSwitch?.label
+
+    // -----------------------------------------------------------------------
+    // Baremetal (arduino-cli) targets: run/stop rides the debugger transport
+    // (Modbus FC 0x49).  No network connection or JWT involved.
+    // -----------------------------------------------------------------------
+    if (caps.directUsbUpload && !caps.isInProcessSimulator) {
+      if (!debuggerPort.getPlcState || !debuggerPort.setPlcState) return
+      try {
+        const debugConfig = await resolveDebugConfigRef.current(boardTarget, boardInfo?.debug)
+        if (!debugConfig) return
+
+        const wantRun = plcStatus !== 'RUNNING'
+
+        // Pre-check: never send a start to a device whose switch reads STOP.
+        // The device refuses it anyway, but blocking here means the user gets
+        // the explanation without a pointless round trip.
+        if (wantRun) {
+          const probe = await debuggerPort.getPlcState(debugConfig)
+          if (probe.unsupported) {
+            addLog({
+              id: crypto.randomUUID(),
+              level: 'info',
+              message:
+                'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
+            })
+            return
+          }
+          if (probe.success && probe.switchPosition === 0) {
+            await warnSwitchInStop(boardTarget, switchLabel)
+            return
+          }
+        }
+
+        const result = await debuggerPort.setPlcState(debugConfig, wantRun ? 'RUNNING' : 'STOPPED')
+        if (result.unsupported) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'info',
+            message: 'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
+          })
+          return
+        }
+        // Covers the race where the switch moved between the pre-check and the
+        // command: the device is authoritative, so its refusal wins.
+        if (result.refusedBySwitch) {
+          await warnSwitchInStop(boardTarget, switchLabel)
+          return
+        }
+        if (!result.success) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to ${wantRun ? 'start' : 'stop'} PLC: ${result.error ?? 'Unknown error'}`,
+          })
+          return
+        }
+
+        // Re-read rather than assuming: the runtime derives the new state on
+        // its next scan, so the value the command returned may still be stale.
+        const after = await debuggerPort.getPlcState(debugConfig)
+        if (after.success && after.state !== undefined) {
+          useOpenPLCStore
+            .getState()
+            .deviceActions.setPlcRuntimeStatus(
+              (after.state === 1 ? 'RUNNING' : after.state === 2 ? 'ERROR' : 'STOPPED') as NonNullable<
+                RuntimeConnection['plcStatus']
+              >,
+            )
+        }
+      } catch (error: unknown) {
+        addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
+      }
+      return
+    }
+
+    // -----------------------------------------------------------------------
+    // Runtime v4: existing REST path, plus the switch pre-check / refusal.
+    // -----------------------------------------------------------------------
     if (!jwtToken || connectionStatus !== 'connected') return
 
     try {
@@ -438,7 +559,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
       } else {
+        // Pre-check against the switch position the last status poll reported.
+        const probe = await runtime.getStatus()
+        if (probe.success && probe.switchPosition === 'stop') {
+          await warnSwitchInStop(boardTarget, switchLabel)
+          return
+        }
+
         const result = await runtime.startPlc()
+        // The runtime refuses a start while the switch is in STOP; catch that
+        // even if the pre-check above passed (switch moved in between).
+        if (result.status?.includes('ERROR_SWITCH_STOP')) {
+          await warnSwitchInStop(boardTarget, switchLabel)
+          return
+        }
         if (!result.success) {
           addLog({
             id: crypto.randomUUID(),
@@ -458,7 +592,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } catch (error: unknown) {
       addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
     }
-  }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
+  }, [
+    runtime,
+    jwtToken,
+    connectionStatus,
+    plcStatus,
+    addLog,
+    debuggerPort,
+    deviceDefinitions,
+    availableBoards,
+    warnSwitchInStop,
+  ])
 
   // ---------------------------------------------------------------------------
   // Simulator control (Start/Stop simulator + auto-debug)
@@ -743,6 +887,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
     [runtime],
   )
+  resolveDebugConfigRef.current = resolveDebugConfigWithUx
 
   // ---------------------------------------------------------------------------
   // Debugger click — full orchestration for non-simulator targets
@@ -902,7 +1047,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 ? simulatorRunning
                   ? 'Stop Simulator'
                   : 'Start Simulator'
-                : connectionStatus !== 'connected'
+                : plcControlNeedsConnection && connectionStatus !== 'connected'
                   ? 'Connect to runtime first'
                   : plcStatus === 'RUNNING'
                     ? 'Stop PLC'
@@ -911,13 +1056,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           >
             <PlayButton
               onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+              disabled={
+                isSimulatorBoard
+                  ? isCompiling || isDebuggerProcessing
+                  : plcControlNeedsConnection && connectionStatus !== 'connected'
+              }
               className={cn(
                 isSimulatorBoard
                   ? isCompiling || isDebuggerProcessing
                     ? disabledButtonClass
                     : ''
-                  : connectionStatus !== 'connected'
+                  : plcControlNeedsConnection && connectionStatus !== 'connected'
                     ? disabledButtonClass
                     : '',
               )}

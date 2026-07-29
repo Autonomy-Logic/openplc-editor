@@ -10,6 +10,7 @@
  * auto-reconnection using stored connection parameters.
  */
 
+import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type {
@@ -67,6 +68,26 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
     async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
       try {
         return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getPlcState(config: DebugConnectionConfig): Promise<PlcControlResult> {
+      try {
+        return await window.bridge.debuggerPlcControl(config.connectionType, config.connectionParams, 'query')
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async setPlcState(config: DebugConnectionConfig, state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult> {
+      try {
+        return await window.bridge.debuggerPlcControl(
+          config.connectionType,
+          config.connectionParams,
+          state === 'RUNNING' ? 'run' : 'stop',
+        )
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }

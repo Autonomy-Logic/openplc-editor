@@ -1,6 +1,8 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { parsePlcControlResponse } from '@root/backend/shared/debug/modbus-pdu'
+import type { Md5ProbeResult, PlcControlResult } from '@root/backend/shared/debug/types'
+import { PlcControlSubcommand, PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
@@ -451,4 +453,45 @@ export class ModbusRtuClient {
       return { success: false, error: getErrorMessage(error) }
     }
   }
+  // -------------------------------------------------------------------------
+  // FC 0x49 -- run/stop control.
+  //
+  // Request:  [id][0x49][subcmd][arg][crc:2]
+  // Response: [id][0x49][status][plc_state][switch_position][crc:2]
+  //
+  // `sendRequest` returns the frame with CRC stripped and 6 bytes of
+  // TCP-header padding prepended, so the fields land at offsets 7/8/9/10 --
+  // the same convention getMd5Hash/getVariablesList use above.
+  // -------------------------------------------------------------------------
+  private async plcControl(subcmd: number, arg: number): Promise<PlcControlResult> {
+    try {
+      const data = Buffer.alloc(2)
+      data.writeUInt8(subcmd, 0)
+      data.writeUInt8(arg, 1)
+
+      const response = await this.sendRequest(this.assembleRequest(ModbusFunctionCode.PLC_CONTROL, data))
+      if (response.length < 11) {
+        return { success: false, error: 'Invalid response: too short' }
+      }
+      // Reuse the shared parser so every transport agrees on the wire format.
+      return parsePlcControlResponse(new Uint8Array(response.subarray(7, 11)))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Read the runtime state and mode-switch position. Never changes state. */
+  async getPlcState(): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.QUERY, 0)
+  }
+
+  /**
+   * Ask the runtime to run or stop. A RUN request is refused (not queued)
+   * while the mode switch reads STOP -- `refusedBySwitch` is set so the caller
+   * can tell the user to flip the switch.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    return this.plcControl(PlcControlSubcommand.SET_STATE, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  }
+
 }
