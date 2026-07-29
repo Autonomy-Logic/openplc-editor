@@ -118,6 +118,19 @@ export interface DeviceActivationResult {
   error?: string
 }
 
+/**
+ * Live status of the held baremetal serial link, pushed by the main process.
+ *
+ * `reason: 'lost'` distinguishes the one failure the user must be TOLD about — a
+ * link that was up, died, and could not be recovered — from an 'error' that came
+ * straight out of something they just clicked (which already has its own dialog).
+ */
+export interface SerialConnectionStatusPayload {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  port: string | null
+  reason?: 'lost'
+}
+
 export interface DevicePort {
   /**
    * Get all available boards with their hardware specs and pin configurations.
@@ -191,12 +204,7 @@ export interface DevicePort {
    * failure, upload/debug handoff). Returns an unsubscribe function. Editor:
    * `device:connection-status` IPC event. Web: no-op.
    */
-  onConnectionStatus(
-    callback: (payload: {
-      status: 'disconnected' | 'connecting' | 'connected' | 'error'
-      port: string | null
-    }) => void,
-  ): () => void
+  onConnectionStatus(callback: (payload: SerialConnectionStatusPayload) => void): () => void
 
   /**
    * Subscribe to run/stop state from the held device link (baremetal targets).

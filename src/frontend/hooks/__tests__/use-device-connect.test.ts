@@ -40,6 +40,7 @@ const mockConnect = jest.fn()
 const mockDisconnect = jest.fn().mockResolvedValue({ success: true })
 const mockActivateLicense = jest.fn()
 const mockOnConnectionStatus = jest.fn().mockReturnValue(() => undefined)
+const mockResolveSerialLink = jest.fn((..._args: unknown[]) => mockResolveOutcome)
 const mockOpenExternalLink = jest.fn().mockResolvedValue({ success: true })
 const mockRequestDeviceFlash = jest.fn()
 
@@ -64,7 +65,7 @@ jest.mock('@root/middleware/shared/utils/target-capabilities', () => ({
   resolveTargetCapabilities: () => mockCaps,
 }))
 jest.mock('../../../backend/shared/hardware/debug-spec', () => ({
-  resolveDebugConnection: () => mockResolveOutcome,
+  resolveSerialLink: (...args: unknown[]) => mockResolveSerialLink(...args),
 }))
 jest.mock('../../utils/device-connect-events', () => ({ requestDeviceFlash: mockRequestDeviceFlash }))
 
@@ -95,20 +96,41 @@ beforeEach(() => {
 })
 
 describe('useDeviceConnect', () => {
-  it('subscribes to main-process connection status on mount', () => {
-    renderHook(() => useDeviceConnect(board))
-    expect(mockOnConnectionStatus).toHaveBeenCalledTimes(1)
+  // Mirroring pushed link status is NOT this hook's job: the link outlives the
+  // device screen, so that subscription lives in `useSerialConnectionMonitor`
+  // (mounted at workspace level) and is tested there.
+
+  it('resolves the SERIAL channel, never whichever transport the debugger would pick', async () => {
+    // The regression: with only Modbus TCP enabled, auto-selection resolved a
+    // `tcp` config, Connect requires `rtu`, and the user got "Select a
+    // communication port" with a port plainly selected. Connect only ever opens
+    // serial, so it must go through `resolveSerialLink` (which names the channel);
+    // that function's own channel-picking is covered against the REAL resolver in
+    // backend/shared/hardware/__tests__/connect-resolve-regression.test.ts.
+    const tcpFirstBoard = {
+      debug: { channels: [{ channel: 'tcp' }, { channel: 'rtu' }] },
+      vpp: { packageId: 'com.vendor.board' },
+    } as unknown as BoardInfo
+    mockConnect.mockResolvedValue({ status: 'connected-with-firmware', activation: 'full' })
+
+    const { result } = renderHook(() => useDeviceConnect(tcpFirstBoard))
+    await result.current.connect()
+
+    expect(mockResolveSerialLink).toHaveBeenCalledTimes(1)
+    expect(mockResolveSerialLink.mock.calls[0][0]).toBe(tcpFirstBoard.debug)
+    expect(mockConnect).toHaveBeenCalled()
   })
 
-  it('mirrors pushed status into the store and clears the probe on a dropped link', () => {
-    renderHook(() => useDeviceConnect(board))
-    const pushed = mockOnConnectionStatus.mock.calls[0][0] as (p: { status: string; port: string | null }) => void
-    pushed({ status: 'connected', port: 'COM5' })
-    expect(mockSetSerialConnectionStatus).toHaveBeenCalledWith('connected', 'COM5')
-    expect(mockClearDeviceProbe).not.toHaveBeenCalled()
-    pushed({ status: 'error', port: 'COM5' })
-    expect(mockSetSerialConnectionStatus).toHaveBeenCalledWith('error', 'COM5')
-    expect(mockClearDeviceProbe).toHaveBeenCalledTimes(1)
+  it('reports the reason the resolver gave instead of blaming the port', async () => {
+    mockResolveOutcome = { kind: 'error', title: 'No Debug Channel', body: 'No serial port selected.' }
+
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+
+    expect(mockOpenModal).toHaveBeenCalledWith(
+      'debugger-message',
+      expect.objectContaining({ title: 'No Debug Channel', message: 'No serial port selected.' }),
+    )
   })
 
   it('opens a "Cannot Connect" dialog and skips connect when no RTU config resolves', async () => {

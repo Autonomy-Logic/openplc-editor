@@ -1,8 +1,10 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import type { DebugStatusResult, PlcControlResult } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
@@ -38,6 +40,7 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { SerialLinkPolicy } from '../../../backend/editor/hardware/serial-link-policy'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
   type DeviceConnectResult,
@@ -63,8 +66,6 @@ import {
 } from '../../../backend/shared/debug/device-anchor'
 import type { LicenseCapableTransport } from '../../../backend/shared/debug/types'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
-import type { DebugStatusResult, PlcControlResult } from '@root/backend/shared/debug/types'
-import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 
@@ -94,6 +95,15 @@ class MainProcessBridge implements MainIpcModule {
   private debuggerRtuBaudRate: number | null = null
   private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
+  // Held serial link (D72) timings. The failure budget before recovery starts is
+  // deliberately small (a dead port is unambiguous), while the recovery window is
+  // generous: unplugging and replugging USB takes seconds, and the OS has to
+  // re-enumerate the port before it can be reopened at all.
+  private static readonly DEVICE_LIVENESS_INTERVAL_MS = 2500
+  private static readonly DEVICE_LIVENESS_FAILURES_BEFORE_RECOVERY = 2
+  /** ~30s of reopen attempts at the poll interval before the link is declared lost. */
+  private static readonly DEVICE_RECOVERY_MAX_ATTEMPTS = 12
+
   // Persistent baremetal serial connection (D72): a held RTU client kept open
   // after Connect (distinct from the on-demand debugger client). A liveness poll
   // keeps the renderer's status fresh; the port yields to upload/debug and
@@ -101,8 +111,16 @@ class MainProcessBridge implements MainIpcModule {
   private deviceSerialClient: LicenseCapableTransport | null = null
   private deviceSerialPort: string | null = null
   private deviceLivenessTimer: ReturnType<typeof setInterval> | null = null
-  private deviceLivenessFailures = 0
   private deviceLivenessInFlight = false
+  // Connect params of the held link, kept so the liveness poll can REOPEN it
+  // after a cable pull without asking the renderer to connect again.
+  private deviceConnectParams: LicenseTransportParams | null = null
+  // Decides when the link is down / back / gone. Counting only — the I/O below
+  // owns the client (see backend/editor/hardware/serial-link-policy.ts).
+  private readonly deviceLinkPolicy = new SerialLinkPolicy(
+    MainProcessBridge.DEVICE_LIVENESS_FAILURES_BEFORE_RECOVERY,
+    MainProcessBridge.DEVICE_RECOVERY_MAX_ATTEMPTS,
+  )
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   private runtimeIp: string | null = null
@@ -1826,11 +1844,21 @@ class MainProcessBridge implements MainIpcModule {
       // Reuse an already-open client, in the order of "most likely to be the
       // one holding the port": the held device link (Connect), then a live
       // debug session.
-      if (
-        this.deviceSerialClient?.setPlcState &&
-        (connectionType === 'rtu' || connectionType === 'simulator')
-      ) {
+      // Any transport EXCEPT websocket (Runtime v4 drives run/stop over REST and
+      // must not be short-circuited). Notably this includes 'tcp': run/stop is a
+      // command to the DEVICE, not to the debug session, so a held serial link is
+      // the right path even when the debugger is running over Modbus TCP. Keying
+      // it off the debug transport meant that a project with Modbus TCP enabled
+      // sent Stop to the board's IP — which times out on a board whose ethernet
+      // shield is not connected, while the open USB cable sat unused.
+      if (this.deviceSerialClient?.setPlcState && connectionType !== 'websocket') {
         return await this.deviceSerialClient.setPlcState(target)
+      }
+      // The held link is mid-recovery (cable out): say so instead of opening a
+      // transient client, which would contend with the reopen for the same port
+      // and report a bare timeout.
+      if (connectionType === 'rtu' && this.deviceLinkPolicy.recovering) {
+        return { success: false, error: 'The device connection dropped and is being restored. Try again in a moment.' }
       }
       if (this.debuggerModbusClient && (connectionType === 'rtu' || connectionType === 'simulator')) {
         return await this.debuggerModbusClient.setPlcState(target)
@@ -2543,22 +2571,33 @@ class MainProcessBridge implements MainIpcModule {
   // Persistent baremetal serial connection (D72) — "stay connected"
   // ===================================================================
 
-  /** Push the live serial link status to the renderer store. */
+  /**
+   * Push the live serial link status to the renderer store. `reason: 'lost'`
+   * marks the one status the user must be TOLD about rather than just shown: a
+   * held link that died and could not be recovered. Every other 'error' is the
+   * direct result of something the user just clicked, which already has its own
+   * dialog.
+   */
   private emitSerialConnectionStatus(
     status: 'disconnected' | 'connecting' | 'connected' | 'error',
     port: string | null,
+    reason?: 'lost',
   ): void {
-    this.mainWindow?.webContents?.send('device:connection-status', { status, port })
+    this.mainWindow?.webContents?.send('device:connection-status', {
+      status,
+      port,
+      ...(reason !== undefined ? { reason } : {}),
+    })
   }
 
-  /** Stop the liveness poll and close the held serial client (idempotent). */
-  private teardownDeviceSerial(): void {
-    if (this.deviceLivenessTimer) {
-      clearInterval(this.deviceLivenessTimer)
-      this.deviceLivenessTimer = null
-    }
-    this.deviceLivenessFailures = 0
-    this.deviceLivenessInFlight = false
+  /**
+   * Close the held client without giving up the link. Shared by teardown and by
+   * recovery, which must drop the dead handle (a stale open fd is exactly what
+   * makes the reopen fail with "Resource temporarily unavailable / cannot lock
+   * port") while keeping `deviceSerialPort` + `deviceConnectParams` so it can
+   * reopen the same link.
+   */
+  private closeHeldDeviceClient(): void {
     // A debug session borrowing this client must not keep using it once it is
     // closed. Dropping the reference makes the next debug read report
     // needsReconnect, which the renderer already handles, instead of talking to
@@ -2569,6 +2608,18 @@ class MainProcessBridge implements MainIpcModule {
     }
     this.deviceSerialClient?.disconnect()
     this.deviceSerialClient = null
+  }
+
+  /** Stop the liveness poll and close the held serial client (idempotent). */
+  private teardownDeviceSerial(): void {
+    if (this.deviceLivenessTimer) {
+      clearInterval(this.deviceLivenessTimer)
+      this.deviceLivenessTimer = null
+    }
+    this.deviceLivenessInFlight = false
+    this.deviceLinkPolicy.reset()
+    this.deviceConnectParams = null
+    this.closeHeldDeviceClient()
     this.deviceSerialPort = null
   }
 
@@ -2586,56 +2637,129 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Liveness poll over the held client. Two consecutive failures (unplug /
-   * reset) tear the link down and notify the renderer. Re-entrancy guarded so a
-   * slow read never overlaps the next tick.
+   * The one timer behind the held link. Each tick either probes the link or, once
+   * it is down, makes a single attempt to reopen it — so the poll interval doubles
+   * as the retry cadence and nothing else needs scheduling. Re-entrancy guarded,
+   * so a slow read (or a slow reopen) never overlaps the next tick.
    *
-   * Prefers the status read (FC 0x46) over the board id (0x48): both are bare-FC
-   * round trips that prove the firmware is answering, but the status frame also
-   * carries the run/stop state and the mode-switch position. That makes this the
-   * ONE place baremetal run/stop state is polled — no second timer, no second
-   * connection, and no extra traffic. Falls back to the board id for a transport
-   * that has no status read (the runtime-v4 WebSocket, which only implements
-   * this interface for licensing).
+   * The full sequence for a cable pulled and plugged back in:
+   *
+   *   connected --(2 silent polls)--> connecting --(port answers)--> connected
+   *                                              \--(12 failed reopens)--> error, 'lost'
+   *
+   * `SerialLinkPolicy` owns those counts; this method owns the I/O.
    */
   private startDeviceLiveness(port: string): void {
-    this.deviceLivenessFailures = 0
+    this.deviceLinkPolicy.reset()
     this.deviceLivenessTimer = setInterval(() => {
       if (this.deviceLivenessInFlight) return
-      const client = this.deviceSerialClient
-      if (!client) return
       this.deviceLivenessInFlight = true
-      void (async () => {
-        try {
-          if (client.getStatus) {
-            const r = await client.getStatus()
-            if (!r.success) throw new Error('no status reply')
-            this.deviceLivenessFailures = 0
-            // This tick IS the state poll: the status frame carries it, so a
-            // switch flipped by hand shows up within one interval at no extra
-            // cost. `minIntervalMs: 0` because the 2.5s timer is already the
-            // rate limit here.
-            this.plcStatePushedAt = 0
-            await this.pushPlcState(client, port, 0)
-            return
-          }
-          const r = await client.getBoardId()
-          if (r.success) {
-            this.deviceLivenessFailures = 0
-            return
-          }
-          throw new Error('no board-id reply')
-        } catch {
-          this.deviceLivenessFailures += 1
-          if (this.deviceLivenessFailures >= 2) {
-            this.teardownDeviceSerial()
-            this.emitSerialConnectionStatus('error', port)
-          }
-        } finally {
-          this.deviceLivenessInFlight = false
-        }
-      })()
-    }, 2500)
+      void this.deviceLivenessTick(port).finally(() => {
+        this.deviceLivenessInFlight = false
+      })
+    }, MainProcessBridge.DEVICE_LIVENESS_INTERVAL_MS)
+  }
+
+  /**
+   * Does the firmware still answer on `client`? Also the state poll: the status
+   * frame carries run/stop + the switch position, so a switch flipped by hand
+   * shows up within one interval at no extra cost (`minIntervalMs: 0` because
+   * the timer is already the rate limit). Falls back to the board id for a
+   * transport with no status read (the runtime-v4 WebSocket, which implements
+   * this interface only for licensing).
+   *
+   * Shared by the liveness tick and by recovery, so "the link is up" means the
+   * same thing in both — a reopened port that never answers is not a recovery.
+   */
+  private async deviceLinkAnswers(client: LicenseCapableTransport, port: string): Promise<boolean> {
+    if (client.getStatus) {
+      const status = await client.getStatus()
+      if (!status.success) return false
+      this.plcStatePushedAt = 0
+      await this.pushPlcState(client, port, 0)
+      return true
+    }
+    return (await client.getBoardId()).success
+  }
+
+  /** One poll tick: probe the held link, or drive recovery when it is down. */
+  private async deviceLivenessTick(port: string): Promise<void> {
+    if (this.deviceLinkPolicy.recovering) return this.attemptDeviceRecovery(port)
+
+    const client = this.deviceSerialClient
+    if (!client) return
+
+    let alive = false
+    try {
+      alive = await this.deviceLinkAnswers(client, port)
+    } catch {
+      alive = false
+    }
+    if (this.deviceLinkPolicy.onProbeResult(alive) === 'enter-recovery') this.enterDeviceRecovery(port)
+  }
+
+  /**
+   * The link stopped answering (cable pulled, board reset, re-flash). Drop the
+   * dead client but KEEP the link: the poll now tries to reopen the same port
+   * each tick, and the renderer sees 'connecting' — a link coming back, not a
+   * link that is gone. Nothing is torn down until recovery gives up, so a cable
+   * that returns within the window restores the connection with no user action.
+   */
+  private enterDeviceRecovery(port: string): void {
+    this.closeHeldDeviceClient()
+    this.emitSerialConnectionStatus('connecting', port)
+  }
+
+  /**
+   * One reopen attempt. On success the fresh client is adopted as the held link;
+   * the license recover from the original Connect still stands, so this
+   * deliberately does NOT re-run `probeAndRecover` (that would hammer the
+   * licensing backend every 2.5s while a cable is out).
+   *
+   * After `DEVICE_RECOVERY_MAX_ATTEMPTS` the device is considered gone: tear the
+   * link down and report 'error' with `reason: 'lost'` so the renderer warns the
+   * user, mirroring the runtime-v4 connection-lost flow.
+   */
+  private async attemptDeviceRecovery(port: string): Promise<void> {
+    const recovered = await this.reopenDeviceLink(port)
+
+    switch (this.deviceLinkPolicy.onReopenResult(recovered !== null)) {
+      case 'recovered':
+        this.deviceSerialClient = recovered
+        this.emitSerialConnectionStatus('connected', port)
+        return
+      case 'give-up':
+        this.teardownDeviceSerial()
+        this.emitSerialConnectionStatus('error', port, 'lost')
+        return
+      default:
+        return
+    }
+  }
+
+  /**
+   * One reopen attempt for the held link: returns a client that answered, or
+   * null. One attempt per tick — the poll timer already paces the retries.
+   *
+   * Deliberately does NOT re-run `probeAndRecover`: the license recover from the
+   * original Connect still stands, and re-running it would hammer the licensing
+   * backend every couple of seconds for as long as a cable is out.
+   */
+  private async reopenDeviceLink(port: string): Promise<LicenseCapableTransport | null> {
+    const params = this.deviceConnectParams
+    if (!params) return null
+    const built = buildLicenseTransport(params, this.RUNTIME_API_PORT)
+    if ('error' in built) return null
+
+    const client = built.client
+    try {
+      await connectWithRetries(client, { attempts: 1, backoffMs: 0 })
+      if (await this.deviceLinkAnswers(client, port)) return client
+    } catch {
+      // Port still absent, or open but not answering — caller retries.
+    }
+    client.disconnect()
+    return null
   }
 
   /**
@@ -2690,9 +2814,11 @@ class MainProcessBridge implements MainIpcModule {
       return result
     }
 
-    // Hold it open + start liveness.
+    // Hold it open + start liveness. The params are kept so the poll can reopen
+    // this same link after a cable pull without a round trip to the renderer.
     this.deviceSerialClient = client
     this.deviceSerialPort = port
+    this.deviceConnectParams = connectionParams
     if (port) this.startDeviceLiveness(port)
     this.emitSerialConnectionStatus('connected', port)
     return result

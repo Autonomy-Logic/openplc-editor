@@ -18,12 +18,12 @@ import type {
   Md5ProbeResult,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
 
 import { ModbusDebugResponse, ModbusFunctionCode } from './modbus-client'
-import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 
 interface ModbusRtuClientOptions {
   port: string

@@ -1,4 +1,5 @@
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { SerialConnectionStatusPayload } from '@root/middleware/shared/ports/device-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -558,11 +559,8 @@ const rendererProcessBridge = {
   deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
 
   // Main pushes live link status here (liveness failure, upload/debug handoff).
-  onDeviceConnectionStatus: (
-    callback: (payload: { status: 'disconnected' | 'connecting' | 'connected' | 'error'; port: string | null }) => void,
-  ): (() => void) => {
-    const listener = (_event: unknown, payload: { status: 'disconnected' | 'connecting' | 'connected' | 'error'; port: string | null }) =>
-      callback(payload)
+  onDeviceConnectionStatus: (callback: (payload: SerialConnectionStatusPayload) => void): (() => void) => {
+    const listener = (_event: unknown, payload: SerialConnectionStatusPayload) => callback(payload)
     ipcRenderer.on('device:connection-status', listener)
     return () => ipcRenderer.removeListener('device:connection-status', listener)
   },

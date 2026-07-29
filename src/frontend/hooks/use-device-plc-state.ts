@@ -16,9 +16,9 @@
  */
 import { useEffect } from 'react'
 
-import { useDevice } from '../../middleware/shared/providers'
-import type { PlcStatus } from '../../middleware/shared/ports/types'
 import { PlcRuntimeState, PlcSwitchPosition } from '../../backend/shared/simulator/types'
+import type { PlcStatus } from '../../middleware/shared/ports/types'
+import { useDevice } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 
 /** Map the wire value to the store's PlcStatus union. */

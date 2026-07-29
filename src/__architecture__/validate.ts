@@ -283,6 +283,18 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
   'frontend/hooks/use-device-connect.ts': ['backend-shared'],
+  // Baremetal run/stop mirror — maps the PROTOCOL's run/stop and switch wire
+  // values (`PlcRuntimeState` / `PlcSwitchPosition`, defined next to the RTU
+  // client that reads them) onto the store's `PlcStatus` union. Same D72 device
+  // link as the sibling entry above. The alternative is either duplicating the
+  // numeric constants in the frontend or hoisting the two enums into
+  // ports/types.ts; both were judged worse than one documented import.
+  'frontend/hooks/use-device-plc-state.ts': ['backend-shared'],
+  // Run/stop control port — `PlcControlResult` is the FC 0x4b acknowledgement
+  // shape, defined with the protocol types it is built from (`PlcRuntimeState`).
+  // Type-only import; hoisting it into ports/types.ts would drag the wire enums
+  // along with it, so the contract stays where the protocol is described.
+  'middleware/shared/ports/debugger-port.ts': ['backend-shared'],
   // PLCopen export — needs the shared XmlGenerator composing function
   // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No

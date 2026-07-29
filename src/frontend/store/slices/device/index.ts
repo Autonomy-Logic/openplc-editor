@@ -6,11 +6,11 @@ export type {
   DevicePinMapping,
   DeviceProbeInfo,
   DeviceSlice,
-  SerialConnection,
-  SerialConnectionStatus,
   DeviceState,
   PinUpdateResponse,
   RuntimeConnection,
   SelectedDevice,
+  SerialConnection,
+  SerialConnectionStatus,
   StoredCredentials,
 } from './types'

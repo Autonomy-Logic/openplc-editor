@@ -292,3 +292,33 @@ export function resolveDebugConnection(
     },
   }
 }
+
+/**
+ * Resolve a board's SERIAL (rtu) channel, whatever Modbus transports the project
+ * enables.
+ *
+ * Two flows open the serial link itself rather than a debug session: the device
+ * screen's Connect, and the reconnect after an upload has finished with the port.
+ * Both need the port / baud / slave id out of the same spec, and neither cares
+ * which transport the DEBUGGER would use — so neither can let `enabledWhen`
+ * auto-select. It picked `tcp` in a Modbus-TCP-only project, which made Connect
+ * refuse ("select a communication port", with one selected) and made the
+ * post-upload reconnect silently skip, leaving the held link closed.
+ *
+ * Naming the channel is also correct on its own terms: the always-on debugger
+ * keeps the serial protocol compiled into every baremetal firmware even when
+ * Modbus RTU is turned off, so serial is connectable regardless.
+ *
+ * Returns the same outcomes as `resolveDebugConnection`, plus `unsupported` when
+ * the board declares no serial channel at all.
+ */
+export function resolveSerialLink(
+  spec: DebugSpec | undefined,
+  context: DebugResolverContext,
+): DebugResolverOutcome {
+  // `channels` arrives from a VPP manifest: treat it as possibly absent rather
+  // than trusting the type, so a malformed spec resolves to a dialog, not a throw.
+  const rtuIndex = spec?.channels?.findIndex((channel) => channel.channel === 'rtu') ?? -1
+  if (!spec || rtuIndex < 0) return { kind: 'unsupported' }
+  return resolveDebugConnection(spec, context, rtuIndex)
+}

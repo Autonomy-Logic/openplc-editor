@@ -19,6 +19,7 @@ import type {
   DeviceConnectParams,
   DeviceConnectResult,
   DevicePort,
+  SerialConnectionStatusPayload,
 } from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort } from '../../shared/ports/types'
 
@@ -62,12 +63,7 @@ export function createEditorDeviceAdapter(): DevicePort {
       return window.bridge.deviceDisconnect()
     },
 
-    onConnectionStatus(
-      callback: (payload: {
-        status: 'disconnected' | 'connecting' | 'connected' | 'error'
-        port: string | null
-      }) => void,
-    ): () => void {
+    onConnectionStatus(callback: (payload: SerialConnectionStatusPayload) => void): () => void {
       return window.bridge.onDeviceConnectionStatus(callback)
     },
 

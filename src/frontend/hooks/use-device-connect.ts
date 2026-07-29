@@ -19,9 +19,9 @@
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { useDevice, useSystem } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 
-import { type DebugResolverContext, resolveDebugConnection } from '../../backend/shared/hardware/debug-spec'
+import { type DebugResolverContext, resolveSerialLink } from '../../backend/shared/hardware/debug-spec'
 import type { DeviceConnectParams } from '../../middleware/shared/ports/device-port'
 import { useOpenPLCStore } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
@@ -72,15 +72,6 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const addLog = useOpenPLCStore((s) => s.consoleActions.addLog)
   const status = useOpenPLCStore((s) => s.serialConnection.status)
 
-  // Mirror main-process link status (liveness failure, upload/debug handoff).
-  useEffect(() => {
-    return device.onConnectionStatus(({ status: next, port }) => {
-      setSerialConnectionStatus(next, port)
-      // A dropped link means the device screen no longer describes a live device.
-      if (next === 'disconnected' || next === 'error') clearDeviceProbe()
-    })
-  }, [device, setSerialConnectionStatus, clearDeviceProbe])
-
   /**
    * Send the user to the Edge purchase page FOR THIS DEVICE (D68a). The page
    * needs the VPP and the device id in the link — without them it can only show
@@ -117,14 +108,20 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     const caps = resolveTargetCapabilities(boardInfo)
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
 
-    const resolved = boardInfo?.debug
-      ? resolveDebugConnection(boardInfo.debug, buildUsbResolverContext(), undefined)
-      : undefined
-    if (!(resolved?.kind === 'config' && resolved.config.connectionType === 'rtu')) {
+    // Connect opens the SERIAL link and nothing else — see `resolveSerialLink`
+    // for why this must name the channel instead of auto-selecting one.
+    const resolved = resolveSerialLink(boardInfo?.debug, buildUsbResolverContext())
+    if (!(resolved.kind === 'config' && resolved.config.connectionType === 'rtu')) {
+      // Report what actually went wrong. The resolver already knows (no port
+      // selected, no serial channel); inventing one reason for all of them is
+      // how a resolved-to-TCP config came out as "select a port".
       openModal('debugger-message', {
         type: 'error',
-        title: 'Cannot Connect',
-        message: 'Select a communication port for this device first, then try Connect again.',
+        title: resolved.kind === 'error' ? resolved.title : 'Cannot Connect',
+        message:
+          resolved.kind === 'error'
+            ? resolved.body
+            : 'This device has no serial debug channel to connect through. Check the device package.',
         buttons: ['OK'],
         onResponse: () => undefined,
       })

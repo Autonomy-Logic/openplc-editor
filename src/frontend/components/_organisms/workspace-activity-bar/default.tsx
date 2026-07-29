@@ -5,6 +5,7 @@ import {
   type DebugResolverContext,
   type DebugSpec,
   resolveDebugConnection,
+  resolveSerialLink,
 } from '../../../../backend/shared/hardware/debug-spec'
 import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
@@ -144,9 +145,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   //
   // Modbus TCP sessions are deliberately untouched — they own their own socket
   // and never depended on the serial link.
+  // Only 'connected' is tolerated. 'connecting' covers RECOVERY too (the link
+  // died and the main process is reopening it), and by then the client the
+  // session was sharing is already closed — waiting for the recovery verdict
+  // would just keep a dead session on screen for the whole retry window. A
+  // session can only have started from 'connected', so the initial connect's
+  // 'connecting' never reaches this: no session is active to stop.
   const serialConnectionStatus = useOpenPLCStore((state) => state.serialConnection.status)
   useEffect(() => {
-    if (serialConnectionStatus === 'connected' || serialConnectionStatus === 'connecting') return
+    if (serialConnectionStatus === 'connected') return
     if (activeDebugTransportRef.current !== 'rtu') return
     if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
 
@@ -418,10 +425,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (serialWasConnected && result.success) {
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
-          const resolved = spec
-            ? resolveDebugConnection(spec, buildDebugResolverContext(boardTarget), undefined)
-            : undefined
-          if (resolved?.kind === 'config' && resolved.config.connectionType === 'rtu') {
+          // Same serial resolution Connect uses: the link being restored is the
+          // serial one, whatever transport the debugger would pick.
+          const resolved = resolveSerialLink(spec, buildDebugResolverContext(boardTarget))
+          if (resolved.kind === 'config' && resolved.config.connectionType === 'rtu') {
             const cp = resolved.config.connectionParams
             try {
               const reconnect = await window.bridge.deviceConnect(
