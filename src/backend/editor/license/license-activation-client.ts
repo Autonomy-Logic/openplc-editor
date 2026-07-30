@@ -116,6 +116,22 @@ export interface DeviceActivationResult {
    * picked. See `EdgeActivationRequestBody`.
    */
   devicePublicKey?: string
+  /**
+   * Whether the activate request actually CARRIED proof of possession (ADR-0002).
+   *
+   * `'unproven'` is a rollout concession, not a normal outcome: it means the
+   * request went out with no `nonce`/`signature` because there was no anchor to
+   * derive from, or because the `/challenge` route answered 404. A backend that
+   * requires the proof then refuses, and the refusal is byte-identical to "no
+   * purchase on record" — so a customer who PAID is shown "no license found" and
+   * invited to buy again (A19). This field is what lets the caller say which of
+   * the two happened; without it the only trace was a `console.warn` in the main
+   * process, invisible in the editor.
+   *
+   * `undefined` when no activate request was made (mock short-circuit, or the
+   * caller never got that far).
+   */
+  proofOfPossession?: 'proved' | 'unproven'
 }
 
 const ACTIVATE_PATH = '/vpp-licenses/activate'
@@ -226,14 +242,18 @@ async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActi
     // check-failed states are precisely the ones where the UI offers "Buy
     // license", and that link is what binds this key to the device.
     const devicePublicKey = proof?.publicKeyHex
+    // Carried for the same reason, one layer up: a `licensed:false` answer to an
+    // UNPROVEN request cannot be read as "no purchase" (A19), and the renderer is
+    // the only place that can say so where a user will see it.
+    const proofOfPossession = proof ? ('proved' as const) : ('unproven' as const)
     const raw = await postJson(`${getEdgeApiBaseUrl()}${ACTIVATE_PATH}`, body)
     const data = unwrapHttpEnvelope(raw) as Partial<EdgeActivationResponse> | undefined
     if (!data || typeof data.licensed !== 'boolean') {
-      return { licensed: false, error: 'Unexpected activation response shape', devicePublicKey }
+      return { licensed: false, error: 'Unexpected activation response shape', devicePublicKey, proofOfPossession }
     }
-    if (!data.licensed) return { licensed: false, reason: data.reason, devicePublicKey }
+    if (!data.licensed) return { licensed: false, reason: data.reason, devicePublicKey, proofOfPossession }
     if (typeof data.license !== 'string') {
-      return { licensed: false, error: 'Activation response missing license blob', devicePublicKey }
+      return { licensed: false, error: 'Activation response missing license blob', devicePublicKey, proofOfPossession }
     }
     // `Buffer.from(s, 'base64')` NEVER throws: the decoder silently skips
     // invalid characters and tolerates missing padding, so a truncated or
@@ -246,9 +266,10 @@ async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActi
         licensed: false,
         error: `Activation response license blob is ${blob.length} bytes, expected ${LIC_BLOB_SIZE}`,
         devicePublicKey,
+        proofOfPossession,
       }
     }
-    return { licensed: true, license: Array.from(blob), reason: data.reason, devicePublicKey }
+    return { licensed: true, license: Array.from(blob), reason: data.reason, devicePublicKey, proofOfPossession }
   } catch (err) {
     return { licensed: false, error: err instanceof Error ? err.message : String(err) }
   }

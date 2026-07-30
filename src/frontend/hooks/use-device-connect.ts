@@ -14,7 +14,7 @@
  *                            Run in Demo.
  *
  * Live link state (`serialConnection.status`) is pushed from the main process; the
- * license classification lands in `deviceProbeInfo` for the FULL/DEMO badge.
+ * license classification lands in `deviceProbeInfo` for the possession badge.
  */
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { useDevice, useSystem } from '@root/middleware/shared/providers/platform-context'
@@ -119,6 +119,79 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     void system.openExternalLink(url)
   }, [boardInfo, openModal, system])
 
+  /**
+   * The prompt shown when the license check came back `demo` — shared by the
+   * serial CONNECT and the runtime-v4 check so the two can never drift.
+   *
+   * TWO CASES, and telling them apart is the point (D6, A19).
+   *
+   * 1. THE BACKEND ANSWERED. It said there is no license for this `deviceId`. It
+   *    deliberately CANNOT say which of two things is true — no purchase exists,
+   *    or a purchase exists but is registered under a different device key — and
+   *    distinguishing them server-side was rejected (ADR-0002: it would tell an
+   *    attacker which ids have purchases). So the message says both, and names
+   *    the Device ID, because that is what support needs to resolve the second
+   *    case. Saying only "no license was found" is what made someone who had
+   *    already paid buy the same license twice.
+   *
+   * 2. THE REQUEST WENT WITHOUT PROOF. The `/challenge` route answered 404 (a
+   *    proxy, a CDN, a corporate portal — the route itself exists, and the
+   *    use-case behind it never returns 404 for a business reason), so the editor
+   *    activated unproven and a backend that requires the proof refused with the
+   *    byte-identical "no license" answer. Nothing was learned about this
+   *    device's entitlement, so Buy is DEMOTED, not offered first, and the
+   *    console gets a line — before this, the only trace was a `console.warn` in
+   *    the main process that no user can see.
+   */
+  const promptLicenseState = useCallback(
+    (deviceBoard: string, result: { deviceId?: string; proofOfPossession?: 'proved' | 'unproven' }): void => {
+      const deviceIdNote = result.deviceId ? ` Device ID: ${result.deviceId}.` : ''
+
+      if (result.proofOfPossession === 'unproven') {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message:
+            'License check ran WITHOUT proof of possession: the licensing service did not serve a challenge, so the ' +
+            'activation could not prove it is talking to this board. A "no license" answer here says nothing about ' +
+            `whether this device has been purchased.${deviceIdNote}`,
+        })
+        openModal('debugger-message', {
+          type: 'warning',
+          title: 'License Check Incomplete',
+          message:
+            `The license check for "${deviceBoard}" could not be completed: the licensing service did not serve a ` +
+            'challenge, so this activation could not prove it is talking to this board, and the service refuses ' +
+            'activations it cannot verify.\n\n' +
+            'This is a service or network problem, NOT a missing purchase — if you already bought a license, do not ' +
+            `buy again. Try connecting again, and contact support if it keeps happening.${deviceIdNote}`,
+          // 'Run in Demo' first on purpose: pushing a purchase when the
+          // entitlement is UNKNOWN is how someone pays twice for one device.
+          buttons: ['Run in Demo', 'Buy License'],
+          onResponse: (buttonIndex: number) => {
+            if (buttonIndex === 1) buyLicense()
+          },
+        })
+        return
+      }
+
+      openModal('debugger-message', {
+        type: 'warning',
+        title: 'License Required',
+        message:
+          `No license was found for "${deviceBoard}". Either no license has been purchased for this device, or the ` +
+          'purchase is registered under a different device key — in that case buying again will not help, so contact ' +
+          `support with this Device ID.${deviceIdNote}\n\n` +
+          'You can buy a license now, or continue running in demo mode (15 min per run).',
+        buttons: ['Buy License', 'Run in Demo'],
+        onResponse: (buttonIndex: number) => {
+          if (buttonIndex === 0) buyLicense()
+        },
+      })
+    },
+    [addLog, buyLicense, openModal],
+  )
+
   const connect = useCallback(async (): Promise<void> => {
     const caps = resolveTargetCapabilities(boardInfo)
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
@@ -154,18 +227,14 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     })
 
     // Land the classification for the badge (main already ran the recover).
-    // `activation` + `error` travel with it: without them the badge cannot tell
-    // a confirmed "no license" from a check that never got an answer, and the
-    // main process's careful distinction dies here.
-    setDeviceProbeResult({
-      status: result.status,
-      anchorHex: result.anchorHex,
-      deviceId: result.deviceId,
-      devicePublicKey: result.devicePublicKey,
-      licenseStatus: result.licenseStatus,
-      activation: result.activation,
-      error: result.error,
-    })
+    //
+    // Passed WHOLE, not field by field (S1): `DeviceConnectResult` IS
+    // `DeviceProbeResult` — one shape, aliased in `device-port.ts`. This used to
+    // copy seven named fields, which is the pattern that silently dropped
+    // `devicePublicKey` on the reconnect path when ADR-0002 added it (see the
+    // comment in `workspace-activity-bar/default.tsx`) and would drop task #60's
+    // hardware discriminator next, with no test turning red.
+    setDeviceProbeResult(result)
 
     if (result.status === 'no-response') {
       openModal('debugger-message', {
@@ -193,7 +262,20 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       openModal('debugger-message', {
         type: 'question',
         title: 'No Firmware Detected',
-        message: `No OpenPLC firmware responded on ${String(cp.port)}. Build & Upload the program to flash this device, then Connect again.`,
+        // The second sentence is the whole point of this wording (A17/D19). This
+        // state is ALSO what a board with correct, responding OpenPLC firmware
+        // reports when its core has no factory unique id: FC 0x48 answers
+        // successfully with `id_len = 0`, which is indistinguishable here from
+        // "nothing spoke the debug protocol". Telling only the flash story sent
+        // users into an endless reflash loop, and never said the thing that
+        // actually decides their outcome: a board with no factory id CANNOT be
+        // licensed (ADR-0001, "Placa sem ID de fábrica não é licenciável") — it
+        // runs demo forever, including for a customer who paid.
+        message:
+          `No OpenPLC firmware responded on ${String(cp.port)}, or this board has no factory-programmed unique id.\n\n` +
+          'If the board has never been flashed, Build & Upload the program and Connect again. If it is already ' +
+          'running OpenPLC, the board reports no unique id — licensing needs one, so this board can only run in ' +
+          'demo mode (15 min per run) and reflashing will not change that.',
         buttons: ['Build & Upload', 'Cancel'],
         onResponse: (buttonIndex: number) => {
           if (buttonIndex === 0) requestDeviceFlash()
@@ -203,19 +285,18 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     }
 
     // connected-with-firmware. The recover already ran in the main process; a
-    // 'demo' outcome means the backend has no license for this device.
-    if (result.activation === 'demo') {
-      openModal('debugger-message', {
-        type: 'warning',
-        title: 'License Required',
-        message: `No license was found for "${deviceBoard}". Buy a license to unlock the full version, or continue running in demo mode.`,
-        buttons: ['Buy License', 'Run in Demo'],
-        onResponse: (buttonIndex: number) => {
-          if (buttonIndex === 0) buyLicense()
-        },
-      })
-    }
-  }, [boardInfo, device, openModal, startDeviceProbe, setDeviceProbeResult, setSerialConnectionStatus, buyLicense])
+    // 'demo' outcome means the backend answered "no license for this device" —
+    // which is not the same as "there is no purchase", see `promptLicenseState`.
+    if (result.activation === 'demo') promptLicenseState(deviceBoard, result)
+  }, [
+    boardInfo,
+    device,
+    openModal,
+    startDeviceProbe,
+    setDeviceProbeResult,
+    setSerialConnectionStatus,
+    promptLicenseState,
+  ])
 
   const disconnect = useCallback(async (): Promise<void> => {
     await device.disconnect()
@@ -274,6 +355,11 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     // same meanings, the serial path lands. This is also what makes the two
     // paths agree on `unsupported` instead of one showing "License unknown" and
     // the other showing nothing at all.
+    // Named field by field, unlike the serial path: `DeviceActivationResult` is
+    // genuinely a DIFFERENT shape (it carries `success`, `probedAt`, `outcome`,
+    // `vppId` and `license`, none of which belong on the badge), so this is a
+    // real projection and not the copy S1 removed. Any field added to the badge
+    // shape must be added here too.
     setDeviceProbeResult({
       status: 'connected-with-firmware',
       anchorHex: act.anchorHex,
@@ -281,21 +367,12 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       devicePublicKey: act.devicePublicKey,
       licenseStatus: act.licenseStatus,
       activation: act.activation,
+      proofOfPossession: act.proofOfPossession,
       error: act.error,
     })
 
-    if (act.activation === 'demo') {
-      openModal('debugger-message', {
-        type: 'warning',
-        title: 'License Required',
-        message: `No license was found for "${deviceBoard}". Buy a license to unlock the full version, or continue running in demo mode.`,
-        buttons: ['Buy License', 'Run in Demo'],
-        onResponse: (buttonIndex: number) => {
-          if (buttonIndex === 0) buyLicense()
-        },
-      })
-    }
-  }, [boardInfo, device, startDeviceProbe, setDeviceProbeResult, clearDeviceProbe, openModal, buyLicense, addLog])
+    if (act.activation === 'demo') promptLicenseState(deviceBoard, act)
+  }, [boardInfo, device, startDeviceProbe, setDeviceProbeResult, clearDeviceProbe, promptLicenseState, addLog])
 
   return {
     connect,

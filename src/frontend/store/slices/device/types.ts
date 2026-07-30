@@ -104,7 +104,9 @@ export type SerialConnection = {
  * UI state for the CONNECT step (D72): "Connect" opens the device channel,
  * runs the Modbus/debug probe, and lands a classification the device screens
  * react to — a flash-firmware dialog on `no-firmware`, a buy/demo prompt from
- * `licenseStatus`, and a FULL/DEMO badge. The `result` is the last landed probe
+ * `licenseStatus`, and a possession badge (Licensed / Not licensed / License
+ * check failed — never an execution mode, see GLOSSARY.md). The `result` is the
+ * last landed probe
  * (null before the first Connect); `phase` drives the button's spinner and
  * guards against overlapping probes.
  */

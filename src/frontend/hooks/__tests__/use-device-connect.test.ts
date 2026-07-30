@@ -161,6 +161,21 @@ describe('useDeviceConnect', () => {
     expect(mockRequestDeviceFlash).toHaveBeenCalledTimes(1)
   })
 
+  // A17/D19. `no-firmware` is also what a board with CORRECT, responding firmware
+  // reports when its core has no factory unique id (0x48 succeeds with
+  // `id_len = 0`), and the two are indistinguishable at this layer. Saying only
+  // "flash the firmware" sent those users into an endless reflash loop and never
+  // mentioned the thing that decides their outcome: no factory id means the board
+  // cannot be licensed at all (ADR-0001), for a paying customer included.
+  it('names the no-unique-id cause in the no-firmware prompt, not just reflashing', async () => {
+    mockConnect.mockResolvedValue({ status: 'no-firmware' })
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+    const message = (mockOpenModal.mock.calls[0][1] as { message: string }).message
+    expect(message).toContain('no factory-programmed unique id')
+    expect(message).toContain('reflashing will not change that')
+  })
+
   it('does not prompt when the recover already licensed the device', async () => {
     mockConnect.mockResolvedValue({ status: 'connected-with-firmware', licenseStatus: 'licensed', activation: 'activated' })
     const { result } = renderHook(() => useDeviceConnect(board))
@@ -186,6 +201,88 @@ describe('useDeviceConnect', () => {
     )
     latestOnResponse()(1)
     expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+  })
+
+  // D6. The backend cannot say WHICH of the two it is (distinguishing them would
+  // tell an attacker which device ids have purchases -- ADR-0002), so the editor
+  // has to say both, and name the Device ID support needs to fix the second case.
+  it('says a purchase under another key is possible, and names the Device ID', async () => {
+    mockConnect.mockResolvedValue({
+      status: 'connected-with-firmware',
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+      proofOfPossession: 'proved',
+      deviceId: DEVICE_ID,
+    })
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+    const message = (mockOpenModal.mock.calls[0][1] as { message: string }).message
+    expect(message).toContain('registered under a different device key')
+    expect(message).toContain(`Device ID: ${DEVICE_ID}`)
+  })
+
+  // A19/D6. This is the double-purchase bug: an unproven request is refused with
+  // the byte-identical answer "no purchase on record" gets, so the paying customer
+  // was shown "Buy a license". Buy must be DEMOTED and the console must carry a
+  // trace -- the only one before this was a `console.warn` in the main process.
+  describe('an activation that carried NO proof of possession is not sold as "no license"', () => {
+    beforeEach(() => {
+      mockConnect.mockResolvedValue({
+        status: 'connected-with-firmware',
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+        proofOfPossession: 'unproven',
+        deviceId: DEVICE_ID,
+      })
+    })
+
+    it('titles the prompt as an incomplete check and does not push a purchase', async () => {
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({
+        title: 'License Check Incomplete',
+        buttons: ['Run in Demo', 'Buy License'],
+      })
+      const message = (mockOpenModal.mock.calls[0][1] as { message: string }).message
+      expect(message).toContain('NOT a missing purchase')
+      // Buy stays reachable, just second.
+      latestOnResponse()(0)
+      expect(mockOpenExternalLink).not.toHaveBeenCalled()
+      latestOnResponse()(1)
+      expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+    })
+
+    it('logs the unproven activation where the user can see it', async () => {
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+      expect(mockAddLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'error',
+          message: expect.stringContaining('WITHOUT proof of possession'),
+        }),
+      )
+    })
+  })
+
+  // S1. `DeviceConnectResult` IS `DeviceProbeResult`, so the result is landed
+  // WHOLE. Copying named fields here is what silently dropped `devicePublicKey`
+  // when ADR-0002 added it; this asserts the pass-through so the next field added
+  // cannot go missing without a red test.
+  it('lands the connect result whole, including fields it does not itself read', async () => {
+    const landed = {
+      status: 'connected-with-firmware',
+      anchorHex: '01020304',
+      deviceId: DEVICE_ID,
+      devicePublicKey: 'ab'.repeat(32),
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+      proofOfPossession: 'proved',
+      error: undefined,
+    }
+    mockConnect.mockResolvedValue(landed)
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+    expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(landed)
   })
 
   // The main process distinguishes a transport/backend failure from a confirmed
@@ -336,6 +433,27 @@ describe('useDeviceConnect', () => {
       expect(mockOpenExternalLink).toHaveBeenCalledWith(
         `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
       )
+    })
+
+    // The two paths share one prompt helper precisely so this cannot drift: a
+    // runtime-v4 customer who paid must not be told to buy again either (A19).
+    it('lands the unproven flag and shows the same demoted prompt the serial path does', async () => {
+      mockActivateLicense.mockResolvedValue({
+        success: true,
+        probedAt: 't',
+        outcome: 'demo',
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+        proofOfPossession: 'unproven',
+        deviceId: DEVICE_ID,
+      })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.checkRuntimeLicense()
+      expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(expect.objectContaining({ proofOfPossession: 'unproven' }))
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({
+        title: 'License Check Incomplete',
+        buttons: ['Run in Demo', 'Buy License'],
+      })
     })
 
     it('clears the badge when the runtime does not answer the license FCs', async () => {

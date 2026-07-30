@@ -399,6 +399,30 @@ describe('checkDeviceActivation (proof of possession)', () => {
       deviceId: PI_DEVICE_ID,
       packageId: INPUT.packageId,
     })
+    // The caller has to be TOLD, not left to infer it (D6/A19): a `licensed:false`
+    // answer to this request is byte-identical to "no purchase on record", so
+    // without this field the renderer sends someone who already paid to buy again.
+    // Before this existed the only trace was a `console.warn` in the main process.
+    expect(result.proofOfPossession).toBe('unproven')
+  }, 30_000)
+
+  it('reports proofOfPossession: proved when the challenge round-trip happened', async () => {
+    mockHttpsRoutes({
+      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: NONCE } } },
+      '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } },
+    })
+
+    const result = await checkDeviceActivation(PROVEN_INPUT)
+
+    expect(result.proofOfPossession).toBe('proved')
+  }, 30_000)
+
+  it('reports unproven when there was no anchor to derive a proof from', async () => {
+    mockHttpsRoutes({ '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } } })
+
+    const result = await checkDeviceActivation(INPUT)
+
+    expect(result.proofOfPossession).toBe('unproven')
   }, 30_000)
 
   it('does NOT strip the proof when the challenge endpoint merely FAILS (503)', async () => {
