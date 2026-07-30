@@ -14,6 +14,20 @@
  * `vppId`/`keyId` are LOCAL-ONLY (the mock signer's key selector below); the
  * real edge derives its own product/key material from `packageId`.
  *
+ * PROOF OF POSSESSION (ADR-0002, added 2026-07-29). The activate body grew two
+ * optional hex fields, `nonce` + `signature`, obtained by first calling
+ * `POST vpp-licenses/challenge { deviceId } -> { nonce }` and signing the
+ * challenge bytes with a key derived from the hardware anchor. This exists
+ * because the endpoint hands a signed license to whoever NAMES a `deviceId`, and
+ * a `deviceId` is not secret — the UI shows it with a copy button and it travels
+ * in the `/buy` query string. The signature is what separates "I am talking to
+ * this device" from "I know its name". See `proveDevicePossession` for the two
+ * cases that still activate unproven, and why only ONE of them is a 404.
+ *
+ * THE ENFORCEMENT IS SERVER-SIDE. This client can only offer the proof; a
+ * backend that does not require it gains nothing. `autonomy-edge` must reject an
+ * unproven request once the route is deployed.
+ *
  * TODO(D49/D51): remover o toggle quando o modulo vpp-licenses do
  * autonomy-edge existir em development.
  *
@@ -28,6 +42,7 @@ import { join } from 'node:path'
 import { LIC_BLOB_SIZE, LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../shared/debug/license-blob'
 import { getEdgeApiBaseUrl } from '../library-manager/desktop-catalog-transport'
 import { defaultPortFor, httpModuleFor } from '../utils/http-module'
+import { deriveDeviceKeyPair } from './device-keypair'
 
 /**
  * Input to `checkDeviceActivation`. Only `deviceId` + `packageId` are ever
@@ -51,12 +66,32 @@ export interface DeviceActivationInput {
    * key from `packageId`.
    */
   keyId?: string
+  /**
+   * Raw hardware anchor bytes, exactly as FC 0x48 returned them.
+   *
+   * Present => the request carries PROOF OF POSSESSION (ADR-0002): the anchor is
+   * the pre-image of `deviceId`, so being able to sign with a key derived from it
+   * is what distinguishes "I am talking to this device" from "I know its name".
+   * Absent => the legacy unproven request, which the backend must eventually
+   * reject. Never transmitted: only a signature derived from it is.
+   */
+  anchor?: Uint8Array
 }
 
 /** The exact JSON body the real edge `ActivateVppLicenseDto` accepts. */
 interface EdgeActivationRequestBody {
   deviceId: string
   packageId: string
+  /**
+   * Proof of possession (ADR-0002). Hex. Both present or both absent.
+   *
+   * The device's PUBLIC key is deliberately NOT sent: the backend must verify
+   * against the key bound to this `deviceId` at checkout. Accepting a public key
+   * from the request would verify a signature against a key the caller chose,
+   * which proves nothing at all.
+   */
+  nonce?: string
+  signature?: string
 }
 
 /** Result of an activation check. Best-effort: transport / backend errors
@@ -70,9 +105,22 @@ export interface DeviceActivationResult {
   reason?: string
   /** Populated on transport / backend failure (best-effort path). */
   error?: string
+  /**
+   * Raw Ed25519 public key (32 bytes hex) of the device keypair, when the proof
+   * derived one. Handed back so the CALLER can put it in the `/buy` link: the
+   * purchase is the only moment that binds a key to a device, and re-deriving it
+   * there would pay the memory-hard KDF a second time for a value already in hand.
+   *
+   * It is the PUBLIC half, and it is never sent on the activate request — the
+   * backend must verify against the key bound at purchase, not one the caller
+   * picked. See `EdgeActivationRequestBody`.
+   */
+  devicePublicKey?: string
 }
 
 const ACTIVATE_PATH = '/vpp-licenses/activate'
+/** Server-issued single-use challenge for proof of possession (ADR-0002). */
+const CHALLENGE_PATH = '/vpp-licenses/challenge'
 const REQUEST_TIMEOUT_MS = 30_000
 
 /**
@@ -169,14 +217,23 @@ interface EdgeActivationResponse {
 async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActivationResult> {
   try {
     const body: EdgeActivationRequestBody = { deviceId: input.deviceId, packageId: input.packageId }
+    const proof = await proveDevicePossession(input)
+    if (proof) {
+      body.nonce = proof.nonce
+      body.signature = proof.signature
+    }
+    // Carried on every outcome below, including the failures: the demo and
+    // check-failed states are precisely the ones where the UI offers "Buy
+    // license", and that link is what binds this key to the device.
+    const devicePublicKey = proof?.publicKeyHex
     const raw = await postJson(`${getEdgeApiBaseUrl()}${ACTIVATE_PATH}`, body)
     const data = unwrapHttpEnvelope(raw) as Partial<EdgeActivationResponse> | undefined
     if (!data || typeof data.licensed !== 'boolean') {
-      return { licensed: false, error: 'Unexpected activation response shape' }
+      return { licensed: false, error: 'Unexpected activation response shape', devicePublicKey }
     }
-    if (!data.licensed) return { licensed: false, reason: data.reason }
+    if (!data.licensed) return { licensed: false, reason: data.reason, devicePublicKey }
     if (typeof data.license !== 'string') {
-      return { licensed: false, error: 'Activation response missing license blob' }
+      return { licensed: false, error: 'Activation response missing license blob', devicePublicKey }
     }
     // `Buffer.from(s, 'base64')` NEVER throws: the decoder silently skips
     // invalid characters and tolerates missing padding, so a truncated or
@@ -188,12 +245,93 @@ async function activateViaEdge(input: DeviceActivationInput): Promise<DeviceActi
       return {
         licensed: false,
         error: `Activation response license blob is ${blob.length} bytes, expected ${LIC_BLOB_SIZE}`,
+        devicePublicKey,
       }
     }
-    return { licensed: true, license: Array.from(blob), reason: data.reason }
+    return { licensed: true, license: Array.from(blob), reason: data.reason, devicePublicKey }
   } catch (err) {
     return { licensed: false, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Proof of possession (ADR-0002)
+// ---------------------------------------------------------------------------
+
+/** Rejection carrying the HTTP status, so callers can tell 404 from 503. */
+class HttpStatusError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+    this.name = 'HttpStatusError'
+  }
+}
+
+/**
+ * Ask the backend for a challenge and sign it with the key derived from the
+ * hardware anchor, proving this request comes from something that can actually
+ * read the device.
+ *
+ * Returns `undefined` — activating unproven — in exactly two cases:
+ *
+ *  1. **No anchor was passed.** The caller never read the hardware, so there is
+ *     nothing to prove with.
+ *  2. **The backend has no challenge endpoint (404).** A rollout concession: the
+ *     route ships with the `autonomy-edge` half, and until then every editor
+ *     would break on every connect. THE SECURITY LIVES SERVER-SIDE — once the
+ *     backend requires the proof, an unproven request is simply refused, so this
+ *     fallback cannot be used to bypass anything. Delete it once the endpoint is
+ *     deployed everywhere.
+ *
+ * Any OTHER challenge failure PROPAGATES. That is deliberate: degrading on 5xx
+ * or a dropped connection would mean anyone able to make the challenge endpoint
+ * fail could strip the proof from a request, turning an availability problem into
+ * an authorization bypass.
+ */
+async function proveDevicePossession(
+  input: DeviceActivationInput,
+): Promise<{ nonce: string; signature: string; publicKeyHex: string } | undefined> {
+  if (!input.anchor || input.anchor.length === 0) {
+    console.warn(
+      '[license] no hardware anchor available — activating WITHOUT proof of possession. The backend may refuse this request.',
+    )
+    return undefined
+  }
+  let nonce: string
+  try {
+    nonce = await requestChallenge(input.deviceId)
+  } catch (err) {
+    if (err instanceof HttpStatusError && err.status === 404) {
+      console.warn(
+        `[license] backend has no ${CHALLENGE_PATH} route — activating WITHOUT proof of possession (ADR-0002 rollout).`,
+      )
+      return undefined
+    }
+    throw err
+  }
+  const keyPair = await deriveDeviceKeyPair(input.anchor, input.deviceId)
+  // Signed over the challenge BYTES, not its hex text: the backend generated the
+  // bytes, and hex is only how they crossed the wire.
+  return { nonce, signature: keyPair.sign(hexToBytes(nonce)), publicKeyHex: keyPair.publicKeyHex }
+}
+
+/** `POST {base}/vpp-licenses/challenge` -> the single-use nonce, hex. */
+async function requestChallenge(deviceId: string): Promise<string> {
+  const raw = await postJson(`${getEdgeApiBaseUrl()}${CHALLENGE_PATH}`, { deviceId })
+  const data = unwrapHttpEnvelope(raw)
+  if (!data || typeof data !== 'object' || !('nonce' in data)) {
+    throw new Error('Challenge response has no nonce')
+  }
+  const nonce = data.nonce
+  // Validated before signing: a non-hex nonce would silently become a shorter or
+  // empty byte string under `hexToBytes`, and we would sign the wrong thing while
+  // reporting success.
+  if (typeof nonce !== 'string' || !/^([0-9a-fA-F]{2})+$/.test(nonce)) {
+    throw new Error('Challenge nonce is not a hex string')
+  }
+  return nonce
 }
 
 function postJson(url: string, body: unknown): Promise<unknown> {
@@ -232,13 +370,19 @@ function postJson(url: string, body: unknown): Promise<unknown> {
         res.on('end', () => {
           const status = res.statusCode ?? 0
           if (status < 200 || status >= 300) {
-            reject(new Error(`Activation request failed: ${status} ${res.statusMessage ?? ''}`.trim()))
+            // Status-carrying so the challenge caller can single out 404 (route
+            // absent during rollout) without string-matching the message.
+            reject(
+              new HttpStatusError(`Activation request failed: ${status} ${res.statusMessage ?? ''}`.trim(), status),
+            )
             return
           }
           try {
             resolve(JSON.parse(responseBody))
           } catch (err) {
-            reject(new Error(`Activation response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`))
+            reject(
+              new Error(`Activation response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`),
+            )
           }
         })
       },
@@ -317,7 +461,9 @@ function resolveMockKeyPath(mockKey: string, keyId: string | undefined): string 
   }
   if (isDir) {
     if (!keyId) {
-      throw new Error('OPLC_LICENSE_MOCK_KEY is a keystore directory but the request carries no keyId to select the per-VPP key')
+      throw new Error(
+        'OPLC_LICENSE_MOCK_KEY is a keystore directory but the request carries no keyId to select the per-VPP key',
+      )
     }
     return join(mockKey, `${keyId}.private.pem`)
   }
@@ -336,7 +482,15 @@ function signedMockLicense(input: DeviceActivationInput, keyPath: string): numbe
   //
   // Serialize once with a placeholder signature so we sign the EXACT payload the
   // serializer lays out (offsets 0..29), independent of layout details.
-  const draft = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: new Uint8Array(64), crc32: 0 })
+  const draft = serializeLicenseBlob({
+    magic: 0,
+    fmtVersion: 1,
+    keyId: 0,
+    deviceId,
+    productId,
+    signature: new Uint8Array(64),
+    crc32: 0,
+  })
   const payload = draft.subarray(0, LIC_PAYLOAD_SIZE)
 
   // `payload` is already a Uint8Array (BinaryLike); pass it directly. Wrapping it
@@ -345,6 +499,14 @@ function signedMockLicense(input: DeviceActivationInput, keyPath: string): numbe
   const sig = new Uint8Array(cryptoSign('sha256', payload, { key: privateKeyPem, dsaEncoding: 'ieee-p1363' }))
   if (sig.length !== 64) throw new Error(`expected 64-byte r||s signature, got ${sig.length}`)
 
-  const blob = serializeLicenseBlob({ magic: 0, fmtVersion: 1, keyId: 0, deviceId, productId, signature: sig, crc32: 0 })
+  const blob = serializeLicenseBlob({
+    magic: 0,
+    fmtVersion: 1,
+    keyId: 0,
+    deviceId,
+    productId,
+    signature: sig,
+    crc32: 0,
+  })
   return Array.from(blob)
 }

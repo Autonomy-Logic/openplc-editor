@@ -5,6 +5,14 @@ jest.mock('../license-activation-client', () => ({
   checkDeviceActivation: (...args: unknown[]) => mockCheckDeviceActivation(...args),
 }))
 
+// Mocked, not run: the real derivation is a memory-hard KDF (64 MiB, hundreds of
+// ms by design). Its own behaviour is covered in `device-keypair.test.ts`; what
+// matters here is WHICH results carry the key and when it is derived twice.
+const mockDeriveDeviceKeyPair = jest.fn()
+jest.mock('../device-keypair', () => ({
+  deriveDeviceKeyPair: (...args: unknown[]) => mockDeriveDeviceKeyPair(...args),
+}))
+
 import { probeAndRecover, toLegacyActivationOutcome } from '../device-connect'
 
 function mockTransport(over: Partial<LicenseCapableTransport> = {}): LicenseCapableTransport {
@@ -28,7 +36,15 @@ function mockTransport(over: Partial<LicenseCapableTransport> = {}): LicenseCapa
  */
 const DEVICE_ID_OF_01020304 = 'af572de307790e5f5e9091f8d7435f70'
 
-beforeEach(() => jest.clearAllMocks())
+/** What the proof already derived while signing the challenge — reused, not recomputed. */
+const KEY_FROM_PROOF = 'a'.repeat(64)
+/** What a local derivation yields when no proof happened (no challenge route, older backend). */
+const KEY_DERIVED_LOCALLY = 'b'.repeat(64)
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockDeriveDeviceKeyPair.mockResolvedValue({ publicKeyHex: KEY_DERIVED_LOCALLY, sign: () => '' })
+})
 
 describe('probeAndRecover', () => {
   it('reports no-firmware when the board never answers 0x48', async () => {
@@ -163,6 +179,68 @@ describe('probeAndRecover', () => {
     expect(mockCheckDeviceActivation).toHaveBeenCalledWith(expect.objectContaining({ deviceId: r.deviceId }))
   })
 
+  // ADR-0002. The purchase is the only moment a key can be bound to a device, and
+  // the buy link is how it gets there — so every result whose popover can offer
+  // "Buy license" has to carry it, and the ones that cannot buy must not.
+  describe('device public key for the purchase link', () => {
+    it('reuses the key the proof already derived instead of paying the KDF twice', async () => {
+      mockCheckDeviceActivation.mockResolvedValue({ licensed: false, devicePublicKey: KEY_FROM_PROOF })
+      const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+      expect(r.devicePublicKey).toBe(KEY_FROM_PROOF)
+      expect(mockDeriveDeviceKeyPair).not.toHaveBeenCalled()
+    })
+
+    // The proof is skipped when the backend has no challenge route (rollout) — but
+    // the user can still buy, so the key has to come from somewhere.
+    it('derives the key locally when the activation carried none', async () => {
+      mockCheckDeviceActivation.mockResolvedValue({ licensed: false })
+      const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+      expect(r.devicePublicKey).toBe(KEY_DERIVED_LOCALLY)
+      expect(mockDeriveDeviceKeyPair).toHaveBeenCalledWith(new Uint8Array([1, 2, 3, 4]), DEVICE_ID_OF_01020304)
+    })
+
+    // Buy is offered on a failed check too (demoted, but present): a device whose
+    // check never answered may well be unlicensed.
+    it.each([
+      ['demo', { licensed: false }],
+      ['activation error', { licensed: false, error: 'Activation request failed: 503 Service Unavailable' }],
+    ])('carries the key on %s, where the popover offers Buy', async (_label, activation) => {
+      mockCheckDeviceActivation.mockResolvedValue(activation)
+      const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+      expect(r.devicePublicKey).toBe(KEY_DERIVED_LOCALLY)
+    })
+
+    it('carries the key with no packageId to recover against — Buy is still offered', async () => {
+      const r = await probeAndRecover(mockTransport(), { isLicensable: true })
+      expect(r.devicePublicKey).toBe(KEY_DERIVED_LOCALLY)
+    })
+
+    // Nothing to buy on these two, so nothing to bind — and deriving anyway would
+    // charge every connect a memory-hard KDF for a value no one reads.
+    it.each([
+      ['a free VPP', { isLicensable: false }, {}],
+      [
+        'an already-licensed device',
+        { isLicensable: true, packageId: 'com.vendor.board' },
+        { readLicense: jest.fn(async () => ({ success: true, status: 0x7e })) },
+      ],
+    ])('omits the key for %s', async (_label, opts, over) => {
+      const r = await probeAndRecover(mockTransport(over), opts)
+      expect(r.devicePublicKey).toBeUndefined()
+      expect(mockDeriveDeviceKeyPair).not.toHaveBeenCalled()
+    })
+
+    // A failed derivation must cost the purchase link, never the connection: the
+    // board is connected and usable, and the backend logs the unbound activation.
+    it('still connects when the derivation fails', async () => {
+      mockCheckDeviceActivation.mockResolvedValue({ licensed: false })
+      mockDeriveDeviceKeyPair.mockRejectedValue(new Error('cannot derive a device keypair from an empty anchor'))
+      const r = await probeAndRecover(mockTransport(), { isLicensable: true, packageId: 'com.vendor.board' })
+      expect(r).toMatchObject({ status: 'connected-with-firmware', activation: 'demo' })
+      expect(r.devicePublicKey).toBeUndefined()
+    })
+  })
+
   it('resolves to error when a transport read throws', async () => {
     const r = await probeAndRecover(
       mockTransport({ readLicense: jest.fn(async () => { throw new Error('serial timeout') }) }),
@@ -192,6 +270,22 @@ describe('toLegacyActivationOutcome (P0-2 dedup: handleActivateDeviceLicense ove
       outcome: 'error',
       error: 'serial timeout',
     })
+  })
+
+  // The runtime-v4 (WebSocket) path reaches the SAME license popover, whose Buy
+  // button builds the link that binds the key. Dropping it here would leave every
+  // network purchase unbound while serial purchases bind correctly.
+  it('carries the device public key through to the network path', () => {
+    expect(
+      toLegacyActivationOutcome({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        deviceId: DEVICE_ID_OF_01020304,
+        devicePublicKey: KEY_FROM_PROOF,
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+      }),
+    ).toMatchObject({ outcome: 'demo', devicePublicKey: KEY_FROM_PROOF })
   })
 
   it('maps already-licensed to success:true with license.present', () => {

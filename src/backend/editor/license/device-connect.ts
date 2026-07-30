@@ -11,6 +11,7 @@
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { LicenseCapableTransport } from '../../shared/debug/types'
 import { deriveDeviceId, deriveVppId } from './device-identity'
+import { deriveDeviceKeyPair } from './device-keypair'
 import { checkDeviceActivation } from './license-activation-client'
 import { type DeviceLicenseStatus, readBoardIdWithRetries } from './license-probe'
 
@@ -32,6 +33,18 @@ export interface DeviceConnectResult {
    * is, licensable or not: it is a pure function of the anchor.
    */
   deviceId?: string
+  /**
+   * Raw Ed25519 public key (32 bytes hex) of this device's proof-of-possession
+   * keypair (ADR-0002), derived from the anchor. Present on the results where the
+   * UI can offer "Buy license" — the purchase link carries it, and the purchase
+   * is the only moment that binds a key to a device.
+   *
+   * Absent when the board is not licensable (nothing to buy), when it already
+   * holds a valid license (same), or when the derivation itself failed. Only the
+   * PUBLIC half ever leaves this process; the private key is never stored and
+   * never transmitted.
+   */
+  devicePublicKey?: string
   /** On-device license state after the (optional) recover. */
   licenseStatus?: DeviceLicenseStatus
   /** What the recover attempt concluded (licensable targets only). */
@@ -63,7 +76,11 @@ export async function probeAndRecover(
     // Derived up front, not inside the recover branch: every connected result
     // carries it, so the renderer can show and copy the licensing identity even
     // when no recover ran (already licensed, unsupported storage, no packageId).
-    const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor))
+    // Kept as bytes: `deviceId` is a one-way hash of these, and the recover step
+    // needs the PRE-IMAGE to prove possession (ADR-0002). The bytes never leave
+    // this process — only a signature derived from them does.
+    const anchorBytes = Uint8Array.from(anchor.anchor)
+    const deviceId = deriveDeviceId(anchorBytes)
 
     // Free VPP — no licensing step.
     if (!opts.isLicensable) return { status: 'connected-with-firmware', anchorHex, deviceId }
@@ -91,10 +108,30 @@ export async function probeAndRecover(
     }
 
     // Empty / corrupt on-device license -> attempt recover. Needs the package id.
-    if (!opts.packageId) return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed' }
+    // From here on the device may end up needing a PURCHASE, and every purchase
+    // link must carry the public key (ADR-0002) — so each return below carries it.
+    if (!opts.packageId) {
+      return {
+        status: 'connected-with-firmware',
+        anchorHex,
+        deviceId,
+        devicePublicKey: await derivePublicKeyForPurchase(anchorBytes, deviceId),
+        licenseStatus: 'unlicensed',
+      }
+    }
 
     const vppId = deriveVppId(opts.packageId)
-    const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId, keyId: opts.keyId })
+    const act = await checkDeviceActivation({
+      deviceId,
+      vppId,
+      packageId: opts.packageId,
+      keyId: opts.keyId,
+      anchor: anchorBytes,
+    })
+    // Reuse the key the proof already derived; only derive again when there was
+    // no proof (no challenge route, or the request never got that far). The KDF
+    // is memory-hard by design, so paying it twice per connect is not free.
+    const devicePublicKey = act.devicePublicKey ?? (await derivePublicKeyForPurchase(anchorBytes, deviceId))
 
     if (!act.licensed) {
       // A transport/backend failure is NOT the same as "no purchase on record".
@@ -109,13 +146,21 @@ export async function probeAndRecover(
           status: 'connected-with-firmware',
           anchorHex,
           deviceId,
+          devicePublicKey,
           licenseStatus: 'unlicensed',
           activation: 'error',
           error: act.error,
         }
       }
       // Genuinely no license for this device -> demo. The renderer prompts buy.
-      return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
+      return {
+        status: 'connected-with-firmware',
+        anchorHex,
+        deviceId,
+        devicePublicKey,
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+      }
     }
 
     if (act.license) {
@@ -142,6 +187,7 @@ export async function probeAndRecover(
         status: 'connected-with-firmware',
         anchorHex,
         deviceId,
+        devicePublicKey,
         licenseStatus: 'unlicensed',
         activation: 'error',
         error: write.error,
@@ -149,9 +195,40 @@ export async function probeAndRecover(
     }
 
     // Licensed but the backend returned no blob — nothing to write; run as demo.
-    return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
+    return {
+      status: 'connected-with-firmware',
+      anchorHex,
+      deviceId,
+      devicePublicKey,
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+    }
   } catch (error) {
     return { status: 'error', error: getErrorMessage(error) }
+  }
+}
+
+/**
+ * The public half of the device keypair, for the purchase link — or `undefined`
+ * when it cannot be produced.
+ *
+ * Swallows the failure on purpose. This runs inside a connect flow whose job is
+ * to classify a board: a KDF that fails (an anchor the derivation refuses, a
+ * memory limit) must not turn a working connection into an error. The cost of
+ * returning nothing is a purchase that binds no key — the device is then served
+ * as before and says so loudly on the backend — while throwing here would cost
+ * the connection itself.
+ */
+async function derivePublicKeyForPurchase(anchor: Uint8Array, deviceId: string): Promise<string | undefined> {
+  try {
+    const keyPair = await deriveDeviceKeyPair(anchor, deviceId)
+    return keyPair.publicKeyHex
+  } catch (error) {
+    console.warn(
+      `[license] could not derive the device public key (${getErrorMessage(error)}) — a purchase from this ` +
+        'connection will not bind one, and the device will activate without proof of possession.',
+    )
+    return undefined
   }
 }
 
@@ -166,6 +243,9 @@ export interface LegacyActivationOutcome {
    *  badge state the serial path does — `outcome` is too coarse for that. */
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
+  /** Carried for the same reason: the runtime-v4 path reaches the same popover,
+   *  and its Buy button needs the key to bind (ADR-0002). */
+  devicePublicKey?: string
   license?: { present: boolean }
   error?: string
 }
@@ -199,8 +279,14 @@ function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOu
   const deviceId = result.deviceId
   // Passed through on every branch: the renderer decides what to show from
   // these, not from `outcome`, which cannot express "storage unsupported" and
-  // "the backend never answered" as different things.
-  const carried = { licenseStatus: result.licenseStatus, activation: result.activation }
+  // "the backend never answered" as different things. `devicePublicKey` rides
+  // along for the same reason — dropping it would leave the network path's Buy
+  // button building a link that binds no key.
+  const carried = {
+    licenseStatus: result.licenseStatus,
+    activation: result.activation,
+    devicePublicKey: result.devicePublicKey,
+  }
   switch (result.activation) {
     case 'already-licensed':
       return { success: true, outcome: 'already-licensed', anchorHex, deviceId, ...carried, license: { present: true } }
