@@ -26,6 +26,7 @@ import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
+import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
@@ -73,11 +74,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
   const [simulatorRunning, setSimulatorRunning] = useState(false)
   const pendingSimulatorDebugRef = useRef(false)
-  // Transport of the ACTIVE debug session, or null when none is running. Only a
-  // serial session is coupled to the device connection, so the drop handler below
-  // needs to know which kind is running — the board alone doesn't say, since a
-  // baremetal board can be debugged over either RTU or Modbus TCP.
-  const activeDebugTransportRef = useRef<'rtu' | 'tcp' | 'websocket' | 'simulator' | null>(null)
+  // True while a debug session is running OVER THE DEVICE CONNECTION (a baremetal
+  // target, whatever transport that connection uses). Such a session shares the
+  // connection, so it has to end when the connection does — which the drop handler
+  // below acts on. A runtime or simulator session owns its own channel and is
+  // unaffected, so this stays false for them.
+  const debugSessionRidesDeviceRef = useRef(false)
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
@@ -101,7 +103,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       setSimulatorRunning(false)
       const { workspace } = useOpenPLCStore.getState()
       if (workspace.isDebuggerVisible) {
-        activeDebugTransportRef.current = null
+        debugSessionRidesDeviceRef.current = false
         void debugSession.stopSession()
       }
     })
@@ -116,16 +118,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   //
   // Modbus TCP sessions are deliberately untouched — they own their own socket
   // and never depended on the serial link.
-  // Only 'connected' is tolerated. 'connecting' covers RECOVERY too (the link
-  // died and the main process is reopening it), and by then the client the
-  // session was sharing is already closed — waiting for the recovery verdict
-  // would just keep a dead session on screen for the whole retry window. A
-  // session can only have started from 'connected', so the initial connect's
-  // 'connecting' never reaches this: no session is active to stop.
+  // Only 'connected' is tolerated. 'connecting' covers RECOVERY too (the
+  // connection died and the main process is reopening it), and by then the client
+  // the session was sharing is already closed — waiting for the recovery verdict
+  // would just keep a dead session on screen for the whole retry window. A session
+  // can only have started from 'connected', so the initial connect's 'connecting'
+  // never reaches this: no session is active to stop.
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
   useEffect(() => {
     if (deviceConnectionStatus === 'connected') return
-    if (activeDebugTransportRef.current !== 'rtu') return
+    if (!debugSessionRidesDeviceRef.current) return
     if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
 
     addLog({
@@ -133,7 +135,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       level: 'warning',
       message: 'Device disconnected — stopping the debug session (serial debugging runs over the device connection).',
     })
-    activeDebugTransportRef.current = null
+    debugSessionRidesDeviceRef.current = false
     void debugSession.stopSession()
   }, [deviceConnectionStatus, debugSession, addLog])
 
@@ -575,10 +577,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
-        const debugConfig = await resolveDebugConfigRef.current(boardTarget, boardInfo?.debug)
-        if (!debugConfig) return
-
-        const result = await debuggerPort.setPlcState(debugConfig, wantRun ? 'RUNNING' : 'STOPPED')
+        // Payload only. Which medium carries this — the serial cable, Modbus TCP,
+        // the emulator's virtual port — is the connection manager's business, and
+        // asking here is what made Stop pop a DHCP address dialog.
+        const result = await debuggerPort.setPlcState(wantRun ? 'RUNNING' : 'STOPPED')
         if (result.unsupported) {
           addLog({
             id: crypto.randomUUID(),
@@ -713,7 +715,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleMd5Verification = async (
     projectPath: string,
     boardTarget: string,
-    debugConfig: DebugConnectionConfig,
+    /** Absent for a target whose session the connection manager already holds. */
+    debugConfig: DebugConnectionConfig | undefined,
     isRuntimeTarget: boolean,
   ) => {
     const { consoleActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
@@ -788,10 +791,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
-        // Surface the active transport in the store so transport-specific
-        // pollers (useDebugPolling) can size their batches against the
-        // real frame budget rather than guessing from the board target.
-        useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(debugConfig.connectionType)
+        // Surface the active transport so transport-specific pollers
+        // (useDebugPolling) can size their batches against the real frame budget.
+        // For a device session the medium is whatever the connection manager chose,
+        // which the store mirrors — this reads that decision, it does not make one.
+        const activeTransport =
+          debugConfig?.connectionType ?? useOpenPLCStore.getState().deviceConnection.transport
+        if (activeTransport) {
+          useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(activeTransport)
+        }
         // Persist the target's byte order — detected from the MD5
         // response trailer in the runtime — so the swap layer at the
         // read / write boundaries flips on BE targets.  Default to
@@ -889,7 +897,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
-      activeDebugTransportRef.current = null
+      debugSessionRidesDeviceRef.current = false
       await debugSession.stopSession()
       return
     }
@@ -917,34 +925,46 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const projectPath = project.meta.path
       const boardInfo = availableBoards.get(boardTarget)
 
-      const debugConfig = await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)
-      if (!debugConfig) {
+      // Does this target's debug session ride the connection the user established?
+      // Decided by the TARGET, not by a transport: a baremetal board reached over
+      // Modbus TCP is still a connected device, and classifying it by transport is
+      // how it got mistaken for a runtime.
+      const debugCaps = resolveTargetCapabilities(boardInfo)
+      const usesDeviceSession = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
+
+      // For those targets the session already knows its medium, so nothing is
+      // resolved here — resolving is what asked for a DHCP address on a device
+      // connected by cable. Everything else (Runtime v3/v4, the simulator) has no
+      // held session yet and still describes its own channel.
+      const debugConfig = usesDeviceSession
+        ? undefined
+        : ((await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)) ?? undefined)
+      if (!usesDeviceSession && !debugConfig) {
         setIsDebuggerProcessing(false)
         return
       }
 
-      // A Modbus debug session rides the ONE held device connection, over whichever
-      // transport that connection uses. So: connect first, exactly as a Runtime v4
-      // target requires. Starting a session must never establish the connection
-      // itself — Connect is the user's explicit action, it reports what it found
-      // (firmware, license), and hiding it inside the debug button means a click
-      // that says "debug" silently goes and opens hardware.
-      //
-      // This cannot be a debug-spec precondition: Connect resolves the same spec
-      // to derive its parameters, so gating the spec would mean Connect needed a
-      // connection in order to establish one.
-      activeDebugTransportRef.current = debugConfig.connectionType
+      // A debug session over the device connection shares it, so it must end when
+      // that connection ends — see the drop handler above. Runtime and simulator
+      // sessions own their own channel and are unaffected.
+      debugSessionRidesDeviceRef.current = usesDeviceSession
 
-      const needsHeldLink = debugConfig.connectionType === 'rtu' || debugConfig.connectionType === 'tcp'
       const connectionStatusNow = useOpenPLCStore.getState().deviceConnection.status
       addLog({
         id: crypto.randomUUID(),
         level: 'info',
-        message: `[connection] debug session requested over ${debugConfig.connectionType}; device connection is "${connectionStatusNow}"${
-          needsHeldLink ? ' (a connection is required)' : ''
+        message: `[connection] debug session requested for ${boardTarget}; ${
+          usesDeviceSession
+            ? `it rides the device connection, currently "${connectionStatusNow}"`
+            : `it opens its own ${debugConfig?.connectionType ?? 'unknown'} channel`
         }`,
       })
-      if (needsHeldLink && connectionStatusNow !== 'connected') {
+
+      // Connect first, exactly as a Runtime v4 target requires. Starting a session
+      // must never establish the connection itself: Connect is the user's explicit
+      // action and reports what it found (firmware, license), so hiding it inside
+      // the debug button means a click that says "debug" silently opens hardware.
+      if (usesDeviceSession && connectionStatusNow !== 'connected') {
         await showDeviceDialog(
           'warning',
           'Connection Required',
@@ -974,12 +994,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // `isRuntimeTarget` here only gates the "PLC stopped, start it?"
-      // dialog inside MD5 verification.  Tied to whether the active
-      // channel needs the runtime alive — websocket/tcp targets do,
-      // rtu/simulator targets don't.
-      const isRuntimeTarget = debugConfig.connectionType === 'websocket' || debugConfig.connectionType === 'tcp'
-      void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+      // Only gates the "PLC stopped, start it?" dialog inside MD5 verification,
+      // which applies to an OpenPLC runtime (v3/v4) — a fact about the TARGET, not
+      // about which transport happens to carry the session.
+      void handleMd5Verification(projectPath, boardTarget, debugConfig, isOpenPLCRuntimeTarget(boardInfo))
     } catch (error: unknown) {
       consoleActions.addLog({
         id: crypto.randomUUID(),

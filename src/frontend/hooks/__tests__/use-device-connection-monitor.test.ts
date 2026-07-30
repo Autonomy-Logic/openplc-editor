@@ -74,7 +74,7 @@ describe('useDeviceConnectionMonitor', () => {
 
     for (const status of ['connecting', 'connected', 'disconnected', 'error'] as const) {
       push({ status, descriptor: 'COM5', transport: 'rtu' })
-      expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith(status, 'COM5')
+      expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith(status, 'COM5', 'rtu')
     }
   })
 
@@ -96,7 +96,7 @@ describe('useDeviceConnectionMonitor', () => {
 
     push({ status: 'connecting', descriptor: 'COM5' })
     expect(mockClearDeviceProbe).not.toHaveBeenCalled()
-    expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5')
+    expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5', null)
   })
 
   it('warns the user only when recovery gave up', () => {

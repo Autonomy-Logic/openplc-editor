@@ -35,18 +35,20 @@ import type {
   DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
-  DeviceAnchorResult,
   Md5VerifyResult,
   Unsubscribe,
 } from './types'
 
 export interface DebuggerPort {
   /**
-   * Connect to a debug target.
-   * @param config — Connection target (TCP host, RTU serial, WebSocket, or simulator).
-   *                 The adapter maps this to the platform's transport mechanism.
+   * Start a debug session.
+   *
+   * `config` describes a target the connection manager does not hold a session
+   * for yet — a Runtime v3/v4 or the simulator. Omit it for a target that IS
+   * connected (a baremetal board): the session already knows its medium, and
+   * naming one here is how a Stop over serial came to ask for a DHCP address.
    */
-  connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }>
+  connect(config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the current debug target. */
   disconnect(): Promise<{ success: boolean }>
@@ -79,22 +81,13 @@ export interface DebuggerPort {
    */
   readLicense(): Promise<DebugLicenseReadResult>
 
-  /**
-   * Acquire the target's device anchor (hardware-unique id), dispatching on the
-   * target type in `config.connectionType`: `websocket` fetches it over the
-   * runtime webserver HTTP API; arduino-cli targets (`tcp`/`rtu`/`simulator`)
-   * read it via the debugger FC 0x48. Returns a unified result regardless of
-   * source.
-   * @param config — Connection target used for the acquisition request.
-   */
-  getDeviceAnchor(config: DebugConnectionConfig): Promise<DeviceAnchorResult>
-
+  
   /**
    * Verify that the running program matches the expected MD5 hash.
    * Used to detect program mismatch before starting a debug session.
    * @param config — Connection target used for the verification request.
    */
-  verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult>
+  verifyMd5(expectedMd5: string, config?: DebugConnectionConfig): Promise<Md5VerifyResult>
 
   /**
    * Read the MD5 hash of the compiled ST program from the debug artifacts.
@@ -130,7 +123,7 @@ export interface DebuggerPort {
    * switch to RUN" warning. `unsupported` means the firmware predates the
    * run/stop state machine.
    */
-  setPlcState?(config: DebugConnectionConfig, state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult>
+  setPlcState?(state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult>
 
   /** Check if the debugger is currently connected. */
   isConnected(): boolean

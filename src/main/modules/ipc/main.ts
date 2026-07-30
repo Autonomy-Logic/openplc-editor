@@ -64,11 +64,6 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import {
-  type DeviceAnchorResult,
-  mapArduinoAnchorResult,
-  selectAnchorSource,
-} from '../../../backend/shared/debug/device-anchor'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
@@ -1078,7 +1073,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('debugger:read-license', this.handleDebuggerReadLicense)
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
-    this.registerHandle('device:get-anchor', this.handleGetDeviceAnchor)
     this.registerHandle('device:activate-license', this.handleActivateDeviceLicense)
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
@@ -1700,15 +1694,9 @@ class MainProcessBridge implements MainIpcModule {
    */
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
     expectedMd5: string,
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
+    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
   ): Promise<{
     success: boolean
     match?: boolean
@@ -1718,7 +1706,7 @@ class MainProcessBridge implements MainIpcModule {
   }> => {
     try {
       if (connectionType === 'websocket') {
-        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+        if (!connectionParams?.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
         if (!this.debuggerWebSocketClient) {
@@ -1760,19 +1748,22 @@ class MainProcessBridge implements MainIpcModule {
    * port the OS will not lock twice.
    */
   private async ensureDeviceLinkFor(
-    connectionType: 'tcp' | 'rtu' | 'simulator',
-    connectionParams: { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number },
+    connectionType: 'tcp' | 'rtu' | 'simulator' | undefined,
+    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
   ): Promise<{ client: DeviceModbusTransport } | { error: string }> {
     const existing = this.deviceClient()
     if (existing) return { client: existing }
 
+    // Either no transport was named (the caller is a connected target, whose
+    // session the manager already owns) or it is one that cannot be brought up
+    // without the user. Nothing to do but report it.
     if (connectionType !== 'simulator') {
       const required = this.requireDeviceClient('debug session')
       return 'error' in required ? { error: required.error } : required
     }
 
     const opened = await this.deviceLink.open(
-      this.toDeviceLinkCandidates([{ connectionType, connectionParams }]),
+      this.toDeviceLinkCandidates([{ connectionType, connectionParams: connectionParams ?? {} }]),
     )
     if (!opened.ok) {
       const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
@@ -1800,17 +1791,10 @@ class MainProcessBridge implements MainIpcModule {
    */
   handleDebuggerPlcControl = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    _connectionParams: unknown,
     action: 'run' | 'stop',
   ): Promise<PlcControlResult> => {
-    if (connectionType === 'websocket') {
-      // Runtime v4 drives run/stop over its REST API, not the debug channel.
-      return { success: false, error: 'Runtime v4 run/stop is driven over REST, not the debug transport' }
-    }
-
-    this.traceDeviceLink(`run/stop: ${action} requested (debug transport: ${connectionType})`)
-    const link = await this.ensureDeviceLinkFor(connectionType, {})
+    this.traceDeviceLink(`run/stop: ${action} requested`)
+    const link = this.requireDeviceClient('run/stop')
     if ('error' in link) return { success: false, error: link.error }
 
     const target = action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED
@@ -2015,63 +1999,6 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * Acquire the device anchor (hardware-unique id), dispatching on the target
-   * type carried by `connectionType`:
-   *   - `websocket` → OpenPLC runtime (Linux v4): fetched over the runtime
-   *     webserver HTTP API (NOT the debug channel).
-   *   - `tcp` | `rtu` | `simulator` → arduino-cli targets (ESP32/AVR/avr8js):
-   *     read via the always-on debugger FC 0x48 (GET_BOARD_ID).
-   * Both paths converge on the unified DeviceAnchorResult.
-   */
-  handleGetDeviceAnchor = async (
-    _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
-  ): Promise<DeviceAnchorResult> => {
-    const source = selectAnchorSource(connectionType)
-
-    if (source === 'runtime') {
-      // Runtime-v4 (Linux): the anchor is the raw hardware id via FC 0x48 on the
-      // debug WebSocket, exactly like Arduino over serial/TCP (D70d). The runtime
-      // answers 0x48 at the webserver level; no HTTP device-id endpoint, no
-      // hex-decode -- the same raw bytes the .so hashes into device_id.
-      if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
-        return { success: false, source, error: 'IP address and token are required for runtime anchor acquisition' }
-      }
-      const ws = new WebSocketDebugTransport({
-        host: connectionParams.ipAddress,
-        port: this.RUNTIME_API_PORT,
-        token: connectionParams.jwtToken,
-      })
-      try {
-        await ws.connect()
-        return mapArduinoAnchorResult(await ws.getBoardId(), 'runtime')
-      } catch (error) {
-        return { success: false, source, error: getErrorMessage(error) }
-      } finally {
-        ws.disconnect()
-      }
-    }
-
-    // arduino-cli targets (ESP32/AVR/simulator): FC 0x48 over the always-on debug channel.
-    const ensured = this.requireDeviceClient('license op')
-    if ('error' in ensured) {
-      return { success: false, source, error: ensured.error }
-    }
-    try {
-      const result = await ensured.client.getBoardId()
-      return mapArduinoAnchorResult(result)
-    } catch (error) {
-      return { success: false, source, error: getErrorMessage(error) }
-    }
-  }
 
   /**
    * Start a debug session against a target.
@@ -2087,18 +2014,12 @@ class MainProcessBridge implements MainIpcModule {
    */
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
+    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       if (connectionType === 'websocket') {
-        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
+        if (!connectionParams?.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
         if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
@@ -2123,7 +2044,9 @@ class MainProcessBridge implements MainIpcModule {
       // Warms nothing and opens nothing — the link is already live and already
       // proven by the connect probe. The md5 read stays in `verifyMd5`, which is
       // where its result is actually used.
-      this.debuggerConnectionType = connectionType
+      // Session identity comes from the SESSION, not from what the caller
+      // guessed: a connected baremetal target names no transport at all.
+      this.debuggerConnectionType = this.deviceLink.getLink()?.transport ?? connectionType ?? null
       return { success: true }
     } catch (error) {
       this.debuggerWebSocketClient = null

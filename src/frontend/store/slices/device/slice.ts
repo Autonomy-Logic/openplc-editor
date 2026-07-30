@@ -67,6 +67,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
   deviceConnection: {
     status: 'disconnected',
     port: null,
+    transport: null,
   },
 
   deviceActions: {
@@ -142,6 +143,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceProbeInfo.result = null
           deviceConnection.status = 'disconnected'
           deviceConnection.port = null
+          deviceConnection.transport = null
         }),
       )
     },
@@ -575,11 +577,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
-    setDeviceConnectionStatus: (status, port): void => {
+    setDeviceConnectionStatus: (status, port, transport): void => {
       setState(
         produce(({ deviceConnection }: DeviceSlice) => {
           deviceConnection.status = status
           if (port !== undefined) deviceConnection.port = port
+          if (transport !== undefined) deviceConnection.transport = transport
         }),
       )
     },
@@ -588,6 +591,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         produce(({ deviceConnection }: DeviceSlice) => {
           deviceConnection.status = 'disconnected'
           deviceConnection.port = null
+          deviceConnection.transport = null
         }),
       )
     },

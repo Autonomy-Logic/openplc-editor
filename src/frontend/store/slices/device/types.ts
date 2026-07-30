@@ -91,16 +91,21 @@ export type RuntimeConnection = {
 export type DeviceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 /**
- * Live link state for a baremetal (USB/serial) target, mirroring the runtime's
- * `connectionStatus`. After Connect the main process HOLDS the RTU client open
- * and a liveness poll keeps this fresh; the port yields to upload/debug and
- * reconnects afterwards. Distinct from `deviceProbeInfo` (which is the license
- * classification) — this is purely whether the serial link is up.
+ * Live state of the connection the main process holds to a baremetal target,
+ * mirroring the connection manager — which remains the source of truth. Distinct
+ * from `deviceProbeInfo` (the license classification): this is purely whether the
+ * connection is up, and over what.
  */
 export type DeviceConnection = {
   status: DeviceConnectionStatus
-  /** The communication port the link is on (or was last attempted on). */
+  /** Endpoint the connection is on (or was last attempted on): a serial path or an IP. */
   port: string | null
+  /**
+   * Medium the manager chose. Read-only mirror — nothing in the renderer picks a
+   * transport; this exists because a few consumers must SIZE work to the medium
+   * (the debug poll's frame budget differs between serial and TCP).
+   */
+  transport: 'rtu' | 'tcp' | 'simulator' | null
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +219,11 @@ export type DeviceActions = {
   /** Reset the probe to `idle`/null. Called on disconnect and project close. */
   clearDeviceProbe: () => void
   /** Set the persistent serial link state (optionally the port it's on). */
-  setDeviceConnectionStatus: (status: DeviceConnectionStatus, port?: string | null) => void
+  setDeviceConnectionStatus: (
+    status: DeviceConnectionStatus,
+    port?: string | null,
+    transport?: DeviceConnection['transport'],
+  ) => void
   /** Reset the serial link to disconnected/null. */
   clearDeviceConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void

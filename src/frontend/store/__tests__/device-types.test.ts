@@ -194,7 +194,7 @@ describe('Device slice types', () => {
           includeEthercatStatsInPolling: false,
         },
         deviceProbeInfo: { phase: 'idle', result: null },
-        deviceConnection: { status: 'disconnected', port: null },
+        deviceConnection: { status: 'disconnected', port: null, transport: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
@@ -211,7 +211,11 @@ describe('Device slice types', () => {
   describe('DeviceConnection', () => {
     it('accepts every status', () => {
       const statuses: DeviceConnectionStatus[] = ['disconnected', 'connecting', 'connected', 'error']
-      const conns: DeviceConnection[] = statuses.map((status) => ({ status, port: status === 'connected' ? 'COM5' : null }))
+      const conns: DeviceConnection[] = statuses.map((status) => ({
+        status,
+        port: status === 'connected' ? 'COM5' : null,
+        transport: status === 'connected' ? 'rtu' : null,
+      }))
       expect(conns).toHaveLength(4)
     })
   })

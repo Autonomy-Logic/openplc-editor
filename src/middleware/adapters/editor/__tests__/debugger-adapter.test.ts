@@ -37,12 +37,7 @@ beforeEach(() => {
       success: true,
       content: 'debug_vars[] = { ... }',
     }),
-    getDeviceAnchor: jest.fn().mockResolvedValue({
-      success: true,
-      source: 'arduino',
-      anchorHex: '0abc01',
-      anchor: [0x0a, 0xbc, 0x01],
-    }),
+    debuggerPlcControl: jest.fn().mockResolvedValue({ success: true, state: 0 }),
   } as unknown as typeof window.bridge
 
   adapter = createEditorDebuggerAdapter()
@@ -292,6 +287,26 @@ describe('readLicense', () => {
 })
 
 // ---------------------------------------------------------------------------
+// setPlcState — the operation whose transport parameter caused the bug
+// ---------------------------------------------------------------------------
+
+describe('setPlcState', () => {
+  it('sends the payload and nothing else', () => {
+    // Naming a medium here is what made Stop resolve the debug spec, which for a
+    // DHCP-configured project popped an address dialog — over a serial connection
+    // that then carried the command anyway. Payload only: the connection manager
+    // routes it.
+    void adapter.setPlcState?.('STOPPED')
+    expect(window.bridge.debuggerPlcControl).toHaveBeenCalledWith('stop')
+  })
+
+  it('maps RUNNING to the run action', () => {
+    void adapter.setPlcState?.('RUNNING')
+    expect(window.bridge.debuggerPlcControl).toHaveBeenCalledWith('run')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // verifyMd5
 // ---------------------------------------------------------------------------
 
@@ -299,11 +314,10 @@ describe('verifyMd5', () => {
   it('delegates to bridge with connection config and expected MD5', async () => {
     const result = await adapter.verifyMd5('abc123def456abc123def456abc123de', tcpConfig)
 
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
-      'tcp',
-      { ipAddress: '192.168.1.100', port: '502' },
-      'abc123def456abc123def456abc123de',
-    )
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('abc123def456abc123def456abc123de', 'tcp', {
+      ipAddress: '192.168.1.100',
+      port: '502',
+    })
     expect(result).toEqual({
       success: true,
       match: true,
@@ -313,15 +327,21 @@ describe('verifyMd5', () => {
 
   it('uses different configs per call', async () => {
     await adapter.verifyMd5('md5-1', tcpConfig)
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
-      'tcp',
-      { ipAddress: '192.168.1.100', port: '502' },
-      'md5-1',
-    )
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-1', 'tcp', {
+      ipAddress: '192.168.1.100',
+      port: '502',
+    })
 
     const simConfig: DebugConnectionConfig = { connectionType: 'simulator', connectionParams: {} }
     await adapter.verifyMd5('md5-2', simConfig)
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('simulator', {}, 'md5-2')
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-2', 'simulator', {})
+  })
+
+  it('omits the transport for a target the connection manager already holds', async () => {
+    // A connected baremetal board: naming a medium here is what made a debug start
+    // over serial ask for a DHCP address.
+    await adapter.verifyMd5('md5-held')
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-held', undefined, undefined)
   })
 
   it('catches bridge errors', async () => {
@@ -329,45 +349,6 @@ describe('verifyMd5', () => {
     const result = await adapter.verifyMd5('abc123', tcpConfig)
 
     expect(result).toEqual({ success: false, error: 'MD5 check failed' })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// getDeviceAnchor
-// ---------------------------------------------------------------------------
-
-describe('getDeviceAnchor', () => {
-  it('delegates to bridge and rehydrates the anchor bytes', async () => {
-    const result = await adapter.getDeviceAnchor(tcpConfig)
-
-    expect(window.bridge.getDeviceAnchor).toHaveBeenCalledWith('tcp', { ipAddress: '192.168.1.100', port: '502' })
-    expect(result).toEqual({ success: true, source: 'arduino', anchorHex: '0abc01', anchor: [0x0a, 0xbc, 0x01] })
-  })
-
-  it('leaves anchor undefined when the bridge returns none', async () => {
-    ;(window.bridge.getDeviceAnchor as jest.Mock).mockResolvedValue({
-      success: false,
-      source: 'runtime',
-      error: 'no id',
-    })
-    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: { ipAddress: '10.0.0.1' } })
-
-    expect(result.anchor).toBeUndefined()
-    expect(result.source).toBe('runtime')
-  })
-
-  it('catches bridge errors (arduino source)', async () => {
-    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
-    const result = await adapter.getDeviceAnchor(tcpConfig)
-
-    expect(result).toEqual({ success: false, source: 'arduino', error: 'IPC boom' })
-  })
-
-  it('catches bridge errors (runtime source)', async () => {
-    ;(window.bridge.getDeviceAnchor as jest.Mock).mockRejectedValue(new Error('IPC boom'))
-    const result = await adapter.getDeviceAnchor({ connectionType: 'websocket', connectionParams: {} })
-
-    expect(result).toEqual({ success: false, source: 'runtime', error: 'IPC boom' })
   })
 })
 

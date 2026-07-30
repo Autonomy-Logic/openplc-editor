@@ -406,29 +406,17 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   debuggerVerifyMd5: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
     expectedMd5: string,
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
+    connectionParams:
+      | { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number; jwtToken?: string }
+      | undefined,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
-    ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
+    ipcRenderer.invoke('debugger:verify-md5', expectedMd5, connectionType, connectionParams),
 
   /** FC 0x4b run/stop command. Reads come from `onDevicePlcState` (the device
    *  status poll), not from here. */
   debuggerPlcControl: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
     action: 'run' | 'stop',
   ): Promise<{
     success: boolean
@@ -437,7 +425,7 @@ const rendererProcessBridge = {
     refusedBySwitch?: boolean
     unsupported?: boolean
     error?: string
-  }> => ipcRenderer.invoke('debugger:plc-control', connectionType, connectionParams, action),
+  }> => ipcRenderer.invoke('debugger:plc-control', action),
 
   debuggerReadProgramStMd5: (
     projectPath: string,
@@ -476,35 +464,15 @@ const rendererProcessBridge = {
   }> => ipcRenderer.invoke('debugger:read-license'),
 
   debuggerConnect: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
+    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
+    connectionParams:
+      | { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number; jwtToken?: string }
+      | undefined,
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
-  getDeviceAnchor: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
-  ): Promise<{
-    success: boolean
-    source: 'runtime' | 'arduino'
-    anchorHex?: string
-    anchor?: number[]
-    error?: string
-  }> => ipcRenderer.invoke('device:get-anchor', connectionType, connectionParams),
 
   // One-shot post-flash license-activation routine (D62): open a transient RTU
   // connection with retries/backoff, read the hardware id (FC 0x48) and any

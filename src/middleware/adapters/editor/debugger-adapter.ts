@@ -19,7 +19,6 @@ import type {
   DebugLicenseWriteResult,
   DebugSetResult,
   DebugVariableResult,
-  DeviceAnchorResult,
   Md5VerifyResult,
   Unsubscribe,
 } from '../../shared/ports/types'
@@ -29,13 +28,15 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
   const disconnectCallbacks: Array<() => void> = []
 
   return {
-    async connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> {
+    async connect(config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> {
       try {
-        const result = await window.bridge.debuggerConnect(config.connectionType, config.connectionParams)
+        // No config: the connection manager already holds this target's session,
+        // so there is no medium for the caller to name.
+        const result = await window.bridge.debuggerConnect(config?.connectionType, config?.connectionParams)
         if (result.success) connected = true
         return result
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     },
 
@@ -88,37 +89,21 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
       }
     },
 
-    async getDeviceAnchor(config: DebugConnectionConfig): Promise<DeviceAnchorResult> {
+
+    async verifyMd5(expectedMd5: string, config?: DebugConnectionConfig): Promise<Md5VerifyResult> {
       try {
-        const result = await window.bridge.getDeviceAnchor(config.connectionType, config.connectionParams)
-        return {
-          ...result,
-          // Rehydrate the anchor bytes defensively — the IPC boundary may hand
-          // back a plain array-like; normalize to a real number[].
-          anchor: result.anchor ? Array.from(result.anchor) : undefined,
-        }
-      } catch (err) {
-        return { success: false, source: config.connectionType === 'websocket' ? 'runtime' : 'arduino', error: getErrorMessage(err) }
+        return await window.bridge.debuggerVerifyMd5(expectedMd5, config?.connectionType, config?.connectionParams)
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     },
 
-    async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
+    async setPlcState(state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult> {
       try {
-        return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
-      }
-    },
-
-    async setPlcState(config: DebugConnectionConfig, state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult> {
-      try {
-        return await window.bridge.debuggerPlcControl(
-          config.connectionType,
-          config.connectionParams,
-          state === 'RUNNING' ? 'run' : 'stop',
-        )
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
+        // Payload only. Which medium carries it is the connection manager's business.
+        return await window.bridge.debuggerPlcControl(state === 'RUNNING' ? 'run' : 'stop')
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     },
 

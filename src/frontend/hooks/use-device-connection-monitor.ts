@@ -43,7 +43,7 @@ export const useDeviceConnectionMonitor = (): void => {
 
   useEffect(() => {
     return device.onConnectionStatus(({ status, descriptor, transport, reason }) => {
-      setDeviceConnectionStatus(status, descriptor ?? null)
+      setDeviceConnectionStatus(status, descriptor ?? null, transport ?? null)
 
       // A dropped link means the device screen no longer describes a live device.
       // 'connecting' is deliberately NOT included: during recovery the probe
