@@ -16,6 +16,7 @@
  * Live link state (`deviceConnection.status`) is pushed from the main process; the
  * license classification lands in `deviceProbeInfo` for the FULL/DEMO badge.
  */
+import type { DeviceConnectResult } from '@root/middleware/shared/ports/device-port'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { useDevice, useSystem } from '@root/middleware/shared/providers/platform-context'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
@@ -90,26 +91,50 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     const caps = resolveTargetCapabilities(boardInfo)
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
 
-    // Resolve every way to reach this device, in the order they should be tried:
-    // Modbus TCP when the project enables it, then serial. The dialogs a spec may
-    // need (the DHCP address) are handled inside, by the same loop the debugger
-    // uses. A null return means the user cancelled, or the board declares nothing
-    // connectable — either way the dialog has already been shown.
-    const candidates = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug)
-    if (!candidates?.length) return
+    const connectOptions = {
+      isLicensable: caps.isLicensable,
+      packageId: boardInfo?.vpp?.packageId,
+      keyId: boardInfo?.vpp?.licenseKeyId,
+    }
 
-    const endpoints = candidates.map((candidate) => describeDebugEndpoint(candidate.config)).join(' or ')
+    // FIRST PASS: everything that needs nothing from the user — serial, then
+    // Modbus TCP on a static address. `deferPrompts` means a DHCP channel is set
+    // aside rather than interrupting with an address dialog, because with a cable
+    // attached the user should never be asked for one.
+    const silent = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug, { deferPrompts: true })
+    if (!silent) return
+    if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return
 
+    const tried: string[] = []
     startDeviceProbe()
     setDeviceConnectionStatus('connecting', null)
-    const result = await device.connect(
-      candidates.map((candidate) => candidate.config),
-      {
-        isLicensable: caps.isLicensable,
-        packageId: boardInfo?.vpp?.packageId,
-        keyId: boardInfo?.vpp?.licenseKeyId,
-      },
-    )
+
+    let result: DeviceConnectResult = { status: 'no-response' }
+    if (silent.candidates.length > 0) {
+      tried.push(...silent.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
+      result = await device.connect(
+        silent.candidates.map((candidate) => candidate.config),
+        connectOptions,
+      )
+    }
+
+    // SECOND PASS: nothing silent worked, so now it is worth asking. Resolving
+    // only the deferred channels surfaces the address dialog, and a cancel here
+    // ends the attempt rather than looping.
+    if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
+      const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug, {
+        onlyChannels: silent.awaitingInput,
+      })
+      if (prompted && prompted.candidates.length > 0) {
+        tried.push(...prompted.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
+        result = await device.connect(
+          prompted.candidates.map((candidate) => candidate.config),
+          connectOptions,
+        )
+      }
+    }
+
+    const endpoints = tried.join(' or ') || 'this device'
 
     // Land the classification for the badge (main already ran the recover).
     // `activation` + `error` travel with it: without them the badge cannot tell

@@ -125,7 +125,15 @@ export interface DeviceLinkCandidateConfig {
  * debugger's single-channel resolution.
  */
 export type DeviceLinkCandidatesOutcome =
-  | { kind: 'candidates'; candidates: DeviceLinkCandidateConfig[] }
+  | {
+      kind: 'candidates'
+      candidates: DeviceLinkCandidateConfig[]
+      /**
+       * Channels that could be tried, but only after asking the user something
+       * (a DHCP address). Empty unless the caller passed `deferPrompts`.
+       */
+      awaitingInput: number[]
+    }
   | Extract<DebugResolverOutcome, { kind: 'prompt' } | { kind: 'error' } | { kind: 'unsupported' }>
 
 // ---------------------------------------------------------------------------
@@ -313,28 +321,28 @@ export function resolveDebugConnection(
 /**
  * Resolve the ordered list of ways to reach a baremetal device.
  *
- * The device link is transport-agnostic, so Connect does not pick a channel — it
+ * The connection is transport-agnostic, so Connect does not pick a channel — it
  * gets CANDIDATES and tries them in order until one answers:
  *
- *   1. Modbus TCP, when the project enables it. Preferred because it needs no
- *      cable and survives an upload over USB.
- *   2. Serial. Always a candidate for a baremetal target, regardless of whether
- *      Modbus RTU is enabled, because the always-on debugger keeps the serial
- *      protocol compiled into the firmware either way.
+ *   1. Serial. Tried FIRST, and always a candidate regardless of whether Modbus
+ *      RTU is enabled, because the always-on debugger keeps the serial protocol
+ *      compiled into the firmware either way. It is the direct, local, physically
+ *      unambiguous path: if a cable is attached, that is the device the user is
+ *      looking at, no address to be stale and nothing to ask them.
+ *   2. Modbus TCP, when the project enables it. The remote path, so it is the
+ *      fallback rather than the preference.
  *
- * If Modbus TCP is not enabled, serial is the only candidate. If neither can be
- * built, the caller gets the reason the first one failed — an editor that reports
- * "connected" with nothing connected is what makes every later request time out
- * for no visible reason.
+ * Order matters beyond speed: a TCP channel on DHCP has to ASK the user for the
+ * device's current address. Trying serial first means that question is only ever
+ * asked when it is actually needed — see `deferPrompts`.
  *
- * Ordering is a preference, not a promise: `DeviceLinkManager` still verifies
- * each candidate before keeping it, so an IP that belongs to something else (or a
- * stale DHCP lease) falls through to serial rather than stranding the user.
+ * If neither can be built, the caller gets the reason the first one failed — an
+ * editor that reports "connected" with nothing connected is what makes every later
+ * request time out for no visible reason.
  *
- * A channel needing user input (the DHCP address prompt) bubbles up as `prompt`,
- * exactly as it does for the debugger; the caller fills the cache and re-invokes.
- * `skipChannels` lets a caller drop a channel it has decided against — a
- * cancelled IP dialog re-resolves without the TCP channel, leaving serial.
+ * Ordering is a preference, not a promise: `DeviceLinkManager` still verifies each
+ * candidate before keeping it, so a cable attached to a board with no firmware
+ * falls through to TCP rather than stranding the user.
  *
  * Nothing here is board-specific: the candidate set is whatever the target's
  * `debug` spec declares, so every baremetal target follows the same flow.
@@ -342,7 +350,18 @@ export function resolveDebugConnection(
 export function resolveDeviceLinkCandidates(
   spec: DebugSpec | undefined,
   context: DebugResolverContext,
-  options: { skipChannels?: number[] } = {},
+  options: {
+    /** Channels to leave out — e.g. one the user has declined. */
+    skipChannels?: number[]
+    /** Consider ONLY these channels. Used for the second pass, after a prompt. */
+    onlyChannels?: number[]
+    /**
+     * Don't ask the user anything: a channel that needs input is left out and
+     * reported in `awaitingInput` instead of bubbling up as a `prompt`. Lets a
+     * caller try everything that works silently before interrupting anyone.
+     */
+    deferPrompts?: boolean
+  } = {},
 ): DeviceLinkCandidatesOutcome {
   // `channels` arrives from a VPP manifest, so treat it as possibly absent
   // rather than trusting the type: a malformed package must produce a dialog,
@@ -351,16 +370,18 @@ export function resolveDeviceLinkCandidates(
   if (!spec || !channels?.length) return { kind: 'unsupported' }
 
   const skip = new Set(options.skipChannels ?? [])
+  const only = options.onlyChannels ? new Set(options.onlyChannels) : null
   const eligible: number[] = []
+  const included = (index: number): boolean => !skip.has(index) && (only === null || only.has(index))
 
-  // Modbus TCP first, but only when the project turned it on.
+  // Serial first, unconditionally.
   channels.forEach((channel, index) => {
-    if (channel.channel !== 'tcp' || skip.has(index)) return
-    if (evaluateCondition(channel.enabledWhen, context.state)) eligible.push(index)
+    if (channel.channel === 'rtu' && included(index)) eligible.push(index)
   })
-  // Then serial, unconditionally.
+  // Then Modbus TCP, but only when the project turned it on.
   channels.forEach((channel, index) => {
-    if (channel.channel === 'rtu' && !skip.has(index)) eligible.push(index)
+    if (channel.channel !== 'tcp' || !included(index)) return
+    if (evaluateCondition(channel.enabledWhen, context.state)) eligible.push(index)
   })
 
   if (eligible.length === 0) {
@@ -373,6 +394,7 @@ export function resolveDeviceLinkCandidates(
   }
 
   const candidates: DeviceLinkCandidateConfig[] = []
+  const awaitingInput: number[] = []
   let firstFailure: Extract<DebugResolverOutcome, { kind: 'error' } | { kind: 'unsupported' }> | null = null
 
   for (const index of eligible) {
@@ -381,15 +403,19 @@ export function resolveDeviceLinkCandidates(
       candidates.push({ config: outcome.config, channelLabel: outcome.channelLabel, channelIndex: index })
       continue
     }
-    // Input needed before this candidate exists at all — ask now, since it is
-    // the preferred one; a caller that would rather not can skip the channel.
-    if (outcome.kind === 'prompt') return outcome
+    if (outcome.kind === 'prompt') {
+      if (options.deferPrompts) {
+        awaitingInput.push(index)
+        continue
+      }
+      return outcome
+    }
     // 'pick' cannot occur: every resolve above names its channel by index.
     if (outcome.kind === 'error' || outcome.kind === 'unsupported') firstFailure ??= outcome
   }
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && awaitingInput.length === 0) {
     return firstFailure ?? { kind: 'unsupported' }
   }
-  return { kind: 'candidates', candidates }
+  return { kind: 'candidates', candidates, awaitingInput }
 }

@@ -40,7 +40,7 @@ const mockConnect = jest.fn()
 const mockDisconnect = jest.fn().mockResolvedValue({ success: true })
 const mockActivateLicense = jest.fn()
 const mockOnConnectionStatus = jest.fn().mockReturnValue(() => undefined)
-const mockResolveDeviceLinkWithUx = jest.fn((..._args: unknown[]) => Promise.resolve(mockCandidates))
+const mockResolveDeviceLinkWithUx = jest.fn((..._args: unknown[]) => Promise.resolve(mockResolution))
 const mockOpenExternalLink = jest.fn().mockResolvedValue({ success: true })
 const mockRequestDeviceFlash = jest.fn()
 
@@ -51,7 +51,8 @@ const serialCandidate = {
   channelIndex: 0,
   config: { connectionType: 'rtu', connectionParams: { port: 'COM5', baudRate: 115200, slaveId: 1 } },
 }
-let mockCandidates: unknown = [serialCandidate]
+/** Shape the hook consumes: what can be tried now, and what needs input first. */
+let mockResolution: unknown = { candidates: [serialCandidate], awaitingInput: [] }
 
 jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
 jest.mock('@root/middleware/shared/providers/platform-context', () => ({
@@ -88,7 +89,7 @@ beforeEach(() => {
   mockState.deviceConnection = { status: 'disconnected', port: null }
   mockState.runtimeConnection = { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' }
   mockState.deviceProbeInfo = { phase: 'idle', result: null }
-  mockCandidates = [serialCandidate]
+  mockResolution = { candidates: [serialCandidate], awaitingInput: [] }
   mockDisconnect.mockResolvedValue({ success: true })
   mockOnConnectionStatus.mockReturnValue(() => undefined)
 })
@@ -98,24 +99,25 @@ describe('useDeviceConnect', () => {
   // device screen, so that subscription lives in `useDeviceConnectionMonitor`
   // (mounted at workspace level) and is tested there.
 
+  const tcpCandidate = {
+    channelLabel: 'Modbus TCP',
+    channelIndex: 0,
+    config: { connectionType: 'tcp', connectionParams: { ipAddress: '192.168.0.50' } },
+  }
+
   it('hands the connection EVERY resolved candidate, in order', async () => {
     // Connect does not choose a transport: the main process tries the list and
     // keeps the first that answers, which is what lets a stale Modbus TCP address
     // fall through to the cable. Choosing here is what previously stranded a
     // Modbus-TCP-only project on "select a communication port".
-    const tcpCandidate = {
-      channelLabel: 'Modbus TCP',
-      channelIndex: 0,
-      config: { connectionType: 'tcp', connectionParams: { ipAddress: '192.168.0.50' } },
-    }
-    mockCandidates = [tcpCandidate, serialCandidate]
+    mockResolution = { candidates: [serialCandidate, tcpCandidate], awaitingInput: [] }
     mockConnect.mockResolvedValue({ status: 'connected-with-firmware', activation: 'full' })
 
     const { result } = renderHook(() => useDeviceConnect(board))
     await result.current.connect()
 
     expect(mockConnect).toHaveBeenCalledWith(
-      [tcpCandidate.config, serialCandidate.config],
+      [serialCandidate.config, tcpCandidate.config],
       expect.objectContaining({ packageId: 'com.vendor.board' }),
     )
   })
@@ -123,7 +125,7 @@ describe('useDeviceConnect', () => {
   it('does nothing when resolution was cancelled or impossible', async () => {
     // The shared resolution has already told the user why (a cancelled prompt is
     // the user's answer), so this must not stack a second dialog on top.
-    mockCandidates = null
+    mockResolution = null
 
     const { result } = renderHook(() => useDeviceConnect(board))
     await result.current.connect()
@@ -132,11 +134,42 @@ describe('useDeviceConnect', () => {
     expect(mockOpenModal).not.toHaveBeenCalled()
   })
 
+  it('never asks for a DHCP address when a silent candidate connects', async () => {
+    // The user's report: with DHCP on, Connect asked for an address before trying
+    // anything. With a cable attached that question is pure interruption, so the
+    // deferred channel must stay unasked when the cable works.
+    mockResolution = { candidates: [serialCandidate], awaitingInput: [1] }
+    mockConnect.mockResolvedValue({ status: 'connected-with-firmware', activation: 'full' })
+
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+
+    expect(mockResolveDeviceLinkWithUx).toHaveBeenCalledTimes(1)
+    expect(mockResolveDeviceLinkWithUx.mock.calls[0][2]).toMatchObject({ deferPrompts: true })
+    expect(mockConnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks for the deferred address only after the silent candidates fail', async () => {
+    mockResolveDeviceLinkWithUx
+      .mockImplementationOnce(() => Promise.resolve({ candidates: [serialCandidate], awaitingInput: [1] }))
+      .mockImplementationOnce(() => Promise.resolve({ candidates: [tcpCandidate], awaitingInput: [] }))
+    mockConnect
+      .mockResolvedValueOnce({ status: 'no-response' })
+      .mockResolvedValueOnce({ status: 'connected-with-firmware', activation: 'full' })
+
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+
+    // Second resolve targets ONLY the channel that needed input.
+    expect(mockResolveDeviceLinkWithUx).toHaveBeenCalledTimes(2)
+    expect(mockResolveDeviceLinkWithUx.mock.calls[1][2]).toMatchObject({ onlyChannels: [1] })
+    expect(mockConnect).toHaveBeenNthCalledWith(2, [tcpCandidate.config], expect.anything())
+    // It connected on the second pass, so no failure dialog.
+    expect(mockOpenModal).not.toHaveBeenCalled()
+  })
+
   it('names every endpoint it tried when nothing answers', async () => {
-    mockCandidates = [
-      { channelLabel: 'Modbus TCP', channelIndex: 0, config: { connectionType: 'tcp', connectionParams: { ipAddress: '192.168.0.50' } } },
-      serialCandidate,
-    ]
+    mockResolution = { candidates: [serialCandidate, tcpCandidate], awaitingInput: [] }
     mockConnect.mockResolvedValue({ status: 'no-response' })
 
     const { result } = renderHook(() => useDeviceConnect(board))

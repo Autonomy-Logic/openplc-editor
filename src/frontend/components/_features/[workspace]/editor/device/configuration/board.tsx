@@ -22,6 +22,7 @@ import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
@@ -343,7 +344,6 @@ const Board = memo(function () {
     connect: connectDevice,
     disconnect: disconnectDevice,
     checkRuntimeLicense,
-    isConnecting,
     isConnected,
     status: serialStatus,
     buyLicense,
@@ -361,6 +361,17 @@ const Board = memo(function () {
   const licensableSelectedBoard = resolveTargetCapabilities(currentBoardInfo).isLicensable
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
+  // Read from the same place the connection resolver reads it, so the button and
+  // the resolution never disagree about whether a network path exists.
+  const modbusTcpConfigured = useOpenPLCStore(
+    (state) =>
+      (
+        (state.deviceDefinitions.configuration.vendorScreenData ?? {}) as Record<
+          string,
+          Record<string, unknown> | undefined
+        >
+      )['modbus_tcp']?.['enabled'] === true,
+  )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
@@ -914,22 +925,14 @@ const Board = memo(function () {
                   Search
                 </button>
               </div>
-              <div id='runtime-connect-button-container' className='flex w-full items-center justify-start'>
-                <button
-                  type='button'
-                  onClick={handleConnectToRuntime}
-                  disabled={connectionStatus === 'connecting'}
-                  className='h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white hover:bg-brand-medium-dark disabled:opacity-50'
-                >
-                  {connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : connectionStatus === 'connected'
-                      ? 'Disconnect'
-                      : 'Connect'}
-                </button>
+              <DeviceConnectButton
+                containerId='runtime-connect-button-container'
+                status={connectionStatus}
+                onConnect={handleConnectToRuntime}
+                onDisconnect={handleConnectToRuntime}
+              >
                 {connectionStatus === 'connected' && (
-                  <div className='ml-2 flex items-center gap-2'>
-                    <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>
+                  <>
                     {plcStatus && (
                       <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
                     )}
@@ -939,12 +942,9 @@ const Board = memo(function () {
                       onBuy={buyLicense}
                       onRecheck={checkRuntimeLicense}
                     />
-                  </div>
+                  </>
                 )}
-                {connectionStatus === 'error' && (
-                  <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
-                )}
-              </div>
+              </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
             <>
@@ -1008,35 +1008,26 @@ const Board = memo(function () {
                 <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
               </button>
             </div>
-            <div id='device-connect-button-container' className='flex w-full items-center justify-start gap-2'>
-              <button
-                type='button'
-                onClick={isConnected ? disconnectDevice : connectDevice}
-                disabled={isConnecting || (!isConnected && !communicationPort)}
-                title={
-                  !isConnected && !communicationPort ? 'Select a communication port first' : 'Connect to the device'
-                }
-                className={cn(
-                  'h-[30px] rounded-md px-4 py-1 font-caption text-cp-sm font-medium text-white disabled:opacity-50',
-                  isConnected
-                    ? 'bg-neutral-800 hover:bg-neutral-900 dark:bg-neutral-850 dark:hover:bg-neutral-800'
-                    : 'bg-brand hover:bg-brand-medium-dark',
-                )}
-              >
-                {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
-              </button>
-              {serialStatus === 'error' && (
-                <span className='font-caption text-cp-xs font-medium text-red-600 dark:text-red-400'>
-                  ● Connection failed
-                </span>
-              )}
+            <DeviceConnectButton
+              containerId='device-connect-button-container'
+              status={serialStatus}
+              onConnect={connectDevice}
+              onDisconnect={disconnectDevice}
+              // A missing port only blocks Connect when serial is the ONLY way in.
+              // With Modbus TCP enabled the connection can still be made over the
+              // network, so the button stays live and resolution reports the real
+              // reason if that path is not usable either.
+              {...(!isConnected && !communicationPort && !modbusTcpConfigured
+                ? { blockedReason: 'Select a communication port first' }
+                : {})}
+            >
               <DeviceLicenseStatus
                 probeInfo={deviceProbeInfo}
                 boardIsLicensable={licensableSelectedBoard}
                 onBuy={buyLicense}
                 onRecheck={connectDevice}
               />
-            </div>
+            </DeviceConnectButton>
             </>
           ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (

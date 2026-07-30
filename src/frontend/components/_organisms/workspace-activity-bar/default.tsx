@@ -360,7 +360,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           // the user established it. Only the serial link is ever released for an
           // upload, but resolving the full list lets the reconnect land on Modbus
           // TCP if that is what now answers.
-          const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget))
+          // `deferPrompts`: this reconnect is silent and automatic (the user just
+          // flashed), so it must never pop an address dialog behind their back. A
+          // DHCP-only target simply stays disconnected until they press Connect.
+          const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
+            deferPrompts: true,
+          })
           if (candidates.kind === 'candidates') {
             try {
               const reconnect = await window.bridge.deviceConnect(

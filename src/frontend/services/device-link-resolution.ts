@@ -190,18 +190,36 @@ function trace(message: string): void {
 /** Guard against a malformed spec bouncing between prompts forever. */
 const MAX_RESOLVE_ROUNDS = 8
 
+/** What resolution found, and what it deliberately left unasked. */
+export interface ResolvedDeviceLink {
+  /** Ways to reach the device that need nothing from the user, in try-order. */
+  candidates: DeviceLinkCandidateConfig[]
+  /**
+   * Channel indexes that could also be tried, but only after asking the user
+   * something. Resolve again with `onlyChannels: awaitingInput` to ask.
+   */
+  awaitingInput: number[]
+}
+
 /**
- * Resolve the ordered ways to reach a baremetal device, asking for input when the
- * spec needs it (the DHCP address).
+ * Resolve the ways to reach a baremetal device: serial first, then Modbus TCP.
  *
- * Returns the candidates in the order they should be tried, or null if the user
- * cancelled or the board declares nothing connectable.
+ * By default this asks the user NOTHING — a channel needing input is reported in
+ * `awaitingInput` instead. That is what lets Connect try the cable before asking
+ * for a DHCP address, so a user with a cable attached is never interrupted by a
+ * dialog about an address they do not need to know.
+ *
+ * Pass `onlyChannels` to resolve just those channels, asking whatever they need;
+ * that is the second pass, run only once everything silent has failed.
+ *
+ * Returns null if the user cancelled, or the board declares nothing connectable
+ * (the dialog explaining why has already been shown).
  */
 export async function resolveDeviceLinkWithUx(
   boardTarget: string,
   spec: DebugSpec | undefined,
-  options: { runtimeReadyForDebug?: boolean } = {},
-): Promise<DeviceLinkCandidateConfig[] | null> {
+  options: { runtimeReadyForDebug?: boolean; onlyChannels?: number[]; deferPrompts?: boolean } = {},
+): Promise<ResolvedDeviceLink | null> {
   if (!spec) {
     await showDeviceDialog(
       'warning',
@@ -212,16 +230,23 @@ export async function resolveDeviceLinkWithUx(
     return null
   }
 
+  const resolverOptions = {
+    ...(options.onlyChannels ? { onlyChannels: options.onlyChannels } : {}),
+    ...(options.deferPrompts ? { deferPrompts: true } : {}),
+  }
+
   for (let round = 0; round < MAX_RESOLVE_ROUNDS; round += 1) {
     const context = buildDeviceResolverContext(boardTarget, options)
-    const outcome = resolveDeviceLinkCandidates(spec, context)
+    const outcome = resolveDeviceLinkCandidates(spec, context, resolverOptions)
     if (outcome.kind === 'candidates') {
       trace(
-        `resolved ${outcome.candidates.length} candidate(s) for ${boardTarget}: ${outcome.candidates
-          .map((candidate) => `${candidate.config.connectionType} ${describeDebugEndpoint(candidate.config)}`)
-          .join(', ')}`,
+        `resolved ${outcome.candidates.length} candidate(s) for ${boardTarget}: ${
+          outcome.candidates
+            .map((candidate) => `${candidate.config.connectionType} ${describeDebugEndpoint(candidate.config)}`)
+            .join(', ') || 'none'
+        }${outcome.awaitingInput.length ? ` (+${outcome.awaitingInput.length} needing input, not asked yet)` : ''}`,
       )
-      return outcome.candidates
+      return { candidates: outcome.candidates, awaitingInput: outcome.awaitingInput }
     }
     // Say what the spec concluded and what it was reading, so a transport that is
     // never attempted can be traced to the screen value that ruled it out.
@@ -234,18 +259,7 @@ export async function resolveDeviceLinkWithUx(
     )
 
     const next = await handleInteractiveOutcome(outcome, boardTarget)
-    if (!next.retry) {
-      // A cancelled prompt only rules out the channel that asked. Serial does not
-      // prompt, so falling through gives the user the cable instead of nothing —
-      // which is the point of having candidates at all.
-      if (outcome.kind === 'prompt') {
-        const withoutPrompted = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget, options), {
-          skipChannels: [outcome.channelIndex],
-        })
-        if (withoutPrompted.kind === 'candidates') return withoutPrompted.candidates
-      }
-      return null
-    }
+    if (!next.retry) return null
   }
   return null
 }

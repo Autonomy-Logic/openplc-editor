@@ -112,17 +112,15 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     if (result.kind === 'config') expect(result.config.connectionType).toBe('tcp')
   })
 
-  it('offers BOTH transports, Modbus TCP first, when the project enables it', () => {
-    // The connection is transport-agnostic, so Connect does not pick — it gets an
-    // ordered list and the manager keeps the first that answers. TCP leads because
-    // it needs no cable and survives an upload; serial follows as the fallback,
-    // which is what makes preferring TCP safe when an address is stale.
+  it('offers BOTH transports, SERIAL first, when the project enables Modbus TCP', () => {
+    // Serial leads: it is the direct, local path, with no address to be stale and
+    // nothing to ask the user. Modbus TCP is the remote fallback.
     const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext())
 
     expect(result.kind).toBe('candidates')
     if (result.kind !== 'candidates') return
-    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['tcp', 'rtu'])
-    expect(String(result.candidates[1].config.connectionParams.port)).toBe('/dev/cu.usbmodem11101')
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu', 'tcp'])
+    expect(String(result.candidates[0].config.connectionParams.port)).toBe('/dev/cu.usbmodem11101')
   })
 
   it('offers serial even with Modbus RTU turned off', () => {
@@ -141,19 +139,22 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     expect(rtuOnly.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
   })
 
-  it('asks for the address when Modbus TCP is on DHCP', () => {
-    // Requirement: prompt for the IP when DHCP is enabled. The spec declares that
-    // prompt; this is the resolver bubbling it so Connect can surface the dialog —
-    // which it could not do at all while it resolved a single channel itself.
-    const dhcp = tcpOnlyContext()
-    dhcp.state.screens.modbus_tcp = { enabled: true, enable_dhcp: true }
-    const spec: DebugSpec = {
+
+  it('lets a caller skip a channel it has decided against', () => {
+    // Channel 0 in this spec is the TCP one.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { skipChannels: [0] })
+    if (result.kind !== 'candidates') throw new Error('expected candidates')
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+  })
+
+  describe('a DHCP address is asked for LAST, and only if needed', () => {
+    const dhcpSpec: DebugSpec = {
       channels: [
         {
           label: 'Modbus TCP',
           channel: 'tcp',
           enabledWhen: { $ref: 'screens.modbus_tcp.enabled' },
-          params: { ipAddress: { $ref: 'screens.modbus_tcp.tcp_ip' } },
+          params: { ipAddress: { $ref: 'screens.modbus_tcp.ip_address' } },
           prompts: [
             {
               when: { $ref: 'screens.modbus_tcp.enable_dhcp' },
@@ -167,16 +168,45 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
         ...baremetalSpec.channels,
       ],
     }
+    const dhcpContext = (): DebugResolverContext => {
+      const context = tcpOnlyContext()
+      context.state.screens.modbus_tcp = { enabled: true, enable_dhcp: true }
+      return context
+    }
 
-    const result = resolveDeviceLinkCandidates(spec, dhcp)
-    expect(result.kind).toBe('prompt')
-  })
+    it('sets the DHCP channel aside instead of asking, when prompts are deferred', () => {
+      // The user's report: with DHCP on, Connect hung on a dialog before trying
+      // anything. With a cable attached, that question is pure interruption.
+      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { deferPrompts: true })
 
-  it('lets a caller skip a channel it has decided against', () => {
-    // A cancelled address dialog must leave the user with the cable, not nothing.
-    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { skipChannels: [0] })
-    if (result.kind !== 'candidates') throw new Error('expected candidates')
-    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+      expect(result.kind).toBe('candidates')
+      if (result.kind !== 'candidates') return
+      expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+      expect(result.awaitingInput).toHaveLength(1)
+    })
+
+    it('asks once the caller resolves that channel on its own', () => {
+      // The second pass, run only after everything silent has failed.
+      const deferred = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { deferPrompts: true })
+      if (deferred.kind !== 'candidates') throw new Error('expected candidates')
+
+      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { onlyChannels: deferred.awaitingInput })
+      expect(result.kind).toBe('prompt')
+    })
+
+    it('reports candidates even when ONLY a prompting channel is eligible', () => {
+      // No serial port selected and DHCP on: there is nothing to try silently, but
+      // the attempt must not be reported as impossible — the address dialog is
+      // exactly what is missing.
+      const context = dhcpContext()
+      delete context.state.configuration.communicationPort
+      const result = resolveDeviceLinkCandidates(dhcpSpec, context, { deferPrompts: true })
+
+      expect(result.kind).toBe('candidates')
+      if (result.kind !== 'candidates') return
+      expect(result.candidates).toHaveLength(0)
+      expect(result.awaitingInput).toHaveLength(1)
+    })
   })
 
   it('still reports a missing port when serial is the only candidate', () => {
