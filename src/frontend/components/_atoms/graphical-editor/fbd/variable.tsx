@@ -10,15 +10,8 @@ import { resolveScopeExpressionType } from '../../../../services/graphical-scope
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
-import {
-  floatToBuffer,
-  getVariableTypeInfo,
-  integerToBuffer,
-  parseFloatValue,
-  parseIntegerValue,
-  parseStringValue,
-  stringToBuffer,
-} from '../../../../utils/variable-types'
+import { encodeForceValue, isForcedValueHigh } from '../../../../utils/variable-sizes'
+import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -338,50 +331,21 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    const typeInfo = getVariableTypeInfo(varType)
-    if (!typeInfo) {
+    let valueBuffer: Uint8Array
+    try {
+      valueBuffer = encodeForceValue(forceValue, varType)
+    } catch (error) {
+      toast({
+        title: 'Cannot force value',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'fail',
+      })
       setForceValueModalOpen(false)
       setForceValue('')
       return
     }
 
-    const normalizedType = varType.toLowerCase()
-    const isFloatType = normalizedType === 'real' || normalizedType === 'lreal'
-    const isStringType = normalizedType === 'string'
-
-    let valueBuffer: Uint8Array
-    let forcedValueForState: boolean
-
-    if (isStringType) {
-      const parsedStringValue: string | null = parseStringValue(forceValue)
-      if (parsedStringValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
-        return
-      }
-      valueBuffer = stringToBuffer(parsedStringValue)
-      forcedValueForState = true
-    } else if (isFloatType) {
-      const parsedFloatValue = parseFloatValue(forceValue, typeInfo.byteSize)
-      if (parsedFloatValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
-        return
-      }
-      valueBuffer = floatToBuffer(parsedFloatValue, typeInfo.byteSize)
-      forcedValueForState = parsedFloatValue >= 0
-    } else {
-      const parsedIntValue = parseIntegerValue(forceValue, typeInfo)
-      if (parsedIntValue === null) {
-        setForceValueModalOpen(false)
-        setForceValue('')
-        return
-      }
-      valueBuffer = integerToBuffer(parsedIntValue, typeInfo.byteSize, typeInfo.signed)
-      forcedValueForState = parsedIntValue >= BigInt(0)
-    }
-
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, forcedValueForState, varType)
+    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, isForcedValueHigh(forceValue), varType)
 
     setForceValueModalOpen(false)
     setForceValue('')
