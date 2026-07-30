@@ -88,6 +88,43 @@ if (isDebug) {
   void import('electron-debug')
 }
 
+/**
+ * In development the renderer is served by webpack-dev-server, which `npm run dev`
+ * starts *in parallel* with Electron (`concurrently`). Nothing waits for the dev
+ * server to be listening, so `loadURL('http://localhost:1313/index.html')` regularly
+ * loses that race and rejects with ERR_CONNECTION_REFUSED. The window is then stuck
+ * on an empty document while the splash closes on its fixed timer — the blank editor.
+ * Whether it happens depends only on how long the bundle takes, which is why the app
+ * "works on the 2nd or 3rd try" (warm webpack cache).
+ *
+ * Retrying the load until the dev server answers removes the race, and gating the
+ * splash on the load actually finishing removes the blind timer.
+ */
+const isDevServerRenderer = process.env.NODE_ENV === 'development'
+const RENDERER_LOAD_RETRY_DELAY_MS = 500
+const RENDERER_LOAD_TIMEOUT_MS = 120_000
+const SPLASH_MINIMUM_DURATION_MS = 3000
+
+const delay = (ms: number) => new Promise<void>((resolveDelay) => setTimeout(resolveDelay, ms))
+
+const loadRenderer = async (window: BrowserWindow): Promise<void> => {
+  const url = resolveHtmlPath('index.html')
+  const deadline = Date.now() + RENDERER_LOAD_TIMEOUT_MS
+
+  for (;;) {
+    if (window.isDestroyed()) return
+    try {
+      await window.loadURL(url)
+      return
+    } catch (error) {
+      if (window.isDestroyed()) return
+      if (!isDevServerRenderer || Date.now() >= deadline) throw error
+      logger.info(`Renderer not available yet (${getErrorMessage(error)}), retrying ${url}`)
+      await delay(RENDERER_LOAD_RETRY_DELAY_MS)
+    }
+  }
+}
+
 const installExtensions = async () => {
   const installer = await import('electron-devtools-installer')
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS
@@ -147,6 +184,10 @@ const createMainWindow = async () => {
 
   splash.setIgnoreMouseEvents(false)
 
+  // Reference point for the splash's minimum on-screen time. Taken here (and not
+  // when the renderer finishes) so a slow renderer never adds to the splash time.
+  const splashOpenedAt = Date.now()
+
   splash.once('ready-to-show', () => {
     splash?.show()
   })
@@ -170,8 +211,47 @@ const createMainWindow = async () => {
     },
   })
 
+  /**
+   * Hand the window over to the user once the renderer is really loaded, keeping the
+   * splash up for its full animation. Both conditions must hold: an early renderer
+   * must still wait for the splash, and a slow one must not be revealed blank.
+   */
+  const revealMainWindow = async () => {
+    const remainingSplashTime = SPLASH_MINIMUM_DURATION_MS - (Date.now() - splashOpenedAt)
+    if (remainingSplashTime > 0) {
+      await delay(remainingSplashTime)
+    }
+
+    // The window went away while the renderer was loading — don't leave the splash
+    // behind, or it keeps the app alive with nothing to show.
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      splash?.close()
+      return
+    }
+
+    if (splash === null) {
+      mainWindow.destroy()
+      return
+    }
+
+    splash.close()
+    mainWindow.maximize()
+    if (process.env.START_MINIMIZED) {
+      mainWindow.minimize()
+      return
+    }
+    mainWindow.show()
+  }
+
   // Load the Url or index.html file;
-  void mainWindow.loadURL(resolveHtmlPath('index.html'))
+  void loadRenderer(mainWindow)
+    .catch((error: unknown) => {
+      // Reveal the window anyway: a visible window with devtools beats an app that
+      // never leaves the splash screen.
+      logger.error('Failed to load the renderer: ' + getErrorMessage(error))
+    })
+    .then(revealMainWindow)
+    .catch((error: unknown) => logger.error('Failed to reveal the main window: ' + getErrorMessage(error)))
 
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
@@ -181,28 +261,6 @@ const createMainWindow = async () => {
   const isMaximizedWindow = () => {
     mainWindow?.webContents.send('window-controls:toggle-maximized')
   }
-
-  /**
-   * -> Ready to show event (https://www.electronjs.org/docs/latest/api/browser-window#event-ready-to-show)
-   * Emitted when the web page has been rendered (while not being shown) and window can be displayed without a visual flash.
-   */
-  mainWindow.once('ready-to-show', () => {
-    if (!mainWindow) {
-      throw new Error('"mainWindow" is not defined')
-    }
-    mainWindow.maximize()
-    if (process.env.START_MINIMIZED) {
-      mainWindow.minimize()
-    }
-    setTimeout(() => {
-      if (splash === null) {
-        mainWindow?.destroy()
-        return
-      }
-      splash.close()
-      mainWindow?.show()
-    }, 3000)
-  })
 
   /**
    * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
