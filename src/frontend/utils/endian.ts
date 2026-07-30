@@ -9,7 +9,7 @@
  *     and code-size-cheap on AVR; the editor (running on a host with
  *     plenty of compute) does the adaptation.
  *
- *   - The editor's internal codecs (`floatToBuffer`, `integerToBuffer`,
+ *   - The editor's internal codecs (`encodeForceValue`,
  *     `decodeWireValue`, etc.) always produce / consume **little-endian**
  *     bytes.  The swap layer below normalises the wire bytes to that
  *     canonical internal form on reads, and back to target-native on
