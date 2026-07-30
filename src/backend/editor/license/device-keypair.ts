@@ -46,10 +46,14 @@ import { createPrivateKey, createPublicKey, type KeyObject, scrypt, sign as cryp
  * anchor feeds both derivations, and reusing one label would make the public
  * `deviceId` and the private seed two truncations of related material. With
  * distinct labels, publishing the id says nothing about the key.
+ *
+ * Part of the persisted derivation contract — see the migration note on
+ * `KDF_PARAMS`. The `v1` here is a LABEL, not a version record: nothing stores
+ * which version produced a bound public key.
  */
 const POP_DOMAIN = 'openplc-pop-v1|'
 
-/** Ed25519 seed length. */
+/** Ed25519 seed length. Part of the persisted contract — see `KDF_PARAMS`. */
 const SEED_BYTES = 32
 
 /**
@@ -58,12 +62,32 @@ const SEED_BYTES = 32
  * flow short-circuits on an already-licensed device before reaching this), so
  * the honest cost is invisible while an attacker pays it per guess.
  *
- * TUNING IS GATED ON A MEASUREMENT, not on taste: task #44.1 (real anchor
- * entropy per target). The target that sets the floor is the ESP32 (~2^24), not
- * the Pi — and the reason is twofold: it has both the smallest anchor space AND
- * a stolen blob that is usable after rebuilding the firmware. An amendment
- * arguing the opposite was considered and REJECTED; see ADR-0002. If the
- * measurement lands, raise N here rather than adding a second KDF.
+ * THESE PARAMETERS ARE A PERSISTED CONTRACT, NOT AN IMPLEMENTATION DETAIL —
+ * amendment (b) to ADR-0002, 2026-07-30. Changing `N`, `r`, `p`, `POP_DOMAIN`,
+ * `SEED_BYTES` or the salt composition changes `publicKeyHex` for EVERY device.
+ * The public key is stored in `licensed_devices.device_public_key` at CHECKOUT
+ * and verified against forever, and the purchase webhook's idempotent fast-path
+ * never re-binds a device that already has a license. So a device bound under
+ * the old parameters would fail `verifyPossession` on both `/activate` and
+ * `/recover`, receive the byte-identical answer that "never purchased" gets, and
+ * have NO WAY BACK short of physical access to every board: a permanent brick of
+ * the device+VPP pair.
+ *
+ * There is no re-bind path today. Until one exists, any change here requires an
+ * explicit migration — a recorded decision, a way to verify a stored key against
+ * both the old and the new derivation, and a way to re-bind. Bumping a number
+ * because a benchmark says it is affordable is exactly the move that bricks the
+ * fleet, so an earlier version of this comment that invited it was removed.
+ *
+ * (For context on which target would set a higher floor if a migration ever
+ * happens: the ESP32 (~2^24 anchor entropy), not the Pi — it has both the
+ * smallest anchor space AND a stolen blob that is usable after rebuilding the
+ * firmware. An amendment arguing the opposite was considered and REJECTED; see
+ * ADR-0002. Task #44.1 measures the real entropy per target.)
+ *
+ * `device-keypair.test.ts` pins a GOLDEN VECTOR (a measured anchor -> the exact
+ * `publicKeyHex`) so any edit to the values above fails a test instead of
+ * silently invalidating every key in the database.
  */
 const KDF_PARAMS = { N: 1 << 16, r: 8, p: 1, maxmem: 128 * 1024 * 1024 } as const
 
@@ -108,6 +132,9 @@ export interface DeviceKeyPair {
  * guess, but it stops an attacker from precomputing one anchor -> key table and
  * reusing it across the whole fleet. With a fixed salt, ~2^24 ESP32 anchors
  * would be a one-time build reusable against every board.
+ *
+ * The salt COMPOSITION (`POP_DOMAIN || deviceIdHex`) is part of the persisted
+ * derivation contract — see the migration note on `KDF_PARAMS`.
  *
  * Async on purpose: `scryptSync` would block the Electron main process for the
  * full cost, and the cost is the point.
