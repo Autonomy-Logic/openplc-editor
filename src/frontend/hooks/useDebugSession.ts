@@ -157,7 +157,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         }
 
         // Connect debugger via port
-        const connectResult = await debuggerPort.connect(debugConfig)
+        const connectResult = await debuggerPort.connect()
         if (!connectResult.success) {
           const error = `Debugger connection failed: ${connectResult.error ?? 'Unknown error'}`
           logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })

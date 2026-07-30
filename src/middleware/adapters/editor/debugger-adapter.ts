@@ -14,7 +14,6 @@ import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type {
-  DebugConnectionConfig,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -28,11 +27,11 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
   const disconnectCallbacks: Array<() => void> = []
 
   return {
-    async connect(config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> {
+    async connect(): Promise<{ success: boolean; error?: string }> {
       try {
-        // No config: the connection manager already holds this target's session,
-        // so there is no medium for the caller to name.
-        const result = await window.bridge.debuggerConnect(config?.connectionType, config?.connectionParams)
+        // Nothing to pass: the connection manager already holds this target's
+        // session, so there is no medium for the caller to name.
+        const result = await window.bridge.debuggerConnect()
         if (result.success) connected = true
         return result
       } catch (error) {
@@ -90,9 +89,9 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
     },
 
 
-    async verifyMd5(expectedMd5: string, config?: DebugConnectionConfig): Promise<Md5VerifyResult> {
+    async verifyMd5(expectedMd5: string): Promise<Md5VerifyResult> {
       try {
-        return await window.bridge.debuggerVerifyMd5(expectedMd5, config?.connectionType, config?.connectionParams)
+        return await window.bridge.debuggerVerifyMd5(expectedMd5)
       } catch (error) {
         return { success: false, error: getErrorMessage(error) }
       }

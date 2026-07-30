@@ -1,8 +1,7 @@
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { type DebugSpec, resolveDeviceLinkCandidates } from '../../../../backend/shared/hardware/debug-spec'
-import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
+import { resolveDeviceLinkCandidates } from '../../../../backend/shared/hardware/debug-spec'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import {
   useCapabilities,
@@ -16,11 +15,7 @@ import {
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import {
-  buildDeviceResolverContext,
-  resolveDebugConfigWithUx as resolveDebugConfigWithSharedUx,
-  showDeviceDialog,
-} from '../../../services/device-link-resolution'
+import { buildDeviceResolverContext, showDeviceDialog } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -510,13 +505,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // PLC control (Start/Stop for runtime targets)
   // ---------------------------------------------------------------------------
 
-  // `resolveDebugConfigWithUx` is defined further down (it depends on state
-  // declared after this point).  Same forward-reference pattern as
-  // `handleBuildRef` above.
-  const resolveDebugConfigRef = useRef<
-    (boardTarget: string, spec: DebugSpec | undefined) => Promise<DebugConnectionConfig | null>
-  >(async () => null)
-
   /**
    * Tell the user the hardware mode switch is holding the device in STOP.
    *
@@ -708,13 +696,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // MD5 verification — runs after debug compilation for non-simulator
   // ---------------------------------------------------------------------------
 
-  const handleMd5Verification = async (
-    projectPath: string,
-    boardTarget: string,
-    /** Absent for a target whose session the connection manager already holds. */
-    debugConfig: DebugConnectionConfig | undefined,
-    isRuntimeTarget: boolean,
-  ) => {
+  const handleMd5Verification = async (projectPath: string, boardTarget: string, isRuntimeTarget: boolean) => {
     const { consoleActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
 
     try {
@@ -760,7 +742,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // Connect debug transport before MD5 verification — the web platform
       // needs an active transport (WebRTC or HTTP fallback) to query the device.
       // connect() is idempotent: connectAndStart will reuse this connection.
-      const preConnectResult = await debuggerPort.connect(debugConfig)
+      const preConnectResult = await debuggerPort.connect()
       if (!preConnectResult.success) {
         await showDeviceDialog(
           'error',
@@ -772,7 +754,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5, debugConfig)
+      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5)
       if (!verifyResult.success) {
         await debuggerPort.disconnect()
         await showDeviceDialog(
@@ -791,8 +773,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // (useDebugPolling) can size their batches against the real frame budget.
         // For a device session the medium is whatever the connection manager chose,
         // which the store mirrors — this reads that decision, it does not make one.
-        const activeTransport =
-          debugConfig?.connectionType ?? useOpenPLCStore.getState().deviceConnection.transport
+        const activeTransport = useOpenPLCStore.getState().deviceConnection.transport
         if (activeTransport) {
           useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(activeTransport)
         }
@@ -802,7 +783,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // `'le'` when the trailer was missing or malformed (older
         // runtimes); detectTargetEndian already logged a warning.
         useOpenPLCStore.getState().workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
-        await debugSession.connectAndStart(debugConfig)
+        await debugSession.connectAndStart()
         setIsDebuggerProcessing(false)
       } else {
         // Disconnect before re-upload; the recursive call will reconnect
@@ -843,7 +824,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               message: 'Upload completed. Re-verifying...',
             })
             await new Promise((resolve) => setTimeout(resolve, 2000))
-            void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+            void handleMd5Verification(projectPath, boardTarget, isRuntimeTarget)
           } else {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -866,17 +847,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       setIsDebuggerProcessing(false)
     }
   }
-
-  // Resolving a debug channel — including the picker / prompt dialogs a spec can
-  // ask for — is shared with the Connect flow (`services/device-link-resolution`),
-  // so both agree on what a board's spec means. Only the runtime-ready capability
-  // has to be supplied here, since it comes from the runtime port.
-  const resolveDebugConfigWithUx = useCallback(
-    (boardTarget: string, spec: DebugSpec | undefined): Promise<DebugConnectionConfig | null> =>
-      resolveDebugConfigWithSharedUx(boardTarget, spec, { runtimeReadyForDebug: runtime.isReadyForDebug?.() === true }),
-    [runtime],
-  )
-  resolveDebugConfigRef.current = resolveDebugConfigWithUx
 
   // ---------------------------------------------------------------------------
   // Debugger click — full orchestration for non-simulator targets
@@ -921,56 +891,39 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const projectPath = project.meta.path
       const boardInfo = availableBoards.get(boardTarget)
 
-      // Two different questions, which used to be one:
-      //
-      //   ridesSession — does the debug session run over a connection the manager
-      //     holds? True for a baremetal board AND for the simulator (whose session
-      //     IS the running emulator). Decided by the TARGET, never by a transport:
-      //     a board reached over Modbus TCP is still a connected device.
-      //   requiresUserConnection — must the user have pressed Connect first? Only
-      //     for a device with a Connect button. The simulator's session is created
-      //     by pressing Start, which is what got us here.
+      // No resolution here at all. Every target's session is established before a
+      // debug session can start — a device by Connect, a runtime by logging in, the
+      // simulator by pressing Start — so the only question left is whether that
+      // session exists. Which medium it uses is the connection manager's to know.
       const debugCaps = resolveTargetCapabilities(boardInfo)
-      const ridesSession = !isOpenPLCRuntimeTarget(boardInfo)
-      const requiresUserConnection = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
+      const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
+      const requiresDeviceConnection = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
 
-      // For those targets the session already knows its medium, so nothing is
-      // resolved here — resolving is what asked for a DHCP address on a device
-      // connected by cable. Everything else (Runtime v3/v4, the simulator) has no
-      // held session yet and still describes its own channel.
-      const debugConfig = ridesSession
-        ? undefined
-        : ((await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)) ?? undefined)
-      if (!ridesSession && !debugConfig) {
-        setIsDebuggerProcessing(false)
-        return
-      }
+      // A session the manager holds (a device or the simulator) also OWNS the debug
+      // channel, so the session ending ends the debug session — see the drop handler
+      // above. A runtime's debug channel is its own and outlives nothing.
+      debugSessionRidesDeviceRef.current = !isRuntime
 
-      // A debug session over the device connection shares it, so it must end when
-      // that connection ends — see the drop handler above. Runtime and simulator
-      // sessions own their own channel and are unaffected.
-      debugSessionRidesDeviceRef.current = ridesSession
-
-      const connectionStatusNow = useOpenPLCStore.getState().deviceConnection.status
+      const deviceStatusNow = useOpenPLCStore.getState().deviceConnection.status
+      const runtimeStatusNow = useOpenPLCStore.getState().runtimeConnection.connectionStatus
       addLog({
         id: crypto.randomUUID(),
         level: 'info',
-        message: `[connection] debug session requested for ${boardTarget}; ${
-          ridesSession
-            ? `it rides the device session, currently "${connectionStatusNow}"`
-            : `it opens its own ${debugConfig?.connectionType ?? 'unknown'} channel`
-        }`,
+        message: `[connection] debug session requested for ${boardTarget}; device connection "${deviceStatusNow}", runtime connection "${runtimeStatusNow}"`,
       })
 
-      // Connect first, exactly as a Runtime v4 target requires. Starting a session
-      // must never establish the connection itself: Connect is the user's explicit
-      // action and reports what it found (firmware, license), so hiding it inside
-      // the debug button means a click that says "debug" silently opens hardware.
-      if (requiresUserConnection && connectionStatusNow !== 'connected') {
+      // Connect first — the same rule for every target that has something to
+      // connect to. Starting a debug session must never establish the connection
+      // itself: connecting is the user's explicit action and reports what it found.
+      const missingConnection =
+        (requiresDeviceConnection && deviceStatusNow !== 'connected') || (isRuntime && runtimeStatusNow !== 'connected')
+      if (missingConnection) {
         await showDeviceDialog(
           'warning',
           'Connection Required',
-          'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
+          isRuntime
+            ? 'Connect to the runtime first. The debugger runs over that connection, so it must be established before a debug session can start.'
+            : 'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
           ['OK'],
         )
         setIsDebuggerProcessing(false)
@@ -999,7 +952,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // Only gates the "PLC stopped, start it?" dialog inside MD5 verification,
       // which applies to an OpenPLC runtime (v3/v4) — a fact about the TARGET, not
       // about which transport happens to carry the session.
-      void handleMd5Verification(projectPath, boardTarget, debugConfig, isOpenPLCRuntimeTarget(boardInfo))
+      void handleMd5Verification(projectPath, boardTarget, isRuntime)
     } catch (error: unknown) {
       consoleActions.addLog({
         id: crypto.randomUUID(),
@@ -1022,7 +975,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     canEdit,
     executeSave,
     addLog,
-    resolveDebugConfigWithUx, currentBoardInfo])
+    currentBoardInfo])
 
   // ---------------------------------------------------------------------------
   // JSX

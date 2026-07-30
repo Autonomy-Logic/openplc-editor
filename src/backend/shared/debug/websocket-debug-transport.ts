@@ -44,7 +44,7 @@ import type {
   DebugSetResult,
   DebugTransport,
   DebugTransportResult,
-  LicenseCapableTransport,
+  DeviceDebugChannel,
   Md5ProbeResult,
 } from './types'
 
@@ -82,7 +82,7 @@ function hexSpacedToBytes(hex: string): Uint8Array {
   return out
 }
 
-export class WebSocketDebugTransport implements DebugTransport, LicenseCapableTransport {
+export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChannel {
   private host: string
   private port: number
   private token: string

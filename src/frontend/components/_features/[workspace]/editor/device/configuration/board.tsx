@@ -665,6 +665,9 @@ const Board = memo(function () {
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       await runtime.clearCredentials()
+      // The session goes with it: control was this REST connection, and any debug
+      // channel opened off it has nothing left to belong to.
+      await device.closeRuntimeSession?.()
       return
     }
 

@@ -407,12 +407,8 @@ const rendererProcessBridge = {
 
   debuggerVerifyMd5: (
     expectedMd5: string,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
-    connectionParams:
-      | { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number; jwtToken?: string }
-      | undefined,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
-    ipcRenderer.invoke('debugger:verify-md5', expectedMd5, connectionType, connectionParams),
+    ipcRenderer.invoke('debugger:verify-md5', expectedMd5),
 
   /** FC 0x4b run/stop command. Reads come from `onDevicePlcState` (the device
    *  status poll), not from here. */
@@ -463,13 +459,7 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('debugger:read-license'),
 
-  debuggerConnect: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
-    connectionParams:
-      | { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number; jwtToken?: string }
-      | undefined,
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
+  debuggerConnect: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('debugger:connect'),
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
@@ -520,6 +510,15 @@ const rendererProcessBridge = {
 
   // Close the held serial link (Disconnect).
   deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
+
+  // A Runtime v3/v4 session: control over REST at `address`, debug over the channel
+  // the board declares (opened later, on the debugger's request).
+  openRuntimeSession: (params: {
+    address: string
+    debug: DebugConnectionConfig
+  }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('session:open-runtime', params),
+
+  closeRuntimeSession: (): Promise<{ success: boolean }> => ipcRenderer.invoke('session:close-runtime'),
 
   // Upload handoff: give up the link ONLY if it is the serial one holding `port`.
   deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>

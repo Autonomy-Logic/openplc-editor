@@ -21,9 +21,50 @@
 import { useEffect } from 'react'
 
 import { useDevice } from '../../middleware/shared/providers'
+import { resolveRuntimeDebugChannel } from '../services/device-link-resolution'
 import { useOpenPLCStore } from '../store'
 
+/**
+ * Keep the main process's session in step with a Runtime v3/v4 login.
+ *
+ * A runtime target is CONTROLLED over REST, which is connectionless — logging in
+ * is what establishes its session. This mirrors that: when the runtime connection
+ * comes up, tell the manager where control lives and how this target debugs; when
+ * it goes down, close the session. The debug channel itself is not opened here —
+ * the debugger asks for it when it needs it.
+ *
+ * The debug channel is DESCRIBED by resolving the board's spec (in the resolution
+ * service, which owns spec interpretation) — legitimate at session-establishment
+ * time. No command ever resolves anything.
+ */
+const useRuntimeSession = (): void => {
+  const device = useDevice()
+  const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
+
+  useEffect(() => {
+    if (!device.openRuntimeSession) return
+
+    if (connectionStatus !== 'connected') {
+      void device.closeRuntimeSession?.()
+      return
+    }
+
+    const store = useOpenPLCStore.getState()
+    const boardTarget = store.deviceDefinitions.configuration.deviceBoard
+    const boardInfo = store.deviceAvailableOptions.availableBoards.get(boardTarget)
+    const address = store.runtimeConnection.ipAddress
+    if (!boardInfo?.debug || !address) return
+
+    const debugChannel = resolveRuntimeDebugChannel(boardTarget, boardInfo.debug)
+    if (!debugChannel) return
+
+    void device.openRuntimeSession({ address, debug: debugChannel })
+  }, [device, connectionStatus, jwtToken])
+}
+
 export const useDeviceConnectionMonitor = (): void => {
+  useRuntimeSession()
   const device = useDevice()
   const addLog = useOpenPLCStore((state) => state.consoleActions.addLog)
   const setDeviceConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setDeviceConnectionStatus)

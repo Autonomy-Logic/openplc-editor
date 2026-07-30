@@ -59,6 +59,17 @@ export function createEditorDeviceAdapter(): DevicePort {
       return window.bridge.deviceConnect(candidates, opts)
     },
 
+    openRuntimeSession(params: { address: string; debug: DebugConnectionConfig }): Promise<{
+      success: boolean
+      error?: string
+    }> {
+      return window.bridge.openRuntimeSession(params)
+    },
+
+    closeRuntimeSession(): Promise<{ success: boolean }> {
+      return window.bridge.closeRuntimeSession()
+    },
+
     async releaseSerialPort(port: string | null | undefined): Promise<boolean> {
       const result = await window.bridge.deviceReleaseSerialPort(port)
       return result.released

@@ -155,6 +155,30 @@ export interface LicenseCapableTransport {
 }
 
 /**
+ * What a DEBUG channel must offer, whatever medium it runs over: the debug
+ * operations plus licensing (which rides the same protocol).
+ *
+ * Deliberately narrower than `DeviceModbusTransport`: it does NOT require
+ * `getStatus` / `setPlcState`, because those are CONTROL operations and a debug
+ * channel is not always the control channel. The runtime-v4 WebSocket implements
+ * exactly this and nothing more — v4 is controlled over REST.
+ */
+export interface DeviceDebugChannel extends LicenseCapableTransport {
+  getMd5Hash(): Promise<Md5ProbeResult>
+  getVariablesList(indexes: number[]): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    /** `Buffer | Uint8Array`: the Node Modbus clients hand back the former, the
+     *  browser-shared WebSocket transport the latter, and TypeScript does not
+     *  treat one as a substitute for the other. */
+    data?: Uint8Array | Buffer
+    error?: string
+  }>
+  setVariable(index: number, force: boolean, valueBuffer?: Uint8Array | Buffer): Promise<DebugSetResult>
+}
+
+/**
  * The full command surface of a Modbus link to a device: the debug operations
  * (`DebugTransport`) plus licensing (`LicenseCapableTransport`) plus run/stop.
  *

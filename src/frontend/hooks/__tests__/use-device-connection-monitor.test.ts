@@ -6,9 +6,16 @@ const mockClearDeviceProbe = jest.fn()
 const mockOpenModal = jest.fn()
 const mockAddLog = jest.fn()
 
+const mockOpenRuntimeSession = jest.fn().mockResolvedValue({ success: true })
+const mockCloseRuntimeSession = jest.fn().mockResolvedValue({ success: true })
+const mockResolveRuntimeDebugChannel = jest.fn(() => null as unknown)
+
 const mockState: Record<string, unknown> = {
   modalActions: { openModal: mockOpenModal },
   consoleActions: { addLog: mockAddLog },
+  runtimeConnection: { connectionStatus: 'disconnected', jwtToken: null, ipAddress: null },
+  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Runtime v4' } },
+  deviceAvailableOptions: { availableBoards: new Map() },
   deviceActions: {
     setDeviceConnectionStatus: mockSetDeviceConnectionStatus,
     clearDeviceProbe: mockClearDeviceProbe,
@@ -25,7 +32,15 @@ const mockOnLinkLog = jest.fn().mockReturnValue(() => undefined)
 
 jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
 jest.mock('../../../middleware/shared/providers', () => ({
-  useDevice: () => ({ onConnectionStatus: mockOnConnectionStatus, onLinkLog: mockOnLinkLog }),
+  useDevice: () => ({
+    onConnectionStatus: mockOnConnectionStatus,
+    onLinkLog: mockOnLinkLog,
+    openRuntimeSession: mockOpenRuntimeSession,
+    closeRuntimeSession: mockCloseRuntimeSession,
+  }),
+}))
+jest.mock('../../services/device-link-resolution', () => ({
+  resolveRuntimeDebugChannel: (...args: unknown[]) => mockResolveRuntimeDebugChannel(...(args as [])),
 }))
 
 import { useDeviceConnectionMonitor } from '../use-device-connection-monitor'
@@ -42,9 +57,34 @@ beforeEach(() => {
   jest.clearAllMocks()
   mockOnConnectionStatus.mockReturnValue(() => undefined)
   mockOnLinkLog.mockReturnValue(() => undefined)
+  mockResolveRuntimeDebugChannel.mockReturnValue(null)
+  mockState.runtimeConnection = { connectionStatus: 'disconnected', jwtToken: null, ipAddress: null }
 })
 
 describe('useDeviceConnectionMonitor', () => {
+  describe('runtime sessions', () => {
+    it('opens a session when a runtime login comes up', () => {
+      // A runtime is controlled over REST, which is connectionless — logging in IS
+      // what establishes its session.
+      mockState.runtimeConnection = { connectionStatus: 'connected', jwtToken: 'jwt', ipAddress: '10.0.0.5' }
+      mockState.deviceAvailableOptions = {
+        availableBoards: new Map([['OpenPLC Runtime v4', { debug: { channels: [] } }]]),
+      }
+      const debugChannel = { connectionType: 'websocket', connectionParams: { ipAddress: '10.0.0.5' } }
+      mockResolveRuntimeDebugChannel.mockReturnValue(debugChannel)
+
+      renderHook(() => useDeviceConnectionMonitor())
+
+      expect(mockOpenRuntimeSession).toHaveBeenCalledWith({ address: '10.0.0.5', debug: debugChannel })
+    })
+
+    it('closes the session when the runtime connection goes down', () => {
+      renderHook(() => useDeviceConnectionMonitor())
+      expect(mockCloseRuntimeSession).toHaveBeenCalledTimes(1)
+      expect(mockOpenRuntimeSession).not.toHaveBeenCalled()
+    })
+  })
+
   it('mirrors the main-process connection trace into the console', () => {
     // The decisions worth reading happen in the main process; the console is where
     // a user can actually see and copy them while reproducing a problem.

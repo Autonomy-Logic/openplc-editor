@@ -213,6 +213,22 @@ export interface DevicePort {
   ): Promise<DeviceConnectResult>
 
   /**
+   * Establish a session with a target CONTROLLED over REST (Runtime v3/v4), after
+   * the renderer has logged in: `debug` describes the channel that target debugs
+   * over (v3 Modbus TCP, v4 the WebSocket), which is opened later, only if a debug
+   * session asks for it.
+   *
+   * Editor: `session:open-runtime`. Web: no-op.
+   */
+  openRuntimeSession?(params: { address: string; debug: DebugConnectionConfig }): Promise<{
+    success: boolean
+    error?: string
+  }>
+
+  /** Close a REST-controlled session (logout / disconnect). */
+  closeRuntimeSession?(): Promise<{ success: boolean }>
+
+  /**
    * Hand the serial port over for an upload: releases the held connection only if
    * it IS the serial one occupying `port`, and reports whether it did.
    *

@@ -1,7 +1,12 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
-import type { DebugStatusResult, DeviceModbusTransport, PlcControlResult } from '@root/backend/shared/debug/types'
+import type {
+  DebugStatusResult,
+  DeviceDebugChannel,
+  DeviceModbusTransport,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -42,6 +47,7 @@ import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import {
+  type DeviceDebugCandidate,
   type DeviceLinkCandidate,
   type DeviceLinkStatus,
   DeviceSessionManager,
@@ -75,6 +81,12 @@ import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-en
 
 // connectWithRetries lives in backend/editor/license/license-probe.ts,
 // shared with `probeAndRecover` (device-connect.ts).
+
+/** Why a channel could not be handed out. */
+interface ChannelUnavailable {
+  error: string
+  needsReconnect: true
+}
 
 /** Program-identity comparison, case-insensitively — targets report either case. */
 function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
@@ -115,7 +127,6 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLinkProbe: DeviceConnectResult | null = null
   /** Licensing options of the current connect, so a verified candidate can recover its license. */
   private deviceLinkLicenseOptions: { isLicensable?: boolean; packageId?: string; keyId?: string } = {}
-  private debuggerWebSocketClient: WebSocketDebugTransport | null = null
   private debuggerTargetIp: string | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
   private debuggerJwtToken: string | null = null
@@ -1081,6 +1092,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
     this.registerHandle('device:release-serial-port', this.handleDeviceReleaseSerialPort)
+    this.registerHandle('session:open-runtime', this.handleOpenRuntimeSession)
+    this.registerHandle('session:close-runtime', this.handleCloseRuntimeSession)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -1699,8 +1712,6 @@ class MainProcessBridge implements MainIpcModule {
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
     expectedMd5: string,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
-    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
   ): Promise<{
     success: boolean
     match?: boolean
@@ -1709,30 +1720,10 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
   }> => {
     try {
-      if (connectionType === 'websocket') {
-        if (!connectionParams?.ipAddress || !connectionParams.jwtToken) {
-          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
-        }
-        if (!this.debuggerWebSocketClient) {
-          this.debuggerWebSocketClient = new WebSocketDebugTransport({
-            host: connectionParams.ipAddress,
-            port: 8443,
-            token: connectionParams.jwtToken,
-            rejectUnauthorized: false,
-          })
-          await this.debuggerWebSocketClient.connect()
-          this.debuggerTargetIp = connectionParams.ipAddress
-          this.debuggerJwtToken = connectionParams.jwtToken
-          this.debuggerConnectionType = 'websocket'
-        }
-        const probe = await this.debuggerWebSocketClient.getMd5Hash()
-        return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
-      }
+      const channel = await this.requireDebug('verify md5')
+      if ('error' in channel) return { success: false, error: channel.error }
 
-      const link = await this.ensureDeviceLinkFor(connectionType, connectionParams)
-      if ('error' in link) return { success: false, error: link.error }
-
-      const probe = await link.client.getMd5Hash()
+      const probe = await channel.client.getMd5Hash()
       return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
     } catch (error) {
       return {
@@ -1740,41 +1731,6 @@ class MainProcessBridge implements MainIpcModule {
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
       }
     }
-  }
-
-  /**
-   * The held link, opening one first if this transport can be brought up without
-   * the user's help.
-   *
-   * The simulator is the only such case: it is in-process, so there is nothing to
-   * configure and nothing to fail. Serial and Modbus TCP must already be connected
-   * — that is what Connect is for, and it is also what keeps a single client on a
-   * port the OS will not lock twice.
-   */
-  private async ensureDeviceLinkFor(
-    connectionType: 'tcp' | 'rtu' | 'simulator' | undefined,
-    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
-  ): Promise<{ client: DeviceModbusTransport } | { error: string }> {
-    const existing = this.deviceClient()
-    if (existing) return { client: existing }
-
-    // Either no transport was named (the caller is a connected target, whose
-    // session the manager already owns) or it is one that cannot be brought up
-    // without the user. Nothing to do but report it.
-    if (connectionType !== 'simulator') {
-      const required = this.requireChannel('debug session', 'debug')
-      return 'error' in required ? { error: required.error } : required
-    }
-
-    const opened = await this.deviceSession.open(
-      this.toDeviceLinkCandidates([{ connectionType, connectionParams: connectionParams ?? {} }]),
-    )
-    if (!opened.ok) {
-      const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
-      return { error: reason || 'The simulator did not answer' }
-    }
-    this.debuggerConnectionType = connectionType
-    return { client: opened.client }
   }
 
   /**
@@ -1798,7 +1754,7 @@ class MainProcessBridge implements MainIpcModule {
     action: 'run' | 'stop',
   ): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
-    const link = this.requireChannel('run/stop', 'control')
+    const link = this.requireControl('run/stop')
     if ('error' in link) return { success: false, error: link.error }
 
     const target = action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED
@@ -1829,27 +1785,12 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: 'Debugger not connected' }
     }
 
-    if (this.debuggerConnectionType === 'websocket') {
-      const socket = await this.ensureDebuggerWebSocket()
-      if ('error' in socket) return { success: false, ...socket }
-      try {
-        const result = await socket.client.getVariablesList(variableIndexes)
-        if (result.success && result.data) {
-          return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
-        }
-        return { success: false, error: result.error }
-      } catch (error) {
-        this.debuggerWebSocketClient?.disconnect()
-        this.debuggerWebSocketClient = null
-        return { success: false, error: getErrorMessage(error), needsReconnect: true }
-      }
-    }
-
-    // Modbus targets read over the held device link. There is nothing to
-    // reconnect here: if the link dropped, the manager is already reopening it
-    // (or has reported it lost), and `needsReconnect` tells the renderer to stop
-    // the session rather than race it for the port.
-    const link = this.requireChannel('read variables', 'debug')
+    // Every target reads over its session's DEBUG channel — Modbus for a device or
+    // a v3 runtime, the WebSocket for v4. There is nothing to reconnect here: if a
+    // connection dropped, the manager is already reopening it (or has reported it
+    // lost), and `needsReconnect` tells the renderer to stop the session rather
+    // than race it for the medium.
+    const link = await this.requireDebug('read variables')
     if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
 
     try {
@@ -1895,34 +1836,6 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * The runtime-v4 debug WebSocket, reconnected from stored credentials if the
-   * session dropped. Its own transport, its own lifecycle: a v4 runtime is a
-   * different kind of target, reached over a different protocol, and it has no
-   * device link to share.
-   */
-  private async ensureDebuggerWebSocket(): Promise<
-    { client: WebSocketDebugTransport } | { error: string; needsReconnect: true }
-  > {
-    if (this.debuggerWebSocketClient) return { client: this.debuggerWebSocketClient }
-    if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
-      return { error: 'No WebSocket credentials stored', needsReconnect: true }
-    }
-    try {
-      const client = new WebSocketDebugTransport({
-        host: this.debuggerTargetIp,
-        port: 8443,
-        token: this.debuggerJwtToken,
-        rejectUnauthorized: false,
-      })
-      await client.connect()
-      this.debuggerWebSocketClient = client
-      return { client }
-    } catch (error) {
-      this.debuggerWebSocketClient = null
-      return { error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-    }
-  }
 
   /**
    * Read the run/stop state over an already-open client and push it to the
@@ -1959,7 +1872,7 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     blob: Uint8Array,
   ): Promise<{ success: boolean; status?: number; error?: string; needsReconnect?: boolean }> => {
-    const ensured = this.requireChannel('license op', 'debug')
+    const ensured = await this.requireDebug('license op')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -1983,7 +1896,7 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
-    const ensured = this.requireChannel('license op', 'debug')
+    const ensured = await this.requireDebug('license op')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -2016,67 +1929,37 @@ class MainProcessBridge implements MainIpcModule {
    *
    * Runtime v4 keeps its own WebSocket: different protocol, different target.
    */
-  handleDebuggerConnect = async (
-    _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | undefined,
-    connectionParams: DebugConnectionConfig['connectionParams'] | undefined,
-  ): Promise<{ success: boolean; error?: string }> => {
+  handleDebuggerConnect = async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'websocket') {
-        if (!connectionParams?.ipAddress || !connectionParams.jwtToken) {
-          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
-        }
-        if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
-          this.debuggerWebSocketClient?.disconnect()
-          this.debuggerWebSocketClient = new WebSocketDebugTransport({
-            host: connectionParams.ipAddress,
-            port: 8443,
-            token: connectionParams.jwtToken,
-            rejectUnauthorized: false,
-          })
-          await this.debuggerWebSocketClient.connect()
-        }
-        this.debuggerTargetIp = connectionParams.ipAddress
-        this.debuggerJwtToken = connectionParams.jwtToken
-        this.debuggerConnectionType = 'websocket'
-        return { success: true }
-      }
+      // For a shared session this opens nothing — it is the connection Connect
+      // established, already proven. For a runtime target it opens that target's
+      // own debug channel, which is why the debugger asks for it here rather than
+      // at login: the channel exists only while a session needs it.
+      const channel = await this.requireDebug('debug session')
+      if ('error' in channel) return { success: false, error: channel.error }
 
-      const link = await this.ensureDeviceLinkFor(connectionType, connectionParams)
-      if ('error' in link) return { success: false, error: link.error }
-
-      // Warms nothing and opens nothing — the link is already live and already
-      // proven by the connect probe. The md5 read stays in `verifyMd5`, which is
-      // where its result is actually used.
-      // Session identity comes from the SESSION, not from what the caller
-      // guessed: a connected baremetal target names no transport at all.
-      this.debuggerConnectionType = this.deviceSession.getLink()?.transport ?? connectionType ?? null
+      // Session identity comes from the SESSION, not from what the caller guessed:
+      // a connected target names no transport at all.
+      this.debuggerConnectionType = this.deviceSession.getLink()?.transport ?? 'tcp'
       return { success: true }
     } catch (error) {
-      this.debuggerWebSocketClient = null
-      this.debuggerTargetIp = null
       this.debuggerConnectionType = null
-      this.debuggerJwtToken = null
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
   /**
-   * Stop a debug session.
+   * Stop a debug session: let go of the debug channel, nothing more.
    *
-   * The device link is deliberately NOT closed: it belongs to Connect, not to the
-   * debugger, and closing it here would drop the user's connection — along with
-   * the status poll driving the Start/Stop button — just because they stopped
-   * debugging. Only the WebSocket, which the session does own, is closed.
+   * The SESSION is deliberately untouched — it belongs to Connect (or to the
+   * runtime login), not to the debugger. Closing it here would drop the user's
+   * connection, and the status poll driving the Start/Stop button with it, just
+   * because they stopped debugging. Releasing closes a channel of its own once
+   * nothing holds it, and never closes a channel shared with control.
    */
   handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
-    if (this.debuggerWebSocketClient) {
-      this.debuggerWebSocketClient.disconnect()
-      this.debuggerWebSocketClient = null
-    }
-    this.debuggerTargetIp = null
+    this.deviceSession.releaseDebugChannel('debug session')
     this.debuggerConnectionType = null
-    this.debuggerJwtToken = null
     return Promise.resolve({ success: true })
   }
 
@@ -2226,6 +2109,57 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
+   * Establish a session with a Runtime v3/v4: control over REST, debug over the
+   * channel its board declares (v3: Modbus TCP on the runtime's address; v4: the
+   * debug WebSocket). Called once the renderer has logged in.
+   *
+   * The debug channel is only DESCRIBED here, not opened — see `acquireDebugChannel`.
+   */
+  handleOpenRuntimeSession = (
+    _event: IpcMainInvokeEvent,
+    params: { address: string; debug: DebugConnectionConfig },
+  ): Promise<{ success: boolean; error?: string }> => {
+    const candidate = this.toDebugCandidate(params.debug)
+    if (!candidate) {
+      return Promise.resolve({
+        success: false,
+        error: `This target declares a debug channel this build cannot open: ${params.debug.connectionType}`,
+      })
+    }
+    this.deviceSession.openRestSession({ address: params.address, debugChannel: candidate })
+    this.debuggerConnectionType = params.debug.connectionType
+    return Promise.resolve({ success: true })
+  }
+
+  /** Close a REST-controlled session (the user logged out / disconnected). */
+  handleCloseRuntimeSession = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    if (this.deviceSession.getRestAddress() !== null) {
+      this.deviceSession.close()
+      this.debuggerConnectionType = null
+    }
+    return Promise.resolve({ success: true })
+  }
+
+  /**
+   * Turn a resolved channel config into an openable DEBUG channel. The one place
+   * that knows a WebSocket is a debug channel too.
+   */
+  private toDebugCandidate(config: DebugConnectionConfig): DeviceDebugCandidate | null {
+    if (config.connectionType === 'websocket') {
+      const host = config.connectionParams.ipAddress
+      const token = config.connectionParams.jwtToken
+      if (!host || !token) return null
+      return {
+        descriptor: `websocket ${host}`,
+        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
+      }
+    }
+    const [candidate] = this.toDeviceLinkCandidates([config])
+    if (!candidate) return null
+    return { descriptor: `${candidate.transport} ${candidate.descriptor}`, create: candidate.create }
+  }
+
+  /**
    * Is this freshly opened candidate a device we can work with? Runs the SAME
    * classify + license recover the connect flow has always run
    * (`probeAndRecover`), and keeps its verdict for the renderer.
@@ -2329,21 +2263,42 @@ class MainProcessBridge implements MainIpcModule {
    * `debug` operations take the debug channel, which for a shared session IS the
    * control channel and for a runtime target is one of its own.
    */
-  private requireChannel(
-    what = 'command',
-    family: 'control' | 'debug' = 'control',
-  ): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
-    const client = family === 'debug' ? this.deviceSession.getDebugClient() : this.deviceClient()
-    if (client) {
-      const link = this.deviceSession.getLink()
-      this.traceDeviceLink(
-        `${what}: using the ${family} channel (${link?.transport ?? '?'} ${link?.descriptor ?? '?'})`,
-      )
-      return { client }
+  private requireControl(what: string): { client: DeviceModbusTransport } | ChannelUnavailable {
+    const client = this.deviceClient()
+    if (!client) return this.explainMissingChannel(what)
+    this.traceChannelUse(what, 'control')
+    return { client }
+  }
+
+  /**
+   * The DEBUG channel, opening it if this session's debug medium is one of its own.
+   * Every debug caller passes a distinct `what`, which doubles as the holder name —
+   * so a license check and a live debug session can hold it at once without either
+   * closing it on the other.
+   */
+  private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
+    const acquired = await this.deviceSession.acquireDebugChannel(what)
+    if ('error' in acquired) {
+      if (!this.deviceSession.isConnected()) return this.explainMissingChannel(what)
+      this.traceDeviceLink(`${what}: debug channel unavailable — ${acquired.error}`)
+      return { error: acquired.error, needsReconnect: true }
     }
+    this.traceChannelUse(what, 'debug')
+    return acquired
+  }
+
+  private traceChannelUse(what: string, family: 'control' | 'debug'): void {
+    const link = this.deviceSession.getLink()
+    this.traceDeviceLink(`${what}: using the ${family} channel (${link?.transport ?? '?'} ${link?.descriptor ?? '?'})`)
+  }
+
+  private explainMissingChannel(what: string): ChannelUnavailable {
     if (this.deviceSession.isRecovering()) {
       this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
-      return { error: 'The device connection dropped and is being restored. Try again in a moment.', needsReconnect: true }
+      return {
+        error: 'The device connection dropped and is being restored. Try again in a moment.',
+        needsReconnect: true,
+      }
     }
     this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
@@ -2421,27 +2376,7 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
 
-    if (this.debuggerConnectionType === 'websocket') {
-      if (!this.debuggerWebSocketClient) {
-        logger.info('[IPC Handler] WebSocket client not connected')
-        return { success: false, error: 'Not connected to debugger' }
-      }
-
-      try {
-        // Shared transport takes Uint8Array; convert from the IPC's
-        // Buffer payload (Buffer is a Uint8Array subclass so the cast
-        // is a no-op at runtime, but TS wants the explicit step).
-        const valueBytes = buffer ? new Uint8Array(buffer) : undefined
-        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, valueBytes)
-        logger.info('[IPC Handler] WebSocket setVariable result: ' + JSON.stringify(result))
-        return result
-      } catch (error) {
-        logger.error('[IPC Handler] WebSocket setVariable error: ' + getErrorMessage(error))
-        return { success: false, error: getErrorMessage(error) }
-      }
-    }
-
-    const link = this.requireChannel('write variable', 'debug')
+    const link = await this.requireDebug('write variable')
     if ('error' in link) {
       return { success: false, error: link.error }
     }

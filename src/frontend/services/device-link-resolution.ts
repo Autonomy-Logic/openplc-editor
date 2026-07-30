@@ -22,7 +22,6 @@ import {
   type DebugResolverContext,
   type DebugSpec,
   type DeviceLinkCandidateConfig,
-  resolveDebugConnection,
   resolveDeviceLinkCandidates,
 } from '../../backend/shared/hardware/debug-spec'
 import type { DebugConnectionConfig } from '../../middleware/shared/ports/types'
@@ -265,33 +264,21 @@ export async function resolveDeviceLinkWithUx(
 }
 
 /**
- * Resolve the ONE channel a debug session should use, asking for input or a choice
- * when the spec needs it. This is the runtime/simulator path; a baremetal Modbus
- * session rides the device link and needs no channel of its own.
+ * The channel a Runtime v3/v4 debugs over, derived from its board spec: Modbus TCP
+ * for v3, the WebSocket for v4. Used when a runtime login establishes a session, so
+ * the manager knows how to open that channel later.
+ *
+ * Never prompts: establishing a session must not interrupt the user, and a runtime's
+ * debug channel is derived from the address they just logged in with.
  */
-export async function resolveDebugConfigWithUx(
+export function resolveRuntimeDebugChannel(
   boardTarget: string,
   spec: DebugSpec | undefined,
-  options: { runtimeReadyForDebug?: boolean } = {},
-): Promise<DebugConnectionConfig | null> {
-  if (!spec) {
-    await showDeviceDialog(
-      'warning',
-      'Debugging Not Available',
-      "This board hasn't declared a debug spec.  The VPP package (or hals.json entry) must provide a `debug` block.",
-      ['OK'],
-    )
-    return null
-  }
-
-  let channelIndex: number | undefined
-  for (let round = 0; round < MAX_RESOLVE_ROUNDS; round += 1) {
-    const outcome = resolveDebugConnection(spec, buildDeviceResolverContext(boardTarget, options), channelIndex)
-    if (outcome.kind === 'config') return outcome.config
-
-    const next = await handleInteractiveOutcome(outcome, boardTarget)
-    if (!next.retry) return null
-    channelIndex = next.channelIndex ?? channelIndex
-  }
-  return null
+): DebugConnectionConfig | null {
+  if (!spec) return null
+  const outcome = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget, { runtimeReadyForDebug: true }), {
+    deferPrompts: true,
+  })
+  if (outcome.kind !== 'candidates' || outcome.candidates.length === 0) return null
+  return outcome.candidates[0].config
 }

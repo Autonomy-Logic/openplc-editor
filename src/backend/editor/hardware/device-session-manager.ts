@@ -39,10 +39,20 @@
  *     main process implements as its existing classify + license recover;
  *   - the counting for down / back / lost         -> `DeviceLinkPolicy`.
  */
-import type { DeviceModbusTransport } from '../../shared/debug/types'
+import type { DeviceDebugChannel, DeviceModbusTransport } from '../../shared/debug/types'
 import { DeviceLinkPolicy } from './device-link-policy'
 
 export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
+
+/**
+ * How to open a DEBUG channel that is not the control channel. Simpler than a
+ * control candidate: there is nothing to choose between and nothing to classify —
+ * the control side already established what this target is.
+ */
+export interface DeviceDebugCandidate {
+  descriptor: string
+  create: () => DeviceDebugChannel
+}
 
 /** One way to reach the device, ready to be tried. */
 export interface DeviceLinkCandidate {
@@ -135,14 +145,22 @@ export class DeviceSessionManager {
    * Debug channel, when it is NOT the control channel: its client (null until
    * something asks for it) and how to open it.
    */
-  private debugClientHeld: DeviceModbusTransport | null = null
-  private debugCandidate: DeviceLinkCandidate | null = null
+  private debugClientHeld: DeviceDebugChannel | null = null
+  private debugCandidate: DeviceDebugCandidate | null = null
   /**
    * Who currently wants the debug channel, by reason. A set rather than a counter
    * so the trace can say who is holding it, and so a double release from one
    * caller cannot close a channel another still needs.
    */
   private readonly debugHolders = new Set<string>()
+  /**
+   * Runtime targets (v3/v4) are CONTROLLED over REST, which is connectionless:
+   * there is no socket to hold, poll or recover, so the session records the address
+   * and routes control operations to the HTTP client instead of holding a channel.
+   * That is why this slot is an address rather than a client — and why polling and
+   * recovery below apply only to a Modbus control channel.
+   */
+  private restControl: { address: string } | null = null
   /** The full list the link was opened from, so recovery can try them all again. */
   private candidates: DeviceLinkCandidate[] = []
   private readonly policy: DeviceLinkPolicy
@@ -175,7 +193,7 @@ export class DeviceSessionManager {
    * cannot be closed independently. For a session whose debug medium differs, it
    * is null until someone calls `acquireDebugChannel`.
    */
-  getDebugClient(): DeviceModbusTransport | null {
+  getDebugClient(): DeviceDebugChannel | null {
     return this.debugCandidate ? this.debugClientHeld : this.client
   }
 
@@ -192,9 +210,10 @@ export class DeviceSessionManager {
    * session there is nothing to open — the answer is the control channel, and the
    * session having been established is the only precondition.
    */
-  async acquireDebugChannel(reason: string): Promise<{ client: DeviceModbusTransport } | { error: string }> {
+  async acquireDebugChannel(reason: string): Promise<{ client: DeviceDebugChannel } | { error: string }> {
     if (this.debugCandidate === null) {
       if (!this.client) return { error: 'Not connected' }
+      // (A REST session always has a debug candidate, so it never lands here.)
       this.debugHolders.add(reason)
       return { client: this.client }
     }
@@ -204,15 +223,18 @@ export class DeviceSessionManager {
       return { client: this.debugClientHeld }
     }
 
-    this.trace(`debug channel: opening ${this.debugCandidate.transport} ${this.debugCandidate.descriptor} for ${reason}`)
-    const outcome = await this.tryCandidate(this.debugCandidate, { isLastCandidate: true })
-    if (!outcome.ok) {
-      this.trace(`debug channel: could not open — ${outcome.error} (control connection unaffected)`)
-      return { error: outcome.error }
+    this.trace(`debug channel: opening ${this.debugCandidate.descriptor} for ${reason}`)
+    let client: DeviceDebugChannel
+    try {
+      client = this.debugCandidate.create()
+      await client.connect()
+    } catch (error) {
+      this.trace(`debug channel: could not open — ${describeError(error)} (control connection unaffected)`)
+      return { error: describeError(error) }
     }
-    this.debugClientHeld = outcome.client
+    this.debugClientHeld = client
     this.debugHolders.add(reason)
-    return { client: outcome.client }
+    return { client }
   }
 
   /**
@@ -241,7 +263,7 @@ export class DeviceSessionManager {
   }
 
   isConnected(): boolean {
-    return this.client !== null
+    return this.client !== null || this.restControl !== null
   }
 
   /**
@@ -264,7 +286,7 @@ export class DeviceSessionManager {
        * share a channel, which is what keeps a debug session from opening a second
        * connection to a device that only answers one.
        */
-      debugChannel?: DeviceLinkCandidate
+      debugChannel?: DeviceDebugCandidate
     } = {},
   ): Promise<DeviceLinkOpenResult> {
     this.close({ silent: true })
@@ -309,6 +331,27 @@ export class DeviceSessionManager {
     this.trace('open: FAILED, no candidate answered')
     this.hooks.emit({ status: 'disconnected' })
     return { ok: false, attempts }
+  }
+
+  /**
+   * Establish a session with a target CONTROLLED over REST (Runtime v3/v4).
+   *
+   * Nothing is opened here. REST needs no connection, and the debug channel is
+   * deliberately left shut until something asks for it — a user who logs in to look
+   * at logs or start the PLC should not be made to hold a debug channel open, and
+   * for v3 that channel is a second Modbus connection to the same box.
+   */
+  openRestSession(options: { address: string; debugChannel: DeviceDebugCandidate }): void {
+    this.close({ silent: true })
+    this.restControl = { address: options.address }
+    this.debugCandidate = options.debugChannel
+    this.trace(`session: control over REST at ${options.address}, debug via ${options.debugChannel.descriptor}`)
+    this.hooks.emit({ status: 'connected', descriptor: options.address })
+  }
+
+  /** The REST address when control runs over REST, else null. */
+  getRestAddress(): string | null {
+    return this.restControl?.address ?? null
   }
 
   /** Open + verify a single candidate, leaving nothing open on failure. */
@@ -374,8 +417,10 @@ export class DeviceSessionManager {
       this.debugClientHeld = null
     }
     this.debugCandidate = null
-    const had = this.client !== null
-    if (had) this.trace(`close: dropping ${this.current?.transport ?? '?'} ${this.current?.descriptor ?? '?'}`)
+    const hadRest = this.restControl !== null
+    this.restControl = null
+    const had = this.client !== null || hadRest
+    if (had) this.trace(`close: dropping ${this.current?.transport ?? (hadRest ? 'rest' : '?')} session`)
     this.dropClient()
     this.current = null
     this.candidates = []

@@ -30,7 +30,6 @@
 
 import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import type {
-  DebugConnectionConfig,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -41,14 +40,13 @@ import type {
 
 export interface DebuggerPort {
   /**
-   * Start a debug session.
+   * Start a debug session over the session the connection manager holds.
    *
-   * `config` describes a target the connection manager does not hold a session
-   * for yet — a Runtime v3/v4 or the simulator. Omit it for a target that IS
-   * connected (a baremetal board): the session already knows its medium, and
-   * naming one here is how a Stop over serial came to ask for a DHCP address.
+   * Takes nothing: every target's session is established before this — a device by
+   * Connect, a runtime by logging in, the simulator by starting. Naming a medium
+   * here is what made a Stop over serial ask for a DHCP address.
    */
-  connect(config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }>
+  connect(): Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the current debug target. */
   disconnect(): Promise<{ success: boolean }>
@@ -87,7 +85,7 @@ export interface DebuggerPort {
    * Used to detect program mismatch before starting a debug session.
    * @param config — Connection target used for the verification request.
    */
-  verifyMd5(expectedMd5: string, config?: DebugConnectionConfig): Promise<Md5VerifyResult>
+  verifyMd5(expectedMd5: string): Promise<Md5VerifyResult>
 
   /**
    * Read the MD5 hash of the compiled ST program from the debug artifacts.
