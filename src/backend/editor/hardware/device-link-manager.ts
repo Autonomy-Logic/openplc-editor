@@ -76,7 +76,11 @@ export interface DeviceLinkHooks {
    * The main process implements this as its classify + license recover, which is
    * why it runs on open only — see `probe` for the per-tick check.
    */
-  verify: (client: DeviceModbusTransport, candidate: DeviceLinkCandidate) => Promise<boolean>
+  verify: (
+    client: DeviceModbusTransport,
+    candidate: DeviceLinkCandidate,
+    context: { isLastCandidate: boolean },
+  ) => Promise<boolean>
   /**
    * Cheap liveness read on the held client, also used to confirm a reopen. Kept
    * separate from `verify` so recovery does not re-run licensing every couple of
@@ -176,11 +180,11 @@ export class DeviceLinkManager {
         .join(', ')}`,
     )
 
-    for (const candidate of candidates) {
+    for (const [index, candidate] of candidates.entries()) {
       this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
 
       const startedAt = Date.now()
-      const outcome = await this.tryCandidate(candidate)
+      const outcome = await this.tryCandidate(candidate, { isLastCandidate: index === candidates.length - 1 })
       const elapsed = Date.now() - startedAt
       this.trace(
         outcome.ok
@@ -207,6 +211,7 @@ export class DeviceLinkManager {
   /** Open + verify a single candidate, leaving nothing open on failure. */
   private async tryCandidate(
     candidate: DeviceLinkCandidate,
+    context: { isLastCandidate: boolean },
   ): Promise<{ ok: true; client: DeviceModbusTransport } | { ok: false; error: string }> {
     // A serial candidate whose port is not even enumerated cannot be opened:
     // say so instead of waiting out a connect timeout.
@@ -237,7 +242,7 @@ export class DeviceLinkManager {
     // so this is the step that decides whether to keep the candidate.
     const verifyStartedAt = Date.now()
     try {
-      if (await this.hooks.verify(client, candidate)) {
+      if (await this.hooks.verify(client, candidate, context)) {
         this.trace(`  ${candidate.descriptor}: answered the debug protocol in ${Date.now() - verifyStartedAt}ms`)
         return { ok: true, client }
       }

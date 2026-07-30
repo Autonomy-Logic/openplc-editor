@@ -49,7 +49,9 @@ import {
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
   type DeviceConnectResult,
+  PATIENT_BOARD_ID_PROBE,
   probeAndRecover,
+  QUICK_BOARD_ID_PROBE,
   toLegacyActivationOutcome,
 } from '../../../backend/editor/license/device-connect'
 import { connectWithRetries } from '../../../backend/editor/license/license-probe'
@@ -104,7 +106,7 @@ class MainProcessBridge implements MainIpcModule {
   // client and its own session identity.
   // ---------------------------------------------------------------------------
   private readonly deviceLink = new DeviceLinkManager({
-    verify: (client, candidate) => this.verifyDeviceCandidate(client, candidate),
+    verify: (client, candidate, context) => this.verifyDeviceCandidate(client, candidate, context),
     probe: (client) => this.probeDeviceLink(client),
     serialPortPresent: (port) => this.hardwareModule.isSerialPortPresent(port),
     emit: (status) => this.emitDeviceLinkStatus(status),
@@ -2309,13 +2311,24 @@ class MainProcessBridge implements MainIpcModule {
   private async verifyDeviceCandidate(
     client: DeviceModbusTransport,
     candidate: DeviceLinkCandidate,
+    context: { isLastCandidate: boolean },
   ): Promise<boolean> {
     // The simulator is in-process: there is no hardware to identify and no
     // license to recover, so asking the licensing backend about it would be a
     // pointless round trip that could also fail offline.
     if (candidate.transport === 'simulator') return this.probeDeviceLink(client)
 
-    const result = await probeAndRecover(client, this.deviceLinkLicenseOptions)
+    // Be patient only with the LAST candidate. The id read is retried because a
+    // board that was just flashed may still be booting — worth ~32s when this is
+    // the only way in, but not while alternatives are waiting: a Modbus TCP
+    // address that no longer answers should not delay the cable that would have
+    // worked. (Measured on a real board: 32.5s to rule out one endpoint.)
+    const boardIdProbe = context.isLastCandidate ? PATIENT_BOARD_ID_PROBE : QUICK_BOARD_ID_PROBE
+    this.traceDeviceLink(
+      `  ${candidate.descriptor}: verifying with up to ${boardIdProbe.attempts} id read(s)` +
+        `${context.isLastCandidate ? ' (last candidate, being patient)' : ''}`,
+    )
+    const result = await probeAndRecover(client, { ...this.deviceLinkLicenseOptions, boardIdProbe })
     this.deviceLinkProbe = result
     this.traceDeviceLink(
       `  ${candidate.descriptor}: classified as "${result.status}"${result.error ? ` (${result.error})` : ''}`,

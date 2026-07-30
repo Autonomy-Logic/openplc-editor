@@ -45,16 +45,37 @@ const LIC_STATUS_SUCCESS = 0x7e
 const LIC_STATUS_UNSUPPORTED = 0x85
 
 /**
+ * How patiently to wait for a board to answer the id read (0x48).
+ *
+ * The generous default exists for ONE situation: a board that has just been
+ * flashed and is still coming up. Six attempts at a 5s request timeout is ~32s of
+ * patience, which is right when this is the only endpoint there is and the device
+ * is expected to appear.
+ *
+ * It is wrong when the caller is CHOOSING between endpoints: 32s spent ruling out
+ * a Modbus TCP address the user is not even using delays the serial connection
+ * that would have worked. Such callers pass a short budget and move on.
+ */
+export const PATIENT_BOARD_ID_PROBE = { attempts: 6, backoffMs: 500 }
+export const QUICK_BOARD_ID_PROBE = { attempts: 2, backoffMs: 300 }
+
+/**
  * Classify the connected device and, for a licensable target, recover its
  * license from the backend when absent. Assumes `client` is already connected;
  * the caller owns its lifecycle (this never disconnects it).
  */
 export async function probeAndRecover(
   client: LicenseCapableTransport,
-  opts: { isLicensable?: boolean; packageId?: string; keyId?: string },
+  opts: {
+    isLicensable?: boolean
+    packageId?: string
+    keyId?: string
+    /** Defaults to `PATIENT_BOARD_ID_PROBE`; see it for when to override. */
+    boardIdProbe?: { attempts: number; backoffMs: number }
+  },
 ): Promise<DeviceConnectResult> {
   try {
-    const anchor = await readBoardIdWithRetries(client, { attempts: 6, backoffMs: 500 })
+    const anchor = await readBoardIdWithRetries(client, opts.boardIdProbe ?? PATIENT_BOARD_ID_PROBE)
     if (!anchor.success || !anchor.anchor || anchor.anchor.length === 0) {
       // Channel opened but nothing spoke the debug protocol -> blank/non-OpenPLC.
       return { status: 'no-firmware' }

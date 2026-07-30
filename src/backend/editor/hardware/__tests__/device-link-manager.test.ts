@@ -151,6 +151,46 @@ describe('DeviceLinkManager', () => {
       h.manager.close()
     })
 
+    it('tells verify whether alternatives remain, so patience is spent last', async () => {
+      // Measured on a real board: ruling out one Modbus TCP address took 32.5s,
+      // because the id read is retried for a device that might still be booting.
+      // That patience belongs to the LAST candidate — with alternatives waiting, a
+      // stale address must not delay the cable that would have worked.
+      const seen: Array<{ descriptor: string; isLastCandidate: boolean }> = []
+      const h = harness({
+        verify: async (_client, candidate, context) => {
+          seen.push({ descriptor: candidate.descriptor, isLastCandidate: context.isLastCandidate })
+          return candidate.transport === 'rtu'
+        },
+      })
+
+      await h.manager.open([
+        candidate('tcp', '192.168.0.50', [new FakeClient()], h.clients),
+        candidate('rtu', '/dev/ttyUSB0', [new FakeClient()], h.clients),
+      ])
+
+      expect(seen).toEqual([
+        { descriptor: '192.168.0.50', isLastCandidate: false },
+        { descriptor: '/dev/ttyUSB0', isLastCandidate: true },
+      ])
+      h.manager.close()
+    })
+
+    it('treats a sole candidate as the last one', async () => {
+      const seen: boolean[] = []
+      const h = harness({
+        verify: async (_client, _candidate, context) => {
+          seen.push(context.isLastCandidate)
+          return true
+        },
+      })
+
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [new FakeClient()], h.clients)])
+
+      expect(seen).toEqual([true])
+      h.manager.close()
+    })
+
     it('fails when no candidate works, reporting each attempt', async () => {
       const h = harness()
       const result = await h.manager.open([

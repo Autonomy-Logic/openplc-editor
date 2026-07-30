@@ -163,13 +163,26 @@ void handle_tcp()
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
                 // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
                 // the minimum for a standard DATA request ([unit][fc][addr:2]
-                // [qty:2]) and silently dropped every debug/control request,
-                // which carries no payload at all: 0x41 debug-info, 0x45 md5,
-                // 0x46 status, 0x47 version, 0x48 board id, 0x4b run/stop. That
-                // is why the always-on debugger, run/stop and Connect only ever
-                // worked over serial — the requests never reached
-                // process_mbpacket(). Per-FC shape is validated there; over TCP
-                // the MBAP length is authoritative (no CRC to check).
+                // [qty:2]), so it silently dropped any request SHORTER than that
+                // before process_mbpacket() ever saw it:
+                //
+                //   0x41 debug-info   len 2  dropped
+                //   0x46 status       len 2  dropped  (run/stop state + switch)
+                //   0x47 version      len 2  dropped
+                //   0x48 board id     len 2  dropped  (Connect's verification)
+                //   0x4b run/stop     len 3  dropped  (the Stop/Run button)
+                //   0x44 get-list     len 4+3n  passed
+                //   0x45 md5          len 6     passed
+                //
+                // Which is why this went unnoticed for so long: a debug SESSION
+                // only uses 0x44 and 0x45, so debugging over Modbus TCP worked
+                // fine, while Connect and run/stop over TCP could never work. The
+                // floor predates the split of the ModbusSlave monolith (it was in
+                // there twice, verbatim) and was harmless until function codes
+                // with no payload were introduced.
+                //
+                // Per-FC shape is validated in process_mbpacket(); over TCP the
+                // MBAP length is authoritative, there being no CRC to check.
                 if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 j = 0;
@@ -223,13 +236,26 @@ void handle_tcp()
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
                 // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
                 // the minimum for a standard DATA request ([unit][fc][addr:2]
-                // [qty:2]) and silently dropped every debug/control request,
-                // which carries no payload at all: 0x41 debug-info, 0x45 md5,
-                // 0x46 status, 0x47 version, 0x48 board id, 0x4b run/stop. That
-                // is why the always-on debugger, run/stop and Connect only ever
-                // worked over serial — the requests never reached
-                // process_mbpacket(). Per-FC shape is validated there; over TCP
-                // the MBAP length is authoritative (no CRC to check).
+                // [qty:2]), so it silently dropped any request SHORTER than that
+                // before process_mbpacket() ever saw it:
+                //
+                //   0x41 debug-info   len 2  dropped
+                //   0x46 status       len 2  dropped  (run/stop state + switch)
+                //   0x47 version      len 2  dropped
+                //   0x48 board id     len 2  dropped  (Connect's verification)
+                //   0x4b run/stop     len 3  dropped  (the Stop/Run button)
+                //   0x44 get-list     len 4+3n  passed
+                //   0x45 md5          len 6     passed
+                //
+                // Which is why this went unnoticed for so long: a debug SESSION
+                // only uses 0x44 and 0x45, so debugging over Modbus TCP worked
+                // fine, while Connect and run/stop over TCP could never work. The
+                // floor predates the split of the ModbusSlave monolith (it was in
+                // there twice, verbatim) and was harmless until function codes
+                // with no payload were introduced.
+                //
+                // Per-FC shape is validated in process_mbpacket(); over TCP the
+                // MBAP length is authoritative, there being no CRC to check.
                 if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 i = 0;
