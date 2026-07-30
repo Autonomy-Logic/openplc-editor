@@ -375,6 +375,75 @@ describe('DeviceSessionManager', () => {
     })
   })
 
+  describe('a REST-controlled session (Runtime v3/v4)', () => {
+    it('counts as connected without holding anything open', () => {
+      // REST is connectionless: there is no socket to hold, poll or recover, so the
+      // session records the address and routes control operations to it.
+      const h = harness()
+      h.manager.openRestSession({
+        address: '10.0.0.5',
+        debugChannel: { descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
+      })
+
+      expect(h.manager.isConnected()).toBe(true)
+      expect(h.manager.getRestAddress()).toBe('10.0.0.5')
+      expect(h.manager.getClient()).toBeNull() // nothing Modbus to hold
+      expect(h.statuses.at(-1)).toMatchObject({ status: 'connected', descriptor: '10.0.0.5' })
+      h.manager.close()
+    })
+
+    it('leaves its debug channel shut until something asks', async () => {
+      // Logging in to read logs or start the PLC must not open a debug channel —
+      // for v3 that would be a second Modbus connection to the same box.
+      const h = harness()
+      const debug = new FakeClient()
+      h.manager.openRestSession({
+        address: '10.0.0.5',
+        debugChannel: { descriptor: 'modbus-tcp 10.0.0.5:502', create: () => asTransport(debug) },
+      })
+
+      expect(h.manager.isDebugShared()).toBe(false)
+      expect(debug.connectCount).toBe(0)
+
+      await h.manager.acquireDebugChannel('debug session')
+      expect(debug.connectCount).toBe(1)
+
+      h.manager.releaseDebugChannel('debug session')
+      expect(debug.disconnectCount).toBe(1)
+      h.manager.close()
+    })
+
+    it('forgets the session on close', () => {
+      const h = harness()
+      h.manager.openRestSession({
+        address: '10.0.0.5',
+        debugChannel: { descriptor: 'x', create: () => asTransport(new FakeClient()) },
+      })
+
+      h.manager.close()
+
+      expect(h.manager.isConnected()).toBe(false)
+      expect(h.manager.getRestAddress()).toBeNull()
+      expect(h.statuses.at(-1)).toEqual({ status: 'disconnected' })
+    })
+
+    it('is superseded by a device connection', async () => {
+      // One target at a time: connecting a device replaces a runtime session rather
+      // than leaving two sessions claiming to be current.
+      const h = harness()
+      h.manager.openRestSession({
+        address: '10.0.0.5',
+        debugChannel: { descriptor: 'x', create: () => asTransport(new FakeClient()) },
+      })
+
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [new FakeClient()], h.clients)])
+
+      expect(h.manager.getRestAddress()).toBeNull()
+      expect(h.manager.getLink()).toEqual({ transport: 'rtu', descriptor: '/dev/ttyUSB0' })
+      h.manager.close()
+    })
+  })
+
   describe('the debug channel', () => {
     it('IS the control channel when one medium serves both', async () => {
       // A baremetal board answers control and debug over one connection. Opening a

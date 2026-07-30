@@ -736,24 +736,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      // Parse the body so the renderer can drive a retry-on-BUSY
-      // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
-      // while it's still unloading the previous program after an
-      // upload).  See `backend/shared/library/start-plc-after-build.ts`.
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
-        ipAddress,
-        '/api/start-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      const status = (result.data?.status ?? '').trim()
-      return { success: true, status }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
   handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
@@ -1754,6 +1737,13 @@ class MainProcessBridge implements MainIpcModule {
     action: 'run' | 'stop',
   ): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
+
+    // Routed by the session's CONTROL channel, which is the whole point: the caller
+    // said "stop the PLC" and does not know or care whether that means a Modbus
+    // function code on a cable or an HTTP POST to a runtime.
+    const restAddress = this.deviceSession.getRestAddress()
+    if (restAddress !== null) return this.restSetPlcState(restAddress, action)
+
     const link = this.requireControl('run/stop')
     if ('error' in link) return { success: false, error: link.error }
 
@@ -1765,6 +1755,45 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during PLC control request',
       }
+    }
+  }
+
+  /**
+   * Run/stop over a REST control channel, reported in the same shape the Modbus
+   * path returns — so the caller handles one result type, not two.
+   *
+   * `ERROR_SWITCH_STOP` in the runtime's reply is its way of saying the hardware
+   * mode switch refused a start, which is exactly what `refusedBySwitch` means on
+   * the Modbus side (FC 0x4b status 0x86).
+   */
+  private async restSetPlcState(address: string, action: 'run' | 'stop'): Promise<PlcControlResult> {
+    const result =
+      action === 'run' ? await this.restStartPlc(address) : await this.makeRuntimeApiRequest(address, '/api/stop-plc')
+    if (!result.success) return { success: false, error: result.error }
+
+    const status = 'status' in result ? (result.status ?? '') : ''
+    if (status.includes('ERROR_SWITCH_STOP')) return { success: false, refusedBySwitch: true }
+
+    // The runtime settles into the new state on its next scan; report the state the
+    // command asked for so the button can reflect it without a second round trip.
+    return { success: true, state: action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED }
+  }
+
+  /** The `/api/start-plc` call, shared by the session router and the IPC handler. */
+  private async restStartPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
+    try {
+      // The body is parsed because the runtime answers `COMMAND:BUSY` while it is
+      // still unloading a previous program after an upload, and callers drive a
+      // retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
+      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
+        address,
+        '/api/start-plc',
+        (data: string) => JSON.parse(data) as { status?: string },
+      )
+      if (!result.success) return { success: false, error: result.error }
+      return { success: true, status: (result.data?.status ?? '').trim() }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
