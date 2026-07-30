@@ -506,6 +506,8 @@ const rendererProcessBridge = {
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     deviceId?: string
+    /** Device proof-of-possession public key, hex — for the purchase link (ADR-0002). */
+    devicePublicKey?: string
     vppId?: string
     anchorHex?: string
     license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
@@ -528,6 +530,8 @@ const rendererProcessBridge = {
     status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
     anchorHex?: string
     deviceId?: string
+    /** Device proof-of-possession public key, hex — for the purchase link (ADR-0002). */
+    devicePublicKey?: string
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     error?: string

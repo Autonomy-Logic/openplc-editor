@@ -48,6 +48,18 @@ export interface DeviceProbeResult {
    * computing it.
    */
   deviceId?: string
+  /**
+   * Raw Ed25519 public key (32 bytes hex) of the device's proof-of-possession
+   * keypair (ADR-0002), derived in the main process from the hardware anchor.
+   * The renderer only ever forwards it into the purchase link: binding it at
+   * checkout is what later lets the backend demand a signature instead of
+   * serving a license to whoever names `deviceId`.
+   *
+   * Present on the results where a purchase is possible; absent for a free VPP,
+   * for an already-licensed device, and when the derivation failed. It is the
+   * PUBLIC half — the private key is never stored and never leaves main.
+   */
+  devicePublicKey?: string
   /** On-device license state — only present for a licensable connected device. */
   licenseStatus?: DeviceLicenseStatus
   /**
@@ -91,6 +103,8 @@ export interface DeviceConnectResult {
   anchorHex?: string
   /** See `DeviceProbeResult.deviceId` — the licensing identity, not the anchor. */
   deviceId?: string
+  /** See `DeviceProbeResult.devicePublicKey` — for the purchase link. */
+  devicePublicKey?: string
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
   error?: string
@@ -112,6 +126,9 @@ export interface DeviceActivationResult {
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
   deviceId?: string
+  /** See `DeviceProbeResult.devicePublicKey` — the network path lands the same
+   *  popover, whose Buy button builds the link that binds this key. */
+  devicePublicKey?: string
   vppId?: string
   anchorHex?: string
   license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }

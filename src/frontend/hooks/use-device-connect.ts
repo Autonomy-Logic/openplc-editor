@@ -89,12 +89,18 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
    * Both ids are read at call time (not closed over): the probe result lands in
    * the store just before the demo prompt opens, and the popover's Buy button
    * fires arbitrarily later.
+   *
+   * The device's public key travels with them (ADR-0002). The checkout is the one
+   * place that can bind a key to a device, so a link built without it sells a
+   * license that no later request can be asked to prove it owns.
    */
   const buyLicense = useCallback((): void => {
+    const probeResult = useOpenPLCStore.getState().deviceProbeInfo.result
     const url = buildLicenseBuyUrl({
       baseUrl: system.getEdgeFrontendUrl(),
       vppId: boardInfo?.vpp?.packageId,
-      deviceId: useOpenPLCStore.getState().deviceProbeInfo.result?.deviceId,
+      deviceId: probeResult?.deviceId,
+      devicePublicKey: probeResult?.devicePublicKey,
     })
     if (!url) {
       // Better to say why than to open a page that rejects the link. Reachable
@@ -155,6 +161,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       status: result.status,
       anchorHex: result.anchorHex,
       deviceId: result.deviceId,
+      devicePublicKey: result.devicePublicKey,
       licenseStatus: result.licenseStatus,
       activation: result.activation,
       error: result.error,
@@ -271,6 +278,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       status: 'connected-with-firmware',
       anchorHex: act.anchorHex,
       deviceId: act.deviceId,
+      devicePublicKey: act.devicePublicKey,
       licenseStatus: act.licenseStatus,
       activation: act.activation,
       error: act.error,

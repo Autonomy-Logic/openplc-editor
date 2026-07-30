@@ -402,14 +402,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   keyId: currentBoardInfo?.vpp?.licenseKeyId,
                 },
               )
-              useOpenPLCStore.getState().deviceActions.setDeviceProbeResult({
-                status: reconnect.status,
-                anchorHex: reconnect.anchorHex,
-                deviceId: reconnect.deviceId,
-                licenseStatus: reconnect.licenseStatus,
-                activation: reconnect.activation,
-                error: reconnect.error,
-              })
+              // Passed whole, NOT field by field: this used to copy 6 named
+              // fields and silently dropped `devicePublicKey` when it was added,
+              // which left the Buy link without the key to bind (ADR-0002). The
+              // bridge response and `DeviceProbeResult` are the same shape — the
+              // next field added must not need an edit here to survive.
+              useOpenPLCStore.getState().deviceActions.setDeviceProbeResult(reconnect)
             } catch {
               // best-effort: the user can press Connect again.
             }

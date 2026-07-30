@@ -249,6 +249,22 @@ describe('useDeviceConnect', () => {
       )
     })
 
+    // The checkout is the only moment that binds a proof-of-possession key to a
+    // device (ADR-0002). A link built without it sells a license that no later
+    // activation can be asked to prove it owns.
+    it('carries the device public key so the purchase can bind it', () => {
+      const devicePublicKey = 'd'.repeat(64)
+      mockState.deviceProbeInfo = {
+        phase: 'done',
+        result: { status: 'connected-with-firmware', deviceId: DEVICE_ID, devicePublicKey },
+      }
+      const { result } = renderHook(() => useDeviceConnect(board))
+      result.current.buyLicense()
+      expect(mockOpenExternalLink).toHaveBeenCalledWith(
+        `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}&devicePublicKey=${devicePublicKey}`,
+      )
+    })
+
     it('explains itself instead of opening a link the page would reject', () => {
       mockState.deviceProbeInfo = { phase: 'idle', result: null }
       const { result } = renderHook(() => useDeviceConnect(board))
