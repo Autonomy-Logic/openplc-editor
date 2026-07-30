@@ -41,7 +41,11 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
-import { type DeviceLinkCandidate, DeviceLinkManager, type DeviceLinkStatus } from '../../../backend/editor/hardware/device-link-manager'
+import {
+  type DeviceLinkCandidate,
+  type DeviceLinkStatus,
+  DeviceSessionManager,
+} from '../../../backend/editor/hardware/device-session-manager'
 import {
   buildDeviceModbusTransport,
   modbusTransportKind,
@@ -100,7 +104,7 @@ class MainProcessBridge implements MainIpcModule {
   // is a different protocol to a different kind of target, so it keeps its own
   // client and its own session identity.
   // ---------------------------------------------------------------------------
-  private readonly deviceLink = new DeviceLinkManager({
+  private readonly deviceSession = new DeviceSessionManager({
     verify: (client, candidate, context) => this.verifyDeviceCandidate(client, candidate, context),
     probe: (client) => this.probeDeviceLink(client),
     serialPortPresent: (port) => this.hardwareModule.isSerialPortPresent(port),
@@ -1758,11 +1762,11 @@ class MainProcessBridge implements MainIpcModule {
     // session the manager already owns) or it is one that cannot be brought up
     // without the user. Nothing to do but report it.
     if (connectionType !== 'simulator') {
-      const required = this.requireDeviceClient('debug session')
+      const required = this.requireChannel('debug session', 'debug')
       return 'error' in required ? { error: required.error } : required
     }
 
-    const opened = await this.deviceLink.open(
+    const opened = await this.deviceSession.open(
       this.toDeviceLinkCandidates([{ connectionType, connectionParams: connectionParams ?? {} }]),
     )
     if (!opened.ok) {
@@ -1794,7 +1798,7 @@ class MainProcessBridge implements MainIpcModule {
     action: 'run' | 'stop',
   ): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
-    const link = this.requireDeviceClient('run/stop')
+    const link = this.requireChannel('run/stop', 'control')
     if ('error' in link) return { success: false, error: link.error }
 
     const target = action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED
@@ -1845,7 +1849,7 @@ class MainProcessBridge implements MainIpcModule {
     // reconnect here: if the link dropped, the manager is already reopening it
     // (or has reported it lost), and `needsReconnect` tells the renderer to stop
     // the session rather than race it for the port.
-    const link = this.requireDeviceClient('read variables')
+    const link = this.requireChannel('read variables', 'debug')
     if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
 
     try {
@@ -1955,7 +1959,7 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     blob: Uint8Array,
   ): Promise<{ success: boolean; status?: number; error?: string; needsReconnect?: boolean }> => {
-    const ensured = this.requireDeviceClient('license op')
+    const ensured = this.requireChannel('license op', 'debug')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -1979,7 +1983,7 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
-    const ensured = this.requireDeviceClient('license op')
+    const ensured = this.requireChannel('license op', 'debug')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -2046,7 +2050,7 @@ class MainProcessBridge implements MainIpcModule {
       // where its result is actually used.
       // Session identity comes from the SESSION, not from what the caller
       // guessed: a connected baremetal target names no transport at all.
-      this.debuggerConnectionType = this.deviceLink.getLink()?.transport ?? connectionType ?? null
+      this.debuggerConnectionType = this.deviceSession.getLink()?.transport ?? connectionType ?? null
       return { success: true }
     } catch (error) {
       this.debuggerWebSocketClient = null
@@ -2239,7 +2243,21 @@ class MainProcessBridge implements MainIpcModule {
     // The simulator is in-process: there is no hardware to identify and no
     // license to recover, so asking the licensing backend about it would be a
     // pointless round trip that could also fail offline.
-    if (candidate.transport === 'simulator') return this.probeDeviceLink(client)
+    //
+    // Retried because the session is opened the instant the emulator starts, and
+    // the sketch inside it still has to reach the point where it services Modbus.
+    // Failing here would stop an emulator that was merely still booting.
+    if (candidate.transport === 'simulator') {
+      for (let attempt = 0; attempt < MainProcessBridge.SIMULATOR_PROBE_ATTEMPTS; attempt += 1) {
+        try {
+          if (await this.probeDeviceLink(client)) return true
+        } catch {
+          // Not up yet — fall through to the wait below.
+        }
+        await new Promise((resolve) => setTimeout(resolve, MainProcessBridge.SIMULATOR_PROBE_INTERVAL_MS))
+      }
+      return false
+    }
 
     // Be patient only with the LAST candidate. The id read is retried because a
     // board that was just flashed may still be booting — worth ~32s when this is
@@ -2272,7 +2290,7 @@ class MainProcessBridge implements MainIpcModule {
    * up within one interval, with no second timer and no extra traffic.
    */
   private async probeDeviceLink(client: DeviceModbusTransport): Promise<boolean> {
-    const descriptor = this.deviceLink.getLink()?.descriptor ?? ''
+    const descriptor = this.deviceSession.getLink()?.descriptor ?? ''
     if (client.getStatus) {
       const status = await client.getStatus()
       if (!status.success) return false
@@ -2294,34 +2312,49 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     port: string | null | undefined,
   ): Promise<{ released: boolean }> => {
-    return { released: this.deviceLink.releaseSerialPort(port) }
+    return { released: this.deviceSession.releaseSerialPort(port) }
   }
 
-  /** The held client, for the handlers that command the device. */
+  /** The CONTROL channel's client (run/stop, status). */
   private deviceClient(): DeviceModbusTransport | null {
-    return this.deviceLink.getClient()
+    return this.deviceSession.getClient()
   }
 
   /**
-   * The held client or a reason there isn't one. Every device command funnels
-   * through this, so "not connected" and "reconnecting" read the same everywhere
-   * instead of each handler inventing its own message — or, worse, opening its own
-   * connection.
+   * The channel for this operation family, or a reason there isn't one. Every
+   * device command funnels through here, so "not connected" and "reconnecting"
+   * read the same everywhere instead of each handler inventing its own message —
+   * or, worse, opening its own connection.
+   *
+   * `debug` operations take the debug channel, which for a shared session IS the
+   * control channel and for a runtime target is one of its own.
    */
-  private requireDeviceClient(what = 'command'): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
-    const client = this.deviceClient()
+  private requireChannel(
+    what = 'command',
+    family: 'control' | 'debug' = 'control',
+  ): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
+    const client = family === 'debug' ? this.deviceSession.getDebugClient() : this.deviceClient()
     if (client) {
-      const link = this.deviceLink.getLink()
-      this.traceDeviceLink(`${what}: using the held ${link?.transport ?? '?'} connection (${link?.descriptor ?? '?'})`)
+      const link = this.deviceSession.getLink()
+      this.traceDeviceLink(
+        `${what}: using the ${family} channel (${link?.transport ?? '?'} ${link?.descriptor ?? '?'})`,
+      )
       return { client }
     }
-    if (this.deviceLink.isRecovering()) {
+    if (this.deviceSession.isRecovering()) {
       this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
       return { error: 'The device connection dropped and is being restored. Try again in a moment.', needsReconnect: true }
     }
     this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
   }
+
+  /**
+   * The emulator boots in milliseconds, but "milliseconds" is not "instantly", and
+   * its session is opened the instant it starts.
+   */
+  private static readonly SIMULATOR_PROBE_ATTEMPTS = 10
+  private static readonly SIMULATOR_PROBE_INTERVAL_MS = 200
 
   /** Message shown when a device command arrives with nothing connected. */
   private static readonly DEVICE_NOT_CONNECTED =
@@ -2358,7 +2391,7 @@ class MainProcessBridge implements MainIpcModule {
       return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
     }
 
-    const result = await this.deviceLink.open(linkCandidates)
+    const result = await this.deviceSession.open(linkCandidates)
     // Read the verdict out of the field after the open: verification runs inside
     // it, one candidate at a time, and this is where its conclusion lands.
     const probe = this.takeDeviceLinkProbe()
@@ -2375,7 +2408,7 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Close the held link (user pressed Disconnect). */
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
-    this.deviceLink.close()
+    this.deviceSession.close()
     this.deviceLinkProbe = null
     return { success: true }
   }
@@ -2408,7 +2441,7 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
 
-    const link = this.requireDeviceClient('write variable')
+    const link = this.requireChannel('write variable', 'debug')
     if ('error' in link) {
       return { success: false, error: link.error }
     }
@@ -2448,6 +2481,7 @@ class MainProcessBridge implements MainIpcModule {
   /** Stops the simulator and notifies the renderer so it can update UI state. */
   private stopSimulatorAndNotify(): void {
     if (this.simulatorModule.isRunning()) {
+      this.closeSimulatorSession()
       this.simulatorModule.stop()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
@@ -2676,6 +2710,16 @@ class MainProcessBridge implements MainIpcModule {
   handleESIMigrateRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
     this.wrapServiceCall(() => this.esiService.migrateRepositoryToV2(projectPath))
 
+  /**
+   * Start the emulator, then open its session.
+   *
+   * The running emulator IS the simulator's connection — there is no port to pick
+   * and no address to configure, so nothing about it is ever resolved from a spec
+   * or asked of the user. Opening the session here (rather than when the debugger
+   * asks) is what makes the simulator behave like every other target downstream:
+   * commands go to a session the manager holds, and when the emulator stops the
+   * session ends the same way a pulled cable ends a serial one.
+   */
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,
     hexPath: string,
@@ -2684,15 +2728,38 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const hexContent = await fs.readFile(hexPath, 'utf-8')
       this.simulatorModule.loadAndRun(hexContent)
+
+      const opened = await this.deviceSession.open(
+        this.toDeviceLinkCandidates([{ connectionType: 'simulator', connectionParams: {} }]),
+      )
+      if (!opened.ok) {
+        this.simulatorModule.stop()
+        const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
+        return { success: false, error: reason || 'The simulator did not answer its debug protocol' }
+      }
+      this.debuggerConnectionType = 'simulator'
       return { success: true }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
+  /**
+   * Stop the emulator entirely — the simulator's Stop button means "stop the
+   * simulator", not "stop the program it is running". The session closes first so
+   * the client is dropped before the thing it talks to disappears.
+   */
   handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.closeSimulatorSession()
     this.simulatorModule.stop()
     return Promise.resolve({ success: true })
+  }
+
+  /** Close the session if it is the simulator's. No-op for any other target. */
+  private closeSimulatorSession(): void {
+    if (this.deviceSession.getLink()?.transport !== 'simulator') return
+    this.deviceSession.close()
+    this.debuggerConnectionType = null
   }
 
   handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {

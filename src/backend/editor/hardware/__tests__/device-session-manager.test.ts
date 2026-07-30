@@ -6,11 +6,11 @@
  * sequences here are the real ones a cable pull produces, without the waiting.
  */
 import {
-  DeviceLinkManager,
+  DeviceSessionManager,
   type DeviceLinkCandidate,
   type DeviceLinkHooks,
   type DeviceLinkStatus,
-} from '../device-link-manager'
+} from '../device-session-manager'
 import type { DeviceModbusTransport } from '../../../shared/debug/types'
 
 /** A client that records open/close and can be made to answer or not. */
@@ -44,7 +44,7 @@ class FakeClient {
 const asTransport = (client: FakeClient): DeviceModbusTransport => client as unknown as DeviceModbusTransport
 
 interface Harness {
-  manager: DeviceLinkManager
+  manager: DeviceSessionManager
   statuses: DeviceLinkStatus[]
   /** Serial ports the OS currently reports. Mutate to pull or replug a cable. */
   ports: Set<string>
@@ -67,7 +67,7 @@ function harness(overrides: Partial<DeviceLinkHooks> = {}): Harness {
     ...overrides,
   }
 
-  const manager = new DeviceLinkManager(hooks, {
+  const manager = new DeviceSessionManager(hooks, {
     pollIntervalMs: 10_000,
     failuresBeforeRecovery: 2,
     maxRecoveryAttempts: 2,
@@ -97,7 +97,7 @@ afterEach(() => {
   jest.useRealTimers()
 })
 
-describe('DeviceLinkManager', () => {
+describe('DeviceSessionManager', () => {
   describe('opening', () => {
     it('takes the first candidate that works', async () => {
       const h = harness()
@@ -372,6 +372,117 @@ describe('DeviceLinkManager', () => {
       await h.manager.tick()
       expect(h.manager.isRecovering()).toBe(true)
       h.manager.close()
+    })
+  })
+
+  describe('the debug channel', () => {
+    it('IS the control channel when one medium serves both', async () => {
+      // A baremetal board answers control and debug over one connection. Opening a
+      // second client to it is what an Arduino Modbus TCP server never answers, and
+      // what the OS refuses on a serial port.
+      const h = harness()
+      const only = new FakeClient()
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [only], h.clients)])
+
+      expect(h.manager.isDebugShared()).toBe(true)
+      const acquired = await h.manager.acquireDebugChannel('debug session')
+      expect('client' in acquired && acquired.client).toBe(asTransport(only))
+      expect(only.connectCount).toBe(1)
+      h.manager.close()
+    })
+
+    it('releasing a shared channel never closes the connection', async () => {
+      // Stopping the debugger must not take the connection run/stop and the status
+      // poll are using.
+      const h = harness()
+      const only = new FakeClient()
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [only], h.clients)])
+      await h.manager.acquireDebugChannel('debug session')
+
+      h.manager.releaseDebugChannel('debug session')
+
+      expect(only.disconnectCount).toBe(0)
+      expect(h.manager.isConnected()).toBe(true)
+      expect(h.manager.getDebugClient()).toBe(asTransport(only))
+      h.manager.close()
+    })
+
+    it('opens a channel of its own when the debug medium differs', async () => {
+      // A Runtime v3/v4 shape: control is elsewhere, debug is its own channel, and
+      // it stays shut until something asks for it.
+      const h = harness()
+      const control = new FakeClient()
+      const debug = new FakeClient()
+      await h.manager.open([candidate('tcp', '10.0.0.5', [control], h.clients)], {
+        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+      })
+
+      expect(h.manager.isDebugShared()).toBe(false)
+      expect(h.manager.getDebugClient()).toBeNull()
+      expect(debug.connectCount).toBe(0)
+
+      const acquired = await h.manager.acquireDebugChannel('debug session')
+      expect('client' in acquired).toBe(true)
+      expect(debug.connectCount).toBe(1)
+      h.manager.close()
+    })
+
+    it('closes its own channel only when the last holder lets go', async () => {
+      const h = harness()
+      const debug = new FakeClient()
+      await h.manager.open([candidate('tcp', '10.0.0.5', [new FakeClient()], h.clients)], {
+        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+      })
+
+      await h.manager.acquireDebugChannel('debug session')
+      await h.manager.acquireDebugChannel('license check')
+      expect(debug.connectCount).toBe(1) // reused, not reopened
+
+      // A license check finishing must not close the channel a live debug session
+      // is still reading through.
+      h.manager.releaseDebugChannel('license check')
+      expect(debug.disconnectCount).toBe(0)
+      expect(h.manager.getDebugClient()).not.toBeNull()
+
+      h.manager.releaseDebugChannel('debug session')
+      expect(debug.disconnectCount).toBe(1)
+      expect(h.manager.getDebugClient()).toBeNull()
+      h.manager.close()
+    })
+
+    it('leaves control connected when its own channel will not open', async () => {
+      // Independent channels: port 502 firewalled is a debugging problem, not a
+      // reason to drop a working control connection.
+      const h = harness()
+      await h.manager.open([candidate('tcp', '10.0.0.5', [new FakeClient()], h.clients)], {
+        debugChannel: candidate('tcp', '10.0.0.5:502', [new FakeClient({ connectFails: true })], h.clients),
+      })
+
+      const acquired = await h.manager.acquireDebugChannel('debug session')
+
+      expect('error' in acquired).toBe(true)
+      expect(h.manager.isConnected()).toBe(true)
+      expect(h.manager.getClient()).not.toBeNull()
+      h.manager.close()
+    })
+
+    it('closes its own channel when the session ends', async () => {
+      const h = harness()
+      const debug = new FakeClient()
+      await h.manager.open([candidate('tcp', '10.0.0.5', [new FakeClient()], h.clients)], {
+        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+      })
+      await h.manager.acquireDebugChannel('debug session')
+
+      h.manager.close()
+
+      expect(debug.disconnectCount).toBe(1)
+      expect(h.manager.getDebugClient()).toBeNull()
+    })
+
+    it('refuses to acquire when nothing is connected', async () => {
+      const h = harness()
+      expect(await h.manager.acquireDebugChannel('debug session')).toEqual({ error: 'Not connected' })
     })
   })
 

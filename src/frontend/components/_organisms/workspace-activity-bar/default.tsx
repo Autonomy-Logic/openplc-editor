@@ -96,19 +96,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Start/Stop button on. Runtime v3/v4 still do.
   const plcControlNeedsConnection = !resolveTargetCapabilities(currentBoardInfo).directUsbUpload
 
-  // Sync simulatorRunning when the simulator stops externally
+  // The emulator stopping is a session ending, and a debug session riding it ends
+  // with it — which the drop handler below already does for every target. This
+  // only mirrors the emulator's own state into the button.
   useEffect(() => {
     const unsub = simulator.onStopped(() => {
       pendingSimulatorDebugRef.current = false
       setSimulatorRunning(false)
-      const { workspace } = useOpenPLCStore.getState()
-      if (workspace.isDebuggerVisible) {
-        debugSessionRidesDeviceRef.current = false
-        void debugSession.stopSession()
-      }
     })
     return unsub
-  }, [simulator, debugSession])
+  }, [simulator])
 
   // A serial debug session lives on the device connection: it shares that
   // client, so when the link drops (unplug, reset, liveness failure, or the user
@@ -326,13 +323,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
                   if (pendingSimulatorDebugRef.current) {
                     pendingSimulatorDebugRef.current = false
-                    // Simulator's debug spec resolves to the trivial
-                    // `{ connectionType: 'simulator' }` config — see
-                    // the hals.json entry.  Pass it explicitly so the
-                    // session's downstream MD5-verification path has
-                    // the right transport instead of falling back to
-                    // `connectAndStart`'s internal default.
-                    void debugSession.connectAndStart({ connectionType: 'simulator', connectionParams: {} })
+                    // Rides the emulator's session, so it ends when the emulator
+                    // does — through the same handler a pulled cable goes through.
+                    debugSessionRidesDeviceRef.current = true
+                    // No config: starting the emulator opened its session, so the
+                    // connection manager already knows how to reach it.
+                    void debugSession.connectAndStart()
                   }
                 } else {
                   pendingSimulatorDebugRef.current = false
@@ -925,21 +921,27 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const projectPath = project.meta.path
       const boardInfo = availableBoards.get(boardTarget)
 
-      // Does this target's debug session ride the connection the user established?
-      // Decided by the TARGET, not by a transport: a baremetal board reached over
-      // Modbus TCP is still a connected device, and classifying it by transport is
-      // how it got mistaken for a runtime.
+      // Two different questions, which used to be one:
+      //
+      //   ridesSession — does the debug session run over a connection the manager
+      //     holds? True for a baremetal board AND for the simulator (whose session
+      //     IS the running emulator). Decided by the TARGET, never by a transport:
+      //     a board reached over Modbus TCP is still a connected device.
+      //   requiresUserConnection — must the user have pressed Connect first? Only
+      //     for a device with a Connect button. The simulator's session is created
+      //     by pressing Start, which is what got us here.
       const debugCaps = resolveTargetCapabilities(boardInfo)
-      const usesDeviceSession = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
+      const ridesSession = !isOpenPLCRuntimeTarget(boardInfo)
+      const requiresUserConnection = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
 
       // For those targets the session already knows its medium, so nothing is
       // resolved here — resolving is what asked for a DHCP address on a device
       // connected by cable. Everything else (Runtime v3/v4, the simulator) has no
       // held session yet and still describes its own channel.
-      const debugConfig = usesDeviceSession
+      const debugConfig = ridesSession
         ? undefined
         : ((await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)) ?? undefined)
-      if (!usesDeviceSession && !debugConfig) {
+      if (!ridesSession && !debugConfig) {
         setIsDebuggerProcessing(false)
         return
       }
@@ -947,15 +949,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // A debug session over the device connection shares it, so it must end when
       // that connection ends — see the drop handler above. Runtime and simulator
       // sessions own their own channel and are unaffected.
-      debugSessionRidesDeviceRef.current = usesDeviceSession
+      debugSessionRidesDeviceRef.current = ridesSession
 
       const connectionStatusNow = useOpenPLCStore.getState().deviceConnection.status
       addLog({
         id: crypto.randomUUID(),
         level: 'info',
         message: `[connection] debug session requested for ${boardTarget}; ${
-          usesDeviceSession
-            ? `it rides the device connection, currently "${connectionStatusNow}"`
+          ridesSession
+            ? `it rides the device session, currently "${connectionStatusNow}"`
             : `it opens its own ${debugConfig?.connectionType ?? 'unknown'} channel`
         }`,
       })
@@ -964,7 +966,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // must never establish the connection itself: Connect is the user's explicit
       // action and reports what it found (firmware, license), so hiding it inside
       // the debug button means a click that says "debug" silently opens hardware.
-      if (usesDeviceSession && connectionStatusNow !== 'connected') {
+      if (requiresUserConnection && connectionStatusNow !== 'connected') {
         await showDeviceDialog(
           'warning',
           'Connection Required',

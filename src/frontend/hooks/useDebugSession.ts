@@ -13,7 +13,7 @@
 import { useCallback, useRef } from 'react'
 
 import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
-import { useDebugger, useSimulator } from '../../middleware/shared/providers'
+import { useDebugger } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { parseDebugMap } from '../utils/debug-parser'
 import {
@@ -32,8 +32,9 @@ export interface UseDebugSessionReturn {
    * connects via the debugger port, stores all artifacts in workspace,
    * and activates the debugger UI.
    *
-   * @param config — Connection target (simulator, TCP, RTU, WebSocket).
-   *                 If omitted, defaults to simulator.
+   * @param config — Only for a target the connection manager holds no session for
+   *                 (Runtime v3/v4). Omit it for a connected device or a running
+   *                 simulator: the session already knows how to reach them.
    */
   connectAndStart: (config?: DebugConnectionConfig) => Promise<{ success: boolean; error?: string }>
 
@@ -49,7 +50,6 @@ export interface UseDebugSessionReturn {
 
 export function useDebugSession(): UseDebugSessionReturn {
   const debuggerPort = useDebugger()
-  const simulator = useSimulator()
 
   const {
     project: { data: projectData, meta: projectMeta },
@@ -62,7 +62,10 @@ export function useDebugSession(): UseDebugSessionReturn {
 
   const connectAndStart = useCallback(
     async (config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> => {
-      const debugConfig = config ?? ({ connectionType: 'simulator', connectionParams: {} } as DebugConnectionConfig)
+      // No config means "the target the connection manager already holds a session
+      // for" — a connected board, or a running simulator. Nothing here names a
+      // medium; that is the manager's to know.
+      const debugConfig = config
       const { project, workspaceActions: wsActions, consoleActions: logActions } = useOpenPLCStore.getState()
       const boardTarget = deviceDefinitions.configuration.deviceBoard
       const projectPath = project.meta.path
@@ -174,7 +177,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         })
 
         // Set target IP for non-simulator connections
-        if (debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
+        if (debugConfig && debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
           wsActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
         }
 
@@ -186,7 +189,11 @@ export function useDebugSession(): UseDebugSessionReturn {
         // the default 200ms instead of its intended 50ms).  Must be set
         // before `setDebuggerVisible(true)`, which is what triggers the
         // polling effect.
-        wsActions.setDebugConnectionType(debugConfig.connectionType)
+        // For a session-backed target the medium is the manager's choice, mirrored
+        // in the store; read it rather than assuming one.
+        wsActions.setDebugConnectionType(
+          debugConfig?.connectionType ?? useOpenPLCStore.getState().deviceConnection.transport ?? 'simulator',
+        )
 
         wsActions.setDebuggerVisible(true)
         logActions.addLog({
@@ -205,19 +212,20 @@ export function useDebugSession(): UseDebugSessionReturn {
     [debuggerPort, deviceDefinitions, projectData, projectMeta],
   )
 
+  /**
+   * End the debug session — and ONLY the debug session.
+   *
+   * It used to stop the simulator too, which had the ownership backwards: a debug
+   * session is a consumer of a connection, not the owner of the thing on the other
+   * end. Stopping the simulator is the Stop button's job (`handleSimulatorControl`),
+   * and closing that session is the connection manager's.
+   */
   const stopSession = useCallback(async () => {
-    // If simulator is running, stop it
-    if (simulator.isRunning()) {
-      await simulator.stop()
-    }
-
-    // Disconnect debugger
     await debuggerPort.disconnect()
 
-    // Clear all debug state
     workspaceActions.clearDebugState()
     debugTreesRef.current = {}
-  }, [simulator, debuggerPort, workspaceActions])
+  }, [debuggerPort, workspaceActions])
 
   const forceVariable = useCallback(
     async (index: number, force: boolean, value?: string, type?: string, enumValues?: string[]): Promise<boolean> => {

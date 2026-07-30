@@ -1,8 +1,22 @@
 /**
- * THE connection to a baremetal device.
+ * THE session with a device: what it is reached through, and by whom.
  *
- * One device, one open Modbus connection, whatever transport it runs over — and
- * every caller shares it: the debugger, run/stop, the status poll, licensing.
+ * A session has two channel slots — CONTROL (run/stop, status) and DEBUG
+ * (variables, md5, licensing) — because that is the shape real targets have:
+ *
+ *   - a baremetal board answers both over ONE Modbus connection, serial or TCP;
+ *   - a Runtime v3/v4 is controlled over REST but debugged over something else
+ *     entirely (Modbus TCP / a WebSocket);
+ *   - the simulator answers both over its in-process virtual serial port.
+ *
+ * When both roles share a medium the two slots hold the SAME channel, so nothing
+ * opens twice and releasing the debug role cannot close the connection out from
+ * under run/stop. When they differ the debug channel is opened on request and
+ * closed when the last requester lets go — an independent channel, whose failure
+ * leaves control untouched.
+ *
+ * Whatever the shape, every caller shares what the session holds: the debugger,
+ * run/stop, the status poll, licensing.
  * That single-ownership rule is the point of this module. Before it, three
  * places opened their own client for the same device (the debug session, the two
  * lazy-reconnect paths, and a transient one per run/stop command), and each had
@@ -113,9 +127,22 @@ export const DEFAULT_DEVICE_LINK_TIMINGS: DeviceLinkTimings = {
   maxRecoveryAttempts: 2,
 }
 
-export class DeviceLinkManager {
+export class DeviceSessionManager {
+  /** The control channel's client, and the debug channel's too when shared. */
   private client: DeviceModbusTransport | null = null
   private current: DeviceLinkCandidate | null = null
+  /**
+   * Debug channel, when it is NOT the control channel: its client (null until
+   * something asks for it) and how to open it.
+   */
+  private debugClientHeld: DeviceModbusTransport | null = null
+  private debugCandidate: DeviceLinkCandidate | null = null
+  /**
+   * Who currently wants the debug channel, by reason. A set rather than a counter
+   * so the trace can say who is holding it, and so a double release from one
+   * caller cannot close a channel another still needs.
+   */
+  private readonly debugHolders = new Set<string>()
   /** The full list the link was opened from, so recovery can try them all again. */
   private candidates: DeviceLinkCandidate[] = []
   private readonly policy: DeviceLinkPolicy
@@ -133,9 +160,73 @@ export class DeviceLinkManager {
     this.hooks.log?.(message)
   }
 
-  /** The held client, or null when nothing is connected (including mid-recovery). */
+  /**
+   * The CONTROL channel's client, or null when nothing is connected (including
+   * mid-recovery). Run/stop and the status poll go here.
+   */
   getClient(): DeviceModbusTransport | null {
     return this.client
+  }
+
+  /**
+   * The DEBUG channel's client, or null when it is not open.
+   *
+   * For a shared session this IS the control client, so it needs no acquiring and
+   * cannot be closed independently. For a session whose debug medium differs, it
+   * is null until someone calls `acquireDebugChannel`.
+   */
+  getDebugClient(): DeviceModbusTransport | null {
+    return this.debugCandidate ? this.debugClientHeld : this.client
+  }
+
+  /** True when one medium serves both roles, so the slots hold the same channel. */
+  isDebugShared(): boolean {
+    return this.debugCandidate === null
+  }
+
+  /**
+   * Open the debug channel if it isn't already, and record `reason` as a holder.
+   *
+   * Independent of control on purpose: a debug channel that will not open is
+   * reported to whoever asked, and the control connection carries on. For a shared
+   * session there is nothing to open — the answer is the control channel, and the
+   * session having been established is the only precondition.
+   */
+  async acquireDebugChannel(reason: string): Promise<{ client: DeviceModbusTransport } | { error: string }> {
+    if (this.debugCandidate === null) {
+      if (!this.client) return { error: 'Not connected' }
+      this.debugHolders.add(reason)
+      return { client: this.client }
+    }
+
+    if (this.debugClientHeld) {
+      this.debugHolders.add(reason)
+      return { client: this.debugClientHeld }
+    }
+
+    this.trace(`debug channel: opening ${this.debugCandidate.transport} ${this.debugCandidate.descriptor} for ${reason}`)
+    const outcome = await this.tryCandidate(this.debugCandidate, { isLastCandidate: true })
+    if (!outcome.ok) {
+      this.trace(`debug channel: could not open — ${outcome.error} (control connection unaffected)`)
+      return { error: outcome.error }
+    }
+    this.debugClientHeld = outcome.client
+    this.debugHolders.add(reason)
+    return { client: outcome.client }
+  }
+
+  /**
+   * Let go of the debug channel. It closes only once nothing holds it AND it is a
+   * channel of its own — releasing a shared one must never take the connection
+   * that run/stop and the status poll are using.
+   */
+  releaseDebugChannel(reason: string): void {
+    this.debugHolders.delete(reason)
+    if (this.debugHolders.size > 0) return
+    if (this.debugCandidate === null || !this.debugClientHeld) return
+    this.trace(`debug channel: closing (last holder ${reason} released)`)
+    this.debugClientHeld.disconnect()
+    this.debugClientHeld = null
   }
 
   /** Transport + endpoint of the held link, for messages and handoff decisions. */
@@ -164,8 +255,20 @@ export class DeviceLinkManager {
    *
    * A fresh open supersedes any held link (reconnect, transport change).
    */
-  async open(candidates: DeviceLinkCandidate[]): Promise<DeviceLinkOpenResult> {
+  async open(
+    candidates: DeviceLinkCandidate[],
+    options: {
+      /**
+       * How to reach this target for DEBUG when that is a different medium from
+       * control (Runtime v3/v4). Omit when one medium serves both — the slots then
+       * share a channel, which is what keeps a debug session from opening a second
+       * connection to a device that only answers one.
+       */
+      debugChannel?: DeviceLinkCandidate
+    } = {},
+  ): Promise<DeviceLinkOpenResult> {
     this.close({ silent: true })
+    this.debugCandidate = options.debugChannel ?? null
 
     if (candidates.length === 0) {
       this.trace('open: refused, no usable candidate was resolved')
@@ -265,6 +368,12 @@ export class DeviceLinkManager {
   close(options: { silent?: boolean } = {}): void {
     this.stopPolling()
     this.policy.reset()
+    this.debugHolders.clear()
+    if (this.debugClientHeld) {
+      this.debugClientHeld.disconnect()
+      this.debugClientHeld = null
+    }
+    this.debugCandidate = null
     const had = this.client !== null
     if (had) this.trace(`close: dropping ${this.current?.transport ?? '?'} ${this.current?.descriptor ?? '?'}`)
     this.dropClient()
