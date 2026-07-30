@@ -4,9 +4,11 @@ import { renderHook } from '@testing-library/react'
 const mockSetDeviceConnectionStatus = jest.fn()
 const mockClearDeviceProbe = jest.fn()
 const mockOpenModal = jest.fn()
+const mockAddLog = jest.fn()
 
 const mockState: Record<string, unknown> = {
   modalActions: { openModal: mockOpenModal },
+  consoleActions: { addLog: mockAddLog },
   deviceActions: {
     setDeviceConnectionStatus: mockSetDeviceConnectionStatus,
     clearDeviceProbe: mockClearDeviceProbe,
@@ -19,10 +21,11 @@ const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
 mockUseOpenPLCStore.getState = () => mockState
 
 const mockOnConnectionStatus = jest.fn().mockReturnValue(() => undefined)
+const mockOnLinkLog = jest.fn().mockReturnValue(() => undefined)
 
 jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
 jest.mock('../../../middleware/shared/providers', () => ({
-  useDevice: () => ({ onConnectionStatus: mockOnConnectionStatus }),
+  useDevice: () => ({ onConnectionStatus: mockOnConnectionStatus, onLinkLog: mockOnLinkLog }),
 }))
 
 import { useDeviceConnectionMonitor } from '../use-device-connection-monitor'
@@ -38,9 +41,23 @@ function mountAndPush(): (payload: Payload) => void {
 beforeEach(() => {
   jest.clearAllMocks()
   mockOnConnectionStatus.mockReturnValue(() => undefined)
+  mockOnLinkLog.mockReturnValue(() => undefined)
 })
 
 describe('useDeviceConnectionMonitor', () => {
+  it('mirrors the main-process connection trace into the console', () => {
+    // The decisions worth reading happen in the main process; the console is where
+    // a user can actually see and copy them while reproducing a problem.
+    renderHook(() => useDeviceConnectionMonitor())
+    const emit = mockOnLinkLog.mock.calls[0][0] as (message: string) => void
+
+    emit('open: 2 candidate(s) in order: tcp 192.168.2.20, rtu /dev/ttyACM0')
+
+    expect(mockAddLog).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'info', message: expect.stringContaining('tcp 192.168.2.20') }),
+    )
+  })
+
   it('subscribes once on mount and unsubscribes on unmount', () => {
     const unsubscribe = jest.fn()
     mockOnConnectionStatus.mockReturnValue(unsubscribe)

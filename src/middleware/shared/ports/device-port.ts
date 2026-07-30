@@ -233,6 +233,12 @@ export interface DevicePort {
    * failure, upload/debug handoff). Returns an unsubscribe function. Editor:
    * `device:connection-status` IPC event. Web: no-op.
    */
+  /**
+   * Subscribe to the device connection's diagnostic trace. Returns an unsubscribe
+   * function. Editor: `device:link-log`. Web: no-op.
+   */
+  onLinkLog?(callback: (message: string) => void): () => void
+
   onConnectionStatus(callback: (payload: DeviceConnectionStatusPayload) => void): () => void
 
   /**

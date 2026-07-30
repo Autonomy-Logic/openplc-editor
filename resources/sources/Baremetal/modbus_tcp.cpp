@@ -161,7 +161,16 @@ void handle_tcp()
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
 
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
-                if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
+                // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
+                // the minimum for a standard DATA request ([unit][fc][addr:2]
+                // [qty:2]) and silently dropped every debug/control request,
+                // which carries no payload at all: 0x41 debug-info, 0x45 md5,
+                // 0x46 status, 0x47 version, 0x48 board id, 0x4b run/stop. That
+                // is why the always-on debugger, run/stop and Connect only ever
+                // worked over serial — the requests never reached
+                // process_mbpacket(). Per-FC shape is validated there; over TCP
+                // the MBAP length is authoritative (no CRC to check).
+                if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 j = 0;
                 while (mb_serverClients[i].available())
@@ -212,7 +221,16 @@ void handle_tcp()
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
 
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
-                if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
+                // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
+                // the minimum for a standard DATA request ([unit][fc][addr:2]
+                // [qty:2]) and silently dropped every debug/control request,
+                // which carries no payload at all: 0x41 debug-info, 0x45 md5,
+                // 0x46 status, 0x47 version, 0x48 board id, 0x4b run/stop. That
+                // is why the always-on debugger, run/stop and Connect only ever
+                // worked over serial — the requests never reached
+                // process_mbpacket(). Per-FC shape is validated there; over TCP
+                // the MBAP length is authoritative (no CRC to check).
+                if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 i = 0;
                 while (client.available())

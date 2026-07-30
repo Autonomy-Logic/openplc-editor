@@ -68,6 +68,10 @@ export function createEditorDeviceAdapter(): DevicePort {
       return window.bridge.deviceDisconnect()
     },
 
+    onLinkLog(callback: (message: string) => void): () => void {
+      return window.bridge.onDeviceLinkLog(callback)
+    },
+
     onConnectionStatus(callback: (payload: DeviceConnectionStatusPayload) => void): () => void {
       return window.bridge.onDeviceConnectionStatus(callback)
     },

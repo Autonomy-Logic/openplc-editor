@@ -557,6 +557,15 @@ const rendererProcessBridge = {
   deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>
     ipcRenderer.invoke('device:release-serial-port', port),
 
+  // Diagnostic trace of the device connection (candidate attempts, poll verdicts,
+  // which connection served each command), mirrored into the editor console so it
+  // can be read and copied while reproducing a problem.
+  onDeviceLinkLog: (callback: (message: string) => void): (() => void) => {
+    const listener = (_event: unknown, message: string) => callback(message)
+    ipcRenderer.on('device:link-log', listener)
+    return () => ipcRenderer.removeListener('device:link-log', listener)
+  },
+
   // Main pushes live link status here (liveness failure, upload/debug handoff).
   onDeviceConnectionStatus: (callback: (payload: DeviceConnectionStatusPayload) => void): (() => void) => {
     const listener = (_event: unknown, payload: DeviceConnectionStatusPayload) => callback(payload)

@@ -108,6 +108,7 @@ class MainProcessBridge implements MainIpcModule {
     probe: (client) => this.probeDeviceLink(client),
     serialPortPresent: (port) => this.hardwareModule.isSerialPortPresent(port),
     emit: (status) => this.emitDeviceLinkStatus(status),
+    log: (message) => this.traceDeviceLink(message),
   })
   /** Classification + license result of the candidate the held link came from. */
   private deviceLinkProbe: DeviceConnectResult | null = null
@@ -1764,7 +1765,7 @@ class MainProcessBridge implements MainIpcModule {
     if (existing) return { client: existing }
 
     if (connectionType !== 'simulator') {
-      const required = this.requireDeviceClient()
+      const required = this.requireDeviceClient('debug session')
       return 'error' in required ? { error: required.error } : required
     }
 
@@ -1806,6 +1807,7 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: 'Runtime v4 run/stop is driven over REST, not the debug transport' }
     }
 
+    this.traceDeviceLink(`run/stop: ${action} requested (debug transport: ${connectionType})`)
     const link = await this.ensureDeviceLinkFor(connectionType, {})
     if ('error' in link) return { success: false, error: link.error }
 
@@ -1857,7 +1859,7 @@ class MainProcessBridge implements MainIpcModule {
     // reconnect here: if the link dropped, the manager is already reopening it
     // (or has reported it lost), and `needsReconnect` tells the renderer to stop
     // the session rather than race it for the port.
-    const link = this.requireDeviceClient()
+    const link = this.requireDeviceClient('read variables')
     if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
 
     try {
@@ -1967,7 +1969,7 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     blob: Uint8Array,
   ): Promise<{ success: boolean; status?: number; error?: string; needsReconnect?: boolean }> => {
-    const ensured = this.requireDeviceClient()
+    const ensured = this.requireDeviceClient('license op')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -1991,7 +1993,7 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
-    const ensured = this.requireDeviceClient()
+    const ensured = this.requireDeviceClient('license op')
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -2057,7 +2059,7 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     // arduino-cli targets (ESP32/AVR/simulator): FC 0x48 over the always-on debug channel.
-    const ensured = this.requireDeviceClient()
+    const ensured = this.requireDeviceClient('license op')
     if ('error' in ensured) {
       return { success: false, source, error: ensured.error }
     }
@@ -2231,7 +2233,24 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Push a link state change to the renderer. */
   private emitDeviceLinkStatus(status: DeviceLinkStatus): void {
+    this.traceDeviceLink(
+      `status -> ${status.status}${status.descriptor ? ` (${status.transport ?? '?'} ${status.descriptor})` : ''}${
+        status.reason ? ` [${status.reason}]` : ''
+      }`,
+    )
     this.mainWindow?.webContents?.send('device:connection-status', status)
+  }
+
+  /**
+   * Diagnostic trace for the device connection, to BOTH sinks on purpose: the
+   * main-process log file keeps it after the fact, and the renderer console puts
+   * it where a user can read and copy it while reproducing something. Connection
+   * problems span two processes and a piece of hardware; without this the only
+   * evidence is "it hangs".
+   */
+  private traceDeviceLink(message: string): void {
+    logger.info(`[link] ${message}`)
+    this.mainWindow?.webContents?.send('device:link-log', message)
   }
 
   /**
@@ -2298,6 +2317,9 @@ class MainProcessBridge implements MainIpcModule {
 
     const result = await probeAndRecover(client, this.deviceLinkLicenseOptions)
     this.deviceLinkProbe = result
+    this.traceDeviceLink(
+      `  ${candidate.descriptor}: classified as "${result.status}"${result.error ? ` (${result.error})` : ''}`,
+    )
     if (result.status !== 'connected-with-firmware') return false
     // The status frame doubles as the run/stop state source; push it straight
     // away so the Start/Stop button is right before the first poll lands.
@@ -2350,12 +2372,18 @@ class MainProcessBridge implements MainIpcModule {
    * instead of each handler inventing its own message — or, worse, opening its own
    * connection.
    */
-  private requireDeviceClient(): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
+  private requireDeviceClient(what = 'command'): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
     const client = this.deviceClient()
-    if (client) return { client }
+    if (client) {
+      const link = this.deviceLink.getLink()
+      this.traceDeviceLink(`${what}: using the held ${link?.transport ?? '?'} connection (${link?.descriptor ?? '?'})`)
+      return { client }
+    }
     if (this.deviceLink.isRecovering()) {
+      this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
       return { error: 'The device connection dropped and is being restored. Try again in a moment.', needsReconnect: true }
     }
+    this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
   }
 
@@ -2383,6 +2411,11 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<DeviceConnectResult> => {
     this.deviceLinkLicenseOptions = opts
     this.deviceLinkProbe = null
+    this.traceDeviceLink(
+      `connect requested with ${candidates.length} candidate(s): ${
+        candidates.map((config) => `${config.connectionType} ${describeDebugEndpoint(config)}`).join(', ') || '(none)'
+      }`,
+    )
 
     const linkCandidates = this.toDeviceLinkCandidates(candidates)
     if (linkCandidates.length === 0) {
@@ -2439,9 +2472,8 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
 
-    const link = this.requireDeviceClient()
+    const link = this.requireDeviceClient('write variable')
     if ('error' in link) {
-      logger.info('[IPC Handler] No device link for setVariable')
       return { success: false, error: link.error }
     }
 

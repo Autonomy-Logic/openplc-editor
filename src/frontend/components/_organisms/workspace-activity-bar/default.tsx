@@ -918,14 +918,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // A Modbus debug session rides the ONE held device connection — that is what
-      // keeps a single client on a serial port the OS will not lock twice, and a
-      // single socket on an Arduino TCP server that serves one client.
-      //
-      // Which means: connect first. Except over Modbus TCP, which needs no cable
-      // and no user input beyond an address the project already carries — so the
-      // debugger brings that link up itself, and remote debugging works with
-      // nothing plugged in.
+      // A Modbus debug session rides the ONE held device connection, over whichever
+      // transport that connection uses. So: connect first, exactly as a Runtime v4
+      // target requires. Starting a session must never establish the connection
+      // itself — Connect is the user's explicit action, it reports what it found
+      // (firmware, license), and hiding it inside the debug button means a click
+      // that says "debug" silently goes and opens hardware.
       //
       // This cannot be a debug-spec precondition: Connect resolves the same spec
       // to derive its parameters, so gating the spec would mean Connect needed a
@@ -933,34 +931,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       activeDebugTransportRef.current = debugConfig.connectionType
 
       const needsHeldLink = debugConfig.connectionType === 'rtu' || debugConfig.connectionType === 'tcp'
-      if (needsHeldLink && useOpenPLCStore.getState().deviceConnection.status !== 'connected') {
-        if (debugConfig.connectionType === 'rtu') {
-          await showDeviceDialog(
-            'warning',
-            'Connection Required',
-            'Connect to the device first. Serial debugging runs over the device connection, so the device must be connected before the debugger can start.',
-            ['OK'],
-          )
-          setIsDebuggerProcessing(false)
-          return
-        }
-
-        const opened = await device.connect([debugConfig], {
-          isLicensable: resolveTargetCapabilities(currentBoardInfo).isLicensable,
-          packageId: currentBoardInfo?.vpp?.packageId,
-          keyId: currentBoardInfo?.vpp?.licenseKeyId,
-        })
-        if (opened.status !== 'connected-with-firmware') {
-          await showDeviceDialog(
-            'warning',
-            'Connection Required',
-            opened.error ??
-              'Could not reach the device over Modbus TCP. Check the address, or connect over USB and try again.',
-            ['OK'],
-          )
-          setIsDebuggerProcessing(false)
-          return
-        }
+      const connectionStatusNow = useOpenPLCStore.getState().deviceConnection.status
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `[connection] debug session requested over ${debugConfig.connectionType}; device connection is "${connectionStatusNow}"${
+          needsHeldLink ? ' (a connection is required)' : ''
+        }`,
+      })
+      if (needsHeldLink && connectionStatusNow !== 'connected') {
+        await showDeviceDialog(
+          'warning',
+          'Connection Required',
+          'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
+          ['OK'],
+        )
+        setIsDebuggerProcessing(false)
+        return
       }
 
       // Debug compilation. Resolve alias-bound locations to concrete

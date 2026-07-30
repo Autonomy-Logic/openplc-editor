@@ -25,9 +25,21 @@ import { useOpenPLCStore } from '../store'
 
 export const useDeviceConnectionMonitor = (): void => {
   const device = useDevice()
+  const addLog = useOpenPLCStore((state) => state.consoleActions.addLog)
   const setDeviceConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setDeviceConnectionStatus)
   const clearDeviceProbe = useOpenPLCStore((state) => state.deviceActions.clearDeviceProbe)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+
+  // Mirror the main process's connection trace into the console. The interesting
+  // decisions (which candidate was tried, what each poll concluded, which
+  // connection served a command) happen in main; without this the user watching
+  // the UI sees only "connecting..." and then a failure.
+  useEffect(() => {
+    if (!device.onLinkLog) return
+    return device.onLinkLog((message) => {
+      addLog({ id: crypto.randomUUID(), level: 'info', message: `[connection] ${message}` })
+    })
+  }, [device, addLog])
 
   useEffect(() => {
     return device.onConnectionStatus(({ status, descriptor, transport, reason }) => {

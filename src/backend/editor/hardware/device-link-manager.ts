@@ -87,6 +87,13 @@ export interface DeviceLinkHooks {
   serialPortPresent: (port: string) => Promise<boolean>
   /** Report a link state change to the renderer. */
   emit: (status: DeviceLinkStatus) => void
+  /**
+   * Diagnostic trace of every decision this manager makes: which candidate was
+   * tried, how long its connect took, why it was kept or rejected, what each poll
+   * concluded. Optional, but in practice always supplied — a connection flow that
+   * spans two transports and a remote board cannot be diagnosed by watching the UI.
+   */
+  log?: (message: string) => void
 }
 
 export interface DeviceLinkTimings {
@@ -116,6 +123,10 @@ export class DeviceLinkManager {
     private readonly timings: DeviceLinkTimings = DEFAULT_DEVICE_LINK_TIMINGS,
   ) {
     this.policy = new DeviceLinkPolicy(timings.failuresBeforeRecovery, timings.maxRecoveryAttempts)
+  }
+
+  private trace(message: string): void {
+    this.hooks.log?.(message)
   }
 
   /** The held client, or null when nothing is connected (including mid-recovery). */
@@ -153,16 +164,29 @@ export class DeviceLinkManager {
     this.close({ silent: true })
 
     if (candidates.length === 0) {
+      this.trace('open: refused, no usable candidate was resolved')
       return { ok: false, attempts: [] }
     }
 
     this.candidates = candidates
     const attempts: DeviceLinkOpenFailure['attempts'] = []
+    this.trace(
+      `open: ${candidates.length} candidate(s) in order: ${candidates
+        .map((candidate) => `${candidate.transport} ${candidate.descriptor}`)
+        .join(', ')}`,
+    )
 
     for (const candidate of candidates) {
       this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
 
+      const startedAt = Date.now()
       const outcome = await this.tryCandidate(candidate)
+      const elapsed = Date.now() - startedAt
+      this.trace(
+        outcome.ok
+          ? `open: ${candidate.transport} ${candidate.descriptor} ACCEPTED in ${elapsed}ms`
+          : `open: ${candidate.transport} ${candidate.descriptor} rejected in ${elapsed}ms — ${outcome.error}`,
+      )
       if (outcome.ok) {
         this.client = outcome.client
         this.current = candidate
@@ -175,6 +199,7 @@ export class DeviceLinkManager {
     }
 
     this.candidates = []
+    this.trace('open: FAILED, no candidate answered')
     this.hooks.emit({ status: 'disconnected' })
     return { ok: false, attempts }
   }
@@ -186,6 +211,7 @@ export class DeviceLinkManager {
     // A serial candidate whose port is not even enumerated cannot be opened:
     // say so instead of waiting out a connect timeout.
     if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) {
+      this.trace(`  ${candidate.descriptor}: serial port is not enumerated, skipping`)
       return { ok: false, error: `${candidate.descriptor} is not available` }
     }
 
@@ -196,19 +222,33 @@ export class DeviceLinkManager {
       return { ok: false, error: describeError(error) }
     }
 
+    const connectStartedAt = Date.now()
     try {
       await client.connect()
+      this.trace(`  ${candidate.descriptor}: transport opened in ${Date.now() - connectStartedAt}ms`)
     } catch (error) {
       client.disconnect()
+      this.trace(`  ${candidate.descriptor}: transport would not open after ${Date.now() - connectStartedAt}ms`)
       return { ok: false, error: describeError(error) }
     }
 
+    // Opening proves an endpoint, not a PLC. A Modbus TCP socket to something
+    // that is not an OpenPLC target connects instantly and then answers nothing,
+    // so this is the step that decides whether to keep the candidate.
+    const verifyStartedAt = Date.now()
     try {
-      if (await this.hooks.verify(client, candidate)) return { ok: true, client }
+      if (await this.hooks.verify(client, candidate)) {
+        this.trace(`  ${candidate.descriptor}: answered the debug protocol in ${Date.now() - verifyStartedAt}ms`)
+        return { ok: true, client }
+      }
       client.disconnect()
+      this.trace(
+        `  ${candidate.descriptor}: opened but did NOT answer the debug protocol (waited ${Date.now() - verifyStartedAt}ms)`,
+      )
       return { ok: false, error: 'No OpenPLC firmware answered' }
     } catch (error) {
       client.disconnect()
+      this.trace(`  ${candidate.descriptor}: verification threw after ${Date.now() - verifyStartedAt}ms`)
       return { ok: false, error: describeError(error) }
     }
   }
@@ -221,6 +261,7 @@ export class DeviceLinkManager {
     this.stopPolling()
     this.policy.reset()
     const had = this.client !== null
+    if (had) this.trace(`close: dropping ${this.current?.transport ?? '?'} ${this.current?.descriptor ?? '?'}`)
     this.dropClient()
     this.current = null
     this.candidates = []
@@ -236,8 +277,15 @@ export class DeviceLinkManager {
    * disturb it, so debugging and run/stop keep working across an upload.
    */
   releaseSerialPort(port: string | null | undefined): boolean {
-    if (!this.current || this.current.transport !== 'rtu') return false
-    if (port !== undefined && port !== null && this.current.descriptor !== String(port)) return false
+    if (!this.current || this.current.transport !== 'rtu') {
+      this.trace(`release ${String(port)}: nothing to release (held: ${this.current?.transport ?? 'none'})`)
+      return false
+    }
+    if (port !== undefined && port !== null && this.current.descriptor !== String(port)) {
+      this.trace(`release ${String(port)}: held connection is on ${this.current.descriptor}, leaving it alone`)
+      return false
+    }
+    this.trace(`release ${this.current.descriptor}: handing the port over for an upload`)
     this.close()
     return true
   }
@@ -276,7 +324,12 @@ export class DeviceLinkManager {
     const candidate = this.current
     if (!client || !candidate) return
 
-    switch (this.policy.onProbeResult(await this.probeVerdict(client, candidate))) {
+    const verdict = await this.probeVerdict(client, candidate)
+    const decision = this.policy.onProbeResult(verdict)
+    if (verdict !== 'alive') {
+      this.trace(`poll: ${candidate.transport} ${candidate.descriptor} ${verdict} -> ${decision}`)
+    }
+    switch (decision) {
       case 'enter-recovery':
         // Drop the dead handle but KEEP the link: a stale open fd is what makes
         // the reopen fail with "cannot lock port", while the candidate list is
@@ -323,6 +376,9 @@ export class DeviceLinkManager {
     if (!previous) return
 
     const reopened = await this.reopen()
+    this.trace(
+      `recovery: attempt ${this.policy.attempts + 1} ${reopened ? `restored over ${reopened.candidate.transport}` : 'failed'}`,
+    )
 
     switch (this.policy.onReopenResult(reopened !== null)) {
       case 'recovered':
@@ -365,6 +421,7 @@ export class DeviceLinkManager {
 
   private declareLost(candidate: DeviceLinkCandidate): void {
     const { transport, descriptor } = candidate
+    this.trace(`LOST: ${transport} ${descriptor} could not be recovered`)
     this.close({ silent: true })
     this.hooks.emit({ status: 'error', transport, descriptor, reason: 'lost' })
   }

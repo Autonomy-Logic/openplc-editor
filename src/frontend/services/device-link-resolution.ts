@@ -26,6 +26,7 @@ import {
   resolveDeviceLinkCandidates,
 } from '../../backend/shared/hardware/debug-spec'
 import type { DebugConnectionConfig } from '../../middleware/shared/ports/types'
+import { describeDebugEndpoint } from '../../middleware/shared/utils/debug-endpoint'
 import { useOpenPLCStore } from '../store'
 
 /**
@@ -173,6 +174,19 @@ async function handleInteractiveOutcome(outcome: InteractiveOutcome, boardTarget
   return { retry: true, channelIndex: outcome.channelIndex }
 }
 
+/**
+ * Trace resolution into the console. Resolution happens HERE, in the renderer,
+ * from the project's screen data — so when a transport is not attempted at all,
+ * this is the only place that can say why.
+ */
+function trace(message: string): void {
+  useOpenPLCStore.getState().consoleActions.addLog({
+    id: crypto.randomUUID(),
+    level: 'info',
+    message: `[connection] ${message}`,
+  })
+}
+
 /** Guard against a malformed spec bouncing between prompts forever. */
 const MAX_RESOLVE_ROUNDS = 8
 
@@ -199,8 +213,25 @@ export async function resolveDeviceLinkWithUx(
   }
 
   for (let round = 0; round < MAX_RESOLVE_ROUNDS; round += 1) {
-    const outcome = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget, options))
-    if (outcome.kind === 'candidates') return outcome.candidates
+    const context = buildDeviceResolverContext(boardTarget, options)
+    const outcome = resolveDeviceLinkCandidates(spec, context)
+    if (outcome.kind === 'candidates') {
+      trace(
+        `resolved ${outcome.candidates.length} candidate(s) for ${boardTarget}: ${outcome.candidates
+          .map((candidate) => `${candidate.config.connectionType} ${describeDebugEndpoint(candidate.config)}`)
+          .join(', ')}`,
+      )
+      return outcome.candidates
+    }
+    // Say what the spec concluded and what it was reading, so a transport that is
+    // never attempted can be traced to the screen value that ruled it out.
+    trace(
+      `resolution returned "${outcome.kind}"${outcome.kind === 'error' ? `: ${outcome.body}` : ''} — modbus_tcp=${JSON.stringify(
+        context.state.screens.modbus_tcp ?? null,
+      )} modbus_rtu=${JSON.stringify(context.state.screens.modbus_rtu ?? null)} port=${String(
+        context.state.configuration.communicationPort ?? 'none',
+      )}`,
+    )
 
     const next = await handleInteractiveOutcome(outcome, boardTarget)
     if (!next.retry) {
