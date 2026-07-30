@@ -340,7 +340,7 @@ export function resolveDebugConnection(
  * editor that reports "connected" with nothing connected is what makes every later
  * request time out for no visible reason.
  *
- * Ordering is a preference, not a promise: `DeviceLinkManager` still verifies each
+ * Ordering is a preference, not a promise: `DeviceSessionManager` still verifies each
  * candidate before keeping it, so a cable attached to a board with no firmware
  * falls through to TCP rather than stranding the user.
  *

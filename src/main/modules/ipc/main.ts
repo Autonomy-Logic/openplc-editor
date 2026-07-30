@@ -106,7 +106,7 @@ class MainProcessBridge implements MainIpcModule {
   // ---------------------------------------------------------------------------
   // Talking to a baremetal device
   //
-  // ONE connection, owned by `deviceLink`, whatever transport it runs over: the
+  // ONE session, owned by `deviceSession`, whatever media it runs over: the
   // debugger, run/stop, the status poll and licensing all borrow that one client.
   // Nothing else here opens a Modbus client — see `device-link-manager.ts` for
   // why (in short: three owners meant a run/stop command could open a second
@@ -127,9 +127,7 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLinkProbe: DeviceConnectResult | null = null
   /** Licensing options of the current connect, so a verified candidate can recover its license. */
   private deviceLinkLicenseOptions: { isLicensable?: boolean; packageId?: string; keyId?: string } = {}
-  private debuggerTargetIp: string | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
-  private debuggerJwtToken: string | null = null
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   private runtimeIp: string | null = null

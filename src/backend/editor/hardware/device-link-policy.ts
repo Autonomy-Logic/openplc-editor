@@ -2,7 +2,7 @@
  * When is a held device link down, coming back, or gone for good?
  *
  * The I/O around the link (open a port or socket, read the status frame, close a
- * dead handle) lives in `DeviceLinkManager`. What lives HERE is only the
+ * dead handle) lives in `DeviceSessionManager`. What lives HERE is only the
  * counting, because that is where the off-by-ones hide and it is the one part
  * that can be tested without a cable to pull.
  *
