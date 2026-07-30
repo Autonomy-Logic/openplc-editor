@@ -407,6 +407,33 @@ void debugGetBoardId()
 // has consumed `blob`, so there is no overlap hazard on write.
 void debugWriteLicense(uint16_t len, const uint8_t *blob)
 {
+    // The license blob is a FIXED 98 bytes; anything else is not one, so refuse
+    // before the store ever sees it. Two separate problems close here.
+    //
+    // 1. CONTRACT (C2). The two ends disagreed about this exact field: the Linux
+    //    runtime answers 0x84 (LIC_CORRUPT) for len != 98, while bare metal passed
+    //    `len` straight through and [0x49][len=0x0004][4 bytes] came back 0x7E
+    //    SUCCESS -- the same command, two contracts, and the editor believing
+    //    whichever target it happened to be talking to.
+    //
+    // 2. OVERREAD. `len` is read from mb_frame[2..3] and can be up to 0xFFFF,
+    //    while `blob` points into `mb_frame`, a static buffer of MAX_MB_FRAME
+    //    (128 on 328P, 256 elsewhere). Over RTU this was already unreachable:
+    //    mb_pdu_request_len() computes 6 + len, modbus_serial.cpp drops any frame
+    //    whose expected length exceeds MAX_MB_FRAME, and it waits for the bytes to
+    //    actually arrive. Over TCP nothing checked it: modbus_tcp.cpp bounds only
+    //    the MBAP length (mb_frame_len), never cross-checks it against this field,
+    //    and hands the PDU to process_mbpacket(), so a 6-byte packet declaring
+    //    len = 0xFFFF made license_store_write read ~64 KB past the frame. Testing
+    //    `len` here is the one check that covers both transports at once.
+    if ((size_t)len != (size_t)LIC_BLOB_SIZE)
+    {
+        mb_frame[1] = MB_FC_DEBUG_WRITE_LICENSE;
+        mb_frame[2] = lic_status_to_mb(LIC_STORE_CORRUPT);
+        mb_frame_len = 3;
+        return;
+    }
+
     lic_store_status_t st = license_store_write(blob, (size_t)len);
     mb_frame[1] = MB_FC_DEBUG_WRITE_LICENSE;
     mb_frame[2] = lic_status_to_mb(st);

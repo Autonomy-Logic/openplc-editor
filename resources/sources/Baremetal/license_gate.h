@@ -22,7 +22,11 @@ typedef enum {
     LIC_GATE_UNSUPPORTED = 3,   /* no license-core linked (weak default) -> unenforced */
 } lic_gate_state_t;
 
-#define LIC_GATE_DEMO_MS 900000u /* 15 minutes */
+/* 15 minutes. Overridable at build (-DLIC_GATE_DEMO_MS=...) for bench tests
+ * that must watch the demo expire in seconds; production keeps the default. */
+#ifndef LIC_GATE_DEMO_MS
+#define LIC_GATE_DEMO_MS 900000u
+#endif
 
 void license_gate_init(const uint8_t *blob, size_t blob_len,
                        const uint8_t *anchor, size_t anchor_len,

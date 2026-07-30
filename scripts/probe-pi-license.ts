@@ -14,6 +14,10 @@
  *   --recover  full flow: probeAndRecover against the configured backend, then
  *              re-read 0x4A to confirm the device now holds a valid license.
  *
+ * `--recover` REQUIRES `OPENPLC_EDGE_API_URL` (or an explicit
+ * `--allow-production`): it consumes a real single-use nonce and rate-limit
+ * quota and, on success, WRITES a license onto the board.
+ *
  * Usage (from openplc-editor):
  *   npx tsx scripts/probe-pi-license.ts --probe --host 192.168.0.128
  *   OPENPLC_EDGE_API_URL=http://127.0.0.1:3333 \
@@ -40,6 +44,8 @@ interface Args {
   password: string
   packageId: string
   mode: 'probe' | 'recover'
+  /** Opt in, explicitly, to talking to the PRODUCTION backend in --recover. */
+  allowProduction: boolean
 }
 
 function parseArgs(argv: string[]): Args {
@@ -50,6 +56,7 @@ function parseArgs(argv: string[]): Args {
     password: 'admin',
     packageId: 'com.openplc.raspberry-pi-licensed',
     mode: 'probe',
+    allowProduction: false,
   }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--host' && argv[i + 1]) args.host = argv[++i]
@@ -59,6 +66,7 @@ function parseArgs(argv: string[]): Args {
     else if (argv[i] === '--packageId' && argv[i + 1]) args.packageId = argv[++i]
     else if (argv[i] === '--recover') args.mode = 'recover'
     else if (argv[i] === '--probe') args.mode = 'probe'
+    else if (argv[i] === '--allow-production') args.allowProduction = true
   }
   return args
 }
@@ -90,7 +98,24 @@ async function main(): Promise<void> {
   console.log(`device   ${args.host}:${args.port}`)
   console.log(`mode     ${args.mode}`)
   if (args.mode === 'recover') {
-    console.log(`backend  ${process.env.OPENPLC_EDGE_API_URL ?? '(default: production!)'}`)
+    // NO IMPLICIT PRODUCTION. `getEdgeApiBaseUrl()` falls back to the production
+    // host when `OPENPLC_EDGE_API_URL` is unset, and this mode does not merely
+    // read: it consumes a real single-use nonce and rate-limit quota, and on
+    // success it WRITES a license onto the board (0x49). Getting that from a
+    // forgotten env var — the previous behaviour, announced only as a
+    // "(default: production!)" line in the output — is not a default worth
+    // having. The target is now required, and `--allow-production` is the one
+    // way to aim at production, spelled out on the command line.
+    const backend = process.env.OPENPLC_EDGE_API_URL?.trim()
+    if (!backend && !args.allowProduction) {
+      console.error(
+        'refusing to run --recover without an explicit backend.\n' +
+          '  point it at a local backend:  OPENPLC_EDGE_API_URL=http://127.0.0.1:3333\n' +
+          '  or opt in to production on purpose:  --allow-production',
+      )
+      process.exit(2)
+    }
+    console.log(`backend  ${backend ?? 'PRODUCTION (--allow-production)'}`)
     console.log(`vpp      ${args.packageId}`)
   }
   console.log()
@@ -153,12 +178,34 @@ async function main(): Promise<void> {
     const after = await transport.readLicense()
     console.log(`0x4A after       ${describeLicenseStatus(after.status)}`)
 
+    // Two things this must NOT claim, both of which the old single line did.
+    //
+    // 1. That a blob was sent. On `already-licensed` the flow short-circuits on
+    //    the 0x4A read and never calls the backend or writes anything, so
+    //    "license-core accepted the blob" described an event that did not happen
+    //    -- and it was the WHOLE POINT of the run (#21: 0x49 has never been
+    //    observed live). A pass that reports success without exercising the thing
+    //    under test is worse than a failure.
+    // 2. That license-core accepted anything. 0x4A is answered by the runtime's
+    //    debug webserver, not by the closed verifier: it reports what is STORED.
+    //    The signature / key_id verdict never crosses the debug channel.
+    const wrote = result.activation === 'activated'
     const ok = after.status === LIC_STATUS_SUCCESS
-    console.log(
-      ok
-        ? '\nDEVICE HOLDS A VALID LICENSE -- license-core accepted the blob.'
-        : '\nDEVICE DID NOT ACCEPT THE LICENSE. See activation/error above.',
-    )
+    if (result.activation === 'already-licensed') {
+      console.log(
+        '\nNO BLOB WAS SENT: the device already held a license, so the flow returned before\n' +
+          'calling the backend and 0x49 was never exercised. Erase the stored license and\n' +
+          're-run to test the write path.',
+      )
+    } else if (wrote && ok) {
+      console.log(
+        '\n0x49 WROTE A LICENSE AND 0x4A READS IT BACK. This proves the transport and the\n' +
+          'store, NOT the verdict: license-core checks the signature and key_id inside the\n' +
+          'closed binary and that answer never crosses the debug channel.',
+      )
+    } else {
+      console.log('\nTHE DEVICE DOES NOT HOLD A LICENSE WE RECOGNISE. See activation/error above.')
+    }
     process.exit(ok ? 0 : 1)
   } finally {
     transport.disconnect()
