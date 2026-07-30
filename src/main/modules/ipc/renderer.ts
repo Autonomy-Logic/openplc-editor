@@ -1,5 +1,5 @@
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
-import type { SerialConnectionStatusPayload } from '@root/middleware/shared/ports/device-port'
+import type { DeviceConnectionStatusPayload } from '@root/middleware/shared/ports/device-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -22,6 +22,7 @@ import type {
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
+import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
@@ -534,17 +535,11 @@ const rendererProcessBridge = {
     error?: string
   }> => ipcRenderer.invoke('device:activate-license', connectionParams, opts),
 
-  // Persistent serial connection (D72): open + HOLD the RTU link. Returns the
-  // same classification as the probe, plus what the recover step concluded.
+  // Persistent device connection (D72): try the ordered candidates and HOLD the
+  // first that answers. Returns the same classification as the probe, plus what
+  // the recover step concluded.
   deviceConnect: (
-    connectionParams: {
-      connectionType?: 'rtu' | 'tcp' | 'websocket'
-      port?: string | number
-      baudRate?: number
-      slaveId?: number
-      host?: string
-      token?: string
-    },
+    candidates: DebugConnectionConfig[],
     opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
   ): Promise<{
     status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
@@ -553,14 +548,18 @@ const rendererProcessBridge = {
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     error?: string
-  }> => ipcRenderer.invoke('device:connect', connectionParams, opts),
+  }> => ipcRenderer.invoke('device:connect', candidates, opts),
 
   // Close the held serial link (Disconnect).
   deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
 
+  // Upload handoff: give up the link ONLY if it is the serial one holding `port`.
+  deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>
+    ipcRenderer.invoke('device:release-serial-port', port),
+
   // Main pushes live link status here (liveness failure, upload/debug handoff).
-  onDeviceConnectionStatus: (callback: (payload: SerialConnectionStatusPayload) => void): (() => void) => {
-    const listener = (_event: unknown, payload: SerialConnectionStatusPayload) => callback(payload)
+  onDeviceConnectionStatus: (callback: (payload: DeviceConnectionStatusPayload) => void): (() => void) => {
+    const listener = (_event: unknown, payload: DeviceConnectionStatusPayload) => callback(payload)
     ipcRenderer.on('device:connection-status', listener)
     return () => ipcRenderer.removeListener('device:connection-status', listener)
   },

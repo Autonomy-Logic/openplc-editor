@@ -64,7 +64,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     phase: 'idle',
     result: null,
   },
-  serialConnection: {
+  deviceConnection: {
     status: 'disconnected',
     port: null,
   },
@@ -118,7 +118,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection, deviceProbeInfo, serialConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceProbeInfo, deviceConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pinsByBoard: {},
@@ -140,8 +140,8 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           // connection so a stale badge can't leak into the next one.
           deviceProbeInfo.phase = 'idle'
           deviceProbeInfo.result = null
-          serialConnection.status = 'disconnected'
-          serialConnection.port = null
+          deviceConnection.status = 'disconnected'
+          deviceConnection.port = null
         }),
       )
     },
@@ -575,19 +575,19 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
-    setSerialConnectionStatus: (status, port): void => {
+    setDeviceConnectionStatus: (status, port): void => {
       setState(
-        produce(({ serialConnection }: DeviceSlice) => {
-          serialConnection.status = status
-          if (port !== undefined) serialConnection.port = port
+        produce(({ deviceConnection }: DeviceSlice) => {
+          deviceConnection.status = status
+          if (port !== undefined) deviceConnection.port = port
         }),
       )
     },
-    clearSerialConnection: (): void => {
+    clearDeviceConnection: (): void => {
       setState(
-        produce(({ serialConnection }: DeviceSlice) => {
-          serialConnection.status = 'disconnected'
-          serialConnection.port = null
+        produce(({ deviceConnection }: DeviceSlice) => {
+          deviceConnection.status = 'disconnected'
+          deviceConnection.port = null
         }),
       )
     },

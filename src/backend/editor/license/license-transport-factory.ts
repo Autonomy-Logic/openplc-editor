@@ -4,11 +4,14 @@
  * and the activation step pick the transport identically -- serial (Arduino),
  * TCP, or the runtime-v4 debug WebSocket. Extracted from
  * `handleActivateDeviceLicense` so there is one place that maps params -> client.
+ *
+ * The runtime-v4 WebSocket is this file's own business (licensing is the only
+ * thing that rides it); serial and TCP defer to `buildDeviceModbusTransport`, so
+ * a Modbus client is constructed in exactly one place.
  */
 import type { LicenseCapableTransport } from '../../shared/debug/types'
 import { WebSocketDebugTransport } from '../../shared/debug/websocket-debug-transport'
-import { ModbusTcpClient } from '../modbus/modbus-client'
-import { ModbusRtuClient } from '../modbus/modbus-rtu-client'
+import { buildDeviceModbusTransport } from '../hardware/device-transport-factory'
 
 export interface LicenseTransportParams {
   connectionType?: 'rtu' | 'tcp' | 'websocket'
@@ -47,29 +50,11 @@ export function buildLicenseTransport(
     }
   }
 
-  if (connectionType === 'tcp') {
-    if (!params.host) {
-      return { error: 'host is required for tcp activation' }
-    }
-    return {
-      client: new ModbusTcpClient({
-        host: params.host,
-        port: typeof params.port === 'number' ? params.port : 502,
-        timeout: 2000,
-      }),
-    }
-  }
-
-  // rtu (default): Arduino over serial.
-  if (!params.port || typeof params.port !== 'string') {
-    return { error: 'Port is required for license activation' }
-  }
-  return {
-    client: new ModbusRtuClient({
-      port: params.port,
-      baudRate: params.baudRate ?? 115200,
-      slaveId: params.slaveId ?? 1,
-      timeout: 2000, // short: the id read is retried while the board boots
-    }),
-  }
+  // Serial and TCP are plain Modbus device links: build them where every other
+  // Modbus client is built. The short timeout is this flow's own concern — the
+  // board-id read is retried while a board is still booting.
+  return buildDeviceModbusTransport(
+    { connectionType, port: params.port, baudRate: params.baudRate, slaveId: params.slaveId, host: params.host },
+    { timeoutMs: 2000 },
+  )
 }

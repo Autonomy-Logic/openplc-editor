@@ -15,6 +15,7 @@ import {
 import type {
   DebugBoardIdResult,
   DebugStatusResult,
+  DeviceModbusTransport,
   Md5ProbeResult,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
@@ -55,7 +56,7 @@ const MD5_REQUEST_RETRY_DELAY_MS = 500
 
 const FRAME_COMPLETE_TIMEOUT_MS = 10
 
-export class ModbusRtuClient {
+export class ModbusRtuClient implements DeviceModbusTransport {
   private port: string
   private baudRate: number
   private slaveId: number

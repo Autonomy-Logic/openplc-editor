@@ -1,14 +1,14 @@
 import { renderHook } from '@testing-library/react'
 
 // `mock*`-prefixed refs are hoisted into the jest.mock factories below.
-const mockSetSerialConnectionStatus = jest.fn()
+const mockSetDeviceConnectionStatus = jest.fn()
 const mockClearDeviceProbe = jest.fn()
 const mockOpenModal = jest.fn()
 
 const mockState: Record<string, unknown> = {
   modalActions: { openModal: mockOpenModal },
   deviceActions: {
-    setSerialConnectionStatus: mockSetSerialConnectionStatus,
+    setDeviceConnectionStatus: mockSetDeviceConnectionStatus,
     clearDeviceProbe: mockClearDeviceProbe,
   },
 }
@@ -25,13 +25,13 @@ jest.mock('../../../middleware/shared/providers', () => ({
   useDevice: () => ({ onConnectionStatus: mockOnConnectionStatus }),
 }))
 
-import { useSerialConnectionMonitor } from '../use-serial-connection-monitor'
+import { useDeviceConnectionMonitor } from '../use-device-connection-monitor'
 
-type Payload = { status: string; port: string | null; reason?: 'lost' }
+type Payload = { status: string; descriptor?: string; transport?: 'rtu' | 'tcp'; reason?: 'lost' }
 
 /** Mount the hook and hand back the main-process push callback. */
 function mountAndPush(): (payload: Payload) => void {
-  renderHook(() => useSerialConnectionMonitor())
+  renderHook(() => useDeviceConnectionMonitor())
   return mockOnConnectionStatus.mock.calls[0][0] as (payload: Payload) => void
 }
 
@@ -40,12 +40,12 @@ beforeEach(() => {
   mockOnConnectionStatus.mockReturnValue(() => undefined)
 })
 
-describe('useSerialConnectionMonitor', () => {
+describe('useDeviceConnectionMonitor', () => {
   it('subscribes once on mount and unsubscribes on unmount', () => {
     const unsubscribe = jest.fn()
     mockOnConnectionStatus.mockReturnValue(unsubscribe)
 
-    const { unmount } = renderHook(() => useSerialConnectionMonitor())
+    const { unmount } = renderHook(() => useDeviceConnectionMonitor())
     expect(mockOnConnectionStatus).toHaveBeenCalledTimes(1)
 
     unmount()
@@ -56,18 +56,18 @@ describe('useSerialConnectionMonitor', () => {
     const push = mountAndPush()
 
     for (const status of ['connecting', 'connected', 'disconnected', 'error'] as const) {
-      push({ status, port: 'COM5' })
-      expect(mockSetSerialConnectionStatus).toHaveBeenCalledWith(status, 'COM5')
+      push({ status, descriptor: 'COM5', transport: 'rtu' })
+      expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith(status, 'COM5')
     }
   })
 
   it('clears the device probe when the link is gone', () => {
     const push = mountAndPush()
 
-    push({ status: 'disconnected', port: 'COM5' })
+    push({ status: 'disconnected', descriptor: 'COM5' })
     expect(mockClearDeviceProbe).toHaveBeenCalledTimes(1)
 
-    push({ status: 'error', port: 'COM5' })
+    push({ status: 'error', descriptor: 'COM5' })
     expect(mockClearDeviceProbe).toHaveBeenCalledTimes(2)
   })
 
@@ -77,19 +77,19 @@ describe('useSerialConnectionMonitor', () => {
     // time a cable is jostled.
     const push = mountAndPush()
 
-    push({ status: 'connecting', port: 'COM5' })
+    push({ status: 'connecting', descriptor: 'COM5' })
     expect(mockClearDeviceProbe).not.toHaveBeenCalled()
-    expect(mockSetSerialConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5')
+    expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5')
   })
 
   it('warns the user only when recovery gave up', () => {
     const push = mountAndPush()
 
     // An 'error' from something the user just clicked already has its own dialog.
-    push({ status: 'error', port: 'COM5' })
+    push({ status: 'error', descriptor: 'COM5' })
     expect(mockOpenModal).not.toHaveBeenCalled()
 
-    push({ status: 'error', port: 'COM5', reason: 'lost' })
+    push({ status: 'error', descriptor: 'COM5', reason: 'lost' })
     expect(mockOpenModal).toHaveBeenCalledTimes(1)
     const [modalId, data] = mockOpenModal.mock.calls[0]
     expect(modalId).toBe('runtime-connection-lost')
@@ -102,18 +102,29 @@ describe('useSerialConnectionMonitor', () => {
     // interrupt the user with a dialog.
     const push = mountAndPush()
 
-    push({ status: 'connecting', port: 'COM5' })
-    push({ status: 'connected', port: 'COM5' })
+    push({ status: 'connecting', descriptor: 'COM5' })
+    push({ status: 'connected', descriptor: 'COM5' })
 
     expect(mockOpenModal).not.toHaveBeenCalled()
   })
 
-  it('still names the device when the port is unknown', () => {
+  it('still names the device when the endpoint is unknown', () => {
     const push = mountAndPush()
-    push({ status: 'error', port: null, reason: 'lost' })
+    push({ status: 'error', reason: 'lost' })
     expect(mockOpenModal).toHaveBeenCalledWith('runtime-connection-lost', {
       label: 'the device',
       body: expect.stringContaining('the device'),
     })
+  })
+
+  it('advises the right thing to check for the transport that dropped', () => {
+    // "Check the cable" is useless advice for a link that ran over ethernet.
+    const push = mountAndPush()
+    push({ status: 'error', descriptor: '192.168.0.50', transport: 'tcp', reason: 'lost' })
+
+    const [, data] = mockOpenModal.mock.calls[0]
+    expect((data as { body: string }).body).toContain('192.168.0.50')
+    expect((data as { body: string }).body).toContain('network')
+    expect((data as { body: string }).body).not.toContain('cable')
   })
 })

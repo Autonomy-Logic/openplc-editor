@@ -10,8 +10,8 @@ import type {
   PinUpdateResponse,
   RuntimeConnection,
   SelectedDevice,
-  SerialConnection,
-  SerialConnectionStatus,
+  DeviceConnection,
+  DeviceConnectionStatus,
   StoredCredentials,
 } from '../slices/device'
 
@@ -194,24 +194,24 @@ describe('Device slice types', () => {
           includeEthercatStatsInPolling: false,
         },
         deviceProbeInfo: { phase: 'idle', result: null },
-        serialConnection: { status: 'disconnected', port: null },
+        deviceConnection: { status: 'disconnected', port: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
       expect(state.deviceUpdated).toBeDefined()
       expect(state.runtimeConnection).toBeDefined()
       expect(state.deviceProbeInfo).toBeDefined()
-      expect(state.serialConnection).toBeDefined()
+      expect(state.deviceConnection).toBeDefined()
     })
   })
 
   // -----------------------------------------------------------------------
-  // SerialConnection
+  // DeviceConnection
   // -----------------------------------------------------------------------
-  describe('SerialConnection', () => {
+  describe('DeviceConnection', () => {
     it('accepts every status', () => {
-      const statuses: SerialConnectionStatus[] = ['disconnected', 'connecting', 'connected', 'error']
-      const conns: SerialConnection[] = statuses.map((status) => ({ status, port: status === 'connected' ? 'COM5' : null }))
+      const statuses: DeviceConnectionStatus[] = ['disconnected', 'connecting', 'connected', 'error']
+      const conns: DeviceConnection[] = statuses.map((status) => ({ status, port: status === 'connected' ? 'COM5' : null }))
       expect(conns).toHaveLength(4)
     })
   })

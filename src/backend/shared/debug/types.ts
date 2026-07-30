@@ -155,6 +155,51 @@ export interface LicenseCapableTransport {
 }
 
 /**
+ * The full command surface of a Modbus link to a device: the debug operations
+ * (`DebugTransport`) plus licensing (`LicenseCapableTransport`) plus run/stop.
+ *
+ * `ModbusRtuClient` and `ModbusTcpClient` are separate classes that differ only
+ * in framing (RTU: slave id + CRC; TCP: MBAP header). The PDUs they carry, and
+ * therefore the operations they expose, are identical. Naming that shared
+ * surface is what lets ONE held connection serve every caller regardless of how
+ * it was established, instead of each caller picking a client class and opening
+ * its own connection.
+ *
+ * A caller-by-caller choice is exactly what broke run/stop over Modbus TCP: the
+ * command path recognised only RTU clients as reusable, so with a live TCP link
+ * it opened a second socket — which an Arduino Modbus TCP server, serving one
+ * client at a time, never answered.
+ *
+ * `getStatus` / `setPlcState` are REQUIRED here, narrowing the optionals on
+ * `LicenseCapableTransport`: both Modbus clients implement run/stop, and only the
+ * runtime-v4 WebSocket (a different protocol, driving run/stop over REST) does
+ * not.
+ */
+export interface DeviceModbusTransport
+  extends Omit<DebugTransport, 'getVariablesList' | 'setVariable'>,
+    LicenseCapableTransport {
+  getStatus(): Promise<DebugStatusResult>
+  setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+  /**
+   * The two payload-carrying operations, restated for the main process.
+   *
+   * `DebugTransport` types payloads as `Uint8Array` because it is also
+   * implemented in the browser-shared layer; the Node Modbus clients hand back
+   * `Buffer`, which TypeScript does not treat as a substitute for `Uint8Array`
+   * since @types/node made `Buffer` generic. Everything else — connect,
+   * disconnect, getMd5Hash — is inherited unchanged.
+   */
+  getVariablesList(indexes: number[]): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: Buffer
+    error?: string
+  }>
+  setVariable(index: number, force: boolean, valueBuffer?: Buffer): Promise<DebugSetResult>
+}
+
+/**
  * Result of a run/stop command (FC 0x4b `PLC_SET_STATE`).
  *
  * Reads are NOT done through this — they come from `DebugStatusResult` via

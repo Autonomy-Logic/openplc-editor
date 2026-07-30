@@ -1,8 +1,8 @@
 /**
  * The Connect flow and the debugger resolve the SAME debug spec.
  *
- * `use-device-connect.ts` resolves it (via `resolveSerialLink`) to derive the
- * serial port / baud / slave id it needs to OPEN the connection, nothing connected
+ * `use-device-connect.ts` resolves it (via `resolveDeviceLinkCandidates`) to derive
+ * the ways it can OPEN a connection, with nothing connected
  * yet — that is the whole point of Connect. So a precondition on a baremetal
  * board's spec gates Connect as well as the debugger, and Connect can then never
  * succeed: it would need a connection to establish one. The user-visible symptom
@@ -13,7 +13,12 @@
  * precondition; it belongs in the debugger entry point. These tests pin both
  * halves of that.
  */
-import { resolveDebugConnection, resolveSerialLink, type DebugResolverContext, type DebugSpec } from '../debug-spec'
+import {
+  resolveDebugConnection,
+  resolveDeviceLinkCandidates,
+  type DebugResolverContext,
+  type DebugSpec,
+} from '../debug-spec'
 
 /** Mirrors what `buildUsbResolverContext` builds: nothing is connected.
  *  `port === undefined` models "no port selected", which is how the store looks
@@ -107,37 +112,83 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     if (result.kind === 'config') expect(result.config.connectionType).toBe('tcp')
   })
 
-  it('resolves serial anyway through resolveSerialLink', () => {
-    // The fix: the serial flows name the rtu channel. Naming it bypasses
-    // `enabledWhen`, which is correct — the always-on debugger keeps the serial
-    // protocol compiled into the firmware even with Modbus RTU turned off, so
-    // serial is connectable regardless of which transports the project enables.
-    const result = resolveSerialLink(bothChannelsSpec, tcpOnlyContext())
+  it('offers BOTH transports, Modbus TCP first, when the project enables it', () => {
+    // The connection is transport-agnostic, so Connect does not pick — it gets an
+    // ordered list and the manager keeps the first that answers. TCP leads because
+    // it needs no cable and survives an upload; serial follows as the fallback,
+    // which is what makes preferring TCP safe when an address is stale.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext())
 
-    expect(result.kind).toBe('config')
-    if (result.kind === 'config') {
-      expect(result.config.connectionType).toBe('rtu')
-      expect(String(result.config.connectionParams.port)).toBe('/dev/cu.usbmodem11101')
-    }
+    expect(result.kind).toBe('candidates')
+    if (result.kind !== 'candidates') return
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['tcp', 'rtu'])
+    expect(String(result.candidates[1].config.connectionParams.port)).toBe('/dev/cu.usbmodem11101')
   })
 
-  it('still reports a missing port through resolveSerialLink', () => {
-    // Naming the channel must not swallow the channel's own `required` messages.
-    const result = resolveSerialLink(baremetalSpec, disconnectedUsbContext())
+  it('offers serial even with Modbus RTU turned off', () => {
+    // Modbus RTU disabled does not mean serial is unreachable: the always-on
+    // debugger keeps the serial protocol compiled into every baremetal firmware.
+    // Requiring `enabledWhen` here is what made Connect refuse a Modbus-TCP-only
+    // project with "select a communication port" while one was plainly selected.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext())
+    if (result.kind !== 'candidates') throw new Error('expected candidates')
+    expect(result.candidates.some((candidate) => candidate.config.connectionType === 'rtu')).toBe(true)
+  })
+
+  it('offers serial ALONE when Modbus TCP is not enabled', () => {
+    const rtuOnly = resolveDeviceLinkCandidates(bothChannelsSpec, disconnectedUsbContext('/dev/cu.usbmodem11101'))
+    if (rtuOnly.kind !== 'candidates') throw new Error('expected candidates')
+    expect(rtuOnly.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+  })
+
+  it('asks for the address when Modbus TCP is on DHCP', () => {
+    // Requirement: prompt for the IP when DHCP is enabled. The spec declares that
+    // prompt; this is the resolver bubbling it so Connect can surface the dialog —
+    // which it could not do at all while it resolved a single channel itself.
+    const dhcp = tcpOnlyContext()
+    dhcp.state.screens.modbus_tcp = { enabled: true, enable_dhcp: true }
+    const spec: DebugSpec = {
+      channels: [
+        {
+          label: 'Modbus TCP',
+          channel: 'tcp',
+          enabledWhen: { $ref: 'screens.modbus_tcp.enabled' },
+          params: { ipAddress: { $ref: 'screens.modbus_tcp.tcp_ip' } },
+          prompts: [
+            {
+              when: { $ref: 'screens.modbus_tcp.enable_dhcp' },
+              field: 'ipAddress',
+              title: 'Target IP Address',
+              message: 'Enter the DHCP-assigned address.',
+              cacheKey: 'lastDhcpIp',
+            },
+          ],
+        },
+        ...baremetalSpec.channels,
+      ],
+    }
+
+    const result = resolveDeviceLinkCandidates(spec, dhcp)
+    expect(result.kind).toBe('prompt')
+  })
+
+  it('lets a caller skip a channel it has decided against', () => {
+    // A cancelled address dialog must leave the user with the cable, not nothing.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { skipChannels: [0] })
+    if (result.kind !== 'candidates') throw new Error('expected candidates')
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+  })
+
+  it('still reports a missing port when serial is the only candidate', () => {
+    // Candidate resolution must not swallow a channel's own `required` message.
+    const result = resolveDeviceLinkCandidates(baremetalSpec, disconnectedUsbContext())
     expect(result).toMatchObject({ kind: 'error', body: 'No serial port selected.' })
   })
 
-  it('reports unsupported when the board has no serial channel at all', () => {
-    const tcpOnlySpec: DebugSpec = { channels: [bothChannelsSpec.channels[0]] }
-    expect(resolveSerialLink(tcpOnlySpec, tcpOnlyContext()).kind).toBe('unsupported')
-  })
-
-  it('does not throw on a spec with no channels array', () => {
-    // `channels` comes from a VPP manifest; a malformed package must produce a
-    // dialog, not an exception inside a click handler.
+  it('reports unsupported when the board declares nothing reachable', () => {
     const malformed = {} as unknown as DebugSpec
-    expect(resolveSerialLink(malformed, tcpOnlyContext()).kind).toBe('unsupported')
-    expect(resolveSerialLink(undefined, tcpOnlyContext()).kind).toBe('unsupported')
+    expect(resolveDeviceLinkCandidates(malformed, tcpOnlyContext()).kind).toBe('unsupported')
+    expect(resolveDeviceLinkCandidates(undefined, tcpOnlyContext()).kind).toBe('unsupported')
   })
 
   it('shows why a precondition cannot express a debugger-only requirement', () => {

@@ -89,10 +89,19 @@ describe('createEditorDeviceAdapter', () => {
     expect(result).toEqual({ success: true, probedAt: '2026-07-22T00:00:00.000Z', outcome: 'activated' })
   })
 
-  it('delegates connect to window.bridge with params and opts', async () => {
-    const params = { connectionType: 'rtu' as const, port: 'COM5', baudRate: 115200 }
-    const result = await adapter.connect(params, { isLicensable: true, packageId: 'com.vendor.board', keyId: 'k1' })
-    expect(window.bridge.deviceConnect).toHaveBeenCalledWith(params, {
+  it('delegates connect to window.bridge with the candidate list and opts', async () => {
+    // Connect passes every way to reach the device, in order; the main process
+    // tries them and keeps the first that answers.
+    const candidates = [
+      { connectionType: 'tcp' as const, connectionParams: { ipAddress: '192.168.0.50' } },
+      { connectionType: 'rtu' as const, connectionParams: { port: 'COM5', baudRate: 115200 } },
+    ]
+    const result = await adapter.connect(candidates, {
+      isLicensable: true,
+      packageId: 'com.vendor.board',
+      keyId: 'k1',
+    })
+    expect(window.bridge.deviceConnect).toHaveBeenCalledWith(candidates, {
       isLicensable: true,
       packageId: 'com.vendor.board',
       keyId: 'k1',

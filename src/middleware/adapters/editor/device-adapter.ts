@@ -16,12 +16,12 @@
 
 import type {
   DeviceActivationResult,
+  DeviceConnectionStatusPayload,
   DeviceConnectParams,
   DeviceConnectResult,
   DevicePort,
-  SerialConnectionStatusPayload,
 } from '../../shared/ports/device-port'
-import type { BoardInfo, CommunicationPort } from '../../shared/ports/types'
+import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
 
 export function createEditorDeviceAdapter(): DevicePort {
   return {
@@ -53,17 +53,22 @@ export function createEditorDeviceAdapter(): DevicePort {
     },
 
     connect(
-      params: DeviceConnectParams,
+      candidates: DebugConnectionConfig[],
       opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
     ): Promise<DeviceConnectResult> {
-      return window.bridge.deviceConnect(params, opts)
+      return window.bridge.deviceConnect(candidates, opts)
+    },
+
+    async releaseSerialPort(port: string | null | undefined): Promise<boolean> {
+      const result = await window.bridge.deviceReleaseSerialPort(port)
+      return result.released
     },
 
     disconnect(): Promise<{ success: boolean }> {
       return window.bridge.deviceDisconnect()
     },
 
-    onConnectionStatus(callback: (payload: SerialConnectionStatusPayload) => void): () => void {
+    onConnectionStatus(callback: (payload: DeviceConnectionStatusPayload) => void): () => void {
       return window.bridge.onDeviceConnectionStatus(callback)
     },
 

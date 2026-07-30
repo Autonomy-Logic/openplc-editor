@@ -88,7 +88,7 @@ export type RuntimeConnection = {
 // Persistent serial connection (D72) — baremetal "stay connected"
 // ---------------------------------------------------------------------------
 
-export type SerialConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+export type DeviceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 /**
  * Live link state for a baremetal (USB/serial) target, mirroring the runtime's
@@ -97,8 +97,8 @@ export type SerialConnectionStatus = 'disconnected' | 'connecting' | 'connected'
  * reconnects afterwards. Distinct from `deviceProbeInfo` (which is the license
  * classification) — this is purely whether the serial link is up.
  */
-export type SerialConnection = {
-  status: SerialConnectionStatus
+export type DeviceConnection = {
+  status: DeviceConnectionStatus
   /** The communication port the link is on (or was last attempted on). */
   port: string | null
 }
@@ -136,7 +136,7 @@ export type DeviceState = {
   }
   runtimeConnection: RuntimeConnection
   deviceProbeInfo: DeviceProbeInfo
-  serialConnection: SerialConnection
+  deviceConnection: DeviceConnection
 }
 
 // ---------------------------------------------------------------------------
@@ -214,9 +214,9 @@ export type DeviceActions = {
   /** Reset the probe to `idle`/null. Called on disconnect and project close. */
   clearDeviceProbe: () => void
   /** Set the persistent serial link state (optionally the port it's on). */
-  setSerialConnectionStatus: (status: SerialConnectionStatus, port?: string | null) => void
+  setDeviceConnectionStatus: (status: DeviceConnectionStatus, port?: string | null) => void
   /** Reset the serial link to disconnected/null. */
-  clearSerialConnection: () => void
+  clearDeviceConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

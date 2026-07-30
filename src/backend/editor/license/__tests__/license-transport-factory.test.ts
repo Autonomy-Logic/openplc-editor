@@ -28,12 +28,18 @@ describe('buildLicenseTransport', () => {
     })
   })
 
+  // Serial and TCP now defer to `buildDeviceModbusTransport`, so these assert
+  // that the delegation reports ITS message rather than a second copy here.
   it('errors when tcp has no host', () => {
-    expect(buildLicenseTransport({ connectionType: 'tcp' }, 8443)).toEqual({ error: expect.stringContaining('host') })
+    expect(buildLicenseTransport({ connectionType: 'tcp' }, 8443)).toEqual({
+      error: expect.stringContaining('IP address is required'),
+    })
   })
 
   it('errors when rtu has no (string) port', () => {
-    expect(buildLicenseTransport({}, 8443)).toEqual({ error: expect.stringContaining('Port') })
-    expect(buildLicenseTransport({ port: 502 }, 8443)).toEqual({ error: expect.stringContaining('Port') })
+    expect(buildLicenseTransport({}, 8443)).toEqual({ error: expect.stringContaining('serial port is required') })
+    expect(buildLicenseTransport({ port: 502 }, 8443)).toEqual({
+      error: expect.stringContaining('serial port is required'),
+    })
   })
 })

@@ -21,7 +21,7 @@
  *   - getDeviceStatus()
  */
 
-import type { BoardInfo, CommunicationPort } from './types'
+import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from './types'
 
 // ---------------------------------------------------------------------------
 // Connect-time classification (D72) — platform contract shared by the port,
@@ -125,9 +125,17 @@ export interface DeviceActivationResult {
  * link that was up, died, and could not be recovered — from an 'error' that came
  * straight out of something they just clicked (which already has its own dialog).
  */
-export interface SerialConnectionStatusPayload {
+export interface DeviceConnectionStatusPayload {
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
-  port: string | null
+  /** Which transport the connection uses (or was using, when it dropped). */
+  transport?: 'rtu' | 'tcp' | 'simulator'
+  /**
+   * The endpoint, as the user would name it: a serial path ("/dev/ttyACM0",
+   * "COM5") or an IP address. Not called `port`, because for a Modbus TCP link it
+   * is an address — and a name that implies serial is what led callers to branch
+   * on the wrong thing in the first place.
+   */
+  descriptor?: string
   reason?: 'lost'
 }
 
@@ -186,15 +194,36 @@ export interface DevicePort {
   ): Promise<DeviceActivationResult>
 
   /**
-   * Open and HOLD a persistent serial link (D72). The main process keeps the
-   * RTU client open with a liveness poll and pushes status changes; this call
-   * returns the initial classification + recover result. Only meaningful for
-   * serial (USB) targets. Editor: `device:connect`. Web: not applicable.
+   * Open and HOLD the connection to a baremetal device (D72).
+   *
+   * `candidates` is the ordered list of ways to reach it, resolved from the
+   * board's debug spec: Modbus TCP first when the project enables it, then serial.
+   * The main process tries them in order and keeps the first that both opens and
+   * answers, so a stale DHCP address or an unplugged ethernet shield falls through
+   * to the cable instead of leaving the editor claiming a connection it does not
+   * have. It then holds that ONE connection — every command (debug, run/stop, the
+   * status poll, licensing) rides it — polls it, and pushes status changes through
+   * `onConnectionStatus`.
+   *
+   * Editor: `device:connect`. Web: not applicable locally.
    */
   connect(
-    params: DeviceConnectParams,
+    candidates: DebugConnectionConfig[],
     opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
   ): Promise<DeviceConnectResult>
+
+  /**
+   * Hand the serial port over for an upload: releases the held connection only if
+   * it IS the serial one occupying `port`, and reports whether it did.
+   *
+   * A connection over Modbus TCP is left alone — flashing over USB does not
+   * disturb it, so debugging and run/stop survive the upload. Disconnecting
+   * unconditionally (what the upload flow used to do) threw away a working link
+   * for no reason.
+   *
+   * Editor: `device:release-serial-port`. Web: no-op, returns false.
+   */
+  releaseSerialPort(port: string | null | undefined): Promise<boolean>
 
   /** Close a held serial link. Editor: `device:disconnect`. */
   disconnect(): Promise<{ success: boolean }>
@@ -204,7 +233,7 @@ export interface DevicePort {
    * failure, upload/debug handoff). Returns an unsubscribe function. Editor:
    * `device:connection-status` IPC event. Web: no-op.
    */
-  onConnectionStatus(callback: (payload: SerialConnectionStatusPayload) => void): () => void
+  onConnectionStatus(callback: (payload: DeviceConnectionStatusPayload) => void): () => void
 
   /**
    * Subscribe to run/stop state from the held device link (baremetal targets).

@@ -3,6 +3,8 @@ export type {
   ConnectionStatus,
   DeviceActions,
   DeviceAvailableOptions,
+  DeviceConnection,
+  DeviceConnectionStatus,
   DevicePinMapping,
   DeviceProbeInfo,
   DeviceSlice,
@@ -10,7 +12,5 @@ export type {
   PinUpdateResponse,
   RuntimeConnection,
   SelectedDevice,
-  SerialConnection,
-  SerialConnectionStatus,
   StoredCredentials,
 } from './types'

@@ -1,0 +1,375 @@
+/**
+ * THE connection to a baremetal device.
+ *
+ * One device, one open Modbus connection, whatever transport it runs over — and
+ * every caller shares it: the debugger, run/stop, the status poll, licensing.
+ * That single-ownership rule is the point of this module. Before it, three
+ * places opened their own client for the same device (the debug session, the two
+ * lazy-reconnect paths, and a transient one per run/stop command), and each had
+ * its own idea of which transport counted as reusable. A run/stop command with a
+ * live Modbus TCP session therefore opened a SECOND socket to the board — which
+ * an Arduino Modbus TCP server, serving one client at a time, never answered, so
+ * the command failed with a bare timeout while a perfectly good connection sat
+ * idle.
+ *
+ * Transport is a detail here, not a branch. Both Modbus clients implement
+ * `DeviceModbusTransport`, so this module never asks which one it holds except to
+ * describe it to the user and to know whether a vanished serial port applies.
+ *
+ * What the manager does NOT decide:
+ *   - which candidates to try, or in what order  -> the caller resolves those
+ *     from the board's debug spec (Modbus TCP first when the project enables it,
+ *     serial otherwise), so this works for every baremetal target rather than
+ *     any particular board;
+ *   - what "this is really the device" means      -> `hooks.verify`, which the
+ *     main process implements as its existing classify + license recover;
+ *   - the counting for down / back / lost         -> `DeviceLinkPolicy`.
+ */
+import type { DeviceModbusTransport } from '../../shared/debug/types'
+import { DeviceLinkPolicy } from './device-link-policy'
+
+export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
+
+/** One way to reach the device, ready to be tried. */
+export interface DeviceLinkCandidate {
+  transport: DeviceLinkTransport
+  /** What the user calls this endpoint: "/dev/cu.usbmodem11101", "192.168.0.50". */
+  descriptor: string
+  /** Build an unconnected client for this candidate. */
+  create: () => DeviceModbusTransport
+}
+
+/** Live link state, as pushed to the renderer. */
+export interface DeviceLinkStatus {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  transport?: DeviceLinkTransport
+  descriptor?: string
+  /**
+   * Set only when a link that WAS up died and could not be recovered. The one
+   * status the user must be told about; every other 'error' came straight out of
+   * something they just clicked and already has its own dialog.
+   */
+  reason?: 'lost'
+}
+
+export interface DeviceLinkOpenSuccess {
+  ok: true
+  transport: DeviceLinkTransport
+  descriptor: string
+  client: DeviceModbusTransport
+}
+
+export interface DeviceLinkOpenFailure {
+  ok: false
+  /** Every candidate that was tried, with why it did not work. */
+  attempts: Array<{ transport: DeviceLinkTransport; descriptor: string; error: string }>
+}
+
+export type DeviceLinkOpenResult = DeviceLinkOpenSuccess | DeviceLinkOpenFailure
+
+export interface DeviceLinkHooks {
+  /**
+   * Is this freshly opened client really a device we can work with? Decides
+   * whether to keep a candidate or move on to the next one, so a Modbus TCP
+   * socket that opens but answers nothing correctly falls back to serial.
+   *
+   * The main process implements this as its classify + license recover, which is
+   * why it runs on open only — see `probe` for the per-tick check.
+   */
+  verify: (client: DeviceModbusTransport, candidate: DeviceLinkCandidate) => Promise<boolean>
+  /**
+   * Cheap liveness read on the held client, also used to confirm a reopen. Kept
+   * separate from `verify` so recovery does not re-run licensing every couple of
+   * seconds for as long as a cable is out.
+   */
+  probe: (client: DeviceModbusTransport) => Promise<boolean>
+  /** Is this serial port still enumerated by the OS? */
+  serialPortPresent: (port: string) => Promise<boolean>
+  /** Report a link state change to the renderer. */
+  emit: (status: DeviceLinkStatus) => void
+}
+
+export interface DeviceLinkTimings {
+  pollIntervalMs: number
+  failuresBeforeRecovery: number
+  maxRecoveryAttempts: number
+}
+
+/** Fail fast, but not so fast that noise reopens a port. See DeviceLinkPolicy. */
+export const DEFAULT_DEVICE_LINK_TIMINGS: DeviceLinkTimings = {
+  pollIntervalMs: 2500,
+  failuresBeforeRecovery: 2,
+  maxRecoveryAttempts: 2,
+}
+
+export class DeviceLinkManager {
+  private client: DeviceModbusTransport | null = null
+  private current: DeviceLinkCandidate | null = null
+  /** The full list the link was opened from, so recovery can try them all again. */
+  private candidates: DeviceLinkCandidate[] = []
+  private readonly policy: DeviceLinkPolicy
+  private timer: ReturnType<typeof setInterval> | null = null
+  private tickInFlight = false
+
+  constructor(
+    private readonly hooks: DeviceLinkHooks,
+    private readonly timings: DeviceLinkTimings = DEFAULT_DEVICE_LINK_TIMINGS,
+  ) {
+    this.policy = new DeviceLinkPolicy(timings.failuresBeforeRecovery, timings.maxRecoveryAttempts)
+  }
+
+  /** The held client, or null when nothing is connected (including mid-recovery). */
+  getClient(): DeviceModbusTransport | null {
+    return this.client
+  }
+
+  /** Transport + endpoint of the held link, for messages and handoff decisions. */
+  getLink(): { transport: DeviceLinkTransport; descriptor: string } | null {
+    if (!this.current) return null
+    return { transport: this.current.transport, descriptor: this.current.descriptor }
+  }
+
+  /** True while the link is down and reopens are being attempted. */
+  isRecovering(): boolean {
+    return this.policy.recovering
+  }
+
+  isConnected(): boolean {
+    return this.client !== null
+  }
+
+  /**
+   * Open the first candidate that works and hold it.
+   *
+   * Candidates are tried IN ORDER and the first one to both connect and verify
+   * wins; a candidate that connects but fails verification is closed before the
+   * next is tried, so no stray handles are left behind. If none work the attempt
+   * fails, reporting what was tried — an editor that claimed "connected" without
+   * a working connection is what made every later request time out mysteriously.
+   *
+   * A fresh open supersedes any held link (reconnect, transport change).
+   */
+  async open(candidates: DeviceLinkCandidate[]): Promise<DeviceLinkOpenResult> {
+    this.close({ silent: true })
+
+    if (candidates.length === 0) {
+      return { ok: false, attempts: [] }
+    }
+
+    this.candidates = candidates
+    const attempts: DeviceLinkOpenFailure['attempts'] = []
+
+    for (const candidate of candidates) {
+      this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
+
+      const outcome = await this.tryCandidate(candidate)
+      if (outcome.ok) {
+        this.client = outcome.client
+        this.current = candidate
+        this.policy.reset()
+        this.startPolling()
+        this.hooks.emit({ status: 'connected', transport: candidate.transport, descriptor: candidate.descriptor })
+        return { ok: true, transport: candidate.transport, descriptor: candidate.descriptor, client: outcome.client }
+      }
+      attempts.push({ transport: candidate.transport, descriptor: candidate.descriptor, error: outcome.error })
+    }
+
+    this.candidates = []
+    this.hooks.emit({ status: 'disconnected' })
+    return { ok: false, attempts }
+  }
+
+  /** Open + verify a single candidate, leaving nothing open on failure. */
+  private async tryCandidate(
+    candidate: DeviceLinkCandidate,
+  ): Promise<{ ok: true; client: DeviceModbusTransport } | { ok: false; error: string }> {
+    // A serial candidate whose port is not even enumerated cannot be opened:
+    // say so instead of waiting out a connect timeout.
+    if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) {
+      return { ok: false, error: `${candidate.descriptor} is not available` }
+    }
+
+    let client: DeviceModbusTransport
+    try {
+      client = candidate.create()
+    } catch (error) {
+      return { ok: false, error: describeError(error) }
+    }
+
+    try {
+      await client.connect()
+    } catch (error) {
+      client.disconnect()
+      return { ok: false, error: describeError(error) }
+    }
+
+    try {
+      if (await this.hooks.verify(client, candidate)) return { ok: true, client }
+      client.disconnect()
+      return { ok: false, error: 'No OpenPLC firmware answered' }
+    } catch (error) {
+      client.disconnect()
+      return { ok: false, error: describeError(error) }
+    }
+  }
+
+  /**
+   * Close the held link. `silent` skips the renderer notification, for the case
+   * where a new open is about to report its own state.
+   */
+  close(options: { silent?: boolean } = {}): void {
+    this.stopPolling()
+    this.policy.reset()
+    const had = this.client !== null
+    this.dropClient()
+    this.current = null
+    this.candidates = []
+    if (had && !options.silent) this.hooks.emit({ status: 'disconnected' })
+  }
+
+  /**
+   * Give up the link if it holds `port` — the handoff before an upload takes the
+   * same serial port. Returns whether anything was released, so the caller knows
+   * whether to reconnect afterwards.
+   *
+   * A link running over Modbus TCP is untouched: flashing over USB does not
+   * disturb it, so debugging and run/stop keep working across an upload.
+   */
+  releaseSerialPort(port: string | null | undefined): boolean {
+    if (!this.current || this.current.transport !== 'rtu') return false
+    if (port !== undefined && port !== null && this.current.descriptor !== String(port)) return false
+    this.close()
+    return true
+  }
+
+  private dropClient(): void {
+    this.client?.disconnect()
+    this.client = null
+  }
+
+  private startPolling(): void {
+    this.stopPolling()
+    this.timer = setInterval(() => {
+      if (this.tickInFlight) return
+      this.tickInFlight = true
+      void this.tick().finally(() => {
+        this.tickInFlight = false
+      })
+    }, this.timings.pollIntervalMs)
+  }
+
+  private stopPolling(): void {
+    if (!this.timer) return
+    clearInterval(this.timer)
+    this.timer = null
+  }
+
+  /**
+   * One step of the link's lifecycle: probe the held client, or make a single
+   * reopen attempt while recovering. Public so it can be driven directly in
+   * tests instead of waiting on a timer.
+   */
+  async tick(): Promise<void> {
+    if (this.policy.recovering) return this.attemptRecovery()
+
+    const client = this.client
+    const candidate = this.current
+    if (!client || !candidate) return
+
+    switch (this.policy.onProbeResult(await this.probeVerdict(client, candidate))) {
+      case 'enter-recovery':
+        // Drop the dead handle but KEEP the link: a stale open fd is what makes
+        // the reopen fail with "cannot lock port", while the candidate list is
+        // what lets the next ticks bring it back with nothing for the user to do.
+        this.dropClient()
+        this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
+        return
+      case 'fail-now':
+        return this.declareLost(candidate)
+      default:
+        return
+    }
+  }
+
+  /** Classify one probe of the held client. */
+  private async probeVerdict(
+    client: DeviceModbusTransport,
+    candidate: DeviceLinkCandidate,
+  ): Promise<'alive' | 'unresponsive' | 'gone'> {
+    // Check the endpoint first: a pulled USB cable is not a slow device, and
+    // treating it as one would spend the whole failure budget waiting for
+    // timeouts on a port that no longer exists.
+    if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) {
+      return 'gone'
+    }
+    try {
+      return (await this.hooks.probe(client)) ? 'alive' : 'unresponsive'
+    } catch {
+      return 'unresponsive'
+    }
+  }
+
+  /**
+   * One reopen attempt while recovering. Tries the SAME candidate list the link
+   * was opened from, so a device that comes back on either transport is picked
+   * up — and a serial port that has not reappeared is skipped without cost.
+   *
+   * Verification here is the cheap `probe`, not `verify`: the classification and
+   * license recover from the original open still stand, and re-running them every
+   * couple of seconds while a cable is out would hammer the licensing backend.
+   */
+  private async attemptRecovery(): Promise<void> {
+    const previous = this.current
+    if (!previous) return
+
+    const reopened = await this.reopen()
+
+    switch (this.policy.onReopenResult(reopened !== null)) {
+      case 'recovered':
+        this.client = reopened!.client
+        this.current = reopened!.candidate
+        this.hooks.emit({
+          status: 'connected',
+          transport: reopened!.candidate.transport,
+          descriptor: reopened!.candidate.descriptor,
+        })
+        return
+      case 'give-up':
+        return this.declareLost(previous)
+      default:
+        return
+    }
+  }
+
+  /** Try every candidate once; return the first that opens and answers. */
+  private async reopen(): Promise<{ client: DeviceModbusTransport; candidate: DeviceLinkCandidate } | null> {
+    for (const candidate of this.candidates) {
+      if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) continue
+
+      let client: DeviceModbusTransport
+      try {
+        client = candidate.create()
+      } catch {
+        continue
+      }
+      try {
+        await client.connect()
+        if (await this.hooks.probe(client)) return { client, candidate }
+      } catch {
+        // Still out, or open but silent — fall through and close it.
+      }
+      client.disconnect()
+    }
+    return null
+  }
+
+  private declareLost(candidate: DeviceLinkCandidate): void {
+    const { transport, descriptor } = candidate
+    this.close({ silent: true })
+    this.hooks.emit({ status: 'error', transport, descriptor, reason: 'lost' })
+  }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}

@@ -13,37 +13,19 @@
  *                            in the main process; if it landed in demo, prompt Buy /
  *                            Run in Demo.
  *
- * Live link state (`serialConnection.status`) is pushed from the main process; the
+ * Live link state (`deviceConnection.status`) is pushed from the main process; the
  * license classification lands in `deviceProbeInfo` for the FULL/DEMO badge.
  */
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { useDevice, useSystem } from '@root/middleware/shared/providers/platform-context'
+import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback } from 'react'
 
-import { type DebugResolverContext, resolveSerialLink } from '../../backend/shared/hardware/debug-spec'
-import type { DeviceConnectParams } from '../../middleware/shared/ports/device-port'
+import { resolveDeviceLinkWithUx } from '../services/device-link-resolution'
 import { useOpenPLCStore } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
 import { buildLicenseBuyUrl } from '../utils/license-buy-url'
-
-/** Build the debug resolver context for a USB connect (serial port + baud only). */
-function buildUsbResolverContext(): DebugResolverContext {
-  const cfg = useOpenPLCStore.getState().deviceDefinitions.configuration
-  const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
-  return {
-    state: {
-      configuration: {
-        deviceBoard: cfg.deviceBoard,
-        ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
-      },
-      screens,
-      runtimeConnection: {},
-      promptCache: {},
-    },
-    capabilities: { runtimeConnected: false, jwtToken: false },
-  }
-}
 
 export interface UseDeviceConnectResult {
   /** Open + hold the serial link for the given board. Never throws. */
@@ -68,9 +50,9 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const startDeviceProbe = useOpenPLCStore((s) => s.deviceActions.startDeviceProbe)
   const setDeviceProbeResult = useOpenPLCStore((s) => s.deviceActions.setDeviceProbeResult)
   const clearDeviceProbe = useOpenPLCStore((s) => s.deviceActions.clearDeviceProbe)
-  const setSerialConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setSerialConnectionStatus)
+  const setDeviceConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setDeviceConnectionStatus)
   const addLog = useOpenPLCStore((s) => s.consoleActions.addLog)
-  const status = useOpenPLCStore((s) => s.serialConnection.status)
+  const status = useOpenPLCStore((s) => s.deviceConnection.status)
 
   /**
    * Send the user to the Edge purchase page FOR THIS DEVICE (D68a). The page
@@ -108,41 +90,26 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     const caps = resolveTargetCapabilities(boardInfo)
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
 
-    // Connect opens the SERIAL link and nothing else — see `resolveSerialLink`
-    // for why this must name the channel instead of auto-selecting one.
-    const resolved = resolveSerialLink(boardInfo?.debug, buildUsbResolverContext())
-    if (!(resolved.kind === 'config' && resolved.config.connectionType === 'rtu')) {
-      // Report what actually went wrong. The resolver already knows (no port
-      // selected, no serial channel); inventing one reason for all of them is
-      // how a resolved-to-TCP config came out as "select a port".
-      openModal('debugger-message', {
-        type: 'error',
-        title: resolved.kind === 'error' ? resolved.title : 'Cannot Connect',
-        message:
-          resolved.kind === 'error'
-            ? resolved.body
-            : 'This device has no serial debug channel to connect through. Check the device package.',
-        buttons: ['OK'],
-        onResponse: () => undefined,
-      })
-      return
-    }
+    // Resolve every way to reach this device, in the order they should be tried:
+    // Modbus TCP when the project enables it, then serial. The dialogs a spec may
+    // need (the DHCP address) are handled inside, by the same loop the debugger
+    // uses. A null return means the user cancelled, or the board declares nothing
+    // connectable — either way the dialog has already been shown.
+    const candidates = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug)
+    if (!candidates?.length) return
 
-    const cp = resolved.config.connectionParams
-    const params: DeviceConnectParams = {
-      connectionType: 'rtu',
-      port: String(cp.port),
-      baudRate: cp.baudRate != null ? Number(cp.baudRate) : undefined,
-      slaveId: cp.slaveId != null ? Number(cp.slaveId) : undefined,
-    }
+    const endpoints = candidates.map((candidate) => describeDebugEndpoint(candidate.config)).join(' or ')
 
     startDeviceProbe()
-    setSerialConnectionStatus('connecting', String(cp.port))
-    const result = await device.connect(params, {
-      isLicensable: caps.isLicensable,
-      packageId: boardInfo?.vpp?.packageId,
-      keyId: boardInfo?.vpp?.licenseKeyId,
-    })
+    setDeviceConnectionStatus('connecting', null)
+    const result = await device.connect(
+      candidates.map((candidate) => candidate.config),
+      {
+        isLicensable: caps.isLicensable,
+        packageId: boardInfo?.vpp?.packageId,
+        keyId: boardInfo?.vpp?.licenseKeyId,
+      },
+    )
 
     // Land the classification for the badge (main already ran the recover).
     // `activation` + `error` travel with it: without them the badge cannot tell
@@ -161,7 +128,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       openModal('debugger-message', {
         type: 'error',
         title: 'No Response',
-        message: `Could not open ${String(cp.port)}. Check that the device is plugged in and the correct port is selected.`,
+        message: `Could not reach the device on ${endpoints}. Check that it is powered and plugged in, and that the port or IP address is correct.`,
         buttons: ['OK'],
         onResponse: () => undefined,
       })
@@ -183,7 +150,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       openModal('debugger-message', {
         type: 'question',
         title: 'No Firmware Detected',
-        message: `No OpenPLC firmware responded on ${String(cp.port)}. Build & Upload the program to flash this device, then Connect again.`,
+        message: `No OpenPLC firmware responded on ${endpoints}. Build & Upload the program to flash this device, then Connect again.`,
         buttons: ['Build & Upload', 'Cancel'],
         onResponse: (buttonIndex: number) => {
           if (buttonIndex === 0) requestDeviceFlash()
@@ -205,13 +172,13 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
         },
       })
     }
-  }, [boardInfo, device, openModal, startDeviceProbe, setDeviceProbeResult, setSerialConnectionStatus, buyLicense])
+  }, [boardInfo, device, openModal, startDeviceProbe, setDeviceProbeResult, setDeviceConnectionStatus, buyLicense])
 
   const disconnect = useCallback(async (): Promise<void> => {
     await device.disconnect()
-    setSerialConnectionStatus('disconnected', null)
+    setDeviceConnectionStatus('disconnected', null)
     clearDeviceProbe()
-  }, [device, setSerialConnectionStatus, clearDeviceProbe])
+  }, [device, setDeviceConnectionStatus, clearDeviceProbe])
 
   /**
    * License check for a runtime-v4 (network) target (F7). The runtime owns its

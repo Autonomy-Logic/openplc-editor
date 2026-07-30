@@ -13,6 +13,7 @@ import {
 import type {
   DebugBoardIdResult,
   DebugStatusResult,
+  DeviceModbusTransport,
   Md5ProbeResult,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
@@ -55,7 +56,7 @@ interface ModbusTcpClientOptions {
   timeout: number
 }
 
-export class ModbusTcpClient {
+export class ModbusTcpClient implements DeviceModbusTransport {
   private host: string
   private port: number
   private timeout: number

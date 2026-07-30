@@ -111,6 +111,23 @@ export type DebugResolverOutcome =
   | { kind: 'error'; title: string; body: string }
   | { kind: 'unsupported' }
 
+/** One resolved way to reach the device, with the channel it came from. */
+export interface DeviceLinkCandidateConfig {
+  config: DebugConnectionConfig
+  channelLabel: string
+  /** Index in `spec.channels`, so a caller can skip this channel on a re-resolve. */
+  channelIndex: number
+}
+
+/**
+ * Outcome of resolving link candidates. Shares `prompt` / `error` / `unsupported`
+ * with `DebugResolverOutcome` so ONE renderer loop can drive both this and the
+ * debugger's single-channel resolution.
+ */
+export type DeviceLinkCandidatesOutcome =
+  | { kind: 'candidates'; candidates: DeviceLinkCandidateConfig[] }
+  | Extract<DebugResolverOutcome, { kind: 'prompt' } | { kind: 'error' } | { kind: 'unsupported' }>
+
 // ---------------------------------------------------------------------------
 // Resolver
 // ---------------------------------------------------------------------------
@@ -294,31 +311,85 @@ export function resolveDebugConnection(
 }
 
 /**
- * Resolve a board's SERIAL (rtu) channel, whatever Modbus transports the project
- * enables.
+ * Resolve the ordered list of ways to reach a baremetal device.
  *
- * Two flows open the serial link itself rather than a debug session: the device
- * screen's Connect, and the reconnect after an upload has finished with the port.
- * Both need the port / baud / slave id out of the same spec, and neither cares
- * which transport the DEBUGGER would use — so neither can let `enabledWhen`
- * auto-select. It picked `tcp` in a Modbus-TCP-only project, which made Connect
- * refuse ("select a communication port", with one selected) and made the
- * post-upload reconnect silently skip, leaving the held link closed.
+ * The device link is transport-agnostic, so Connect does not pick a channel — it
+ * gets CANDIDATES and tries them in order until one answers:
  *
- * Naming the channel is also correct on its own terms: the always-on debugger
- * keeps the serial protocol compiled into every baremetal firmware even when
- * Modbus RTU is turned off, so serial is connectable regardless.
+ *   1. Modbus TCP, when the project enables it. Preferred because it needs no
+ *      cable and survives an upload over USB.
+ *   2. Serial. Always a candidate for a baremetal target, regardless of whether
+ *      Modbus RTU is enabled, because the always-on debugger keeps the serial
+ *      protocol compiled into the firmware either way.
  *
- * Returns the same outcomes as `resolveDebugConnection`, plus `unsupported` when
- * the board declares no serial channel at all.
+ * If Modbus TCP is not enabled, serial is the only candidate. If neither can be
+ * built, the caller gets the reason the first one failed — an editor that reports
+ * "connected" with nothing connected is what makes every later request time out
+ * for no visible reason.
+ *
+ * Ordering is a preference, not a promise: `DeviceLinkManager` still verifies
+ * each candidate before keeping it, so an IP that belongs to something else (or a
+ * stale DHCP lease) falls through to serial rather than stranding the user.
+ *
+ * A channel needing user input (the DHCP address prompt) bubbles up as `prompt`,
+ * exactly as it does for the debugger; the caller fills the cache and re-invokes.
+ * `skipChannels` lets a caller drop a channel it has decided against — a
+ * cancelled IP dialog re-resolves without the TCP channel, leaving serial.
+ *
+ * Nothing here is board-specific: the candidate set is whatever the target's
+ * `debug` spec declares, so every baremetal target follows the same flow.
  */
-export function resolveSerialLink(
+export function resolveDeviceLinkCandidates(
   spec: DebugSpec | undefined,
   context: DebugResolverContext,
-): DebugResolverOutcome {
-  // `channels` arrives from a VPP manifest: treat it as possibly absent rather
-  // than trusting the type, so a malformed spec resolves to a dialog, not a throw.
-  const rtuIndex = spec?.channels?.findIndex((channel) => channel.channel === 'rtu') ?? -1
-  if (!spec || rtuIndex < 0) return { kind: 'unsupported' }
-  return resolveDebugConnection(spec, context, rtuIndex)
+  options: { skipChannels?: number[] } = {},
+): DeviceLinkCandidatesOutcome {
+  // `channels` arrives from a VPP manifest, so treat it as possibly absent
+  // rather than trusting the type: a malformed package must produce a dialog,
+  // not an exception inside a click handler.
+  const channels = spec?.channels
+  if (!spec || !channels?.length) return { kind: 'unsupported' }
+
+  const skip = new Set(options.skipChannels ?? [])
+  const eligible: number[] = []
+
+  // Modbus TCP first, but only when the project turned it on.
+  channels.forEach((channel, index) => {
+    if (channel.channel !== 'tcp' || skip.has(index)) return
+    if (evaluateCondition(channel.enabledWhen, context.state)) eligible.push(index)
+  })
+  // Then serial, unconditionally.
+  channels.forEach((channel, index) => {
+    if (channel.channel === 'rtu' && !skip.has(index)) eligible.push(index)
+  })
+
+  if (eligible.length === 0) {
+    const message = spec.messages?.noneEnabled
+    return {
+      kind: 'error',
+      title: message?.title ?? 'No Connection Channel',
+      body: message?.body ?? 'This device declares no serial or Modbus TCP channel to connect through.',
+    }
+  }
+
+  const candidates: DeviceLinkCandidateConfig[] = []
+  let firstFailure: Extract<DebugResolverOutcome, { kind: 'error' } | { kind: 'unsupported' }> | null = null
+
+  for (const index of eligible) {
+    const outcome = resolveDebugConnection(spec, context, index)
+    if (outcome.kind === 'config') {
+      candidates.push({ config: outcome.config, channelLabel: outcome.channelLabel, channelIndex: index })
+      continue
+    }
+    // Input needed before this candidate exists at all — ask now, since it is
+    // the preferred one; a caller that would rather not can skip the channel.
+    if (outcome.kind === 'prompt') return outcome
+    // 'pick' cannot occur: every resolve above names its channel by index.
+    if (outcome.kind === 'error' || outcome.kind === 'unsupported') firstFailure ??= outcome
+  }
+
+  if (candidates.length === 0) {
+    return firstFailure ?? { kind: 'unsupported' }
+  }
+  return { kind: 'candidates', candidates }
 }

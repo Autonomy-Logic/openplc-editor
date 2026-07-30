@@ -1,7 +1,7 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
-import type { DebugStatusResult, PlcControlResult } from '@root/backend/shared/debug/types'
+import type { DebugStatusResult, DeviceModbusTransport, PlcControlResult } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -24,6 +24,7 @@ import type {
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -40,7 +41,11 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
-import { SerialLinkPolicy } from '../../../backend/editor/hardware/serial-link-policy'
+import { type DeviceLinkCandidate, DeviceLinkManager, type DeviceLinkStatus } from '../../../backend/editor/hardware/device-link-manager'
+import {
+  buildDeviceModbusTransport,
+  modbusTransportKind,
+} from '../../../backend/editor/hardware/device-transport-factory'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
   type DeviceConnectResult,
@@ -48,9 +53,7 @@ import {
   toLegacyActivationOutcome,
 } from '../../../backend/editor/license/device-connect'
 import { connectWithRetries } from '../../../backend/editor/license/license-probe'
-import { buildLicenseTransport, type LicenseTransportParams } from '../../../backend/editor/license/license-transport-factory'
-import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
-import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
+import { buildLicenseTransport } from '../../../backend/editor/license/license-transport-factory'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -64,13 +67,18 @@ import {
   mapArduinoAnchorResult,
   selectAnchorSource,
 } from '../../../backend/shared/debug/device-anchor'
-import type { LicenseCapableTransport } from '../../../backend/shared/debug/types'
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
+import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
 
 // connectWithRetries lives in backend/editor/license/license-probe.ts,
 // shared with `probeAndRecover` (device-connect.ts).
+
+/** Program-identity comparison, case-insensitively — targets report either case. */
+function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
+  return targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+}
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -82,45 +90,33 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   private registeredHandleChannels: string[] = []
-  private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
-  // True when `debuggerModbusClient` IS the held device link rather than a
-  // client the debugger opened. Borrowed clients must never be disconnected by
-  // the debugger — the device connection still owns the port.
-  private debuggerBorrowedDeviceClient = false
+  // ---------------------------------------------------------------------------
+  // Talking to a baremetal device
+  //
+  // ONE connection, owned by `deviceLink`, whatever transport it runs over: the
+  // debugger, run/stop, the status poll and licensing all borrow that one client.
+  // Nothing else here opens a Modbus client — see `device-link-manager.ts` for
+  // why (in short: three owners meant a run/stop command could open a second
+  // socket the board would not answer).
+  //
+  // The runtime-v4 WebSocket is the one transport that is NOT a device link: it
+  // is a different protocol to a different kind of target, so it keeps its own
+  // client and its own session identity.
+  // ---------------------------------------------------------------------------
+  private readonly deviceLink = new DeviceLinkManager({
+    verify: (client, candidate) => this.verifyDeviceCandidate(client, candidate),
+    probe: (client) => this.probeDeviceLink(client),
+    serialPortPresent: (port) => this.hardwareModule.isSerialPortPresent(port),
+    emit: (status) => this.emitDeviceLinkStatus(status),
+  })
+  /** Classification + license result of the candidate the held link came from. */
+  private deviceLinkProbe: DeviceConnectResult | null = null
+  /** Licensing options of the current connect, so a verified candidate can recover its license. */
+  private deviceLinkLicenseOptions: { isLicensable?: boolean; packageId?: string; keyId?: string } = {}
   private debuggerWebSocketClient: WebSocketDebugTransport | null = null
   private debuggerTargetIp: string | null = null
-  private debuggerReconnecting: boolean = false
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
-  private debuggerRtuPort: string | null = null
-  private debuggerRtuBaudRate: number | null = null
-  private debuggerRtuSlaveId: number | null = null
   private debuggerJwtToken: string | null = null
-  // Held serial link (D72) timings. The failure budget before recovery starts is
-  // deliberately small (a dead port is unambiguous), while the recovery window is
-  // generous: unplugging and replugging USB takes seconds, and the OS has to
-  // re-enumerate the port before it can be reopened at all.
-  private static readonly DEVICE_LIVENESS_INTERVAL_MS = 2500
-  private static readonly DEVICE_LIVENESS_FAILURES_BEFORE_RECOVERY = 2
-  /** ~30s of reopen attempts at the poll interval before the link is declared lost. */
-  private static readonly DEVICE_RECOVERY_MAX_ATTEMPTS = 12
-
-  // Persistent baremetal serial connection (D72): a held RTU client kept open
-  // after Connect (distinct from the on-demand debugger client). A liveness poll
-  // keeps the renderer's status fresh; the port yields to upload/debug and
-  // reconnects afterwards.
-  private deviceSerialClient: LicenseCapableTransport | null = null
-  private deviceSerialPort: string | null = null
-  private deviceLivenessTimer: ReturnType<typeof setInterval> | null = null
-  private deviceLivenessInFlight = false
-  // Connect params of the held link, kept so the liveness poll can REOPEN it
-  // after a cable pull without asking the renderer to connect again.
-  private deviceConnectParams: LicenseTransportParams | null = null
-  // Decides when the link is down / back / gone. Counting only — the I/O below
-  // owns the client (see backend/editor/hardware/serial-link-policy.ts).
-  private readonly deviceLinkPolicy = new SerialLinkPolicy(
-    MainProcessBridge.DEVICE_LIVENESS_FAILURES_BEFORE_RECOVERY,
-    MainProcessBridge.DEVICE_RECOVERY_MAX_ATTEMPTS,
-  )
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   private runtimeIp: string | null = null
@@ -1083,6 +1079,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('device:activate-license', this.handleActivateDeviceLicense)
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
+    this.registerHandle('device:release-serial-port', this.handleDeviceReleaseSerialPort)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -1690,6 +1687,14 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Confirm the target is running the program that was just built.
+   *
+   * Modbus targets (serial, TCP, simulator) read this over the ONE held device
+   * link, so the check runs on the same connection every later command uses — no
+   * second client, and nothing to reconnect afterwards. Runtime v4 reads it over
+   * its own WebSocket, which is a different protocol to a different target.
+   */
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
@@ -1708,105 +1713,33 @@ class MainProcessBridge implements MainIpcModule {
     targetEndian?: 'le' | 'be'
     error?: string
   }> => {
-    let client: ModbusTcpClient | ModbusRtuClient | null = null
-    let wsClient: WebSocketDebugTransport | null = null
     try {
-      if (connectionType === 'simulator') {
-        const virtualPort = new VirtualSerialPort(this.simulatorModule)
-        client = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
-          slaveId: 1,
-          timeout: 5000,
-          serialPort: virtualPort,
-        })
-        await client.connect()
-        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
-        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-
-        // Keep the client for subsequent debug operations
-        this.debuggerModbusClient = client
-        this.debuggerConnectionType = 'simulator'
-
-        return { success: true, match, targetMd5, targetEndian }
-      } else if (connectionType === 'websocket') {
+      if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
         if (!this.debuggerWebSocketClient) {
-          wsClient = new WebSocketDebugTransport({
+          this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
             token: connectionParams.jwtToken,
             rejectUnauthorized: false,
           })
-          await wsClient.connect()
-        } else {
-          wsClient = this.debuggerWebSocketClient
-        }
-
-        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
-
-        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-
-        if (!this.debuggerWebSocketClient) {
-          this.debuggerWebSocketClient = wsClient
+          await this.debuggerWebSocketClient.connect()
           this.debuggerTargetIp = connectionParams.ipAddress
           this.debuggerJwtToken = connectionParams.jwtToken
           this.debuggerConnectionType = 'websocket'
         }
-
-        return { success: true, match, targetMd5, targetEndian }
-      } else if (connectionType === 'tcp') {
-        if (!connectionParams.ipAddress) {
-          return { success: false, error: 'IP address is required for TCP connection' }
-        }
-        client = new ModbusTcpClient({
-          host: connectionParams.ipAddress,
-          port: 502,
-          timeout: 5000,
-        })
-      } else {
-        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
-          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
-        }
-
-        // Reuse whatever already owns this port: the debug client from a live
-        // session, or the held device link (which is the normal case, since
-        // serial debugging requires being connected).
-        const existing =
-          this.debuggerModbusClient && this.debuggerConnectionType === 'rtu' && this.debuggerRtuPort === connectionParams.port
-            ? this.debuggerModbusClient
-            : this.adoptHeldSerialClientForDebug(connectionParams.port)
-
-        if (!existing) {
-          return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION }
-        }
-
-        const { md5: targetMd5, targetEndian } = await existing.getMd5Hash()
-        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-        return { success: true, match, targetMd5, targetEndian }
+        const probe = await this.debuggerWebSocketClient.getMd5Hash()
+        return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
       }
 
-      await client.connect()
-      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
+      const link = await this.ensureDeviceLinkFor(connectionType, connectionParams)
+      if ('error' in link) return { success: false, error: link.error }
 
-      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-
-      if (connectionType === 'tcp') {
-        client.disconnect()
-      } else {
-        this.debuggerModbusClient = client
-        this.debuggerConnectionType = 'rtu'
-        this.debuggerRtuPort = connectionParams.port!
-        this.debuggerRtuBaudRate = connectionParams.baudRate!
-        this.debuggerRtuSlaveId = connectionParams.slaveId!
-      }
-
-      return { success: true, match, targetMd5, targetEndian }
+      const probe = await link.client.getMd5Hash()
+      return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
     } catch (error) {
-      client?.disconnect()
-      wsClient?.disconnect()
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
@@ -1815,96 +1748,126 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * FC 0x4b run/stop command for baremetal (arduino-cli) targets.
+   * The held link, opening one first if this transport can be brought up without
+   * the user's help.
    *
-   * Command only -- the state is READ from the device status poll (FC 0x46,
-   * `handleDeviceGetPlcStatus` / the liveness tick), which already reports it.
+   * The simulator is the only such case: it is in-process, so there is nothing to
+   * configure and nothing to fail. Serial and Modbus TCP must already be connected
+   * — that is what Connect is for, and it is also what keeps a single client on a
+   * port the OS will not lock twice.
+   */
+  private async ensureDeviceLinkFor(
+    connectionType: 'tcp' | 'rtu' | 'simulator',
+    connectionParams: { ipAddress?: string; port?: string; baudRate?: number; slaveId?: number },
+  ): Promise<{ client: DeviceModbusTransport } | { error: string }> {
+    const existing = this.deviceClient()
+    if (existing) return { client: existing }
+
+    if (connectionType !== 'simulator') {
+      const required = this.requireDeviceClient()
+      return 'error' in required ? { error: required.error } : required
+    }
+
+    const opened = await this.deviceLink.open(
+      this.toDeviceLinkCandidates([{ connectionType, connectionParams }]),
+    )
+    if (!opened.ok) {
+      const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
+      return { error: reason || 'The simulator did not answer' }
+    }
+    this.debuggerConnectionType = connectionType
+    return { client: opened.client }
+  }
+
+  /**
+   * FC 0x4b run/stop for a baremetal target.
    *
-   * Mirrors handleDebuggerVerifyMd5's transport dispatch, but deliberately
-   * REUSES an already-open client when one exists -- the held device link first,
-   * then a live debug session -- instead of opening a second connection: two
-   * clients on one serial port would fight.
+   * Command only — the state is READ from the status poll (FC 0x46), which already
+   * reports it, so there is no second round trip here.
+   *
+   * Goes over the ONE held device link, whatever transport that link runs over.
+   * The transport the DEBUGGER is using is not consulted, and no client is opened:
+   * this is a command to the device, and the connection to it already exists.
+   *
+   * That is precisely what was broken. The old code only recognised an RTU client
+   * as reusable, so with a live Modbus TCP session a Stop fell through to opening a
+   * transient second socket — which an Arduino Modbus TCP server, serving one
+   * client at a time, never answered. The user saw "Failed to stop PLC: Request
+   * timeout" while a working connection sat idle.
    */
   handleDebuggerPlcControl = async (
     _event: IpcMainInvokeEvent,
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
+    _connectionParams: unknown,
     action: 'run' | 'stop',
   ): Promise<PlcControlResult> => {
+    if (connectionType === 'websocket') {
+      // Runtime v4 drives run/stop over its REST API, not the debug channel.
+      return { success: false, error: 'Runtime v4 run/stop is driven over REST, not the debug transport' }
+    }
+
+    const link = await this.ensureDeviceLinkFor(connectionType, {})
+    if ('error' in link) return { success: false, error: link.error }
+
     const target = action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED
-
-    let transient: ModbusTcpClient | ModbusRtuClient | null = null
     try {
-      // Reuse an already-open client, in the order of "most likely to be the
-      // one holding the port": the held device link (Connect), then a live
-      // debug session.
-      // Any transport EXCEPT websocket (Runtime v4 drives run/stop over REST and
-      // must not be short-circuited). Notably this includes 'tcp': run/stop is a
-      // command to the DEVICE, not to the debug session, so a held serial link is
-      // the right path even when the debugger is running over Modbus TCP. Keying
-      // it off the debug transport meant that a project with Modbus TCP enabled
-      // sent Stop to the board's IP — which times out on a board whose ethernet
-      // shield is not connected, while the open USB cable sat unused.
-      if (this.deviceSerialClient?.setPlcState && connectionType !== 'websocket') {
-        return await this.deviceSerialClient.setPlcState(target)
-      }
-      // The held link is mid-recovery (cable out): say so instead of opening a
-      // transient client, which would contend with the reopen for the same port
-      // and report a bare timeout.
-      if (connectionType === 'rtu' && this.deviceLinkPolicy.recovering) {
-        return { success: false, error: 'The device connection dropped and is being restored. Try again in a moment.' }
-      }
-      if (this.debuggerModbusClient && (connectionType === 'rtu' || connectionType === 'simulator')) {
-        return await this.debuggerModbusClient.setPlcState(target)
-      }
-      if (connectionType === 'websocket') {
-        // Runtime v4 drives run/stop over its REST API, not the debug channel.
-        return { success: false, error: 'Runtime v4 run/stop is driven over REST, not the debug transport' }
-      }
-
-      if (connectionType === 'simulator') {
-        transient = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
-          slaveId: 1,
-          timeout: 5000,
-          serialPort: new VirtualSerialPort(this.simulatorModule),
-        })
-      } else if (connectionType === 'tcp') {
-        if (!connectionParams.ipAddress) {
-          return { success: false, error: 'IP address is required for TCP connection' }
-        }
-        transient = new ModbusTcpClient({ host: connectionParams.ipAddress, port: 502, timeout: 5000 })
-      } else {
-        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
-          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
-        }
-        transient = new ModbusRtuClient({
-          port: connectionParams.port,
-          baudRate: connectionParams.baudRate,
-          slaveId: connectionParams.slaveId,
-          timeout: 5000,
-        })
-      }
-
-      await transient.connect()
-      try {
-        return await transient.setPlcState(target)
-      } finally {
-        transient.disconnect()
-      }
+      return await link.client.setPlcState(target)
     } catch (error) {
-      transient?.disconnect()
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during PLC control request',
       }
+    }
+  }
+
+  handleDebuggerGetVariablesList = async (
+    _event: IpcMainInvokeEvent,
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    // A null connection type means the debugger was intentionally disconnected.
+    // Fail silently so the renderer's poll loop ignores it.
+    if (this.debuggerConnectionType === null) {
+      return { success: false, error: 'Debugger not connected' }
+    }
+
+    if (this.debuggerConnectionType === 'websocket') {
+      const socket = await this.ensureDebuggerWebSocket()
+      if ('error' in socket) return { success: false, ...socket }
+      try {
+        const result = await socket.client.getVariablesList(variableIndexes)
+        if (result.success && result.data) {
+          return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
+        }
+        return { success: false, error: result.error }
+      } catch (error) {
+        this.debuggerWebSocketClient?.disconnect()
+        this.debuggerWebSocketClient = null
+        return { success: false, error: getErrorMessage(error), needsReconnect: true }
+      }
+    }
+
+    // Modbus targets read over the held device link. There is nothing to
+    // reconnect here: if the link dropped, the manager is already reopening it
+    // (or has reported it lost), and `needsReconnect` tells the renderer to stop
+    // the session rather than race it for the port.
+    const link = this.requireDeviceClient()
+    if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
+
+    try {
+      const result = await link.client.getVariablesList(variableIndexes)
+      if (result.success && result.data) {
+        return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
 
@@ -1940,149 +1903,32 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleDebuggerGetVariablesList = async (
-    _event: IpcMainInvokeEvent,
-    variableIndexes: number[],
-  ): Promise<{
-    success: boolean
-    tick?: number
-    lastIndex?: number
-    data?: number[]
-    error?: string
-    needsReconnect?: boolean
-  }> => {
-    // If connection type is null, the debugger was intentionally disconnected.
-    // Return a silent failure so the renderer polling ignores it.
-    if (this.debuggerConnectionType === null) {
-      return { success: false, error: 'Debugger not connected' }
+  /**
+   * The runtime-v4 debug WebSocket, reconnected from stored credentials if the
+   * session dropped. Its own transport, its own lifecycle: a v4 runtime is a
+   * different kind of target, reached over a different protocol, and it has no
+   * device link to share.
+   */
+  private async ensureDebuggerWebSocket(): Promise<
+    { client: WebSocketDebugTransport } | { error: string; needsReconnect: true }
+  > {
+    if (this.debuggerWebSocketClient) return { client: this.debuggerWebSocketClient }
+    if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
+      return { error: 'No WebSocket credentials stored', needsReconnect: true }
     }
-
-    if (this.debuggerConnectionType === 'websocket') {
-      if (!this.debuggerWebSocketClient) {
-        if (this.debuggerReconnecting) {
-          return { success: false, error: 'Reconnection in progress', needsReconnect: true }
-        }
-
-        this.debuggerReconnecting = true
-        try {
-          if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
-          }
-          this.debuggerWebSocketClient = new WebSocketDebugTransport({
-            host: this.debuggerTargetIp,
-            port: 8443,
-            token: this.debuggerJwtToken,
-            rejectUnauthorized: false,
-          })
-          await this.debuggerWebSocketClient.connect()
-          this.debuggerReconnecting = false
-        } catch (error) {
-          this.debuggerWebSocketClient = null
-          this.debuggerReconnecting = false
-          return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-        }
-      }
-
-      try {
-        const result = await this.debuggerWebSocketClient.getVariablesList(variableIndexes)
-
-        if (result.success && result.data) {
-          return {
-            success: true,
-            tick: result.tick,
-            lastIndex: result.lastIndex,
-            data: Array.from(result.data),
-          }
-        }
-
-        return { success: false, error: result.error }
-      } catch (error) {
-        if (this.debuggerWebSocketClient) {
-          this.debuggerWebSocketClient.disconnect()
-          this.debuggerWebSocketClient = null
-        }
-        return { success: false, error: getErrorMessage(error), needsReconnect: true }
-      }
-    }
-
-    if (!this.debuggerModbusClient) {
-      if (this.debuggerReconnecting) {
-        return { success: false, error: 'Reconnection in progress', needsReconnect: true }
-      }
-
-      this.debuggerReconnecting = true
-      try {
-        if (this.debuggerConnectionType === 'simulator') {
-          const virtualPort = new VirtualSerialPort(this.simulatorModule)
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: 'simulator',
-            baudRate: 115200,
-            slaveId: 1,
-            timeout: 5000,
-            serialPort: virtualPort,
-          })
-        } else if (this.debuggerConnectionType === 'tcp') {
-          if (!this.debuggerTargetIp) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No target IP address stored', needsReconnect: true }
-          }
-          this.debuggerModbusClient = new ModbusTcpClient({
-            host: this.debuggerTargetIp,
-            port: 502,
-            timeout: 5000,
-          })
-        } else if (this.debuggerConnectionType === 'rtu') {
-          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
-          }
-          // Re-adopt the held device link; if the device was disconnected the
-          // session cannot continue, which the renderer surfaces as a reconnect.
-          if (!this.adoptHeldSerialClientForDebug(this.debuggerRtuPort)) {
-            this.debuggerReconnecting = false
-            return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION, needsReconnect: true }
-          }
-        } else {
-          this.debuggerReconnecting = false
-          return { success: false, error: 'No connection type stored', needsReconnect: true }
-        }
-
-        // A borrowed client is already open — the device connection owns it, and
-        // connect() would re-open the port and re-wait the bootloader delay.
-        if (!this.debuggerBorrowedDeviceClient) await this.debuggerModbusClient?.connect()
-        this.debuggerReconnecting = false
-      } catch (error) {
-        this.debuggerModbusClient = null
-        this.debuggerReconnecting = false
-        return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-      }
-    }
-
-    const client = this.debuggerModbusClient
-    if (!client) {
-      return { success: false, error: 'Debugger not connected', needsReconnect: true }
-    }
-
     try {
-      const result = await client.getVariablesList(variableIndexes)
-
-      if (result.success && result.data) {
-        return {
-          success: true,
-          tick: result.tick,
-          lastIndex: result.lastIndex,
-          data: Array.from(result.data),
-        }
-      }
-
-      return { success: false, error: result.error }
+      const client = new WebSocketDebugTransport({
+        host: this.debuggerTargetIp,
+        port: 8443,
+        token: this.debuggerJwtToken,
+        rejectUnauthorized: false,
+      })
+      await client.connect()
+      this.debuggerWebSocketClient = client
+      return { client }
     } catch (error) {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
-      return { success: false, error: getErrorMessage(error), needsReconnect: true }
+      this.debuggerWebSocketClient = null
+      return { error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
     }
   }
 
@@ -2091,10 +1937,9 @@ class MainProcessBridge implements MainIpcModule {
    * renderer. Throttled, because its two callers tick at very different rates:
    * the device liveness poll (2.5s) and the debugger's variable poll (fast).
    *
-   * Whichever client currently owns the serial port drives this, which is what
-   * keeps the Start/Stop button live across the debug handoff — the held device
-   * link is released while debugging, so a poll bound only to that link would go
-   * silent exactly when the user is most likely watching.
+   * Both callers use the ONE held connection, so there is no handoff to survive:
+   * a debug session shares the link rather than replacing it, and the Start/Stop
+   * button keeps tracking the device while debugging.
    */
   private plcStatePushedAt = 0
 
@@ -2118,119 +1963,11 @@ class MainProcessBridge implements MainIpcModule {
   }
 
 
-  /**
-   * Adopt the held device link as the debug client (D72 + run/stop).
-   *
-   * Debugging a baremetal target REQUIRES being connected, mirroring how
-   * Runtime v4 requires a runtime connection. That is not a restriction so much
-   * as the thing that makes serial debugging work at all: the Connect flow
-   * already holds this port open, so the debugger shares that one client instead
-   * of opening a second handle on a port the OS will not lock twice ("Resource
-   * temporarily unavailable"). It also means the device link is never torn down
-   * mid-session, so its liveness tick — and therefore the run/stop state feeding
-   * the Start/Stop button — keeps running while debugging.
-   *
-   * Returns null when nothing is held for `port`; callers surface that as
-   * "connect first" rather than silently opening a competing client.
-   */
-  private adoptHeldSerialClientForDebug(port: string | undefined): ModbusRtuClient | null {
-    if (!port || !this.deviceSerialClient || this.deviceSerialPort !== port) return null
-    // The serial branch of the transport factory builds a ModbusRtuClient, which
-    // is the full debug surface; the interface it is typed as is the narrower
-    // licensing one.
-    const held = this.deviceSerialClient as unknown as ModbusRtuClient
-    this.debuggerModbusClient = held
-    this.debuggerBorrowedDeviceClient = true
-    this.debuggerConnectionType = 'rtu'
-    this.debuggerRtuPort = port
-    return held
-  }
-
-  /** Message shown when a serial debug session is attempted while disconnected. */
-  private static readonly DEBUG_REQUIRES_CONNECTION =
-    'Connect to the device first: serial debugging runs over the same connection, so the device must be connected before starting the debugger.'
-
-  /**
-   * Ensure a Modbus debug client is connected, reconnecting from stored
-   * parameters if needed. License FCs (0x49/0x4A) ride the same Modbus
-   * transport as getVariablesList; WebSocket targets are unsupported.
-   * Returns the live client on success, or an error result to bubble up.
-   */
-  private ensureDebuggerModbusClient = async (): Promise<
-    { client: ModbusTcpClient | ModbusRtuClient } | { error: string; needsReconnect?: boolean }
-  > => {
-    if (this.debuggerConnectionType === null) {
-      return { error: 'Debugger not connected' }
-    }
-
-    if (this.debuggerConnectionType === 'websocket') {
-      return { error: 'License storage is not supported over the WebSocket transport' }
-    }
-
-    if (!this.debuggerModbusClient) {
-      if (this.debuggerReconnecting) {
-        return { error: 'Reconnection in progress', needsReconnect: true }
-      }
-
-      this.debuggerReconnecting = true
-      try {
-        if (this.debuggerConnectionType === 'simulator') {
-          const virtualPort = new VirtualSerialPort(this.simulatorModule)
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: 'simulator',
-            baudRate: 115200,
-            slaveId: 1,
-            timeout: 5000,
-            serialPort: virtualPort,
-          })
-        } else if (this.debuggerConnectionType === 'tcp') {
-          if (!this.debuggerTargetIp) {
-            this.debuggerReconnecting = false
-            return { error: 'No target IP address stored', needsReconnect: true }
-          }
-          this.debuggerModbusClient = new ModbusTcpClient({
-            host: this.debuggerTargetIp,
-            port: 502,
-            timeout: 5000,
-          })
-        } else if (this.debuggerConnectionType === 'rtu') {
-          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
-            this.debuggerReconnecting = false
-            return { error: 'No RTU connection parameters stored', needsReconnect: true }
-          }
-          // Re-adopt the held device link; if the device was disconnected the
-          // session cannot continue, which the renderer surfaces as a reconnect.
-          if (!this.adoptHeldSerialClientForDebug(this.debuggerRtuPort)) {
-            this.debuggerReconnecting = false
-            return { error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION, needsReconnect: true }
-          }
-        } else {
-          this.debuggerReconnecting = false
-          return { error: 'No connection type stored', needsReconnect: true }
-        }
-
-        // A borrowed client is already open — the device connection owns it, and
-        // connect() would re-open the port and re-wait the bootloader delay.
-        if (!this.debuggerBorrowedDeviceClient) await this.debuggerModbusClient?.connect()
-        this.debuggerReconnecting = false
-      } catch (error) {
-        this.debuggerModbusClient = null
-        this.debuggerReconnecting = false
-        return { error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-      }
-    }
-
-    if (!this.debuggerModbusClient) {
-      return { error: 'Debugger not connected', needsReconnect: true }
-    }
-    return { client: this.debuggerModbusClient }
-  }
-
   handleDebuggerWriteLicense = async (
     _event: IpcMainInvokeEvent,
     blob: Uint8Array,
   ): Promise<{ success: boolean; status?: number; error?: string; needsReconnect?: boolean }> => {
-    const ensured = await this.ensureDebuggerModbusClient()
+    const ensured = this.requireDeviceClient()
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -2239,10 +1976,6 @@ class MainProcessBridge implements MainIpcModule {
       const bytes = blob instanceof Uint8Array ? blob : new Uint8Array(blob)
       return await ensured.client.writeLicense(bytes)
     } catch (error) {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
       return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
@@ -2258,7 +1991,7 @@ class MainProcessBridge implements MainIpcModule {
     error?: string
     needsReconnect?: boolean
   }> => {
-    const ensured = await this.ensureDebuggerModbusClient()
+    const ensured = this.requireDeviceClient()
     if ('error' in ensured) {
       return { success: false, error: ensured.error, needsReconnect: ensured.needsReconnect }
     }
@@ -2274,10 +2007,6 @@ class MainProcessBridge implements MainIpcModule {
         error: result.error,
       }
     } catch (error) {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
       return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
@@ -2328,7 +2057,7 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     // arduino-cli targets (ESP32/AVR/simulator): FC 0x48 over the always-on debug channel.
-    const ensured = await this.ensureDebuggerModbusClient()
+    const ensured = this.requireDeviceClient()
     if ('error' in ensured) {
       return { success: false, source, error: ensured.error }
     }
@@ -2336,14 +2065,22 @@ class MainProcessBridge implements MainIpcModule {
       const result = await ensured.client.getBoardId()
       return mapArduinoAnchorResult(result)
     } catch (error) {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
       return { success: false, source, error: getErrorMessage(error) }
     }
   }
 
+  /**
+   * Start a debug session against a target.
+   *
+   * For a Modbus target there is nothing to open: the session runs over the ONE
+   * held device link, which Connect established and which the status poll keeps
+   * honest. That is what makes serial debugging work at all (the OS will not lock
+   * a port twice), and it is equally right for Modbus TCP (an Arduino TCP server
+   * serves one client). The simulator is the exception only because it is
+   * in-process, so it can bring its own link up on demand.
+   *
+   * Runtime v4 keeps its own WebSocket: different protocol, different target.
+   */
   handleDebuggerConnect = async (
     _event: IpcMainInvokeEvent,
     connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
@@ -2356,44 +2093,12 @@ class MainProcessBridge implements MainIpcModule {
     },
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'simulator') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
-        const virtualPort = new VirtualSerialPort(this.simulatorModule)
-        this.debuggerModbusClient = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
-          slaveId: 1,
-          timeout: 5000,
-          serialPort: virtualPort,
-        })
-        await this.debuggerModbusClient.connect()
-
-        // MD5 fetch warms the connection and exercises the
-        // runtime's endianness-sentinel path.  Endianness detection
-        // itself is handled at the editor's verify-MD5 step (see
-        // handleDebuggerVerifyMd5) where the result feeds the swap
-        // layer; here we just need the connection live.
-        await this.debuggerModbusClient.getMd5Hash()
-      } else if (connectionType === 'websocket') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
+      if (connectionType === 'websocket') {
         if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
           return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
         }
-
         if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
-          if (this.debuggerWebSocketClient) {
-            this.debuggerWebSocketClient.disconnect()
-            this.debuggerWebSocketClient = null
-          }
-
+          this.debuggerWebSocketClient?.disconnect()
           this.debuggerWebSocketClient = new WebSocketDebugTransport({
             host: connectionParams.ipAddress,
             port: 8443,
@@ -2402,92 +2107,45 @@ class MainProcessBridge implements MainIpcModule {
           })
           await this.debuggerWebSocketClient.connect()
         }
-
         this.debuggerTargetIp = connectionParams.ipAddress
         this.debuggerJwtToken = connectionParams.jwtToken
-      } else if (connectionType === 'tcp') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
-        if (!connectionParams.ipAddress) {
-          return { success: false, error: 'IP address is required for TCP connection' }
-        }
-        this.debuggerModbusClient = new ModbusTcpClient({
-          host: connectionParams.ipAddress,
-          port: 502,
-          timeout: 5000,
-        })
-        await this.debuggerModbusClient.connect()
-        this.debuggerTargetIp = connectionParams.ipAddress
-      } else {
-        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
-          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
-        }
-
-        if (
-          this.debuggerModbusClient &&
-          this.debuggerConnectionType === 'rtu' &&
-          this.debuggerRtuPort === connectionParams.port &&
-          this.debuggerRtuBaudRate === connectionParams.baudRate &&
-          this.debuggerRtuSlaveId === connectionParams.slaveId
-        ) {
-          this.debuggerReconnecting = false
-          return { success: true }
-        }
-
-        // Serial debugging runs over the device connection, so adopt the held
-        // client rather than opening a competing handle on the same port.
-        if (!this.adoptHeldSerialClientForDebug(connectionParams.port)) {
-          this.debuggerReconnecting = false
-          return { success: false, error: MainProcessBridge.DEBUG_REQUIRES_CONNECTION }
-        }
-        // Already open and already proven live by the connect probe — nothing to
-        // connect here.
-        this.debuggerRtuPort = connectionParams.port
-        this.debuggerRtuBaudRate = connectionParams.baudRate
-        this.debuggerRtuSlaveId = connectionParams.slaveId
+        this.debuggerConnectionType = 'websocket'
+        return { success: true }
       }
 
-      this.debuggerConnectionType = connectionType
-      this.debuggerReconnecting = false
+      const link = await this.ensureDeviceLinkFor(connectionType, connectionParams)
+      if ('error' in link) return { success: false, error: link.error }
 
+      // Warms nothing and opens nothing — the link is already live and already
+      // proven by the connect probe. The md5 read stays in `verifyMd5`, which is
+      // where its result is actually used.
+      this.debuggerConnectionType = connectionType
       return { success: true }
     } catch (error) {
-      this.debuggerModbusClient = null
       this.debuggerWebSocketClient = null
       this.debuggerTargetIp = null
       this.debuggerConnectionType = null
-      this.debuggerRtuPort = null
-      this.debuggerRtuBaudRate = null
-      this.debuggerRtuSlaveId = null
       this.debuggerJwtToken = null
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
+  /**
+   * Stop a debug session.
+   *
+   * The device link is deliberately NOT closed: it belongs to Connect, not to the
+   * debugger, and closing it here would drop the user's connection — along with
+   * the status poll driving the Start/Stop button — just because they stopped
+   * debugging. Only the WebSocket, which the session does own, is closed.
+   */
   handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
-    if (this.debuggerModbusClient) {
-      // A borrowed client belongs to the held device connection: drop the
-      // reference but leave it open. Closing it here would tear down the user's
-      // device connection (and its liveness / run-stop polling) just because
-      // they stopped debugging.
-      if (!this.debuggerBorrowedDeviceClient) this.debuggerModbusClient.disconnect()
-      this.debuggerModbusClient = null
-      this.debuggerBorrowedDeviceClient = false
-    }
     if (this.debuggerWebSocketClient) {
       this.debuggerWebSocketClient.disconnect()
       this.debuggerWebSocketClient = null
     }
     this.debuggerTargetIp = null
     this.debuggerConnectionType = null
-    this.debuggerRtuPort = null
-    this.debuggerRtuBaudRate = null
-    this.debuggerRtuSlaveId = null
     this.debuggerJwtToken = null
-    this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
   }
 
@@ -2502,12 +2160,12 @@ class MainProcessBridge implements MainIpcModule {
    * to this handler's legacy `outcome` shape via `toLegacyActivationOutcome`
    * (P0-2 dedup: one classify+recover implementation, not two).
    *
-   * This is deliberately independent of the always-on debugger session: it
-   * spins up a TRANSIENT local `ModbusRtuClient` (never `this.debuggerModbusClient`
-   * and it never touches `this.debuggerConnectionType` / RTU session fields),
-   * runs the routine, and closes the serial in a `finally` so the port is free
-   * for the debugger to open on demand. The device reboots after the flash, so
-   * the connection is attempted with a short retry/backoff loop.
+   * This is deliberately independent of the held device connection: it spins up a
+   * TRANSIENT local client of its own, runs the routine, and closes it in a
+   * `finally`. That is safe precisely because of when it runs — right after an
+   * upload, with the serial link already released for arduino-cli — and it is why
+   * this one place is exempt from the single-connection rule. The device reboots
+   * after the flash, so the connect is attempted with a short retry/backoff loop.
    *
    * Best-effort: a connect failure after all retries returns
    * `{ success: false, outcome: 'error', error }` rather than throwing, so the
@@ -2568,267 +2226,188 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================================================================
-  // Persistent baremetal serial connection (D72) — "stay connected"
+  // The device link — "stay connected", over serial or Modbus TCP
   // ===================================================================
 
-  /**
-   * Push the live serial link status to the renderer store. `reason: 'lost'`
-   * marks the one status the user must be TOLD about rather than just shown: a
-   * held link that died and could not be recovered. Every other 'error' is the
-   * direct result of something the user just clicked, which already has its own
-   * dialog.
-   */
-  private emitSerialConnectionStatus(
-    status: 'disconnected' | 'connecting' | 'connected' | 'error',
-    port: string | null,
-    reason?: 'lost',
-  ): void {
-    this.mainWindow?.webContents?.send('device:connection-status', {
-      status,
-      port,
-      ...(reason !== undefined ? { reason } : {}),
-    })
+  /** Push a link state change to the renderer. */
+  private emitDeviceLinkStatus(status: DeviceLinkStatus): void {
+    this.mainWindow?.webContents?.send('device:connection-status', status)
   }
 
   /**
-   * Close the held client without giving up the link. Shared by teardown and by
-   * recovery, which must drop the dead handle (a stale open fd is exactly what
-   * makes the reopen fail with "Resource temporarily unavailable / cannot lock
-   * port") while keeping `deviceSerialPort` + `deviceConnectParams` so it can
-   * reopen the same link.
+   * Turn a resolved channel config into something the link manager can try.
+   * The only transport-specific step left in the flow; a config that names a
+   * transport this build cannot speak is dropped rather than half-built.
    */
-  private closeHeldDeviceClient(): void {
-    // A debug session borrowing this client must not keep using it once it is
-    // closed. Dropping the reference makes the next debug read report
-    // needsReconnect, which the renderer already handles, instead of talking to
-    // a dead port.
-    if (this.debuggerBorrowedDeviceClient) {
-      this.debuggerModbusClient = null
-      this.debuggerBorrowedDeviceClient = false
-    }
-    this.deviceSerialClient?.disconnect()
-    this.deviceSerialClient = null
-  }
-
-  /** Stop the liveness poll and close the held serial client (idempotent). */
-  private teardownDeviceSerial(): void {
-    if (this.deviceLivenessTimer) {
-      clearInterval(this.deviceLivenessTimer)
-      this.deviceLivenessTimer = null
-    }
-    this.deviceLivenessInFlight = false
-    this.deviceLinkPolicy.reset()
-    this.deviceConnectParams = null
-    this.closeHeldDeviceClient()
-    this.deviceSerialPort = null
-  }
-
-  /**
-   * Release a held serial connection when it owns `port` — the handoff before
-   * an upload / debug session takes the same serial port. Notifies the renderer
-   * so the UI drops to disconnected. No-op when nothing is held on that port.
-   */
-  releaseDeviceSerialForPort(port: string | null | undefined): void {
-    if (!this.deviceSerialClient || !this.deviceSerialPort) return
-    if (port !== undefined && port !== null && this.deviceSerialPort !== String(port)) return
-    const held = this.deviceSerialPort
-    this.teardownDeviceSerial()
-    this.emitSerialConnectionStatus('disconnected', held)
-  }
-
-  /**
-   * The one timer behind the held link. Each tick either probes the link or, once
-   * it is down, makes a single attempt to reopen it — so the poll interval doubles
-   * as the retry cadence and nothing else needs scheduling. Re-entrancy guarded,
-   * so a slow read (or a slow reopen) never overlaps the next tick.
-   *
-   * The full sequence for a cable pulled and plugged back in:
-   *
-   *   connected --(2 silent polls)--> connecting --(port answers)--> connected
-   *                                              \--(12 failed reopens)--> error, 'lost'
-   *
-   * `SerialLinkPolicy` owns those counts; this method owns the I/O.
-   */
-  private startDeviceLiveness(port: string): void {
-    this.deviceLinkPolicy.reset()
-    this.deviceLivenessTimer = setInterval(() => {
-      if (this.deviceLivenessInFlight) return
-      this.deviceLivenessInFlight = true
-      void this.deviceLivenessTick(port).finally(() => {
-        this.deviceLivenessInFlight = false
+  private toDeviceLinkCandidates(configs: DebugConnectionConfig[]): DeviceLinkCandidate[] {
+    const candidates: DeviceLinkCandidate[] = []
+    for (const config of configs) {
+      const kind = modbusTransportKind(config.connectionType)
+      if (kind === null) continue
+      const params = {
+        connectionType: config.connectionType,
+        port: config.connectionParams.port,
+        baudRate: config.connectionParams.baudRate,
+        slaveId: config.connectionParams.slaveId,
+        host: config.connectionParams.ipAddress,
+      }
+      // Only the simulator needs an in-process serial port; building one for a real
+      // transport would allocate a virtual port nobody reads.
+      const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
+      // Probe the params now so a malformed config fails resolution rather than
+      // becoming a candidate that always throws on `create()`.
+      if ('error' in buildDeviceModbusTransport(params, options)) continue
+      candidates.push({
+        transport: kind,
+        descriptor: describeDebugEndpoint(config),
+        create: () => {
+          const built = buildDeviceModbusTransport(params, options)
+          if ('error' in built) throw new Error(built.error)
+          return built.client
+        },
       })
-    }, MainProcessBridge.DEVICE_LIVENESS_INTERVAL_MS)
+    }
+    return candidates
+  }
+
+  /** Consume the classification the last verified candidate produced. */
+  private takeDeviceLinkProbe(): DeviceConnectResult | null {
+    const probe = this.deviceLinkProbe
+    this.deviceLinkProbe = null
+    return probe
   }
 
   /**
-   * Does the firmware still answer on `client`? Also the state poll: the status
-   * frame carries run/stop + the switch position, so a switch flipped by hand
-   * shows up within one interval at no extra cost (`minIntervalMs: 0` because
-   * the timer is already the rate limit). Falls back to the board id for a
-   * transport with no status read (the runtime-v4 WebSocket, which implements
-   * this interface only for licensing).
+   * Is this freshly opened candidate a device we can work with? Runs the SAME
+   * classify + license recover the connect flow has always run
+   * (`probeAndRecover`), and keeps its verdict for the renderer.
    *
-   * Shared by the liveness tick and by recovery, so "the link is up" means the
-   * same thing in both — a reopened port that never answers is not a recovery.
+   * Only `connected-with-firmware` keeps a candidate. A port that opens but has
+   * no firmware, or an IP that answers something else, therefore falls through to
+   * the next candidate instead of becoming a link that cannot serve a single
+   * command.
    */
-  private async deviceLinkAnswers(client: LicenseCapableTransport, port: string): Promise<boolean> {
+  private async verifyDeviceCandidate(
+    client: DeviceModbusTransport,
+    candidate: DeviceLinkCandidate,
+  ): Promise<boolean> {
+    // The simulator is in-process: there is no hardware to identify and no
+    // license to recover, so asking the licensing backend about it would be a
+    // pointless round trip that could also fail offline.
+    if (candidate.transport === 'simulator') return this.probeDeviceLink(client)
+
+    const result = await probeAndRecover(client, this.deviceLinkLicenseOptions)
+    this.deviceLinkProbe = result
+    if (result.status !== 'connected-with-firmware') return false
+    // The status frame doubles as the run/stop state source; push it straight
+    // away so the Start/Stop button is right before the first poll lands.
+    await this.pushPlcState(client, candidate.descriptor, 0)
+    return true
+  }
+
+  /**
+   * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
+   *
+   * Prefers the status read (FC 0x46) over the board id (0x48): both prove the
+   * firmware is answering, but the status frame also carries the run/stop state
+   * and the mode-switch position — so a switch flipped by hand at the panel shows
+   * up within one interval, with no second timer and no extra traffic.
+   */
+  private async probeDeviceLink(client: DeviceModbusTransport): Promise<boolean> {
+    const descriptor = this.deviceLink.getLink()?.descriptor ?? ''
     if (client.getStatus) {
       const status = await client.getStatus()
       if (!status.success) return false
       this.plcStatePushedAt = 0
-      await this.pushPlcState(client, port, 0)
+      await this.pushPlcState(client, descriptor, 0)
       return true
     }
     return (await client.getBoardId()).success
   }
 
-  /** One poll tick: probe the held link, or drive recovery when it is down. */
-  private async deviceLivenessTick(port: string): Promise<void> {
-    if (this.deviceLinkPolicy.recovering) return this.attemptDeviceRecovery(port)
-
-    const client = this.deviceSerialClient
-    if (!client) return
-
-    let alive = false
-    try {
-      alive = await this.deviceLinkAnswers(client, port)
-    } catch {
-      alive = false
-    }
-    if (this.deviceLinkPolicy.onProbeResult(alive) === 'enter-recovery') this.enterDeviceRecovery(port)
-  }
-
   /**
-   * The link stopped answering (cable pulled, board reset, re-flash). Drop the
-   * dead client but KEEP the link: the poll now tries to reopen the same port
-   * each tick, and the renderer sees 'connecting' — a link coming back, not a
-   * link that is gone. Nothing is torn down until recovery gives up, so a cable
-   * that returns within the window restores the connection with no user action.
-   */
-  private enterDeviceRecovery(port: string): void {
-    this.closeHeldDeviceClient()
-    this.emitSerialConnectionStatus('connecting', port)
-  }
-
-  /**
-   * One reopen attempt. On success the fresh client is adopted as the held link;
-   * the license recover from the original Connect still stands, so this
-   * deliberately does NOT re-run `probeAndRecover` (that would hammer the
-   * licensing backend every 2.5s while a cable is out).
+   * Release the link if it holds `port` — the handoff before an upload takes the
+   * same serial port. A Modbus TCP link is left alone: flashing over USB does not
+   * disturb it, so debugging and run/stop survive an upload.
    *
-   * After `DEVICE_RECOVERY_MAX_ATTEMPTS` the device is considered gone: tear the
-   * link down and report 'error' with `reason: 'lost'` so the renderer warns the
-   * user, mirroring the runtime-v4 connection-lost flow.
+   * Returns whether anything was released, so the caller knows to reconnect.
    */
-  private async attemptDeviceRecovery(port: string): Promise<void> {
-    const recovered = await this.reopenDeviceLink(port)
+  handleDeviceReleaseSerialPort = async (
+    _event: IpcMainInvokeEvent,
+    port: string | null | undefined,
+  ): Promise<{ released: boolean }> => {
+    return { released: this.deviceLink.releaseSerialPort(port) }
+  }
 
-    switch (this.deviceLinkPolicy.onReopenResult(recovered !== null)) {
-      case 'recovered':
-        this.deviceSerialClient = recovered
-        this.emitSerialConnectionStatus('connected', port)
-        return
-      case 'give-up':
-        this.teardownDeviceSerial()
-        this.emitSerialConnectionStatus('error', port, 'lost')
-        return
-      default:
-        return
-    }
+  /** The held client, for the handlers that command the device. */
+  private deviceClient(): DeviceModbusTransport | null {
+    return this.deviceLink.getClient()
   }
 
   /**
-   * One reopen attempt for the held link: returns a client that answered, or
-   * null. One attempt per tick — the poll timer already paces the retries.
+   * The held client or a reason there isn't one. Every device command funnels
+   * through this, so "not connected" and "reconnecting" read the same everywhere
+   * instead of each handler inventing its own message — or, worse, opening its own
+   * connection.
+   */
+  private requireDeviceClient(): { client: DeviceModbusTransport } | { error: string; needsReconnect: true } {
+    const client = this.deviceClient()
+    if (client) return { client }
+    if (this.deviceLink.isRecovering()) {
+      return { error: 'The device connection dropped and is being restored. Try again in a moment.', needsReconnect: true }
+    }
+    return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
+  }
+
+  /** Message shown when a device command arrives with nothing connected. */
+  private static readonly DEVICE_NOT_CONNECTED =
+    'Connect to the device first: the debugger and run/stop share the device connection.'
+
+  /**
+   * Open and HOLD the link to a baremetal device (D72).
    *
-   * Deliberately does NOT re-run `probeAndRecover`: the license recover from the
-   * original Connect still stands, and re-running it would hammer the licensing
-   * backend every couple of seconds for as long as a cable is out.
-   */
-  private async reopenDeviceLink(port: string): Promise<LicenseCapableTransport | null> {
-    const params = this.deviceConnectParams
-    if (!params) return null
-    const built = buildLicenseTransport(params, this.RUNTIME_API_PORT)
-    if ('error' in built) return null
-
-    const client = built.client
-    try {
-      await connectWithRetries(client, { attempts: 1, backoffMs: 0 })
-      if (await this.deviceLinkAnswers(client, port)) return client
-    } catch {
-      // Port still absent, or open but not answering — caller retries.
-    }
-    client.disconnect()
-    return null
-  }
-
-  /**
-   * Open and HOLD a serial link to a baremetal target (D72). Opens the RTU
-   * client once, classifies the device + recovers its license over that single
-   * open (via `probeAndRecover`), and — when firmware is present — keeps the
-   * client open with a liveness poll. On no-firmware / no-response it closes and
-   * reports so the renderer can offer to flash. Refuses if the debugger already
-   * owns the port.
+   * `candidates` is the ordered list the renderer resolved from the board's debug
+   * spec — Modbus TCP first when the project enables it, then serial. The manager
+   * tries them in order and keeps the first that both opens and answers, so a
+   * stale DHCP address or an unplugged ethernet shield falls through to the cable
+   * instead of stranding the user on a link that cannot serve a command.
+   *
+   * The classification that used to be this method's job now happens per candidate
+   * (`verifyDeviceCandidate`), because it is also what decides whether a candidate
+   * is worth keeping.
    */
   handleDeviceConnect = async (
     _event: IpcMainInvokeEvent,
-    connectionParams: LicenseTransportParams,
+    candidates: DebugConnectionConfig[],
     opts: { isLicensable?: boolean; packageId?: string; keyId?: string } = {},
   ): Promise<DeviceConnectResult> => {
-    // A fresh connect supersedes any previous held link (reconnect / port change).
-    this.teardownDeviceSerial()
+    this.deviceLinkLicenseOptions = opts
+    this.deviceLinkProbe = null
 
-    const rawPort = connectionParams.port
-    const port = rawPort === undefined || rawPort === null ? null : String(rawPort)
-
-    // The debugger owns the serial exclusively while a session is live.
-    if (this.debuggerConnectionType === 'rtu' && this.debuggerRtuPort && port && this.debuggerRtuPort === port) {
-      this.emitSerialConnectionStatus('error', port)
-      return { status: 'error', error: 'Serial port is in use by an active debug session. Stop debugging first.' }
+    const linkCandidates = this.toDeviceLinkCandidates(candidates)
+    if (linkCandidates.length === 0) {
+      return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
     }
 
-    const built = buildLicenseTransport(connectionParams, this.RUNTIME_API_PORT)
-    if ('error' in built) {
-      this.emitSerialConnectionStatus('error', port)
-      return { status: 'error', error: built.error }
-    }
-    const client = built.client
+    const result = await this.deviceLink.open(linkCandidates)
+    // Read the verdict out of the field after the open: verification runs inside
+    // it, one candidate at a time, and this is where its conclusion lands.
+    const probe = this.takeDeviceLinkProbe()
+    if (result.ok) return probe ?? { status: 'connected-with-firmware' }
 
-    this.emitSerialConnectionStatus('connecting', port)
-
-    try {
-      await connectWithRetries(client, { attempts: 5, backoffMs: 800 })
-    } catch {
-      client.disconnect()
-      this.emitSerialConnectionStatus('disconnected', port)
-      return { status: 'no-response' }
-    }
-
-    // Classify + recover over the SAME open client (single port open).
-    const result = await probeAndRecover(client, opts)
-
-    if (result.status !== 'connected-with-firmware') {
-      // no-firmware / error: nothing to hold. Close and report.
-      client.disconnect()
-      this.emitSerialConnectionStatus('disconnected', port)
-      return result
-    }
-
-    // Hold it open + start liveness. The params are kept so the poll can reopen
-    // this same link after a cable pull without a round trip to the renderer.
-    this.deviceSerialClient = client
-    this.deviceSerialPort = port
-    this.deviceConnectParams = connectionParams
-    if (port) this.startDeviceLiveness(port)
-    this.emitSerialConnectionStatus('connected', port)
-    return result
+    // Nothing worked. A candidate that got far enough to be classified gives the
+    // better message ("no firmware" beats "could not connect"); otherwise report
+    // what was tried.
+    if (probe && probe.status !== 'connected-with-firmware') return probe
+    const tried = result.attempts.map((attempt) => `${attempt.descriptor}: ${attempt.error}`).join('; ')
+    return { status: 'no-response', error: tried || 'No connection could be established.' }
   }
 
-  /** Close a held serial link (user pressed Disconnect). */
+
+  /** Close the held link (user pressed Disconnect). */
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
-    const port = this.deviceSerialPort
-    this.teardownDeviceSerial()
-    this.emitSerialConnectionStatus('disconnected', port)
+    this.deviceLink.close()
+    this.deviceLinkProbe = null
     return { success: true }
   }
 
@@ -2860,13 +2439,14 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
 
-    if (!this.debuggerModbusClient) {
-      logger.info('[IPC Handler] Modbus client not connected')
-      return { success: false, error: 'Not connected to debugger' }
+    const link = this.requireDeviceClient()
+    if ('error' in link) {
+      logger.info('[IPC Handler] No device link for setVariable')
+      return { success: false, error: link.error }
     }
 
     try {
-      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, buffer)
+      const result = await link.client.setVariable(variableIndex, force, buffer)
       logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
       return result
     } catch (error) {

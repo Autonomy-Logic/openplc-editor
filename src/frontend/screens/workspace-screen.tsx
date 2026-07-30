@@ -52,9 +52,9 @@ import {
   useDebugNonBoolValuesMap,
   useIsDebuggerVisible,
 } from '../hooks/use-debug-value'
+import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
-import { useSerialConnectionMonitor } from '../hooks/use-serial-connection-monitor'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
@@ -156,7 +156,7 @@ const WorkspaceScreen = () => {
   // Mirrors a baremetal target's run/stop state from the held device link's
   // existing liveness tick (no timer of its own).
   useDevicePlcState()
-  useSerialConnectionMonitor()
+  useDeviceConnectionMonitor()
 
   // Build debug variables from POUs with debug=true
   const allDebugVariables = useMemo(() => {
