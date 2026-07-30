@@ -148,11 +148,21 @@ function CopyableHex({ value, label }: { value: string; label: string }) {
  * brand blue is spent only on the "Buy license" action. Renders nothing until a
  * probe lands on a connected device.
  *
- * NOTE (accuracy): "Licensed" reflects the on-device `0x4A` read, i.e. a valid
- * license blob is present and intact (magic + crc32). It is not the closed
- * gate's runtime signature/binding verdict; those agree in practice, but a
- * tampered/foreign blob could read "Licensed" here while the device still runs
- * demo. Surfacing the gate verdict over the wire is a separate improvement.
+ * NOTE (accuracy) — what "Licensed" is allowed to mean here. It means the main
+ * process read the device's stored blob over `0x4A` and VERIFIED, itself, four
+ * things: the 98-byte length, the `OPLC` magic, the crc32 over bytes 0..93, and
+ * that the embedded `device_id` / `product_id` match this board's anchor and this
+ * VPP (`verifyStoredLicenseBlob`, D2). The editor does this because the `0x7E`
+ * status byte does not mean it: the Linux runtime checks only the file length, so
+ * a blob cloned from another Pi answered `0x7E` and this badge used to say
+ * "Licensed" for it — while skipping the recover that would have fixed it.
+ *
+ * It is still NOT the closed gate's verdict. The ECDSA signature and the `key_id`
+ * are not checked here (only `license_core_verify` can, and asking it over the
+ * wire is a separate project), so a blob signed with a key the firmware does not
+ * trust would read "Licensed" and the board would still run demo. Nothing in this
+ * component may claim an execution mode — see `GLOSSARY.md`: the UI speaks of
+ * POSSESSION (Licensed / Not licensed / License check failed), never FULL/DEMO.
  *
  * THREE distinct states, deliberately not two: "Not licensed" is an ANSWER (the
  * backend has no license for this device), while "License check failed" is the
@@ -239,12 +249,19 @@ function DeviceLicenseStatus({
               {/* On failure the reason IS the useful part: a 429 means try again,
                   a 503 means the service is down, a network error means check the
                   connection. Hiding it would leave the user with no next step. */}
+              {/* POSSESSION, not execution mode. This said "Full version
+                  unlocked" / "Running in demo mode", which `GLOSSARY.md` forbids
+                  outright (FULL/DEMO are the closed gate's execution modes and
+                  the UI never speaks them) — and it asserted them from a 0x49
+                  write nobody had verified. The subtitle now states only what
+                  was actually established: a license bound to this device is
+                  stored on it, or none is. */}
               <p className='break-words font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
                 {checkFailed
                   ? (error ?? 'Could not reach the licensing service.')
                   : licensed
-                    ? 'Full version unlocked'
-                    : 'Running in demo mode'}
+                    ? 'A license issued for this device is stored on the board'
+                    : 'No license for this device is stored on the board'}
               </p>
             </div>
           </div>
@@ -264,12 +281,20 @@ function DeviceLicenseStatus({
                 </dd>
               </>
             )}
+            {/* TRUNCATED, and deliberately WITHOUT a `title` carrying the whole
+                value (D3). The anchor is the one secret in this design: it is the
+                pre-image of the Device ID and the input to the proof-of-possession
+                KDF, so whoever holds it can derive this device's key offline and
+                pass /activate and /recover for it forever — and the anchor never
+                rotates, so nothing revokes that. The truncated form is enough to
+                identify a board on a bench, which is all this row is for; a
+                screenshot of a hover tooltip pasted into a support ticket handed
+                the secret away permanently. Contrast the Device ID above, which
+                is a NAME and is copyable in full on purpose (#23). */}
             {anchorHex && (
               <>
                 <dt className='text-neutral-600 dark:text-neutral-400'>Hardware ID</dt>
-                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300' title={anchorHex}>
-                  {shortHex(anchorHex)}
-                </dd>
+                <dd className='text-right font-mono text-neutral-800 dark:text-neutral-300'>{shortHex(anchorHex)}</dd>
               </>
             )}
             {!licensed && (
@@ -356,8 +381,10 @@ const Board = memo(function () {
   // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
 
-  // Licensable targets get a FULL/DEMO badge next to Connect; free VPPs just
-  // show "Connected". Drives whether the connect flow runs the license step.
+  // Licensable targets get a POSSESSION badge next to Connect (Licensed / Not
+  // licensed / License check failed — never an execution mode, see GLOSSARY.md);
+  // free VPPs just show "Connected". Drives whether the connect flow runs the
+  // license step.
   const licensableSelectedBoard = resolveTargetCapabilities(currentBoardInfo).isLicensable
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
@@ -759,7 +786,7 @@ const Board = memo(function () {
     }
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
-  // Drop the FULL/DEMO badge whenever the target board or port changes — a
+  // Drop the license badge whenever the target board or port changes — a
   // classification from a previous Connect describes a different device.
   useEffect(() => {
     clearDeviceProbe()
@@ -1227,4 +1254,11 @@ const Board = memo(function () {
   )
 })
 
-export { Board }
+/**
+ * `DeviceLicenseStatus` is exported for its own tests (T12). It had NONE, and the
+ * strings it renders are load-bearing: the three possession labels are the
+ * vocabulary `GLOSSARY.md` mandates, and the two identifier labels are the pair
+ * task #23 had to fix after "Device ID" was used for the anchor. Swapping those
+ * two labels back to the #23 bug left the whole suite green.
+ */
+export { Board, DeviceLicenseStatus }
