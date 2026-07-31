@@ -3,6 +3,7 @@ import {
   encodeForceValue,
   getTypeSizeByName,
   getVariableSize,
+  isForcedValueHigh,
   parseValueByTypeName,
   parseVariableValue,
 } from '../variable-sizes'
@@ -476,6 +477,11 @@ describe('parseValueByTypeName', () => {
     const result = parseValueByTypeName(data, 0, 'usint')
     expect(result).toEqual({ value: '42', bytesRead: 1 })
   })
+
+  it('renders an unknown type as ??? and consumes the 4-byte default', () => {
+    const result = parseValueByTypeName(u8(1, 2, 3, 4), 0, 'TOTALLY_FAKE_TYPE')
+    expect(result).toEqual({ value: '???', bytesRead: 4 })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -510,9 +516,36 @@ describe('encodeForceValue', () => {
     )
   })
 
-  it('rejects unsupported types cleanly', () => {
-    expect(() => encodeForceValue('5s', 'TIME')).toThrow(/not supported/)
-    expect(() => encodeForceValue('"hello"', 'STRING')).toThrow(/not supported/)
+  it('encodes TIME as int64 nanoseconds, little-endian', () => {
+    // T#10s → 10e9 ns → 0x00000002540BE400
+    expect(Array.from(encodeForceValue('T#10s', 'TIME'))).toEqual([0x00, 0xe4, 0x0b, 0x54, 0x02, 0x00, 0x00, 0x00])
+    // Prefix-less input (what the watch panel renders) works too.
+    expect(Array.from(encodeForceValue('250ms', 'TIME'))).toEqual([0x80, 0xb2, 0xe6, 0x0e, 0x00, 0x00, 0x00, 0x00])
+    // Negative durations are two-complement.
+    expect(Array.from(encodeForceValue('T#-1ns', 'TIME'))).toEqual([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+  })
+
+  it('surfaces the duration parser error for a malformed TIME value', () => {
+    expect(() => encodeForceValue('10', 'TIME')).toThrow(/Invalid TIME value/)
+  })
+
+  it('encodes STRING as a length byte followed by ASCII', () => {
+    expect(Array.from(encodeForceValue('hi', 'STRING'))).toEqual([2, 0x68, 0x69])
+    // IEC literal quotes are unwrapped — and are how spaces survive trimming.
+    expect(Array.from(encodeForceValue("' hi '", 'STRING'))).toEqual([4, 0x20, 0x68, 0x69, 0x20])
+    expect(Array.from(encodeForceValue("''", 'STRING'))).toEqual([0])
+  })
+
+  it('rejects STRING values that are non-ASCII or over the protocol cap', () => {
+    expect(() => encodeForceValue('café', 'STRING')).toThrow(/must be ASCII/)
+    expect(() => encodeForceValue('x'.repeat(127), 'STRING')).toThrow(/too long: 127 characters \(max 126\)/)
+  })
+
+  it('rejects the wire formats that still lack an encoder', () => {
+    expect(() => encodeForceValue('D#2026-01-01', 'DATE')).toThrow(/not supported/)
+    expect(() => encodeForceValue('TOD#12:00:00', 'TOD')).toThrow(/not supported/)
+    expect(() => encodeForceValue('DT#2026-01-01-12:00:00', 'DT')).toThrow(/not supported/)
+    expect(() => encodeForceValue('"hello"', 'WSTRING')).toThrow(/not supported/)
   })
 
   describe('out-of-range truncation', () => {
@@ -628,5 +661,27 @@ describe('encodeForceValue', () => {
       // decision not in the scope of this PR.
       expect(Array.from(encodeForceValue('', 'DINT'))).toEqual([0x00, 0x00, 0x00, 0x00])
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isForcedValueHigh
+// ---------------------------------------------------------------------------
+
+describe('isForcedValueHigh', () => {
+  it('treats FALSE / 0 / negative values as forced-low', () => {
+    expect(isForcedValueHigh('FALSE')).toBe(false)
+    expect(isForcedValueHigh(' false ')).toBe(false)
+    expect(isForcedValueHigh('0')).toBe(false)
+    expect(isForcedValueHigh('-1')).toBe(false)
+    expect(isForcedValueHigh('T#-5s')).toBe(false)
+  })
+
+  it('treats everything else as forced-high', () => {
+    expect(isForcedValueHigh('TRUE')).toBe(true)
+    expect(isForcedValueHigh('1')).toBe(true)
+    expect(isForcedValueHigh('T#10s')).toBe(true)
+    expect(isForcedValueHigh('0s')).toBe(true)
+    expect(isForcedValueHigh('hello')).toBe(true)
   })
 })
