@@ -1,0 +1,68 @@
+name: Security — archive PR SBOM on merge
+
+# When a pull request is MERGED, generate the SBOM + report for the resulting
+# state and commit it under security/pr-<number>-<date>/ on the default branch,
+# so the repo keeps a permanent, per-PR supply-chain history. Runs once per merge
+# (not on synchronize), so it never loops and never touches the PR while it is
+# under review.
+#
+# NOTE: this pushes directly to the default branch. If you later require PRs on
+# the default branch in branch protection, switch this to open a PR instead.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: security-pr-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the default branch (post-merge state)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Enable pnpm
+        run: corepack enable
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+
+      - name: Generate SBOM + report and archive under security/pr-<n>-<date>/
+        run: |
+          bash scripts/generate-sbom.sh
+          NAME=$(basename "$(ls sbom/*.cdx.json | head -1)" .cdx.json)
+          CFG=""; [ -f osv-scanner.toml ] && CFG="--config=osv-scanner.toml"
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/osv.json . || true
+          node scripts/scan-vulns.mjs /tmp/osv.json sbom/vulnerabilities.csv
+          DATE=$(date -u +%Y-%m-%d)
+          PR="${{ github.event.pull_request.number }}"
+          DIR="security/pr-${PR}-${DATE}"
+          node scripts/build-report.mjs --config security/report-config.json --cdx "sbom/$NAME.cdx.json" --out "$DIR" --date "$DATE"
+          mkdir -p "$DIR/sbom"
+          cp "sbom/$NAME".cdx.json "sbom/$NAME".spdx.json "sbom/$NAME".components.csv sbom/vulnerabilities.csv "$DIR/sbom/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$DIR"
+          if git diff --cached --quiet; then
+            echo "No SBOM to archive."
+          else
+            git commit -m "chore(security): SBOM snapshot for merged PR #${PR} (${DATE})"
+            git push origin "HEAD:${{ github.event.pull_request.base.ref }}"
+          fi

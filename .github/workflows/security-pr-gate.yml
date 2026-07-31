@@ -1,0 +1,92 @@
+name: Security — PR gate
+
+# Runs on every pull request. Scans the BASE and the HEAD of the PR and blocks
+# ONLY on security advisories the PR *introduces* (present in head, absent in
+# base) at or above the severity threshold — pre-existing issues never block.
+# Both scans honor osv-scanner.toml (the VEX baseline), so a justified new
+# suppression in the PR clears the gate.
+#
+# The job never writes CODE to the repo (contents: read), so the check is present
+# on every commit and is safe to require in branch protection. It DOES post a
+# single sticky PR comment (pull-requests: write) with the actionable result, so
+# the author sees what to fix without digging into the check log. The per-PR SBOM
+# snapshot is archived on MERGE by security-pr-archive.yml.
+#
+# To ENFORCE the block, mark the "gate" job a required status check in branch
+# protection for the default branch.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write   # post/update the result comment (never pushes code)
+
+concurrency:
+  group: security-pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Block when the PR introduces a NEW advisory at or above this severity.
+  GATE_THRESHOLD: HIGH
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
+          chmod +x /usr/local/bin/osv-scanner
+
+      # Both scans use the HEAD osv-scanner.toml so a justified suppression added
+      # in the PR is honored on both sides.
+      - name: Scan HEAD
+        run: |
+          cp osv-scanner.toml /tmp/head-config.toml 2>/dev/null || true
+          CFG=""; [ -f /tmp/head-config.toml ] && CFG="--config=/tmp/head-config.toml"
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/head.json . || true
+
+      - name: Scan BASE
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}" 2>/dev/null || true
+          git worktree add -f /tmp/base "${{ github.event.pull_request.base.sha }}"
+          CFG=""; [ -f /tmp/head-config.toml ] && CFG="--config=/tmp/head-config.toml"
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/base.json /tmp/base || true
+
+      # THE GATE — non-zero exit here fails the check and (with branch protection)
+      # blocks the merge. It also writes /tmp/gate-comment.md and /tmp/gate-status.
+      - name: Evaluate — block on newly-introduced advisories
+        run: node scripts/pr-gate-diff.mjs /tmp/base.json /tmp/head.json "${GATE_THRESHOLD}"
+
+      # Post/update ONE sticky comment on the PR with the actionable result.
+      # Runs even when the gate failed (always()); never flips the verdict
+      # (continue-on-error) — the pass/fail is decided by the step above.
+      - name: Comment result on the PR
+        if: ${{ always() && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          STATUS=$(cat /tmp/gate-status 2>/dev/null || echo clean)
+          CID=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                  --jq '.[] | select(.body | contains("<!-- security-pr-gate -->")) | .id' | head -1)
+          if [ "$STATUS" = "clean" ] && [ -z "$CID" ]; then
+            echo "Clean and no existing comment — nothing to post."; exit 0
+          fi
+          if [ -n "$CID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$CID" -F body=@/tmp/gate-comment.md >/dev/null && echo "Updated comment $CID"
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file /tmp/gate-comment.md && echo "Created comment"
+          fi
