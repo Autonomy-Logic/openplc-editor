@@ -5,17 +5,10 @@ import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import ViewIcon from '../../../assets/icons/interface/View'
 import ZapIcon from '../../../assets/icons/interface/Zap'
 import { cn } from '../../../utils/cn'
-import {
-  floatToBuffer,
-  getVariableTypeInfo,
-  integerToBuffer,
-  parseFloatValue,
-  parseIntegerValue,
-  parseStringValue,
-  stringToBuffer,
-} from '../../../utils/variable-types'
+import { encodeForceValue, isForcedValueHigh } from '../../../utils/variable-sizes'
 import { TreeNode } from '../../_atoms/debug-tree-node'
 import { Label } from '../../_atoms/label'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '../modal'
 
 type Variable = {
@@ -117,6 +110,7 @@ const VariablesPanel = ({
     compositeKey: string
     lookupKey: string
     variableType: string
+    enumValues?: string[]
     position: { x: number; y: number }
   } | null>(null)
   const [forceValueModalOpen, setForceValueModalOpen] = useState<boolean>(false)
@@ -125,6 +119,7 @@ const VariablesPanel = ({
     compositeKey: string
     lookupKey: string
     variableType: string
+    enumValues?: string[]
   } | null>(null)
 
   const getValue = (compositeKey: string): string | undefined => {
@@ -199,6 +194,7 @@ const VariablesPanel = ({
         compositeKey: node.compositeKey,
         lookupKey,
         variableType: node.type,
+        enumValues: node.enumValues,
         position,
       })
     },
@@ -260,6 +256,7 @@ const VariablesPanel = ({
           compositeKey: contextMenuState.compositeKey,
           lookupKey: contextMenuState.lookupKey,
           variableType: contextMenuState.variableType,
+          enumValues: contextMenuState.enumValues,
         })
       }
       handleCloseContextMenu()
@@ -281,49 +278,24 @@ const VariablesPanel = ({
     }
 
     const variableType = pendingForceContext.variableType
-    const typeInfo = getVariableTypeInfo(variableType)
-    if (!typeInfo) {
-      closeModal()
-      return
-    }
-
-    const normalizedType = variableType.toLowerCase()
-    const isFloatType = normalizedType === 'real' || normalizedType === 'lreal'
-    const isStringType = normalizedType === 'string'
 
     let valueBuffer: Uint8Array
-    let forcedValueForState: boolean
-
-    if (isStringType) {
-      const parsedStringValue: string | null = parseStringValue(forceValue)
-      if (parsedStringValue === null) {
-        closeModal()
-        return
-      }
-      valueBuffer = stringToBuffer(parsedStringValue)
-      forcedValueForState = true
-    } else if (isFloatType) {
-      const parsedFloatValue = parseFloatValue(forceValue, typeInfo.byteSize)
-      if (parsedFloatValue === null) {
-        closeModal()
-        return
-      }
-      valueBuffer = floatToBuffer(parsedFloatValue, typeInfo.byteSize)
-      forcedValueForState = parsedFloatValue >= 0
-    } else {
-      const parsedIntValue = parseIntegerValue(forceValue, typeInfo)
-      if (parsedIntValue === null) {
-        closeModal()
-        return
-      }
-      valueBuffer = integerToBuffer(parsedIntValue, typeInfo.byteSize, typeInfo.signed)
-      forcedValueForState = parsedIntValue >= BigInt(0)
+    try {
+      valueBuffer = encodeForceValue(forceValue, variableType, pendingForceContext.enumValues)
+    } catch (error) {
+      toast({
+        title: 'Cannot force value',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'fail',
+      })
+      closeModal()
+      return
     }
 
     void onForceVariable(
       pendingForceContext.compositeKey,
       variableType,
-      forcedValueForState,
+      isForcedValueHigh(forceValue),
       valueBuffer,
       pendingForceContext.lookupKey,
     )

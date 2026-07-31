@@ -183,6 +183,18 @@ export type ProjectActions = {
   getCompileReadyProjectData: () => ProjectState['data']
 
   /**
+   * The live `alias → IEC address` index derived from every active producer
+   * (pin mapping, VPP module slots, Modbus TCP remote IO, EtherCAT channels).
+   *
+   * Exposed for consumers that must project variables into IEC text the way
+   * the compiler sees them — currently the ST language server, whose stub and
+   * scope-query documents would otherwise emit `AT <alias>` and fail to parse.
+   * Memoized on producer-state identity, so the LSP can call it on every
+   * project reconcile without rebuilding the address registry.
+   */
+  getAliasIndex: () => ReadonlyMap<string, string>
+
+  /**
    * Cascade-rename bound variables' `location` from `oldAlias` to `newAlias`
    * across all POU-local and global variables. In the single-field model a
    * variable bound to a producer alias holds the alias NAME in `location`;

@@ -87,6 +87,15 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   const snapshot = emptySnapshot()
   let disposed = false
 
+  // A variable's `location` holds EITHER a producer alias name OR a literal
+  // `%addr`. `AT <alias>` is not valid IEC ST — strucpp abandons the whole VAR
+  // block on it, so every symbol after the first alias-bound variable vanishes
+  // from the POU's scope. The LSP therefore sees the same resolved addresses
+  // the compiler does (`getCompileReadyProjectData`); only the projection is
+  // resolved, the store keeps the alias names for display. The store memoizes
+  // this on producer-state identity, so calling it per reconcile is cheap.
+  const aliasIndex = (): ReadonlyMap<string, string> => openPLCStoreBase.getState().projectActions.getAliasIndex()
+
   // Reconcile a single fixed-URI synthesized document (data types, resource
   // globals, softmotion axes …) against the worker: open on first non-empty
   // text, didChange on a text change, didClose when it becomes empty. Centralised
@@ -119,7 +128,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // The project's configuration-level `VAR_GLOBAL`s wrapped in a CONFIGURATION,
   // so a POU's `VAR_EXTERNAL` resolves against a matching global.
   function reconcileResourceGlobals(globals: PLCVariable[]): void {
-    reconcileSyntheticDoc(RESOURCE_GLOBALS_URI, serializeResourceGlobalsToST(globals))
+    reconcileSyntheticDoc(RESOURCE_GLOBALS_URI, serializeResourceGlobalsToST(globals, aliasIndex()))
   }
 
   // A `VAR_GLOBAL <axis> : AXIS_REF_SM3` per recognized CiA 402 drive, so editor
@@ -132,6 +141,8 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   function reconcile(pous: PLCPou[]): void {
     if (disposed) return
 
+    // Read once per reconcile — every POU stub resolves against the same index.
+    const resolvedAliases = aliasIndex()
     const seenNames = new Set<string>()
     const seenUris = new Set<string>()
     // The synthesized documents (data types, resource globals, SoftMotion axes)
@@ -149,7 +160,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       // Axes are surfaced as ambient globals (SOFTMOTION_GLOBALS_URI), so the
       // editor documents keep the exact line layout the user wrote and
       // go-to-definition line mapping stays correct.
-      const { text: nextText, bodyLineOffset } = serializePouSignatureToSTWithBodyOffset(pou)
+      const { text: nextText, bodyLineOffset } = serializePouSignatureToSTWithBodyOffset(pou, resolvedAliases)
 
       // POU name unchanged but URI switched (body language change).
       // Send didClose for the previous URI before didOpen on the new.
@@ -222,6 +233,23 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     (state) => state.project.data.remoteDevices,
     (remoteDevices) => reconcileSoftMotionGlobals(remoteDevices),
   )
+  // Every document that declares variables is serialized against the alias →
+  // address index, so a producer-only change must re-emit them.  Renaming an
+  // alias already cascades into `project.data.pous` (via `renameAlias`) and
+  // reconciles through the subscription above, but a pure *re-address*
+  // (`recalculateIecAddresses` compacting after an IO point is removed)
+  // touches only the producers — the stubs would otherwise keep the old
+  // `%addr`.  Selecting the index itself is the exact trigger: the store
+  // memoizes it on producer-state identity, so this selector is a handful of
+  // `===` checks and the listener fires only when the index really moved.
+  const unsubscribeAliasIndex = openPLCStoreBase.subscribe(
+    (state) => state.projectActions.getAliasIndex(),
+    () => {
+      const live = openPLCStoreBase.getState()
+      reconcileResourceGlobals(live.project.data.configurations.resource.globalVariables)
+      reconcile(live.project.data.pous)
+    },
+  )
 
   // Initial reconcile against whatever is already in the store.  The
   // synthesized globals/types load first so any POU that references
@@ -257,6 +285,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       unsubscribeDataTypes()
       unsubscribeResourceGlobals()
       unsubscribeRemoteDevices()
+      unsubscribeAliasIndex()
       // Close every doc we'd opened so the worker stays consistent
       // if the service is restarted in the same session.
       for (const uri of snapshot.contentByUri.keys()) {

@@ -19,7 +19,8 @@
  *
  * Polling intervals:
  * - Modbus RTU / simulator: 50ms   (no network; keep the UI snappy)
- * - Web HTTP fallback:      1000ms  (WebRTC failed; each poll is a slow
+ * - Web HTTP fallback:      platform-capability-driven, 1000ms by default
+ *                                    (WebRTC failed; each poll is a slow
  *                                    orchestrator round-trip, so back off)
  * - Everything else:        200ms   (general purpose — TCP / WebSocket /
  *                                    web WebRTC data channel)
@@ -38,10 +39,6 @@ import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes
 const RTU_POLL_INTERVAL_MS = 50
 /** Polling interval for higher-bandwidth transports (TCP / WebSocket). */
 const DEFAULT_POLL_INTERVAL_MS = 200
-/** Polling interval for the web HTTP fallback (WebRTC unavailable): each
- *  poll is a full orchestrator `run_command` round-trip, so we slow right
- *  down to avoid hammering the edge API / runtime. */
-const HTTP_FALLBACK_POLL_INTERVAL_MS = 1000
 
 // Batch size is transport-dependent. The wire request packs 3 bytes per
 // variable (arr:u8 + elem:u16); the response packs raw type-sized values
@@ -434,7 +431,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       const pollIntervalMs = usesRtuFraming
         ? RTU_POLL_INTERVAL_MS
         : usesHttpFallback
-          ? HTTP_FALLBACK_POLL_INTERVAL_MS
+          ? capabilities.debugHttpFallbackPollIntervalMs
           : DEFAULT_POLL_INTERVAL_MS
 
       // Fire first poll immediately, then schedule at fixed rate
@@ -492,6 +489,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     debugConnectionType,
     sessionDebugTransport,
     capabilities.isNativeApplication,
+    capabilities.debugHttpFallbackPollIntervalMs,
     workspaceActions,
   ])
 
