@@ -25,6 +25,7 @@ export {
   type LeafAddress,
   OpcUaConfigError,
   resolveArrayAddress,
+  resolveArrayElementFields,
   resolveStructureAddresses,
   resolveVariableAddress,
 } from './resolve-indices'
