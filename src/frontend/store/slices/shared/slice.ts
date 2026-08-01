@@ -979,10 +979,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       )
     },
 
-    markAllSaved: () => {
+    markAllSaved: (except) => {
       setState(
         produce((state: SharedRootState) => {
-          for (const history of Object.values(state.undoRedo)) {
+          for (const [pouName, history] of Object.entries(state.undoRedo)) {
+            if (except?.includes(pouName)) continue
             history.savedAtDepth = history.past.length
           }
         }),

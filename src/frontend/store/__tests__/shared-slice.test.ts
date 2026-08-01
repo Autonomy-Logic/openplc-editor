@@ -2158,6 +2158,16 @@ describe('createSharedSlice', () => {
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
         expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(2)
       })
+
+      it('skips the excluded POUs', () => {
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P2', { variables: [], body: 'v1' })
+
+        store.getState().snapshotActions.markAllSaved(['P2'])
+
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
+        expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(0)
+      })
     })
 
     // -----------------------------------------------------------------------

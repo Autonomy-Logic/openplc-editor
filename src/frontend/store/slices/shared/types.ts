@@ -117,7 +117,7 @@ export type EtherCATDeviceActions = {
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
   markSaved: (pouName: string) => void
-  markAllSaved: () => void
+  markAllSaved: (except?: readonly string[]) => void
   undo: (pouName: string) => void
   redo: (pouName: string) => void
 }
