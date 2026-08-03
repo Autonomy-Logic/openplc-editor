@@ -127,8 +127,18 @@ export interface DeviceActivationResult {
  */
 export interface DeviceConnectionStatusPayload {
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
-  /** Which transport the connection uses (or was using, when it dropped). */
+  /**
+   * Medium the CONTROL channel uses (or was using, when it dropped). Absent for a
+   * REST-controlled runtime session: REST holds no connection.
+   */
   transport?: 'rtu' | 'tcp' | 'simulator'
+  /**
+   * Medium the DEBUG channel uses — the same as `transport` when one channel serves
+   * both roles, else `websocket` (v4) or `tcp` (v3). Consumers that must size work
+   * to the wire (the debug poll's frame budget) read THIS, rather than inferring a
+   * medium they have no business choosing.
+   */
+  debugTransport?: 'rtu' | 'tcp' | 'simulator' | 'websocket'
   /**
    * The endpoint, as the user would name it: a serial path ("/dev/ttyACM0",
    * "COM5") or an IP address. Not called `port`, because for a Modbus TCP link it

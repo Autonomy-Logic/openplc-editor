@@ -50,6 +50,13 @@ export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
  * the control side already established what this target is.
  */
 export interface DeviceDebugCandidate {
+  /**
+   * Medium this channel rides. Published with the session status because the debug
+   * poll sizes its batches to the frame budget (a WebSocket swallows 500 variables
+   * per round trip, Modbus TCP 60, RTU 19), and a poller that has to GUESS the
+   * medium either wastes round trips or overruns a frame.
+   */
+  transport: DeviceLinkTransport | 'websocket'
   descriptor: string
   create: () => DeviceDebugChannel
 }
@@ -66,7 +73,19 @@ export interface DeviceLinkCandidate {
 /** Live link state, as pushed to the renderer. */
 export interface DeviceLinkStatus {
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  /**
+   * The CONTROL channel's medium. Absent for a REST-controlled session (v3/v4):
+   * REST holds no connection, so there is no medium to report or lose.
+   */
   transport?: DeviceLinkTransport
+  /**
+   * The DEBUG channel's medium — the same as `transport` when one channel serves
+   * both roles, and `websocket` (v4) or `tcp` (v3) when it does not. Reported
+   * separately because these are genuinely two facts: the control medium decides
+   * what "the connection dropped" means, the debug medium decides the poll's frame
+   * budget.
+   */
+  debugTransport?: DeviceLinkTransport | 'websocket'
   descriptor?: string
   /**
    * Set only when a link that WAS up died and could not be recovered. The one
@@ -321,7 +340,13 @@ export class DeviceSessionManager {
         this.current = candidate
         this.policy.reset()
         this.startPolling()
-        this.hooks.emit({ status: 'connected', transport: candidate.transport, descriptor: candidate.descriptor })
+        this.hooks.emit({
+          status: 'connected',
+          transport: candidate.transport,
+          // Shared unless the caller supplied a separate debug channel.
+          debugTransport: this.debugCandidate?.transport ?? candidate.transport,
+          descriptor: candidate.descriptor,
+        })
         return { ok: true, transport: candidate.transport, descriptor: candidate.descriptor, client: outcome.client }
       }
       attempts.push({ transport: candidate.transport, descriptor: candidate.descriptor, error: outcome.error })
@@ -346,7 +371,13 @@ export class DeviceSessionManager {
     this.restControl = { address: options.address }
     this.debugCandidate = options.debugChannel
     this.trace(`session: control over REST at ${options.address}, debug via ${options.debugChannel.descriptor}`)
-    this.hooks.emit({ status: 'connected', descriptor: options.address })
+    this.hooks.emit({
+      status: 'connected',
+      // No control transport: REST holds nothing. The debug medium is what the
+      // debugger will actually ride, and what its poll must be sized for.
+      debugTransport: options.debugChannel.transport,
+      descriptor: options.address,
+    })
   }
 
   /** The REST address when control runs over REST, else null. */
@@ -546,6 +577,7 @@ export class DeviceSessionManager {
         this.hooks.emit({
           status: 'connected',
           transport: reopened!.candidate.transport,
+          debugTransport: this.debugCandidate?.transport ?? reopened!.candidate.transport,
           descriptor: reopened!.candidate.descriptor,
         })
         return

@@ -89,19 +89,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
 
   // Run/stop travels over the session's control channel, so the button is live
-  // exactly when a session exists — a device connection for a baremetal target, a
-  // runtime login for v3/v4. It used to key off `directUsbUpload`, which said
-  // nothing about whether anything was connected: a baremetal board was always
-  // "ready", so Start failed with "connect first" after the click instead of the
-  // button explaining itself before it.
-  const plcControlBlocked = (() => {
-    const caps = resolveTargetCapabilities(currentBoardInfo)
-    if (caps.isInProcessSimulator) return false
-    return caps.directUsbUpload ? deviceConnectionStatus !== 'connected' : connectionStatus !== 'connected'
-  })()
-  const plcControlBlockedReason = resolveTargetCapabilities(currentBoardInfo).directUsbUpload
-    ? 'Connect to the device first'
-    : 'Connect to runtime first'
+  // exactly when a SESSION exists — one question, asked once, for every target type.
+  // Every session publishes its status: a device connection, a runtime login, a
+  // running simulator. Asking the target's kind first (`directUsbUpload ? … : …`)
+  // meant asking "did the user log in" for a runtime, which is not the same question
+  // and diverged in practice: logged in, session never opened, every command
+  // refused. "Can a payload be delivered?" is what the button actually needs.
+  //
+  // Deliberately NOT applied to Build & Upload. Uploading is how a blank board stops
+  // being blank, so it cannot require a connection — see `handleBuild`, where the
+  // connection is consulted only to hand the serial port over to arduino-cli.
+  const plcControlBlocked = deviceConnectionStatus !== 'connected'
+  const plcControlBlockedReason = 'Connect to the target first'
 
   // The emulator stopping is a session ending, and a debug session riding it ends
   // with it — which the drop handler below already does for every target. This
@@ -726,11 +725,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
-        // Surface the active transport so transport-specific pollers
-        // (useDebugPolling) can size their batches against the real frame budget.
-        // For a device session the medium is whatever the connection manager chose,
-        // which the store mirrors — this reads that decision, it does not make one.
-        const activeTransport = useOpenPLCStore.getState().deviceConnection.transport
+        // The debug poll sizes its batches to the frame budget, so it needs the
+        // medium the DEBUG channel rides — published by the manager and mirrored in
+        // the store. Reading the control medium instead left a v4 session (control
+        // over REST, debug over a WebSocket) with no medium at all, and it silently
+        // polled with TCP-sized batches: 60 variables per round trip instead of 500.
+        const activeTransport = useOpenPLCStore.getState().deviceConnection.debugTransport
         if (activeTransport) {
           useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(activeTransport)
         }
@@ -852,29 +852,26 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // debug session can start — a device by Connect, a runtime by logging in, the
       // simulator by pressing Start — so the only question left is whether that
       // session exists. Which medium it uses is the connection manager's to know.
-      const debugCaps = resolveTargetCapabilities(boardInfo)
       const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
-      const requiresDeviceConnection = debugCaps.directUsbUpload && !debugCaps.isInProcessSimulator
 
       // A session the manager holds (a device or the simulator) also OWNS the debug
       // channel, so the session ending ends the debug session — see the drop handler
       // above. A runtime's debug channel is its own and outlives nothing.
       debugSessionRidesDeviceRef.current = !isRuntime
 
-      const deviceStatusNow = useOpenPLCStore.getState().deviceConnection.status
-      const runtimeStatusNow = useOpenPLCStore.getState().runtimeConnection.connectionStatus
+      // One question for every target: does the manager hold a session? A simulator's
+      // session is its running emulator, a device's is Connect, a runtime's is the
+      // login — all three publish the same status.
+      const sessionStatus = useOpenPLCStore.getState().deviceConnection.status
       addLog({
         id: crypto.randomUUID(),
         level: 'info',
-        message: `[connection] debug session requested for ${boardTarget}; device connection "${deviceStatusNow}", runtime connection "${runtimeStatusNow}"`,
+        message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
       })
 
-      // Connect first — the same rule for every target that has something to
-      // connect to. Starting a debug session must never establish the connection
+      // Connect first. Starting a debug session must never establish the connection
       // itself: connecting is the user's explicit action and reports what it found.
-      const missingConnection =
-        (requiresDeviceConnection && deviceStatusNow !== 'connected') || (isRuntime && runtimeStatusNow !== 'connected')
-      if (missingConnection) {
+      if (sessionStatus !== 'connected') {
         await showDeviceDialog(
           'warning',
           'Connection Required',

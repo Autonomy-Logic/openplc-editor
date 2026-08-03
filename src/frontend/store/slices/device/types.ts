@@ -101,11 +101,18 @@ export type DeviceConnection = {
   /** Endpoint the connection is on (or was last attempted on): a serial path or an IP. */
   port: string | null
   /**
-   * Medium the manager chose. Read-only mirror — nothing in the renderer picks a
-   * transport; this exists because a few consumers must SIZE work to the medium
-   * (the debug poll's frame budget differs between serial and TCP).
+   * Medium the CONTROL channel uses. Read-only mirror — nothing in the renderer
+   * picks a transport. Null for a REST-controlled runtime session, which holds no
+   * connection.
    */
   transport: 'rtu' | 'tcp' | 'simulator' | null
+  /**
+   * Medium the DEBUG channel uses. The debug poll sizes its batches to this, because
+   * the frame budget differs enormously by wire (WebSocket 500 variables per round
+   * trip, Modbus TCP 60, RTU 19). Mirrored from the manager rather than inferred: a
+   * v4 session left this unset and silently polled with TCP-sized batches.
+   */
+  debugTransport: 'rtu' | 'tcp' | 'simulator' | 'websocket' | null
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +230,7 @@ export type DeviceActions = {
     status: DeviceConnectionStatus,
     port?: string | null,
     transport?: DeviceConnection['transport'],
+    debugTransport?: DeviceConnection['debugTransport'],
   ) => void
   /** Reset the serial link to disconnected/null. */
   clearDeviceConnection: () => void

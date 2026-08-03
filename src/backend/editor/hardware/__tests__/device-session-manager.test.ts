@@ -310,7 +310,13 @@ describe('DeviceSessionManager', () => {
       await h.manager.tick() // reopen attempt succeeds
       expect(h.manager.isRecovering()).toBe(false)
       expect(h.manager.getClient()).toBe(asTransport(revived))
-      expect(h.statuses.at(-1)).toEqual({ status: 'connected', transport: 'tcp', descriptor: '192.168.0.50' })
+      expect(h.statuses.at(-1)).toEqual({
+        status: 'connected',
+        transport: 'tcp',
+        // Shared session: one medium serves both roles, so both are reported as it.
+        debugTransport: 'tcp',
+        descriptor: '192.168.0.50',
+      })
       h.manager.close()
     })
 
@@ -382,13 +388,32 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
+        debugChannel: { transport: 'websocket', descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
       })
 
       expect(h.manager.isConnected()).toBe(true)
       expect(h.manager.getRestAddress()).toBe('10.0.0.5')
       expect(h.manager.getClient()).toBeNull() // nothing Modbus to hold
       expect(h.statuses.at(-1)).toMatchObject({ status: 'connected', descriptor: '10.0.0.5' })
+      h.manager.close()
+    })
+
+    it('publishes the DEBUG medium, which is not the control one', async () => {
+      // The debug poll sizes its batches to the frame budget: a WebSocket takes 500
+      // variables per round trip, Modbus TCP 60, RTU 19. A v4 session is controlled
+      // over REST — no medium there at all — so publishing only the control medium
+      // left the poller with nothing and it silently used TCP-sized batches.
+      const h = harness()
+      h.manager.openRestSession({
+        address: '10.0.0.5',
+        debugChannel: { transport: 'websocket', descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
+      })
+
+      expect(h.statuses.at(-1)).toEqual({
+        status: 'connected',
+        debugTransport: 'websocket',
+        descriptor: '10.0.0.5',
+      })
       h.manager.close()
     })
 
@@ -399,7 +424,7 @@ describe('DeviceSessionManager', () => {
       const debug = new FakeClient()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { descriptor: 'modbus-tcp 10.0.0.5:502', create: () => asTransport(debug) },
+        debugChannel: { transport: 'tcp', descriptor: 'modbus-tcp 10.0.0.5:502', create: () => asTransport(debug) },
       })
 
       expect(h.manager.isDebugShared()).toBe(false)
@@ -417,7 +442,7 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { descriptor: 'x', create: () => asTransport(new FakeClient()) },
+        debugChannel: { transport: 'websocket', descriptor: 'x', create: () => asTransport(new FakeClient()) },
       })
 
       h.manager.close()
@@ -433,7 +458,7 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { descriptor: 'x', create: () => asTransport(new FakeClient()) },
+        debugChannel: { transport: 'websocket', descriptor: 'x', create: () => asTransport(new FakeClient()) },
       })
 
       await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [new FakeClient()], h.clients)])
@@ -483,7 +508,7 @@ describe('DeviceSessionManager', () => {
       const control = new FakeClient()
       const debug = new FakeClient()
       await h.manager.open([candidate('tcp', '10.0.0.5', [control], h.clients)], {
-        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+        debugChannel: { transport: 'tcp', descriptor: '10.0.0.5:502', create: () => asTransport(debug) },
       })
 
       expect(h.manager.isDebugShared()).toBe(false)
@@ -500,7 +525,7 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       const debug = new FakeClient()
       await h.manager.open([candidate('tcp', '10.0.0.5', [new FakeClient()], h.clients)], {
-        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+        debugChannel: { transport: 'tcp', descriptor: '10.0.0.5:502', create: () => asTransport(debug) },
       })
 
       await h.manager.acquireDebugChannel('debug session')
@@ -539,7 +564,7 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       const debug = new FakeClient()
       await h.manager.open([candidate('tcp', '10.0.0.5', [new FakeClient()], h.clients)], {
-        debugChannel: candidate('tcp', '10.0.0.5:502', [debug], h.clients),
+        debugChannel: { transport: 'tcp', descriptor: '10.0.0.5:502', create: () => asTransport(debug) },
       })
       await h.manager.acquireDebugChannel('debug session')
 

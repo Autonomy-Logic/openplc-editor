@@ -2177,13 +2177,18 @@ class MainProcessBridge implements MainIpcModule {
       const token = config.connectionParams.jwtToken
       if (!host || !token) return null
       return {
+        transport: 'websocket',
         descriptor: `websocket ${host}`,
         create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
       }
     }
     const [candidate] = this.toDeviceLinkCandidates([config])
     if (!candidate) return null
-    return { descriptor: `${candidate.transport} ${candidate.descriptor}`, create: candidate.create }
+    return {
+      transport: candidate.transport,
+      descriptor: `${candidate.transport} ${candidate.descriptor}`,
+      create: candidate.create,
+    }
   }
 
   /**

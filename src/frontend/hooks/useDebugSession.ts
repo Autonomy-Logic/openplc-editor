@@ -12,7 +12,7 @@
 
 import { useCallback, useRef } from 'react'
 
-import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
+import type { DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { parseDebugMap } from '../utils/debug-parser'
@@ -32,11 +32,10 @@ export interface UseDebugSessionReturn {
    * connects via the debugger port, stores all artifacts in workspace,
    * and activates the debugger UI.
    *
-   * @param config — Only for a target the connection manager holds no session for
-   *                 (Runtime v3/v4). Omit it for a connected device or a running
-   *                 simulator: the session already knows how to reach them.
+   * Takes nothing: the connection manager holds the session for every target by the
+   * time a debug session can start, so there is no medium for a caller to name.
    */
-  connectAndStart: (config?: DebugConnectionConfig) => Promise<{ success: boolean; error?: string }>
+  connectAndStart: () => Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the debug target and clear all debug state. */
   stopSession: () => Promise<void>
@@ -61,11 +60,7 @@ export function useDebugSession(): UseDebugSessionReturn {
   const debugTreesRef = useRef<Record<string, DebugTreeNode[]>>({})
 
   const connectAndStart = useCallback(
-    async (config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> => {
-      // No config means "the target the connection manager already holds a session
-      // for" — a connected board, or a running simulator. Nothing here names a
-      // medium; that is the manager's to know.
-      const debugConfig = config
+    async (): Promise<{ success: boolean; error?: string }> => {
       const { project, workspaceActions: wsActions, consoleActions: logActions } = useOpenPLCStore.getState()
       const boardTarget = deviceDefinitions.configuration.deviceBoard
       const projectPath = project.meta.path
@@ -177,9 +172,10 @@ export function useDebugSession(): UseDebugSessionReturn {
         })
 
         // Set target IP for non-simulator connections
-        if (debugConfig && debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
-          wsActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
-        }
+        // The target's address, for the debugger's own display. Comes from the
+        // session the manager holds, not from a config the caller chose.
+        const sessionEndpoint = useOpenPLCStore.getState().deviceConnection.port
+        if (sessionEndpoint) wsActions.setDebuggerTargetIp(sessionEndpoint)
 
         // Record the active transport so useDebugPolling picks the right
         // poll cadence + batch size.  Set on EVERY start path (runtime
@@ -189,11 +185,9 @@ export function useDebugSession(): UseDebugSessionReturn {
         // the default 200ms instead of its intended 50ms).  Must be set
         // before `setDebuggerVisible(true)`, which is what triggers the
         // polling effect.
-        // For a session-backed target the medium is the manager's choice, mirrored
-        // in the store; read it rather than assuming one.
-        wsActions.setDebugConnectionType(
-          debugConfig?.connectionType ?? useOpenPLCStore.getState().deviceConnection.transport ?? 'simulator',
-        )
+        // The medium is the manager's choice, mirrored in the store; read it rather
+        // than assuming one. `debugTransport` because this sizes the debug poll.
+        wsActions.setDebugConnectionType(useOpenPLCStore.getState().deviceConnection.debugTransport ?? 'simulator')
 
         wsActions.setDebuggerVisible(true)
         logActions.addLog({
