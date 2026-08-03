@@ -36,6 +36,13 @@ beforeEach(() => {
       .fn()
       .mockResolvedValue({ status: 'connected-with-firmware', anchorHex: 'deadbeef', licenseStatus: 'licensed' }),
     deviceDisconnect: jest.fn().mockResolvedValue({ success: true }),
+    deviceReadBoardId: jest
+      .fn()
+      .mockResolvedValue({ success: true, anchorHex: '00b18ced', deviceId: '7b3ea3f4c33fe6f1af313a4c4bf94b56' }),
+    deviceReadLicense: jest.fn().mockResolvedValue({ success: true, licenseStatus: 'licensed', deviceId: 'abc' }),
+    deviceRefreshLicense: jest
+      .fn()
+      .mockResolvedValue({ status: 'connected-with-firmware', licenseStatus: 'licensed', activation: 'activated' }),
     onDeviceConnectionStatus: jest.fn().mockReturnValue(() => undefined),
   } as unknown as typeof window.bridge
 })
@@ -114,5 +121,44 @@ describe('createEditorDeviceAdapter', () => {
     const unsub = adapter.onConnectionStatus(cb)
     expect(window.bridge.onDeviceConnectionStatus).toHaveBeenCalledWith(cb)
     expect(typeof unsub).toBe('function')
+  })
+  // The three on-demand FCs. What they prove here is only the delegation and the
+  // argument shape -- the behaviour lives in the main process. The `undefined`
+  // pass-through matters: the handlers default the options object themselves, and
+  // the adapter must not invent one.
+  it('delegates readBoardId to window.bridge, returning both ids', async () => {
+    const result = await adapter.readBoardId()
+    expect(window.bridge.deviceReadBoardId).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      success: true,
+      anchorHex: '00b18ced',
+      deviceId: '7b3ea3f4c33fe6f1af313a4c4bf94b56',
+    })
+  })
+
+  it('delegates readLicense to window.bridge with the packageId', async () => {
+    const result = await adapter.readLicense({ packageId: 'com.vendor.board' })
+    expect(window.bridge.deviceReadLicense).toHaveBeenCalledWith({ packageId: 'com.vendor.board' })
+    expect(result).toMatchObject({ success: true, licenseStatus: 'licensed' })
+  })
+
+  it('passes readLicense through with no options at all', async () => {
+    await adapter.readLicense()
+    expect(window.bridge.deviceReadLicense).toHaveBeenCalledWith(undefined)
+  })
+
+  it('delegates refreshLicense to window.bridge with the recover options', async () => {
+    const result = await adapter.refreshLicense({ isLicensable: true, packageId: 'com.vendor.board', keyId: 'k1' })
+    expect(window.bridge.deviceRefreshLicense).toHaveBeenCalledWith({
+      isLicensable: true,
+      packageId: 'com.vendor.board',
+      keyId: 'k1',
+    })
+    expect(result).toMatchObject({ activation: 'activated' })
+  })
+
+  it('passes refreshLicense through with no options at all', async () => {
+    await adapter.refreshLicense()
+    expect(window.bridge.deviceRefreshLicense).toHaveBeenCalledWith(undefined)
   })
 })

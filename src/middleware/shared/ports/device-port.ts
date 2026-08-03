@@ -192,6 +192,61 @@ export interface DevicePort {
   disconnect(): Promise<{ success: boolean }>
 
   /**
+   * Read the connected board's hardware id on demand (FC 0x48).
+   *
+   * WHY A SEPARATE CALL FROM `connect`. The licensing function codes used to be
+   * reachable only at connect time, or over a transient transport that opened its
+   * own port — which on a serial target could not even open, because the held
+   * connection already owned it. So while connected the editor could not ask the
+   * board anything, and every licensing value the UI showed was captured once and
+   * then went stale. These three calls run over the ALREADY-OPEN link, so they can
+   * be issued at any point in a session.
+   *
+   * Returns BOTH ids because they are different things: `anchorHex` is the silicon
+   * serial, `deviceId` is the derived value a licence is bound to. They must never
+   * be labelled the same in the UI.
+   *
+   * Editor: `device:read-board-id`. Web: not applicable locally.
+   */
+  readBoardId(): Promise<{ success: boolean; anchorHex?: string; deviceId?: string; error?: string }>
+
+  /**
+   * Read the stored licence on demand (FC 0x4A) and report whether it VERIFIES.
+   *
+   * A `0x7E` status alone means only that the device had something to hand back —
+   * the targets disagree about what it implies — so the bytes are checked (magic,
+   * crc32, device_id, product_id) before a `licensed` answer. `reason` carries why
+   * a present blob was rejected, which is the difference between "buy a licence"
+   * and "this licence belongs to another board".
+   *
+   * Editor: `device:read-license`. Web: not applicable locally.
+   */
+  readLicense(opts?: { packageId?: string }): Promise<{
+    success: boolean
+    licenseStatus?: DeviceLicenseStatus
+    deviceId?: string
+    reason?: string
+    error?: string
+  }>
+
+  /**
+   * Re-run the whole classify + recover sequence over the held link.
+   *
+   * The call a user needs right after completing a purchase: fetch the licence and
+   * write it without disconnecting or reflashing. Refuses while another run is in
+   * flight — the transport serializes individual frames, not multi-frame
+   * sequences, so two concurrent recovers would read and write one licence out of
+   * order.
+   *
+   * Editor: `device:refresh-license`. Web: not applicable locally.
+   */
+  refreshLicense(opts?: {
+    isLicensable?: boolean
+    packageId?: string
+    keyId?: string
+  }): Promise<DeviceConnectResult>
+
+  /**
    * Subscribe to live serial-link status pushed by the main process (liveness
    * failure, upload/debug handoff). Returns an unsubscribe function. Editor:
    * `device:connection-status` IPC event. Web: no-op.

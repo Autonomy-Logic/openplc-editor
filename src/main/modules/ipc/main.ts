@@ -43,8 +43,14 @@ import {
   type DeviceConnectResult,
   probeAndRecover,
   toLegacyActivationOutcome,
+  verifyStoredLicenseBlob,
 } from '../../../backend/editor/license/device-connect'
-import { connectWithRetries } from '../../../backend/editor/license/license-probe'
+import { deriveDeviceId } from '../../../backend/editor/license/device-identity'
+import {
+  connectWithRetries,
+  type DeviceLicenseStatus,
+  readBoardIdWithRetries,
+} from '../../../backend/editor/license/license-probe'
 import { buildLicenseTransport, type LicenseTransportParams } from '../../../backend/editor/license/license-transport-factory'
 import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
 import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
@@ -97,6 +103,17 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLivenessTimer: ReturnType<typeof setInterval> | null = null
   private deviceLivenessFailures = 0
   private deviceLivenessInFlight = false
+  /**
+   * True while a COMPOUND licensing sequence is running over the held client.
+   *
+   * The wire itself needs no guarding: `ModbusRtuClient.sendRequest` chains every
+   * request through `sendRequestMutex`, so individual frames cannot interleave no
+   * matter who asks. What that mutex does NOT protect is a SEQUENCE — the recover
+   * path is 0x48 -> 0x4A -> HTTP -> 0x49 -> 0x4A, and two of those running at once
+   * would each see atomic frames while reading and writing the same license out of
+   * order. Single-FC reads need nothing and take no part in this.
+   */
+  private deviceLicenseSequenceInFlight = false
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   private runtimeIp: string | null = null
@@ -1053,6 +1070,11 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('device:activate-license', this.handleActivateDeviceLicense)
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
+    // On-demand licensing FCs over the HELD link — callable any time while
+    // connected, not just at connect. See the block above their definitions.
+    this.registerHandle('device:read-board-id', this.handleDeviceReadBoardId)
+    this.registerHandle('device:read-license', this.handleDeviceReadLicense)
+    this.registerHandle('device:refresh-license', this.handleDeviceRefreshLicense)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -2515,6 +2537,130 @@ class MainProcessBridge implements MainIpcModule {
     if (port) this.startDeviceLiveness(port)
     this.emitSerialConnectionStatus('connected', port)
     return result
+  }
+
+  // -------------------------------------------------------------------------
+  // On-demand licensing FCs over the HELD link.
+  //
+  // WHY THESE EXIST. `device:connect` ran the licensing FCs once, at connect
+  // time, and `device:activate-license` ran them over a TRANSIENT transport it
+  // opened and closed itself. So between those two moments the FCs were
+  // unreachable: the editor held a live link to the board and still could not ask
+  // it for its hardware id or what licence it was holding. Everything the license
+  // UI wanted to show had to be captured at connect and then went stale, and on a
+  // baremetal target the transient path could not even open the port -- the held
+  // connection already owned it.
+  //
+  // These run over `deviceSerialClient` instead, so any of them can be called at
+  // any point while connected. The liveness poll keeps running underneath; it does
+  // not need to be paused, because the client serializes frames.
+  // -------------------------------------------------------------------------
+
+  /** The held client, or a uniform "not connected" failure. */
+  private heldDeviceClient(): { client: LicenseCapableTransport } | { error: string } {
+    const client = this.deviceSerialClient
+    if (!client) return { error: 'No device is connected. Press Connect first.' }
+    return { client }
+  }
+
+  /**
+   * Read the hardware id (FC 0x48) from the connected board, on demand.
+   *
+   * Returns the RAW anchor plus the derived `deviceId`, because the two are not
+   * interchangeable and the UI shows both: the anchor is the silicon serial, the
+   * deviceId is what a licence is bound to. Derived here because `node:crypto` is
+   * main-only.
+   */
+  handleDeviceReadBoardId = async (): Promise<{
+    success: boolean
+    anchorHex?: string
+    deviceId?: string
+    error?: string
+  }> => {
+    const held = this.heldDeviceClient()
+    if ('error' in held) return { success: false, error: held.error }
+
+    try {
+      const r = await readBoardIdWithRetries(held.client, { attempts: 2, backoffMs: 200 })
+      if (!r.success || !r.anchor || r.anchor.length === 0) {
+        return { success: false, error: r.error ?? 'the board did not answer the board-id request' }
+      }
+      return { success: true, anchorHex: r.anchorHex, deviceId: deriveDeviceId(Uint8Array.from(r.anchor)) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * Read the stored licence (FC 0x4A) and say whether it actually verifies.
+   *
+   * `status === 0x7E` alone means only "the device had something to give us" — the
+   * two targets disagree about what it implies (see `verifyStoredLicenseBlob`), so
+   * the bytes are checked here rather than reported as good. This is the call that
+   * answers "is this board licensed RIGHT NOW", which is the question the badge
+   * was previously answering from a value captured at connect time.
+   */
+  handleDeviceReadLicense = async (
+    _event: IpcMainInvokeEvent,
+    opts: { packageId?: string } = {},
+  ): Promise<{
+    success: boolean
+    licenseStatus?: DeviceLicenseStatus
+    deviceId?: string
+    reason?: string
+    error?: string
+  }> => {
+    const held = this.heldDeviceClient()
+    if ('error' in held) return { success: false, error: held.error }
+
+    try {
+      const id = await readBoardIdWithRetries(held.client, { attempts: 2, backoffMs: 200 })
+      if (!id.success || !id.anchor || id.anchor.length === 0) {
+        return { success: false, error: 'the board did not answer the board-id request' }
+      }
+      const deviceId = deriveDeviceId(Uint8Array.from(id.anchor))
+
+      const lic = await held.client.readLicense()
+      if (lic.unsupported || lic.status === 0x85) {
+        return { success: true, deviceId, licenseStatus: 'unsupported' }
+      }
+      if (lic.status !== 0x7e) {
+        return { success: true, deviceId, licenseStatus: 'unlicensed', reason: 'no licence stored' }
+      }
+      const verdict = verifyStoredLicenseBlob(lic.blob, deviceId, opts.packageId)
+      return verdict.ok
+        ? { success: true, deviceId, licenseStatus: 'licensed' }
+        : { success: true, deviceId, licenseStatus: 'unlicensed', reason: verdict.reason }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * Re-run the whole classify + recover sequence over the held link, on demand.
+   *
+   * The same `probeAndRecover` body `device:connect` uses — so a user who has just
+   * bought a licence gets it written without disconnecting, reflashing, or
+   * restarting the editor. Refuses to run twice concurrently: see
+   * `deviceLicenseSequenceInFlight` for why the frame-level mutex is not enough
+   * here.
+   */
+  handleDeviceRefreshLicense = async (
+    _event: IpcMainInvokeEvent,
+    opts: { isLicensable?: boolean; packageId?: string; keyId?: string } = {},
+  ): Promise<DeviceConnectResult> => {
+    const held = this.heldDeviceClient()
+    if ('error' in held) return { status: 'error', error: held.error }
+
+    if (this.deviceLicenseSequenceInFlight) {
+      return { status: 'error', error: 'A licence check is already running on this device.' }
+    }
+    this.deviceLicenseSequenceInFlight = true
+    try {
+      return await probeAndRecover(held.client, opts)
+    } finally {
+      this.deviceLicenseSequenceInFlight = false
+    }
   }
 
   /** Close a held serial link (user pressed Disconnect). */

@@ -536,6 +536,46 @@ const rendererProcessBridge = {
   // Close the held serial link (Disconnect).
   deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
 
+  // --- On-demand licensing FCs over the HELD link -------------------------
+  // Callable at ANY point while connected, which the connect-time-only path was
+  // not: the editor held a live link and still could not ask the board for its id
+  // or its licence, so everything the licence UI showed was captured once and
+  // then went stale.
+
+  // FC 0x48 on demand: the raw silicon serial plus the derived licensing id.
+  // The two are NOT interchangeable and must not be labelled the same in the UI.
+  deviceReadBoardId: (): Promise<{
+    success: boolean
+    anchorHex?: string
+    deviceId?: string
+    error?: string
+  }> => ipcRenderer.invoke('device:read-board-id'),
+
+  // FC 0x4A on demand: what the board is holding, VERIFIED — a 0x7E status alone
+  // does not mean the stored bytes are a good licence for this device.
+  deviceReadLicense: (
+    opts?: { packageId?: string },
+  ): Promise<{
+    success: boolean
+    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+    deviceId?: string
+    reason?: string
+    error?: string
+  }> => ipcRenderer.invoke('device:read-license', opts ?? {}),
+
+  // The full classify + recover sequence again, without disconnecting: what a user
+  // who just completed a purchase needs. Refuses to run twice at once.
+  deviceRefreshLicense: (
+    opts?: { isLicensable?: boolean; packageId?: string; keyId?: string },
+  ): Promise<{
+    status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
+    anchorHex?: string
+    deviceId?: string
+    licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
+    activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
+    error?: string
+  }> => ipcRenderer.invoke('device:refresh-license', opts ?? {}),
+
   // Main pushes live link status here (liveness failure, upload/debug handoff).
   onDeviceConnectionStatus: (
     callback: (payload: { status: 'disconnected' | 'connecting' | 'connected' | 'error'; port: string | null }) => void,

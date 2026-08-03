@@ -18,6 +18,7 @@ import type {
   DeviceActivationResult,
   DeviceConnectParams,
   DeviceConnectResult,
+  DeviceLicenseStatus,
   DevicePort,
 } from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort } from '../../shared/ports/types'
@@ -60,6 +61,30 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     disconnect(): Promise<{ success: boolean }> {
       return window.bridge.deviceDisconnect()
+    },
+
+    // The three on-demand licensing FCs, over the link `connect` is holding open.
+    // See `DevicePort.readBoardId` for why they are separate calls.
+    readBoardId(): Promise<{ success: boolean; anchorHex?: string; deviceId?: string; error?: string }> {
+      return window.bridge.deviceReadBoardId()
+    },
+
+    readLicense(opts?: { packageId?: string }): Promise<{
+      success: boolean
+      licenseStatus?: DeviceLicenseStatus
+      deviceId?: string
+      reason?: string
+      error?: string
+    }> {
+      return window.bridge.deviceReadLicense(opts)
+    },
+
+    refreshLicense(opts?: {
+      isLicensable?: boolean
+      packageId?: string
+      keyId?: string
+    }): Promise<DeviceConnectResult> {
+      return window.bridge.deviceRefreshLicense(opts)
     },
 
     onConnectionStatus(
