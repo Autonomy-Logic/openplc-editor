@@ -112,6 +112,48 @@ describe('generateModbusMasterConfig', () => {
     expect(ioPoints[0].iec_location).toBe('%MW0')
     expect(ioPoints[0].len).toBe(10)
     expect(ioPoints[0].cycle_time_ms).toBe(100)
+    expect(ioPoints[0].error_handling).toBe('keep-last-value')
+  })
+
+  // Regression, openplc-editor#691: the per-group "Keep last value / Set to
+  // zero" choice existed only in the UI. It was stored in the project and
+  // dropped here, so the runtime never learned about it and always kept the
+  // last value when a device went unreachable.
+  it('emits the error handling each IO group is configured with', () => {
+    const device = makeTcpDevice()
+    device.modbusTcpConfig!.ioGroups[0].errorHandling = 'set-to-zero'
+
+    const parsed = JSON.parse(generateModbusMasterConfig([device])!)
+
+    expect(parsed[0].config.io_points[0].error_handling).toBe('set-to-zero')
+  })
+
+  it('emits error handling per point, not per device', () => {
+    const device = makeTcpDevice()
+    const [firstGroup] = device.modbusTcpConfig!.ioGroups
+    device.modbusTcpConfig!.ioGroups = [
+      { ...firstGroup, id: 'g1', errorHandling: 'set-to-zero' },
+      { ...firstGroup, id: 'g2', errorHandling: 'keep-last-value' },
+    ]
+
+    const parsed = JSON.parse(generateModbusMasterConfig([device])!)
+
+    expect(parsed[0].config.io_points.map((p: { error_handling: string }) => p.error_handling)).toEqual([
+      'set-to-zero',
+      'keep-last-value',
+    ])
+  })
+
+  it('defaults to keeping the last value when a group predates the field', () => {
+    // Projects saved before the option shipped have no value stored; the
+    // runtime's historical behaviour is to keep the last value.
+    const device = makeTcpDevice()
+    const group = device.modbusTcpConfig!.ioGroups[0]
+    delete (group as { errorHandling?: unknown }).errorHandling
+
+    const parsed = JSON.parse(generateModbusMasterConfig([device])!)
+
+    expect(parsed[0].config.io_points[0].error_handling).toBe('keep-last-value')
   })
 
   it('generates RTU config with serial port parameters', () => {
