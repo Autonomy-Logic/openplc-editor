@@ -118,13 +118,18 @@ import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
-import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
+import { logger } from '../services/logger-service'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
+import {
+  VerifiedBoardInfoResolver,
+  VppPackageSignatureError,
+  vppSignatureRefusalMessage,
+} from './verified-board-info-resolver'
 
 interface MethodsResult<T> {
   success: boolean
@@ -166,6 +171,42 @@ type CompileArduinoProgramArgs = {
   compilationPath: string
   handleOutputData: HandleOutputDataCallback
   cleanBuild?: boolean
+}
+
+/**
+ * Builds the signature-verifying board resolver. Free function (not a class
+ * method) on purpose: `handleVendorPluginPackaging` and
+ * `buildVppArduinoModuleConfig` are unit-tested by invoking them via
+ * `CompilerModule.prototype.<method>.call({} as CompilerModule, ...)` —
+ * a bare object that never ran through the constructor. A `#private` class
+ * method throws on brand-check the moment it's referenced on such an object,
+ * regardless of whether it's actually called, so this can't be a private
+ * method shared via `this.#createBoardInfoResolver()` without breaking that
+ * test technique. `sourceDirectoryPath` is a normal (non-`#`) field, so
+ * passing it in as a parameter keeps those call sites safe.
+ *
+ * SECURITY: every compile/upload path resolves its board through here, so
+ * this returns the signature-verifying subclass rather than the bare shared
+ * resolver.  A VPP package that no longer matches its Ed25519 signature
+ * can't feed HAL sources, prebuilt archives, license-store backends or
+ * compiler flags into a build — see `verified-board-info-resolver.ts` for
+ * the rationale and cost model.
+ */
+async function createVerifiedBoardInfoResolver(sourceDirectoryPath: string): Promise<VerifiedBoardInfoResolver> {
+  const halsContent = await readHalsFile<HalsFile>()
+  return new VerifiedBoardInfoResolver({
+    halsContent,
+    packageManager: new PackageManagerModule(),
+    resolveHalSourcePath: (rel) => join(sourceDirectoryPath, 'hal', rel),
+    resolvePackageRelativePath: (pkgPath, relPath) => {
+      const root = pathResolve(pkgPath)
+      const candidate = pathResolve(root, relPath)
+      if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+        throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+      }
+      return candidate
+    },
+  })
 }
 
 class CompilerModule {
@@ -238,33 +279,12 @@ class CompilerModule {
   }
 
   /**
-   * Build a `BoardInfoResolver` wired with the editor's filesystem-
-   * backed adapters.  Hals.json content is read off the bundled
-   * `src/backend/shared/firmware/hals.json` (the shared catalogue
-   * editor and web both consume), so this method is `async` — the
-   * resolver itself is synchronous.
-   *
-   * Web's matching adapter (when VPP-on-web lands) builds a resolver
-   * with the same `BoardInfoResolverConfig` interface but
-   * browser-friendly path strings + a real (or no-op) package
-   * manager; the shared `BoardInfoResolver` is byte-identical
-   * between repos.
+   * Build a `BoardInfoResolver` wired with the editor's filesystem-backed
+   * adapters. See `createVerifiedBoardInfoResolver` above the class for the
+   * rationale (including why it's a free function, not inlined here).
    */
-  async #createBoardInfoResolver(): Promise<BoardInfoResolver> {
-    const halsContent = await readHalsFile<HalsFile>()
-    return new BoardInfoResolver({
-      halsContent,
-      packageManager: new PackageManagerModule(),
-      resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
-      resolvePackageRelativePath: (pkgPath, relPath) => {
-        const root = pathResolve(pkgPath)
-        const candidate = pathResolve(root, relPath)
-        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
-          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
-        }
-        return candidate
-      },
-    })
+  async #createBoardInfoResolver(): Promise<VerifiedBoardInfoResolver> {
+    return createVerifiedBoardInfoResolver(this.sourceDirectoryPath)
   }
 
   // ############################################################################
@@ -2015,6 +2035,22 @@ class CompilerModule {
         return
       }
 
+      // Defense in depth: `compileProgram`/`compileForDebugger` already gate
+      // the whole build on `VerifiedBoardInfoResolver` before this runs, so
+      // an untrusted package never reaches here today. But this function is
+      // exactly the code that decides what a licensable VPP ships into the
+      // upload (the plugin Makefile the runtime's make-as-root chain
+      // consumes — SEC-1/#38), so it must not depend on staying the only
+      // caller forever. Hard-fails like the resolver itself does, not a
+      // logged skip: a signature failure here is never "nothing to do".
+      const resolverForVerification = await createVerifiedBoardInfoResolver(this.sourceDirectoryPath)
+      const rejectionReason = resolverForVerification.verifyBoardPackage(boardTarget)
+      if (rejectionReason !== null) {
+        const message = vppSignatureRefusalMessage(boardTarget, rejectionReason)
+        handleOutputData(message, 'error')
+        throw new VppPackageSignatureError(boardTarget, rejectionReason)
+      }
+
       if (matchingDevice.target.type !== 'runtime-v4') {
         handleOutputData(
           `VPP board "${boardTarget}" is not runtime-v4 (target=${matchingDevice.target.type}), skipping VPP packaging`,
@@ -2155,23 +2191,23 @@ class CompilerModule {
       try {
         assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
       } catch (err) {
-        handleOutputData(`Invalid VPP pluginEntry: ${getErrorMessage(err)}`, 'error')
-        return
+        const message = `Invalid VPP pluginEntry: ${getErrorMessage(err)}`
+        handleOutputData(message, 'error')
+        throw new Error(message)
       }
       let pluginSourceStat
       try {
         pluginSourceStat = await stat(pluginSourceDir)
       } catch (err) {
-        handleOutputData(
-          `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`,
-          'error',
-        )
-        return
+        const message = `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`
+        handleOutputData(message, 'error')
+        throw new Error(message)
       }
 
       if (!pluginSourceStat.isDirectory()) {
-        handleOutputData(`VPP plugin source path is not a directory: ${pluginEntryRelPath}`, 'error')
-        return
+        const message = `VPP plugin source path is not a directory: ${pluginEntryRelPath}`
+        handleOutputData(message, 'error')
+        throw new Error(message)
       }
 
       const destPluginDir = join(sourceTargetFolderPath, 'vpp_plugin')
@@ -2223,8 +2259,12 @@ class CompilerModule {
       await collectAndCopy(pluginSourceDir, destPluginDir)
 
       if (copiedFiles.length === 0) {
-        handleOutputData('VPP plugin source directory contained no files to copy', 'info')
-        return
+        // A licensable board declares a pluginEntry and ships nothing there —
+        // this is a broken package, not a legitimate "nothing to do" case
+        // (those are handled above, before we ever stat the directory).
+        const message = `VPP plugin source directory at ${pluginEntryRelPath} contained no files to copy`
+        handleOutputData(message, 'error')
+        throw new Error(message)
       }
 
       // Compute SHA-256 over all copied files (sorted for determinism)
@@ -2245,9 +2285,68 @@ class CompilerModule {
         `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
       )
+
+      // --- Step 3: Forward the package signature so the runtime can verify ---
+      //
+      // checksum.sha256 above is a recompilation cache key, nothing more: we
+      // compute it over files we just copied, and it travels in the same upload
+      // as those files. It is self-attestation and the runtime treats it as
+      // such.
+      //
+      // The real provenance record is the package's own signature.json: an
+      // Ed25519 signature over a sha256-per-file map, produced by
+      // openplc-packages at publish time with a private key that never leaves
+      // CI. It sits at the package ROOT, so copying the plugin directory alone
+      // left it behind and the runtime had nothing to check the plugin against
+      // -- which is why editing the uploaded Makefile (adding a license_gate.c
+      // stub that always answers "licensed") used to compile and run.
+      //
+      // We forward it VERBATIM, whole, rather than a slice covering only the
+      // files that travel: the signature is over the canonical payload of the
+      // entire file, so a filtered map is not the thing that was signed and
+      // could never verify. `pluginDir` tells the runtime which subtree of that
+      // map the uploaded files correspond to; the runtime verifies the
+      // signature over the whole payload first, then compares hashes for the
+      // files it actually received.
+      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      let packageSignature: unknown
+      try {
+        packageSignature = JSON.parse(await readFile(packageSignaturePath, 'utf-8'))
+      } catch (err) {
+        // Fail loudly here rather than silently shipping an unverifiable
+        // plugin: the runtime refuses an upload whose vpp_plugin/ has no
+        // signature, so the user needs to know why before the upload fails.
+        const message =
+          `VPP package has no readable signature.json (${getErrorMessage(err)}). The runtime will ` +
+          `refuse this plugin -- re-install the package from a signed .vpp.`
+        handleOutputData(message, 'error')
+        throw new Error(message)
+      }
+
+      // POSIX separators: the signed hash map is keyed by POSIX-relative paths
+      // (package-signing.ts), and this string is prefixed onto those keys.
+      const signedPluginDir = pluginDirRelPath.replace(/\\/g, '/')
+      await writeFile(
+        join(sourceTargetFolderPath, 'vpp_signature.json'),
+        JSON.stringify({ pluginDir: signedPluginDir, package: packageSignature }, null, 2),
+        'utf-8',
+      )
+      handleOutputData(`Forwarded VPP package signature for ${signedPluginDir}`, 'info')
     } catch (error) {
-      const errorMessage = getErrorMessage(error)
-      handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
+      // Log and RE-THROW: `packageVppPlugin` (editor-compiler-platform-port.ts)
+      // turns a thrown error into the pipeline's structured `errors`, which is
+      // what makes it actually abort the build (pipeline.ts checks
+      // `vppResult.errors`). Swallowing here used to mean every failure path
+      // above — an unreadable signature.json, an invalid pluginEntry, an empty
+      // plugin source directory — logged an error line and then let the build
+      // proceed and upload a bundle with no VPP driver at all, in silence.
+      if (!(error instanceof VppPackageSignatureError)) {
+        // The signature-refusal branch above already logged its own message
+        // via vppSignatureRefusalMessage; avoid a duplicate, less specific line.
+        const errorMessage = getErrorMessage(error)
+        handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
+      }
+      throw error
     }
   }
 
@@ -2289,6 +2388,22 @@ class CompilerModule {
 
       const rawModules = matchingDevice?.moduleSystem?.modules
       if (!matchingDevice || !matchingPackagePath || !rawModules || rawModules.length === 0) return []
+
+      // Defense in depth, same rationale as handleVendorPluginPackaging above.
+      // Unlike that function, this one keeps its documented "never throws"
+      // contract: the bytes it produces are per-module firmware config
+      // (analog ranges, thermocouple types), not something that can grant a
+      // license bypass by itself, and its caller isn't set up to abort the
+      // whole build on this failing. Untrusted package -> skip module config,
+      // don't throw.
+      const resolverForVerification = await createVerifiedBoardInfoResolver(this.sourceDirectoryPath)
+      const rejectionReason = resolverForVerification.verifyBoardPackage(boardTarget)
+      if (rejectionReason !== null) {
+        logger.warn(
+          `Skipping VPP module config for "${boardTarget}": ${vppSignatureRefusalMessage(boardTarget, rejectionReason)}`,
+        )
+        return []
+      }
 
       const pkgPath = matchingPackagePath
       const modules = await Promise.all(
@@ -2385,6 +2500,26 @@ class CompilerModule {
     // because `boardHalsContent` below needs the raw entry slice.
     const halsContent = await readHalsFile<HalsFile>()
     const resolver = await this.#createBoardInfoResolver()
+
+    // SECURITY GATE (fails closed): re-verify the Ed25519 signature of the VPP
+    // package that provides `boardTarget` before ANY of its content reaches the
+    // toolchain. Import-time and open-project verification don't cover this
+    // path, and the package chooses the prebuilt archives, HAL sources,
+    // license-store backends and compiler flags of the firmware we're about to
+    // build and flash. Probed explicitly (rather than letting the resolver
+    // throw) because `resolveBoardSelection` flattens every resolver throw into
+    // a generic "board not found", which would hide the real reason.
+    const signatureRejection = resolver.verifyBoardPackage(boardTarget)
+    if (signatureRejection !== null) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: vppSignatureRefusalMessage(boardTarget, signatureRejection),
+      })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping compilation process.' })
+      _mainProcessPort.close()
+      return
+    }
+
     const selection = resolveBoardSelection(resolver, boardTarget)
     if (!selection.ok) {
       _mainProcessPort.postMessage({ logLevel: 'error', message: selection.error })
@@ -2797,6 +2932,21 @@ class CompilerModule {
     const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
 
     const debugResolver = await this.#createBoardInfoResolver()
+
+    // Same fail-closed package-signature gate as `compileProgram` — the debug
+    // build compiles and flashes the very same firmware, just with debug
+    // symbols, so it can't be a way around the check.
+    const debugSignatureRejection = debugResolver.verifyBoardPackage(boardTarget)
+    if (debugSignatureRejection !== null) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: vppSignatureRefusalMessage(boardTarget, debugSignatureRejection),
+      })
+      _mainProcessPort.postMessage({ logLevel: 'error', message: 'Stopping debug compilation process.' })
+      _mainProcessPort.close()
+      return
+    }
+
     const { boardRuntime } = debugResolver.resolve(boardTarget)
     const normalizedProjectPath = projectPath.replace('project.json', '')
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)

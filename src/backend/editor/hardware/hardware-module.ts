@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { app as electronApp } from 'electron'
@@ -9,7 +9,6 @@ import { produce } from 'immer'
 import { SerialPort as NodeSerialPort } from 'serialport'
 
 import { readHalsFile } from '../../shared/firmware/hals-loader'
-import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
@@ -191,36 +190,6 @@ class HardwareModule {
       logger.warn(`arduino-cli board list failed; serial ports will show without board names: ${String(error)}`)
     }
     return boardNamesByPath
-  }
-
-  /**
-   * Resolve compile/upload info for `boardName` from either hals.json or
-   * an installed VPP package. Compiler module should call this instead
-   * of reading hals.json directly.
-   */
-  async getBoardBuildInfo(boardName: string): Promise<BoardBuildInfo> {
-    const halsContent = await readHalsFile<HalsFile>()
-    const resolver = new BoardInfoResolver({
-      halsContent,
-      packageManager: new PackageManagerModule(),
-      // Editor maps hals.json `source` (relative HAL .cpp filename) to
-      // an absolute path under `resources/sources/hal/`.  Web's adapter
-      // (when VPP-on-web lands) will map the same string to a bundled-
-      // asset key.
-      resolveHalSourcePath: (rel) => join(this.sourcesDirectoryPath, 'hal', rel),
-      // Editor security-check: VPP-package-relative paths must resolve
-      // inside the package's root directory.  Web's adapter will pick
-      // its own scheme when VPP-on-web lands.
-      resolvePackageRelativePath: (pkgPath, relPath) => {
-        const root = pathResolve(pkgPath)
-        const candidate = pathResolve(root, relPath)
-        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
-          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
-        }
-        return candidate
-      },
-    })
-    return resolver.resolve(boardName)
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {

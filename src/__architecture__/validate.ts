@@ -10,6 +10,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // ---------------------------------------------------------------------------
 // Layer definitions
@@ -118,7 +119,7 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SRC_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
+const SRC_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function collectFiles(dir: string, ext: string[]): string[] {
   const results: string[] = []

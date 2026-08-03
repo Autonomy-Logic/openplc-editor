@@ -46,7 +46,8 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
     return {
       chart: {
         id: chartId,
-        animations: { enabled: true, easing: 'linear' as const, dynamicAnimation: { speed: 500 } },
+        // Tweening ApexCharts' full-SVG rebuild replays partial states and reads as flicker.
+        animations: { enabled: false },
         toolbar: { show: false },
         zoom: { enabled: false },
         background: 'transparent',
@@ -81,7 +82,7 @@ const LineChart = ({ data, isBool = false, range, now, startTime, label }: LineC
         xaxis: { lines: { show: false } },
         yaxis: { lines: { show: true } },
       },
-      stroke: { curve: isBool ? ('stepline' as const) : ('smooth' as const), width: 2 },
+      stroke: { curve: 'stepline' as const, width: 2 },
       tooltip: { enabled: false },
       states: {
         hover: { filter: { type: 'none' } },
