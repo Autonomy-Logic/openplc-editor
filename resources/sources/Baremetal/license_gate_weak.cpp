@@ -30,3 +30,12 @@ __attribute__((weak)) int license_gate_actuation_allowed(uint32_t now_ms)
     (void)now_ms;
     return 1;
 }
+
+// Same unenforced answer, for the same reason: a board with no license-core is
+// not a board running an expired demo. A licensable VPP overrides this with the
+// strong version from its closed .a, and its HAL asks THAT one before driving a
+// pin — so this default is only ever reached where there is nothing to enforce.
+__attribute__((weak)) int license_gate_outputs_permitted(void)
+{
+    return 1;
+}

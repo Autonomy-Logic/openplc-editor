@@ -41,6 +41,38 @@ void license_gate_init(const uint8_t *blob, size_t blob_len, uint32_t now_ms);
 lic_gate_state_t license_gate_state(uint32_t now_ms);
 int license_gate_actuation_allowed(uint32_t now_ms);
 
+/*
+ * May outputs be driven RIGHT NOW? Takes no clock on purpose.
+ *
+ * This is the question a signed HAL asks at the top of its own raw output write,
+ * so that calling `hal_write_outputs` directly -- which open code can do, the
+ * symbol is declared in openplc.h -- cannot skip the gate the way it did when the
+ * only check lived inside updateOutputBuffers().
+ *
+ * No now_ms parameter because the caller must not choose the time: an entry point
+ * that accepts a timestamp accepts the boot timestamp forever. The gate reads a
+ * monotonic clock inside the closed artifact instead.
+ *
+ * Returns 1 when actuation is allowed (FULL, or a demo window still running) and
+ * 0 once the demo has expired. Fail-open before init, like
+ * license_gate_actuation_allowed: the firmware always inits in setup.
+ */
+int license_gate_outputs_permitted(void);
+
+#ifndef ARDUINO
+/*
+ * HOST-TEST SEAM, absent from every device build by construction -- `ARDUINO` is
+ * defined for the prebuilt `.a`, so this symbol is not in the artifact a VPP
+ * ships. It has to be absent: `license_gate_init` refuses a second call
+ * specifically so open code cannot re-arm the demo window, and an exported
+ * "forget you were initialised" would hand that back with a nicer name.
+ *
+ * The host tests need it because they exercise FULL, expiry and millis-wrap as
+ * separate scenarios against one set of file-scope statics.
+ */
+void license_gate_reset_for_test(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
