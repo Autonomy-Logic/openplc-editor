@@ -2331,18 +2331,15 @@ class MainProcessBridge implements MainIpcModule {
     },
     opts: { packageId: string; keyId?: string },
     // The declared return type MUST list every field the response actually
-    // carries (A20). It used to omit `licenseStatus`, `activation` and
-    // `devicePublicKey` — the three fields ADR-0002 and the badge work added —
-    // and TypeScript said nothing, because the body returns
-    // `{ probedAt, ...toLegacyActivationOutcome(result) }` and a SPREAD is not
-    // subject to excess-property checking. The renderer-side declaration
+    // carries (A20). It used to omit `licenseStatus` and `activation` — the
+    // fields the badge work added — and TypeScript said nothing, because the body
+    // returns `{ probedAt, ...toLegacyActivationOutcome(result) }` and a SPREAD is
+    // not subject to excess-property checking. The renderer-side declaration
     // (`renderer.ts`, `deviceActivateLicense`) listed them, so the values did
     // reach the UI; what was missing was any signal to the next person who
     // "tidies up" this handler by naming the fields it returns, guided by the
     // type right here. That is the exact move that broke the activity bar (see
-    // the comment in `workspace-activity-bar/default.tsx`), and on this channel
-    // it costs `devicePublicKey`: a runtime-v4 purchase then binds no key, the
-    // device stays unbound forever, and the backend serves it WITHOUT proof.
+    // the comment in `workspace-activity-bar/default.tsx`).
     // Keep this in lockstep with `LegacyActivationOutcome`.
   ): Promise<{
     success: boolean
@@ -2351,8 +2348,6 @@ class MainProcessBridge implements MainIpcModule {
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     deviceId?: string
-    devicePublicKey?: string
-    proofOfPossession?: 'proved' | 'unproven'
     vppId?: string
     anchorHex?: string
     license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }

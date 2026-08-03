@@ -4,14 +4,13 @@
  * WHY THIS FILE EXISTS (A20/T12). The handler had NO test: coverage stopped at
  * `toLegacyActivationOutcome`, the pure function, and never touched the code that
  * calls it. That is exactly where the type drift lived — the handler's declared
- * return type omitted `licenseStatus`, `activation` and `devicePublicKey`, the
- * three fields ADR-0002 and the badge work added, and `tsc` stayed silent because
- * the body returns `{ probedAt, ...toLegacyActivationOutcome(result) }` and a
- * SPREAD is not subject to excess-property checking. Nothing failed, so nothing
- * warned the next person who "tidies up" the handler by naming the fields its
- * type lists — the exact move that broke the activity bar. On this channel it
- * costs `devicePublicKey`: a runtime-v4 purchase then binds no key, the device
- * stays unbound forever, and the backend serves it WITHOUT proof of possession.
+ * return type omitted `licenseStatus` and `activation`, the fields the badge work
+ * added, and `tsc` stayed silent because the body returns
+ * `{ probedAt, ...toLegacyActivationOutcome(result) }` and a SPREAD is not
+ * subject to excess-property checking. Nothing failed, so nothing warned the next
+ * person who "tidies up" the handler by naming the fields its type lists — the
+ * exact move that broke the activity bar. On this channel it costs the badge: the
+ * runtime-v4 device screen then shows a blank or stale license state.
  *
  * WHY NOT IN `main.spec.ts`, where the bridge harness already lives: on Windows
  * jest collects NO `*.spec.ts` file at all. `testMatch`'s first pattern loses the
@@ -82,7 +81,6 @@ import MainProcessBridge from '../main'
 const WS_PARAMS = { connectionType: 'websocket' as const, host: '192.168.0.128', token: 'jwt' }
 const OPTS = { packageId: 'com.openplc.raspberry-pi-licensed', keyId: 'raspberry-pi-licensed-2026' }
 const DEVICE_ID = '7146518f9842adacfadc731ee7f546e5'
-const DEVICE_PUBLIC_KEY = '1af309c4605fbe25be6e84f571d4299f98d45e811860450689b317ef14f128f0'
 
 function makeBridge() {
   return new MainProcessBridge({
@@ -107,17 +105,15 @@ describe('MainProcessBridge.handleActivateDeviceLicense', () => {
     mockConnectWithRetries.mockResolvedValue(undefined)
   })
 
-  // The assertion the missing test was: the three ADR-0002 / badge fields reach
-  // the renderer. A handler rewritten from its own declared type dropped them.
-  it('carries licenseStatus, activation and devicePublicKey out to the renderer', async () => {
+  // The assertion the missing test was: the badge fields reach the renderer. A
+  // handler rewritten from its own declared type dropped them.
+  it('carries licenseStatus and activation out to the renderer', async () => {
     mockProbeAndRecover.mockResolvedValue({
       status: 'connected-with-firmware',
       anchorHex: '38363235383037623061383361653764',
       deviceId: DEVICE_ID,
-      devicePublicKey: DEVICE_PUBLIC_KEY,
       licenseStatus: 'unlicensed',
       activation: 'demo',
-      proofOfPossession: 'unproven',
     })
 
     const result = await makeBridge().handleActivateDeviceLicense({} as IpcMainInvokeEvent, WS_PARAMS, OPTS)
@@ -126,10 +122,8 @@ describe('MainProcessBridge.handleActivateDeviceLicense', () => {
       success: true,
       outcome: 'demo',
       deviceId: DEVICE_ID,
-      devicePublicKey: DEVICE_PUBLIC_KEY,
       licenseStatus: 'unlicensed',
       activation: 'demo',
-      proofOfPossession: 'unproven',
     })
     expect(typeof result.probedAt).toBe('string')
   })

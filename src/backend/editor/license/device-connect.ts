@@ -12,7 +12,6 @@ import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
 import type { LicenseCapableTransport } from '../../shared/debug/types'
 import { deriveDeviceId, deriveVppId } from './device-identity'
-import { deriveDeviceKeyPair } from './device-keypair'
 import { checkDeviceActivation } from './license-activation-client'
 import { type DeviceLicenseStatus, readBoardIdWithRetries } from './license-probe'
 
@@ -34,34 +33,10 @@ export interface DeviceConnectResult {
    * is, licensable or not: it is a pure function of the anchor.
    */
   deviceId?: string
-  /**
-   * Raw Ed25519 public key (32 bytes hex) of this device's proof-of-possession
-   * keypair (ADR-0002), derived from the anchor. Present on the results where the
-   * UI can offer "Buy license" — the purchase link carries it, and the purchase
-   * is the only moment that binds a key to a device.
-   *
-   * Absent when the board is not licensable (nothing to buy), when it already
-   * holds a valid license (same), or when the derivation itself failed. Only the
-   * PUBLIC half ever leaves this process; the private key is never stored and
-   * never transmitted.
-   */
-  devicePublicKey?: string
   /** On-device license state after the (optional) recover. */
   licenseStatus?: DeviceLicenseStatus
   /** What the recover attempt concluded (licensable targets only). */
   activation?: DeviceActivationSummary
-  /**
-   * Whether the activate request carried proof of possession (ADR-0002).
-   *
-   * Present only when the backend was actually asked. `'unproven'` means the
-   * request went WITHOUT a signature — no `/challenge` route (404) or no anchor —
-   * so a `demo` conclusion here cannot be read as "there is no purchase": a
-   * backend that requires the proof refuses with the byte-identical answer.
-   * Carried out to the renderer because the alternative was a `console.warn` in
-   * the main process, which no user ever sees, and the visible result was a
-   * paying customer being told to buy again (A19).
-   */
-  proofOfPossession?: 'proved' | 'unproven'
   error?: string
 }
 
@@ -162,11 +137,7 @@ export async function probeAndRecover(
     // Derived up front, not inside the recover branch: every connected result
     // carries it, so the renderer can show and copy the licensing identity even
     // when no recover ran (already licensed, unsupported storage, no packageId).
-    // Kept as bytes: `deviceId` is a one-way hash of these, and the recover step
-    // needs the PRE-IMAGE to prove possession (ADR-0002). The bytes never leave
-    // this process — only a signature derived from them does.
-    const anchorBytes = Uint8Array.from(anchor.anchor)
-    const deviceId = deriveDeviceId(anchorBytes)
+    const deviceId = deriveDeviceId(Uint8Array.from(anchor.anchor))
 
     // Free VPP — no licensing step.
     if (!opts.isLicensable) return { status: 'connected-with-firmware', anchorHex, deviceId }
@@ -207,36 +178,12 @@ export async function probeAndRecover(
     }
 
     // Empty / corrupt on-device license -> attempt recover. Needs the package id.
-    // From here on the device may end up needing a PURCHASE, and every purchase
-    // link must carry the public key (ADR-0002) — so each return below carries it.
     if (!opts.packageId) {
-      return {
-        status: 'connected-with-firmware',
-        anchorHex,
-        deviceId,
-        devicePublicKey: await derivePublicKeyForPurchase(anchorBytes, deviceId),
-        licenseStatus: 'unlicensed',
-      }
+      return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed' }
     }
 
     const vppId = deriveVppId(opts.packageId)
-    const act = await checkDeviceActivation({
-      deviceId,
-      vppId,
-      packageId: opts.packageId,
-      keyId: opts.keyId,
-      anchor: anchorBytes,
-    })
-    // Reuse the key the proof already derived; only derive again when there was
-    // no proof (no challenge route, or the request never got that far). The KDF
-    // is memory-hard by design, so paying it twice per connect is not free.
-    const devicePublicKey = act.devicePublicKey ?? (await derivePublicKeyForPurchase(anchorBytes, deviceId))
-    // Rides on EVERY branch below, because the branch that needs it most is the
-    // one that looks most like a settled answer: `demo`. An unproven request that
-    // the backend refuses is indistinguishable, on the wire, from "this device
-    // never bought anything" — so without this the renderer would keep telling a
-    // paying customer to buy again (A19, D6).
-    const proofOfPossession = act.proofOfPossession
+    const act = await checkDeviceActivation({ deviceId, vppId, packageId: opts.packageId, keyId: opts.keyId })
 
     if (!act.licensed) {
       // A transport/backend failure is NOT the same as "no purchase on record".
@@ -251,25 +198,14 @@ export async function probeAndRecover(
           status: 'connected-with-firmware',
           anchorHex,
           deviceId,
-          devicePublicKey,
           licenseStatus: 'unlicensed',
           activation: 'error',
-          proofOfPossession,
           error: act.error,
         }
       }
-      // No license for this device on the backend's word -> demo. The renderer
-      // prompts buy — UNLESS the request went unproven, in which case "no
-      // license" is not something the backend actually told us.
-      return {
-        status: 'connected-with-firmware',
-        anchorHex,
-        deviceId,
-        devicePublicKey,
-        licenseStatus: 'unlicensed',
-        activation: 'demo',
-        proofOfPossession,
-      }
+      // No license for this device on the backend's word -> demo, and the
+      // renderer prompts buy.
+      return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
     }
 
     if (act.license) {
@@ -281,7 +217,6 @@ export async function probeAndRecover(
           deviceId,
           licenseStatus: 'unsupported',
           activation: 'unsupported',
-          proofOfPossession,
         }
       }
       if (write.success) {
@@ -309,17 +244,14 @@ export async function probeAndRecover(
             deviceId,
             licenseStatus: 'licensed',
             activation: 'activated',
-            proofOfPossession,
           }
         }
         return {
           status: 'connected-with-firmware',
           anchorHex,
           deviceId,
-          devicePublicKey,
           licenseStatus: 'unlicensed',
           activation: 'error',
-          proofOfPossession,
           error: `the license was written but could not be confirmed on the device: ${verdict.reason}`,
         }
       }
@@ -327,50 +259,16 @@ export async function probeAndRecover(
         status: 'connected-with-firmware',
         anchorHex,
         deviceId,
-        devicePublicKey,
         licenseStatus: 'unlicensed',
         activation: 'error',
-        proofOfPossession,
         error: write.error,
       }
     }
 
     // Licensed but the backend returned no blob — nothing to write; run as demo.
-    return {
-      status: 'connected-with-firmware',
-      anchorHex,
-      deviceId,
-      devicePublicKey,
-      licenseStatus: 'unlicensed',
-      activation: 'demo',
-      proofOfPossession,
-    }
+    return { status: 'connected-with-firmware', anchorHex, deviceId, licenseStatus: 'unlicensed', activation: 'demo' }
   } catch (error) {
     return { status: 'error', error: getErrorMessage(error) }
-  }
-}
-
-/**
- * The public half of the device keypair, for the purchase link — or `undefined`
- * when it cannot be produced.
- *
- * Swallows the failure on purpose. This runs inside a connect flow whose job is
- * to classify a board: a KDF that fails (an anchor the derivation refuses, a
- * memory limit) must not turn a working connection into an error. The cost of
- * returning nothing is a purchase that binds no key — the device is then served
- * as before and says so loudly on the backend — while throwing here would cost
- * the connection itself.
- */
-async function derivePublicKeyForPurchase(anchor: Uint8Array, deviceId: string): Promise<string | undefined> {
-  try {
-    const keyPair = await deriveDeviceKeyPair(anchor, deviceId)
-    return keyPair.publicKeyHex
-  } catch (error) {
-    console.warn(
-      `[license] could not derive the device public key (${getErrorMessage(error)}) — a purchase from this ` +
-        'connection will not bind one, and the device will activate without proof of possession.',
-    )
-    return undefined
   }
 }
 
@@ -403,13 +301,6 @@ export interface LegacyActivationOutcome {
    *  badge state the serial path does — `outcome` is too coarse for that. */
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
-  /** Carried for the same reason: the runtime-v4 path reaches the same popover,
-   *  and its Buy button needs the key to bind (ADR-0002). */
-  devicePublicKey?: string
-  /** Carried for the same reason again: the runtime-v4 path shows the same
-   *  "License Required" prompt, which must not push a purchase when the request
-   *  never carried proof (A19/D6). */
-  proofOfPossession?: 'proved' | 'unproven'
   license?: { present: boolean }
   error?: string
 }
@@ -443,14 +334,10 @@ function mapConnectedActivation(result: DeviceConnectResult): LegacyActivationOu
   const deviceId = result.deviceId
   // Passed through on every branch: the renderer decides what to show from
   // these, not from `outcome`, which cannot express "storage unsupported" and
-  // "the backend never answered" as different things. `devicePublicKey` rides
-  // along for the same reason — dropping it would leave the network path's Buy
-  // button building a link that binds no key.
+  // "the backend never answered" as different things.
   const carried = {
     licenseStatus: result.licenseStatus,
     activation: result.activation,
-    devicePublicKey: result.devicePublicKey,
-    proofOfPossession: result.proofOfPossession,
   }
   switch (result.activation) {
     case 'already-licensed':

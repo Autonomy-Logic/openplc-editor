@@ -89,10 +89,6 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
    * Both ids are read at call time (not closed over): the probe result lands in
    * the store just before the demo prompt opens, and the popover's Buy button
    * fires arbitrarily later.
-   *
-   * The device's public key travels with them (ADR-0002). The checkout is the one
-   * place that can bind a key to a device, so a link built without it sells a
-   * license that no later request can be asked to prove it owns.
    */
   const buyLicense = useCallback((): void => {
     const probeResult = useOpenPLCStore.getState().deviceProbeInfo.result
@@ -100,7 +96,6 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       baseUrl: system.getEdgeFrontendUrl(),
       vppId: boardInfo?.vpp?.packageId,
       deviceId: probeResult?.deviceId,
-      devicePublicKey: probeResult?.devicePublicKey,
     })
     if (!url) {
       // Better to say why than to open a page that rejects the link. Reachable
@@ -123,64 +118,25 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
    * The prompt shown when the license check came back `demo` — shared by the
    * serial CONNECT and the runtime-v4 check so the two can never drift.
    *
-   * TWO CASES, and telling them apart is the point (D6, A19).
-   *
-   * 1. THE BACKEND ANSWERED. It said there is no license for this `deviceId`. It
-   *    deliberately CANNOT say which of two things is true — no purchase exists,
-   *    or a purchase exists but is registered under a different device key — and
-   *    distinguishing them server-side was rejected (ADR-0002: it would tell an
-   *    attacker which ids have purchases). So the message says both, and names
-   *    the Device ID, because that is what support needs to resolve the second
-   *    case. Saying only "no license was found" is what made someone who had
-   *    already paid buy the same license twice.
-   *
-   * 2. THE REQUEST WENT WITHOUT PROOF. The `/challenge` route answered 404 (a
-   *    proxy, a CDN, a corporate portal — the route itself exists, and the
-   *    use-case behind it never returns 404 for a business reason), so the editor
-   *    activated unproven and a backend that requires the proof refused with the
-   *    byte-identical "no license" answer. Nothing was learned about this
-   *    device's entitlement, so Buy is DEMOTED, not offered first, and the
-   *    console gets a line — before this, the only trace was a `console.warn` in
-   *    the main process that no user can see.
+   * The backend said there is no license for this `deviceId`. It deliberately
+   * CANNOT say which of two things is true — no purchase exists, or a purchase
+   * exists but is registered against a different device — and distinguishing them
+   * server-side was rejected (it would tell an attacker which ids have
+   * purchases). So the message says both, and names the Device ID, because that
+   * is what support needs to resolve the second case. Saying only "no license was
+   * found" is what made someone who had already paid buy the same license twice
+   * (A19, D6).
    */
   const promptLicenseState = useCallback(
-    (deviceBoard: string, result: { deviceId?: string; proofOfPossession?: 'proved' | 'unproven' }): void => {
+    (deviceBoard: string, result: { deviceId?: string }): void => {
       const deviceIdNote = result.deviceId ? ` Device ID: ${result.deviceId}.` : ''
-
-      if (result.proofOfPossession === 'unproven') {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'error',
-          message:
-            'License check ran WITHOUT proof of possession: the licensing service did not serve a challenge, so the ' +
-            'activation could not prove it is talking to this board. A "no license" answer here says nothing about ' +
-            `whether this device has been purchased.${deviceIdNote}`,
-        })
-        openModal('debugger-message', {
-          type: 'warning',
-          title: 'License Check Incomplete',
-          message:
-            `The license check for "${deviceBoard}" could not be completed: the licensing service did not serve a ` +
-            'challenge, so this activation could not prove it is talking to this board, and the service refuses ' +
-            'activations it cannot verify.\n\n' +
-            'This is a service or network problem, NOT a missing purchase — if you already bought a license, do not ' +
-            `buy again. Try connecting again, and contact support if it keeps happening.${deviceIdNote}`,
-          // 'Run in Demo' first on purpose: pushing a purchase when the
-          // entitlement is UNKNOWN is how someone pays twice for one device.
-          buttons: ['Run in Demo', 'Buy License'],
-          onResponse: (buttonIndex: number) => {
-            if (buttonIndex === 1) buyLicense()
-          },
-        })
-        return
-      }
 
       openModal('debugger-message', {
         type: 'warning',
         title: 'License Required',
         message:
           `No license was found for "${deviceBoard}". Either no license has been purchased for this device, or the ` +
-          'purchase is registered under a different device key — in that case buying again will not help, so contact ' +
+          'purchase is registered against a different device — in that case buying again will not help, so contact ' +
           `support with this Device ID.${deviceIdNote}\n\n` +
           'You can buy a license now, or continue running in demo mode (15 min per run).',
         buttons: ['Buy License', 'Run in Demo'],
@@ -189,7 +145,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
         },
       })
     },
-    [addLog, buyLicense, openModal],
+    [buyLicense, openModal],
   )
 
   const connect = useCallback(async (): Promise<void> => {
@@ -364,10 +320,8 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       status: 'connected-with-firmware',
       anchorHex: act.anchorHex,
       deviceId: act.deviceId,
-      devicePublicKey: act.devicePublicKey,
       licenseStatus: act.licenseStatus,
       activation: act.activation,
-      proofOfPossession: act.proofOfPossession,
       error: act.error,
     })
 

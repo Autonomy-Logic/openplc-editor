@@ -1,4 +1,4 @@
-import { createPublicKey, generateKeyPairSync, verify as cryptoVerify } from 'node:crypto'
+import { generateKeyPairSync, verify as cryptoVerify } from 'node:crypto'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { EventEmitter } from 'events'
 import https from 'https'
 
-import { deriveDeviceKeyPair } from '../device-keypair'
 import { checkDeviceActivation } from '../license-activation-client'
 
 /** Fake `https.request`: invokes the response callback synchronously and
@@ -263,26 +262,25 @@ describe('checkDeviceActivation (real edge client, no mock toggle)', () => {
 })
 
 /**
- * Proof of possession (ADR-0002).
+ * NO proof of possession (removed 2026-08-03).
  *
- * The flow makes TWO requests with different answers, so these route by path
- * instead of replaying one canned response.
+ * The activate request used to be preceded by `POST /vpp-licenses/challenge` and
+ * to carry `nonce` + `signature` signed by a keypair derived from the hardware
+ * anchor (ADR-0002). All of it is gone: on bare metal the anchor is read inside
+ * the closed license-core and the blob is bound to `deviceId`, so the silicon is
+ * what proves possession.
+ *
+ * These tests assert the ABSENCE, which is the only way the deletion stays
+ * deleted. A test that merely checks the happy path would pass just as well with
+ * a challenge round-trip silently reintroduced.
  */
-describe('checkDeviceActivation (proof of possession)', () => {
-  /** Raw FC 0x48 bytes of the test Pi: ASCII "8625807b0a83ae7d". */
-  const ANCHOR = Uint8Array.from(Buffer.from('8625807b0a83ae7d', 'utf8'))
-  /** `deriveDeviceId(ANCHOR)`, measured on real hardware. */
-  const PI_DEVICE_ID = '7146518f9842adacfadc731ee7f546e5'
-  const PROVEN_INPUT = { ...INPUT, deviceId: PI_DEVICE_ID, anchor: ANCHOR }
-  const NONCE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
-  const ED25519_SPKI_PREFIX = '302a300506032b6570032100'
-
+describe('checkDeviceActivation (no proof of possession)', () => {
   interface Route {
     status: number
     body: unknown
   }
 
-  /** Route `https.request` by path; record every body written per path. */
+  /** Route `https.request` by path; record every path hit and body written. */
   function mockHttpsRoutes(routes: Record<string, Route>) {
     const bodies: Record<string, string> = {}
     const hits: string[] = []
@@ -317,143 +315,25 @@ describe('checkDeviceActivation (proof of possession)', () => {
     body: { statusCode: 200, data: { licensed: true, license: Buffer.from(GOLDEN_HEX, 'hex').toString('base64') } },
   }
 
-  it('signs the challenge with a key the backend can verify from the anchor alone', async () => {
-    const { bodies } = mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: NONCE } } },
-      '/vpp-licenses/activate': licensedRoute,
+  it('sends exactly deviceId and packageId, and nothing else', () => {
+    const { bodies } = mockHttpsRoutes({ '/vpp-licenses/activate': licensedRoute })
+
+    return checkDeviceActivation(INPUT).then((result) => {
+      expect(result.licensed).toBe(true)
+      // Whole-key equality, not a per-field check: `nonce`/`signature` creeping
+      // back in has to fail here.
+      const sent: unknown = JSON.parse(bodies['/vpp-licenses/activate'])
+      expect(Object.keys(sent as Record<string, unknown>).sort()).toEqual(['deviceId', 'packageId'])
     })
+  })
 
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-    expect(result.licensed).toBe(true)
+  it('never asks for a challenge', () => {
+    const { hits } = mockHttpsRoutes({ '/vpp-licenses/activate': licensedRoute })
 
-    const sent = JSON.parse(bodies['/vpp-licenses/activate'])
-    expect(sent.nonce).toBe(NONCE)
-
-    // The assertion that matters: verify exactly as the backend will — rebuild the
-    // public key from the anchor, independently of the module's internals.
-    const keyPair = await deriveDeviceKeyPair(ANCHOR, PI_DEVICE_ID)
-    const publicKey = createPublicKey({
-      key: Buffer.from(`${ED25519_SPKI_PREFIX}${keyPair.publicKeyHex}`, 'hex'),
-      format: 'der',
-      type: 'spki',
+    return checkDeviceActivation(INPUT).then(() => {
+      // One request, and it is the activate. A reintroduced challenge round-trip
+      // would show up as a second hit even if the flow still succeeded.
+      expect(hits).toEqual(['/vpp-licenses/activate'])
     })
-    const ok = cryptoVerify(
-      null,
-      Uint8Array.from(Buffer.from(NONCE, 'hex')),
-      publicKey,
-      Uint8Array.from(Buffer.from(String(sent.signature), 'hex')),
-    )
-    expect(ok).toBe(true)
-  }, 30_000)
-
-  it('never sends the device public key (the backend must use the one bound at checkout)', async () => {
-    const { bodies } = mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: NONCE } } },
-      '/vpp-licenses/activate': licensedRoute,
-    })
-
-    await checkDeviceActivation(PROVEN_INPUT)
-
-    // Accepting a caller-supplied key would verify a signature against a key the
-    // caller chose, which proves nothing. Keep it off the wire entirely.
-    const sent = JSON.parse(bodies['/vpp-licenses/activate'])
-    expect(Object.keys(sent).sort()).toEqual(['deviceId', 'nonce', 'packageId', 'signature'])
-  }, 30_000)
-
-  // The key the proof derived is handed back so the caller can put it in the buy
-  // link. Re-deriving it there would pay the memory-hard KDF a second time for a
-  // value already computed.
-  it('returns the public key it derived, so the purchase link can bind it', async () => {
-    mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: NONCE } } },
-      '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } },
-    })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.licensed).toBe(false)
-    const keyPair = await deriveDeviceKeyPair(ANCHOR, PI_DEVICE_ID)
-    expect(result.devicePublicKey).toBe(keyPair.publicKeyHex)
-  }, 30_000)
-
-  // No proof ran, so nothing was derived. The caller derives it itself rather
-  // than getting a wrong or stale value here.
-  it('returns no public key when the proof was skipped', async () => {
-    mockHttpsRoutes({
-      '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } },
-    })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.devicePublicKey).toBeUndefined()
-  }, 30_000)
-
-  it('activates unproven when the challenge route does not exist yet (404 rollout)', async () => {
-    const { bodies, hits } = mockHttpsRoutes({ '/vpp-licenses/activate': licensedRoute })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.licensed).toBe(true)
-    expect(hits).toContain('/vpp-licenses/activate')
-    expect(JSON.parse(bodies['/vpp-licenses/activate'])).toEqual({
-      deviceId: PI_DEVICE_ID,
-      packageId: INPUT.packageId,
-    })
-    // The caller has to be TOLD, not left to infer it (D6/A19): a `licensed:false`
-    // answer to this request is byte-identical to "no purchase on record", so
-    // without this field the renderer sends someone who already paid to buy again.
-    // Before this existed the only trace was a `console.warn` in the main process.
-    expect(result.proofOfPossession).toBe('unproven')
-  }, 30_000)
-
-  it('reports proofOfPossession: proved when the challenge round-trip happened', async () => {
-    mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: NONCE } } },
-      '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } },
-    })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.proofOfPossession).toBe('proved')
-  }, 30_000)
-
-  it('reports unproven when there was no anchor to derive a proof from', async () => {
-    mockHttpsRoutes({ '/vpp-licenses/activate': { status: 200, body: { statusCode: 200, data: { licensed: false } } } })
-
-    const result = await checkDeviceActivation(INPUT)
-
-    expect(result.proofOfPossession).toBe('unproven')
-  }, 30_000)
-
-  it('does NOT strip the proof when the challenge endpoint merely FAILS (503)', async () => {
-    // The security-critical case. Degrading here would let anyone who can make
-    // the challenge endpoint fail turn an availability problem into an
-    // authorization bypass, so a 5xx must surface as an error and activate must
-    // never be reached.
-    const { hits } = mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 503, body: {} },
-      '/vpp-licenses/activate': licensedRoute,
-    })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/503/)
-    expect(hits).not.toContain('/vpp-licenses/activate')
-  }, 30_000)
-
-  it('refuses a nonce that is not hex instead of signing the wrong bytes', async () => {
-    // `hexToBytes` would silently produce a short or empty buffer, and we would
-    // report success while having signed something else.
-    const { hits } = mockHttpsRoutes({
-      '/vpp-licenses/challenge': { status: 200, body: { statusCode: 200, data: { nonce: 'not-hex!' } } },
-      '/vpp-licenses/activate': licensedRoute,
-    })
-
-    const result = await checkDeviceActivation(PROVEN_INPUT)
-
-    expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/not a hex string/)
-    expect(hits).not.toContain('/vpp-licenses/activate')
-  }, 30_000)
+  })
 })

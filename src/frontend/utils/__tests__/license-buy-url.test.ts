@@ -2,8 +2,6 @@ import { buildLicenseBuyUrl } from '../license-buy-url'
 
 const DEVICE_ID = '7146518f9842adacfadc731ee7f546e5'
 const VPP_ID = 'com.openplc.raspberry-pi-licensed'
-/** Raw Ed25519 public key: 32 bytes, so 64 hex chars — twice the device id. */
-const DEVICE_PUBLIC_KEY = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
 
 describe('buildLicenseBuyUrl', () => {
   it('builds the purchase link the /buy page accepts', () => {
@@ -73,62 +71,15 @@ describe('buildLicenseBuyUrl', () => {
     expect(url).toBe(`https://e.test/buy?vppId=${encodeURIComponent(VPP_ID)}&deviceId=${DEVICE_ID}`)
   })
 
-  // The checkout is the ONLY moment that binds a key to a device (ADR-0002).
-  // A link without it sells a license nothing can later be asked to prove.
-  describe('device public key (proof of possession)', () => {
-    it('carries the key so the purchase can bind it', () => {
-      const url = buildLicenseBuyUrl({
-        baseUrl: 'https://e.test',
-        vppId: VPP_ID,
-        deviceId: DEVICE_ID,
-        devicePublicKey: DEVICE_PUBLIC_KEY,
-      })
-      expect(url).toBe(
-        `https://e.test/buy?vppId=${encodeURIComponent(VPP_ID)}&deviceId=${DEVICE_ID}&devicePublicKey=${DEVICE_PUBLIC_KEY}`,
-      )
-    })
-
-    it('trims whitespace off the key', () => {
-      const url = buildLicenseBuyUrl({
-        baseUrl: 'https://e.test',
-        vppId: VPP_ID,
-        deviceId: DEVICE_ID,
-        devicePublicKey: ` ${DEVICE_PUBLIC_KEY} `,
-      })
-      expect(url).toContain(`&devicePublicKey=${DEVICE_PUBLIC_KEY}`)
-    })
-
-    // Absent is the ROLLOUT case, not an error: the buy flow shipped before the
-    // proof did. Still sells — the device is then licensed unbound.
-    it('still builds the link when no key is available', () => {
-      const url = buildLicenseBuyUrl({ baseUrl: 'https://e.test', vppId: VPP_ID, deviceId: DEVICE_ID })
-      expect(url).toBe(`https://e.test/buy?vppId=${encodeURIComponent(VPP_ID)}&deviceId=${DEVICE_ID}`)
-    })
-
-    // A malformed key is dropped rather than fatal: the page would refuse the
-    // same value anyway, and killing the purchase over an add-on field costs
-    // the sale to gain nothing.
-    it.each([
-      ['empty', ''],
-      ['blank', '   '],
-      ['too short', DEVICE_PUBLIC_KEY.slice(0, 63)],
-      ['too long', `${DEVICE_PUBLIC_KEY}00`],
-      ['not hex', `z${DEVICE_PUBLIC_KEY.slice(1)}`],
-      // The device id is half the length — a mislabelled field must not pass.
-      ['the device id instead of the key', DEVICE_ID],
-    ])('drops a %s key instead of refusing to sell', (_label, devicePublicKey) => {
-      const url = buildLicenseBuyUrl({ baseUrl: 'https://e.test', vppId: VPP_ID, deviceId: DEVICE_ID, devicePublicKey })
-      expect(url).toBe(`https://e.test/buy?vppId=${encodeURIComponent(VPP_ID)}&deviceId=${DEVICE_ID}`)
-    })
-
-    it('accepts an uppercase key, matching the page guard', () => {
-      const url = buildLicenseBuyUrl({
-        baseUrl: 'https://e.test',
-        vppId: VPP_ID,
-        deviceId: DEVICE_ID,
-        devicePublicKey: DEVICE_PUBLIC_KEY.toUpperCase(),
-      })
-      expect(url).toContain(`&devicePublicKey=${DEVICE_PUBLIC_KEY.toUpperCase()}`)
-    })
+  // The link carries EXACTLY the two ids the /buy page reads. It used to also
+  // carry `devicePublicKey`, because the purchase was the moment that bound a
+  // proof-of-possession key to a device (ADR-0002). That key is gone: on bare
+  // metal the anchor is read inside the closed license-core and the blob is bound
+  // to `deviceId`, so possession is proven by the silicon, not by a signature.
+  // Asserted as a WHOLE-STRING equality on purpose — a `toContain` would let a
+  // third parameter creep back in without failing.
+  it('carries no query parameter beyond the two ids', () => {
+    const url = buildLicenseBuyUrl({ baseUrl: 'https://e.test', vppId: VPP_ID, deviceId: DEVICE_ID })
+    expect(url).toBe(`https://e.test/buy?vppId=${encodeURIComponent(VPP_ID)}&deviceId=${DEVICE_ID}`)
   })
 })

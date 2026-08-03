@@ -506,11 +506,6 @@ const rendererProcessBridge = {
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
     deviceId?: string
-    /** Device proof-of-possession public key, hex — for the purchase link (ADR-0002). */
-    devicePublicKey?: string
-    /** Whether the activate request carried proof of possession (ADR-0002). An
-     *  unproven refusal is NOT "no purchase on record" — see `DeviceProbeResult`. */
-    proofOfPossession?: 'proved' | 'unproven'
     vppId?: string
     anchorHex?: string
     license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
@@ -533,13 +528,8 @@ const rendererProcessBridge = {
     status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
     anchorHex?: string
     deviceId?: string
-    /** Device proof-of-possession public key, hex — for the purchase link (ADR-0002). */
-    devicePublicKey?: string
     licenseStatus?: 'licensed' | 'unlicensed' | 'unsupported' | 'unknown'
     activation?: 'already-licensed' | 'activated' | 'demo' | 'unsupported' | 'error'
-    /** Whether the activate request carried proof of possession (ADR-0002). An
-     *  unproven refusal is NOT "no purchase on record" — see `DeviceProbeResult`. */
-    proofOfPossession?: 'proved' | 'unproven'
     error?: string
   }> => ipcRenderer.invoke('device:connect', connectionParams, opts),
 

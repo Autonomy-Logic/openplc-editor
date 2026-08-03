@@ -206,77 +206,52 @@ describe('useDeviceConnect', () => {
   // D6. The backend cannot say WHICH of the two it is (distinguishing them would
   // tell an attacker which device ids have purchases -- ADR-0002), so the editor
   // has to say both, and name the Device ID support needs to fix the second case.
-  it('says a purchase under another key is possible, and names the Device ID', async () => {
+  it('says a purchase against another device is possible, and names the Device ID', async () => {
     mockConnect.mockResolvedValue({
       status: 'connected-with-firmware',
       licenseStatus: 'unlicensed',
       activation: 'demo',
-      proofOfPossession: 'proved',
       deviceId: DEVICE_ID,
     })
     const { result } = renderHook(() => useDeviceConnect(board))
     await result.current.connect()
     const message = (mockOpenModal.mock.calls[0][1] as { message: string }).message
-    expect(message).toContain('registered under a different device key')
+    expect(message).toContain('registered against a different device')
     expect(message).toContain(`Device ID: ${DEVICE_ID}`)
   })
 
-  // A19/D6. This is the double-purchase bug: an unproven request is refused with
-  // the byte-identical answer "no purchase on record" gets, so the paying customer
-  // was shown "Buy a license". Buy must be DEMOTED and the console must carry a
-  // trace -- the only one before this was a `console.warn` in the main process.
-  describe('an activation that carried NO proof of possession is not sold as "no license"', () => {
-    beforeEach(() => {
-      mockConnect.mockResolvedValue({
-        status: 'connected-with-firmware',
-        licenseStatus: 'unlicensed',
-        activation: 'demo',
-        proofOfPossession: 'unproven',
-        deviceId: DEVICE_ID,
-      })
+  // There is now ONE demo prompt, because there is one way to get here: the
+  // backend answered "no license for this device". The second prompt ("License
+  // Check Incomplete") existed for an activation that went WITHOUT proof of
+  // possession, a state that cannot occur any more.
+  it('offers Buy first on a demo answer -- there is no unproven state to demote it for', async () => {
+    mockConnect.mockResolvedValue({
+      status: 'connected-with-firmware',
+      licenseStatus: 'unlicensed',
+      activation: 'demo',
+      deviceId: DEVICE_ID,
     })
-
-    it('titles the prompt as an incomplete check and does not push a purchase', async () => {
-      const { result } = renderHook(() => useDeviceConnect(board))
-      await result.current.connect()
-      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({
-        title: 'License Check Incomplete',
-        buttons: ['Run in Demo', 'Buy License'],
-      })
-      const message = (mockOpenModal.mock.calls[0][1] as { message: string }).message
-      expect(message).toContain('NOT a missing purchase')
-      // Buy stays reachable, just second.
-      latestOnResponse()(0)
-      expect(mockOpenExternalLink).not.toHaveBeenCalled()
-      latestOnResponse()(1)
-      expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
+    const { result } = renderHook(() => useDeviceConnect(board))
+    await result.current.connect()
+    expect(mockOpenModal.mock.calls[0][1]).toMatchObject({
+      title: 'License Required',
+      buttons: ['Buy License', 'Run in Demo'],
     })
-
-    it('logs the unproven activation where the user can see it', async () => {
-      const { result } = renderHook(() => useDeviceConnect(board))
-      await result.current.connect()
-      expect(mockAddLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          level: 'error',
-          message: expect.stringContaining('WITHOUT proof of possession'),
-        }),
-      )
-    })
+    latestOnResponse()(0)
+    expect(mockOpenExternalLink).toHaveBeenCalledTimes(1)
   })
 
   // S1. `DeviceConnectResult` IS `DeviceProbeResult`, so the result is landed
-  // WHOLE. Copying named fields here is what silently dropped `devicePublicKey`
-  // when ADR-0002 added it; this asserts the pass-through so the next field added
-  // cannot go missing without a red test.
+  // WHOLE. Copying named fields here is what silently dropped a field when one was
+  // added; this asserts the pass-through so the next field added cannot go missing
+  // without a red test.
   it('lands the connect result whole, including fields it does not itself read', async () => {
     const landed = {
       status: 'connected-with-firmware',
       anchorHex: '01020304',
       deviceId: DEVICE_ID,
-      devicePublicKey: 'ab'.repeat(32),
       licenseStatus: 'unlicensed',
       activation: 'demo',
-      proofOfPossession: 'proved',
       error: undefined,
     }
     mockConnect.mockResolvedValue(landed)
@@ -343,22 +318,6 @@ describe('useDeviceConnect', () => {
       result.current.buyLicense()
       expect(mockOpenExternalLink).toHaveBeenCalledWith(
         `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}`,
-      )
-    })
-
-    // The checkout is the only moment that binds a proof-of-possession key to a
-    // device (ADR-0002). A link built without it sells a license that no later
-    // activation can be asked to prove it owns.
-    it('carries the device public key so the purchase can bind it', () => {
-      const devicePublicKey = 'd'.repeat(64)
-      mockState.deviceProbeInfo = {
-        phase: 'done',
-        result: { status: 'connected-with-firmware', deviceId: DEVICE_ID, devicePublicKey },
-      }
-      const { result } = renderHook(() => useDeviceConnect(board))
-      result.current.buyLicense()
-      expect(mockOpenExternalLink).toHaveBeenCalledWith(
-        `https://edge.test/buy?vppId=com.vendor.board&deviceId=${DEVICE_ID}&devicePublicKey=${devicePublicKey}`,
       )
     })
 
@@ -435,24 +394,33 @@ describe('useDeviceConnect', () => {
       )
     })
 
-    // The two paths share one prompt helper precisely so this cannot drift: a
-    // runtime-v4 customer who paid must not be told to buy again either (A19).
-    it('lands the unproven flag and shows the same demoted prompt the serial path does', async () => {
+    // The two paths share one prompt helper precisely so this cannot drift. The
+    // projection here is field by field (`DeviceActivationResult` is genuinely a
+    // different shape), so it is the copy most likely to grow a stale field --
+    // `toEqual` rather than `toMatchObject` is what makes that fail.
+    it('projects exactly the badge fields, with no proof-of-possession leftovers', async () => {
       mockActivateLicense.mockResolvedValue({
         success: true,
         probedAt: 't',
         outcome: 'demo',
+        anchorHex: '01020304',
         licenseStatus: 'unlicensed',
         activation: 'demo',
-        proofOfPossession: 'unproven',
         deviceId: DEVICE_ID,
       })
       const { result } = renderHook(() => useDeviceConnect(board))
       await result.current.checkRuntimeLicense()
-      expect(mockSetDeviceProbeResult).toHaveBeenCalledWith(expect.objectContaining({ proofOfPossession: 'unproven' }))
+      expect(mockSetDeviceProbeResult).toHaveBeenCalledWith({
+        status: 'connected-with-firmware',
+        anchorHex: '01020304',
+        deviceId: DEVICE_ID,
+        licenseStatus: 'unlicensed',
+        activation: 'demo',
+        error: undefined,
+      })
       expect(mockOpenModal.mock.calls[0][1]).toMatchObject({
-        title: 'License Check Incomplete',
-        buttons: ['Run in Demo', 'Buy License'],
+        title: 'License Required',
+        buttons: ['Buy License', 'Run in Demo'],
       })
     })
 

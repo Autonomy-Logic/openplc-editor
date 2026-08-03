@@ -48,18 +48,6 @@ export interface DeviceProbeResult {
    * computing it.
    */
   deviceId?: string
-  /**
-   * Raw Ed25519 public key (32 bytes hex) of the device's proof-of-possession
-   * keypair (ADR-0002), derived in the main process from the hardware anchor.
-   * The renderer only ever forwards it into the purchase link: binding it at
-   * checkout is what later lets the backend demand a signature instead of
-   * serving a license to whoever names `deviceId`.
-   *
-   * Present on the results where a purchase is possible; absent for a free VPP,
-   * for an already-licensed device, and when the derivation failed. It is the
-   * PUBLIC half — the private key is never stored and never leaves main.
-   */
-  devicePublicKey?: string
   /** On-device license state — only present for a licensable connected device. */
   licenseStatus?: DeviceLicenseStatus
   /**
@@ -71,20 +59,6 @@ export interface DeviceProbeResult {
    * apart is the difference between "buy a license" and "we could not check".
    */
   activation?: DeviceActivationSummary
-  /**
-   * Whether the activation request actually CARRIED proof of possession
-   * (ADR-0002). Present only when the backend was asked at all.
-   *
-   * `'unproven'` is a rollout concession, not a normal outcome: the request went
-   * out with no signature because the `/challenge` route answered 404 or because
-   * there was no anchor to derive from. A backend that requires the proof then
-   * refuses, and its refusal is byte-identical to "no purchase on record" — so
-   * `activation: 'demo'` with `proofOfPossession: 'unproven'` must NOT be
-   * presented as "you have no license". It used to be, which is how a customer
-   * who had already paid got shown "Buy a license" (A19); the only other trace
-   * was a `console.warn` in the main process that no user can see.
-   */
-  proofOfPossession?: 'proved' | 'unproven'
   /** Transport/backend failure text when `activation === 'error'`. */
   error?: string
 }
@@ -113,11 +87,10 @@ export type DeviceActivationSummary = 'already-licensed' | 'activated' | 'demo' 
  * client in the main process.
  *
  * AN ALIAS, NOT A COPY (S1, decided 2026-07-30). These were two independently
- * maintained interfaces with the same seven fields, same types, same
- * optionality — and one consumer (`use-device-connect.ts`) bridged them by
- * copying field names, which is the exact pattern that silently dropped
- * `devicePublicKey` when it was added and left every purchase from the reconnect
- * path binding no key (see the comment at
+ * maintained interfaces with the same fields, same types, same optionality — and
+ * one consumer (`use-device-connect.ts`) bridged them by copying field names,
+ * which is the exact pattern that silently dropped a field when one was added and
+ * left every purchase from the reconnect path incomplete (see the comment at
  * `workspace-activity-bar/default.tsx`). Two names for one shape bought the
  * freedom to diverge, which was never exercised, at the price of every new field
  * needing an edit in both — and being invisible when it did not get one. When
@@ -144,12 +117,6 @@ export interface DeviceActivationResult {
   licenseStatus?: DeviceLicenseStatus
   activation?: DeviceActivationSummary
   deviceId?: string
-  /** See `DeviceProbeResult.devicePublicKey` — the network path lands the same
-   *  popover, whose Buy button builds the link that binds this key. */
-  devicePublicKey?: string
-  /** See `DeviceProbeResult.proofOfPossession` — the network path shows the same
-   *  prompt, which must not push a purchase on an unproven refusal. */
-  proofOfPossession?: 'proved' | 'unproven'
   vppId?: string
   anchorHex?: string
   license?: { present: boolean; empty?: boolean; corrupt?: boolean; unsupported?: boolean; blob?: number[] }
