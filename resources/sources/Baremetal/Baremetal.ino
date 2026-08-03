@@ -36,15 +36,12 @@
 #include "ModbusSlave.h"
 #endif
 
-// Hardware anchor for the license gate: the SAME ArduinoUniqueID material the
-// debugger returns for FC 0x48 (see modbus_debug.cpp::debugGetBoardId). Mirror
-// that file's guard exactly so a core without UniqueID support — or a board
-// that opts out via OPENPLC_NO_UNIQUE_ID — still compiles; the anchor is simply
-// empty there and the license-core binds to whatever it gets.
-#ifndef OPENPLC_NO_UNIQUE_ID
-    #include <ArduinoUniqueID.h>
-    #define OPENPLC_HAS_UNIQUE_ID
-#endif
+// ArduinoUniqueID used to be included here to feed the license gate. It is not
+// any more (ADR-0003): the license-core reads the silicon itself. `modbus_debug.cpp`
+// keeps its own include + guard for FC 0x48, which REPORTS the anchor to the
+// editor so a purchase can be bound to this board — a separate concern from
+// enforcement, and see the note at `debugGetBoardId` for what that asymmetry
+// does and does not allow.
 
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
 #ifndef MBTCP
@@ -141,13 +138,20 @@ void setup()
     hardwareInit();
 
     // -----------------------------------------------------------------------
-    // License gate (Slice C, D65). Hand the stored license blob and the
-    // hardware anchor to the license-core so it can verify the license and arm
-    // its demo timer. Without a license-core linked, license_gate_init() is the
-    // weak default (license_gate_weak.cpp) and this whole block is a harmless
-    // no-op — actuation then stays unconditionally allowed, i.e. behaviour is
-    // identical to boards that never had licensing. millis() gives the core the
-    // same time base the runtime uses (no esp_timer dependency).
+    // License gate (Slice C, D65). Hand the stored license blob to the
+    // license-core so it can verify the license and arm its demo timer. Without
+    // a license-core linked, license_gate_init() is the weak default
+    // (license_gate_weak.cpp) and this whole block is a harmless no-op —
+    // actuation then stays unconditionally allowed, i.e. behaviour is identical
+    // to boards that never had licensing. millis() gives the core the same time
+    // base the runtime uses (no esp_timer dependency).
+    //
+    // THE HARDWARE ANCHOR IS NO LONGER PASSED IN (ADR-0003). This block used to
+    // read `UniqueID` here and hand the bytes over, which made the board's
+    // identity a claim made by the OPEN firmware: licensing hardware you do not
+    // own cost one edit to this file, substituting the target's anchor. The
+    // license-core now reads the silicon itself, inside the closed artifact, so
+    // there is nothing here to substitute.
     // -----------------------------------------------------------------------
     {
         uint8_t lic_blob[LIC_BLOB_SIZE];
@@ -161,15 +165,7 @@ void setup()
             lic_len = 0;
         }
 
-    #ifdef OPENPLC_HAS_UNIQUE_ID
-        const uint8_t *anchor     = UniqueID;
-        size_t         anchor_len = (size_t)UniqueIDsize;
-    #else
-        const uint8_t *anchor     = NULL;
-        size_t         anchor_len = 0;
-    #endif
-
-        license_gate_init(lic_blob, lic_len, anchor, anchor_len, (uint32_t)millis());
+        license_gate_init(lic_blob, lic_len, (uint32_t)millis());
     }
 
     #ifdef MODBUS_ENABLED

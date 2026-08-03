@@ -28,9 +28,16 @@ typedef enum {
 #define LIC_GATE_DEMO_MS 900000u
 #endif
 
-void license_gate_init(const uint8_t *blob, size_t blob_len,
-                       const uint8_t *anchor, size_t anchor_len,
-                       uint32_t now_ms);
+/*
+ * Verify the stored blob once and arm the gate.
+ *   blob / blob_len - the 98 bytes read out of on-device storage.
+ *   now_ms          - injected clock, so the core stays host-testable.
+ *
+ * The device anchor is NOT a parameter: license_core reads it from the silicon
+ * inside the closed artifact (ADR-0003). It used to be passed in from the sketch,
+ * which made the identity a claim the open firmware could rewrite.
+ */
+void license_gate_init(const uint8_t *blob, size_t blob_len, uint32_t now_ms);
 lic_gate_state_t license_gate_state(uint32_t now_ms);
 int license_gate_actuation_allowed(uint32_t now_ms);
 

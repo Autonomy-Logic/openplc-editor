@@ -12,13 +12,10 @@ behaves exactly as it did before licensing existed (no enforcement).
 #include "license_gate.h"
 
 __attribute__((weak)) void license_gate_init(const uint8_t *blob, size_t blob_len,
-                                             const uint8_t *anchor, size_t anchor_len,
                                              uint32_t now_ms)
 {
     (void)blob;
     (void)blob_len;
-    (void)anchor;
-    (void)anchor_len;
     (void)now_ms;
 }
 
