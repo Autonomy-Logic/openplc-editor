@@ -101,7 +101,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     // Modbus TCP on a static address. `deferPrompts` means a DHCP channel is set
     // aside rather than interrupting with an address dialog, because with a cable
     // attached the user should never be asked for one.
-    const silent = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug, { deferPrompts: true })
+    const silent = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, { deferPrompts: true })
     if (!silent) return
     if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return
 
@@ -122,7 +122,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     // only the deferred channels surfaces the address dialog, and a cancel here
     // ends the attempt rather than looping.
     if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
-      const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo?.debug, {
+      const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, {
         onlyChannels: silent.awaitingInput,
       })
       if (prompted && prompted.candidates.length > 0) {

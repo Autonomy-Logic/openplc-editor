@@ -20,6 +20,10 @@ import {
   type DebugSpec,
 } from '../debug-spec'
 
+/** What an Arduino target declares: serial always, TCP when an ethernet shield is
+ *  configured. The ORDER is the capability matrix's, not the resolver's. */
+const ARDUINO_TRANSPORTS = ['modbus-serial', 'modbus-tcp'] as const
+
 /** Mirrors what `buildUsbResolverContext` builds: nothing is connected.
  *  `port === undefined` models "no port selected", which is how the store looks
  *  before the user picks one — the builder omits the key entirely. */
@@ -115,7 +119,7 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
   it('offers BOTH transports, SERIAL first, when the project enables Modbus TCP', () => {
     // Serial leads: it is the direct, local path, with no address to be stale and
     // nothing to ask the user. Modbus TCP is the remote fallback.
-    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext())
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { transports: [...ARDUINO_TRANSPORTS] })
 
     expect(result.kind).toBe('candidates')
     if (result.kind !== 'candidates') return
@@ -128,21 +132,97 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     // debugger keeps the serial protocol compiled into every baremetal firmware.
     // Requiring `enabledWhen` here is what made Connect refuse a Modbus-TCP-only
     // project with "select a communication port" while one was plainly selected.
-    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext())
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { transports: [...ARDUINO_TRANSPORTS] })
     if (result.kind !== 'candidates') throw new Error('expected candidates')
     expect(result.candidates.some((candidate) => candidate.config.connectionType === 'rtu')).toBe(true)
   })
 
   it('offers serial ALONE when Modbus TCP is not enabled', () => {
-    const rtuOnly = resolveDeviceLinkCandidates(bothChannelsSpec, disconnectedUsbContext('/dev/cu.usbmodem11101'))
+    const rtuOnly = resolveDeviceLinkCandidates(bothChannelsSpec, disconnectedUsbContext('/dev/cu.usbmodem11101'), {
+      transports: [...ARDUINO_TRANSPORTS],
+    })
     if (rtuOnly.kind !== 'candidates') throw new Error('expected candidates')
     expect(rtuOnly.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
   })
 
 
+  it('resolves a Runtime v4 target, whose only transport is a WebSocket', () => {
+    // The regression that broke every v4 target: with eligibility hardcoded to
+    // serial-then-TCP, a `websocket` channel was never a candidate, so no session
+    // was opened and every command answered "not connected" on a target the user
+    // had connected to and uploaded to. Eligibility comes from the TARGET's
+    // declared transports, so this needs no special case — only the right facts.
+    const v4Spec: DebugSpec = {
+      preconditions: ['runtimeConnected', 'jwtToken'],
+      channels: [
+        {
+          label: 'WebSocket',
+          channel: 'websocket',
+          enabledWhen: true,
+          params: {
+            ipAddress: { $ref: 'configuration.runtimeIpAddress', required: 'Runtime IP address is not configured.' },
+            jwtToken: { $ref: 'runtimeConnection.jwtToken', required: 'JWT token missing.' },
+          },
+        },
+      ],
+    }
+    const connectedRuntime: DebugResolverContext = {
+      state: {
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '192.168.0.42' },
+        screens: {},
+        runtimeConnection: { connectionStatus: 'connected', jwtToken: 'jwt' },
+        promptCache: {},
+      },
+      capabilities: { runtimeConnected: true, jwtToken: true },
+    }
+
+    const result = resolveDeviceLinkCandidates(v4Spec, connectedRuntime, { transports: ['websocket'] })
+
+    expect(result.kind).toBe('candidates')
+    if (result.kind !== 'candidates') return
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['websocket'])
+    expect(result.candidates[0].config.connectionParams.jwtToken).toBe('jwt')
+  })
+
+  it('resolves a Runtime v3 target over Modbus TCP', () => {
+    const v3Spec: DebugSpec = {
+      preconditions: ['runtimeConnected'],
+      channels: [
+        {
+          label: 'Modbus TCP',
+          channel: 'tcp',
+          enabledWhen: true,
+          params: { ipAddress: { $ref: 'configuration.runtimeIpAddress', required: 'Runtime IP address is not set.' } },
+        },
+      ],
+    }
+    const connectedRuntime: DebugResolverContext = {
+      state: {
+        configuration: { deviceBoard: 'OpenPLC Runtime v3', runtimeIpAddress: '192.168.0.9' },
+        screens: {},
+        runtimeConnection: { connectionStatus: 'connected' },
+        promptCache: {},
+      },
+      capabilities: { runtimeConnected: true, jwtToken: false },
+    }
+
+    const result = resolveDeviceLinkCandidates(v3Spec, connectedRuntime, { transports: ['modbus-tcp'] })
+
+    if (result.kind !== 'candidates') throw new Error('expected candidates')
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['tcp'])
+  })
+
+  it('ignores a channel the target cannot actually speak', () => {
+    // A spec may declare more than the target supports; the capability matrix wins.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { transports: ['modbus-serial'] })
+
+    if (result.kind !== 'candidates') throw new Error('expected candidates')
+    expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
+  })
+
   it('lets a caller skip a channel it has decided against', () => {
     // Channel 0 in this spec is the TCP one.
-    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { skipChannels: [0] })
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { transports: [...ARDUINO_TRANSPORTS], skipChannels: [0] })
     if (result.kind !== 'candidates') throw new Error('expected candidates')
     expect(result.candidates.map((candidate) => candidate.config.connectionType)).toEqual(['rtu'])
   })
@@ -177,7 +257,7 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     it('sets the DHCP channel aside instead of asking, when prompts are deferred', () => {
       // The user's report: with DHCP on, Connect hung on a dialog before trying
       // anything. With a cable attached, that question is pure interruption.
-      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { deferPrompts: true })
+      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { transports: [...ARDUINO_TRANSPORTS], deferPrompts: true })
 
       expect(result.kind).toBe('candidates')
       if (result.kind !== 'candidates') return
@@ -187,10 +267,10 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
 
     it('asks once the caller resolves that channel on its own', () => {
       // The second pass, run only after everything silent has failed.
-      const deferred = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { deferPrompts: true })
+      const deferred = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { transports: [...ARDUINO_TRANSPORTS], deferPrompts: true })
       if (deferred.kind !== 'candidates') throw new Error('expected candidates')
 
-      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { onlyChannels: deferred.awaitingInput })
+      const result = resolveDeviceLinkCandidates(dhcpSpec, dhcpContext(), { transports: [...ARDUINO_TRANSPORTS], onlyChannels: deferred.awaitingInput })
       expect(result.kind).toBe('prompt')
     })
 
@@ -200,7 +280,7 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
       // exactly what is missing.
       const context = dhcpContext()
       delete context.state.configuration.communicationPort
-      const result = resolveDeviceLinkCandidates(dhcpSpec, context, { deferPrompts: true })
+      const result = resolveDeviceLinkCandidates(dhcpSpec, context, { transports: [...ARDUINO_TRANSPORTS], deferPrompts: true })
 
       expect(result.kind).toBe('candidates')
       if (result.kind !== 'candidates') return
@@ -211,14 +291,14 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
 
   it('still reports a missing port when serial is the only candidate', () => {
     // Candidate resolution must not swallow a channel's own `required` message.
-    const result = resolveDeviceLinkCandidates(baremetalSpec, disconnectedUsbContext())
+    const result = resolveDeviceLinkCandidates(baremetalSpec, disconnectedUsbContext(), { transports: [...ARDUINO_TRANSPORTS] })
     expect(result).toMatchObject({ kind: 'error', body: 'No serial port selected.' })
   })
 
   it('reports unsupported when the board declares nothing reachable', () => {
     const malformed = {} as unknown as DebugSpec
-    expect(resolveDeviceLinkCandidates(malformed, tcpOnlyContext()).kind).toBe('unsupported')
-    expect(resolveDeviceLinkCandidates(undefined, tcpOnlyContext()).kind).toBe('unsupported')
+    expect(resolveDeviceLinkCandidates(malformed, tcpOnlyContext(), { transports: [...ARDUINO_TRANSPORTS] }).kind).toBe('unsupported')
+    expect(resolveDeviceLinkCandidates(undefined, tcpOnlyContext(), { transports: [...ARDUINO_TRANSPORTS] }).kind).toBe('unsupported')
   })
 
   it('shows why a precondition cannot express a debugger-only requirement', () => {

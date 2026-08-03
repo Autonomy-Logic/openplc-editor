@@ -2322,10 +2322,7 @@ class MainProcessBridge implements MainIpcModule {
   private explainMissingChannel(what: string): ChannelUnavailable {
     if (this.deviceSession.isRecovering()) {
       this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
-      return {
-        error: 'The device connection dropped and is being restored. Try again in a moment.',
-        needsReconnect: true,
-      }
+      return { error: 'the connection dropped and is being restored — try again in a moment', needsReconnect: true }
     }
     this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
@@ -2338,9 +2335,18 @@ class MainProcessBridge implements MainIpcModule {
   private static readonly SIMULATOR_PROBE_ATTEMPTS = 10
   private static readonly SIMULATOR_PROBE_INTERVAL_MS = 200
 
-  /** Message shown when a device command arrives with nothing connected. */
-  private static readonly DEVICE_NOT_CONNECTED =
-    'Connect to the device first: the debugger and run/stop share the device connection.'
+  /**
+   * Reported when a command arrives and no session exists.
+   *
+   * Short and neutral on purpose. The caller already says which action failed
+   * ("Failed to stop PLC: …", "Could not connect to debug target: …"), so this only
+   * has to supply the reason. It used to explain the reason as well — "the debugger
+   * and run/stop share the device connection" — which was written for a baremetal
+   * board and read as nonsense on a Runtime v4, whose debug channel is its own
+   * WebSocket and shares nothing. Worse, it appeared on a target the user HAD
+   * connected to, so the explanation was not merely irrelevant but wrong.
+   */
+  private static readonly DEVICE_NOT_CONNECTED = 'not connected to the target'
 
   /**
    * Open and HOLD the link to a baremetal device (D72).

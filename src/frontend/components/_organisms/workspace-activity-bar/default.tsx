@@ -373,6 +373,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           // flashed), so it must never pop an address dialog behind their back. A
           // DHCP-only target simply stays disconnected until they press Connect.
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
+            transports: caps.debuggerTransports,
             deferPrompts: true,
           })
           if (candidates.kind === 'candidates') {
@@ -702,8 +703,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       if (!preConnectResult.success) {
         await showDeviceDialog(
           'error',
-          'Connection Error',
-          `Could not connect to debug target: ${preConnectResult.error ?? 'Unknown error'}`,
+          "Can't Start Debugger",
+          `Can't start the debugger — ${preConnectResult.error ?? 'unknown error'}.`,
           ['OK'],
         )
         setIsDebuggerProcessing(false)

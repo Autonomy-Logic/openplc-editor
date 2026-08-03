@@ -19,6 +19,7 @@
 
 import type { DebugCondition, DebugParam, DebugRef, DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { DebugConnectionConfig } from '../../../middleware/shared/ports/types'
+import type { DebuggerTransport } from '../../../middleware/shared/utils/target-capabilities'
 
 // Re-export types so importers have one canonical entry point.  The
 // types themselves live in the ports layer (architecture rule); the
@@ -110,6 +111,19 @@ export type DebugResolverOutcome =
     }
   | { kind: 'error'; title: string; body: string }
   | { kind: 'unsupported' }
+
+/**
+ * Which capability transport a declared channel kind belongs to.
+ *
+ * `simulator` maps to `modbus-serial` because that is what it is: RTU over the
+ * emulated serial port the in-process simulator exposes.
+ */
+const CHANNEL_TRANSPORT: Record<string, DebuggerTransport> = {
+  rtu: 'modbus-serial',
+  simulator: 'modbus-serial',
+  tcp: 'modbus-tcp',
+  websocket: 'websocket',
+}
 
 /** One resolved way to reach the device, with the channel it came from. */
 export interface DeviceLinkCandidateConfig {
@@ -319,38 +333,52 @@ export function resolveDebugConnection(
 }
 
 /**
- * Resolve the ordered list of ways to reach a baremetal device.
+ * Resolve the ordered ways to reach a target — ANY target.
  *
- * The connection is transport-agnostic, so Connect does not pick a channel — it
- * gets CANDIDATES and tries them in order until one answers:
+ * The caller does not pick a medium; it gets candidates in preference order and the
+ * connection manager tries them until one answers. That makes this the single
+ * interpreter of a `debug` spec, whatever kind of target declared it:
  *
- *   1. Serial. Tried FIRST, and always a candidate regardless of whether Modbus
- *      RTU is enabled, because the always-on debugger keeps the serial protocol
- *      compiled into the firmware either way. It is the direct, local, physically
- *      unambiguous path: if a cable is attached, that is the device the user is
- *      looking at, no address to be stale and nothing to ask them.
- *   2. Modbus TCP, when the project enables it. The remote path, so it is the
- *      fallback rather than the preference.
+ *   1. `rtu` — serial. Always a candidate for a board that declares it, regardless
+ *      of whether Modbus RTU is enabled, because the always-on debugger keeps the
+ *      serial protocol compiled into every baremetal firmware. Preferred because it
+ *      is the direct, local, physically unambiguous path: if a cable is attached,
+ *      that is the device in front of you, with no address to be stale and nothing
+ *      to ask the user.
+ *   2. `tcp` — Modbus TCP, when enabled. A baremetal board's remote path, and a
+ *      Runtime v3's debug channel.
+ *   3. `websocket` — a Runtime v4's debug channel.
+ *   4. `simulator` — in-process.
  *
- * Order matters beyond speed: a TCP channel on DHCP has to ASK the user for the
- * device's current address. Trying serial first means that question is only ever
- * asked when it is actually needed — see `deferPrompts`.
+ * In practice the sets are disjoint: a baremetal board declares serial and possibly
+ * Modbus TCP, a runtime declares exactly one network channel, the simulator one
+ * in-process channel. So the ordering only ever decides anything for a baremetal
+ * board — but it is expressed once, for every kind, rather than once per caller.
+ * Resolving a runtime's channel through a serial-and-TCP-only version of this
+ * function is what left Runtime v4 targets with no session at all.
  *
- * If neither can be built, the caller gets the reason the first one failed — an
- * editor that reports "connected" with nothing connected is what makes every later
+ * Order is a preference, not a promise: the manager still verifies each candidate
+ * before keeping it, so a cable attached to a board with no firmware falls through
+ * to the next option rather than stranding the user.
+ *
+ * A channel needing user input (a DHCP address) is asked for LAST — see
+ * `deferPrompts` — so a user with a cable attached is never interrupted by a
+ * question about an address they do not need to know.
+ *
+ * If nothing can be built the caller gets the reason the first candidate failed: an
+ * editor reporting "connected" with nothing connected is what makes every later
  * request time out for no visible reason.
- *
- * Ordering is a preference, not a promise: `DeviceSessionManager` still verifies each
- * candidate before keeping it, so a cable attached to a board with no firmware
- * falls through to TCP rather than stranding the user.
- *
- * Nothing here is board-specific: the candidate set is whatever the target's
- * `debug` spec declares, so every baremetal target follows the same flow.
  */
 export function resolveDeviceLinkCandidates(
   spec: DebugSpec | undefined,
   context: DebugResolverContext,
   options: {
+    /**
+     * The target's `debuggerTransports`, in preference order, from its capability
+     * matrix. Required: which media a target speaks is a fact about the target, and
+     * the resolver has no business guessing it.
+     */
+    transports: DebuggerTransport[]
     /** Channels to leave out — e.g. one the user has declined. */
     skipChannels?: number[]
     /** Consider ONLY these channels. Used for the second pass, after a prompt. */
@@ -361,7 +389,7 @@ export function resolveDeviceLinkCandidates(
      * caller try everything that works silently before interrupting anyone.
      */
     deferPrompts?: boolean
-  } = {},
+  },
 ): DeviceLinkCandidatesOutcome {
   // `channels` arrives from a VPP manifest, so treat it as possibly absent
   // rather than trusting the type: a malformed package must produce a dialog,
@@ -369,27 +397,36 @@ export function resolveDeviceLinkCandidates(
   const channels = spec?.channels
   if (!spec || !channels?.length) return { kind: 'unsupported' }
 
+  const transports = options.transports
   const skip = new Set(options.skipChannels ?? [])
   const only = options.onlyChannels ? new Set(options.onlyChannels) : null
-  const eligible: number[] = []
   const included = (index: number): boolean => !skip.has(index) && (only === null || only.has(index))
 
-  // Serial first, unconditionally.
-  channels.forEach((channel, index) => {
-    if (channel.channel === 'rtu' && included(index)) eligible.push(index)
-  })
-  // Then Modbus TCP, but only when the project turned it on.
-  channels.forEach((channel, index) => {
-    if (channel.channel !== 'tcp' || !included(index)) return
-    if (evaluateCondition(channel.enabledWhen, context.state)) eligible.push(index)
-  })
+  // Order and eligibility come from the TARGET's declared transports, not from any
+  // list kept here: `debuggerTransports` already says which media a target speaks
+  // and in what order (`['modbus-serial', 'modbus-tcp']` for an Arduino board,
+  // `['websocket']` for a Runtime v4, `['modbus-tcp']` for a v3). Honouring that
+  // declaration is what makes one resolver serve every kind of target — and a
+  // channel the target cannot actually speak is not a candidate, however the spec
+  // describes it.
+  const eligible: number[] = []
+  for (const transport of transports) {
+    channels.forEach((channel, index) => {
+      if (!included(index) || CHANNEL_TRANSPORT[channel.channel] !== transport) return
+      // Serial is exempt from `enabledWhen`: "Modbus RTU disabled" does not mean the
+      // board is unreachable over serial, because the always-on debugger keeps the
+      // serial protocol compiled in either way. Every other kind must be turned on.
+      if (channel.channel !== 'rtu' && !evaluateCondition(channel.enabledWhen, context.state)) return
+      eligible.push(index)
+    })
+  }
 
   if (eligible.length === 0) {
     const message = spec.messages?.noneEnabled
     return {
       kind: 'error',
       title: message?.title ?? 'No Connection Channel',
-      body: message?.body ?? 'This device declares no serial or Modbus TCP channel to connect through.',
+      body: message?.body ?? 'This target declares no channel the editor can connect through.',
     }
   }
 

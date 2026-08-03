@@ -20,12 +20,12 @@
  */
 import {
   type DebugResolverContext,
-  type DebugSpec,
   type DeviceLinkCandidateConfig,
   resolveDeviceLinkCandidates,
 } from '../../backend/shared/hardware/debug-spec'
-import type { DebugConnectionConfig } from '../../middleware/shared/ports/types'
+import type { BoardInfo, DebugConnectionConfig } from '../../middleware/shared/ports/types'
 import { describeDebugEndpoint } from '../../middleware/shared/utils/debug-endpoint'
+import { resolveTargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
 import { useOpenPLCStore } from '../store'
 
 /**
@@ -216,9 +216,11 @@ export interface ResolvedDeviceLink {
  */
 export async function resolveDeviceLinkWithUx(
   boardTarget: string,
-  spec: DebugSpec | undefined,
+  boardInfo: BoardInfo | undefined,
   options: { runtimeReadyForDebug?: boolean; onlyChannels?: number[]; deferPrompts?: boolean } = {},
 ): Promise<ResolvedDeviceLink | null> {
+  const spec = boardInfo?.debug
+  const transports = resolveTargetCapabilities(boardInfo).debuggerTransports
   if (!spec) {
     await showDeviceDialog(
       'warning',
@@ -230,6 +232,7 @@ export async function resolveDeviceLinkWithUx(
   }
 
   const resolverOptions = {
+    transports,
     ...(options.onlyChannels ? { onlyChannels: options.onlyChannels } : {}),
     ...(options.deferPrompts ? { deferPrompts: true } : {}),
   }
@@ -264,21 +267,53 @@ export async function resolveDeviceLinkWithUx(
 }
 
 /**
- * The channel a Runtime v3/v4 debugs over, derived from its board spec: Modbus TCP
- * for v3, the WebSocket for v4. Used when a runtime login establishes a session, so
- * the manager knows how to open that channel later.
+ * The channel a Runtime v3/v4 debugs over: the WebSocket for v4, Modbus TCP for v3.
+ * Used when a runtime login establishes a session, so the manager knows how to open
+ * that channel later.
  *
- * Never prompts: establishing a session must not interrupt the user, and a runtime's
- * debug channel is derived from the address they just logged in with.
+ * Uses the SINGLE-channel resolver, not the candidate one. A runtime declares
+ * exactly one debug channel and there is nothing to choose between or order — while
+ * `resolveDeviceLinkCandidates` exists to order a baremetal board's serial and
+ * Modbus TCP options, and collects only those two kinds. Pointing it at a
+ * `websocket` channel therefore found nothing eligible, returned an error, and left
+ * every runtime target without a session: "nothing is connected" for both the
+ * debugger and run/stop, on a target the user had plainly connected to.
+ *
+ * Never prompts (v3/v4 specs declare no prompts) and traces its own failure, because
+ * a session that cannot be described must not fail silently — that silence is what
+ * hid this until it reached hardware.
  */
 export function resolveRuntimeDebugChannel(
   boardTarget: string,
-  spec: DebugSpec | undefined,
+  boardInfo: BoardInfo | undefined,
 ): DebugConnectionConfig | null {
-  if (!spec) return null
-  const outcome = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget, { runtimeReadyForDebug: true }), {
-    deferPrompts: true,
-  })
-  if (outcome.kind !== 'candidates' || outcome.candidates.length === 0) return null
-  return outcome.candidates[0].config
+  const spec = boardInfo?.debug
+  if (!spec) {
+    trace(`${boardTarget}: no debug spec, so no debug channel can be described`)
+    return null
+  }
+
+  // The SAME resolver Connect uses. A runtime declares exactly one debug transport
+  // in its capability matrix (`['websocket']` for v4, `['modbus-tcp']` for v3), so
+  // the ordered candidate list has one entry — no separate code path, and no
+  // hardcoded assumption here about what a runtime debugs over.
+  const outcome = resolveDeviceLinkCandidates(
+    spec,
+    buildDeviceResolverContext(boardTarget, { runtimeReadyForDebug: true }),
+    { transports: resolveTargetCapabilities(boardInfo).debuggerTransports, deferPrompts: true },
+  )
+  if (outcome.kind === 'candidates' && outcome.candidates.length > 0) {
+    const [channel] = outcome.candidates
+    trace(`${boardTarget}: debug channel is ${channel.config.connectionType} (${channel.channelLabel})`)
+    return channel.config
+  }
+
+  // Never silently: a session that cannot be described leaves every later command
+  // answering "not connected" on a target the user believes they are connected to.
+  trace(
+    `${boardTarget}: could NOT describe a debug channel — resolver returned "${outcome.kind}"${
+      outcome.kind === 'error' ? `: ${outcome.body}` : ''
+    }`,
+  )
+  return null
 }

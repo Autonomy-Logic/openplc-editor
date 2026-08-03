@@ -54,12 +54,37 @@ const useRuntimeSession = (): void => {
     const boardTarget = store.deviceDefinitions.configuration.deviceBoard
     const boardInfo = store.deviceAvailableOptions.availableBoards.get(boardTarget)
     const address = store.runtimeConnection.ipAddress
-    if (!boardInfo?.debug || !address) return
 
-    const debugChannel = resolveRuntimeDebugChannel(boardTarget, boardInfo.debug)
-    if (!debugChannel) return
+    // Every early return says why. Returning quietly is what let a runtime target
+    // end up with no session at all while the UI showed it connected, so that every
+    // command answered "not connected" on a target the user had just uploaded to.
+    if (!address) {
+      store.consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'warning',
+        message: '[connection] runtime is connected but has no address recorded; no session opened',
+      })
+      return
+    }
+    const debugChannel = resolveRuntimeDebugChannel(boardTarget, boardInfo)
+    if (!debugChannel) {
+      store.consoleActions.addLog({
+        id: crypto.randomUUID(),
+        level: 'warning',
+        message: `[connection] no debug channel could be described for ${boardTarget}; debugging will not be available`,
+      })
+      return
+    }
 
-    void device.openRuntimeSession({ address, debug: debugChannel })
+    void device.openRuntimeSession({ address, debug: debugChannel }).then((result) => {
+      if (!result.success) {
+        store.consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `[connection] could not open the runtime session: ${result.error ?? 'unknown error'}`,
+        })
+      }
+    })
   }, [device, connectionStatus, jwtToken])
 }
 
