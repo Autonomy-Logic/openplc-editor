@@ -4,12 +4,18 @@
 // Both inputs are osv-scanner JSON outputs produced WITH --config=osv-scanner.toml
 // (so the VEX baseline is already applied). We block ONLY on advisories that the
 // PR INTRODUCES — present in head, absent in base — at or above <threshold>
-// (default HIGH). Pre-existing advisories never block. Exit 1 = block, 0 = pass.
+// (default HIGH). Pre-existing advisories never block. Exit 1 = block, 0 = pass,
+// 2 = the inputs are unusable (the scanner failed) → the caller must treat this
+// as a hard failure, never as a pass.
+//
+// FAIL-CLOSED: the workflow validates the scanner's exit code and guarantees a
+// valid (possibly empty) JSON for each side. Here we still validate the shape and
+// EXIT 2 if an input is missing/garbage — we never silently treat a broken scan
+// as "no advisories".
 //
 // Side effect: writes a Markdown body to $GATE_COMMENT_FILE (default
 // /tmp/gate-comment.md) and a one-word status (block|warn|clean) to
-// $GATE_STATUS_FILE (default /tmp/gate-status), so the workflow can post a PR
-// comment. The full detail is also printed to stdout (the check log).
+// $GATE_STATUS_FILE (default /tmp/gate-status), for the PR comment.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -20,9 +26,27 @@ const COMMENT_FILE = process.env.GATE_COMMENT_FILE || '/tmp/gate-comment.md';
 const STATUS_FILE = process.env.GATE_STATUS_FILE || '/tmp/gate-status';
 const MARKER = '<!-- security-pr-gate -->';
 
-const load = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return {}; } };
+// --- fail-closed input loading ------------------------------------------------
+// Missing / unparseable / shapeless input means the scan did NOT run correctly.
+// We must NOT return an empty index (that would pass the gate blindly). Exit 2.
+function load(p, label) {
+  let raw;
+  try { raw = readFileSync(p, 'utf8'); }
+  catch (e) { fatal(`${label} scan output "${p}" is missing — the scanner did not produce it (${e.code || e.message}).`); }
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { fatal(`${label} scan output "${p}" is not valid JSON — the scanner failed.`); }
+  if (!data || !Array.isArray(data.results)) {
+    fatal(`${label} scan output "${p}" has no "results" array — the scanner failed or did not scan.`);
+  }
+  return data;
+}
+function fatal(msg) {
+  console.error(`\n🛑 SECURITY GATE ERROR: ${msg}\nThe gate fails closed (cannot verify the PR). Re-run the job; if it persists, the scanner is broken.`);
+  process.exit(2);
+}
 
-// --- CVSS v3.x base-score computation (for entries that carry only a vector) ---
+// --- CVSS v3.x base-score computation (official formula) ----------------------
 function cvss3Base(vector) {
   const m = {};
   for (const kv of vector.split('/')) { const [k, v] = kv.split(':'); if (k && v) m[k] = v; }
@@ -42,17 +66,31 @@ function cvss3Base(vector) {
   return roundup(Math.min((scopeChanged ? 1.08 : 1) * (impact + expl), 10));
 }
 const bucketFromScore = (s) => (s >= 9 ? 'CRITICAL' : s >= 7 ? 'HIGH' : s >= 4 ? 'MODERATE' : s > 0 ? 'LOW' : 'LOW');
+const normWord = (w) => (w === 'MEDIUM' ? 'MODERATE' : w); // OSV/NVD use MEDIUM; we use MODERATE
 
+// Returns { sev, approx }. approx=true means we could not compute an exact score
+// (e.g. a CVSS 4.0-only vector with no qualitative severity) and fell back to a
+// conservative HIGH, surfaced explicitly so it is never a *silent* default.
 function severityOf(v) {
-  const word = (v.database_specific?.severity || '').toUpperCase();
-  if (ORDER.includes(word)) return word === 'MEDIUM' ? 'MODERATE' : word;
+  // 1) explicit qualitative severity (present on most GHSA advisories)
+  const word = normWord((v.database_specific?.severity || '').toUpperCase());
+  if (ORDER.includes(word)) return { sev: word, approx: false };
+  // 2) CVSS v3.x vector → exact base score
+  let sawV4 = false;
   for (const s of (v.severity || [])) {
-    if (typeof s.score === 'string' && s.score.startsWith('CVSS:3')) {
-      const sc = cvss3Base(s.score);
-      if (sc != null) return bucketFromScore(sc);
+    const score = String(s.score || '');
+    if (s.type === 'CVSS_V3' || score.startsWith('CVSS:3')) {
+      const sc = cvss3Base(score);
+      if (sc != null) return { sev: bucketFromScore(sc), approx: false };
     }
+    if (s.type === 'CVSS_V4' || score.startsWith('CVSS:4')) sawV4 = true;
   }
-  return 'HIGH'; // conservative: an unscored NEW advisory should surface, not slip through
+  // 3) CVSS 4.0-only: we deliberately do NOT hand-roll the v4 macrovector table
+  //    (error-prone in a merge-deciding script). Treat conservatively as HIGH and
+  //    flag it so a reviewer verifies — never a silent pass, never a silent bucket.
+  if (sawV4) return { sev: 'HIGH', approx: true };
+  // 4) no severity at all → conservative + flagged
+  return { sev: 'HIGH', approx: true };
 }
 
 function fixedOf(v) {
@@ -61,37 +99,45 @@ function fixedOf(v) {
   return fixes.join(', ');
 }
 
+// Key by advisory id AND package: the same CVE landing on a *different* package
+// in head must count as introduced; a version bump of an already-vulnerable
+// package (same id+package) must NOT.
 function index(data) {
   const m = new Map();
   for (const r of (data.results || [])) for (const p of (r.packages || [])) for (const v of (p.vulnerabilities || [])) {
-    if (!v.id || m.has(v.id)) continue;
-    m.set(v.id, { sev: severityOf(v), pkg: p.package?.name || '?', ver: p.package?.version || '', fixed: fixedOf(v), summary: (v.summary || '').slice(0, 120) });
+    const pkg = p.package?.name || '?';
+    const key = `${v.id}|${pkg}`;
+    if (!v.id || m.has(key)) continue;
+    const { sev, approx } = severityOf(v);
+    m.set(key, { id: v.id, sev, approx, pkg, ver: p.package?.version || '', fixed: fixedOf(v), summary: (v.summary || '').slice(0, 120) });
   }
   return m;
 }
 
-const base = index(load(baseP));
-const head = index(load(headP));
+const base = load(baseP, 'BASE');
+const head = load(headP, 'HEAD');
+const baseIdx = index(base);
+const headIdx = index(head);
 const min = ORDER.indexOf(THRESHOLD);
 
-const introduced = [...head.entries()].filter(([id]) => !base.has(id))
-  .map(([id, d]) => ({ id, ...d }))
+const introduced = [...headIdx.entries()].filter(([key]) => !baseIdx.has(key)).map(([, d]) => d)
   .sort((a, b) => ORDER.indexOf(b.sev) - ORDER.indexOf(a.sev));
 const blocking = introduced.filter((a) => ORDER.indexOf(a.sev) >= min);
 
 // ---- stdout (the check log — full detail) ----
 if (introduced.length) {
   console.log(`\nAdvisories introduced by this PR (${introduced.length}):`);
-  for (const a of introduced) console.log(`  [${a.sev}] ${a.pkg}@${a.ver}  ${a.id}  ${a.summary}`);
+  for (const a of introduced) console.log(`  [${a.sev}${a.approx ? '*' : ''}] ${a.pkg}@${a.ver}  ${a.id}  ${a.summary}`);
+  if (introduced.some((a) => a.approx)) console.log('  (* severity could not be computed exactly — treated conservatively as HIGH; verify manually)');
 } else {
   console.log('No new advisories introduced by this PR.');
 }
 
 // ---- PR comment body ----
 const advLink = (id) => (id.startsWith('GHSA') ? `https://github.com/advisories/${id}` : `https://osv.dev/${id}`);
-const rows = introduced.map((a) => `| ${a.sev} | \`${a.pkg}\` | ${a.ver} | [${a.id}](${advLink(a.id)}) | ${a.fixed || '—'} |`).join('\n');
+const rows = introduced.map((a) => `| ${a.sev}${a.approx ? ' \\*' : ''} | \`${a.pkg}\` | ${a.ver} | [${a.id}](${advLink(a.id)}) | ${a.fixed || '—'} |`).join('\n');
 const table = introduced.length
-  ? `| Severity | Package | Version | Advisory | Fixed in |\n|---|---|---|---|---|\n${rows}`
+  ? `| Severity | Package | Version | Advisory | Fixed in |\n|---|---|---|---|---|\n${rows}${introduced.some((a) => a.approx) ? '\n\n_\\* severity could not be computed exactly (e.g. CVSS 4.0-only) — treated conservatively as HIGH; please verify._' : ''}`
   : '';
 let status, body;
 if (blocking.length) {

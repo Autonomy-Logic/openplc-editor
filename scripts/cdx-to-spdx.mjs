@@ -17,15 +17,23 @@ const toolCreators = toolComps
   .filter((t) => t && t.name)
   .map((t) => `Tool: ${t.name}${t.version ? '-' + t.version : ''}`);
 
-// Flatten root + nested workspace components into the package list.
+// Stable identity for a component (bom-ref → purl → name@version).
+const refOf = (c) => c['bom-ref'] || c.purl || `${c.group || ''}/${c.name}@${c.version || ''}`;
+
+// Flatten root + nested workspace components into the package list, DEDUPED by
+// ref: a component can appear both under metadata.component.components and in
+// cdx.components — without deduping we'd emit two SPDX packages sharing one
+// SPDXID (the memoized id below), which makes the document invalid.
 const comps = [];
-const walk = (c) => {
+const seenRef = new Set();
+const collect = (c) => {
   if (!c) return;
-  comps.push(c);
-  (c.components || []).forEach(walk);
+  const r = refOf(c);
+  if (!seenRef.has(r)) { seenRef.add(r); comps.push(c); }
+  (c.components || []).forEach(collect);
 };
-walk(cdx.metadata?.component);
-(cdx.components || []).forEach((c) => comps.push(c));
+collect(cdx.metadata?.component);
+(cdx.components || []).forEach(collect);
 
 // Stable SPDXID per bom-ref/purl.
 const idFor = new Map();
@@ -45,14 +53,19 @@ const licenseExpr = (c) => {
     .map((l) => l.license?.id || l.expression || null)
     .filter(Boolean);
   if (!parts.length) return 'NOASSERTION';
-  const expr = parts.length === 1 ? parts[0] : parts.join(' AND ');
+  // Multiple license entries in CycloneDX mean the component is offered under
+  // ANY of them (dual-licensed) → SPDX "OR", not "AND". Using AND would invert
+  // the legal obligation in a procurement artifact. Parenthesize compound
+  // expressions before OR-joining to keep operator precedence unambiguous.
+  const expr = parts.length === 1 ? parts[0]
+    : parts.map((p) => (/\s/.test(p) ? `(${p})` : p)).join(' OR ');
   // Non-SPDX placeholders -> NOASSERTION
   if (/SEE LICENSE|UNLICENSED|UNKNOWN/i.test(expr)) return 'NOASSERTION';
   return expr;
 };
 
 const packages = comps.map((c) => {
-  const ref = c['bom-ref'] || c.purl || `${c.group || ''}/${c.name}@${c.version || ''}`;
+  const ref = refOf(c);
   const pkg = {
     name: (c.group ? `${c.group}/` : '') + c.name,
     SPDXID: spdxId(ref),

@@ -54,14 +54,30 @@ jobs:
         run: |
           cp osv-scanner.toml /tmp/head-config.toml 2>/dev/null || true
           CFG=""; [ -f /tmp/head-config.toml ] && CFG="--config=/tmp/head-config.toml"
-          osv-scanner scan $CFG --recursive --format=json --output=/tmp/head.json . || true
+          set +e
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/head.json .
+          rc=$?
+          set -e
+          # osv-scanner: 0 = no vulns, 1 = vulns found. ANY other code is an
+          # operational failure — fail the gate CLOSED, never pass a broken scan.
+          if [ "$rc" != "0" ] && [ "$rc" != "1" ]; then
+            echo "::error::osv-scanner failed to scan HEAD (exit $rc)"; exit 1
+          fi
+          [ -s /tmp/head.json ] || echo '{"results":[]}' > /tmp/head.json
 
       - name: Scan BASE
         run: |
-          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}" 2>/dev/null || true
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
           git worktree add -f /tmp/base "${{ github.event.pull_request.base.sha }}"
           CFG=""; [ -f /tmp/head-config.toml ] && CFG="--config=/tmp/head-config.toml"
-          osv-scanner scan $CFG --recursive --format=json --output=/tmp/base.json /tmp/base || true
+          set +e
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/base.json /tmp/base
+          rc=$?
+          set -e
+          if [ "$rc" != "0" ] && [ "$rc" != "1" ]; then
+            echo "::error::osv-scanner failed to scan BASE (exit $rc)"; exit 1
+          fi
+          [ -s /tmp/base.json ] || echo '{"results":[]}' > /tmp/base.json
 
       # THE GATE — non-zero exit here fails the check and (with branch protection)
       # blocks the merge. It also writes /tmp/gate-comment.md and /tmp/gate-status.

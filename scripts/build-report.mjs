@@ -38,7 +38,13 @@ for (const c of comps) {
 const topLicenses = Object.entries(licAgg).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const rich = (s) => String(s ?? ''); // config strings may contain <b>/<code> — keep as-is in HTML
+// report-config.json is written by the AI triage step, so its strings are
+// UNTRUSTED. Escape everything, then re-enable only a small set of attribute-less
+// formatting tags. This blocks <script>, <img onerror=…>, <b onmouseover=…>, etc.
+// from reaching the headless Chrome that renders the PDF (which also runs with
+// JavaScript disabled — see the workflow).
+const RICH_TAGS = /&lt;(\/?(?:b|strong|code|em|i|br))&gt;/gi;
+const rich = (s) => esc(s).replace(RICH_TAGS, '<$1>');
 const stripTags = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
 
 // ========================= MARKDOWN =========================

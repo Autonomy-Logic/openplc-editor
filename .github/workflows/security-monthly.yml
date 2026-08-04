@@ -110,8 +110,11 @@ jobs:
           REPORT="$DIR/$(ls "$DIR" | grep -E 'Security-Report\.html$')"
           # --no-sandbox / --disable-dev-shm-usage: Chrome's zygote sandbox aborts
           # (SIGABRT) on GitHub runners; required for headless Chrome in CI.
+          # --disable-javascript: the report HTML is a static document written from
+          # report-config.json (AI-authored) — no JS should ever run while rendering
+          # it with local file:// access. Defense-in-depth on top of the HTML escaping.
           "${{ steps.chrome.outputs.chrome-path }}" --headless=new --no-sandbox --disable-dev-shm-usage \
-            --disable-gpu --no-pdf-header-footer \
+            --disable-javascript --disable-gpu --no-pdf-header-footer \
             --run-all-compositor-stages-before-draw --virtual-time-budget=5000 \
             --print-to-pdf="${REPORT%.html}.pdf" "file://$PWD/$REPORT"
           ln -sfn "$MONTH" security/latest
