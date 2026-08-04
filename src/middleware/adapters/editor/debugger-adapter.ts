@@ -10,10 +10,10 @@
  * auto-reconnection using stored connection parameters.
  */
 
+import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
 import type {
-  DebugConnectionConfig,
   DebugSetResult,
   DebugVariableResult,
   Md5VerifyResult,
@@ -25,13 +25,15 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
   const disconnectCallbacks: Array<() => void> = []
 
   return {
-    async connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> {
+    async connect(): Promise<{ success: boolean; error?: string }> {
       try {
-        const result = await window.bridge.debuggerConnect(config.connectionType, config.connectionParams)
+        // Nothing to pass: the connection manager already holds this target's
+        // session, so there is no medium for the caller to name.
+        const result = await window.bridge.debuggerConnect()
         if (result.success) connected = true
         return result
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     },
 
@@ -64,11 +66,20 @@ export function createEditorDebuggerAdapter(): DebuggerPort {
       }
     },
 
-    async verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult> {
+    async verifyMd5(expectedMd5: string): Promise<Md5VerifyResult> {
       try {
-        return await window.bridge.debuggerVerifyMd5(config.connectionType, config.connectionParams, expectedMd5)
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
+        return await window.bridge.debuggerVerifyMd5(expectedMd5)
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    },
+
+    async setPlcState(state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult> {
+      try {
+        // Payload only. Which medium carries it is the connection manager's business.
+        return await window.bridge.debuggerPlcControl(state === 'RUNNING' ? 'run' : 'stop')
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     },
 

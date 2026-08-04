@@ -14,7 +14,7 @@ import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
-import { mergeSerialPortList } from './serial-port-list'
+import { mergeSerialPortList, toCalloutPath } from './serial-port-list'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 const execFileAsync = promisify(execFile)
@@ -111,6 +111,30 @@ class HardwareModule {
       this.#listSerialPortManufacturers(),
     ])
     return mergeSerialPortList(boardNamesByPath, manufacturersByPath)
+  }
+
+  /**
+   * Is this serial port still attached?
+   *
+   * The `serialport` scan only — deliberately NOT `getAvailableSerialPorts()`,
+   * which also shells out to arduino-cli. This is called on every tick of the
+   * device link poll to tell a pulled USB cable (fail now, there is nothing to
+   * retry against) from a device that is merely slow to answer (retry), so it has
+   * to be instant.
+   *
+   * Fails SAFE: if enumeration itself breaks, the port is reported present. A
+   * false "gone" would tear down a working connection, which is worse than
+   * waiting out one timeout.
+   */
+  async isSerialPortPresent(address: string): Promise<boolean> {
+    try {
+      const ports = await NodeSerialPort.list()
+      const wanted = toCalloutPath(address)
+      return ports.some((port) => toCalloutPath(port.path) === wanted)
+    } catch (error: unknown) {
+      logger.error(`Failed to check serial port presence: ${String(error)}`)
+      return true
+    }
   }
 
   /**

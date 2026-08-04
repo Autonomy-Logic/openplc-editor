@@ -12,8 +12,8 @@
 
 import { useCallback, useRef } from 'react'
 
-import type { DebugConnectionConfig, DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
-import { useDebugger, useSimulator } from '../../middleware/shared/providers'
+import type { DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
+import { useDebugger } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { parseDebugMap } from '../utils/debug-parser'
 import {
@@ -32,10 +32,10 @@ export interface UseDebugSessionReturn {
    * connects via the debugger port, stores all artifacts in workspace,
    * and activates the debugger UI.
    *
-   * @param config — Connection target (simulator, TCP, RTU, WebSocket).
-   *                 If omitted, defaults to simulator.
+   * Takes nothing: the connection manager holds the session for every target by the
+   * time a debug session can start, so there is no medium for a caller to name.
    */
-  connectAndStart: (config?: DebugConnectionConfig) => Promise<{ success: boolean; error?: string }>
+  connectAndStart: () => Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the debug target and clear all debug state. */
   stopSession: () => Promise<void>
@@ -49,7 +49,6 @@ export interface UseDebugSessionReturn {
 
 export function useDebugSession(): UseDebugSessionReturn {
   const debuggerPort = useDebugger()
-  const simulator = useSimulator()
 
   const {
     project: { data: projectData, meta: projectMeta },
@@ -61,8 +60,7 @@ export function useDebugSession(): UseDebugSessionReturn {
   const debugTreesRef = useRef<Record<string, DebugTreeNode[]>>({})
 
   const connectAndStart = useCallback(
-    async (config?: DebugConnectionConfig): Promise<{ success: boolean; error?: string }> => {
-      const debugConfig = config ?? ({ connectionType: 'simulator', connectionParams: {} } as DebugConnectionConfig)
+    async (): Promise<{ success: boolean; error?: string }> => {
       const { project, workspaceActions: wsActions, consoleActions: logActions } = useOpenPLCStore.getState()
       const boardTarget = deviceDefinitions.configuration.deviceBoard
       const projectPath = project.meta.path
@@ -154,7 +152,7 @@ export function useDebugSession(): UseDebugSessionReturn {
         }
 
         // Connect debugger via port
-        const connectResult = await debuggerPort.connect(debugConfig)
+        const connectResult = await debuggerPort.connect()
         if (!connectResult.success) {
           const error = `Debugger connection failed: ${connectResult.error ?? 'Unknown error'}`
           logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
@@ -174,9 +172,10 @@ export function useDebugSession(): UseDebugSessionReturn {
         })
 
         // Set target IP for non-simulator connections
-        if (debugConfig.connectionType !== 'simulator' && debugConfig.connectionParams.ipAddress) {
-          wsActions.setDebuggerTargetIp(debugConfig.connectionParams.ipAddress)
-        }
+        // The target's address, for the debugger's own display. Comes from the
+        // session the manager holds, not from a config the caller chose.
+        const sessionEndpoint = useOpenPLCStore.getState().deviceConnection.port
+        if (sessionEndpoint) wsActions.setDebuggerTargetIp(sessionEndpoint)
 
         // Record the active transport so useDebugPolling picks the right
         // poll cadence + batch size.  Set on EVERY start path (runtime
@@ -186,7 +185,9 @@ export function useDebugSession(): UseDebugSessionReturn {
         // the default 200ms instead of its intended 50ms).  Must be set
         // before `setDebuggerVisible(true)`, which is what triggers the
         // polling effect.
-        wsActions.setDebugConnectionType(debugConfig.connectionType)
+        // The medium is the manager's choice, mirrored in the store; read it rather
+        // than assuming one. `debugTransport` because this sizes the debug poll.
+        wsActions.setDebugConnectionType(useOpenPLCStore.getState().deviceConnection.debugTransport ?? 'simulator')
 
         wsActions.setDebuggerVisible(true)
         logActions.addLog({
@@ -205,19 +206,20 @@ export function useDebugSession(): UseDebugSessionReturn {
     [debuggerPort, deviceDefinitions, projectData, projectMeta],
   )
 
+  /**
+   * End the debug session — and ONLY the debug session.
+   *
+   * It used to stop the simulator too, which had the ownership backwards: a debug
+   * session is a consumer of a connection, not the owner of the thing on the other
+   * end. Stopping the simulator is the Stop button's job (`handleSimulatorControl`),
+   * and closing that session is the connection manager's.
+   */
   const stopSession = useCallback(async () => {
-    // If simulator is running, stop it
-    if (simulator.isRunning()) {
-      await simulator.stop()
-    }
-
-    // Disconnect debugger
     await debuggerPort.disconnect()
 
-    // Clear all debug state
     workspaceActions.clearDebugState()
     debugTreesRef.current = {}
-  }, [simulator, debuggerPort, workspaceActions])
+  }, [debuggerPort, workspaceActions])
 
   const forceVariable = useCallback(
     async (index: number, force: boolean, value?: string, type?: string, enumValues?: string[]): Promise<boolean> => {

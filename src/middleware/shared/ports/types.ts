@@ -915,9 +915,25 @@ export interface VendorIoMapping {
   entries: IoMappingEntry[]
 }
 
+/**
+ * A serial port offered in the communication-port picker.
+ *
+ * Deliberately NOT a pre-composed display string. The producer reports facts
+ * and the renderer decides how they read (`serialPortDisplay`) — conflating the
+ * two is what let the board name get dropped: the label had to guess whether
+ * `name` held a bare manufacturer or an already-composed `"COM5 (Arduino Uno)"`.
+ */
 export interface CommunicationPort {
-  name: string
+  /** OS-canonical port identifier, and the value actually opened: `COM5` on
+   *  Windows, `/dev/ttyUSB0` on Linux, `/dev/cu.usbmodem*` on macOS. Always the
+   *  primary label — never replaced by a descriptor. */
   address: string
+  /** Board name identified by arduino-cli from the connected core's VID/PID
+   *  (e.g. `Arduino MKR`). Absent when no core matched the device. */
+  boardName?: string
+  /** Manufacturer / vendor string from `serialport` (e.g. `wch.cn` for a
+   *  CH340). The fallback descriptor when arduino-cli identified no board. */
+  manufacturer?: string
 }
 
 export interface SerialPort {

@@ -35,6 +35,7 @@ beforeEach(() => {
       success: true,
       content: 'debug_vars[] = { ... }',
     }),
+    debuggerPlcControl: jest.fn().mockResolvedValue({ success: true, state: 0 }),
   } as unknown as typeof window.bridge
 
   adapter = createEditorDebuggerAdapter()
@@ -46,18 +47,15 @@ beforeEach(() => {
 
 describe('connect', () => {
   it('delegates to bridge with connection type and params', async () => {
-    const result = await adapter.connect(tcpConfig)
+    const result = await adapter.connect()
 
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('tcp', {
-      ipAddress: '192.168.1.100',
-      port: '502',
-    })
+    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith()
     expect(result).toEqual({ success: true })
   })
 
   it('sets connected state on success', async () => {
     expect(adapter.isConnected()).toBe(false)
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     expect(adapter.isConnected()).toBe(true)
   })
 
@@ -66,55 +64,33 @@ describe('connect', () => {
       success: false,
       error: 'Connection refused',
     })
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     expect(adapter.isConnected()).toBe(false)
   })
 
   it('catches bridge errors', async () => {
     ;(window.bridge.debuggerConnect as jest.Mock).mockRejectedValue(new Error('IPC failed'))
-    const result = await adapter.connect(tcpConfig)
+    const result = await adapter.connect()
 
     expect(result).toEqual({ success: false, error: 'IPC failed' })
   })
 
   it('supports simulator connection type', async () => {
-    await adapter.connect({ connectionType: 'simulator', connectionParams: {} })
+    await adapter.connect()
 
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('simulator', {})
+    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith()
   })
 
   it('supports websocket connection type with JWT', async () => {
-    await adapter.connect({
-      connectionType: 'websocket',
-      connectionParams: {
-        ipAddress: '10.0.0.1',
-        port: '8443',
-        jwtToken: 'my-jwt',
-      },
-    })
+    await adapter.connect()
 
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('websocket', {
-      ipAddress: '10.0.0.1',
-      port: '8443',
-      jwtToken: 'my-jwt',
-    })
+    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith()
   })
 
   it('supports RTU connection type with serial params', async () => {
-    await adapter.connect({
-      connectionType: 'rtu',
-      connectionParams: {
-        port: '/dev/ttyUSB0',
-        baudRate: 115200,
-        slaveId: 1,
-      },
-    })
+    await adapter.connect()
 
-    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith('rtu', {
-      port: '/dev/ttyUSB0',
-      baudRate: 115200,
-      slaveId: 1,
-    })
+    expect(window.bridge.debuggerConnect).toHaveBeenCalledWith()
   })
 })
 
@@ -124,7 +100,7 @@ describe('connect', () => {
 
 describe('disconnect', () => {
   it('delegates to bridge', async () => {
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     const result = await adapter.disconnect()
 
     expect(window.bridge.debuggerDisconnect).toHaveBeenCalled()
@@ -132,7 +108,7 @@ describe('disconnect', () => {
   })
 
   it('clears connected state', async () => {
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     expect(adapter.isConnected()).toBe(true)
 
     await adapter.disconnect()
@@ -145,7 +121,7 @@ describe('disconnect', () => {
     adapter.onDisconnected(cb1)
     adapter.onDisconnected(cb2)
 
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     await adapter.disconnect()
 
     expect(cb1).toHaveBeenCalledTimes(1)
@@ -157,7 +133,7 @@ describe('disconnect', () => {
     const cb = jest.fn()
     adapter.onDisconnected(cb)
 
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     const result = await adapter.disconnect()
 
     expect(adapter.isConnected()).toBe(false)
@@ -233,18 +209,34 @@ describe('setVariable', () => {
 })
 
 // ---------------------------------------------------------------------------
+// setPlcState — the operation whose transport parameter caused the bug
+// ---------------------------------------------------------------------------
+
+describe('setPlcState', () => {
+  it('sends the payload and nothing else', () => {
+    // Naming a medium here is what made Stop resolve the debug spec, which for a
+    // DHCP-configured project popped an address dialog — over a serial connection
+    // that then carried the command anyway. Payload only: the connection manager
+    // routes it.
+    void adapter.setPlcState?.('STOPPED')
+    expect(window.bridge.debuggerPlcControl).toHaveBeenCalledWith('stop')
+  })
+
+  it('maps RUNNING to the run action', () => {
+    void adapter.setPlcState?.('RUNNING')
+    expect(window.bridge.debuggerPlcControl).toHaveBeenCalledWith('run')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // verifyMd5
 // ---------------------------------------------------------------------------
 
 describe('verifyMd5', () => {
   it('delegates to bridge with connection config and expected MD5', async () => {
-    const result = await adapter.verifyMd5('abc123def456abc123def456abc123de', tcpConfig)
+    const result = await adapter.verifyMd5('abc123def456abc123def456abc123de')
 
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
-      'tcp',
-      { ipAddress: '192.168.1.100', port: '502' },
-      'abc123def456abc123def456abc123de',
-    )
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('abc123def456abc123def456abc123de')
     expect(result).toEqual({
       success: true,
       match: true,
@@ -253,21 +245,24 @@ describe('verifyMd5', () => {
   })
 
   it('uses different configs per call', async () => {
-    await adapter.verifyMd5('md5-1', tcpConfig)
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith(
-      'tcp',
-      { ipAddress: '192.168.1.100', port: '502' },
-      'md5-1',
-    )
+    await adapter.verifyMd5('md5-1')
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-1')
 
     const simConfig: DebugConnectionConfig = { connectionType: 'simulator', connectionParams: {} }
-    await adapter.verifyMd5('md5-2', simConfig)
-    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('simulator', {}, 'md5-2')
+    await adapter.verifyMd5('md5-2')
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-2')
+  })
+
+  it('omits the transport for a target the connection manager already holds', async () => {
+    // A connected baremetal board: naming a medium here is what made a debug start
+    // over serial ask for a DHCP address.
+    await adapter.verifyMd5('md5-held')
+    expect(window.bridge.debuggerVerifyMd5).toHaveBeenCalledWith('md5-held')
   })
 
   it('catches bridge errors', async () => {
     ;(window.bridge.debuggerVerifyMd5 as jest.Mock).mockRejectedValue(new Error('MD5 check failed'))
-    const result = await adapter.verifyMd5('abc123', tcpConfig)
+    const result = await adapter.verifyMd5('abc123')
 
     expect(result).toEqual({ success: false, error: 'MD5 check failed' })
   })
@@ -328,7 +323,7 @@ describe('onDisconnected', () => {
     const cb = jest.fn()
     const unsub = adapter.onDisconnected(cb)
 
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     unsub()
     await adapter.disconnect()
 
@@ -344,7 +339,7 @@ describe('onDisconnected', () => {
     adapter.onDisconnected(cb3)
 
     unsub2()
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     await adapter.disconnect()
 
     expect(cb1).toHaveBeenCalledTimes(1)
@@ -372,12 +367,12 @@ describe('isConnected', () => {
   })
 
   it('returns true after successful connect', async () => {
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     expect(adapter.isConnected()).toBe(true)
   })
 
   it('returns false after disconnect', async () => {
-    await adapter.connect(tcpConfig)
+    await adapter.connect()
     await adapter.disconnect()
     expect(adapter.isConnected()).toBe(false)
   })

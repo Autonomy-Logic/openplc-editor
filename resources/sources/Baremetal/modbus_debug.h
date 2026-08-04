@@ -1,11 +1,10 @@
 /*
-modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x48)
+modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x48, 0x4B)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The debugger PDU handlers, dispatched from process_mbpacket. Kept ungated: the
 dispatch in modbus_pdu references them unconditionally (the always-on debugger is
-present on every baremetal build). This is the growth home for future custom FCs
-(e.g. the 0x49-0x4C licensing set).
+present on every baremetal build). This is the growth home for future custom FCs.
 */
 
 #ifndef MODBUS_DEBUG_H
@@ -25,5 +24,8 @@ void debugGetMd5(void *endianness);
 void debugGetStatus(void);
 void debugGetVersion(void);
 void debugGetBoardId(void);
+// FC 0x4B -- set the runtime run/stop state. Command only; the state is read
+// back through debugGetStatus (FC 0x46), which reports it.
+void plcSetState(uint8_t desired);
 
 #endif

@@ -574,7 +574,9 @@ describe('ModbusRtuClient', () => {
       await connectClient()
       autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, statusPayload(1, 42, 256)))
       const result = await client.getStatus()
-      expect(result).toEqual({ success: true, running: true, tick: 42, uptimeMs: 256 })
+      // `plcState` mirrors `running` as the run/stop machine's tri-state; the
+      // fixture frame carries no switch byte, so that field stays absent.
+      expect(result).toEqual({ success: true, running: true, plcState: 1, tick: 42, uptimeMs: 256 })
     })
 
     it('reports running=false when the flag byte is zero', async () => {

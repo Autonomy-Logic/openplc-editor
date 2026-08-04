@@ -93,6 +93,13 @@ export interface TargetCapabilities {
    *  whether the host *can* run a simulator. */
   isInProcessSimulator: boolean
 
+  /** Target implements the runtime run/stop state machine, so the
+   *  Start/Stop control is meaningful.  Runtime v4 drives it over REST;
+   *  arduino-cli targets drive it over the debugger transport (Modbus
+   *  FC 0x49).  Runtime v3 has its own web UI and is excluded; the
+   *  Simulator keeps its dedicated start/stop path. */
+  plcStateControl: boolean
+
   /** Upload happens over a local connection (USB / loopback) and
    *  doesn't require a separate "Connect" step. Arduino-CLI + the
    *  in-process Simulator. Runtime v3 / v4 require an established

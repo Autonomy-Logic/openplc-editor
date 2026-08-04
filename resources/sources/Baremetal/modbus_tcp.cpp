@@ -161,7 +161,29 @@ void handle_tcp()
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
 
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
-                if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
+                // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
+                // the minimum for a standard DATA request ([unit][fc][addr:2]
+                // [qty:2]), so it silently dropped any request SHORTER than that
+                // before process_mbpacket() ever saw it:
+                //
+                //   0x41 debug-info   len 2  dropped
+                //   0x46 status       len 2  dropped  (run/stop state + switch)
+                //   0x47 version      len 2  dropped
+                //   0x48 board id     len 2  dropped  (Connect's verification)
+                //   0x4b run/stop     len 3  dropped  (the Stop/Run button)
+                //   0x44 get-list     len 4+3n  passed
+                //   0x45 md5          len 6     passed
+                //
+                // Which is why this went unnoticed for so long: a debug SESSION
+                // only uses 0x44 and 0x45, so debugging over Modbus TCP worked
+                // fine, while Connect and run/stop over TCP could never work. The
+                // floor predates the split of the ModbusSlave monolith (it was in
+                // there twice, verbatim) and was harmless until function codes
+                // with no payload were introduced.
+                //
+                // Per-FC shape is validated in process_mbpacket(); over TCP the
+                // MBAP length is authoritative, there being no CRC to check.
+                if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 j = 0;
                 while (mb_serverClients[i].available())
@@ -212,7 +234,29 @@ void handle_tcp()
                 mb_frame_len = mb_mbap[4] << 8 | mb_mbap[5];
 
                 if (mb_mbap[2] !=0 || mb_mbap[3] !=0) return;   //Not a MODBUSIP packet
-                if (mb_frame_len < 6 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
+                // Smallest legal frame is [unit][fc] = 2. The old floor of 6 was
+                // the minimum for a standard DATA request ([unit][fc][addr:2]
+                // [qty:2]), so it silently dropped any request SHORTER than that
+                // before process_mbpacket() ever saw it:
+                //
+                //   0x41 debug-info   len 2  dropped
+                //   0x46 status       len 2  dropped  (run/stop state + switch)
+                //   0x47 version      len 2  dropped
+                //   0x48 board id     len 2  dropped  (Connect's verification)
+                //   0x4b run/stop     len 3  dropped  (the Stop/Run button)
+                //   0x44 get-list     len 4+3n  passed
+                //   0x45 md5          len 6     passed
+                //
+                // Which is why this went unnoticed for so long: a debug SESSION
+                // only uses 0x44 and 0x45, so debugging over Modbus TCP worked
+                // fine, while Connect and run/stop over TCP could never work. The
+                // floor predates the split of the ModbusSlave monolith (it was in
+                // there twice, verbatim) and was harmless until function codes
+                // with no payload were introduced.
+                //
+                // Per-FC shape is validated in process_mbpacket(); over TCP the
+                // MBAP length is authoritative, there being no CRC to check.
+                if (mb_frame_len < 2 || mb_frame_len > MAX_MB_FRAME) return;      //Packet is too small or too big
 
                 i = 0;
                 while (client.available())

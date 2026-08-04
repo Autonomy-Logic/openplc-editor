@@ -218,7 +218,10 @@ describe('buildGetStatusRequest / parseGetStatusResponse', () => {
       0x00, // uptime = 256
     ])
     const result = parseGetStatusResponse(buf)
-    expect(result).toEqual({ success: true, running: true, tick: 42, uptimeMs: 256 })
+    // `plcState` is the same byte as `running`, surfaced as the tri-state the
+    // run/stop state machine actually has. An 11-byte frame (this one) carries
+    // no switch position, so the field is absent.
+    expect(result).toEqual({ success: true, running: true, plcState: 1, tick: 42, uptimeMs: 256 })
   })
 
   it('reports running=false when the flag byte is zero', () => {

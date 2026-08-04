@@ -1,8 +1,15 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import type {
+  DebugStatusResult,
+  DeviceDebugChannel,
+  DeviceModbusTransport,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
@@ -22,6 +29,7 @@ import type {
   ListPublicLibrariesResponse,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -38,9 +46,23 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import {
+  type DeviceDebugCandidate,
+  type DeviceLinkCandidate,
+  type DeviceLinkStatus,
+  DeviceSessionManager,
+} from '../../../backend/editor/hardware/device-session-manager'
+import {
+  buildDeviceModbusTransport,
+  modbusTransportKind,
+} from '../../../backend/editor/hardware/device-transport-factory'
+import {
+  classifyDeviceLink,
+  type DeviceProbeOutcome,
+  PATIENT_BOARD_ID_PROBE,
+  QUICK_BOARD_ID_PROBE,
+} from '../../../backend/editor/hardware/device-probe'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { ModbusTcpClient } from '../../../backend/editor/modbus/modbus-client'
-import { ModbusRtuClient } from '../../../backend/editor/modbus/modbus-rtu-client'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -52,6 +74,18 @@ import {
 import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
+import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
+
+/** Why a channel could not be handed out. */
+interface ChannelUnavailable {
+  error: string
+  needsReconnect: true
+}
+
+/** Program-identity comparison, case-insensitively — targets report either case. */
+function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
+  return targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+}
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -63,15 +97,29 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   private registeredHandleChannels: string[] = []
-  private debuggerModbusClient: ModbusTcpClient | ModbusRtuClient | null = null
-  private debuggerWebSocketClient: WebSocketDebugTransport | null = null
-  private debuggerTargetIp: string | null = null
-  private debuggerReconnecting: boolean = false
+  // ---------------------------------------------------------------------------
+  // Talking to a baremetal device
+  //
+  // ONE session, owned by `deviceSession`, whatever media it runs over: the
+  // debugger, run/stop and the status poll all borrow that one client.
+  // Nothing else here opens a Modbus client — see `device-link-manager.ts` for
+  // why (in short: three owners meant a run/stop command could open a second
+  // socket the board would not answer).
+  //
+  // The runtime-v4 WebSocket is the one transport that is NOT a device link: it
+  // is a different protocol to a different kind of target, so it keeps its own
+  // client and its own session identity.
+  // ---------------------------------------------------------------------------
+  private readonly deviceSession = new DeviceSessionManager({
+    verify: (client, candidate, context) => this.verifyDeviceCandidate(client, candidate, context),
+    probe: (client) => this.probeDeviceLink(client),
+    serialPortPresent: (port) => this.hardwareModule.isSerialPortPresent(port),
+    emit: (status) => this.emitDeviceLinkStatus(status),
+    log: (message) => this.traceDeviceLink(message),
+  })
+  /** Classification of the candidate the held link came from. */
+  private deviceLinkProbe: DeviceProbeOutcome | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
-  private debuggerRtuPort: string | null = null
-  private debuggerRtuBaudRate: number | null = null
-  private debuggerRtuSlaveId: number | null = null
-  private debuggerJwtToken: string | null = null
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   private runtimeIp: string | null = null
@@ -636,10 +684,14 @@ class MainProcessBridge implements MainIpcModule {
       const result = await this.makeRuntimeApiRequest<{
         status: string
         timing_stats?: TimingStatsResponse
+        // Run/stop mode-switch position. Absent on runtimes older than the
+        // run/stop interface — treat undefined as "no gating".
+        switchPosition?: 'run' | 'stop'
       }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
+          switchPosition?: 'run' | 'stop'
         }
         return response
       })
@@ -664,6 +716,7 @@ class MainProcessBridge implements MainIpcModule {
           success: true,
           status: result.data.status,
           timingStats,
+          ...(result.data.switchPosition ? { switchPosition: result.data.switchPosition } : {}),
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
@@ -673,24 +726,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeStartPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      // Parse the body so the renderer can drive a retry-on-BUSY
-      // loop around `COMMAND:BUSY` replies (the runtime answers BUSY
-      // while it's still unloading the previous program after an
-      // upload).  See `backend/shared/library/start-plc-after-build.ts`.
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
-        ipAddress,
-        '/api/start-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      const status = (result.data?.status ?? '').trim()
-      return { success: true, status }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
   handleRuntimeStopPlc = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     try {
@@ -1017,11 +1053,17 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== DEBUGGER =====================
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
+    this.registerHandle('debugger:plc-control', this.handleDebuggerPlcControl)
     this.registerHandle('debugger:read-program-st-md5', this.handleReadProgramStMd5)
     this.registerHandle('debugger:get-variables-list', this.handleDebuggerGetVariablesList)
     this.registerHandle('debugger:set-variable', this.handleDebuggerSetVariable)
     this.registerHandle('debugger:connect', this.handleDebuggerConnect)
     this.registerHandle('debugger:disconnect', this.handleDebuggerDisconnect)
+    this.registerHandle('device:connect', this.handleDeviceConnect)
+    this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
+    this.registerHandle('device:release-serial-port', this.handleDeviceReleaseSerialPort)
+    this.registerHandle('session:open-runtime', this.handleOpenRuntimeSession)
+    this.registerHandle('session:close-runtime', this.handleCloseRuntimeSession)
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
@@ -1629,16 +1671,16 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Confirm the target is running the program that was just built.
+   *
+   * Modbus targets (serial, TCP, simulator) read this over the ONE held device
+   * link, so the check runs on the same connection every later command uses — no
+   * second client, and nothing to reconnect afterwards. Runtime v4 reads it over
+   * its own WebSocket, which is a different protocol to a different target.
+   */
   handleDebuggerVerifyMd5 = async (
     _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
     expectedMd5: string,
   ): Promise<{
     success: boolean
@@ -1647,111 +1689,134 @@ class MainProcessBridge implements MainIpcModule {
     targetEndian?: 'le' | 'be'
     error?: string
   }> => {
-    let client: ModbusTcpClient | ModbusRtuClient | null = null
-    let wsClient: WebSocketDebugTransport | null = null
     try {
-      if (connectionType === 'simulator') {
-        const virtualPort = new VirtualSerialPort(this.simulatorModule)
-        client = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
-          slaveId: 1,
-          timeout: 5000,
-          serialPort: virtualPort,
-        })
-        await client.connect()
-        const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
-        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
+      const channel = await this.requireDebug('verify md5')
+      if ('error' in channel) return { success: false, error: channel.error }
 
-        // Keep the client for subsequent debug operations
-        this.debuggerModbusClient = client
-        this.debuggerConnectionType = 'simulator'
-
-        return { success: true, match, targetMd5, targetEndian }
-      } else if (connectionType === 'websocket') {
-        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
-          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
-        }
-        if (!this.debuggerWebSocketClient) {
-          wsClient = new WebSocketDebugTransport({
-            host: connectionParams.ipAddress,
-            port: 8443,
-            token: connectionParams.jwtToken,
-            rejectUnauthorized: false,
-          })
-          await wsClient.connect()
-        } else {
-          wsClient = this.debuggerWebSocketClient
-        }
-
-        const { md5: targetMd5, targetEndian } = await wsClient.getMd5Hash()
-
-        const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-
-        if (!this.debuggerWebSocketClient) {
-          this.debuggerWebSocketClient = wsClient
-          this.debuggerTargetIp = connectionParams.ipAddress
-          this.debuggerJwtToken = connectionParams.jwtToken
-          this.debuggerConnectionType = 'websocket'
-        }
-
-        return { success: true, match, targetMd5, targetEndian }
-      } else if (connectionType === 'tcp') {
-        if (!connectionParams.ipAddress) {
-          return { success: false, error: 'IP address is required for TCP connection' }
-        }
-        client = new ModbusTcpClient({
-          host: connectionParams.ipAddress,
-          port: 502,
-          timeout: 5000,
-        })
-      } else {
-        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
-          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
-        }
-
-        // Reuse existing RTU client if already connected to the same port
-        if (
-          this.debuggerModbusClient &&
-          this.debuggerConnectionType === 'rtu' &&
-          this.debuggerRtuPort === connectionParams.port
-        ) {
-          const { md5: targetMd5, targetEndian } = await this.debuggerModbusClient.getMd5Hash()
-          const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-          return { success: true, match, targetMd5, targetEndian }
-        }
-
-        client = new ModbusRtuClient({
-          port: connectionParams.port,
-          baudRate: connectionParams.baudRate,
-          slaveId: connectionParams.slaveId,
-          timeout: 5000,
-        })
-      }
-
-      await client.connect()
-      const { md5: targetMd5, targetEndian } = await client.getMd5Hash()
-
-      const match = targetMd5.toLowerCase() === expectedMd5.toLowerCase()
-
-      if (connectionType === 'tcp') {
-        client.disconnect()
-      } else {
-        this.debuggerModbusClient = client
-        this.debuggerConnectionType = 'rtu'
-        this.debuggerRtuPort = connectionParams.port!
-        this.debuggerRtuBaudRate = connectionParams.baudRate!
-        this.debuggerRtuSlaveId = connectionParams.slaveId!
-      }
-
-      return { success: true, match, targetMd5, targetEndian }
+      const probe = await channel.client.getMd5Hash()
+      return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
     } catch (error) {
-      client?.disconnect()
-      wsClient?.disconnect()
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during MD5 verification',
       }
+    }
+  }
+
+  /**
+   * FC 0x4b run/stop for a baremetal target.
+   *
+   * Command only — the state is READ from the status poll (FC 0x46), which already
+   * reports it, so there is no second round trip here.
+   *
+   * Goes over the ONE held device link, whatever transport that link runs over.
+   * The transport the DEBUGGER is using is not consulted, and no client is opened:
+   * this is a command to the device, and the connection to it already exists.
+   *
+   * That is precisely what was broken. The old code only recognised an RTU client
+   * as reusable, so with a live Modbus TCP session a Stop fell through to opening a
+   * transient second socket — which an Arduino Modbus TCP server, serving one
+   * client at a time, never answered. The user saw "Failed to stop PLC: Request
+   * timeout" while a working connection sat idle.
+   */
+  handleDebuggerPlcControl = async (
+    _event: IpcMainInvokeEvent,
+    action: 'run' | 'stop',
+  ): Promise<PlcControlResult> => {
+    this.traceDeviceLink(`run/stop: ${action} requested`)
+
+    // Routed by the session's CONTROL channel, which is the whole point: the caller
+    // said "stop the PLC" and does not know or care whether that means a Modbus
+    // function code on a cable or an HTTP POST to a runtime.
+    const restAddress = this.deviceSession.getRestAddress()
+    if (restAddress !== null) return this.restSetPlcState(restAddress, action)
+
+    const link = this.requireControl('run/stop')
+    if ('error' in link) return { success: false, error: link.error }
+
+    const target = action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED
+    try {
+      return await link.client.setPlcState(target)
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during PLC control request',
+      }
+    }
+  }
+
+  /**
+   * Run/stop over a REST control channel, reported in the same shape the Modbus
+   * path returns — so the caller handles one result type, not two.
+   *
+   * `ERROR_SWITCH_STOP` in the runtime's reply is its way of saying the hardware
+   * mode switch refused a start, which is exactly what `refusedBySwitch` means on
+   * the Modbus side (FC 0x4b status 0x86).
+   */
+  private async restSetPlcState(address: string, action: 'run' | 'stop'): Promise<PlcControlResult> {
+    const result =
+      action === 'run' ? await this.restStartPlc(address) : await this.makeRuntimeApiRequest(address, '/api/stop-plc')
+    if (!result.success) return { success: false, error: result.error }
+
+    const status = 'status' in result ? (result.status ?? '') : ''
+    if (status.includes('ERROR_SWITCH_STOP')) return { success: false, refusedBySwitch: true }
+
+    // The runtime settles into the new state on its next scan; report the state the
+    // command asked for so the button can reflect it without a second round trip.
+    return { success: true, state: action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED }
+  }
+
+  /** The `/api/start-plc` call, shared by the session router and the IPC handler. */
+  private async restStartPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
+    try {
+      // The body is parsed because the runtime answers `COMMAND:BUSY` while it is
+      // still unloading a previous program after an upload, and callers drive a
+      // retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
+      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
+        address,
+        '/api/start-plc',
+        (data: string) => JSON.parse(data) as { status?: string },
+      )
+      if (!result.success) return { success: false, error: result.error }
+      return { success: true, status: (result.data?.status ?? '').trim() }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  handleDebuggerGetVariablesList = async (
+    _event: IpcMainInvokeEvent,
+    variableIndexes: number[],
+  ): Promise<{
+    success: boolean
+    tick?: number
+    lastIndex?: number
+    data?: number[]
+    error?: string
+    needsReconnect?: boolean
+  }> => {
+    // A null connection type means the debugger was intentionally disconnected.
+    // Fail silently so the renderer's poll loop ignores it.
+    if (this.debuggerConnectionType === null) {
+      return { success: false, error: 'Debugger not connected' }
+    }
+
+    // Every target reads over its session's DEBUG channel — Modbus for a device or
+    // a v3 runtime, the WebSocket for v4. There is nothing to reconnect here: if a
+    // connection dropped, the manager is already reopening it (or has reported it
+    // lost), and `needsReconnect` tells the renderer to stop the session rather
+    // than race it for the medium.
+    const link = await this.requireDebug('read variables')
+    if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
+
+    try {
+      const result = await link.client.getVariablesList(variableIndexes)
+      if (result.success && result.data) {
+        return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
   }
 
@@ -1787,289 +1852,419 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleDebuggerGetVariablesList = async (
-    _event: IpcMainInvokeEvent,
-    variableIndexes: number[],
-  ): Promise<{
-    success: boolean
-    tick?: number
-    lastIndex?: number
-    data?: number[]
-    error?: string
-    needsReconnect?: boolean
-  }> => {
-    // If connection type is null, the debugger was intentionally disconnected.
-    // Return a silent failure so the renderer polling ignores it.
-    if (this.debuggerConnectionType === null) {
-      return { success: false, error: 'Debugger not connected' }
-    }
 
-    if (this.debuggerConnectionType === 'websocket') {
-      if (!this.debuggerWebSocketClient) {
-        if (this.debuggerReconnecting) {
-          return { success: false, error: 'Reconnection in progress', needsReconnect: true }
-        }
+  /**
+   * Read the run/stop state over an already-open client and push it to the
+   * renderer. Throttled, because its two callers tick at very different rates:
+   * the device liveness poll (2.5s) and the debugger's variable poll (fast).
+   *
+   * Both callers use the ONE held connection, so there is no handoff to survive:
+   * a debug session shares the link rather than replacing it, and the Start/Stop
+   * button keeps tracking the device while debugging.
+   */
+  private plcStatePushedAt = 0
 
-        this.debuggerReconnecting = true
-        try {
-          if (!this.debuggerTargetIp || !this.debuggerJwtToken) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No target IP or JWT token stored', needsReconnect: true }
-          }
-          this.debuggerWebSocketClient = new WebSocketDebugTransport({
-            host: this.debuggerTargetIp,
-            port: 8443,
-            token: this.debuggerJwtToken,
-            rejectUnauthorized: false,
-          })
-          await this.debuggerWebSocketClient.connect()
-          this.debuggerReconnecting = false
-        } catch (error) {
-          this.debuggerWebSocketClient = null
-          this.debuggerReconnecting = false
-          return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-        }
-      }
+  private async pushPlcState(
+    client: { getStatus?: () => Promise<DebugStatusResult> },
+    port: string,
+    minIntervalMs = 2000,
+  ): Promise<void> {
+    if (!client.getStatus) return
+    const now = Date.now()
+    if (now - this.plcStatePushedAt < minIntervalMs) return
+    this.plcStatePushedAt = now
 
-      try {
-        const result = await this.debuggerWebSocketClient.getVariablesList(variableIndexes)
-
-        if (result.success && result.data) {
-          return {
-            success: true,
-            tick: result.tick,
-            lastIndex: result.lastIndex,
-            data: Array.from(result.data),
-          }
-        }
-
-        return { success: false, error: result.error }
-      } catch (error) {
-        if (this.debuggerWebSocketClient) {
-          this.debuggerWebSocketClient.disconnect()
-          this.debuggerWebSocketClient = null
-        }
-        return { success: false, error: getErrorMessage(error), needsReconnect: true }
-      }
-    }
-
-    if (!this.debuggerModbusClient) {
-      if (this.debuggerReconnecting) {
-        return { success: false, error: 'Reconnection in progress', needsReconnect: true }
-      }
-
-      this.debuggerReconnecting = true
-      try {
-        if (this.debuggerConnectionType === 'simulator') {
-          const virtualPort = new VirtualSerialPort(this.simulatorModule)
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: 'simulator',
-            baudRate: 115200,
-            slaveId: 1,
-            timeout: 5000,
-            serialPort: virtualPort,
-          })
-        } else if (this.debuggerConnectionType === 'tcp') {
-          if (!this.debuggerTargetIp) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No target IP address stored', needsReconnect: true }
-          }
-          this.debuggerModbusClient = new ModbusTcpClient({
-            host: this.debuggerTargetIp,
-            port: 502,
-            timeout: 5000,
-          })
-        } else if (this.debuggerConnectionType === 'rtu') {
-          if (!this.debuggerRtuPort || !this.debuggerRtuBaudRate || this.debuggerRtuSlaveId === null) {
-            this.debuggerReconnecting = false
-            return { success: false, error: 'No RTU connection parameters stored', needsReconnect: true }
-          }
-          this.debuggerModbusClient = new ModbusRtuClient({
-            port: this.debuggerRtuPort,
-            baudRate: this.debuggerRtuBaudRate,
-            slaveId: this.debuggerRtuSlaveId,
-            timeout: 5000,
-          })
-        } else {
-          this.debuggerReconnecting = false
-          return { success: false, error: 'No connection type stored', needsReconnect: true }
-        }
-
-        await this.debuggerModbusClient.connect()
-        this.debuggerReconnecting = false
-      } catch (error) {
-        this.debuggerModbusClient = null
-        this.debuggerReconnecting = false
-        return { success: false, error: `Failed to reconnect: ${getErrorMessage(error)}`, needsReconnect: true }
-      }
-    }
-
-    try {
-      const result = await this.debuggerModbusClient.getVariablesList(variableIndexes)
-
-      if (result.success && result.data) {
-        return {
-          success: true,
-          tick: result.tick,
-          lastIndex: result.lastIndex,
-          data: Array.from(result.data),
-        }
-      }
-
-      return { success: false, error: result.error }
-    } catch (error) {
-      if (this.debuggerModbusClient) {
-        this.debuggerModbusClient.disconnect()
-        this.debuggerModbusClient = null
-      }
-      return { success: false, error: getErrorMessage(error), needsReconnect: true }
-    }
+    const r = await client.getStatus()
+    if (!r.success) return
+    this.mainWindow?.webContents?.send('device:plc-state', {
+      port,
+      plcState: r.plcState,
+      switchPosition: r.switchPosition,
+    })
   }
 
-  handleDebuggerConnect = async (
-    _event: IpcMainInvokeEvent,
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
-  ): Promise<{ success: boolean; error?: string }> => {
+
+
+  /**
+   * Start a debug session against a target.
+   *
+   * For a Modbus target there is nothing to open: the session runs over the ONE
+   * held device link, which Connect established and which the status poll keeps
+   * honest. That is what makes serial debugging work at all (the OS will not lock
+   * a port twice), and it is equally right for Modbus TCP (an Arduino TCP server
+   * serves one client). The simulator is the exception only because it is
+   * in-process, so it can bring its own link up on demand.
+   *
+   * Runtime v4 keeps its own WebSocket: different protocol, different target.
+   */
+  handleDebuggerConnect = async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
     try {
-      if (connectionType === 'simulator') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
+      // For a shared session this opens nothing — it is the connection Connect
+      // established, already proven. For a runtime target it opens that target's
+      // own debug channel, which is why the debugger asks for it here rather than
+      // at login: the channel exists only while a session needs it.
+      const channel = await this.requireDebug('debug session')
+      if ('error' in channel) return { success: false, error: channel.error }
 
-        const virtualPort = new VirtualSerialPort(this.simulatorModule)
-        this.debuggerModbusClient = new ModbusRtuClient({
-          port: 'simulator',
-          baudRate: 115200,
-          slaveId: 1,
-          timeout: 5000,
-          serialPort: virtualPort,
-        })
-        await this.debuggerModbusClient.connect()
-
-        // MD5 fetch warms the connection and exercises the
-        // runtime's endianness-sentinel path.  Endianness detection
-        // itself is handled at the editor's verify-MD5 step (see
-        // handleDebuggerVerifyMd5) where the result feeds the swap
-        // layer; here we just need the connection live.
-        await this.debuggerModbusClient.getMd5Hash()
-      } else if (connectionType === 'websocket') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
-        if (!connectionParams.ipAddress || !connectionParams.jwtToken) {
-          return { success: false, error: 'IP address and JWT token are required for WebSocket connection' }
-        }
-
-        if (!this.debuggerWebSocketClient || this.debuggerConnectionType !== 'websocket') {
-          if (this.debuggerWebSocketClient) {
-            this.debuggerWebSocketClient.disconnect()
-            this.debuggerWebSocketClient = null
-          }
-
-          this.debuggerWebSocketClient = new WebSocketDebugTransport({
-            host: connectionParams.ipAddress,
-            port: 8443,
-            token: connectionParams.jwtToken,
-            rejectUnauthorized: false,
-          })
-          await this.debuggerWebSocketClient.connect()
-        }
-
-        this.debuggerTargetIp = connectionParams.ipAddress
-        this.debuggerJwtToken = connectionParams.jwtToken
-      } else if (connectionType === 'tcp') {
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
-        if (!connectionParams.ipAddress) {
-          return { success: false, error: 'IP address is required for TCP connection' }
-        }
-        this.debuggerModbusClient = new ModbusTcpClient({
-          host: connectionParams.ipAddress,
-          port: 502,
-          timeout: 5000,
-        })
-        await this.debuggerModbusClient.connect()
-        this.debuggerTargetIp = connectionParams.ipAddress
-      } else {
-        if (!connectionParams.port || !connectionParams.baudRate || connectionParams.slaveId === undefined) {
-          return { success: false, error: 'Port, baud rate, and slave ID are required for RTU connection' }
-        }
-
-        if (
-          this.debuggerModbusClient &&
-          this.debuggerConnectionType === 'rtu' &&
-          this.debuggerRtuPort === connectionParams.port &&
-          this.debuggerRtuBaudRate === connectionParams.baudRate &&
-          this.debuggerRtuSlaveId === connectionParams.slaveId
-        ) {
-          this.debuggerReconnecting = false
-          return { success: true }
-        }
-
-        if (this.debuggerModbusClient) {
-          this.debuggerModbusClient.disconnect()
-          this.debuggerModbusClient = null
-        }
-
-        this.debuggerModbusClient = new ModbusRtuClient({
-          port: connectionParams.port,
-          baudRate: connectionParams.baudRate,
-          slaveId: connectionParams.slaveId,
-          timeout: 5000,
-        })
-        await this.debuggerModbusClient.connect()
-        this.debuggerRtuPort = connectionParams.port
-        this.debuggerRtuBaudRate = connectionParams.baudRate
-        this.debuggerRtuSlaveId = connectionParams.slaveId
-      }
-
-      this.debuggerConnectionType = connectionType
-      this.debuggerReconnecting = false
-
+      // Session identity comes from the SESSION, not from what the caller guessed:
+      // a connected target names no transport at all.
+      this.debuggerConnectionType = this.deviceSession.getLink()?.transport ?? 'tcp'
       return { success: true }
     } catch (error) {
-      this.debuggerModbusClient = null
-      this.debuggerWebSocketClient = null
-      this.debuggerTargetIp = null
       this.debuggerConnectionType = null
-      this.debuggerRtuPort = null
-      this.debuggerRtuBaudRate = null
-      this.debuggerRtuSlaveId = null
-      this.debuggerJwtToken = null
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
+  /**
+   * Stop a debug session: let go of the debug channel, nothing more.
+   *
+   * The SESSION is deliberately untouched — it belongs to Connect (or to the
+   * runtime login), not to the debugger. Closing it here would drop the user's
+   * connection, and the status poll driving the Start/Stop button with it, just
+   * because they stopped debugging. Releasing closes a channel of its own once
+   * nothing holds it, and never closes a channel shared with control.
+   */
   handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
-    if (this.debuggerModbusClient) {
-      this.debuggerModbusClient.disconnect()
-      this.debuggerModbusClient = null
-    }
-    if (this.debuggerWebSocketClient) {
-      this.debuggerWebSocketClient.disconnect()
-      this.debuggerWebSocketClient = null
-    }
-    this.debuggerTargetIp = null
+    this.deviceSession.releaseDebugChannel('debug session')
     this.debuggerConnectionType = null
-    this.debuggerRtuPort = null
-    this.debuggerRtuBaudRate = null
-    this.debuggerRtuSlaveId = null
-    this.debuggerJwtToken = null
-    this.debuggerReconnecting = false
     return Promise.resolve({ success: true })
+  }
+
+  // ===================================================================
+  // The device link — "stay connected", over serial or Modbus TCP
+  // ===================================================================
+
+  /** Push a link state change to the renderer. */
+  private emitDeviceLinkStatus(status: DeviceLinkStatus): void {
+    this.traceDeviceLink(
+      `status -> ${status.status}${status.descriptor ? ` (${status.transport ?? '?'} ${status.descriptor})` : ''}${
+        status.reason ? ` [${status.reason}]` : ''
+      }`,
+    )
+    this.mainWindow?.webContents?.send('device:connection-status', status)
+  }
+
+  /**
+   * Diagnostic trace for the device connection, to BOTH sinks on purpose: the
+   * main-process log file keeps it after the fact, and the renderer console puts
+   * it where a user can read and copy it while reproducing something. Connection
+   * problems span two processes and a piece of hardware; without this the only
+   * evidence is "it hangs".
+   */
+  private traceDeviceLink(message: string): void {
+    logger.info(`[link] ${message}`)
+    this.mainWindow?.webContents?.send('device:link-log', message)
+  }
+
+  /**
+   * Turn a resolved channel config into something the link manager can try.
+   * The only transport-specific step left in the flow; a config that names a
+   * transport this build cannot speak is dropped rather than half-built.
+   */
+  private toDeviceLinkCandidates(configs: DebugConnectionConfig[]): DeviceLinkCandidate[] {
+    const candidates: DeviceLinkCandidate[] = []
+    for (const config of configs) {
+      const kind = modbusTransportKind(config.connectionType)
+      if (kind === null) continue
+      const params = {
+        connectionType: config.connectionType,
+        port: config.connectionParams.port,
+        baudRate: config.connectionParams.baudRate,
+        slaveId: config.connectionParams.slaveId,
+        host: config.connectionParams.ipAddress,
+      }
+      // Only the simulator needs an in-process serial port; building one for a real
+      // transport would allocate a virtual port nobody reads.
+      const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
+      // Probe the params now so a malformed config fails resolution rather than
+      // becoming a candidate that always throws on `create()`.
+      if ('error' in buildDeviceModbusTransport(params, options)) continue
+      candidates.push({
+        transport: kind,
+        descriptor: describeDebugEndpoint(config),
+        create: () => {
+          const built = buildDeviceModbusTransport(params, options)
+          if ('error' in built) throw new Error(built.error)
+          return built.client
+        },
+      })
+    }
+    return candidates
+  }
+
+  /** Consume the classification the last verified candidate produced. */
+  private takeDeviceLinkProbe(): DeviceProbeOutcome | null {
+    const probe = this.deviceLinkProbe
+    this.deviceLinkProbe = null
+    return probe
+  }
+
+  /**
+   * Establish a session with a Runtime v3/v4: control over REST, debug over the
+   * channel its board declares (v3: Modbus TCP on the runtime's address; v4: the
+   * debug WebSocket). Called once the renderer has logged in.
+   *
+   * The debug channel is only DESCRIBED here, not opened — see `acquireDebugChannel`.
+   */
+  handleOpenRuntimeSession = (
+    _event: IpcMainInvokeEvent,
+    params: { address: string; debug: DebugConnectionConfig },
+  ): Promise<{ success: boolean; error?: string }> => {
+    const candidate = this.toDebugCandidate(params.debug)
+    if (!candidate) {
+      return Promise.resolve({
+        success: false,
+        error: `This target declares a debug channel this build cannot open: ${params.debug.connectionType}`,
+      })
+    }
+    this.deviceSession.openRestSession({ address: params.address, debugChannel: candidate })
+    this.debuggerConnectionType = params.debug.connectionType
+    return Promise.resolve({ success: true })
+  }
+
+  /** Close a REST-controlled session (the user logged out / disconnected). */
+  handleCloseRuntimeSession = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    if (this.deviceSession.getRestAddress() !== null) {
+      this.deviceSession.close()
+      this.debuggerConnectionType = null
+    }
+    return Promise.resolve({ success: true })
+  }
+
+  /**
+   * Turn a resolved channel config into an openable DEBUG channel. The one place
+   * that knows a WebSocket is a debug channel too.
+   */
+  private toDebugCandidate(config: DebugConnectionConfig): DeviceDebugCandidate | null {
+    if (config.connectionType === 'websocket') {
+      const host = config.connectionParams.ipAddress
+      const token = config.connectionParams.jwtToken
+      if (!host || !token) return null
+      return {
+        transport: 'websocket',
+        descriptor: `websocket ${host}`,
+        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
+      }
+    }
+    const [candidate] = this.toDeviceLinkCandidates([config])
+    if (!candidate) return null
+    return {
+      transport: candidate.transport,
+      descriptor: `${candidate.transport} ${candidate.descriptor}`,
+      create: candidate.create,
+    }
+  }
+
+  /**
+   * Is this freshly opened candidate a device we can work with? Runs the
+   * connect-time classification (`classifyDeviceLink`) and keeps its verdict for
+   * the renderer.
+   *
+   * Only `connected-with-firmware` keeps a candidate. A port that opens but has
+   * no firmware, or an IP that answers something else, therefore falls through to
+   * the next candidate instead of becoming a link that cannot serve a single
+   * command.
+   */
+  private async verifyDeviceCandidate(
+    client: DeviceModbusTransport,
+    candidate: DeviceLinkCandidate,
+    context: { isLastCandidate: boolean },
+  ): Promise<boolean> {
+    // The simulator is in-process: there is no hardware to identify, so the
+    // board-id read is not the right question to ask of it.
+    //
+    // Retried because the session is opened the instant the emulator starts, and
+    // the sketch inside it still has to reach the point where it services Modbus.
+    // Failing here would stop an emulator that was merely still booting.
+    if (candidate.transport === 'simulator') {
+      for (let attempt = 0; attempt < MainProcessBridge.SIMULATOR_PROBE_ATTEMPTS; attempt += 1) {
+        try {
+          if (await this.probeDeviceLink(client)) return true
+        } catch {
+          // Not up yet — fall through to the wait below.
+        }
+        await new Promise((resolve) => setTimeout(resolve, MainProcessBridge.SIMULATOR_PROBE_INTERVAL_MS))
+      }
+      return false
+    }
+
+    // Be patient only with the LAST candidate. The id read is retried because a
+    // board that was just flashed may still be booting — worth ~32s when this is
+    // the only way in, but not while alternatives are waiting: a Modbus TCP
+    // address that no longer answers should not delay the cable that would have
+    // worked. (Measured on a real board: 32.5s to rule out one endpoint.)
+    const boardIdProbe = context.isLastCandidate ? PATIENT_BOARD_ID_PROBE : QUICK_BOARD_ID_PROBE
+    this.traceDeviceLink(
+      `  ${candidate.descriptor}: verifying with up to ${boardIdProbe.attempts} id read(s)` +
+        `${context.isLastCandidate ? ' (last candidate, being patient)' : ''}`,
+    )
+    const result = await classifyDeviceLink(client, { boardIdProbe })
+    this.deviceLinkProbe = result
+    this.traceDeviceLink(
+      `  ${candidate.descriptor}: classified as "${result.status}"${result.error ? ` (${result.error})` : ''}`,
+    )
+    if (result.status !== 'connected-with-firmware') return false
+    // The status frame doubles as the run/stop state source; push it straight
+    // away so the Start/Stop button is right before the first poll lands.
+    await this.pushPlcState(client, candidate.descriptor, 0)
+    return true
+  }
+
+  /**
+   * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
+   *
+   * Prefers the status read (FC 0x46) over the board id (0x48): both prove the
+   * firmware is answering, but the status frame also carries the run/stop state
+   * and the mode-switch position — so a switch flipped by hand at the panel shows
+   * up within one interval, with no second timer and no extra traffic.
+   */
+  private async probeDeviceLink(client: DeviceModbusTransport): Promise<boolean> {
+    const descriptor = this.deviceSession.getLink()?.descriptor ?? ''
+    if (client.getStatus) {
+      const status = await client.getStatus()
+      if (!status.success) return false
+      this.plcStatePushedAt = 0
+      await this.pushPlcState(client, descriptor, 0)
+      return true
+    }
+    return (await client.getBoardId()).success
+  }
+
+  /**
+   * Release the link if it holds `port` — the handoff before an upload takes the
+   * same serial port. A Modbus TCP link is left alone: flashing over USB does not
+   * disturb it, so debugging and run/stop survive an upload.
+   *
+   * Returns whether anything was released, so the caller knows to reconnect.
+   */
+  handleDeviceReleaseSerialPort = async (
+    _event: IpcMainInvokeEvent,
+    port: string | null | undefined,
+  ): Promise<{ released: boolean }> => {
+    return { released: this.deviceSession.releaseSerialPort(port) }
+  }
+
+  /** The CONTROL channel's client (run/stop, status). */
+  private deviceClient(): DeviceModbusTransport | null {
+    return this.deviceSession.getClient()
+  }
+
+  /**
+   * The channel for this operation family, or a reason there isn't one. Every
+   * device command funnels through here, so "not connected" and "reconnecting"
+   * read the same everywhere instead of each handler inventing its own message —
+   * or, worse, opening its own connection.
+   *
+   * `debug` operations take the debug channel, which for a shared session IS the
+   * control channel and for a runtime target is one of its own.
+   */
+  private requireControl(what: string): { client: DeviceModbusTransport } | ChannelUnavailable {
+    const client = this.deviceClient()
+    if (!client) return this.explainMissingChannel(what)
+    this.traceChannelUse(what, 'control')
+    return { client }
+  }
+
+  /**
+   * The DEBUG channel, opening it if this session's debug medium is one of its own.
+   * Every debug caller passes a distinct `what`, which doubles as the holder name —
+   * so two callers can hold it at once without either closing it on the other.
+   */
+  private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
+    const acquired = await this.deviceSession.acquireDebugChannel(what)
+    if ('error' in acquired) {
+      if (!this.deviceSession.isConnected()) return this.explainMissingChannel(what)
+      this.traceDeviceLink(`${what}: debug channel unavailable — ${acquired.error}`)
+      return { error: acquired.error, needsReconnect: true }
+    }
+    this.traceChannelUse(what, 'debug')
+    return acquired
+  }
+
+  private traceChannelUse(what: string, family: 'control' | 'debug'): void {
+    const link = this.deviceSession.getLink()
+    this.traceDeviceLink(`${what}: using the ${family} channel (${link?.transport ?? '?'} ${link?.descriptor ?? '?'})`)
+  }
+
+  private explainMissingChannel(what: string): ChannelUnavailable {
+    if (this.deviceSession.isRecovering()) {
+      this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
+      return { error: 'the connection dropped and is being restored — try again in a moment', needsReconnect: true }
+    }
+    this.traceDeviceLink(`${what}: refused, nothing is connected`)
+    return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
+  }
+
+  /**
+   * The emulator boots in milliseconds, but "milliseconds" is not "instantly", and
+   * its session is opened the instant it starts.
+   */
+  private static readonly SIMULATOR_PROBE_ATTEMPTS = 10
+  private static readonly SIMULATOR_PROBE_INTERVAL_MS = 200
+
+  /**
+   * Reported when a command arrives and no session exists.
+   *
+   * Short and neutral on purpose. The caller already says which action failed
+   * ("Failed to stop PLC: …", "Could not connect to debug target: …"), so this only
+   * has to supply the reason. It used to explain the reason as well — "the debugger
+   * and run/stop share the device connection" — which was written for a baremetal
+   * board and read as nonsense on a Runtime v4, whose debug channel is its own
+   * WebSocket and shares nothing. Worse, it appeared on a target the user HAD
+   * connected to, so the explanation was not merely irrelevant but wrong.
+   */
+  private static readonly DEVICE_NOT_CONNECTED = 'not connected to the target'
+
+  /**
+   * Open and HOLD the link to a baremetal device (D72).
+   *
+   * `candidates` is the ordered list the renderer resolved from the board's debug
+   * spec — Modbus TCP first when the project enables it, then serial. The manager
+   * tries them in order and keeps the first that both opens and answers, so a
+   * stale DHCP address or an unplugged ethernet shield falls through to the cable
+   * instead of stranding the user on a link that cannot serve a command.
+   *
+   * The classification that used to be this method's job now happens per candidate
+   * (`verifyDeviceCandidate`), because it is also what decides whether a candidate
+   * is worth keeping.
+   */
+  handleDeviceConnect = async (
+    _event: IpcMainInvokeEvent,
+    candidates: DebugConnectionConfig[],
+  ): Promise<DeviceProbeOutcome> => {
+    this.deviceLinkProbe = null
+    this.traceDeviceLink(
+      `connect requested with ${candidates.length} candidate(s): ${
+        candidates.map((config) => `${config.connectionType} ${describeDebugEndpoint(config)}`).join(', ') || '(none)'
+      }`,
+    )
+
+    const linkCandidates = this.toDeviceLinkCandidates(candidates)
+    if (linkCandidates.length === 0) {
+      return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
+    }
+
+    const result = await this.deviceSession.open(linkCandidates)
+    // Read the verdict out of the field after the open: verification runs inside
+    // it, one candidate at a time, and this is where its conclusion lands.
+    const probe = this.takeDeviceLinkProbe()
+    if (result.ok) return probe ?? { status: 'connected-with-firmware' }
+
+    // Nothing worked. A candidate that got far enough to be classified gives the
+    // better message ("no firmware" beats "could not connect"); otherwise report
+    // what was tried.
+    if (probe && probe.status !== 'connected-with-firmware') return probe
+    const tried = result.attempts.map((attempt) => `${attempt.descriptor}: ${attempt.error}`).join('; ')
+    return { status: 'no-response', error: tried || 'No connection could be established.' }
+  }
+
+
+  /** Close the held link (user pressed Disconnect). */
+  handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
+    this.deviceSession.close()
+    this.deviceLinkProbe = null
+    return { success: true }
   }
 
   handleDebuggerSetVariable = async (
@@ -2080,33 +2275,13 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
 
-    if (this.debuggerConnectionType === 'websocket') {
-      if (!this.debuggerWebSocketClient) {
-        logger.info('[IPC Handler] WebSocket client not connected')
-        return { success: false, error: 'Not connected to debugger' }
-      }
-
-      try {
-        // Shared transport takes Uint8Array; convert from the IPC's
-        // Buffer payload (Buffer is a Uint8Array subclass so the cast
-        // is a no-op at runtime, but TS wants the explicit step).
-        const valueBytes = buffer ? new Uint8Array(buffer) : undefined
-        const result = await this.debuggerWebSocketClient.setVariable(variableIndex, force, valueBytes)
-        logger.info('[IPC Handler] WebSocket setVariable result: ' + JSON.stringify(result))
-        return result
-      } catch (error) {
-        logger.error('[IPC Handler] WebSocket setVariable error: ' + getErrorMessage(error))
-        return { success: false, error: getErrorMessage(error) }
-      }
-    }
-
-    if (!this.debuggerModbusClient) {
-      logger.info('[IPC Handler] Modbus client not connected')
-      return { success: false, error: 'Not connected to debugger' }
+    const link = await this.requireDebug('write variable')
+    if ('error' in link) {
+      return { success: false, error: link.error }
     }
 
     try {
-      const result = await this.debuggerModbusClient.setVariable(variableIndex, force, buffer)
+      const result = await link.client.setVariable(variableIndex, force, buffer)
       logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
       return result
     } catch (error) {
@@ -2140,6 +2315,7 @@ class MainProcessBridge implements MainIpcModule {
   /** Stops the simulator and notifies the renderer so it can update UI state. */
   private stopSimulatorAndNotify(): void {
     if (this.simulatorModule.isRunning()) {
+      this.closeSimulatorSession()
       this.simulatorModule.stop()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
@@ -2368,6 +2544,16 @@ class MainProcessBridge implements MainIpcModule {
   handleESIMigrateRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
     this.wrapServiceCall(() => this.esiService.migrateRepositoryToV2(projectPath))
 
+  /**
+   * Start the emulator, then open its session.
+   *
+   * The running emulator IS the simulator's connection — there is no port to pick
+   * and no address to configure, so nothing about it is ever resolved from a spec
+   * or asked of the user. Opening the session here (rather than when the debugger
+   * asks) is what makes the simulator behave like every other target downstream:
+   * commands go to a session the manager holds, and when the emulator stops the
+   * session ends the same way a pulled cable ends a serial one.
+   */
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,
     hexPath: string,
@@ -2376,15 +2562,38 @@ class MainProcessBridge implements MainIpcModule {
       const fs = await import('fs/promises')
       const hexContent = await fs.readFile(hexPath, 'utf-8')
       this.simulatorModule.loadAndRun(hexContent)
+
+      const opened = await this.deviceSession.open(
+        this.toDeviceLinkCandidates([{ connectionType: 'simulator', connectionParams: {} }]),
+      )
+      if (!opened.ok) {
+        this.simulatorModule.stop()
+        const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
+        return { success: false, error: reason || 'The simulator did not answer its debug protocol' }
+      }
+      this.debuggerConnectionType = 'simulator'
       return { success: true }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
+  /**
+   * Stop the emulator entirely — the simulator's Stop button means "stop the
+   * simulator", not "stop the program it is running". The session closes first so
+   * the client is dropped before the thing it talks to disappears.
+   */
   handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.closeSimulatorSession()
     this.simulatorModule.stop()
     return Promise.resolve({ success: true })
+  }
+
+  /** Close the session if it is the simulator's. No-op for any other target. */
+  private closeSimulatorSession(): void {
+    if (this.deviceSession.getLink()?.transport !== 'simulator') return
+    this.deviceSession.close()
+    this.debuggerConnectionType = null
   }
 
   handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {

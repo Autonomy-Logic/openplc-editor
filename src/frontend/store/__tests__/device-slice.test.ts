@@ -155,6 +155,43 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
+
+    it('has a disconnected serial connection', () => {
+      const store = makeStore()
+      expect(store.getState().deviceConnection).toEqual({ status: 'disconnected', port: null, transport: null, debugTransport: null })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
+  describe('serial connection', () => {
+    it('setDeviceConnectionStatus updates status and port', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      expect(store.getState().deviceConnection).toEqual({ status: 'connecting', port: 'COM5', transport: null, debugTransport: null })
+    })
+
+    it('setDeviceConnectionStatus leaves the port unchanged when omitted', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('connected')
+      expect(store.getState().deviceConnection).toEqual({ status: 'connected', port: 'COM5', transport: null, debugTransport: null })
+    })
+
+    it('setDeviceConnectionStatus can explicitly clear the port with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('error', null)
+      expect(store.getState().deviceConnection).toEqual({ status: 'error', port: null, transport: null, debugTransport: null })
+    })
+
+    it('clearDeviceConnection resets to disconnected/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceConnection()
+      expect(store.getState().deviceConnection).toEqual({ status: 'disconnected', port: null, transport: null, debugTransport: null })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -173,7 +210,7 @@ describe('createDeviceSlice', () => {
 
     it('sets available communication ports', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM3', address: '/dev/ttyUSB0' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       expect(store.getState().deviceAvailableOptions.availableCommunicationPorts).toEqual(ports)
     })
@@ -185,14 +222,14 @@ describe('createDeviceSlice', () => {
       ])
       store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
       store.getState().deviceActions.setAvailableOptions({
-        availableCommunicationPorts: [{ name: 'COM1', address: '/dev/tty1' }],
+        availableCommunicationPorts: [{ address: '/dev/tty1' }],
       })
       expect(store.getState().deviceAvailableOptions.availableBoards.size).toBe(1)
     })
 
     it('does not overwrite ports when only boards given', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM1', address: '/dev/tty1' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/tty1' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       store.getState().deviceActions.setAvailableOptions({
         availableBoards: new Map<string, BoardInfo>(),
@@ -303,6 +340,13 @@ describe('createDeviceSlice', () => {
       expect(rc.includeTimingStatsInPolling).toBe(false)
       expect(rc.ethercatStatus).toBeNull()
       expect(rc.includeEthercatStatsInPolling).toBe(false)
+    })
+
+    it('resets the serial connection', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceConnection).toEqual({ status: 'disconnected', port: null, transport: null, debugTransport: null })
     })
   })
 

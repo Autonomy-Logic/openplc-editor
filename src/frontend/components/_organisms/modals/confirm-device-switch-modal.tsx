@@ -20,6 +20,7 @@ const ConfirmDeviceSwitchModal = () => {
     deviceActions.setRuntimeJwtToken(null)
     deviceActions.setRuntimeConnectionStatus('disconnected')
     deviceActions.setPlcRuntimeStatus(null)
+    deviceActions.setPlcSwitchPosition(null)
 
     if (modalData.onConfirm) {
       modalData.onConfirm()

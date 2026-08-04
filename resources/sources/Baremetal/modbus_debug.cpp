@@ -10,6 +10,9 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // standard. The shims forward to strucpp::debug::handle_* inside
 // arduino_runtime_glue.cpp (part of the precompiled OpenPLCUserLib archive).
 #include "arduino_runtime_glue.h"
+// PLC_STATE_* / PLC_SWITCH_* and runtime_get_plc_state(), for the run/stop
+// reporting in debugGetStatus() and plcSetState().
+#include "openplc.h"
 #include "openplc_version.h"
 
 // ArduinoUniqueID (ricaun) backs the DEBUG_GET_BOARD_ID (0x48) function code.
@@ -339,7 +342,11 @@ void debugGetStatus()
 
     mb_frame[1] = MB_FC_DEBUG_GET_STATUS;
     mb_frame[2] = MB_DEBUG_SUCCESS;
-    mb_frame[3] = 1; // PLC scan is always running on baremetal
+    // The real run/stop state, not a constant: the baremetal runtime has a
+    // state machine now (see arduino_runtime_glue.h). This byte being the
+    // state is why there is no separate query function code -- the editor's
+    // status poll already carries it.
+    mb_frame[3] = runtime_get_plc_state();
     mb_frame[4] = (uint8_t)((scan_counter >> 24) & 0xFF);
     mb_frame[5] = (uint8_t)((scan_counter >> 16) & 0xFF);
     mb_frame[6] = (uint8_t)((scan_counter >> 8)  & 0xFF);
@@ -348,7 +355,38 @@ void debugGetStatus()
     mb_frame[9]  = (uint8_t)((uptime >> 16) & 0xFF);
     mb_frame[10] = (uint8_t)((uptime >> 8)  & 0xFF);
     mb_frame[11] = (uint8_t)(uptime & 0xFF);
-    mb_frame_len = 12;
+    // Mode-switch position, appended so the editor can gate a start locally.
+    // Boards with no physical switch report RUN, so a caller needs no "absent"
+    // case; an older editor that stops reading at byte 11 simply ignores it.
+    mb_frame[12] = runtime_get_switch_position();
+    mb_frame_len = 13;
+}
+
+// PDU request:  [FC][state:u8]        (0 = STOP, 1 = RUN)
+// PDU response: [FC][status][plc_state:u8][switch_position:u8]
+//
+// Command only -- reading the state is debugGetStatus() (FC 0x46) above, which
+// already reports it. A RUN request while the mode switch reads STOP is
+// REFUSED, not queued, so the editor tells the user to flip the switch instead
+// of leaving a start pending. Stop requests are always honoured.
+//
+// The reported state is read back after the request is applied, but the runtime
+// derives it inside runtime_plc_cycle() -- so on a change the value here is the
+// state as of the last cycle and the caller sees the new one on its next status
+// poll (at most one scan period later).
+void plcSetState(uint8_t desired)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+
+    const uint8_t target = (desired == 0x01) ? PLC_STATE_RUNNING : PLC_STATE_STOPPED;
+    if (runtime_request_plc_state(target) == PLC_CTRL_REFUSED_SWITCH_STOP)
+        status = MB_PLC_CTRL_REFUSED_SWITCH;
+
+    mb_frame[1] = MB_FC_PLC_SET_STATE;
+    mb_frame[2] = status;
+    mb_frame[3] = runtime_get_plc_state();
+    mb_frame[4] = runtime_get_switch_position();
+    mb_frame_len = 5;
 }
 
 // PDU request:  [FC]

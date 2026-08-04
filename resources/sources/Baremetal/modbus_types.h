@@ -41,6 +41,11 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define MB_DEBUG_SUCCESS                 0x7E
 #define MB_DEBUG_ERROR_OUT_OF_BOUNDS     0x81
 #define MB_DEBUG_ERROR_OUT_OF_MEMORY     0x82
+// MB_FC_PLC_SET_STATE only: a RUN request was refused because the hardware mode
+// switch reads STOP. The editor turns this into a "flip the switch to RUN"
+// warning rather than a generic failure. It doesn't collide with Modbus
+// exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
+#define MB_PLC_CTRL_REFUSED_SWITCH       0x86
 
 //Modbus registers struct
 struct MBinfo {
@@ -77,6 +82,7 @@ enum {
     MB_FC_DEBUG_GET_STATUS = 0x46, // Debug get PLC status (running, scan tick, uptime)
     MB_FC_DEBUG_GET_VERSION = 0x47, // Debug get runtime firmware version
     MB_FC_DEBUG_GET_BOARD_ID = 0x48, // Debug get unique hardware board ID
+    MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
 };
 
 //Exception Codes

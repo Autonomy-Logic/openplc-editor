@@ -15,10 +15,7 @@ const mockBoards = new Map<string, BoardInfo>([
   ],
 ])
 
-const mockPorts: CommunicationPort[] = [
-  { name: '/dev/ttyUSB0', address: '/dev/ttyUSB0' },
-  { name: '/dev/ttyACM0', address: '/dev/ttyACM0' },
-]
+const mockPorts: CommunicationPort[] = [{ address: '/dev/ttyUSB0' }, { address: '/dev/ttyACM0' }]
 
 const mockRefreshResult = [{ board: 'Arduino Uno', version: '1.8.6' }]
 
@@ -29,6 +26,9 @@ beforeEach(() => {
     refreshAvailableBoards: jest.fn().mockResolvedValue(mockRefreshResult),
     refreshCommunicationPorts: jest.fn().mockResolvedValue(mockPorts),
     getPreviewImage: jest.fn().mockResolvedValue('data:image/png;base64,abc123'),
+    deviceConnect: jest.fn().mockResolvedValue({ status: 'connected-with-firmware' }),
+    deviceDisconnect: jest.fn().mockResolvedValue({ success: true }),
+    onDeviceConnectionStatus: jest.fn().mockReturnValue(() => undefined),
   } as unknown as typeof window.bridge
 })
 
@@ -72,5 +72,30 @@ describe('createEditorDeviceAdapter', () => {
   it('forwards vppPackagePath to window.bridge for VPP-shipped previews', async () => {
     await adapter.getPreviewImage('motor-shield.png', '/path/to/pkg')
     expect(window.bridge.getPreviewImage).toHaveBeenCalledWith('motor-shield.png', '/path/to/pkg')
+  })
+
+  it('delegates connect to window.bridge with the candidate list', async () => {
+    // Connect passes every way to reach the device, in order; the main process
+    // tries them and keeps the first that answers.
+    const candidates = [
+      { connectionType: 'tcp' as const, connectionParams: { ipAddress: '192.168.0.50' } },
+      { connectionType: 'rtu' as const, connectionParams: { port: 'COM5', baudRate: 115200 } },
+    ]
+    const result = await adapter.connect(candidates)
+    expect(window.bridge.deviceConnect).toHaveBeenCalledWith(candidates)
+    expect(result).toMatchObject({ status: 'connected-with-firmware' })
+  })
+
+  it('delegates disconnect to window.bridge', async () => {
+    const result = await adapter.disconnect()
+    expect(window.bridge.deviceDisconnect).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('delegates onConnectionStatus subscription to window.bridge and returns its unsubscribe', () => {
+    const cb = jest.fn()
+    const unsub = adapter.onConnectionStatus(cb)
+    expect(window.bridge.onDeviceConnectionStatus).toHaveBeenCalledWith(cb)
+    expect(typeof unsub).toBe('function')
   })
 })

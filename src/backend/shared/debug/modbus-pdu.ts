@@ -23,6 +23,9 @@
  *   getList request:   [FC=0x44] [numIndexes: U16BE] [arr0:U8 elem0:U16BE] [arr1:U8 elem1:U16BE] ...
  *   getList response:  [FC=0x44] [status] [lastIndex: U16BE] [tick: U32BE] [size: U16BE] [data...]
  *
+ *   plcSetState request:  [FC=0x4b] [state: U8]   (0 = STOP, 1 = RUN)
+ *   plcSetState response: [FC=0x4b] [status] [plcState: U8] [switchPosition: U8]
+ *
  *   set request:   [FC=0x42] [arr: U8] [elem: U16BE] [force: U8] [dataLen: U16BE] [value...]
  *   set response:  [FC=0x42] [status]
  *
@@ -41,7 +44,7 @@
  */
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
-import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
+import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from '../simulator/types'
 import type {
   DebugBoardIdResult,
   DebugSetResult,
@@ -49,6 +52,7 @@ import type {
   DebugTransportResult,
   DebugVersionResult,
   Md5ProbeResult,
+  PlcControlResult,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -278,7 +282,14 @@ export function parseSetVariableResponse(data: Uint8Array): DebugSetResult {
 
 /**
  * Parse a status response (FC 0x46).
- * Layout: `[FC][status][running:u8][tick:u32BE][uptime:u32BE]` (11 PDU bytes).
+ * Layout: `[FC][status][running:u8][tick:u32BE][uptime:u32BE][switch:u8]`
+ * (12 PDU bytes; 11 on firmware predating the run/stop state machine).
+ *
+ * This is the ONE read path for run/stop state — `running` was always this
+ * frame's first payload byte, so reporting the real state there rather than a
+ * hardcoded 1 costs no extra round trip and needs no second function code. The
+ * switch position is appended, which older parsers ignore and older firmware
+ * simply omits.
  */
 export function parseGetStatusResponse(data: Uint8Array): DebugStatusResult {
   if (data.length < 2) {
@@ -300,11 +311,18 @@ export function parseGetStatusResponse(data: Uint8Array): DebugStatusResult {
     return { success: false, error: `Incomplete status response (${data.length} bytes, expected 11)` }
   }
 
+  const running = readU8(data, 2)
   return {
     success: true,
-    running: readU8(data, 2) !== 0,
+    running: running !== 0,
+    // Same byte as `running`, as the tri-state the run/stop machine actually
+    // has (STOPPED / RUNNING / ERROR).
+    plcState: running,
     tick: readU32BE(data, 3),
     uptimeMs: readU32BE(data, 7),
+    // Appended by firmware carrying the run/stop state machine; absent on older
+    // firmware, which callers read as "no switch gating".
+    ...(data.length >= 12 ? { switchPosition: readU8(data, 11) } : {}),
   }
 }
 
@@ -376,4 +394,61 @@ export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
  */
 export function responseFunctionCode(data: Uint8Array): number | undefined {
   return data.length > 0 ? readU8(data, 0) : undefined
+}
+
+// ---------------------------------------------------------------------------
+// FC 0x4b — run/stop command
+//
+// Command only. Reading the state is `buildGetStatusRequest` /
+// `parseGetStatusResponse` (FC 0x46) above, which already reports it.
+// ---------------------------------------------------------------------------
+
+export function buildPlcSetStateRequest(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Uint8Array {
+  const pdu = alloc(2)
+  writeU8(pdu, 0, ModbusFunctionCode.PLC_SET_STATE)
+  writeU8(pdu, 1, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  return pdu
+}
+
+/**
+ * Parse a run/stop command acknowledgement.
+ *
+ * Three outcomes the caller must tell apart:
+ *   - success: the request was accepted; `state` is as of the last scan.
+ *   - `refusedBySwitch`: a RUN was rejected because the hardware switch reads
+ *     STOP. The editor turns this into the "flip the switch" warning, not an
+ *     error.
+ *   - `unsupported`: the target answered the Modbus exception form (FC | 0x80),
+ *     i.e. firmware built before the run/stop state machine. The editor degrades
+ *     to "rebuild and upload" so field devices never look broken.
+ */
+export function parsePlcSetStateResponse(data: Uint8Array): PlcControlResult {
+  if (data.length < 1) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const fc = readU8(data, 0)
+  if (fc === (ModbusFunctionCode.PLC_SET_STATE as number) + 0x80) {
+    return { success: false, unsupported: true, error: 'Firmware does not implement run/stop control' }
+  }
+  if (fc !== (ModbusFunctionCode.PLC_SET_STATE as number)) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+  if (data.length < 4) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const status = readU8(data, 1)
+  const result: PlcControlResult = {
+    success: status === (ModbusDebugResponse.SUCCESS as number),
+    state: readU8(data, 2),
+    switchPosition: readU8(data, 3),
+  }
+  if (status === (ModbusDebugResponse.REFUSED_BY_SWITCH as number)) {
+    result.refusedBySwitch = true
+    result.error = 'Refused: the hardware mode switch is in STOP'
+  } else if (!result.success) {
+    result.error = statusError(status)
+  }
+  return result
 }

@@ -63,6 +63,13 @@ export type RuntimeConnection = {
   jwtToken: string | null
   connectionStatus: ConnectionStatus
   plcStatus: PlcStatus | null
+  /** Run/stop mode-switch position of the connected target, or null when
+   *  unknown. Lives next to `plcStatus` so the Start/Stop button, its tooltip
+   *  and the start pre-check all read one value, whatever the target type:
+   *  Runtime v4 fills it from `/api/status`, baremetal from the device status
+   *  poll. `'run'` on any device without a physical switch, so a null-safe
+   *  caller treats absence as "no gating". */
+  switchPosition: 'run' | 'stop' | null
   ipAddress: string | null
   /** Version string reported by the connected runtime (from
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
@@ -74,6 +81,36 @@ export type RuntimeConnection = {
   includeTimingStatsInPolling: boolean
   ethercatStatus: EtherCATRuntimeStatusResponse | null
   includeEthercatStatsInPolling: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Persistent serial connection (D72) — baremetal "stay connected"
+// ---------------------------------------------------------------------------
+
+export type DeviceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+
+/**
+ * Live state of the connection the main process holds to a baremetal target,
+ * mirroring the connection manager — which remains the source of truth. Purely
+ * whether the connection is up, and over what.
+ */
+export type DeviceConnection = {
+  status: DeviceConnectionStatus
+  /** Endpoint the connection is on (or was last attempted on): a serial path or an IP. */
+  port: string | null
+  /**
+   * Medium the CONTROL channel uses. Read-only mirror — nothing in the renderer
+   * picks a transport. Null for a REST-controlled runtime session, which holds no
+   * connection.
+   */
+  transport: 'rtu' | 'tcp' | 'simulator' | null
+  /**
+   * Medium the DEBUG channel uses. The debug poll sizes its batches to this, because
+   * the frame budget differs enormously by wire (WebSocket 500 variables per round
+   * trip, Modbus TCP 60, RTU 19). Mirrored from the manager rather than inferred: a
+   * v4 session left this unset and silently polled with TCP-sized batches.
+   */
+  debugTransport: 'rtu' | 'tcp' | 'simulator' | 'websocket' | null
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +128,7 @@ export type DeviceState = {
     updated: boolean
   }
   runtimeConnection: RuntimeConnection
+  deviceConnection: DeviceConnection
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +188,8 @@ export type DeviceActions = {
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
+  /** Set the mode-switch position (null clears it, e.g. on disconnect). */
+  setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
@@ -158,6 +198,15 @@ export type DeviceActions = {
   setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
+  /** Set the persistent serial link state (optionally the port it's on). */
+  setDeviceConnectionStatus: (
+    status: DeviceConnectionStatus,
+    port?: string | null,
+    transport?: DeviceConnection['transport'],
+    debugTransport?: DeviceConnection['debugTransport'],
+  ) => void
+  /** Reset the serial link to disconnected/null. */
+  clearDeviceConnection: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

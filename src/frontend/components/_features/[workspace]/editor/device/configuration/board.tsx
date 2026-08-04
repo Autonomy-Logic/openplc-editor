@@ -1,28 +1,44 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import * as Popover from '@radix-ui/react-popover'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { Copy } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
+import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { PinMappingTable } from './components/pin-mapping-table'
+
+/**
+ * Confirms the held device link on the device screen: a quiet, monochrome line
+ * that appears once Connect has settled on a channel a firmware answered.
+ */
+function DeviceConnectedIndicator({ isConnected }: { isConnected: boolean }) {
+  if (!isConnected) return null
+  return (
+    <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
+  )
+}
 
 const Board = memo(function () {
   const capabilities = useCapabilities()
@@ -50,12 +66,32 @@ const Board = memo(function () {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
+  // CONNECT flow (D72): open the device channel, classify it, and drive the
+  // flash follow-up when nothing answered the debug protocol.
+  const {
+    connect: connectDevice,
+    disconnect: disconnectDevice,
+    isConnected,
+    status: serialStatus,
+  } = useDeviceConnect(currentBoardInfo)
+
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
   // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
+  // Read from the same place the connection resolver reads it, so the button and
+  // the resolution never disagree about whether a network path exists.
+  const modbusTcpConfigured = useOpenPLCStore(
+    (state) =>
+      (
+        (state.deviceDefinitions.configuration.vendorScreenData ?? {}) as Record<
+          string,
+          Record<string, unknown> | undefined
+        >
+      )['modbus_tcp']?.['enabled'] === true,
+  )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
@@ -349,6 +385,9 @@ const Board = memo(function () {
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       await runtime.clearCredentials()
+      // The session goes with it: control was this REST connection, and any debug
+      // channel opened off it has nothing left to belong to.
+      await device.closeRuntimeSession?.()
       return
     }
 
@@ -593,33 +632,24 @@ const Board = memo(function () {
                   Search
                 </button>
               </div>
-              <div id='runtime-connect-button-container' className='flex w-full items-center justify-start'>
-                <button
-                  type='button'
-                  onClick={handleConnectToRuntime}
-                  disabled={connectionStatus === 'connecting'}
-                  className='h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white hover:bg-brand-medium-dark disabled:opacity-50'
-                >
-                  {connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : connectionStatus === 'connected'
-                      ? 'Disconnect'
-                      : 'Connect'}
-                </button>
+              <DeviceConnectButton
+                containerId='runtime-connect-button-container'
+                status={connectionStatus}
+                onConnect={handleConnectToRuntime}
+                onDisconnect={handleConnectToRuntime}
+              >
                 {connectionStatus === 'connected' && (
-                  <div className='ml-2 flex items-center gap-2'>
-                    <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>
+                  <>
                     {plcStatus && (
                       <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
                     )}
-                  </div>
+                    <DeviceConnectedIndicator isConnected={connectionStatus === 'connected'} />
+                  </>
                 )}
-                {connectionStatus === 'error' && (
-                  <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
-                )}
-              </div>
+              </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
+            <>
             <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
               <Label
                 id='communication-ports-selector-label'
@@ -648,7 +678,9 @@ const Board = memo(function () {
                   viewportRef={communicationSelectRef}
                 >
                   {availableCommunicationPorts.map((port) => {
-                    const displayName = port.name?.trim() || port.address
+                    // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
+                    // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
+                    const { label, title } = serialPortDisplay(port)
                     return (
                       <SelectItem
                         key={port.address}
@@ -657,9 +689,10 @@ const Board = memo(function () {
                           'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
                         )}
                         value={port.address}
+                        title={title}
                       >
                         <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {displayName}
+                          {label}
                         </span>
                       </SelectItem>
                     )
@@ -677,6 +710,22 @@ const Board = memo(function () {
                 <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
               </button>
             </div>
+            <DeviceConnectButton
+              containerId='device-connect-button-container'
+              status={serialStatus}
+              onConnect={connectDevice}
+              onDisconnect={disconnectDevice}
+              // A missing port only blocks Connect when serial is the ONLY way in.
+              // With Modbus TCP enabled the connection can still be made over the
+              // network, so the button stays live and resolution reports the real
+              // reason if that path is not usable either.
+              {...(!isConnected && !communicationPort && !modbusTcpConfigured
+                ? { blockedReason: 'Select a communication port first' }
+                : {})}
+            >
+              <DeviceConnectedIndicator isConnected={isConnected} />
+            </DeviceConnectButton>
+            </>
           ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
