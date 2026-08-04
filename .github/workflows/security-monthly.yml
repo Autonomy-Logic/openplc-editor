@@ -64,6 +64,14 @@ jobs:
           if [ "$rc" != "0" ] && [ "$rc" != "1" ]; then echo "::error::osv-scanner failed (exit $rc)"; exit 1; fi
           [ -s /tmp/osv.json ] || echo '{"results":[]}' > /tmp/osv.json
           node scripts/scan-vulns.mjs /tmp/osv.json sbom/vulnerabilities.csv
+          # also an UNfiltered scan, so the report's headline numbers are derived
+          # live (raw total vs. suppressed vs. surfacing) instead of hard-coded.
+          set +e
+          osv-scanner scan --recursive --format=json --output=/tmp/osv-raw.json .
+          rc2=$?
+          set -e
+          if [ "$rc2" != "0" ] && [ "$rc2" != "1" ]; then echo "::error::osv-scanner (raw) failed (exit $rc2)"; exit 1; fi
+          [ -s /tmp/osv-raw.json ] || echo '{"results":[]}' > /tmp/osv-raw.json
 
       - name: Build report (md + html)
         run: |
@@ -71,6 +79,8 @@ jobs:
           node scripts/build-report.mjs \
             --config security/report-config.json \
             --cdx "sbom/$NAME.cdx.json" \
+            --osv-raw /tmp/osv-raw.json \
+            --osv-delta /tmp/osv.json \
             --out "security/${{ steps.m.outputs.month }}" \
             --date "${{ steps.m.outputs.month }}"
 
@@ -99,6 +109,12 @@ jobs:
       - name: Open Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          # A PR opened with the default GITHUB_TOKEN does NOT trigger other
+          # workflows (so the gate/lint/tests would never run on the monthly PR).
+          # Set a SECURITY_BOT_TOKEN secret (a GitHub App installation token or a
+          # fine-grained PAT with contents+PR write) to make checks run; it falls
+          # back to GITHUB_TOKEN if unset (PR still opens, just without checks).
+          token: ${{ secrets.SECURITY_BOT_TOKEN || github.token }}
           base: development
           branch: chore/security-${{ steps.m.outputs.month }}
           title: "chore(security): monthly SBOM & VEX report — ${{ steps.m.outputs.month }}"

@@ -37,6 +37,46 @@ for (const c of comps) {
 }
 const topLicenses = Object.entries(licAgg).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
+// --- live advisory metrics from the actual scan(s), when provided -----------
+// Keeps the headline honest: the numbers reflect THIS run's scan, not a static
+// value in the config. --osv-raw = unfiltered scan; --osv-delta = scan WITH the
+// osv-scanner.toml VEX baseline applied. Falls back to the config numbers if no
+// scan is passed (e.g. an ad-hoc local render).
+const loadScan = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
+function tally(scan) {
+  const bySev = { CRITICAL: 0, HIGH: 0, MODERATE: 0, LOW: 0 };
+  const ids = new Set();
+  for (const r of (scan?.results || [])) for (const p of (r.packages || [])) for (const v of (p.vulnerabilities || [])) {
+    if (!v.id || ids.has(v.id)) continue; ids.add(v.id);
+    let s = (v.database_specific?.severity || '').toUpperCase();
+    if (s === 'MEDIUM') s = 'MODERATE';
+    if (!(s in bySev)) s = 'MODERATE';
+    bySev[s]++;
+  }
+  return { total: ids.size, bySev };
+}
+const sevStr = (b) => `${b.CRITICAL} critical · ${b.HIGH} high · ${b.MODERATE} moderate · ${b.LOW} low`;
+const rawScan = args['osv-raw'] ? loadScan(args['osv-raw']) : null;
+const deltaScan = args['osv-delta'] ? loadScan(args['osv-delta']) : null;
+let advisoryRows;
+if (rawScan && deltaScan) {
+  const raw = tally(rawScan), delta = tally(deltaScan);
+  const suppressed = Math.max(0, raw.total - delta.total);
+  const pct = raw.total ? Math.round(100 * suppressed / raw.total) : 0;
+  advisoryRows = [
+    { label: `Raw advisories detected (this scan · ${date})`, value: `${raw.total} (${sevStr(raw.bySev)})` },
+    { label: 'Not applicable — suppressed by the VEX baseline', value: `${suppressed} (${pct}%)`, badge: 'b-green' },
+    { label: 'Surfacing after suppression — review', value: `${delta.total} (${sevStr(delta.bySev)})`, badge: delta.total ? 'b-red' : 'b-green' },
+  ];
+} else {
+  advisoryRows = [
+    { label: 'Raw advisories detected', value: `${cfg.advisories.total} (${cfg.advisories.critical} critical · ${cfg.advisories.high} high · ${cfg.advisories.moderate} moderate · ${cfg.advisories.low} low)` },
+    { label: 'AFFECTED — action required', value: `${cfg.counts.affected.n} (${cfg.counts.affected.sev})`, badge: 'b-red' },
+    { label: 'AFFECTED — mitigating controls in place', value: `${cfg.counts.mitigated.n} (${cfg.counts.mitigated.sev})`, badge: 'b-amber' },
+    { label: 'NOT AFFECTED', value: `${cfg.counts.notAffected.n} (${cfg.counts.notAffected.pct})`, badge: 'b-green' },
+  ];
+}
+
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // report-config.json is written by the AI triage step, so its strings are
 // UNTRUSTED. Escape everything, then re-enable only a small set of attribute-less
@@ -66,10 +106,7 @@ md.push('### Key metrics\n');
 md.push('| Metric | Value |');
 md.push('|---|---|');
 md.push(`| Components inventoried (full transitive graph) | **${componentCount}** |`);
-md.push(`| Raw advisories detected | ${cfg.advisories.total} (${cfg.advisories.critical} critical · ${cfg.advisories.high} high · ${cfg.advisories.moderate} moderate · ${cfg.advisories.low} low) |`);
-md.push(`| **AFFECTED — action required** | **${cfg.counts.affected.n}** (${cfg.counts.affected.sev}) |`);
-md.push(`| AFFECTED — mitigating controls in place | ${cfg.counts.mitigated.n} (${cfg.counts.mitigated.sev}) |`);
-md.push(`| **NOT AFFECTED** | **${cfg.counts.notAffected.n}** (${cfg.counts.notAffected.pct}) |`);
+for (const r of advisoryRows) md.push(`| ${r.label} | ${r.value} |`);
 md.push('\n## 1. Scope & System Description\n');
 md.push(stripTags(cfg.scope) + '\n');
 md.push(`> **Scope note.** ${stripTags(cfg.scopeNote)}\n`);
@@ -149,10 +186,7 @@ ${row(['Security contact', esc(cfg.securityContact)])}
 <h2>Key metrics</h2>
 <table>${th(['Metric', 'Value'])}
 ${row(['Components inventoried (full transitive graph)', `<strong>${componentCount}</strong>`])}
-${row(['Raw advisories detected', `${cfg.advisories.total} (${cfg.advisories.critical} critical · ${cfg.advisories.high} high · ${cfg.advisories.moderate} moderate · ${cfg.advisories.low} low)`])}
-${row([badge('AFFECTED — action required', 'b-red'), `<strong>${cfg.counts.affected.n}</strong> (${cfg.counts.affected.sev})`])}
-${row([badge('AFFECTED — mitigated', 'b-amber'), `${cfg.counts.mitigated.n} (${cfg.counts.mitigated.sev})`])}
-${row([badge('NOT AFFECTED', 'b-green'), `<strong>${cfg.counts.notAffected.n}</strong> (${cfg.counts.notAffected.pct})`])}
+${advisoryRows.map((r) => row([r.badge ? badge(r.label, r.badge) : esc(r.label), esc(r.value)])).join('\n')}
 </table>
 <h1>1. Scope &amp; System Description</h1><p>${rich(cfg.scope)}</p>
 <div class="callout"><strong>Scope note.</strong> ${rich(cfg.scopeNote)}</div>
