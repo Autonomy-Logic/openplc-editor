@@ -1463,7 +1463,25 @@ class CompilerModule {
 
     // Build the .o path list synchronously up-front so the archive members
     // land in source-file order regardless of the concurrent compile result.
-    const objectFiles = sources.map((sourcePath) => join(objDir, path.basename(sourcePath).replace(/\.cpp$/, '.o')))
+    //
+    // The `.cpp` is KEPT in the object name (`foo.cpp.o`, not `foo.o`) — the same
+    // convention arduino-cli uses for sketch objects, and on ESP8266 it decides
+    // whether the code runs from flash or from IRAM.
+    //
+    // esp8266's linker script sends code to flash by matching the OBJECT NAME:
+    //
+    //     .irom0.text : { *.c.o(.literal* .text*)
+    //                     *.cpp.o(EXCLUDE_FILE (umm_malloc.cpp.o) .literal* … .text*)
+    //                     *.cc.o(.literal* .text*)  … }
+    //
+    // Anything it does not match falls through to `.text1`, a catch-all mapped
+    // into `iram1_0_seg` — 32 KB shared with the WiFi/SDK core. Named `foo.o`,
+    // every translation unit of libOpenPLCUserLib.a landed there: measured at
+    // 7387 bytes of IRAM for a small project (glue 3781 + configuration 3149 +
+    // pou_MAIN 457), which overflowed the segment and failed the link with
+    // "section `.text1' will not fit in region `iram1_0_seg'" — a message that
+    // names neither this archive nor the reason.
+    const objectFiles = sources.map((sourcePath) => join(objDir, `${path.basename(sourcePath)}.o`))
 
     // Cap concurrent toolchain spawns at the host's logical core count.
     // An unbounded `sources.map(async …)` was dispatching one g++ per TU
