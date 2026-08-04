@@ -26,22 +26,6 @@ any new advisory** and update the report data, renders the report from
 The report is **generated from data** (`report-config.json` + the live SBOM), so
 it never drifts from the actual dependency graph.
 
-## One-time setup — run Claude on your subscription (no API key)
-
-Claude runs inside the workflow on **your Claude subscription** (Pro/Max), not a
-pay-per-token API key:
-
-1. On your machine: `claude setup-token` → complete the browser login → copy the
-   token it prints (`CLAUDE_CODE_OAUTH_TOKEN`).
-2. In the repo: **Settings → Secrets and variables → Actions → New repository
-   secret** → name `CLAUDE_CODE_OAUTH_TOKEN`, value = the token.
-3. Done. The monthly workflow will authenticate as you. (If the secret is absent,
-   the workflow still runs and builds the report deterministically — it just
-   skips the AI triage step.)
-
-> To move billing off a personal account later (e.g. an org API key), replace the
-> secret with `ANTHROPIC_API_KEY` and swap the one input in the workflow — nothing
-> else changes.
 
 ## Reviewing the monthly PR
 

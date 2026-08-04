@@ -6,8 +6,20 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 const [src, out = 'sbom/vulnerabilities.csv'] = process.argv.slice(2);
-let data = {};
-try { data = JSON.parse(readFileSync(src, 'utf8')); } catch { data = {}; }
+// FAIL CLOSED: a missing / unreadable / shapeless scan output means the scanner
+// did not run correctly. We must NOT write an empty register (that would look
+// like "no vulnerabilities"). Exit non-zero so the workflow step fails.
+let data;
+try {
+  data = JSON.parse(readFileSync(src, 'utf8'));
+} catch (e) {
+  console.error(`scan-vulns: cannot read/parse "${src}" — the scanner failed (${e.code || e.message}). Refusing to write an empty register.`);
+  process.exit(1);
+}
+if (!data || !Array.isArray(data.results)) {
+  console.error(`scan-vulns: "${src}" has no "results" array — the scanner failed. Refusing to write an empty register.`);
+  process.exit(1);
+}
 
 const esc = (s) => { s = String(s ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 const sevOf = (v) => (v.database_specific?.severity)

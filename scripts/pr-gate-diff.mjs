@@ -46,7 +46,13 @@ function fatal(msg) {
   process.exit(2);
 }
 
-// --- CVSS v3.x base-score computation (official formula) ----------------------
+// --- CVSS v3.x base-score computation ----------------------------------------
+// Implements the official CVSS v3.1 Base score (FIRST.org spec §7.1 "Base
+// equations"). The magic numbers are the spec's metric weights and the Impact /
+// Exploitability / Roundup coefficients — verify against
+// https://www.first.org/cvss/v3.1/specification-document (§7.1). We only reach
+// this path when an advisory has no qualitative severity word; most OSV entries
+// carry database_specific.severity, which is preferred above.
 function cvss3Base(vector) {
   const m = {};
   for (const kv of vector.split('/')) { const [k, v] = kv.split(':'); if (k && v) m[k] = v; }

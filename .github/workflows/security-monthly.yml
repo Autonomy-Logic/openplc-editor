@@ -1,12 +1,10 @@
 name: Security — monthly SBOM & VEX report
 
 # Runs on GitHub's servers (not on anyone's laptop). Every month it regenerates
-# the SBOM, scans dependencies, has Claude triage any NEW advisory and write the
-# report from the versioned template, drops everything into security/<YYYY-MM>/,
+# the SBOM, scans dependencies, renders the
+#   report from the versioned template, drops everything into security/<YYYY-MM>/,
 # and opens a PR for the team to review. Nothing is merged automatically.
 #
-# Auth: Claude runs on your Claude subscription via CLAUDE_CODE_OAUTH_TOKEN
-# (from `claude setup-token`) — no pay-per-token API key. See security/README.md.
 
 on:
   schedule:
@@ -16,7 +14,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write   # required by claude-code-action (OIDC)
 
 concurrency:
   group: security-monthly
@@ -25,10 +22,6 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
-    # Mapped here because the `secrets` context is NOT allowed in a step-level
-    # `if:` — the Claude step gates on `env.CLAUDE_CODE_OAUTH_TOKEN` instead.
-    env:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - name: Checkout (with submodules for vendored C libs)
         uses: actions/checkout@v4
@@ -54,41 +47,24 @@ jobs:
       # ---- deterministic: vulnerability scan (OSV, honoring the VEX baseline) ----
       - name: Install osv-scanner
         run: |
-          curl -sSfL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" -o /usr/local/bin/osv-scanner
-          chmod +x /usr/local/bin/osv-scanner
+          OSV_VER=v2.4.0   # pinned; verified against the release SHA256SUMS
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_linux_amd64" -o /tmp/osv-scanner_linux_amd64
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_SHA256SUMS" -o /tmp/osv_SHA256SUMS
+          ( cd /tmp && grep " osv-scanner_linux_amd64$" osv_SHA256SUMS | sha256sum -c - )
+          install -m 0755 /tmp/osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
       - name: Scan
         run: |
           CFG=""; [ -f osv-scanner.toml ] && CFG="--config=osv-scanner.toml"
-          osv-scanner scan $CFG --recursive --format=json --output=/tmp/osv.json . || true
+          set +e
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/osv.json .
+          rc=$?
+          set -e
+          # osv-scanner: 0 = no vulns, 1 = vulns found. Any other code is a scanner
+          # failure — do NOT let scan-vulns turn it into an empty (clean) register.
+          if [ "$rc" != "0" ] && [ "$rc" != "1" ]; then echo "::error::osv-scanner failed (exit $rc)"; exit 1; fi
+          [ -s /tmp/osv.json ] || echo '{"results":[]}' > /tmp/osv.json
           node scripts/scan-vulns.mjs /tmp/osv.json sbom/vulnerabilities.csv
 
-      # ---- judgment: Claude triages the delta + updates the report data ----
-      # Runs on YOUR subscription (no API key). Skipped gracefully if the token
-      # isn't configured yet — the deterministic report still builds below.
-      - name: Claude — triage new advisories & update report data
-        if: ${{ env.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-        continue-on-error: true
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: >
-            You are updating this repository's monthly security report DATA only.
-            Inputs: the fresh scan at /tmp/osv.json and the SBOM under sbom/.
-            For every advisory present in /tmp/osv.json that is NOT already listed
-            in osv-scanner.toml, read the source code and decide reachability
-            (is the vulnerable function called? is its input attacker-controlled?).
-            Then:
-             (a) if NOT exploitable, add an [[IgnoredVulns]] entry to osv-scanner.toml
-                 with a CISA VEX reason and an ignoreUntil date ~3 months out;
-             (b) if exploitable, add/refresh the corresponding entry in
-                 security/report-config.json (affected[]) with the fix version;
-             (c) keep the counts and the notAffected[]/mitigated[] arrays in
-                 security/report-config.json consistent with the scan.
-            EDIT ONLY these two files: osv-scanner.toml and
-            security/report-config.json. Do not touch anything else. If there are
-            no new advisories, make no changes.
-
-      # ---- deterministic: render the report from the (possibly updated) data ----
       - name: Build report (md + html)
         run: |
           NAME=$(node -p "require('./package.json').name")
@@ -123,6 +99,7 @@ jobs:
       - name: Open Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          base: development
           branch: chore/security-${{ steps.m.outputs.month }}
           title: "chore(security): monthly SBOM & VEX report — ${{ steps.m.outputs.month }}"
           labels: supply-chain, security
@@ -132,6 +109,6 @@ jobs:
 
             - SBOM regenerated (CycloneDX + SPDX) from the current lockfile.
             - Dependencies scanned against OSV (same source as Dependabot), honoring `osv-scanner.toml` (the VEX baseline).
-            - New advisories (if any) were triaged by Claude and reflected in `report-config.json` / `osv-scanner.toml` — **review those diffs**.
+            - New advisories (if any) surface in `vulnerabilities.csv` for human review (no AI triage on this public repo).
 
             Nothing is merged automatically. Approve to archive this month's snapshot.
