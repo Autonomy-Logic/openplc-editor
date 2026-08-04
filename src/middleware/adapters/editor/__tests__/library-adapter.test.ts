@@ -1,5 +1,29 @@
 import type { LibraryPort } from '../../../shared/ports/library-port'
+import type { PublicLibrary } from '../../../shared/ports/public-catalog-types'
 import { createEditorLibraryAdapter } from '../library-adapter'
+
+function makePublicLibrary(overrides: Partial<PublicLibrary> = {}): PublicLibrary {
+  return {
+    id: 'pub-1',
+    projectId: 'project-1',
+    name: 'alpha-lib',
+    version: '1.0.0',
+    displayName: 'Alpha Lib',
+    description: null,
+    license: null,
+    authorHandle: 'jdoe',
+    manifestPous: { functions: [], functionBlocks: [], types: [] },
+    sizeBytes: 1024,
+    sha256: 'a'.repeat(64),
+    downloadsCount: 0,
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    isProjectPublic: false,
+    projectUrl: null,
+    projectStarsCount: null,
+    ...overrides,
+  }
+}
 
 let adapter: LibraryPort
 
@@ -10,6 +34,7 @@ beforeEach(() => {
     installLibraryFromFile: jest.fn().mockResolvedValue({ success: true, installed: { name: 'oscat' } }),
     uninstallLibrary: jest.fn().mockResolvedValue({ success: true }),
     onLibrariesChanged: jest.fn().mockReturnValue(() => undefined),
+    installLibrariesFromCatalog: jest.fn().mockResolvedValue({ results: [] }),
   } as unknown as typeof window.bridge
 
   adapter = createEditorLibraryAdapter()
@@ -67,6 +92,19 @@ describe('uninstall', () => {
     const result = await adapter.uninstall('missing')
 
     expect(result).toEqual({ success: false, error: 'Uninstall failed' })
+  })
+})
+
+describe('installFromCatalog', () => {
+  it('narrows the catalog rows to bare ids before delegating to the bridge', async () => {
+    const libraries = [makePublicLibrary({ id: 'pub-1' }), makePublicLibrary({ id: 'pub-2' })]
+    const batch = { results: [{ publishedLibraryId: 'pub-1', success: true }] }
+    ;(window.bridge.installLibrariesFromCatalog as jest.Mock).mockResolvedValueOnce(batch)
+
+    const result = await adapter.installFromCatalog!(libraries)
+
+    expect(window.bridge.installLibrariesFromCatalog).toHaveBeenCalledWith(['pub-1', 'pub-2'])
+    expect(result).toEqual(batch)
   })
 })
 

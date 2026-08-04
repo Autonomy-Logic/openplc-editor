@@ -24,7 +24,7 @@ import type {
   StlibArchiveDTO,
 } from '../../shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../shared/ports/library-types'
-import type { ListPublicLibrariesArgs } from '../../shared/ports/public-catalog-types'
+import type { ListPublicLibrariesArgs, PublicLibrary } from '../../shared/ports/public-catalog-types'
 import type { Result, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorLibraryAdapter(): LibraryPort {
@@ -62,8 +62,12 @@ export function createEditorLibraryAdapter(): LibraryPort {
       return window.bridge.queryPublicCatalog(args)
     },
 
-    installFromCatalog(publishedLibraryIds: string[]): Promise<CatalogInstallBatch> {
-      return window.bridge.installLibrariesFromCatalog(publishedLibraryIds)
+    installFromCatalog(libraries: PublicLibrary[]): Promise<CatalogInstallBatch> {
+      // The main-process module only needs each library's id — it
+      // downloads directly from autonomy-edge and installs locally
+      // already, unlike the web adapter it never round-tripped
+      // through a server-side install-from-repository call.
+      return window.bridge.installLibrariesFromCatalog(libraries.map((l) => l.id))
     },
   }
 }

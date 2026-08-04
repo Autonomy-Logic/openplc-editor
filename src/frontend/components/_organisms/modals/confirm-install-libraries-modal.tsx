@@ -44,7 +44,7 @@ const ConfirmInstallLibrariesModal = () => {
     if (selection.length === 0) return
     if (!library?.installFromCatalog) return
     setPhase('installing')
-    const batch = await library.installFromCatalog(selection.map((l) => l.id))
+    const batch = await library.installFromCatalog(selection)
     setResults(batch.results)
     setPhase('done')
   }
