@@ -101,7 +101,7 @@ describe('installFromCatalog', () => {
     const batch = { results: [{ publishedLibraryId: 'pub-1', success: true }] }
     ;(window.bridge.installLibrariesFromCatalog as jest.Mock).mockResolvedValueOnce(batch)
 
-    const result = await adapter.installFromCatalog!(libraries)
+    const result = await adapter.installFromCatalog?.(libraries)
 
     expect(window.bridge.installLibrariesFromCatalog).toHaveBeenCalledWith(['pub-1', 'pub-2'])
     expect(result).toEqual(batch)
