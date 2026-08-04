@@ -2347,6 +2347,10 @@ class MainProcessBridge implements MainIpcModule {
 
     try {
       const result = await link.client.setVariable(variableIndex, force, buffer)
+      // Forcing values is device traffic too: it queues on the same link and
+      // proves the same thing a read does. Without this, holding a force while
+      // the poll is due lets the liveness read wait behind it and time out.
+      if (result.success) this.deviceSession.noteTraffic()
       logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
       return result
     } catch (error) {

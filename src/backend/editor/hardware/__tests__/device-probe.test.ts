@@ -104,10 +104,21 @@ describe('classifyDeviceLink', () => {
     expect(result).toEqual({ status: 'no-firmware' })
   })
 
-  it('reports no-firmware when the frame came back with an empty id', async () => {
+  // Cores without ArduinoUniqueID, and boards opting out via
+  // OPENPLC_NO_UNIQUE_ID, answer FC 0x48 with `id_len = 0` on purpose rather than
+  // failing to compile. That is a firmware replying, not a blank board — treating
+  // the empty id as "no firmware" told those users to reflash a working device.
+  it('keeps a firmware that answers with no unique id at all', async () => {
     const result = await classifyDeviceLink(fakeChannel([EMPTY_ID]), { boardIdProbe: { attempts: 1, backoffMs: 0 } })
 
-    expect(result).toEqual({ status: 'no-firmware' })
+    expect(result).toEqual({ status: 'connected-with-firmware' })
+  })
+
+  it('does not burn retries once a firmware has answered, empty id or not', async () => {
+    const channel = fakeChannel([EMPTY_ID])
+    await classifyDeviceLink(channel, { boardIdProbe: { attempts: 6, backoffMs: 0 } })
+
+    expect(channel.calls).toHaveLength(1)
   })
 
   it('never throws — a transport that blows up resolves to an error status', async () => {

@@ -121,7 +121,14 @@ export async function connectWithRetries(client: Connectable, { attempts, backof
 /**
  * Read the board id (FC 0x48) with a bounded retry/backoff loop -- a readiness
  * probe for the firmware itself (the serial open auto-resets ESP8266/AVR boards).
- * A non-empty board id means a firmware answered.
+ *
+ * A SUCCESSFUL REPLY is the signal, not a non-empty id. `success` already means
+ * the frame came back with the right function code and a SUCCESS status, which
+ * only an OpenPLC firmware sends. The id itself is allowed to be empty: cores
+ * without ArduinoUniqueID support, and boards that opt out with
+ * `OPENPLC_NO_UNIQUE_ID`, deliberately answer `id_len = 0` rather than fail to
+ * compile (see `debugGetBoardId` in modbus_debug.cpp). Requiring bytes here
+ * reported those boards as having no firmware at all.
  */
 export async function readBoardIdWithRetries(
   client: BoardIdReadable,
@@ -131,7 +138,7 @@ export async function readBoardIdWithRetries(
   for (let attempt = 0; attempt < attempts; attempt++) {
     const result = await client.getBoardId()
     last = { success: result.success, boardId: result.boardId }
-    if (last.success && !!last.boardId && last.boardId.length > 0) return last
+    if (last.success) return last
     if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, backoffMs))
   }
   return last
@@ -160,8 +167,10 @@ export async function classifyDeviceLink(
 ): Promise<DeviceProbeOutcome> {
   try {
     const probe = await readBoardIdWithRetries(client, opts.boardIdProbe ?? PATIENT_BOARD_ID_PROBE)
-    if (!probe.success || !probe.boardId || probe.boardId.length === 0) {
-      // Channel opened but nothing spoke the debug protocol -> blank/non-OpenPLC.
+    if (!probe.success) {
+      // Channel opened but nothing spoke the debug protocol -> blank board, a
+      // non-OpenPLC device, or the wrong baud rate. Whether the reply carried a
+      // unique id is NOT part of this question — see `readBoardIdWithRetries`.
       return { status: 'no-firmware' }
     }
     return { status: 'connected-with-firmware' }
