@@ -180,7 +180,5 @@ export interface DevicePort {
    * 0/1/2 (STOPPED/RUNNING/ERROR); `switchPosition` is 0/1 (STOP/RUN) and is
    * absent on firmware predating the run/stop state machine.
    */
-  onPlcState?(
-    callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
-  ): () => void
+  onPlcState?(callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void): () => void
 }

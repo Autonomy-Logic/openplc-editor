@@ -287,7 +287,14 @@ describe('buildGetVersionRequest / parseGetVersionResponse', () => {
   })
 
   it('strips a trailing NUL terminator', () => {
-    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_VERSION, ModbusDebugResponse.SUCCESS, 0x31, 0x2e, 0x30, 0x00])
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_VERSION,
+      ModbusDebugResponse.SUCCESS,
+      0x31,
+      0x2e,
+      0x30,
+      0x00,
+    ])
     expect(parseGetVersionResponse(buf).version).toBe('1.0')
   })
 

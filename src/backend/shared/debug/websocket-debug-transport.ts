@@ -31,14 +31,7 @@ import {
   parseGetMd5Response,
   parseSetVariableResponse,
 } from './modbus-pdu'
-import type {
-  DebugBoardIdResult,
-  DebugSetResult,
-  DebugTransport,
-  DebugTransportResult,
-  DeviceDebugChannel,
-  Md5ProbeResult,
-} from './types'
+import type { DebugSetResult, DebugTransport, DebugTransportResult, DeviceDebugChannel, Md5ProbeResult } from './types'
 
 const REQUEST_TIMEOUT_MS = 5000
 const CONNECT_TIMEOUT_MS = 5000

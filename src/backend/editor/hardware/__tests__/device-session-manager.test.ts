@@ -278,9 +278,7 @@ describe('DeviceSessionManager', () => {
 
       expect(h.manager.isConnected()).toBe(false)
       expect(h.manager.isRecovering()).toBe(false)
-      expect(h.statuses).toEqual([
-        { status: 'error', transport: 'rtu', descriptor: '/dev/ttyUSB0', reason: 'lost' },
-      ])
+      expect(h.statuses).toEqual([{ status: 'error', transport: 'rtu', descriptor: '/dev/ttyUSB0', reason: 'lost' }])
     })
   })
 
@@ -388,7 +386,11 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { transport: 'websocket', descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
+        debugChannel: {
+          transport: 'websocket',
+          descriptor: 'websocket 10.0.0.5',
+          create: () => asTransport(new FakeClient()),
+        },
       })
 
       expect(h.manager.isConnected()).toBe(true)
@@ -406,7 +408,11 @@ describe('DeviceSessionManager', () => {
       const h = harness()
       h.manager.openRestSession({
         address: '10.0.0.5',
-        debugChannel: { transport: 'websocket', descriptor: 'websocket 10.0.0.5', create: () => asTransport(new FakeClient()) },
+        debugChannel: {
+          transport: 'websocket',
+          descriptor: 'websocket 10.0.0.5',
+          create: () => asTransport(new FakeClient()),
+        },
       })
 
       expect(h.statuses.at(-1)).toEqual({

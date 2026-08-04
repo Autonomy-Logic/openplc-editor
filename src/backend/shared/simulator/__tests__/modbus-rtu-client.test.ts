@@ -604,7 +604,9 @@ describe('ModbusRtuClient', () => {
 
     it('returns error on incomplete success payload', async () => {
       await connectClient()
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, new Uint8Array([ModbusDebugResponse.SUCCESS, 1])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, new Uint8Array([ModbusDebugResponse.SUCCESS, 1])),
+      )
       const result = await client.getStatus()
       expect(result.success).toBe(false)
       expect(result.error).toContain('Incomplete status response')
@@ -701,7 +703,9 @@ describe('ModbusRtuClient', () => {
 
     it('handles id_len = 0 (unsupported core) as success with empty id', async () => {
       await connectClient()
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])))
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
+      )
       const result = await client.getBoardId()
       expect(result.success).toBe(true)
       expect(result.boardIdHex).toBe('')
@@ -727,7 +731,11 @@ describe('ModbusRtuClient', () => {
     it('returns error on incomplete id data', async () => {
       await connectClient()
       autoRespond(
-        buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])),
+        buildResponse(
+          1,
+          ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b]),
+        ),
       )
       const result = await client.getBoardId()
       expect(result.success).toBe(false)

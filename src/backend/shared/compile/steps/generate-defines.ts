@@ -104,8 +104,15 @@ export interface GenerateDefinesInput {
  * editor-produced and web-produced firmware comes out clean).
  */
 export function generateDefinesContent(input: GenerateDefinesInput): string {
-  const { boardEntry, devicePinMapping, stProgramFileContent, buildMD5Hash, boardRuntime, vppModbusState, defaultSerial } =
-    input
+  const {
+    boardEntry,
+    devicePinMapping,
+    stProgramFileContent,
+    buildMD5Hash,
+    boardRuntime,
+    vppModbusState,
+    defaultSerial,
+  } = input
 
   let DEFINES_CONTENT = ''
 

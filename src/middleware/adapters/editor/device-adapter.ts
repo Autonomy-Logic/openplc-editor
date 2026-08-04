@@ -14,11 +14,7 @@
  *   util:get-preview-image                      (invoke)
  */
 
-import type {
-  DeviceConnectionStatusPayload,
-  DeviceConnectResult,
-  DevicePort,
-} from '../../shared/ports/device-port'
+import type { DeviceConnectionStatusPayload, DeviceConnectResult, DevicePort } from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
 
 export function createEditorDeviceAdapter(): DevicePort {
@@ -75,9 +71,7 @@ export function createEditorDeviceAdapter(): DevicePort {
       return window.bridge.onDeviceConnectionStatus(callback)
     },
 
-    onPlcState(
-      callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
-    ): () => void {
+    onPlcState(callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void): () => void {
       return window.bridge.onDevicePlcState(callback)
     },
   }

@@ -13,12 +13,7 @@
 import type { PlcControlResult } from '../../../backend/shared/debug/types'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type { DebuggerPort } from '../../shared/ports/debugger-port'
-import type {
-  DebugSetResult,
-  DebugVariableResult,
-  Md5VerifyResult,
-  Unsubscribe,
-} from '../../shared/ports/types'
+import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorDebuggerAdapter(): DebuggerPort {
   let connected = false

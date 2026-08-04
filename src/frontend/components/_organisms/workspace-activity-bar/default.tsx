@@ -509,19 +509,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
    * package provides it, so a P1AM says "CPU switch" rather than the generic
    * wording.
    */
-  const warnSwitchInStop = useCallback(
-    async (deviceName: string, switchLabel?: string): Promise<void> => {
-      await showDeviceDialog(
-        'warning',
-        'Device is in STOP',
-        `The ${switchLabel ?? 'mode switch'} on ${deviceName} is in the STOP position. ` +
-          'The PLC cannot be started from the editor while the switch is in STOP.\n\n' +
-          'Flip the switch to RUN and try again.',
-        ['OK'],
-      )
-    },
-    [],
-  )
+  const warnSwitchInStop = useCallback(async (deviceName: string, switchLabel?: string): Promise<void> => {
+    await showDeviceDialog(
+      'warning',
+      'Device is in STOP',
+      `The ${switchLabel ?? 'mode switch'} on ${deviceName} is in the STOP position. ` +
+        'The PLC cannot be started from the editor while the switch is in STOP.\n\n' +
+        'Flip the switch to RUN and try again.',
+      ['OK'],
+    )
+  }, [])
 
   const handlePlcControl = useCallback(async (): Promise<void> => {
     const boardTarget = deviceDefinitions.configuration.deviceBoard
@@ -529,9 +526,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     const caps = resolveTargetCapabilities(boardInfo)
     if (!caps.plcStateControl) return
 
-    const switchLabel = (
-      boardInfo as { stateControl?: { modeSwitch?: { label?: string } } } | undefined
-    )?.stateControl?.modeSwitch?.label
+    const switchLabel = (boardInfo as { stateControl?: { modeSwitch?: { label?: string } } } | undefined)?.stateControl
+      ?.modeSwitch?.label
 
     // ONE path for every target. "Start the PLC" is the same request whether it
     // travels as Modbus FC 0x4b down a cable or as an HTTP POST to a runtime; the
@@ -908,7 +904,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     canEdit,
     executeSave,
     addLog,
-    currentBoardInfo])
+    currentBoardInfo,
+  ])
 
   // ---------------------------------------------------------------------------
   // JSX
@@ -980,11 +977,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           >
             <PlayButton
               onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-              disabled={
-                isSimulatorBoard
-                  ? isCompiling || isDebuggerProcessing
-                  : plcControlBlocked
-              }
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : plcControlBlocked}
               className={cn(
                 isSimulatorBoard
                   ? isCompiling || isDebuggerProcessing

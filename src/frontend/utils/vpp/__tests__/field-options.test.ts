@@ -11,16 +11,23 @@ describe('resolveFieldOptions', () => {
 
   it('resolves a dynamic optionsRef from board context', () => {
     expect(
-      resolveFieldOptions({ optionsRef: 'board.serialPorts', options: ['Serial'] }, { board: { serialPorts: ['Serial', 'Serial1'] } }),
+      resolveFieldOptions(
+        { optionsRef: 'board.serialPorts', options: ['Serial'] },
+        { board: { serialPorts: ['Serial', 'Serial1'] } },
+      ),
     ).toEqual(['Serial', 'Serial1'])
   })
 
   it('falls back to static options when optionsRef resolves to undefined', () => {
-    expect(resolveFieldOptions({ optionsRef: 'board.serialPorts', options: ['Serial'] }, { board: {} })).toEqual(['Serial'])
+    expect(resolveFieldOptions({ optionsRef: 'board.serialPorts', options: ['Serial'] }, { board: {} })).toEqual([
+      'Serial',
+    ])
   })
 
   it('falls back to static options when the board is absent', () => {
-    expect(resolveFieldOptions({ optionsRef: 'board.serialPorts', options: ['Serial'] }, { board: undefined })).toEqual(['Serial'])
+    expect(resolveFieldOptions({ optionsRef: 'board.serialPorts', options: ['Serial'] }, { board: undefined })).toEqual(
+      ['Serial'],
+    )
   })
 
   it('falls back to static options when optionsRef resolves to an empty array', () => {

@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import * as Popover from '@radix-ui/react-popover'
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { Copy } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifier'
@@ -35,9 +33,7 @@ import { PinMappingTable } from './components/pin-mapping-table'
  */
 function DeviceConnectedIndicator({ isConnected }: { isConnected: boolean }) {
   if (!isConnected) return null
-  return (
-    <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
-  )
+  return <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
 }
 
 const Board = memo(function () {
@@ -650,81 +646,81 @@ const Board = memo(function () {
             </>
           ) : capabilities.hasLocalSerialPorts ? (
             <>
-            <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
-              <Label
-                id='communication-ports-selector-label'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                Communication Port
-              </Label>
-              <Select
-                value={communicationPort}
-                onValueChange={setCommunicationPort}
-                onOpenChange={setCommunicationSelectIsOpen}
-              >
-                <SelectTrigger
-                  aria-label='Communication port selection'
-                  placeholder='Select a communication port'
-                  withIndicator
-                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                />
-                <SelectContent
-                  className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                  sideOffset={5}
-                  alignOffset={5}
-                  position='popper'
-                  align='center'
-                  side='bottom'
-                  viewportRef={communicationSelectRef}
+              <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
+                <Label
+                  id='communication-ports-selector-label'
+                  className='whitespace-pre text-xs text-neutral-950 dark:text-white'
                 >
-                  {availableCommunicationPorts.map((port) => {
-                    // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
-                    // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
-                    const { label, title } = serialPortDisplay(port)
-                    return (
-                      <SelectItem
-                        key={port.address}
-                        className={cn(
-                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                          'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                        )}
-                        value={port.address}
-                        title={title}
-                      >
-                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {label}
-                        </span>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-              <button
-                type='button'
-                onClick={refreshCommunicationPorts}
-                disabled={isRefreshingPorts}
-                className={cn('group', isRefreshingPorts && 'cursor-not-allowed opacity-50')}
-                aria-pressed={isPressed}
-                aria-label='Refresh communication ports'
+                  Communication Port
+                </Label>
+                <Select
+                  value={communicationPort}
+                  onValueChange={setCommunicationPort}
+                  onOpenChange={setCommunicationSelectIsOpen}
+                >
+                  <SelectTrigger
+                    aria-label='Communication port selection'
+                    placeholder='Select a communication port'
+                    withIndicator
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent
+                    className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                    sideOffset={5}
+                    alignOffset={5}
+                    position='popper'
+                    align='center'
+                    side='bottom'
+                    viewportRef={communicationSelectRef}
+                  >
+                    {availableCommunicationPorts.map((port) => {
+                      // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
+                      // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
+                      const { label, title } = serialPortDisplay(port)
+                      return (
+                        <SelectItem
+                          key={port.address}
+                          className={cn(
+                            'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                            'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                          )}
+                          value={port.address}
+                          title={title}
+                        >
+                          <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                            {label}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+                <button
+                  type='button'
+                  onClick={refreshCommunicationPorts}
+                  disabled={isRefreshingPorts}
+                  className={cn('group', isRefreshingPorts && 'cursor-not-allowed opacity-50')}
+                  aria-pressed={isPressed}
+                  aria-label='Refresh communication ports'
+                >
+                  <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
+                </button>
+              </div>
+              <DeviceConnectButton
+                containerId='device-connect-button-container'
+                status={serialStatus}
+                onConnect={connectDevice}
+                onDisconnect={disconnectDevice}
+                // A missing port only blocks Connect when serial is the ONLY way in.
+                // With Modbus TCP enabled the connection can still be made over the
+                // network, so the button stays live and resolution reports the real
+                // reason if that path is not usable either.
+                {...(!isConnected && !communicationPort && !modbusTcpConfigured
+                  ? { blockedReason: 'Select a communication port first' }
+                  : {})}
               >
-                <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
-              </button>
-            </div>
-            <DeviceConnectButton
-              containerId='device-connect-button-container'
-              status={serialStatus}
-              onConnect={connectDevice}
-              onDisconnect={disconnectDevice}
-              // A missing port only blocks Connect when serial is the ONLY way in.
-              // With Modbus TCP enabled the connection can still be made over the
-              // network, so the button stays live and resolution reports the real
-              // reason if that path is not usable either.
-              {...(!isConnected && !communicationPort && !modbusTcpConfigured
-                ? { blockedReason: 'Select a communication port first' }
-                : {})}
-            >
-              <DeviceConnectedIndicator isConnected={isConnected} />
-            </DeviceConnectButton>
+                <DeviceConnectedIndicator isConnected={isConnected} />
+              </DeviceConnectButton>
             </>
           ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (

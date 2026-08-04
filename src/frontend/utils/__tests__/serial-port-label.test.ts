@@ -38,9 +38,10 @@ describe('serialPortDisplay', () => {
   describe('descriptor precedence', () => {
     it('prefers the arduino-cli board name over the manufacturer', () => {
       // Both scans found something; the board name is the specific one.
-      expect(
-        serialPortDisplay({ address: 'COM1', boardName: 'Opta', manufacturer: 'Arduino' }),
-      ).toEqual({ label: 'COM1 (Opta)', title: 'COM1 (Opta)' })
+      expect(serialPortDisplay({ address: 'COM1', boardName: 'Opta', manufacturer: 'Arduino' })).toEqual({
+        label: 'COM1 (Opta)',
+        title: 'COM1 (Opta)',
+      })
     })
 
     it('falls back to the manufacturer when arduino-cli identified no board', () => {

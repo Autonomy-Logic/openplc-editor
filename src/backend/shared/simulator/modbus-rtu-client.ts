@@ -581,9 +581,7 @@ export class ModbusRtuClient {
       // buildPlcSetStateRequest returns [FC][state]; assembleRequest writes the
       // FC + slaveId itself, so hand it only the trailing payload.
       const pdu = buildPlcSetStateRequest(state)
-      const response = await this.sendRequest(
-        this.assembleRequest(ModbusFunctionCode.PLC_SET_STATE, pdu.subarray(1)),
-      )
+      const response = await this.sendRequest(this.assembleRequest(ModbusFunctionCode.PLC_SET_STATE, pdu.subarray(1)))
       if (response.length < 8) {
         return { success: false, error: `Invalid response: too short (${response.length} bytes)` }
       }

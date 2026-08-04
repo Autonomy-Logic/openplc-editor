@@ -47,6 +47,12 @@ import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import {
+  classifyDeviceLink,
+  type DeviceProbeOutcome,
+  PATIENT_BOARD_ID_PROBE,
+  QUICK_BOARD_ID_PROBE,
+} from '../../../backend/editor/hardware/device-probe'
+import {
   type DeviceDebugCandidate,
   type DeviceLinkCandidate,
   type DeviceLinkStatus,
@@ -56,12 +62,6 @@ import {
   buildDeviceModbusTransport,
   modbusTransportKind,
 } from '../../../backend/editor/hardware/device-transport-factory'
-import {
-  classifyDeviceLink,
-  type DeviceProbeOutcome,
-  PATIENT_BOARD_ID_PROBE,
-  QUICK_BOARD_ID_PROBE,
-} from '../../../backend/editor/hardware/device-probe'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
@@ -1719,10 +1719,7 @@ class MainProcessBridge implements MainIpcModule {
    * client at a time, never answered. The user saw "Failed to stop PLC: Request
    * timeout" while a working connection sat idle.
    */
-  handleDebuggerPlcControl = async (
-    _event: IpcMainInvokeEvent,
-    action: 'run' | 'stop',
-  ): Promise<PlcControlResult> => {
+  handleDebuggerPlcControl = async (_event: IpcMainInvokeEvent, action: 'run' | 'stop'): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
 
     // Routed by the session's CONTROL channel, which is the whole point: the caller
@@ -1852,7 +1849,6 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-
   /**
    * Read the run/stop state over an already-open client and push it to the
    * renderer. Throttled, because its two callers tick at very different rates:
@@ -1882,8 +1878,6 @@ class MainProcessBridge implements MainIpcModule {
       switchPosition: r.switchPosition,
     })
   }
-
-
 
   /**
    * Start a debug session against a target.
@@ -2258,7 +2252,6 @@ class MainProcessBridge implements MainIpcModule {
     const tried = result.attempts.map((attempt) => `${attempt.descriptor}: ${attempt.error}`).join('; ')
     return { status: 'no-response', error: tried || 'No connection could be established.' }
   }
-
 
   /** Close the held link (user pressed Disconnect). */
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {

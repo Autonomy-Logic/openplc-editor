@@ -182,7 +182,7 @@ describe('Device slice types', () => {
           jwtToken: null,
           connectionStatus: 'disconnected',
           plcStatus: null,
-        switchPosition: null,
+          switchPosition: null,
           ipAddress: null,
           runtimeVersion: null,
           selectedDevice: null,
