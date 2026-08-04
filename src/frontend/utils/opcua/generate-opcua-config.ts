@@ -13,10 +13,11 @@ import { getErrorMessage } from '../get-error-message'
 import {
   OpcUaConfigError,
   resolveArrayAddress,
+  resolveArrayElementFields,
   resolveStructureAddresses,
   resolveVariableAddress,
 } from './resolve-indices'
-import type { PLCInstanceInfo } from './types'
+import type { PLCInstanceInfo, ResolvedField } from './types'
 
 /**
  * opcua.json contract version. Bump when the per-variable schema changes
@@ -279,14 +280,19 @@ const resolveStructure = (
   if (resolvedFields.length === 0) {
     return null
   }
-  return {
-    node_id: node.nodeId,
-    browse_name: node.browseName,
-    display_name: node.displayName,
-    description: node.description,
-    fields: resolvedFields.map(convertResolvedFieldToRuntime),
-  }
+  return toRuntimeStructure(node, resolvedFields)
 }
+
+/**
+ * Wrap resolved fields in the runtime's structure shape.
+ */
+const toRuntimeStructure = (node: OpcUaNodeConfig, fields: ResolvedField[]): RuntimeStructure => ({
+  node_id: node.nodeId,
+  browse_name: node.browseName,
+  display_name: node.displayName,
+  description: node.description,
+  fields: fields.map(convertResolvedFieldToRuntime),
+})
 
 /**
  * Resolve an array and build runtime format
@@ -351,10 +357,19 @@ const buildAddressSpace = (
           if (node.fields && node.fields.length > 0) {
             const struct = resolveStructure(node, pathToAddr, instances, droppedPaths)
             if (struct) structures.push(struct)
-          } else {
-            // Simple arrays of base types
-            arrays.push(resolveArray(node, pathToAddr, instances))
+            break
           }
+          // An array of a UDT / FB has no leaf of its own — only
+          // `ARR[i].FIELD`. The picker only pre-expands small 1-D ones
+          // into `fields`, so rebuild the elements from the debug map
+          // instead of failing the build on a bare `array` node.
+          const elementFields = resolveArrayElementFields(node, pathToAddr, instances)
+          if (elementFields.length > 0) {
+            structures.push(toRuntimeStructure(node, elementFields))
+            break
+          }
+          // Simple arrays of base types
+          arrays.push(resolveArray(node, pathToAddr, instances))
           break
         }
       }
@@ -523,7 +538,8 @@ export const validateOpcUaConfig = (
         case 'array':
           if (node.fields && node.fields.length > 0) {
             resolveStructureAddresses(node, pathToAddr, instances)
-          } else {
+          } else if (resolveArrayElementFields(node, pathToAddr, instances).length === 0) {
+            // Not an array of a UDT / FB — must resolve as a plain array.
             resolveArrayAddress(node, pathToAddr, instances)
           }
           break
