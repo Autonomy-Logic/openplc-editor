@@ -1444,7 +1444,24 @@ class CompilerModule {
       `-I${srcDir}`,
       `-I${baremetalDir}`,
     ]
-    const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
+    // ESP32/S2/S3 are Xtensa: a direct `call8` only reaches +/-512 KB. Without
+    // `-mlongcalls` the linker cannot relax an out-of-range `call8` into
+    // `l32r`+`callx8`, so once the firmware `.text` grows past that range
+    // (always, on ESP32, with WiFi + Modbus linked in) the precompiled
+    // `libOpenPLCUserLib.a` fails to link with
+    // "dangerous relocation: call8: call target out of range" against
+    // `memcpy` / `__udivdi3` / `<pou>_setup` / `<pou>_loop`. The normal
+    // sketch compile already gets `-mlongcalls` via the core cpp_flags;
+    // the precompile TUs must match. Gated on the Xtensa compiler so the
+    // RISC-V parts (esp32c3/c6/h2 -> riscv32-esp-elf-g++) and AVR/ARM
+    // toolchains -- which reject `-mlongcalls` -- stay untouched.
+    const isXtensaToolchain = String(tcProps.properties['compiler.cpp.cmd'] || '').includes('xtensa')
+    const trailingFlags = [
+      '-std=gnu++17',
+      '-fno-rtti',
+      ...(isXtensaToolchain ? ['-mlongcalls'] : []),
+      ...extraNonIncludeFlags,
+    ]
 
     const execMaxBuffer = 16 * 1024 * 1024
 
