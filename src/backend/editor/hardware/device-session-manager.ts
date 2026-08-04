@@ -227,6 +227,8 @@ export class DeviceSessionManager {
   private readonly policy: DeviceLinkPolicy
   private timer: ReturnType<typeof setInterval> | null = null
   private tickInFlight = false
+  /** When a command last succeeded over the link. 0 = nothing since it opened. */
+  private lastTrafficAt = 0
 
   constructor(
     private readonly hooks: DeviceLinkHooks,
@@ -237,6 +239,25 @@ export class DeviceSessionManager {
 
   private trace(message: string): void {
     this.hooks.log?.(message)
+  }
+
+  /**
+   * A command just succeeded over the held link.
+   *
+   * This is liveness evidence, and better evidence than the poll's own read: it
+   * already happened, and it cost nothing extra. The poll uses it to skip its
+   * round trip entirely (see `probeVerdict`).
+   *
+   * Why that matters, not merely as an optimisation: a debug session polls
+   * variables continuously, and every request queues on the ONE serial link.
+   * On a slow wire the status read waits behind that traffic, times out, and two
+   * such timeouts enter recovery — tearing down a debug session over a link that
+   * was demonstrably working, which is what the traffic proves. Measured on a
+   * 9600-baud ESP8266: the debugger died roughly every ten seconds while its own
+   * reads kept succeeding.
+   */
+  noteTraffic(): void {
+    this.lastTrafficAt = Date.now()
   }
 
   /**
@@ -377,6 +398,10 @@ export class DeviceSessionManager {
         this.client = outcome.client
         this.current = candidate
         this.policy.reset()
+        // Deliberately NOT seeding `lastTrafficAt` from the verify that just
+        // passed: nothing else is on the link yet, so letting the first tick do
+        // its own read costs nothing and keeps the poll's behaviour on a fresh
+        // connection exactly as it was.
         this.startPolling()
         this.hooks.emit({
           status: 'connected',
@@ -530,6 +555,8 @@ export class DeviceSessionManager {
   private dropClient(): void {
     this.client?.disconnect()
     this.client = null
+    // Traffic over a client we just dropped proves nothing about the next one.
+    this.lastTrafficAt = 0
   }
 
   private startPolling(): void {
@@ -588,9 +615,17 @@ export class DeviceSessionManager {
   ): Promise<'alive' | 'unresponsive' | 'gone'> {
     // Check the endpoint first: a pulled USB cable is not a slow device, and
     // treating it as one would spend the whole failure budget waiting for
-    // timeouts on a port that no longer exists.
+    // timeouts on a port that no longer exists. Deliberately BEFORE the traffic
+    // shortcut below: the port list is local and instant, so a yanked cable is
+    // still caught on the very next tick.
     if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) {
       return 'gone'
+    }
+    // Something already answered within this interval, so the link is up and
+    // asking again would only add traffic to a wire that is evidently busy —
+    // and on a slow one, queue behind it and time out. See `noteTraffic`.
+    if (this.lastTrafficAt > 0 && Date.now() - this.lastTrafficAt < this.timings.pollIntervalMs) {
+      return 'alive'
     }
     try {
       return (await this.hooks.probe(client)) ? 'alive' : 'unresponsive'

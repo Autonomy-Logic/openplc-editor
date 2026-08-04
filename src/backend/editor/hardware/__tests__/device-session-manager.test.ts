@@ -170,6 +170,77 @@ describe('DeviceSessionManager', () => {
       }
     })
 
+    // A debug session polls variables continuously, and every request queues on
+    // the ONE serial link. On a slow wire the liveness read waits behind that
+    // traffic and times out; two such timeouts entered recovery and tore down a
+    // debug session whose own reads were succeeding — measured at roughly every
+    // ten seconds on a 9600-baud ESP8266. Traffic IS liveness evidence.
+    it('treats recent successful traffic as liveness instead of polling the busy link', async () => {
+      const client = new FakeClient()
+      let probes = 0
+      const h = harness({
+        probe: async () => {
+          probes += 1
+          return false
+        },
+      })
+
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [client], h.clients)])
+      const afterOpen = probes
+
+      // The debugger just read something successfully.
+      h.manager.noteTraffic()
+      await h.manager.tick()
+
+      // No probe was sent, and a probe that WOULD have failed did not count.
+      expect(probes).toBe(afterOpen)
+      expect(h.statuses.map((s) => s.status)).not.toContain('error')
+      expect(h.manager.getClient()).toBe(asTransport(client))
+      h.manager.close()
+    })
+
+    it('polls normally on a fresh connection, before any traffic', async () => {
+      const client = new FakeClient()
+      let probes = 0
+      const h = harness({
+        probe: async () => {
+          probes += 1
+          return true
+        },
+      })
+
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [client], h.clients)])
+      await h.manager.tick()
+
+      // Nothing else is on the link yet, so the poll does its own read.
+      expect(probes).toBe(1)
+      h.manager.close()
+    })
+
+    it('resumes polling once the traffic evidence has aged out', async () => {
+      const client = new FakeClient()
+      let probes = 0
+      const h = harness({
+        probe: async () => {
+          probes += 1
+          return true
+        },
+      })
+
+      await h.manager.open([candidate('rtu', '/dev/ttyUSB0', [client], h.clients)])
+      h.manager.noteTraffic()
+      await h.manager.tick()
+      expect(probes).toBe(0)
+
+      // A whole interval with nothing on the link: the poll must ask again.
+      jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000)
+      await h.manager.tick()
+      expect(probes).toBe(1)
+
+      jest.restoreAllMocks()
+      h.manager.close()
+    })
+
     it('falls back to serial when Modbus TCP cannot connect', async () => {
       const h = harness()
       const tcp = new FakeClient({ connectFails: true })

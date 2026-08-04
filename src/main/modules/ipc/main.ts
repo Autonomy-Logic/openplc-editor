@@ -1812,6 +1812,10 @@ class MainProcessBridge implements MainIpcModule {
     try {
       const result = await link.client.getVariablesList(variableIndexes)
       if (result.success && result.data) {
+        // The debug poll is the busiest thing on the link; telling the session
+        // about it is what stops the liveness read from queueing behind this
+        // traffic and timing out on a link that is plainly working.
+        this.deviceSession.noteTraffic()
         return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
       }
       return { success: false, error: result.error }
@@ -2224,9 +2228,25 @@ class MainProcessBridge implements MainIpcModule {
     return acquired
   }
 
+  /**
+   * Which channel served which command — logged ONCE per distinct combination.
+   *
+   * The question this answers ("did run/stop really ride the same connection as
+   * the debugger?") is answered by the first occurrence. Logging every occurrence
+   * answered it several times a second: the debug poll reads variables
+   * continuously, so an unfiltered trace emitted ~8 identical lines per second
+   * and buried every other message in the console, including the ones explaining
+   * a disconnect.
+   */
+  private tracedChannelUses = new Set<string>()
+
   private traceChannelUse(what: string, family: 'control' | 'debug'): void {
     const link = this.deviceSession.getLink()
-    this.traceDeviceLink(`${what}: using the ${family} channel (${link?.transport ?? '?'} ${link?.descriptor ?? '?'})`)
+    const endpoint = `${link?.transport ?? '?'} ${link?.descriptor ?? '?'}`
+    const key = `${what}|${family}|${endpoint}`
+    if (this.tracedChannelUses.has(key)) return
+    this.tracedChannelUses.add(key)
+    this.traceDeviceLink(`${what}: using the ${family} channel (${endpoint})`)
   }
 
   private explainMissingChannel(what: string): ChannelUnavailable {
@@ -2276,6 +2296,9 @@ class MainProcessBridge implements MainIpcModule {
     candidates: DebugConnectionConfig[],
   ): Promise<DeviceProbeOutcome> => {
     this.deviceLinkProbe = null
+    // A new connection is a new story: let each command say which channel served
+    // it again, since it may well be a different one this time.
+    this.tracedChannelUses.clear()
     this.traceDeviceLink(
       `connect requested with ${candidates.length} candidate(s): ${
         candidates.map((config) => `${config.connectionType} ${describeDebugEndpoint(config)}`).join(', ') || '(none)'
@@ -2305,6 +2328,7 @@ class MainProcessBridge implements MainIpcModule {
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
     this.deviceSession.close()
     this.deviceLinkProbe = null
+    this.tracedChannelUses.clear()
     return { success: true }
   }
 
