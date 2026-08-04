@@ -96,17 +96,23 @@ export function scheduleFlowWriteBack(getState: GetWriteBackState, pouName: stri
  *
  * @returns names of POUs whose body could not be updated.
  */
-export function flushFlowWriteBacks(getState: GetWriteBackState, pouName?: string): string[] {
+export function flushFlowWriteBacks(getState: GetWriteBackState, pouName?: string): readonly string[] {
   cancelFlowWriteBacks(pouName)
 
   const state = getState()
+  // Deleting a POU leaves its flow behind, so an invalid one would be reported
+  // stale on every future save — blocking saves and builds for good. It has no
+  // body left to write back, so it isn't a write-back failure.
+  const livePous = new Set(state.project.data.pous.map((pou) => pou.name))
   const failed: string[] = []
   for (const flow of state.ladderFlows) {
     if (pouName !== undefined && flow.name !== pouName) continue
+    if (!livePous.has(flow.name)) continue
     if (flow.updated && !runWriteBack(getState, flow.name, 'ld')) failed.push(flow.name)
   }
   for (const flow of state.fbdFlows) {
     if (pouName !== undefined && flow.name !== pouName) continue
+    if (!livePous.has(flow.name)) continue
     if (flow.updated && !runWriteBack(getState, flow.name, 'fbd')) failed.push(flow.name)
   }
   return failed

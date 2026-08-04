@@ -288,21 +288,31 @@ const AcceleratorHandler = () => {
   /**
    * Undo / Redo
    */
+  // An invalid graphical body blocks history changes outright, so say so rather
+  // than letting the shortcut look broken (DOPE-495).
+  const notifyStaleBody = useCallback((pouName: string) => {
+    toast({
+      title: 'History unavailable',
+      description: `The graphical body of "${pouName}" is invalid, so its history was not changed.`,
+      variant: 'fail',
+    })
+  }, [])
+
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
       if (!meta?.name) return
-      undo(meta.name)
+      if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
-  }, [meta.name, isMonacoFocused, accelerator, undo])
+  }, [meta.name, isMonacoFocused, accelerator, undo, notifyStaleBody])
 
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
       if (!meta?.name) return
-      redo(meta.name)
+      if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
-  }, [meta.name, isMonacoFocused, accelerator, redo])
+  }, [meta.name, isMonacoFocused, accelerator, redo, notifyStaleBody])
 
   /**
    * Quit app (Ctrl+Q on Windows/Linux)

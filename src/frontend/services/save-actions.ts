@@ -439,6 +439,8 @@ export async function executeSaveProject(
         deleted: deletionsBeforeSave,
       })
 
+      const isStale = new Set(staleFlows)
+
       state.projectActions.clearPendingDeletions()
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
@@ -449,14 +451,15 @@ export async function executeSaveProject(
       // would strand the in-memory edit with no way back to disk.
       for (const flow of state.ladderFlows) {
         state.ladderFlowActions.clearSelections({ editorName: flow.name })
-        if (staleFlows.includes(flow.name)) continue
+        if (isStale.has(flow.name)) continue
         state.ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
       for (const flow of state.fbdFlows) {
         state.fbdFlowActions.clearSelections({ editorName: flow.name })
-        if (staleFlows.includes(flow.name)) continue
+        if (isStale.has(flow.name)) continue
         state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
+      // Must stay after `setAllToSaved()` above, which marks every file saved.
       for (const name of staleFlows) {
         updateFile({ name, saved: false })
       }
@@ -512,8 +515,9 @@ export async function executeSaveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // See executeSaveProject — same pending write-back flush requirement.
-  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
+  // See executeSaveProject — same pending write-back flush requirement, scoped
+  // to the target so a single-file save doesn't touch unrelated POUs.
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {

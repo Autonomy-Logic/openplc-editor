@@ -24,8 +24,9 @@ export function usePouSnapshot() {
   const captureAndPush = useCallback(
     (pouName: string) => {
       // A debounced graphical write-back may still be pending — flush it so
-      // the snapshot can't pair a stale body with a fresh flow.
-      flushFlowWriteBacks(useOpenPLCStore.getState, pouName)
+      // the snapshot can't pair a stale body with a fresh flow. A failed flush
+      // leaves the body stale, so there is nothing coherent to capture.
+      if (flushFlowWriteBacks(useOpenPLCStore.getState, pouName).length > 0) return
       const { project, ladderFlows, fbdFlows } = useOpenPLCStore.getState()
       const pou = project.data.pous.find((p) => p.name === pouName)
       if (!pou) return

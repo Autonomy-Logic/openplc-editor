@@ -118,8 +118,10 @@ export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
   markSaved: (pouName: string) => void
   markAllSaved: (except?: readonly string[]) => void
-  undo: (pouName: string) => void
-  redo: (pouName: string) => void
+  /** @returns `false` when the POU's graphical body is stale, so history was left untouched. */
+  undo: (pouName: string) => boolean
+  /** @returns `false` when the POU's graphical body is stale, so history was left untouched. */
+  redo: (pouName: string) => boolean
 }
 
 export type OpenProjectResponseData = {

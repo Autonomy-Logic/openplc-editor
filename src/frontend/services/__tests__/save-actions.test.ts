@@ -100,6 +100,23 @@ describe('save-actions', () => {
       expect(flowUpdated('GoodPou')).toBe(false)
       expect(fileSaved('GoodPou')).toBe(true)
     })
+
+    it('stops blocking saves once the POU behind an invalid flow is deleted', async () => {
+      createLadderPou('Doomed')
+      corruptFlow('Doomed')
+      createLadderPou('Healthy')
+
+      expect((await executeSaveProject(makeProjectPort(), capabilities)).success).toBe(false)
+
+      // Deleting the POU is the user's only escape hatch, and it leaves the
+      // flow behind — the save must stop reporting it.
+      openPLCStoreBase.getState().pouActions.delete('Doomed')
+
+      const result = await executeSaveProject(makeProjectPort(), capabilities)
+
+      expect(result.success).toBe(true)
+      expect(fileSaved('Healthy')).toBe(true)
+    })
   })
 
   describe('executeSaveFile', () => {
@@ -124,6 +141,22 @@ describe('save-actions', () => {
       expect(result.success).toBe(true)
       expect(projectPort.saveFile).toHaveBeenCalled()
       expect(flowUpdated('ValidFile')).toBe(false)
+    })
+
+    it('leaves an unrelated failing POU untouched', async () => {
+      createLadderPou('TargetFile')
+      createLadderPou('Unrelated')
+      corruptFlow('Unrelated')
+
+      const projectPort = makeProjectPort()
+      const result = await executeSaveFile('TargetFile', projectPort, capabilities)
+
+      expect(result.success).toBe(true)
+      expect(projectPort.saveFile).toHaveBeenCalled()
+      // The flush is scoped to the target, so the unrelated flow is never
+      // validated and never warns.
+      expect(warn).not.toHaveBeenCalled()
+      expect(flowUpdated('Unrelated')).toBe(true)
     })
   })
 })
