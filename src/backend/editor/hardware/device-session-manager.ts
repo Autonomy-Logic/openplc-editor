@@ -68,6 +68,19 @@ export interface DeviceLinkCandidate {
   descriptor: string
   /** Build an unconnected client for this candidate. */
   create: () => DeviceModbusTransport
+  /**
+   * A guess rather than something the project declared (an alternative baud
+   * rate). Verification spends a short budget on these — there may be several,
+   * and being wrong about one must not delay the next.
+   */
+  speculative?: boolean
+  /**
+   * Worth waiting for. Set on the last candidate the project actually declared,
+   * so it keeps the patient probe budget even when speculative candidates queue
+   * up behind it — a board that was just flashed is still booting, and that wait
+   * belongs to the configured endpoint, not to a guess.
+   */
+  patient?: boolean
 }
 
 /** Live link state, as pushed to the renderer. */

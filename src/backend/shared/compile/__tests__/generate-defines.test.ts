@@ -200,6 +200,40 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('#define DEBUG_BAUD 115200')
   })
 
+  // A PUBLISHED VPP has no `serial` section — only the legacy RTU fields. The
+  // debugger and the RTU then share one port, so ONE rate must come out of this
+  // file. Emitting 115200 while MBSERIAL_BAUD said 9600 built a firmware the
+  // editor could not talk to, and the user was told "No Firmware Detected" about
+  // a board that was running fine.
+  it('aligns DEBUG_BAUD with MBSERIAL_BAUD for a published VPP (no `serial` section)', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 1 },
+      },
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+  })
+
+  it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600', rtu_slave_id: 1 },
+      },
+    })
+    // Two distinct ports, two distinct rates — and the debugger keeps the default.
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).toContain('#define DEBUG_BAUD 115200')
+  })
+
   it('does NOT emit DEBUGGER_ENABLED for the simulator (it uses the full Modbus path)', () => {
     const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })
     expect(out).not.toContain('DEBUGGER_ENABLED')

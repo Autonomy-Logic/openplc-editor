@@ -18,7 +18,7 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
-import { generateModbusDefines, type VppModbusScreenState } from './modbus-defines'
+import { generateModbusDefines, resolveDebugBaud, type VppModbusScreenState } from './modbus-defines'
 
 export type { VppModbusScreenState } from './modbus-defines'
 
@@ -186,7 +186,12 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '//Debugger\n'
     DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
     DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
-    DEFINES_CONTENT += `#define DEBUG_BAUD ${vppModbusState?.serial?.baud_rate ?? '115200'}\n`
+    // Not `serial.baud_rate ?? 115200`: a package published without a `serial`
+    // section still configures a baud — on the RTU section — and when the RTU
+    // shares the default port that IS this port's speed. Ignoring it compiled a
+    // firmware listening at 115200 while the editor dialled the RTU's baud, and
+    // the board answered nothing ("No Firmware Detected" on a healthy board).
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {}, defaultSerial)}\n`
     DEFINES_CONTENT += `\n\n`
   }
 

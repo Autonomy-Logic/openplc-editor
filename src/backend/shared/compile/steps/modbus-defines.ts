@@ -76,6 +76,44 @@ export interface VppModbusScreenState {
   }
 }
 
+/** Baud the always-on debugger falls back to when nothing else says otherwise. */
+export const DEFAULT_DEBUG_BAUD = '115200'
+
+/**
+ * Baud rate the DEFAULT serial port comes up at — the one the always-on
+ * debugger answers on, and therefore the one the editor must dial to reach it.
+ *
+ * Three sources, in order:
+ *
+ *  1. The `serial` section, when a package declares one. It exists precisely to
+ *     configure this port independently of Modbus.
+ *  2. Otherwise, the RTU's baud — but ONLY when the RTU is on the default port,
+ *     because there the firmware brings that one port up at `MBSERIAL_BAUD` and
+ *     the debugger shares it (`MBSERIAL_SHARES_DEBUG_SERIAL`). Honouring it is
+ *     what keeps firmware and editor on the same wire speed for every package
+ *     published without a `serial` section.
+ *  3. Otherwise `115200`: either no RTU at all, or an RTU on a SECOND UART while
+ *     the debugger keeps the default port to itself. Nothing in the project
+ *     states that port's speed, so the firmware's default is the only answer —
+ *     which is why the connect flow probes alternative bauds rather than
+ *     trusting this one blindly.
+ */
+export function resolveDebugBaud(state: VppModbusScreenState, defaultSerial: string = 'Serial'): string {
+  const declared = state.serial?.baud_rate
+  if (declared) return declared
+
+  const rtu = state.modbus_rtu
+  if (rtu?.enabled === true) {
+    const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
+    if (iface === defaultSerial) {
+      const shared = rtu.baud_rate ?? rtu.rtu_baud_rate
+      if (shared) return shared
+    }
+  }
+
+  return DEFAULT_DEBUG_BAUD
+}
+
 /**
  * `aa:bb:cc:dd:ee:ff` → `0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff` so it can
  * land verbatim in `byte mac[] = { MBTCP_MAC };`. Accepts the canonical

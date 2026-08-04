@@ -50,7 +50,9 @@ import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
   PATIENT_BOARD_ID_PROBE,
+  planBaudAttempts,
   QUICK_BOARD_ID_PROBE,
+  SPECULATIVE_BOARD_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
 import {
   type DeviceDebugCandidate,
@@ -1956,15 +1958,22 @@ class MainProcessBridge implements MainIpcModule {
    * The only transport-specific step left in the flow; a config that names a
    * transport this build cannot speak is dropped rather than half-built.
    */
-  private toDeviceLinkCandidates(configs: DebugConnectionConfig[]): DeviceLinkCandidate[] {
-    const candidates: DeviceLinkCandidate[] = []
-    for (const config of configs) {
+  private toDeviceLinkCandidates(
+    configs: DebugConnectionConfig[],
+    opts: { probeBaudRates?: boolean } = {},
+  ): DeviceLinkCandidate[] {
+    const declared: DeviceLinkCandidate[] = []
+    // Baud guesses go AFTER everything the project declared: a configured Modbus
+    // TCP address is a better next try than a rate nobody asked for.
+    const speculative: DeviceLinkCandidate[] = []
+
+    const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
       const kind = modbusTransportKind(config.connectionType)
-      if (kind === null) continue
+      if (kind === null) return
       const params = {
         connectionType: config.connectionType,
         port: config.connectionParams.port,
-        baudRate: config.connectionParams.baudRate,
+        baudRate,
         slaveId: config.connectionParams.slaveId,
         host: config.connectionParams.ipAddress,
       }
@@ -1973,10 +1982,14 @@ class MainProcessBridge implements MainIpcModule {
       const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
       // Probe the params now so a malformed config fails resolution rather than
       // becoming a candidate that always throws on `create()`.
-      if ('error' in buildDeviceModbusTransport(params, options)) continue
-      candidates.push({
+      if ('error' in buildDeviceModbusTransport(params, options)) return
+      const base = describeDebugEndpoint(config)
+      ;(isGuess ? speculative : declared).push({
         transport: kind,
-        descriptor: describeDebugEndpoint(config),
+        // Name the rate on a guess: the trace and the failure dialog list what was
+        // tried, and "COM5" five times over tells the user nothing.
+        descriptor: isGuess ? `${base} @ ${baudRate} baud` : base,
+        speculative: isGuess,
         create: () => {
           const built = buildDeviceModbusTransport(params, options)
           if ('error' in built) throw new Error(built.error)
@@ -1984,7 +1997,27 @@ class MainProcessBridge implements MainIpcModule {
         },
       })
     }
-    return candidates
+
+    for (const config of configs) {
+      // A wrong baud is the one misconfiguration that looks like healthy silence:
+      // the port opens, so it is not "no response", and nothing decodes, so it
+      // reads as "no firmware" — and the user gets told to reflash a board that is
+      // running fine. Sweeping the rates OpenPLC is ever built with turns that dead
+      // end into a connection. Serial only; a TCP address is either right or not.
+      for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
+        build(config, attempt.baudRate, attempt.speculative)
+      }
+    }
+
+    // The patient budget belongs to the last DECLARED endpoint, not to the last
+    // candidate overall. Without this the baud sweep would silently take that
+    // patience away from the configured endpoint and hand it to a guess — and a
+    // board that was just flashed, still booting on the right rate, would be ruled
+    // out in ~10s instead of the ~32s it sometimes needs.
+    const lastDeclared = declared[declared.length - 1]
+    if (lastDeclared) lastDeclared.patient = true
+
+    return [...declared, ...speculative]
   }
 
   /** Consume the classification the last verified candidate produced. */
@@ -2041,7 +2074,9 @@ class MainProcessBridge implements MainIpcModule {
         create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
       }
     }
-    const [candidate] = this.toDeviceLinkCandidates([config])
+    // One config in, one candidate out: this builds the DEBUG channel for a
+    // session that already exists, so the rate is settled and guessing is wrong.
+    const [candidate] = this.toDeviceLinkCandidates([config], { probeBaudRates: false })
     if (!candidate) return null
     return {
       transport: candidate.transport,
@@ -2088,10 +2123,20 @@ class MainProcessBridge implements MainIpcModule {
     // the only way in, but not while alternatives are waiting: a Modbus TCP
     // address that no longer answers should not delay the cable that would have
     // worked. (Measured on a real board: 32.5s to rule out one endpoint.)
-    const boardIdProbe = context.isLastCandidate ? PATIENT_BOARD_ID_PROBE : QUICK_BOARD_ID_PROBE
+    //
+    // A speculative candidate never gets that patience, whether or not it happens
+    // to be last: it is a baud rate NOBODY configured, and there are several of
+    // them. Spending the patient budget on the final guess would put ~32s at the
+    // end of a sweep whose whole point is to finish quickly.
+    const isPatient = !candidate.speculative && (candidate.patient === true || context.isLastCandidate)
+    const boardIdProbe = candidate.speculative
+      ? SPECULATIVE_BOARD_ID_PROBE
+      : isPatient
+        ? PATIENT_BOARD_ID_PROBE
+        : QUICK_BOARD_ID_PROBE
     this.traceDeviceLink(
       `  ${candidate.descriptor}: verifying with up to ${boardIdProbe.attempts} id read(s)` +
-        `${context.isLastCandidate ? ' (last candidate, being patient)' : ''}`,
+        `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, being patient)' : ''}`,
     )
     const result = await classifyDeviceLink(client, { boardIdProbe })
     this.deviceLinkProbe = result

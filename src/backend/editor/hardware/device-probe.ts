@@ -40,6 +40,63 @@ export interface ProbeBudget {
  */
 export const PATIENT_BOARD_ID_PROBE: ProbeBudget = { attempts: 6, backoffMs: 500 }
 export const QUICK_BOARD_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 300 }
+/**
+ * For a SPECULATIVE candidate — an alternative baud rate nobody configured.
+ *
+ * Two attempts rather than one, and not out of optimism: opening the port asserts
+ * DTR, which resets an AVR or ESP8266, so the first read after the open can land
+ * while the board is still booting. One attempt would reject a correct rate for a
+ * reason that has nothing to do with the rate. Two is the floor that makes the
+ * sweep trustworthy; more would multiply across every rate tried.
+ */
+export const SPECULATIVE_BOARD_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 400 }
+
+/**
+ * Baud rates tried, in this order, when the configured one does not answer.
+ *
+ * A board whose baud nobody remembers is otherwise unreachable, and it fails in
+ * the most misleading way available: the port opens (so it is not "no response"),
+ * nothing decodes (so it reads as "no firmware"), and the user is told to reflash
+ * a device that is running perfectly well. In the field that reflash is the
+ * expensive part — it is why this sweep exists.
+ *
+ * Ordered by how often they occur in practice, not numerically. Deliberately
+ * short: every wrong rate costs a port open, and on AVR/ESP8266 opening the port
+ * asserts DTR and RESETS the board, so a wide sweep is not free — it restarts the
+ * user's program once per guess.
+ */
+export const FALLBACK_BAUD_RATES = [115200, 9600, 57600, 19200, 38400] as const
+
+/** One baud rate to try, and whether trying it is a guess. */
+export interface BaudAttempt {
+  baudRate: number | undefined
+  /** True for a rate nobody configured — verification keeps these cheap. */
+  speculative: boolean
+}
+
+/**
+ * The order to try baud rates in for one serial endpoint: the configured rate
+ * first, then every fallback that isn't it.
+ *
+ * The configured rate leads because it is nearly always right, and a correct
+ * first try costs one port open. The guesses follow in `FALLBACK_BAUD_RATES`
+ * order.
+ *
+ * Returns a single non-speculative attempt when there is no rate to sweep — a
+ * TCP or WebSocket endpoint (`undefined`), or a caller that opted out.
+ */
+export function planBaudAttempts(declaredBaud: number | undefined, options: { sweep?: boolean } = {}): BaudAttempt[] {
+  const declared: BaudAttempt = { baudRate: declaredBaud, speculative: false }
+  if (options.sweep === false || typeof declaredBaud !== 'number') return [declared]
+
+  return [
+    declared,
+    ...FALLBACK_BAUD_RATES.filter((baud) => baud !== declaredBaud).map((baud) => ({
+      baudRate: baud,
+      speculative: true,
+    })),
+  ]
+}
 
 /**
  * Connect with a bounded retry/backoff loop. A device flashed over arduino-cli

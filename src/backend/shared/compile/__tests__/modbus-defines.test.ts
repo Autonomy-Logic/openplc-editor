@@ -1,4 +1,56 @@
-import { generateModbusDefines } from '../steps/modbus-defines'
+import { DEFAULT_DEBUG_BAUD, generateModbusDefines, resolveDebugBaud } from '../steps/modbus-defines'
+
+/**
+ * The baud the always-on debugger answers on. It has to agree with the rate the
+ * editor dials, and the two are derived in different places — so these pin the
+ * derivation against the shapes real projects actually persist.
+ */
+describe('resolveDebugBaud', () => {
+  it('prefers an explicit `serial` section when a package declares one', () => {
+    expect(
+      resolveDebugBaud({ serial: { baud_rate: '57600' }, modbus_rtu: { enabled: true, rtu_baud_rate: '9600' } }),
+    ).toBe('57600')
+  })
+
+  // The regression this function exists for: a PUBLISHED VPP has no `serial`
+  // section, so the RTU's baud is the only statement of the default port's speed.
+  // Reading 115200 instead compiled a firmware listening at one rate while the
+  // editor dialled another, and the board answered nothing at all.
+  it('takes the RTU baud when the RTU shares the default port (published VPP shape)', () => {
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600' } })).toBe(
+      '9600',
+    )
+  })
+
+  it('takes the RTU baud when the RTU names no port at all (defaults to the default one)', () => {
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_baud_rate: '19200' } })).toBe('19200')
+  })
+
+  it('honours a board whose default serial is not called `Serial`', () => {
+    expect(
+      resolveDebugBaud(
+        { modbus_rtu: { enabled: true, rtu_interface: 'SerialUSB', rtu_baud_rate: '38400' } },
+        'SerialUSB',
+      ),
+    ).toBe('38400')
+  })
+
+  it('ignores the RTU baud when the RTU is on a SECOND port', () => {
+    // There the debugger keeps the default port to itself and nothing in the
+    // project states its speed, so the firmware default is the only answer.
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600' } })).toBe(
+      DEFAULT_DEBUG_BAUD,
+    )
+  })
+
+  it('ignores the RTU baud when the RTU is disabled', () => {
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } })).toBe(DEFAULT_DEBUG_BAUD)
+  })
+
+  it('falls back for an empty project', () => {
+    expect(resolveDebugBaud({})).toBe(DEFAULT_DEBUG_BAUD)
+  })
+})
 
 describe('generateModbusDefines', () => {
   it('returns an empty string when neither RTU nor TCP is enabled', () => {
