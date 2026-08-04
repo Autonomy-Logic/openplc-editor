@@ -1938,11 +1938,17 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Push a link state change to the renderer. */
   private emitDeviceLinkStatus(status: DeviceLinkStatus): void {
-    this.traceDeviceLink(
-      `status -> ${status.status}${status.descriptor ? ` (${status.transport ?? '?'} ${status.descriptor})` : ''}${
-        status.reason ? ` [${status.reason}]` : ''
-      }`,
-    )
+    // `connecting` is not traced. It is a transient the user can already see in the
+    // button, and it repeats once per candidate — on a baud sweep that is five
+    // identical lines around the one outcome worth reading. Every settled state
+    // (connected / disconnected / error) still gets its line.
+    if (status.status !== 'connecting') {
+      this.traceDeviceLink(
+        `status -> ${status.status}${status.descriptor ? ` (${status.transport ?? '?'} ${status.descriptor})` : ''}${
+          status.reason ? ` [${status.reason}]` : ''
+        }`,
+      )
+    }
     this.mainWindow?.webContents?.send('device:connection-status', status)
   }
 
@@ -2141,16 +2147,21 @@ class MainProcessBridge implements MainIpcModule {
       : isPatient
         ? PATIENT_BOARD_ID_PROBE
         : QUICK_BOARD_ID_PROBE
-    this.traceDeviceLink(
-      `  ${candidate.descriptor}: verifying with up to ${boardIdProbe.attempts} id read(s)` +
-        `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, being patient)' : ''}`,
-    )
     const result = await classifyDeviceLink(client, { boardIdProbe })
     this.deviceLinkProbe = result
-    this.traceDeviceLink(
-      `  ${candidate.descriptor}: classified as "${result.status}"${result.error ? ` (${result.error})` : ''}`,
-    )
-    if (result.status !== 'connected-with-firmware') return false
+    if (result.status !== 'connected-with-firmware') {
+      // Traced only when the endpoint is REJECTED, and then with the budget it was
+      // given: "no firmware after 2 id reads (baud guess)" is a different problem
+      // from "no firmware after 6" on the port the project configured. Announcing
+      // the budget up front, as this used to, put the line before the outcome it
+      // explains and printed it on every success too.
+      this.traceDeviceLink(
+        `  ${candidate.descriptor}: "${result.status}" after up to ${boardIdProbe.attempts} id read(s)` +
+          `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, was patient)' : ''}` +
+          `${result.error ? ` — ${result.error}` : ''}`,
+      )
+      return false
+    }
     // The status frame doubles as the run/stop state source; push it straight
     // away so the Start/Stop button is right before the first poll lands.
     await this.pushPlcState(client, candidate.descriptor, 0)

@@ -381,19 +381,28 @@ export class DeviceSessionManager {
 
     this.candidates = candidates
     const attempts: DeviceLinkOpenFailure['attempts'] = []
-    this.trace(`open: ${candidates.length} candidate(s) in order: ${candidates.map(describeLinkCandidate).join(', ')}`)
 
     for (const [index, candidate] of candidates.entries()) {
+      // The plan is only worth stating once something went wrong. On the ordinary
+      // connection the first candidate answers, and listing four baud rates nobody
+      // will dial just buries the two lines that matter. The moment a fallback IS
+      // in play, the order becomes the thing you need to read.
+      if (index === 1) {
+        this.trace(
+          `open: falling back — ${candidates.length} candidate(s): ${candidates.map(describeLinkCandidate).join(', ')}`,
+        )
+      }
       this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
 
       const startedAt = Date.now()
       const outcome = await this.tryCandidate(candidate, { isLastCandidate: index === candidates.length - 1 })
-      const elapsed = Date.now() - startedAt
-      this.trace(
-        outcome.ok
-          ? `open: ${describeLinkCandidate(candidate)} ACCEPTED in ${elapsed}ms`
-          : `open: ${describeLinkCandidate(candidate)} rejected in ${elapsed}ms — ${outcome.error}`,
-      )
+      // Only a rejection is traced. Acceptance is already announced by the
+      // `connected` status that follows, with the same descriptor.
+      if (!outcome.ok) {
+        this.trace(
+          `open: ${describeLinkCandidate(candidate)} rejected in ${Date.now() - startedAt}ms — ${outcome.error}`,
+        )
+      }
       if (outcome.ok) {
         this.client = outcome.client
         this.current = candidate
@@ -474,8 +483,9 @@ export class DeviceSessionManager {
 
     const connectStartedAt = Date.now()
     try {
+      // Nothing traced on success: opening is a step towards the answer, not the
+      // answer. Only failing to open is news.
       await client.connect()
-      this.trace(`  ${describeLinkCandidate(candidate)}: transport opened in ${Date.now() - connectStartedAt}ms`)
     } catch (error) {
       client.disconnect()
       this.trace(
@@ -489,12 +499,7 @@ export class DeviceSessionManager {
     // so this is the step that decides whether to keep the candidate.
     const verifyStartedAt = Date.now()
     try {
-      if (await this.hooks.verify(client, candidate, context)) {
-        this.trace(
-          `  ${describeLinkCandidate(candidate)}: answered the debug protocol in ${Date.now() - verifyStartedAt}ms`,
-        )
-        return { ok: true, client }
-      }
+      if (await this.hooks.verify(client, candidate, context)) return { ok: true, client }
       client.disconnect()
       this.trace(
         `  ${describeLinkCandidate(candidate)}: opened but did NOT answer the debug protocol (waited ${Date.now() - verifyStartedAt}ms)`,
