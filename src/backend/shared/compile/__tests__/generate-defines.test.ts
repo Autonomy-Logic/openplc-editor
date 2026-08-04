@@ -219,6 +219,23 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('#define DEBUG_BAUD 9600')
   })
 
+  // The reported failure, end to end: Modbus off, 9600 saved on the screen. The
+  // editor dials 9600 (spec params ignore `enabledWhen`), so a firmware built at
+  // 115200 opened the port and answered nothing — "No Firmware Detected" on a
+  // healthy board.
+  it('aligns DEBUG_BAUD with the screen baud when Modbus is DISABLED', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } },
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+    // Modbus itself stays out of the build.
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+  })
+
   it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,

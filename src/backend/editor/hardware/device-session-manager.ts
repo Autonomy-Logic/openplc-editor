@@ -64,8 +64,21 @@ export interface DeviceDebugCandidate {
 /** One way to reach the device, ready to be tried. */
 export interface DeviceLinkCandidate {
   transport: DeviceLinkTransport
-  /** What the user calls this endpoint: "/dev/cu.usbmodem11101", "192.168.0.50". */
+  /**
+   * What the user calls this endpoint: "/dev/cu.usbmodem11101", "192.168.0.50".
+   *
+   * This is an IDENTIFIER, not a caption: it is matched against the OS port list
+   * (`serialPortPresent`) and against the port an upload asks to borrow. Anything
+   * decorative belongs in `baudRate` or the trace, never here — a descriptor that
+   * read "COM5 @ 9600 baud" matched no port and no upload.
+   */
   descriptor: string
+  /**
+   * Wire speed for a serial candidate, carried so the trace can name it. Two
+   * candidates on one port differ only by this, and a log that repeated the port
+   * five times said nothing about what was actually tried.
+   */
+  baudRate?: number
   /** Build an unconnected client for this candidate. */
   create: () => DeviceModbusTransport
   /**
@@ -118,10 +131,26 @@ export interface DeviceLinkOpenSuccess {
 export interface DeviceLinkOpenFailure {
   ok: false
   /** Every candidate that was tried, with why it did not work. */
-  attempts: Array<{ transport: DeviceLinkTransport; descriptor: string; error: string }>
+  attempts: Array<{ transport: DeviceLinkTransport; descriptor: string; baudRate?: number; error: string }>
 }
 
 export type DeviceLinkOpenResult = DeviceLinkOpenSuccess | DeviceLinkOpenFailure
+
+/**
+ * How a candidate reads in the trace and in a failure message: the endpoint plus
+ * its wire speed, when it has one.
+ *
+ * Derived here rather than baked into `descriptor`, because that field is matched
+ * against OS port names and upload requests — see the note on it.
+ */
+export function describeLinkCandidate(candidate: {
+  transport: DeviceLinkTransport
+  descriptor: string
+  baudRate?: number
+}): string {
+  const speed = candidate.baudRate === undefined ? '' : ` @ ${candidate.baudRate} baud`
+  return `${candidate.transport} ${candidate.descriptor}${speed}`
+}
 
 export interface DeviceLinkHooks {
   /**
@@ -331,11 +360,7 @@ export class DeviceSessionManager {
 
     this.candidates = candidates
     const attempts: DeviceLinkOpenFailure['attempts'] = []
-    this.trace(
-      `open: ${candidates.length} candidate(s) in order: ${candidates
-        .map((candidate) => `${candidate.transport} ${candidate.descriptor}`)
-        .join(', ')}`,
-    )
+    this.trace(`open: ${candidates.length} candidate(s) in order: ${candidates.map(describeLinkCandidate).join(', ')}`)
 
     for (const [index, candidate] of candidates.entries()) {
       this.hooks.emit({ status: 'connecting', transport: candidate.transport, descriptor: candidate.descriptor })
@@ -345,8 +370,8 @@ export class DeviceSessionManager {
       const elapsed = Date.now() - startedAt
       this.trace(
         outcome.ok
-          ? `open: ${candidate.transport} ${candidate.descriptor} ACCEPTED in ${elapsed}ms`
-          : `open: ${candidate.transport} ${candidate.descriptor} rejected in ${elapsed}ms — ${outcome.error}`,
+          ? `open: ${describeLinkCandidate(candidate)} ACCEPTED in ${elapsed}ms`
+          : `open: ${describeLinkCandidate(candidate)} rejected in ${elapsed}ms — ${outcome.error}`,
       )
       if (outcome.ok) {
         this.client = outcome.client
@@ -362,7 +387,12 @@ export class DeviceSessionManager {
         })
         return { ok: true, transport: candidate.transport, descriptor: candidate.descriptor, client: outcome.client }
       }
-      attempts.push({ transport: candidate.transport, descriptor: candidate.descriptor, error: outcome.error })
+      attempts.push({
+        transport: candidate.transport,
+        descriptor: candidate.descriptor,
+        baudRate: candidate.baudRate,
+        error: outcome.error,
+      })
     }
 
     this.candidates = []
@@ -406,7 +436,7 @@ export class DeviceSessionManager {
     // A serial candidate whose port is not even enumerated cannot be opened:
     // say so instead of waiting out a connect timeout.
     if (candidate.transport === 'rtu' && !(await this.hooks.serialPortPresent(candidate.descriptor))) {
-      this.trace(`  ${candidate.descriptor}: serial port is not enumerated, skipping`)
+      this.trace(`  ${describeLinkCandidate(candidate)}: serial port is not enumerated, skipping`)
       return { ok: false, error: `${candidate.descriptor} is not available` }
     }
 
@@ -420,10 +450,12 @@ export class DeviceSessionManager {
     const connectStartedAt = Date.now()
     try {
       await client.connect()
-      this.trace(`  ${candidate.descriptor}: transport opened in ${Date.now() - connectStartedAt}ms`)
+      this.trace(`  ${describeLinkCandidate(candidate)}: transport opened in ${Date.now() - connectStartedAt}ms`)
     } catch (error) {
       client.disconnect()
-      this.trace(`  ${candidate.descriptor}: transport would not open after ${Date.now() - connectStartedAt}ms`)
+      this.trace(
+        `  ${describeLinkCandidate(candidate)}: transport would not open after ${Date.now() - connectStartedAt}ms`,
+      )
       return { ok: false, error: describeError(error) }
     }
 
@@ -433,17 +465,19 @@ export class DeviceSessionManager {
     const verifyStartedAt = Date.now()
     try {
       if (await this.hooks.verify(client, candidate, context)) {
-        this.trace(`  ${candidate.descriptor}: answered the debug protocol in ${Date.now() - verifyStartedAt}ms`)
+        this.trace(
+          `  ${describeLinkCandidate(candidate)}: answered the debug protocol in ${Date.now() - verifyStartedAt}ms`,
+        )
         return { ok: true, client }
       }
       client.disconnect()
       this.trace(
-        `  ${candidate.descriptor}: opened but did NOT answer the debug protocol (waited ${Date.now() - verifyStartedAt}ms)`,
+        `  ${describeLinkCandidate(candidate)}: opened but did NOT answer the debug protocol (waited ${Date.now() - verifyStartedAt}ms)`,
       )
       return { ok: false, error: 'No OpenPLC firmware answered' }
     } catch (error) {
       client.disconnect()
-      this.trace(`  ${candidate.descriptor}: verification threw after ${Date.now() - verifyStartedAt}ms`)
+      this.trace(`  ${describeLinkCandidate(candidate)}: verification threw after ${Date.now() - verifyStartedAt}ms`)
       return { ok: false, error: describeError(error) }
     }
   }
@@ -530,7 +564,7 @@ export class DeviceSessionManager {
     const verdict = await this.probeVerdict(client, candidate)
     const decision = this.policy.onProbeResult(verdict)
     if (verdict !== 'alive') {
-      this.trace(`poll: ${candidate.transport} ${candidate.descriptor} ${verdict} -> ${decision}`)
+      this.trace(`poll: ${describeLinkCandidate(candidate)} ${verdict} -> ${decision}`)
     }
     switch (decision) {
       case 'enter-recovery':

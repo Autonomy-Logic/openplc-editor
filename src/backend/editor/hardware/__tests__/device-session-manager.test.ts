@@ -81,6 +81,7 @@ function candidate(
   descriptor: string,
   queue: FakeClient[],
   registry: FakeClient[],
+  extra: Partial<DeviceLinkCandidate> = {},
 ): DeviceLinkCandidate {
   return {
     transport,
@@ -90,6 +91,7 @@ function candidate(
       registry.push(client)
       return asTransport(client)
     },
+    ...extra,
   }
 }
 
@@ -114,6 +116,58 @@ describe('DeviceSessionManager', () => {
       expect(serial.connectCount).toBe(0)
       expect(h.manager.getLink()).toEqual({ transport: 'tcp', descriptor: '192.168.0.50' })
       h.manager.close()
+    })
+
+    // The baud sweep sends several candidates down the SAME port, differing only
+    // by `baudRate`. `descriptor` is matched against the OS port list, so it has
+    // to stay the bare port name: when the rate was folded into it ("COM5 @ 9600
+    // baud") every swept candidate matched no port and was skipped in 1ms — the
+    // sweep silently did nothing at all.
+    it('tries every baud rate on one port instead of skipping them as absent ports', async () => {
+      const h = harness()
+      const wrongBaud = new FakeClient()
+      const rightBaud = new FakeClient()
+      // Only the real port name is enumerated, exactly as the OS reports it.
+      h.ports.clear()
+      h.ports.add('COM5')
+      // First candidate opens but answers nothing (what a wrong baud looks like).
+      let verified = 0
+      const h2 = harness({
+        serialPortPresent: async (port) => h.ports.has(port),
+        verify: async () => {
+          verified += 1
+          return verified > 1
+        },
+      })
+
+      const result = await h2.manager.open([
+        candidate('rtu', 'COM5', [wrongBaud], h2.clients, { baudRate: 9600, patient: true }),
+        candidate('rtu', 'COM5', [rightBaud], h2.clients, { baudRate: 115200, speculative: true }),
+      ])
+
+      expect(result.ok).toBe(true)
+      // Both were actually opened — the second was not dismissed as a missing port.
+      expect(wrongBaud.connectCount).toBe(1)
+      expect(rightBaud.connectCount).toBe(1)
+      if (result.ok) expect(result.descriptor).toBe('COM5')
+      h2.manager.close()
+    })
+
+    it('names the baud rate when reporting what it tried', async () => {
+      const h = harness({ verify: async () => false })
+      h.ports.clear()
+      h.ports.add('COM5')
+
+      const result = await h.manager.open([
+        candidate('rtu', 'COM5', [], h.clients, { baudRate: 9600 }),
+        candidate('rtu', 'COM5', [], h.clients, { baudRate: 115200, speculative: true }),
+      ])
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        // Two entries for one port are only meaningful if each says its rate.
+        expect(result.attempts.map((attempt) => attempt.baudRate)).toEqual([9600, 115200])
+      }
     })
 
     it('falls back to serial when Modbus TCP cannot connect', async () => {

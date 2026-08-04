@@ -80,38 +80,43 @@ export interface VppModbusScreenState {
 export const DEFAULT_DEBUG_BAUD = '115200'
 
 /**
- * Baud rate the DEFAULT serial port comes up at — the one the always-on
- * debugger answers on, and therefore the one the editor must dial to reach it.
+ * Baud rate the DEFAULT serial port comes up at — the one the always-on debugger
+ * answers on, and therefore the one the editor must dial to reach it.
  *
- * Three sources, in order:
+ * The two sides derive this independently (the firmware from here, the editor
+ * from the board's `debug` spec), so they have to agree or the port opens and
+ * decodes nothing. What the editor dials is
+ * `screens.modbus_rtu.rtu_baud_rate` — ALWAYS, whether or not the RTU is
+ * enabled, because a spec's `params` are read independently of its
+ * `enabledWhen`. This function mirrors that:
  *
- *  1. The `serial` section, when a package declares one. It exists precisely to
- *     configure this port independently of Modbus.
- *  2. Otherwise, the RTU's baud — but ONLY when the RTU is on the default port,
- *     because there the firmware brings that one port up at `MBSERIAL_BAUD` and
- *     the debugger shares it (`MBSERIAL_SHARES_DEBUG_SERIAL`). Honouring it is
- *     what keeps firmware and editor on the same wire speed for every package
- *     published without a `serial` section.
- *  3. Otherwise `115200`: either no RTU at all, or an RTU on a SECOND UART while
- *     the debugger keeps the default port to itself. Nothing in the project
- *     states that port's speed, so the firmware's default is the only answer —
- *     which is why the connect flow probes alternative bauds rather than
- *     trusting this one blindly.
+ *  1. A `serial` section, when a package declares one — it exists precisely to
+ *     configure this port, and a package that has it also points its debug spec
+ *     at it.
+ *  2. Otherwise the RTU's baud, which for a package published today is the only
+ *     serial speed the project states at all. This holds even when the RTU is
+ *     DISABLED: the rate is then unused by Modbus, but the editor still dials it,
+ *     so the firmware had better listen there.
+ *  3. `115200` only when the RTU is enabled on a SECOND UART — the one case where
+ *     that rate genuinely belongs to a different port and the debugger keeps the
+ *     default one to itself. Nothing states that port's speed, so this is a
+ *     guess, and it is exactly the case the connect flow's baud sweep exists for.
  */
 export function resolveDebugBaud(state: VppModbusScreenState, defaultSerial: string = 'Serial'): string {
   const declared = state.serial?.baud_rate
   if (declared) return declared
 
   const rtu = state.modbus_rtu
-  if (rtu?.enabled === true) {
+  if (!rtu) return DEFAULT_DEBUG_BAUD
+
+  // An enabled RTU on its own UART takes its baud with it; the debugger is then
+  // on a port whose speed the project never mentions.
+  if (rtu.enabled === true) {
     const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
-    if (iface === defaultSerial) {
-      const shared = rtu.baud_rate ?? rtu.rtu_baud_rate
-      if (shared) return shared
-    }
+    if (iface !== defaultSerial) return DEFAULT_DEBUG_BAUD
   }
 
-  return DEFAULT_DEBUG_BAUD
+  return rtu.baud_rate ?? rtu.rtu_baud_rate ?? DEFAULT_DEBUG_BAUD
 }
 
 /**

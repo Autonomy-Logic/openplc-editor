@@ -43,8 +43,24 @@ describe('resolveDebugBaud', () => {
     )
   })
 
-  it('ignores the RTU baud when the RTU is disabled', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } })).toBe(DEFAULT_DEBUG_BAUD)
+  // The editor dials `rtu_baud_rate` whether or not the RTU is enabled — a debug
+  // spec's `params` are read independently of its `enabledWhen`. So the firmware
+  // must listen there too, or a project with Modbus turned off and a non-default
+  // baud saved on the screen is unreachable.
+  it('still takes the RTU baud when the RTU is DISABLED', () => {
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } })).toBe('9600')
+  })
+
+  it('takes the RTU baud when the RTU is disabled and names a second port', () => {
+    // The rate is unused by Modbus, and the debugger owns the default port. What
+    // decides this is what the editor dials, which is this value.
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_interface: 'Serial1', rtu_baud_rate: '9600' } })).toBe(
+      '9600',
+    )
+  })
+
+  it('falls back when the RTU section states no baud at all', () => {
+    expect(resolveDebugBaud({ modbus_rtu: { enabled: true } })).toBe(DEFAULT_DEBUG_BAUD)
   })
 
   it('falls back for an empty project', () => {

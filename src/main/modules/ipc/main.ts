@@ -55,6 +55,7 @@ import {
   SPECULATIVE_BOARD_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
 import {
+  describeLinkCandidate,
   type DeviceDebugCandidate,
   type DeviceLinkCandidate,
   type DeviceLinkStatus,
@@ -1983,12 +1984,14 @@ class MainProcessBridge implements MainIpcModule {
       // Probe the params now so a malformed config fails resolution rather than
       // becoming a candidate that always throws on `create()`.
       if ('error' in buildDeviceModbusTransport(params, options)) return
-      const base = describeDebugEndpoint(config)
       ;(isGuess ? speculative : declared).push({
         transport: kind,
-        // Name the rate on a guess: the trace and the failure dialog list what was
-        // tried, and "COM5" five times over tells the user nothing.
-        descriptor: isGuess ? `${base} @ ${baudRate} baud` : base,
+        // The endpoint ONLY. It is matched against the OS port list and against
+        // the port an upload asks to borrow, so the baud travels beside it rather
+        // than inside it — decorating this string made every swept candidate match
+        // no port and be skipped in 1ms.
+        descriptor: describeDebugEndpoint(config),
+        baudRate,
         speculative: isGuess,
         create: () => {
           const built = buildDeviceModbusTransport(params, options)
@@ -2294,7 +2297,7 @@ class MainProcessBridge implements MainIpcModule {
     // better message ("no firmware" beats "could not connect"); otherwise report
     // what was tried.
     if (probe && probe.status !== 'connected-with-firmware') return probe
-    const tried = result.attempts.map((attempt) => `${attempt.descriptor}: ${attempt.error}`).join('; ')
+    const tried = result.attempts.map((attempt) => `${describeLinkCandidate(attempt)}: ${attempt.error}`).join('; ')
     return { status: 'no-response', error: tried || 'No connection could be established.' }
   }
 
