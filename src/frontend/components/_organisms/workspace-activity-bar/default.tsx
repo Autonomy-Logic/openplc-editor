@@ -376,7 +376,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           })
           if (candidates.kind === 'candidates') {
             try {
-              await window.bridge.deviceConnect(candidates.candidates.map((candidate) => candidate.config))
+              await device.connect(candidates.candidates.map((candidate) => candidate.config))
             } catch {
               // best-effort: the user can press Connect again.
             }
