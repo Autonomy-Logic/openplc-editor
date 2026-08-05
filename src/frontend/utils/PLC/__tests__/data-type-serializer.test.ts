@@ -11,7 +11,7 @@
  * one of these up.
  */
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
-import { serializeDataTypesToLines, serializeDataTypesToST } from '../data-type-serializer'
+import { serializeDataTypesToLines, serializeDataTypesToST, serializeDataTypeToText } from '../data-type-serializer'
 
 const enumerated = (name: string, values: string[], initialValue?: string): PLCDataType => ({
   name,
@@ -88,8 +88,62 @@ describe('serializeDataTypesToST', () => {
   })
 
   it('serialises a multi-dimension array with an initial value', () => {
+    // IEC 61131-3 multi-dimension syntax: one bracket, comma-separated.
     const out = serializeDataTypesToST([array('Matrix', 'REAL', ['0..3', '0..3'], '[0,0,0,0]')])
-    expect(out).toBe('TYPE\n  Matrix : ARRAY [0..3][0..3] OF REAL := [0,0,0,0];\nEND_TYPE\n')
+    expect(out).toBe('TYPE\n  Matrix : ARRAY [0..3, 0..3] OF REAL := [0,0,0,0];\nEND_TYPE\n')
+  })
+
+  it('rebuilds structure array fields from their structured shape', () => {
+    const dt: PLCDataType = {
+      name: 'Rec',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'samples',
+          type: {
+            definition: 'array',
+            value: 'ARRAY [1..5, 1..3] OF INT',
+            data: {
+              baseType: { definition: 'base-type', value: 'INT' },
+              dimensions: [{ dimension: '1..5' }, { dimension: '1..3' }],
+            },
+          },
+        },
+        // Legacy records may carry an array definition without the
+        // structured `data` — the display value is all we have.
+        { name: 'legacy', type: { definition: 'array', value: 'ARRAY [0..1] OF BOOL' } },
+      ],
+    }
+    expect(serializeDataTypesToST([dt])).toBe(
+      'TYPE\n' +
+        '  Rec : STRUCT\n' +
+        '    samples : ARRAY [1..5, 1..3] OF INT;\n' +
+        '    legacy : ARRAY [0..1] OF BOOL;\n' +
+        '  END_STRUCT;\n' +
+        'END_TYPE\n',
+    )
+  })
+
+  it('renders structure field documentation as a trailing comment', () => {
+    const dt: PLCDataType = {
+      name: 'Motor',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'speed',
+          type: { definition: 'base-type', value: 'INT' },
+          initialValue: { simpleValue: { value: '100' } },
+          documentation: 'target speed in rpm',
+        },
+      ],
+    }
+    expect(serializeDataTypesToST([dt])).toBe(
+      'TYPE\n' +
+        '  Motor : STRUCT\n' +
+        '    speed : INT := 100; (* target speed in rpm *)\n' +
+        '  END_STRUCT;\n' +
+        'END_TYPE\n',
+    )
   })
 
   it('packs multiple entries in one block in declaration order', () => {
@@ -145,13 +199,30 @@ describe('serializeDataTypesToLines', () => {
 
   it('reports a single line for an array (regardless of dimensions)', () => {
     const entries = serializeDataTypesToLines([array('Buffer', 'INT', ['0..9', '0..3'])])
-    expect(entries).toEqual([{ name: 'Buffer', lines: ['  Buffer : ARRAY [0..9][0..3] OF INT;'] }])
+    expect(entries).toEqual([{ name: 'Buffer', lines: ['  Buffer : ARRAY [0..9, 0..3] OF INT;'] }])
   })
 
   it('drops zero-line entries from the result', () => {
     const unknown = { name: 'Mystery', derivation: 'pointer' } as unknown as PLCDataType
     const entries = serializeDataTypesToLines([unknown, enumerated('Color', ['Red'])])
     expect(entries).toEqual([{ name: 'Color', lines: ['  Color : (Red);'] }])
+  })
+
+  it('serializeDataTypeToText frames a single entry as its own TYPE block', () => {
+    expect(serializeDataTypeToText(enumerated('Color', ['Red', 'Green'], 'Red'))).toBe(
+      'TYPE\n  Color : (Red, Green) := Red;\nEND_TYPE\n',
+    )
+    expect(serializeDataTypeToText(structure('Point', [{ name: 'x', type: 'INT' }]))).toBe(
+      'TYPE\n  Point : STRUCT\n    x : INT;\n  END_STRUCT;\nEND_TYPE\n',
+    )
+    expect(serializeDataTypeToText(array('Buffer', 'INT', ['0..9']))).toBe(
+      'TYPE\n  Buffer : ARRAY [0..9] OF INT;\nEND_TYPE\n',
+    )
+  })
+
+  it('serializeDataTypeToText returns an empty string for an unknown derivation', () => {
+    const unknown = { name: 'Mystery', derivation: 'pointer' } as unknown as PLCDataType
+    expect(serializeDataTypeToText(unknown)).toBe('')
   })
 
   it('lines from serializeDataTypesToLines roundtrip into serializeDataTypesToST', () => {
