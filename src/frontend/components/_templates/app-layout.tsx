@@ -3,6 +3,7 @@ import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState }
 import { useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
+import type { CreateGraphicalVariableModalData } from '../../store/slices/modal/types'
 import { cn } from '../../utils/cn'
 import { ResolutionWarning } from '../_atoms/resolution-warning-message'
 import Toaster from '../_features/[app]/toast/toaster'
@@ -13,6 +14,7 @@ import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal 
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
+import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphical-variable-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
@@ -35,6 +37,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
+  const dataTypes = useOpenPLCStore(useCallback((s) => s.project.data.dataTypes, []))
+  const { closeModal, onOpenChange } = useOpenPLCStore(useCallback((s) => s.modalActions, []))
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
@@ -129,6 +133,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           )}
           {modals?.['confirm-plcopen-import']?.open === true && (
             <ConfirmPlcopenImportModal isOpen={modals['confirm-plcopen-import'].open} />
+          )}
+          {modals?.['create-graphical-variable']?.open === true && (
+            <CreateGraphicalVariableModal
+              isOpen={modals['create-graphical-variable'].open}
+              data={modals['create-graphical-variable'].data as CreateGraphicalVariableModalData}
+              dataTypeNames={dataTypes.map((dataType) => dataType.name)}
+              onOpenChange={(open) => onOpenChange('create-graphical-variable', open)}
+              onClose={closeModal}
+            />
           )}
           {modals?.['quit-application']?.open === true && (
             <QuitApplicationModal isOpen={modals['quit-application'].open} />
