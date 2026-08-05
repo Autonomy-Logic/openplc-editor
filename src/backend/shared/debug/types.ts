@@ -7,10 +7,14 @@ import type { PlcRuntimeState } from '../simulator/types'
  * Mirrors the implicit interface from openplc-editor where ModbusTcpClient,
  * ModbusRtuClient, and WebSocketDebugClient all implement the same methods.
  *
- * openplc-web transports: ModbusRtuTransport (simulator), ModbusDataChannelTransport (WebRTC), HttpTransport.
+ * openplc-web transports: ModbusRtuTransport (simulator), ModbusDataChannelTransport
+ * (a WebRTC data channel, falling back to the Autonomy Edge relay per request).
+ *
+ * Which medium a session ends up on is NOT named here: the connection manager
+ * publishes it as a `DebugMedium` (middleware/shared/ports/types), which is the one
+ * vocabulary the debug poller reads. A second, near-identical union living here is
+ * how the poller came to have two disagreeing sources for the same fact.
  */
-
-export type DebugConnectionType = 'webrtc' | 'http' | 'simulator'
 
 export interface DebugTransportResult {
   success: boolean

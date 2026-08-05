@@ -176,18 +176,11 @@ export function useDebugSession(): UseDebugSessionReturn {
       const sessionEndpoint = useOpenPLCStore.getState().deviceConnection.port
       if (sessionEndpoint) wsActions.setDebuggerTargetIp(sessionEndpoint)
 
-      // Record the active transport so useDebugPolling picks the right
-      // poll cadence + batch size.  Set on EVERY start path (runtime
-      // targets also set it earlier in handleMd5Verification; this
-      // additionally covers the simulator path, which doesn't go
-      // through MD5 verification — without it the simulator stayed at
-      // the default 200ms instead of its intended 50ms).  Must be set
-      // before `setDebuggerVisible(true)`, which is what triggers the
-      // polling effect.
-      // The medium is the manager's choice, mirrored in the store; read it rather
-      // than assuming one. `debugTransport` because this sizes the debug poll.
-      wsActions.setDebugConnectionType(useOpenPLCStore.getState().deviceConnection.debugTransport ?? 'simulator')
-
+      // Nothing to record about the transport: `useDebugPolling` reads the medium
+      // the connection manager published (`deviceConnection.debugTransport`) and
+      // derives both its batch size and its cadence from it. Copying that into a
+      // second store field is what let the two disagree — and made a session whose
+      // medium was not yet known silently poll as if it were the simulator.
       wsActions.setDebuggerVisible(true)
       logActions.addLog({
         id: crypto.randomUUID(),

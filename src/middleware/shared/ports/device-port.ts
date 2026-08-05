@@ -21,7 +21,7 @@
  *   - getDeviceStatus()
  */
 
-import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from './types'
+import type { BoardInfo, CommunicationPort, DebugConnectionConfig, DebugMedium, DeviceLinkTransport } from './types'
 
 // ---------------------------------------------------------------------------
 // Connect-time classification (D72) — platform contract shared by the port and
@@ -55,14 +55,15 @@ export interface DeviceConnectionStatusPayload {
    * Medium the CONTROL channel uses (or was using, when it dropped). Absent for a
    * REST-controlled runtime session: REST holds no connection.
    */
-  transport?: 'rtu' | 'tcp' | 'simulator'
+  transport?: DeviceLinkTransport
   /**
    * Medium the DEBUG channel uses — the same as `transport` when one channel serves
-   * both roles, else `websocket` (v4) or `tcp` (v3). Consumers that must size work
-   * to the wire (the debug poll's frame budget) read THIS, rather than inferring a
-   * medium they have no business choosing.
+   * both roles, else `websocket` (editor / v4), `tcp` (v3), or `webrtc` /
+   * `http-relay` in the browser. Consumers that must pace or size work to the wire
+   * (the debug poll) read THIS, rather than inferring a medium they have no
+   * business choosing.
    */
-  debugTransport?: 'rtu' | 'tcp' | 'simulator' | 'websocket'
+  debugTransport?: DebugMedium
   /**
    * The endpoint, as the user would name it: a serial path ("/dev/ttyACM0",
    * "COM5") or an IP address. Not called `port`, because for a Modbus TCP link it

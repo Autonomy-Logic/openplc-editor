@@ -2,7 +2,9 @@ import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/share
 import type {
   BoardInfo,
   CommunicationPort,
+  DebugMedium,
   DeviceConfiguration,
+  DeviceLinkTransport,
   DevicePin,
   PlcStatus,
   TimingStats,
@@ -103,14 +105,17 @@ export type DeviceConnection = {
    * picks a transport. Null for a REST-controlled runtime session, which holds no
    * connection.
    */
-  transport: 'rtu' | 'tcp' | 'simulator' | null
+  transport: DeviceLinkTransport | null
   /**
-   * Medium the DEBUG channel uses. The debug poll sizes its batches to this, because
-   * the frame budget differs enormously by wire (WebSocket 500 variables per round
-   * trip, Modbus TCP 60, RTU 19). Mirrored from the manager rather than inferred: a
-   * v4 session left this unset and silently polled with TCP-sized batches.
+   * Medium the DEBUG channel uses — the ONE fact the debug poller reads, for both
+   * its batch size and its cadence (see `DEBUG_MEDIUM_PROFILE`). Published by the
+   * connection manager, which is the only component that knows: the main process on
+   * the editor, the WebRTC lifecycle manager in the browser.
+   *
+   * Can change mid-session on web, when a WebRTC data channel drops to the Edge
+   * relay — the poller follows it, so this is read live rather than latched.
    */
-  debugTransport: 'rtu' | 'tcp' | 'simulator' | 'websocket' | null
+  debugTransport: DebugMedium | null
 }
 
 // ---------------------------------------------------------------------------

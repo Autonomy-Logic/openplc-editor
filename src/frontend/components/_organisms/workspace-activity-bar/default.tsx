@@ -708,15 +708,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
-        // The debug poll sizes its batches to the frame budget, so it needs the
-        // medium the DEBUG channel rides — published by the manager and mirrored in
-        // the store. Reading the control medium instead left a v4 session (control
-        // over REST, debug over a WebSocket) with no medium at all, and it silently
-        // polled with TCP-sized batches: 60 variables per round trip instead of 500.
-        const activeTransport = useOpenPLCStore.getState().deviceConnection.debugTransport
-        if (activeTransport) {
-          useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(activeTransport)
-        }
         // Persist the target's byte order — detected from the MD5
         // response trailer in the runtime — so the swap layer at the
         // read / write boundaries flips on BE targets.  Default to

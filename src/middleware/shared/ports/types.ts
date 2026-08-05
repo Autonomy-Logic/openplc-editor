@@ -1053,7 +1053,39 @@ export interface RuntimeLogEntry {
 // Debugger
 // ---------------------------------------------------------------------------
 
+/**
+ * A channel kind a board's `debug` spec can declare. This is the SPEC's
+ * vocabulary — what a package author writes — not necessarily what a live
+ * session ends up riding. See `DebugMedium` for that.
+ */
 export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
+
+/**
+ * What a live debug session actually rides — the one fact the connection manager
+ * publishes and the debug poller consumes.
+ *
+ * Wider than `DebugConnectionType` because the browser reaches a runtime two ways
+ * that no spec distinguishes, and they behave differently enough that the poller
+ * must tell them apart:
+ *
+ *   `webrtc`      a data channel straight to the orchestrator agent, which relays
+ *                 to the runtime's debug socket.
+ *   `http-relay`  the same request, hop by hop: browser -> Autonomy Edge ->
+ *                 agent (over its always-on websocket) -> runtime. The fallback
+ *                 when a data channel cannot be opened.
+ *
+ * Both terminate at the SAME endpoint on the device, so they carry the same frame
+ * budget and differ only in latency — which is exactly the split
+ * `DEBUG_MEDIUM_PROFILE` encodes.
+ */
+export type DebugMedium = DebugConnectionType | 'webrtc' | 'http-relay'
+
+/**
+ * Media that can carry a CONTROL channel — one the connection manager physically
+ * holds open and polls. Narrower than `DebugMedium` on purpose: a REST-controlled
+ * runtime holds nothing, and the browser's media are debug-only.
+ */
+export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
 
 export interface DebugConnectionConfig {
   connectionType: DebugConnectionType

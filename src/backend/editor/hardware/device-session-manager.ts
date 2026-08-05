@@ -39,10 +39,13 @@
  *     main process implements as its existing classify + license recover;
  *   - the counting for down / back / lost         -> `DeviceLinkPolicy`.
  */
+import type { DebugMedium, DeviceLinkTransport } from '../../../middleware/shared/ports/types'
 import type { DeviceDebugChannel, DeviceModbusTransport } from '../../shared/debug/types'
 import { DeviceLinkPolicy } from './device-link-policy'
 
-export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
+// Re-exported so callers in this layer keep one import site; the definition is
+// shared with the renderer, which mirrors these media into the store.
+export type { DebugMedium, DeviceLinkTransport }
 
 /**
  * How to open a DEBUG channel that is not the control channel. Simpler than a
@@ -56,7 +59,7 @@ export interface DeviceDebugCandidate {
    * per round trip, Modbus TCP 60, RTU 19), and a poller that has to GUESS the
    * medium either wastes round trips or overruns a frame.
    */
-  transport: DeviceLinkTransport | 'websocket'
+  transport: DebugMedium
   descriptor: string
   create: () => DeviceDebugChannel
 }
@@ -111,7 +114,7 @@ export interface DeviceLinkStatus {
    * what "the connection dropped" means, the debug medium decides the poll's frame
    * budget.
    */
-  debugTransport?: DeviceLinkTransport | 'websocket'
+  debugTransport?: DebugMedium
   descriptor?: string
   /**
    * Set only when a link that WAS up died and could not be recovered. The one
