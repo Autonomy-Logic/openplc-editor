@@ -96,14 +96,14 @@ describe('uninstall', () => {
 })
 
 describe('installFromCatalog', () => {
-  it('narrows the catalog rows to bare ids before delegating to the bridge', async () => {
+  it('forwards the full catalog rows to the bridge', async () => {
     const libraries = [makePublicLibrary({ id: 'pub-1' }), makePublicLibrary({ id: 'pub-2' })]
     const batch = { results: [{ publishedLibraryId: 'pub-1', success: true }] }
     ;(window.bridge.installLibrariesFromCatalog as jest.Mock).mockResolvedValueOnce(batch)
 
     const result = await adapter.installFromCatalog?.(libraries)
 
-    expect(window.bridge.installLibrariesFromCatalog).toHaveBeenCalledWith(['pub-1', 'pub-2'])
+    expect(window.bridge.installLibrariesFromCatalog).toHaveBeenCalledWith(libraries)
     expect(result).toEqual(batch)
   })
 })

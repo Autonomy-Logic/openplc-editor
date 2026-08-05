@@ -58,6 +58,7 @@ jest.mock(
   { virtual: true },
 )
 
+import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import { LibraryManagerModule } from '../library-manager-module'
 
 function makeArchive(name: string, version = '1.0.0') {
@@ -72,6 +73,29 @@ function makeArchive(name: string, version = '1.0.0') {
       functionBlocks: [],
       types: [],
     },
+  }
+}
+
+function makePublicLibrary(overrides: Partial<PublicLibrary> = {}): PublicLibrary {
+  return {
+    id: 'pub-1',
+    projectId: 'project-1',
+    name: 'alpha-lib',
+    version: '1.0.0',
+    displayName: 'Alpha Lib',
+    description: null,
+    license: null,
+    authorHandle: 'jdoe',
+    manifestPous: { functions: [], functionBlocks: [], types: [] },
+    sizeBytes: 1024,
+    sha256: 'a'.repeat(64),
+    downloadsCount: 0,
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    isProjectPublic: false,
+    projectUrl: null,
+    projectStarsCount: null,
+    ...overrides,
   }
 }
 
@@ -392,7 +416,10 @@ describe('LibraryManagerModule', () => {
       })
       const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
 
-      const batch = await mod.installFromCatalog(['pub-1', 'pub-2'])
+      const batch = await mod.installFromCatalog([
+        makePublicLibrary({ id: 'pub-1', name: 'alpha-lib' }),
+        makePublicLibrary({ id: 'pub-2', name: 'beta-lib' }),
+      ])
 
       expect(batch.results).toEqual([
         { publishedLibraryId: 'pub-1', success: true, name: 'alpha-lib', version: '1.0.0' },
@@ -405,6 +432,44 @@ describe('LibraryManagerModule', () => {
       expect(mod.listInstalled().map((r) => r.name)).toEqual(['alpha-lib', 'beta-lib'])
     })
 
+    it("persists the catalog row's displayName/description onto the archive's own manifest", async () => {
+      // listInstalled() derives displayName/description by re-reading
+      // the persisted archive's manifest off disk — there's no
+      // separate metadata store on this platform — so the override
+      // has to land inside the .stlib file itself to be visible.
+      const transport = makeStubTransport({ 'pub-1': makeArchive('alpha-lib', '1.0.0') })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      await mod.installFromCatalog([
+        makePublicLibrary({
+          id: 'pub-1',
+          name: 'alpha-lib',
+          displayName: 'ACME Industrial',
+          description: 'Catalog description',
+        }),
+      ])
+
+      const installed = mod.listInstalled().find((l) => l.name === 'alpha-lib')
+      expect(installed).toMatchObject({ displayName: 'ACME Industrial', description: 'Catalog description' })
+
+      const persistedArchive = JSON.parse(readFileSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'), 'utf-8'))
+      expect(persistedArchive.manifest.displayName).toBe('ACME Industrial')
+      expect(persistedArchive.manifest.description).toBe('Catalog description')
+    })
+
+    it('leaves the archive untouched when catalog metadata matches the manifest already', async () => {
+      const archive = makeArchive('alpha-lib', '1.0.0')
+      const transport = makeStubTransport({ 'pub-1': archive })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+
+      await mod.installFromCatalog([
+        makePublicLibrary({ id: 'pub-1', name: 'alpha-lib', displayName: '', description: archive.manifest.description }),
+      ])
+
+      const persistedText = readFileSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'), 'utf-8')
+      expect(JSON.parse(persistedText)).toEqual(archive)
+    })
+
     it('reports per-item failures without aborting the batch', async () => {
       const transport = makeStubTransport(
         { 'pub-good': makeArchive('good-lib', '1.0.0') },
@@ -412,7 +477,10 @@ describe('LibraryManagerModule', () => {
       )
       const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
 
-      const batch = await mod.installFromCatalog(['pub-bad', 'pub-good'])
+      const batch = await mod.installFromCatalog([
+        makePublicLibrary({ id: 'pub-bad' }),
+        makePublicLibrary({ id: 'pub-good', name: 'good-lib' }),
+      ])
 
       expect(batch.results).toHaveLength(2)
       expect(batch.results[0]).toMatchObject({
@@ -446,7 +514,7 @@ describe('LibraryManagerModule', () => {
       })
       const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
 
-      const batch = await mod.installFromCatalog(['pub-x'])
+      const batch = await mod.installFromCatalog([makePublicLibrary({ id: 'pub-x', name: 'iec-standard-fb' })])
 
       expect(batch.results).toHaveLength(1)
       expect(batch.results[0]).toMatchObject({

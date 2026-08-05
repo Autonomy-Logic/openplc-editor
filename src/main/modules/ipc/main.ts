@@ -20,6 +20,7 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
@@ -1362,11 +1363,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, publishedLibraryIds: string[]) => {
-    if (!Array.isArray(publishedLibraryIds) || publishedLibraryIds.length === 0) {
+  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, libraries: PublicLibrary[]) => {
+    if (!Array.isArray(libraries) || libraries.length === 0) {
       return { results: [] }
     }
-    const batch = await this.libraryManagerModule.installFromCatalog(publishedLibraryIds)
+    const batch = await this.libraryManagerModule.installFromCatalog(libraries)
     // Fire one change event for the whole batch — saves N renderer
     // refreshes for an N-library install.
     if (batch.results.some((r) => r.success)) {

@@ -63,11 +63,10 @@ export function createEditorLibraryAdapter(): LibraryPort {
     },
 
     installFromCatalog(libraries: PublicLibrary[]): Promise<CatalogInstallBatch> {
-      // The main-process module only needs each library's id — it
-      // downloads directly from autonomy-edge and installs locally
-      // already, unlike the web adapter it never round-tripped
-      // through a server-side install-from-repository call.
-      return window.bridge.installLibrariesFromCatalog(libraries.map((l) => l.id))
+      // Forward the full rows, not just ids — the main process needs
+      // authorHandle/displayName/description to finalize each install
+      // the same way the web adapter does. See library-port.ts.
+      return window.bridge.installLibrariesFromCatalog(libraries)
     },
   }
 }

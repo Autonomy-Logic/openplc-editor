@@ -14,6 +14,7 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
@@ -164,7 +165,7 @@ const rendererProcessBridge = {
   ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> =>
     ipcRenderer.invoke('catalog:list', args),
   installLibrariesFromCatalog: (
-    publishedLibraryIds: string[],
+    libraries: PublicLibrary[],
   ): Promise<{
     results: Array<{
       publishedLibraryId: string
@@ -173,7 +174,7 @@ const rendererProcessBridge = {
       version?: string
       error?: string
     }>
-  }> => ipcRenderer.invoke('catalog:install-many', publishedLibraryIds),
+  }> => ipcRenderer.invoke('catalog:install-many', libraries),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)
