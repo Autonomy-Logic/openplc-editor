@@ -99,8 +99,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Deliberately NOT applied to Build & Upload. Uploading is how a blank board stops
   // being blank, so it cannot require a connection — see `handleBuild`, where the
   // connection is consulted only to hand the serial port over to arduino-cli.
-  const plcControlBlocked = deviceConnectionStatus !== 'connected'
-  const plcControlBlockedReason = 'Connect to the target first'
+  //
+  // A transition already in flight blocks it too. TRANSITIONING means the runtime
+  // has a start or stop underway: it answers COMMAND:BUSY to everything except
+  // PING and STATUS, and the state it will settle on is not decided yet, so the
+  // icon is drawn from a state that is about to change. Clicking then cannot do
+  // what it appears to.
+  const plcTransitioning = plcStatus === 'TRANSITIONING'
+  const plcControlBlocked = deviceConnectionStatus !== 'connected' || plcTransitioning
+  const plcControlBlockedReason = plcTransitioning
+    ? 'PLC is changing state...'
+    : 'Connect to the target first'
 
   // The emulator stopping is a session ending, and a debug session riding it ends
   // with it — which the drop handler below already does for every target. This
@@ -564,6 +573,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     // `switchPosition` in the store, so the pre-check is a store lookup rather than
     // another round trip over a medium the poll is already using.
     try {
+      // The button is disabled while a transition is in flight; this covers the
+      // window before the next status poll catches up, and any caller that is not
+      // the click.
+      if (plcStatus === 'TRANSITIONING') return
+
       const wantRun = plcStatus !== 'RUNNING'
 
       // Never send a start to a device whose switch reads STOP. `null` means
