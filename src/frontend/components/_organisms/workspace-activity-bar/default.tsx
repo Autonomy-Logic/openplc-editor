@@ -104,11 +104,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // reason, and says so. `handlePlcControl` refuses such a target anyway, so
   // without this the button looked live and the click did nothing at all — no
   // command, no error, no log line.
+  //
+  // A transition already in flight blocks it for a third reason. TRANSITIONING
+  // means the runtime has a start or stop underway: it answers COMMAND:BUSY to
+  // everything except PING and STATUS, and the state it will settle on is not
+  // decided yet, so the icon is drawn from a state that is about to change.
+  // Clicking then cannot do what it appears to.
   const plcStateControlSupported = resolveTargetCapabilities(currentBoardInfo).plcStateControl
-  const plcControlBlocked = !plcStateControlSupported || deviceConnectionStatus !== 'connected'
-  const plcControlBlockedReason = plcStateControlSupported
-    ? 'Connect to the target first'
-    : 'This target does not support Start/Stop from the editor'
+  const plcTransitioning = plcStatus === 'TRANSITIONING'
+  const plcControlBlocked =
+    !plcStateControlSupported || deviceConnectionStatus !== 'connected' || plcTransitioning
+  const plcControlBlockedReason = !plcStateControlSupported
+    ? 'This target does not support Start/Stop from the editor'
+    : plcTransitioning
+      ? 'PLC is changing state...'
+      : 'Connect to the target first'
 
   // The emulator stopping is a session ending, and a debug session riding it ends
   // with it — which the drop handler below already does for every target. This
@@ -547,6 +557,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     // `switchPosition` in the store, so the pre-check is a store lookup rather than
     // another round trip over a medium the poll is already using.
     try {
+      // The button is disabled while a transition is in flight; this covers the
+      // window before the next status poll catches up, and any caller that is not
+      // the click.
+      if (plcStatus === 'TRANSITIONING') return
+
       const wantRun = plcStatus !== 'RUNNING'
 
       // Never send a start to a device whose switch reads STOP. `null` means
