@@ -468,9 +468,14 @@ class ProjectService {
       // arrays are empty (e.g. fresh library with no servers yet),
       // so callers can rely on them existing.
       await Promise.all(
-        ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote', 'datatypes'].map((d) =>
-          promises.mkdir(join(dir, d), { recursive: true }),
-        ),
+        [
+          'pous/programs',
+          'pous/functions',
+          'pous/function-blocks',
+          'devices/servers',
+          'devices/remote',
+          'datatypes',
+        ].map((d) => promises.mkdir(join(dir, d), { recursive: true })),
       )
 
       // Single source of truth for the file shape lives in the
