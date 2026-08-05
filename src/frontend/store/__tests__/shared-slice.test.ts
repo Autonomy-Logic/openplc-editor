@@ -8,6 +8,7 @@ import { createEditorSlice } from '../slices/editor/slice'
 import { createFBDFlowSlice } from '../slices/fbd/slice'
 import { createFileSlice } from '../slices/file/slice'
 import { createHistorySlice } from '../slices/history/slice'
+import type { LadderFlowType } from '../slices/ladder'
 import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
 import { createModalSlice } from '../slices/modal/slice'
@@ -1104,6 +1105,34 @@ describe('createSharedSlice', () => {
         expect(store.getState().undoRedo['Main'].past).toHaveLength(0)
       })
 
+      it('does nothing when the POU flow fails its write-back', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        store.getState().pouActions.create({ type: 'program', name: 'Graphical', language: 'ld' })
+        store.getState().snapshotActions.pushToHistory('Graphical', snapshot1)
+        // `rungs` entries without `defaultBounds` fail the ladder schema, so the
+        // body stays stale and a snapshot here would pair it with a fresh flow.
+        store.getState().ladderFlowActions.addLadderFlow({
+          name: 'Graphical',
+          updated: true,
+          rungs: [{ id: 'r1', comment: '', nodes: [], edges: [] }],
+        } as unknown as LadderFlowType)
+        store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Graphical', updated: true })
+
+        // `false` is what drives the "History unavailable" toast in the UI.
+        expect(store.getState().snapshotActions.undo('Graphical')).toBe(false)
+        expect(store.getState().snapshotActions.redo('Graphical')).toBe(false)
+
+        expect(store.getState().undoRedo['Graphical'].past).toHaveLength(1)
+        expect(store.getState().undoRedo['Graphical'].future).toHaveLength(0)
+        warn.mockRestore()
+      })
+
+      it('reports success when there is simply nothing to undo', () => {
+        expect(store.getState().snapshotActions.undo('Main')).toBe(true)
+        store.getState().snapshotActions.pushToHistory('Main', snapshot1)
+        expect(store.getState().snapshotActions.undo('Main')).toBe(true)
+      })
+
       it('undo falls back to empty array when POU has no interface', () => {
         // Manually strip the POU interface to test the ?? [] fallback
         const pous = store.getState().project.data.pous.map((p) => {
@@ -2157,6 +2186,16 @@ describe('createSharedSlice', () => {
 
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
         expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(2)
+      })
+
+      it('skips the excluded POUs', () => {
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P2', { variables: [], body: 'v1' })
+
+        store.getState().snapshotActions.markAllSaved(['P2'])
+
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
+        expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(0)
       })
     })
 

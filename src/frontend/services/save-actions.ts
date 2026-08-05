@@ -324,8 +324,9 @@ export async function executeSaveProject(
 ): Promise<{ success: boolean }> {
   // Run any pending debounced graphical write-backs before reading state:
   // a save landing inside the debounce window must serialize the fresh
-  // POU bodies, not the pre-edit ones.
-  flushFlowWriteBacks(openPLCStoreBase.getState)
+  // POU bodies, not the pre-edit ones.  Flows that fail validation keep a
+  // stale body, so they must not be reported as saved (DOPE-495).
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
   const state = openPLCStoreBase.getState()
   // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
   // a rename/delete, the AI panel — funnels through here.  When the viewer
@@ -339,7 +340,7 @@ export async function executeSaveProject(
   }
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
-  const { setAllToSaved } = state.fileActions
+  const { setAllToSaved, updateFile } = state.fileActions
   const { markAllSaved } = state.snapshotActions
 
   const deletionsBeforeSave = [...pendingDeletions]
@@ -438,22 +439,38 @@ export async function executeSaveProject(
         deleted: deletionsBeforeSave,
       })
 
-      state.projectActions.clearPendingDeletions()
-      setEditingState('saved')
-      setAllToSaved()
-      markAllSaved()
+      const isStale = new Set(staleFlows)
 
-      // Reset graphical flow state: clear selections and updated flags
+      state.projectActions.clearPendingDeletions()
+      setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
+      setAllToSaved()
+      markAllSaved(staleFlows)
+
+      // Reset graphical flow state: clear selections and updated flags.
+      // A stale flow keeps `updated` set and its file dirty — clearing them
+      // would strand the in-memory edit with no way back to disk.
       for (const flow of state.ladderFlows) {
         state.ladderFlowActions.clearSelections({ editorName: flow.name })
+        if (isStale.has(flow.name)) continue
         state.ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
       for (const flow of state.fbdFlows) {
         state.fbdFlowActions.clearSelections({ editorName: flow.name })
+        if (isStale.has(flow.name)) continue
         state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
+      // Must stay after `setAllToSaved()` above, which marks every file saved.
+      for (const name of staleFlows) {
+        updateFile({ name, saved: false })
+      }
 
-      if (!capabilities.isNativeApplication) {
+      if (staleFlows.length > 0) {
+        toast({
+          title: 'Some changes were not saved',
+          description: `The graphical body of ${staleFlows.join(', ')} is invalid and could not be written to disk. Every other file was saved.`,
+          variant: 'fail',
+        })
+      } else if (!capabilities.isNativeApplication) {
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',
@@ -468,7 +485,9 @@ export async function executeSaveProject(
         variant: 'fail',
       })
     }
-    return { success: res.success }
+    // A stale flow means the user's graphical edit never reached disk, so
+    // callers that gate on the save (build, close-project) must not proceed.
+    return { success: res.success && staleFlows.length === 0 }
   } catch {
     setEditingState('unsaved')
     toast({
@@ -496,8 +515,9 @@ export async function executeSaveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // See executeSaveProject — same pending write-back flush requirement.
-  flushFlowWriteBacks(openPLCStoreBase.getState)
+  // See executeSaveProject — same pending write-back flush requirement, scoped
+  // to the target so a single-file save doesn't touch unrelated POUs.
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {
@@ -522,6 +542,12 @@ export async function executeSaveFile(
     setEditingState('unsaved')
     toast({ title: 'Error saving file', description, variant: 'fail' })
     return { success: false }
+  }
+
+  // Writing the stale body would overwrite disk with pre-edit content and
+  // then report success — abort instead (DOPE-495).
+  if (staleFlows.includes(fileName)) {
+    return fail(`The graphical body of "${fileName}" is invalid, so the file was not written to disk.`)
   }
 
   try {

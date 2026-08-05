@@ -979,10 +979,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       )
     },
 
-    markAllSaved: () => {
+    markAllSaved: (except) => {
       setState(
         produce((state: SharedRootState) => {
-          for (const history of Object.values(state.undoRedo)) {
+          for (const [pouName, history] of Object.entries(state.undoRedo)) {
+            if (except?.includes(pouName)) continue
             history.savedAtDepth = history.past.length
           }
         }),
@@ -992,14 +993,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     undo: (pouName) => {
       // A debounced graphical write-back may still be pending — flush it so
       // the redo snapshot below can't pair a stale body with a fresh flow.
-      flushFlowWriteBacks(getState, pouName)
+      // A failed flush leaves the body stale, and capturing it would restore
+      // the file to "saved" over content that never reached disk (DOPE-495).
+      if (flushFlowWriteBacks(getState, pouName).length > 0) return false
       const state = getState()
       const history = state.undoRedo[pouName]
-      if (!history || history.past.length === 0) return
+      if (!history || history.past.length === 0) return true
 
       const snapshot = history.past[history.past.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return
+      if (!pou) return true
 
       // Save current state to future. Plain references — the store is
       // immer-managed (frozen, copy-on-write), so later edits can never
@@ -1045,18 +1048,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (afterUndo?.savedAtDepth !== null && afterUndo?.savedAtDepth === afterUndo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
       }
+      return true
     },
 
     redo: (pouName) => {
       // See undo — same pending write-back consistency requirement.
-      flushFlowWriteBacks(getState, pouName)
+      if (flushFlowWriteBacks(getState, pouName).length > 0) return false
       const state = getState()
       const history = state.undoRedo[pouName]
-      if (!history || history.future.length === 0) return
+      if (!history || history.future.length === 0) return true
 
       const snapshot = history.future[history.future.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return
+      if (!pou) return true
 
       // Save current state to past. Plain references — see undo.
       const currentSnapshot: PouHistorySnapshot = {
@@ -1100,6 +1104,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (afterRedo?.savedAtDepth !== null && afterRedo?.savedAtDepth === afterRedo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
       }
+      return true
     },
   },
 })
