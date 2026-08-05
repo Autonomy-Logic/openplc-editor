@@ -7,7 +7,7 @@
  */
 
 import { ModbusRtuClient, type SerialPortLike } from '../modbus-rtu-client'
-import { ModbusDebugResponse, ModbusFunctionCode } from '../types'
+import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState, PlcSwitchPosition } from '../types'
 
 // jsdom polyfill
 if (typeof globalThis.TextEncoder === 'undefined') {
@@ -936,6 +936,26 @@ describe('ModbusRtuClient', () => {
       expect(result.error).toContain('too short')
     })
 
+    it('setPlcState handles response too short (<8 bytes)', async () => {
+      // Belongs here rather than with the wire-framing tests: `sendRequest` prepends
+      // 6 bytes of TCP-compat padding, so no real reply can be short enough to reach
+      // this guard — a 4-byte frame lands on the PARSER's own "too short" instead.
+      // Both messages read alike, which is how a fixture can appear to cover this
+      // branch while never entering it.
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid response: too short')
+    })
+
+    it('setPlcState reports a non-Error rejection', async () => {
+      await connectClient()
+      mockSendRequest(client, 'serial port vanished')
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+      expect(result).toEqual({ success: false, error: 'serial port vanished' })
+    })
+
     it('getBoardId handles non-Error exception', async () => {
       await connectClient()
       mockSendRequest(client, 'non-error string')
@@ -1031,6 +1051,112 @@ describe('ModbusRtuClient', () => {
 
       const result = await client.setVariable(0, false)
       expect(result.success).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setPlcState (FC 0x4b)
+  //
+  // The end-to-end coverage for run/stop lives in plc-control-e2e.test.ts, which
+  // only runs when it is pointed at built firmware — so without these the wire
+  // framing here is unexercised on any ordinary test run.
+  // -----------------------------------------------------------------------
+  describe('setPlcState', () => {
+    /** `[status][plcState][switchPosition]` — the FC 0x4b acknowledgement payload. */
+    function ackPayload(status: number, state: number, switchPosition: number): Uint8Array {
+      return new Uint8Array([status, state, switchPosition])
+    }
+
+    it('sends the run request and returns the acknowledged state', async () => {
+      await connectClient()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(
+                1,
+                ModbusFunctionCode.PLC_SET_STATE,
+                ackPayload(ModbusDebugResponse.SUCCESS, PlcRuntimeState.RUNNING, PlcSwitchPosition.RUN),
+              ),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      // Request is [slaveId][FC][state] + CRC — the state byte is what distinguishes
+      // run from stop, and getting it backwards would stop a PLC on a start click.
+      expect(written[0][1]).toBe(ModbusFunctionCode.PLC_SET_STATE)
+      expect(written[0][2]).toBe(1)
+      expect(result).toMatchObject({ success: true, state: PlcRuntimeState.RUNNING })
+    })
+
+    it('encodes a stop request as state 0', async () => {
+      await connectClient()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(
+                1,
+                ModbusFunctionCode.PLC_SET_STATE,
+                ackPayload(ModbusDebugResponse.SUCCESS, PlcRuntimeState.STOPPED, PlcSwitchPosition.RUN),
+              ),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+
+      expect(written[0][2]).toBe(0)
+      expect(result).toMatchObject({ success: true, state: PlcRuntimeState.STOPPED })
+    })
+
+    it('surfaces a RUN refused by the hardware mode switch', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(
+          1,
+          ModbusFunctionCode.PLC_SET_STATE,
+          ackPayload(ModbusDebugResponse.REFUSED_BY_SWITCH, PlcRuntimeState.STOPPED, PlcSwitchPosition.STOP),
+        ),
+      )
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      // Drives the "flip the switch to RUN" warning rather than a generic failure.
+      expect(result).toMatchObject({ success: false, refusedBySwitch: true })
+    })
+
+    it('rejects a well-framed reply whose PDU is truncated', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.PLC_SET_STATE])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
     })
   })
 })

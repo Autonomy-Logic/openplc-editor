@@ -119,6 +119,36 @@ export function resolveDebugBaud(state: VppModbusScreenState, defaultSerial: str
   return rtu.baud_rate ?? rtu.rtu_baud_rate ?? DEFAULT_DEBUG_BAUD
 }
 
+/** Slave id the always-on debugger frames on when the project states none. */
+export const DEFAULT_DEBUG_SLAVE = 1
+
+/**
+ * Modbus slave id the always-on debugger answers on — and therefore the id the
+ * editor must address to reach it.
+ *
+ * The same two-sided agreement `resolveDebugBaud` describes, and the same failure
+ * when it breaks: `handle_serial_port` drops any frame whose first byte is not
+ * this id, and that check is the ONLY validation applied to debug function codes
+ * (CRC is skipped on them). A mismatch is therefore total silence on a healthy
+ * board — reported as "No Firmware Detected".
+ *
+ * What the editor addresses is `screens.modbus_rtu.rtu_slave_id`, ALWAYS: a
+ * spec's `params` are read independently of its `enabledWhen`, so an RTU screen
+ * left at slave id 7 with the RTU toggle OFF still sends id 7 down the cable.
+ * So this returns that id unconditionally — including when the RTU runs on a
+ * SECOND UART, where it is not a conflict but the same number on two distinct
+ * ports.
+ *
+ * Deliberately NOT the `resolveDebugBaud` shape of "guess 115200 for a secondary
+ * port": a wrong baud is recoverable, because Connect sweeps the plausible rates.
+ * There is no sweep for slave ids, so this has to match exactly rather than
+ * approximately.
+ */
+export function resolveDebugSlave(state: VppModbusScreenState): number {
+  const slave = state.modbus_rtu?.rtu_slave_id
+  return typeof slave === 'number' ? slave : DEFAULT_DEBUG_SLAVE
+}
+
 /**
  * `aa:bb:cc:dd:ee:ff` → `0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff` so it can
  * land verbatim in `byte mac[] = { MBTCP_MAC };`. Accepts the canonical

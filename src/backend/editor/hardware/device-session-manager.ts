@@ -376,6 +376,11 @@ export class DeviceSessionManager {
 
     if (candidates.length === 0) {
       this.trace('open: refused, no usable candidate was resolved')
+      // Still report a settled state. The `close({ silent: true })` above suppressed
+      // its own notification on the assumption that this open would publish one, so
+      // returning quietly here leaves the renderer showing 'connecting' forever —
+      // and its Connect button disabled with no way back.
+      this.hooks.emit({ status: 'disconnected' })
       return { ok: false, attempts: [] }
     }
 

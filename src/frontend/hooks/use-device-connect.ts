@@ -54,61 +54,91 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     const tried: string[] = []
     setDeviceConnectionStatus('connecting', null)
 
+    // Declared out here so the `finally` can tell "we never got a connection" from
+    // "we did, and the main process has already published it".
     let result: { status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'; error?: string } = {
       status: 'no-response',
     }
-    if (silent.candidates.length > 0) {
-      tried.push(...silent.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
-      result = await device.connect(silent.candidates.map((candidate) => candidate.config))
-    }
 
-    // SECOND PASS: nothing silent worked, so now it is worth asking. Resolving
-    // only the deferred channels surfaces the address dialog, and a cancel here
-    // ends the attempt rather than looping.
-    if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
-      const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, {
-        onlyChannels: silent.awaitingInput,
-      })
-      if (prompted && prompted.candidates.length > 0) {
-        tried.push(...prompted.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
-        result = await device.connect(prompted.candidates.map((candidate) => candidate.config))
+    try {
+      if (silent.candidates.length > 0) {
+        tried.push(...silent.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
+        result = await device.connect(silent.candidates.map((candidate) => candidate.config))
       }
-    }
 
-    const endpoints = tried.join(' or ') || 'this device'
+      // SECOND PASS: nothing silent worked, so now it is worth asking. Resolving
+      // only the deferred channels surfaces the address dialog, and a cancel here
+      // ends the attempt rather than looping.
+      if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
+        const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, {
+          onlyChannels: silent.awaitingInput,
+        })
+        if (prompted && prompted.candidates.length > 0) {
+          tried.push(...prompted.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))
+          result = await device.connect(prompted.candidates.map((candidate) => candidate.config))
+        } else if (tried.length === 0) {
+          // The user declined to supply the address and there was nothing else to
+          // try, so nothing was attempted at all. Saying "could not reach the
+          // device" would be reporting a failure that never happened — they
+          // cancelled. The `finally` below clears the button.
+          return
+        }
+      }
 
-    if (result.status === 'no-response') {
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'No Response',
-        message: `Could not reach the device on ${endpoints}. Check that it is powered and plugged in, and that the port or IP address is correct.`,
-        buttons: ['OK'],
-        onResponse: () => undefined,
-      })
-      return
-    }
+      const endpoints = tried.join(' or ') || 'this device'
 
-    if (result.status === 'error') {
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'Connection Error',
-        message: result.error ?? 'An unexpected error occurred while connecting to the device.',
-        buttons: ['OK'],
-        onResponse: () => undefined,
-      })
-      return
-    }
+      if (result.status === 'no-response') {
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'No Response',
+          message: `Could not reach the device on ${endpoints}. Check that it is powered and plugged in, and that the port or IP address is correct.`,
+          buttons: ['OK'],
+          onResponse: () => undefined,
+        })
+        return
+      }
 
-    if (result.status === 'no-firmware') {
-      openModal('debugger-message', {
-        type: 'question',
-        title: 'No Firmware Detected',
-        message: `No OpenPLC firmware responded on ${endpoints}. Build & Upload the program to flash this device, then Connect again.`,
-        buttons: ['Build & Upload', 'Cancel'],
-        onResponse: (buttonIndex: number) => {
-          if (buttonIndex === 0) requestDeviceFlash()
-        },
-      })
+      if (result.status === 'error') {
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'Connection Error',
+          message: result.error ?? 'An unexpected error occurred while connecting to the device.',
+          buttons: ['OK'],
+          onResponse: () => undefined,
+        })
+        return
+      }
+
+      if (result.status === 'no-firmware') {
+        openModal('debugger-message', {
+          type: 'question',
+          title: 'No Firmware Detected',
+          message: `No OpenPLC firmware responded on ${endpoints}. Build & Upload the program to flash this device, then Connect again.`,
+          buttons: ['Build & Upload', 'Cancel'],
+          onResponse: (buttonIndex: number) => {
+            if (buttonIndex === 0) requestDeviceFlash()
+          },
+        })
+      }
+    } finally {
+      // 'connecting' is set OPTIMISTICALLY above, and normally only the main process
+      // clears it — every settled state is pushed from there. But a path that
+      // returns without ever reaching `deviceSession.open()` leaves nothing to push:
+      // a cancelled address prompt, a config that built no usable candidate, or an
+      // IPC rejection. The button is disabled while 'connecting' and Disconnect only
+      // fires when 'connected', so a stuck 'connecting' is not recoverable from the
+      // UI at all — the user has to close and reopen the project. Settle it here.
+      //
+      // Only on a NON-success outcome. On success the main process has published
+      // 'connected', but that push and this invoke's reply travel separate IPC
+      // channels with no ordering guarantee between them, so settling here as well
+      // would risk a visible flicker for no reason.
+      if (
+        result.status !== 'connected-with-firmware' &&
+        useOpenPLCStore.getState().deviceConnection.status === 'connecting'
+      ) {
+        setDeviceConnectionStatus('disconnected', null)
+      }
     }
   }, [boardInfo, device, openModal, setDeviceConnectionStatus])
 

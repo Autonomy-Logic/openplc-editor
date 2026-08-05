@@ -90,6 +90,19 @@ function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
   return targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 }
 
+/**
+ * What `debugger:verify-md5` answers. Named so the success and unavailable paths
+ * are typed against ONE shape — inferred separately, the success branch narrowed
+ * `success` to the literal `true` and the two stopped being assignable.
+ */
+interface Md5VerifyReply {
+  success: boolean
+  match?: boolean
+  targetMd5?: string
+  targetEndian?: 'le' | 'be'
+  error?: string
+}
+
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -1682,22 +1695,27 @@ class MainProcessBridge implements MainIpcModule {
    * second client, and nothing to reconnect afterwards. Runtime v4 reads it over
    * its own WebSocket, which is a different protocol to a different target.
    */
-  handleDebuggerVerifyMd5 = async (
-    _event: IpcMainInvokeEvent,
-    expectedMd5: string,
-  ): Promise<{
-    success: boolean
-    match?: boolean
-    targetMd5?: string
-    targetEndian?: 'le' | 'be'
-    error?: string
-  }> => {
+  handleDebuggerVerifyMd5 = async (_event: IpcMainInvokeEvent, expectedMd5: string): Promise<Md5VerifyReply> => {
     try {
-      const channel = await this.requireDebug('verify md5')
-      if ('error' in channel) return { success: false, error: channel.error }
-
-      const probe = await channel.client.getMd5Hash()
-      return { success: true, match: matchesMd5(probe.md5, expectedMd5), ...probe }
+      return await this.withDebugChannel<Md5VerifyReply>(
+        'verify md5',
+        async (client) => {
+          const probe = await client.getMd5Hash()
+          // `targetMd5` spelled out rather than spread: `Md5ProbeResult` names the
+          // hash `md5`, so `...probe` silently left the declared `targetMd5`
+          // undefined — and TypeScript does not apply excess-property checks to a
+          // spread, so nothing caught it. The mismatch report then read
+          // "MD5 mismatch. Target: undefined", losing the one value that tells the
+          // user which program is actually on the board.
+          return {
+            success: true,
+            match: matchesMd5(probe.md5, expectedMd5),
+            targetMd5: probe.md5,
+            targetEndian: probe.targetEndian,
+          }
+        },
+        (reason) => ({ success: false, error: reason.error }),
+      )
     } catch (error) {
       return {
         success: false,
@@ -1806,19 +1824,22 @@ class MainProcessBridge implements MainIpcModule {
     // connection dropped, the manager is already reopening it (or has reported it
     // lost), and `needsReconnect` tells the renderer to stop the session rather
     // than race it for the medium.
-    const link = await this.requireDebug('read variables')
-    if ('error' in link) return { success: false, error: link.error, needsReconnect: true }
-
     try {
-      const result = await link.client.getVariablesList(variableIndexes)
-      if (result.success && result.data) {
-        // The debug poll is the busiest thing on the link; telling the session
-        // about it is what stops the liveness read from queueing behind this
-        // traffic and timing out on a link that is plainly working.
-        this.deviceSession.noteTraffic()
-        return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
-      }
-      return { success: false, error: result.error }
+      return await this.withDebugChannel(
+        'read variables',
+        async (client) => {
+          const result = await client.getVariablesList(variableIndexes)
+          if (result.success && result.data) {
+            // The debug poll is the busiest thing on the link; telling the session
+            // about it is what stops the liveness read from queueing behind this
+            // traffic and timing out on a link that is plainly working.
+            this.deviceSession.noteTraffic()
+            return { success: true, tick: result.tick, lastIndex: result.lastIndex, data: Array.from(result.data) }
+          }
+          return { success: false, error: result.error }
+        },
+        (reason) => ({ success: false, error: reason.error, needsReconnect: true }),
+      )
     } catch (error) {
       return { success: false, error: getErrorMessage(error), needsReconnect: true }
     }
@@ -2227,6 +2248,11 @@ class MainProcessBridge implements MainIpcModule {
    * The DEBUG channel, opening it if this session's debug medium is one of its own.
    * Every debug caller passes a distinct `what`, which doubles as the holder name —
    * so two callers can hold it at once without either closing it on the other.
+   *
+   * A holder acquired here MUST be released, or the channel can never close. Only
+   * the debug session itself is a long-lived holder (acquired by `debugger:connect`,
+   * released by `debugger:disconnect`); every per-command caller goes through
+   * `withDebugChannel`, which releases in a `finally`.
    */
   private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
     const acquired = await this.deviceSession.acquireDebugChannel(what)
@@ -2237,6 +2263,37 @@ class MainProcessBridge implements MainIpcModule {
     }
     this.traceChannelUse(what, 'debug')
     return acquired
+  }
+
+  /**
+   * Run one command over the DEBUG channel, holding it only for the duration.
+   *
+   * The holder set is a reference count, and a per-command caller is not a holder
+   * of the channel's LIFETIME — it just needs the channel to exist while it runs.
+   * Registering those callers permanently is what kept a Runtime v3/v4 debug channel
+   * open after the debug session ended: `read variables` is acquired on every poll
+   * tick, so once one had run, `releaseDebugChannel('debug session')` always found
+   * the set non-empty and skipped the close. The user stopped debugging and the
+   * editor held an authenticated debug channel to their PLC until they logged out.
+   *
+   * Releasing here is safe for a BAREMETAL target, where control and debug are the
+   * same channel: `releaseDebugChannel` returns early on `debugCandidate === null`
+   * before touching any client, so it can never disconnect the device out from
+   * under run/stop or the status poll. Only a session whose debug medium is its
+   * own — v3's second Modbus TCP connection, v4's WebSocket — is ever closed.
+   */
+  private async withDebugChannel<T>(
+    what: string,
+    run: (client: DeviceDebugChannel) => Promise<T>,
+    onUnavailable: (reason: ChannelUnavailable) => T,
+  ): Promise<T> {
+    const acquired = await this.requireDebug(what)
+    if ('error' in acquired) return onUnavailable(acquired)
+    try {
+      return await run(acquired.client)
+    } finally {
+      this.deviceSession.releaseDebugChannel(what)
+    }
   }
 
   /**
@@ -2318,6 +2375,11 @@ class MainProcessBridge implements MainIpcModule {
 
     const linkCandidates = this.toDeviceLinkCandidates(candidates)
     if (linkCandidates.length === 0) {
+      // Publish a settled state before returning: this path never reaches
+      // `deviceSession.open()`, so nothing else will, and the renderer set
+      // 'connecting' the moment the user clicked. Left unsaid, its Connect button
+      // stays disabled for the rest of the project's life.
+      this.emitDeviceLinkStatus({ status: 'disconnected' })
       return { status: 'error', error: 'No usable serial or Modbus TCP connection was configured for this device.' }
     }
 
@@ -2351,19 +2413,20 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: boolean; error?: string }> => {
     const buffer = valueBuffer ? Buffer.from(valueBuffer) : undefined
 
-    const link = await this.requireDebug('write variable')
-    if ('error' in link) {
-      return { success: false, error: link.error }
-    }
-
     try {
-      const result = await link.client.setVariable(variableIndex, force, buffer)
-      // Forcing values is device traffic too: it queues on the same link and
-      // proves the same thing a read does. Without this, holding a force while
-      // the poll is due lets the liveness read wait behind it and time out.
-      if (result.success) this.deviceSession.noteTraffic()
-      logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
-      return result
+      return await this.withDebugChannel(
+        'write variable',
+        async (client) => {
+          const result = await client.setVariable(variableIndex, force, buffer)
+          // Forcing values is device traffic too: it queues on the same link and
+          // proves the same thing a read does. Without this, holding a force while
+          // the poll is due lets the liveness read wait behind it and time out.
+          if (result.success) this.deviceSession.noteTraffic()
+          logger.info('[IPC Handler] Modbus setVariable result: ' + JSON.stringify(result))
+          return result
+        },
+        (reason) => ({ success: false, error: reason.error }),
+      )
     } catch (error) {
       logger.error('[IPC Handler] Modbus setVariable error: ' + getErrorMessage(error))
       return { success: false, error: getErrorMessage(error) }

@@ -99,8 +99,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Deliberately NOT applied to Build & Upload. Uploading is how a blank board stops
   // being blank, so it cannot require a connection — see `handleBuild`, where the
   // connection is consulted only to hand the serial port over to arduino-cli.
-  const plcControlBlocked = deviceConnectionStatus !== 'connected'
-  const plcControlBlockedReason = 'Connect to the target first'
+  //
+  // A target that does not implement run/stop at all is blocked for a DIFFERENT
+  // reason, and says so. `handlePlcControl` refuses such a target anyway, so
+  // without this the button looked live and the click did nothing at all — no
+  // command, no error, no log line.
+  const plcStateControlSupported = resolveTargetCapabilities(currentBoardInfo).plcStateControl
+  const plcControlBlocked = !plcStateControlSupported || deviceConnectionStatus !== 'connected'
+  const plcControlBlockedReason = plcStateControlSupported
+    ? 'Connect to the target first'
+    : 'This target does not support Start/Stop from the editor'
 
   // The emulator stopping is a session ending, and a debug session riding it ends
   // with it — which the drop handler below already does for every target. This

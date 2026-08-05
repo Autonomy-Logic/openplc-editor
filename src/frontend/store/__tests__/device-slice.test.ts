@@ -206,6 +206,41 @@ describe('createDeviceSlice', () => {
       })
     })
 
+    it('setDeviceConnectionStatus records both media when the manager reports them', () => {
+      // What `useDeviceConnectionMonitor` actually forwards. `debugTransport` is a
+      // separate fact from `transport`: the debug poll sizes its batches to the
+      // debug medium, and a v4 session (control over REST, debug over a WebSocket)
+      // has no control transport at all.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '192.168.0.9', null, 'websocket')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connected',
+        port: '192.168.0.9',
+        transport: null,
+        debugTransport: 'websocket',
+      })
+    })
+
+    it('setDeviceConnectionStatus records a shared medium on both slots', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      expect(store.getState().deviceConnection).toMatchObject({ transport: 'rtu', debugTransport: 'rtu' })
+    })
+
+    it('setDeviceConnectionStatus leaves the media untouched when they are omitted', () => {
+      // A status-only update (the optimistic 'connecting') must not wipe what the
+      // manager last reported.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connecting',
+        port: '/dev/ttyACM0',
+        transport: 'rtu',
+        debugTransport: 'rtu',
+      })
+    })
+
     it('clearDeviceConnection resets to disconnected/null', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
@@ -1326,6 +1361,33 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setPlcRuntimeStatus('RUNNING')
       store.getState().deviceActions.setPlcRuntimeStatus(null)
       expect(store.getState().runtimeConnection.plcStatus).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setPlcSwitchPosition
+  // -----------------------------------------------------------------------
+  describe('setPlcSwitchPosition', () => {
+    it('defaults to null — unknown, not "no gating"', () => {
+      // The start pre-check must be able to tell "the switch says RUN" from "this
+      // target has no switch / firmware too old to report one". Only 'stop' blocks
+      // a start; null must not, or a board without a switch is un-startable.
+      expect(makeStore().getState().runtimeConnection.switchPosition).toBeNull()
+    })
+
+    it('records the switch reading', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('stop')
+      store.getState().deviceActions.setPlcSwitchPosition('run')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('run')
+    })
+
+    it('clears back to null on disconnect', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      store.getState().deviceActions.setPlcSwitchPosition(null)
+      expect(store.getState().runtimeConnection.switchPosition).toBeNull()
     })
   })
 

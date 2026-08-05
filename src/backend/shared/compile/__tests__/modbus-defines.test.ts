@@ -1,4 +1,10 @@
-import { DEFAULT_DEBUG_BAUD, generateModbusDefines, resolveDebugBaud } from '../steps/modbus-defines'
+import {
+  DEFAULT_DEBUG_BAUD,
+  DEFAULT_DEBUG_SLAVE,
+  generateModbusDefines,
+  resolveDebugBaud,
+  resolveDebugSlave,
+} from '../steps/modbus-defines'
 
 /**
  * The baud the always-on debugger answers on. It has to agree with the rate the
@@ -65,6 +71,42 @@ describe('resolveDebugBaud', () => {
 
   it('falls back for an empty project', () => {
     expect(resolveDebugBaud({})).toBe(DEFAULT_DEBUG_BAUD)
+  })
+})
+
+/**
+ * The slave id the always-on debugger frames on. Unlike the baud, a mismatch here
+ * is NOT recoverable by the connect flow's rate sweep — the firmware silently
+ * drops every frame whose first byte isn't this id, and that check is the only
+ * validation debug function codes get. So these pin exact agreement with the id
+ * the editor addresses (`screens.modbus_rtu.rtu_slave_id`, read regardless of
+ * whether the RTU is enabled).
+ */
+describe('resolveDebugSlave', () => {
+  it('uses the RTU screen slave id when the RTU is enabled', () => {
+    expect(resolveDebugSlave({ modbus_rtu: { enabled: true, rtu_slave_id: 3 } })).toBe(3)
+  })
+
+  it('uses the RTU screen slave id even when the RTU is DISABLED', () => {
+    // The regression this exists for: a TCP-only (or Modbus-off) project still
+    // has the editor addressing the RTU screen's id over serial, because a debug
+    // spec's `params` are read independently of its `enabledWhen`. Defaulting to
+    // 1 here made a healthy board report "No Firmware Detected".
+    expect(resolveDebugSlave({ modbus_rtu: { enabled: false, rtu_slave_id: 7 } })).toBe(7)
+  })
+
+  it('uses the RTU screen slave id even when the RTU runs on a secondary UART', () => {
+    // Not a conflict: MBSERIAL_SLAVE frames that id on Serial1 while DEBUG_SLAVE
+    // frames it on Serial. Two distinct ports, and the editor still dials this id.
+    expect(resolveDebugSlave({ modbus_rtu: { enabled: true, serial_port: 'Serial1', rtu_slave_id: 4 } })).toBe(4)
+  })
+
+  it('falls back when the RTU section states no slave id', () => {
+    expect(resolveDebugSlave({ modbus_rtu: { enabled: true } })).toBe(DEFAULT_DEBUG_SLAVE)
+  })
+
+  it('falls back for an empty project', () => {
+    expect(resolveDebugSlave({})).toBe(DEFAULT_DEBUG_SLAVE)
   })
 })
 

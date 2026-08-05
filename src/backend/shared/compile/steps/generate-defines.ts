@@ -18,7 +18,7 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
-import { generateModbusDefines, resolveDebugBaud, type VppModbusScreenState } from './modbus-defines'
+import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
 
 export type { VppModbusScreenState } from './modbus-defines'
 
@@ -192,6 +192,13 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     // firmware listening at 115200 while the editor dialled the RTU's baud, and
     // the board answered nothing ("No Firmware Detected" on a healthy board).
     DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {}, defaultSerial)}\n`
+    // Same two-sided agreement as the baud, and the same symptom when it breaks:
+    // the firmware drops every frame whose slave id doesn't match, and that check
+    // is the only validation debug function codes get. The editor addresses the
+    // RTU screen's slave id whether or not the RTU is enabled, so emit it rather
+    // than leaving modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback to disagree
+    // with a project that configured anything else.
+    DEFINES_CONTENT += `#define DEBUG_SLAVE ${resolveDebugSlave(vppModbusState ?? {})}\n`
     DEFINES_CONTENT += `\n\n`
   }
 

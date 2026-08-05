@@ -47,7 +47,12 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
-  plcStateControl: false,
+  // v3 exposes the SAME run/stop REST API as v4 (`/api/start-plc`,
+  // `/api/stop-plc`, JWT-authenticated) — only the debug channel differs
+  // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
+  // command over REST for both, so the only thing that ever stopped v3
+  // was this flag.
+  plcStateControl: true,
   directUsbUpload: false,
 }
 

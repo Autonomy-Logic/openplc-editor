@@ -2,8 +2,19 @@ import { renderHook } from '@testing-library/react'
 
 // `mock*`-prefixed refs are hoisted into the jest.mock factories below.
 const mockOpenModal = jest.fn()
-const mockSetDeviceConnectionStatus = jest.fn()
 const mockAddLog = jest.fn()
+
+/**
+ * Writes through to `mockState`, like the real action does. The hook reads the
+ * live status back to decide whether a settled state still needs publishing, so a
+ * write-only spy would make that branch untestable.
+ */
+const mockSetDeviceConnectionStatus = jest.fn((status: string, port: string | null = null) => {
+  mockState.deviceConnection = { status, port }
+})
+
+/** The status the store ended up in — what the Connect button actually reads. */
+const currentStatus = (): string => (mockState.deviceConnection as { status: string }).status
 
 const mockState: Record<string, unknown> = {
   deviceDefinitions: { configuration: { deviceBoard: 'Test Board', communicationPort: 'COM5', vendorScreenData: {} } },
@@ -205,5 +216,67 @@ describe('useDeviceConnect', () => {
     expect(result.current.isConnected).toBe(true)
     expect(result.current.isConnecting).toBe(false)
     expect(result.current.status).toBe('connected')
+  })
+
+  /**
+   * The Connect button is disabled while the status reads 'connecting', and
+   * Disconnect only fires when it reads 'connected'. So a status left at
+   * 'connecting' is a dead button with no way back short of reopening the project.
+   * Every path out of `connect()` must therefore leave a settled status — including
+   * the ones that never reach the main process, which is where the wedge was.
+   */
+  describe('never leaves the button stuck on "connecting"', () => {
+    it('settles when the user cancels the address prompt and nothing else was tried', async () => {
+      // A DHCP-only target: no silent candidate at all, one channel awaiting input.
+      // Cancelling the prompt used to leave 'connecting' set forever, because
+      // device.connect() was never called and so nothing ever pushed a status.
+      mockResolveDeviceLinkWithUx
+        .mockImplementationOnce(() => Promise.resolve({ candidates: [], awaitingInput: [0] }))
+        .mockImplementationOnce(() => Promise.resolve(null))
+
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+
+      expect(mockConnect).not.toHaveBeenCalled()
+      expect(currentStatus()).toBe('disconnected')
+      // Nothing was attempted, so there is no failure to report either.
+      expect(mockOpenModal).not.toHaveBeenCalled()
+    })
+
+    it('settles when the prompted pass resolves no usable candidate', async () => {
+      mockResolveDeviceLinkWithUx
+        .mockImplementationOnce(() => Promise.resolve({ candidates: [], awaitingInput: [0] }))
+        .mockImplementationOnce(() => Promise.resolve({ candidates: [], awaitingInput: [] }))
+
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+
+      expect(currentStatus()).toBe('disconnected')
+    })
+
+    it('settles after a failure dialog', async () => {
+      mockConnect.mockResolvedValue({ status: 'no-response' })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'No Response' })
+      expect(currentStatus()).toBe('disconnected')
+    })
+
+    it('settles when the connect IPC call rejects outright', async () => {
+      mockConnect.mockRejectedValue(new Error('bridge is gone'))
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await expect(result.current.connect()).rejects.toThrow('bridge is gone')
+      expect(currentStatus()).toBe('disconnected')
+    })
+
+    it('leaves a successful connection alone for the main process to publish', async () => {
+      // The status push and this reply travel separate IPC channels, so settling on
+      // success too would risk overwriting 'connected' with a spurious flicker.
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+      expect(currentStatus()).toBe('connecting')
+      expect(mockSetDeviceConnectionStatus).not.toHaveBeenCalledWith('disconnected', null)
+    })
   })
 })

@@ -540,9 +540,12 @@ describe('CompilerModule', () => {
         handleOutputData: noopLog,
       })
 
-      const aPos = arCmd.indexOf('a_first.o')
-      const mPos = arCmd.indexOf('m_middle.o')
-      const zPos = arCmd.indexOf('z_last.o')
+      // `foo.cpp.o`, not `foo.o` — the `.cpp` is KEPT so esp8266's linker script
+      // matches `*.cpp.o` and sends the code to flash instead of the 32 KB IRAM
+      // catch-all. See the objectFiles comment in handlePrecompileUserLib.
+      const aPos = arCmd.indexOf('a_first.cpp.o')
+      const mPos = arCmd.indexOf('m_middle.cpp.o')
+      const zPos = arCmd.indexOf('z_last.cpp.o')
       expect(aPos).toBeGreaterThan(-1)
       expect(mPos).toBeGreaterThan(aPos)
       expect(zPos).toBeGreaterThan(mPos)
@@ -658,7 +661,7 @@ describe('CompilerModule', () => {
 
       // The TU set discovered from the stash matches the original two
       // strucpp sources — order is deterministic (sorted basenames).
-      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual(['configuration.o', 'pou_MAIN.o'])
+      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual(['configuration.cpp.o', 'pou_MAIN.cpp.o'])
     })
 
     it('injects -I{build.core.path} and -I{build.variant.path} into every TU compile (so Arduino.h resolves)', async () => {

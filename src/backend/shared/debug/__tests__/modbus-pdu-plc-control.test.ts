@@ -80,6 +80,19 @@ describe('parsePlcSetStateResponse', () => {
     expect(result.state).toBe(PlcRuntimeState.ERROR)
   })
 
+  it('describes any other failure status rather than failing silently', () => {
+    // Neither SUCCESS nor REFUSED_BY_SWITCH — e.g. the runtime ran out of memory
+    // servicing the request. Without the error text the editor would report
+    // "Failed to start PLC: Unknown error" and give the user nothing to act on.
+    const result = parsePlcSetStateResponse(
+      frame(ModbusDebugResponse.ERROR_OUT_OF_MEMORY, PlcRuntimeState.STOPPED, PlcSwitchPosition.RUN),
+    )
+    expect(result.success).toBe(false)
+    expect(result.refusedBySwitch).toBeUndefined()
+    expect(result.unsupported).toBeUndefined()
+    expect(result.error).toBeTruthy()
+  })
+
   it('detects old firmware via the Modbus exception form', () => {
     // A runtime built before the state machine answers (FC | 0x80). The editor turns this
     // into "rebuild and upload", never an error, so field devices don't look

@@ -328,6 +328,26 @@ describe('Connect resolves a baremetal debug spec while disconnected', () => {
     )
   })
 
+  it('reports an error when no declared channel matches a transport the target speaks', () => {
+    // A target whose capability matrix says `['websocket']` cannot use a spec that
+    // only declares serial and TCP — nothing is eligible. Reported as an error, not
+    // silently as an empty candidate list, because an empty list downstream reads as
+    // "connected to nothing" and every later command then times out unexplained.
+    const result = resolveDeviceLinkCandidates(bothChannelsSpec, tcpOnlyContext(), { transports: ['websocket'] })
+
+    expect(result.kind).toBe('error')
+    if (result.kind === 'error') expect(result.body).toBeTruthy()
+  })
+
+  it('prefers the spec-supplied noneEnabled message when it has one', () => {
+    const withMessage: DebugSpec = {
+      ...bothChannelsSpec,
+      messages: { noneEnabled: { title: 'Nope', body: 'This board needs an ethernet shield.' } },
+    }
+    const result = resolveDeviceLinkCandidates(withMessage, tcpOnlyContext(), { transports: ['websocket'] })
+    expect(result).toMatchObject({ kind: 'error', title: 'Nope', body: 'This board needs an ethernet shield.' })
+  })
+
   it('shows why a precondition cannot express a debugger-only requirement', () => {
     // Adding ANY precondition to the spec above breaks Connect, because Connect
     // resolves this same spec with nothing connected.

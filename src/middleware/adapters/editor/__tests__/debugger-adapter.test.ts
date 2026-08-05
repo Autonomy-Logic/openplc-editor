@@ -226,6 +226,33 @@ describe('setPlcState', () => {
     void adapter.setPlcState?.('RUNNING')
     expect(window.bridge.debuggerPlcControl).toHaveBeenCalledWith('run')
   })
+
+  it('returns the acknowledgement the main process produced', async () => {
+    // `refusedBySwitch` / `unsupported` drive two distinct dialogs upstream, so the
+    // adapter must pass the whole shape through rather than reducing it to a boolean.
+    ;(window.bridge.debuggerPlcControl as jest.Mock).mockResolvedValue({
+      success: false,
+      refusedBySwitch: true,
+      state: 0,
+      switchPosition: 0,
+    })
+
+    await expect(adapter.setPlcState?.('RUNNING')).resolves.toMatchObject({
+      success: false,
+      refusedBySwitch: true,
+    })
+  })
+
+  it('reports a rejected IPC call as a failed command instead of throwing', async () => {
+    // Run/stop is driven straight from a click handler. An escaping rejection would
+    // surface as an unhandled promise and the button would look like it did nothing.
+    ;(window.bridge.debuggerPlcControl as jest.Mock).mockRejectedValue(new Error('bridge is gone'))
+
+    await expect(adapter.setPlcState?.('STOPPED')).resolves.toEqual({
+      success: false,
+      error: 'bridge is gone',
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -94,10 +94,16 @@ export interface TargetCapabilities {
   isInProcessSimulator: boolean
 
   /** Target implements the runtime run/stop state machine, so the
-   *  Start/Stop control is meaningful.  Runtime v4 drives it over REST;
-   *  arduino-cli targets drive it over the debugger transport (Modbus
-   *  FC 0x49).  Runtime v3 has its own web UI and is excluded; the
-   *  Simulator keeps its dedicated start/stop path. */
+   *  Start/Stop control is meaningful.  Runtime v3 AND v4 drive it over
+   *  the same REST API (`/api/start-plc`, `/api/stop-plc`, both
+   *  JWT-authenticated); arduino-cli targets drive it over the device
+   *  connection (Modbus FC 0x4b).  Only the Simulator is excluded, and
+   *  only because it keeps its dedicated start/stop path.
+   *
+   *  Runtime v3 having its own web UI is NOT a reason to exclude it: the
+   *  editor's REST access is unaffected by that, the editor has shipped
+   *  this button working against v3, and gating it off here made Start /
+   *  Stop a silent no-op on a target where it had always worked. */
   plcStateControl: boolean
 
   /** Upload happens over a local connection (USB / loopback) and
