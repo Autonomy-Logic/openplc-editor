@@ -35,6 +35,12 @@
 import type { PLCDataType, PLCVariableType } from '../../../middleware/shared/ports/types'
 
 function renderVariableType(type: PLCVariableType): string {
+  // Rebuild array types from their structured shape — `value` is a
+  // display string that legacy records may hold in a lossy form.
+  if (type.definition === 'array' && type.data) {
+    const dims = type.data.dimensions.map((d) => d.dimension).join(', ')
+    return `ARRAY [${dims}] OF ${type.data.baseType.value}`
+  }
   return type.value
 }
 
@@ -47,15 +53,17 @@ function renderEnumeratedLines(dt: Extract<PLCDataType, { derivation: 'enumerate
 function renderStructureLines(dt: Extract<PLCDataType, { derivation: 'structure' }>): string[] {
   const fieldLines = dt.variable.map((v) => {
     const init = v.initialValue?.simpleValue?.value ? ` := ${v.initialValue.simpleValue.value}` : ''
-    return `    ${v.name} : ${renderVariableType(v.type)}${init};`
+    const doc = v.documentation ? ` (* ${v.documentation} *)` : ''
+    return `    ${v.name} : ${renderVariableType(v.type)}${init};${doc}`
   })
   return [`  ${dt.name} : STRUCT`, ...fieldLines, `  END_STRUCT;`]
 }
 
 function renderArrayLines(dt: Extract<PLCDataType, { derivation: 'array' }>): string[] {
-  const dims = dt.dimensions.map((d) => `[${d.dimension}]`).join('')
+  // IEC 61131-3 multi-dimension syntax: one bracket, comma-separated.
+  const dims = dt.dimensions.map((d) => d.dimension).join(', ')
   const initial = dt.initialValue ? ` := ${dt.initialValue}` : ''
-  return [`  ${dt.name} : ARRAY ${dims} OF ${renderVariableType(dt.baseType)}${initial};`]
+  return [`  ${dt.name} : ARRAY [${dims}] OF ${renderVariableType(dt.baseType)}${initial};`]
 }
 
 function renderDataTypeLines(dt: PLCDataType): string[] {
@@ -114,4 +122,18 @@ export function serializeDataTypesToST(dataTypes: PLCDataType[]): string {
   if (entries.length === 0) return ''
   const body = entries.flatMap((e) => e.lines).join('\n')
   return `TYPE\n${body}\nEND_TYPE\n`
+}
+
+/**
+ * Serialise ONE data type to its on-disk `.dt` file content — a
+ * `TYPE…END_TYPE` block holding a single declaration.  This is the
+ * canonical persistence format (`datatypes/<Name>.dt`); its inverse
+ * is `parseDataTypeFromText` in `data-type-text-parser.ts`, and the
+ * pair must round-trip.  Returns `''` for a derivation that renders
+ * to no lines (unknown shape).
+ */
+export function serializeDataTypeToText(dt: PLCDataType): string {
+  const lines = renderDataTypeLines(dt)
+  if (lines.length === 0) return ''
+  return `TYPE\n${lines.join('\n')}\nEND_TYPE\n`
 }
