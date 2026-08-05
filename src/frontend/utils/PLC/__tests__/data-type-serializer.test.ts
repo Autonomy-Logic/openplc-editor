@@ -124,6 +124,23 @@ describe('serializeDataTypesToST', () => {
     )
   })
 
+  it('collapses newlines in structure field documentation', () => {
+    // A multi-line comment would desync serializeDataTypesToLines'
+    // line map and be unreadable by the .dt parser.
+    const dt: PLCDataType = {
+      name: 'Motor',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'speed',
+          type: { definition: 'base-type', value: 'INT' },
+          documentation: 'target speed\nin rpm',
+        },
+      ],
+    }
+    expect(serializeDataTypesToST([dt])).toContain('    speed : INT; (* target speed in rpm *)\n')
+  })
+
   it('renders structure field documentation as a trailing comment', () => {
     const dt: PLCDataType = {
       name: 'Motor',

@@ -18,6 +18,7 @@ const baseFiles: WriteProjectFiles = {
   pouFiles: [],
   serverFiles: [],
   remoteDeviceFiles: [],
+  dataTypeFiles: [],
   deletions: [],
 }
 
@@ -126,6 +127,24 @@ describe('iterateWriteProjectFiles', () => {
         { category: 'remote-device', relativePath: 'devices/remote/bus0.json', content: '{"id":"bus0"}' },
       ])
     })
+
+    it('yields each data type file preserving relativePath verbatim', () => {
+      const entries = collect({
+        ...baseFiles,
+        dataTypeFiles: [
+          { relativePath: 'datatypes/Motor.dt', content: 'TYPE\n  Motor : STRUCT\n  END_STRUCT;\nEND_TYPE\n' },
+          { relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' },
+        ],
+      })
+      expect(entries.filter((e) => e.category === 'data-type')).toEqual([
+        {
+          category: 'data-type',
+          relativePath: 'datatypes/Motor.dt',
+          content: 'TYPE\n  Motor : STRUCT\n  END_STRUCT;\nEND_TYPE\n',
+        },
+        { category: 'data-type', relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' },
+      ])
+    })
   })
 
   describe('whole-project shapes', () => {
@@ -158,7 +177,7 @@ describe('iterateWriteProjectFiles', () => {
   })
 
   describe('ordering', () => {
-    it('emits in a stable order: project.json, device-config, pin-mapping, library-manifest, pous, servers, remote-devices', () => {
+    it('emits in a stable order: project.json, device-config, pin-mapping, library-manifest, pous, servers, remote-devices, data-types', () => {
       const entries = collect({
         ...baseFiles,
         deviceConfig: 'D',
@@ -167,6 +186,7 @@ describe('iterateWriteProjectFiles', () => {
         pouFiles: [{ relativePath: 'pous/programs/a.st', content: 'A' }],
         serverFiles: [{ relativePath: 'devices/servers/s.json', content: 'S' }],
         remoteDeviceFiles: [{ relativePath: 'devices/remote/r.json', content: 'R' }],
+        dataTypeFiles: [{ relativePath: 'datatypes/T.dt', content: 'T' }],
       })
       expect(entries.map((e) => e.category)).toEqual([
         'project-json',
@@ -176,6 +196,7 @@ describe('iterateWriteProjectFiles', () => {
         'pou',
         'server',
         'remote-device',
+        'data-type',
       ])
     })
   })

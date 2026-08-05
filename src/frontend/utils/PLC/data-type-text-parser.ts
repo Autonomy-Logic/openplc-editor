@@ -70,6 +70,9 @@ function parseStructure(name: string, body: string[]): ParseDataTypeResult {
     if (groups?.name === undefined || type === null) {
       return { error: `invalid structure field: "${line}". Possible cause: ${guessErrorReason(line)}` }
     }
+    if (!identifierRegex.test(groups.name)) {
+      return { error: `invalid structure field name: "${groups.name}"` }
+    }
     variable.push({
       name: groups.name,
       type,

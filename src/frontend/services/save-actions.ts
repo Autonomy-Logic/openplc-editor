@@ -416,6 +416,8 @@ export async function executeSaveProject(
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
+      // Populated when the .dt write path is switched on (DOPE-533).
+      dataTypeFiles: [],
       deletions: [...pendingDeletions],
     }
 

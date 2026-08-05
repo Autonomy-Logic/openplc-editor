@@ -192,6 +192,7 @@ class ProjectService {
       pouFiles: Array<{ relativePath: string; content: string }>
       serverFiles: Array<{ relativePath: string; content: string }>
       remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+      dataTypeFiles: Array<{ relativePath: string; content: string }>
     }
     error?: { title: string; description: string }
   }> {
@@ -242,6 +243,7 @@ class ProjectService {
       const readDirRecursive = async (
         dirPath: string,
         basePath: string,
+        validExtensions: string[] = VALID_POU_EXTENSIONS,
       ): Promise<Array<{ relativePath: string; content: string }>> => {
         const results: Array<{ relativePath: string; content: string }> = []
         try {
@@ -250,11 +252,11 @@ class ProjectService {
             const fullPath = join(dirPath, entry.name)
             const relPath = join(basePath, entry.name)
             if (entry.isDirectory()) {
-              const subResults = await readDirRecursive(fullPath, relPath)
+              const subResults = await readDirRecursive(fullPath, relPath, validExtensions)
               results.push(...subResults)
             } else if (entry.isFile()) {
               const ext = entry.name.slice(entry.name.lastIndexOf('.'))
-              if (!VALID_POU_EXTENSIONS.includes(ext)) continue
+              if (!validExtensions.includes(ext)) continue
               const content = await promises.readFile(fullPath, 'utf-8')
               results.push({ relativePath: relPath, content })
             }
@@ -285,6 +287,11 @@ class ProjectService {
       const serverFiles = await readDirRecursive(join(projectPath, 'devices', 'servers'), 'devices/servers')
       const remoteDeviceFiles = await readDirRecursive(join(projectPath, 'devices', 'remote'), 'devices/remote')
 
+      // Data type files live at datatypes/<Name>.dt — collected into
+      // their own bucket, never into pouFiles (pou-path detection
+      // throws for paths outside the pou folders).
+      const dataTypeFiles = await readDirRecursive(join(projectPath, 'datatypes'), 'datatypes', ['.dt'])
+
       // Library projects own a `library.json` at the project root.
       // Read it as a plain string (parsing happens upstream in the
       // build pipeline + manifest editor — same convention POUs use:
@@ -310,6 +317,7 @@ class ProjectService {
           pouFiles,
           serverFiles,
           remoteDeviceFiles,
+          dataTypeFiles,
         },
       }
     } catch (error) {
@@ -460,7 +468,7 @@ class ProjectService {
       // arrays are empty (e.g. fresh library with no servers yet),
       // so callers can rely on them existing.
       await Promise.all(
-        ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote'].map((d) =>
+        ['pous/programs', 'pous/functions', 'pous/function-blocks', 'devices/servers', 'devices/remote', 'datatypes'].map((d) =>
           promises.mkdir(join(dir, d), { recursive: true }),
         ),
       )

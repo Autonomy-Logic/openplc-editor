@@ -53,7 +53,9 @@ function renderEnumeratedLines(dt: Extract<PLCDataType, { derivation: 'enumerate
 function renderStructureLines(dt: Extract<PLCDataType, { derivation: 'structure' }>): string[] {
   const fieldLines = dt.variable.map((v) => {
     const init = v.initialValue?.simpleValue?.value ? ` := ${v.initialValue.simpleValue.value}` : ''
-    const doc = v.documentation ? ` (* ${v.documentation} *)` : ''
+    // Newlines collapsed: a multi-line comment would desync the
+    // line map (goto-definition) and be unreadable by the parser.
+    const doc = v.documentation ? ` (* ${v.documentation.replace(/\s*\r?\n\s*/g, ' ')} *)` : ''
     return `    ${v.name} : ${renderVariableType(v.type)}${init};${doc}`
   })
   return [`  ${dt.name} : STRUCT`, ...fieldLines, `  END_STRUCT;`]
