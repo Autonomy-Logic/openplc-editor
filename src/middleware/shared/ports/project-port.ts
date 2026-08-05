@@ -122,6 +122,10 @@ export interface WriteProjectFiles {
   serverFiles: RawProjectFile[]
   /** Remote device config files with pre-serialized JSON content */
   remoteDeviceFiles: RawProjectFile[]
+  /** Data type files (`datatypes/<Name>.dt`) with pre-serialized ST
+   *  `TYPE…END_TYPE` content, one declaration per file.  Empty until
+   *  the `.dt` write path is switched on (DOPE-533). */
+  dataTypeFiles: RawProjectFile[]
   /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
   deletions: string[]
 }
@@ -172,6 +176,9 @@ export interface RawProjectFiles {
     serverFiles: RawProjectFile[]
     /** Raw remote device config files from devices/remote/ */
     remoteDeviceFiles: RawProjectFile[]
+    /** Raw data type files from datatypes/ (`.dt`, one ST `TYPE…END_TYPE`
+     *  declaration each).  Empty on projects that predate the format. */
+    dataTypeFiles: RawProjectFile[]
     /** See {@link ProjectResponse.data.canEdit}.  Carried through the
      *  raw layer so adapters that build `ProjectResponse` from a raw
      *  fetch don't have to round-trip the details endpoint twice. */

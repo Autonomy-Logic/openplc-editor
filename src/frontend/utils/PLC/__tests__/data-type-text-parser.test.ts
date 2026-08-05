@@ -180,6 +180,11 @@ describe('parseDataTypeFromText errors', () => {
     expect(parseDataTypeFromText('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n').error).toMatch(/invalid enumeration value/)
   })
 
+  it('rejects invalid structure field names', () => {
+    const badName = 'TYPE\n  P : STRUCT\n    2bad : INT;\n  END_STRUCT;\nEND_TYPE\n'
+    expect(parseDataTypeFromText(badName).error).toMatch(/invalid structure field name: "2bad"/)
+  })
+
   it('rejects unrecognized declarations with a hint', () => {
     expect(parseDataTypeFromText('TYPE\n  Foo\nEND_TYPE\n').error).toMatch(/missing semicolon/)
     expect(parseDataTypeFromText('TYPE\n  Foo Bar;\nEND_TYPE\n').error).toMatch(/missing colon/)
