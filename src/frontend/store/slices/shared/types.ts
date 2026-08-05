@@ -1,6 +1,7 @@
 import type {
   DeviceConfiguration,
   DevicePin,
+  PLCDataType,
   PLCProjectData,
   PLCVariable,
   ProjectMeta,
@@ -62,6 +63,8 @@ export type PouHistorySnapshot = {
   globalVariables?: PLCVariable[]
   ladderFlow?: unknown
   fbdFlow?: unknown
+  /** Set when the history key is a data type instead of a POU. */
+  dataTypes?: PLCDataType[]
 }
 
 export type PouHistory = {

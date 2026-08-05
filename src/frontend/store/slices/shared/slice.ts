@@ -1002,17 +1002,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.past[history.past.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to future. Plain references — the store is
       // immer-managed (frozen, copy-on-write), so later edits can never
       // reach a captured snapshot.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1025,22 +1032,27 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        if (restoredDataType) state.projectActions.applyDatatypeSnapshot(pouName, restoredDataType)
       }
 
       // Check if we've returned to the saved state
@@ -1060,15 +1072,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.future[history.future.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to past. Plain references — see undo.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1081,22 +1100,27 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        if (restoredDataType) state.projectActions.applyDatatypeSnapshot(pouName, restoredDataType)
       }
 
       // Check if we've returned to the saved state

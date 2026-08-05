@@ -36,6 +36,7 @@ const DimensionsTable = ({
       data: { dataTypes },
     },
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -48,6 +49,7 @@ const DimensionsTable = ({
     const current = dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'array') return
     updateDatatype(name, { ...current, dimensions: newDimensions })
+    handleFileAndWorkspaceSavedState(name)
   }
 
   const columnHelper = createColumnHelper<{ dimension: string }>()

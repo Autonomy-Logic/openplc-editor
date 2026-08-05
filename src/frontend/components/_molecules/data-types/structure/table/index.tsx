@@ -51,6 +51,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
       data: { dataTypes },
     },
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -85,6 +86,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
               return variable
             }),
           })
+          handleFileAndWorkspaceSavedState(editor.meta.name)
           return { ok: true, message: 'Data updated successfully.' }
         } catch (error) {
           console.error('Failed to update data:', error)

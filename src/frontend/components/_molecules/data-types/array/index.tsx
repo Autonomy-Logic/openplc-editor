@@ -30,6 +30,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -92,17 +93,21 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInitialValueData(e.target.value)
+    captureAndPush(editor.meta.name)
     const updatedData = { ...data }
     updatedData.initialValue = e.target.value
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   const handleSelect = (definition: string, value: string) => {
     setBaseType(value)
+    captureAndPush(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       baseType: { value, definition },
     } as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   // `updateDatatype` is a full replace — never pass a partial object,
@@ -110,16 +115,14 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   // gets stripped and downstream selectors lose the entry.
   const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
     updateDatatype(data.name, { ...data, dimensions: newRows })
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   const addNewRow = () => {
-    setTableData((prevRows) => {
-      const isFirst = prevRows.length === 0
-      const newRows = [...prevRows, { dimension: '' }]
+    captureAndPush(editor.meta.name)
 
-      if (isFirst) {
-        captureAndPush(editor.meta.name)
-      }
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, { dimension: '' }]
 
       setArrayTable({ selectedRow: newRows.length - 1 })
       writeDimensions(newRows)

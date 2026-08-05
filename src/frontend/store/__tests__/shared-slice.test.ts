@@ -1463,6 +1463,97 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v2')
       })
     })
+
+    // -----------------------------------------------------------------------
+    // undo / redo for data types
+    // -----------------------------------------------------------------------
+    describe('undo/redo for data types', () => {
+      const edited = {
+        name: 'Colors',
+        derivation: 'enumerated' as const,
+        values: [{ description: 'RED' }],
+        initialValue: '',
+      }
+
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
+      })
+
+      it('undo restores the snapshot data type and moves the current entry to future', () => {
+        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+
+        expect(store.getState().snapshotActions.undo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(initial)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        expect(history.future[0].dataTypes).toEqual([edited])
+      })
+
+      it('redo reapplies the undone data type edit', () => {
+        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().snapshotActions.redo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(1)
+        expect(history.future).toHaveLength(0)
+        expect(history.past[0].dataTypes).toEqual([initial])
+      })
+
+      it('undo marks the data type file saved when history returns to the saved depth', () => {
+        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.markSaved('Colors')
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: false })
+
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(true)
+      })
+
+      it('undo leaves the data type untouched when the snapshot has no dataTypes entry', () => {
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null })
+
+        expect(store.getState().snapshotActions.undo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        expect(history.future[0].dataTypes).toEqual([edited])
+      })
+
+      it('redo leaves the data type untouched when the future snapshot has no dataTypes entry', () => {
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.setState({
+          undoRedo: {
+            Colors: {
+              past: [],
+              future: [{ variables: [], body: null }],
+              savedAtDepth: null,
+            },
+          },
+        })
+
+        expect(store.getState().snapshotActions.redo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(1)
+        expect(history.past[0].dataTypes).toEqual([edited])
+      })
+    })
   })
 
   // =========================================================================

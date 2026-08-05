@@ -19,6 +19,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
     editor,
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -46,6 +47,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       ...data,
       initialValue: value,
     })
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   // `updateDatatype` is a full replace — spread `data` first so we
@@ -53,6 +55,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   // downstream consumers.
   const writeValues = (newValues: PLCEnumeratedDatatype['values']) => {
     updateDatatype(data.name, { ...data, values: newValues })
+    handleFileAndWorkspaceSavedState(data.name)
   }
 
   const addNewRow = () => {
