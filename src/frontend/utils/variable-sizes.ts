@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
+import { parseDurationLiteral } from './iec-duration'
 import { type IECTypeMetadata, type IECWireFormat, lookupBaseType } from './iec-types-registry'
 
 /**
@@ -325,10 +326,33 @@ export function encodeForceValue(input: string, typeName: string, enumValues?: s
 }
 
 /**
- * Encode dispatcher keyed on `wireFormat`. TIME / DATE / TOD / DT /
- * STRING / WSTRING force is not yet supported — those need IEC literal
- * parsing (`T#…`, `D#…`) and string framing, which the debugger UI
- * doesn't currently expose.
+ * Colour hint stored in the workspace's forced-variables map: `false`
+ * marks a forced-low value (rendered blue in the watch panel and the
+ * graphical editors), `true` forced-high.
+ */
+export function isForcedValueHigh(input: string): boolean {
+  // Drop a literal prefix so `T#-5s` reads as negative like `-5s` does.
+  const value = input
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z_]+#/, '')
+  return value !== 'false' && value !== '0' && !value.startsWith('-')
+}
+
+/**
+ * Unwrap an IEC STRING literal (`'text'`) to its content. Input arrives
+ * trimmed, so quoting is also how a force value keeps leading/trailing
+ * spaces.
+ */
+function stripStringLiteral(input: string): string {
+  const quoted = /^'([\s\S]*)'$/.exec(input)
+  return quoted ? quoted[1] : input
+}
+
+/**
+ * Encode dispatcher keyed on `wireFormat`. DATE / TOD / DT / WSTRING
+ * force is not yet supported — those need calendar-literal parsing
+ * (`D#…`, `TOD#…`, `DT#…`) and UTF-16 framing.
  */
 function encodeByWireFormat(originalInput: string, numericInput: string, meta: IECTypeMetadata): Uint8Array {
   switch (meta.wireFormat) {
@@ -382,11 +406,28 @@ function encodeByWireFormat(originalInput: string, numericInput: string, meta: I
       new DataView(buf.buffer).setFloat64(0, n, true)
       return buf
     }
-    case 'duration-ns-i64':
+    case 'duration-ns-i64': {
+      const buf = new Uint8Array(8)
+      new DataView(buf.buffer).setBigInt64(0, parseDurationLiteral(originalInput), true)
+      return buf
+    }
+    case 'len8-utf8': {
+      const text = stripStringLiteral(originalInput)
+      if (text.length > DEBUG_STRING_CAP) {
+        throw new Error(`STRING value too long: ${text.length} characters (max ${DEBUG_STRING_CAP})`)
+      }
+      const buf = new Uint8Array(1 + text.length)
+      buf[0] = text.length
+      for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i)
+        if (code > 127) throw new Error(`STRING value must be ASCII: "${originalInput}"`)
+        buf[i + 1] = code
+      }
+      return buf
+    }
     case 'datetime-ns-i64':
     case 'date-ns-i64':
     case 'tod-ns-i64':
-    case 'len8-utf8':
     case 'len8-utf16le':
       throw new Error(`Forcing ${meta.name} values is not supported yet`)
     default: {

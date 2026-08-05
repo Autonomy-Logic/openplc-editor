@@ -6,6 +6,12 @@ interface ModbusMasterIOPoint {
   iec_location: string
   len: number
   cycle_time_ms: number
+  /** What the runtime does with this point's IEC buffer while the device is
+   *  unreachable. The UI has offered the choice per I/O group for a while, but
+   *  it never reached the config — so the runtime always kept the last value
+   *  (openplc-editor#691). Emitted for every point so a config never leaves
+   *  the behaviour implicit. */
+  error_handling: ModbusIOGroup['errorHandling']
 }
 
 // Base device config with common fields
@@ -83,6 +89,9 @@ const convertIOGroupToIOPoint = (ioGroup: ModbusIOGroup): ModbusMasterIOPoint =>
     iec_location: iecLocation,
     len: ioGroup.length,
     cycle_time_ms: ioGroup.cycleTime,
+    // Groups saved before the field existed have no value; the runtime's
+    // historical behaviour is to keep the last value, so default to it.
+    error_handling: ioGroup.errorHandling ?? 'keep-last-value',
   }
 }
 
