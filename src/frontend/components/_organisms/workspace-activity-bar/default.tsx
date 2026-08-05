@@ -452,6 +452,33 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           })
           return
         }
+
+        // A refusal arrives as a successful request carrying a refusal status —
+        // the HTTP call worked, the runtime just declined. Checking only
+        // `success` therefore swallowed it: pressing Start with the mode switch
+        // in STOP did nothing at all, with no dialog and not even a log line.
+        //
+        // The switch case gets a dialog rather than a console entry because the
+        // user just asked for this explicitly and is watching the button; only
+        // they can resolve it, by moving the switch.
+        const status = result.status ?? ''
+        if (status.includes('ERROR_SWITCH_STOP')) {
+          void showDebuggerMessage(
+            'warning',
+            'PLC Not Started',
+            'The mode switch on the device is in STOP, so the runtime refused to start the PLC. Move the switch to RUN and try again.',
+            ['OK'],
+          )
+          return
+        }
+        if (!status.includes('START:OK') && !status.includes('ALREADY_RUNNING')) {
+          addLog({
+            id: crypto.randomUUID(),
+            level: 'error',
+            message: `Failed to start PLC: ${status || 'unknown response'}`,
+          })
+          return
+        }
       }
 
       const statusResult = await runtime.getStatus()
