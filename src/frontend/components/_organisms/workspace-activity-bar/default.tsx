@@ -425,6 +425,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const handlePlcControl = useCallback(async (): Promise<void> => {
     if (!jwtToken || connectionStatus !== 'connected') return
+    // Mid-transition the runtime refuses everything but PING and STATUS with
+    // COMMAND:BUSY, so a start or stop here can only produce a confusing error.
+    // The button is disabled for this too; guarding the handler as well covers
+    // any other caller and the gap between a stale render and the next poll.
+    if (plcStatus === 'TRANSITIONING') return
 
     try {
       if (plcStatus === 'RUNNING') {
@@ -459,6 +464,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
     }
   }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
+
+  /**
+   * Run/stop is blocked while the runtime is mid-transition.
+   *
+   * TRANSITIONING means a start or stop is in flight: the runtime answers
+   * COMMAND:BUSY to everything except PING and STATUS, and the state it will
+   * settle on is not decided yet. Clicking then cannot do what the icon says --
+   * the icon itself is ambiguous, since it is drawn from a state that is about to
+   * change -- so the button goes inert until the runtime lands.
+   */
+  const isPlcTransitioning = plcStatus === 'TRANSITIONING'
+  const isPlcControlBlocked = connectionStatus !== 'connected' || isPlcTransitioning
 
   // ---------------------------------------------------------------------------
   // Simulator control (Start/Stop simulator + auto-debug)
@@ -904,20 +921,22 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   : 'Start Simulator'
                 : connectionStatus !== 'connected'
                   ? 'Connect to runtime first'
-                  : plcStatus === 'RUNNING'
-                    ? 'Stop PLC'
-                    : 'Start PLC'
+                  : isPlcTransitioning
+                    ? 'PLC is changing state...'
+                    : plcStatus === 'RUNNING'
+                      ? 'Stop PLC'
+                      : 'Start PLC'
             }
           >
             <PlayButton
               onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : isPlcControlBlocked}
               className={cn(
                 isSimulatorBoard
                   ? isCompiling || isDebuggerProcessing
                     ? disabledButtonClass
                     : ''
-                  : connectionStatus !== 'connected'
+                  : isPlcControlBlocked
                     ? disabledButtonClass
                     : '',
               )}
