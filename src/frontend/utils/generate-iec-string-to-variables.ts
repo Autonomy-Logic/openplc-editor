@@ -56,8 +56,9 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
 /**
  * Parse an array type string like "ARRAY[1..10] OF INT" or "ARRAY[1..10, 1..5] OF MyStruct"
  * Returns null if not an array type, otherwise returns the parsed array type definition.
+ * Also consumed by the data-type text parser (`PLC/data-type-text-parser.ts`).
  */
-const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
+export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
   // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
   const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
   if (!arrayMatch) return null
