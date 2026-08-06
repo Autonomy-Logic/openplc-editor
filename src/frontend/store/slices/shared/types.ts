@@ -1,3 +1,4 @@
+import type { RawProjectFile } from '../../../../middleware/shared/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
@@ -140,6 +141,9 @@ export type OpenProjectResponseData = {
   devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings from parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
+  /** `datatypes/*.dt` files that failed to parse on load, preserved
+   *  raw so the save flow echoes them back verbatim. */
+  unparsedDataTypeFiles?: RawProjectFile[]
   /**
    * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
    * `false` puts the workspace in read-only mode; `true` / `undefined`

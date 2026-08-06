@@ -8,6 +8,7 @@
  * The backend only reads raw files from disk; all parsing happens here.
  */
 
+import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-text-parser'
 import {
   detectLanguageFromExtension,
   findLastEndVarIndex,
@@ -79,6 +80,11 @@ export interface ParsedProjectData {
   devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings collected during parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
+  /** `datatypes/*.dt` files that failed to parse (or whose declared
+   *  name mismatched the file name).  Preserved raw so the save flow
+   *  can echo them back verbatim — an unreadable file must never be
+   *  silently dropped from disk. */
+  unparsedDataTypeFiles?: RawProjectFile[]
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +393,9 @@ function deduplicatePouFiles(pouFiles: RawProjectFile[]): RawProjectFile[] {
  * @param pouFiles - Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json)
  * @param serverFiles - Raw server config files from devices/servers/
  * @param remoteDeviceFiles - Raw remote device config files from devices/remote/
+ * @param libraryManifest - Raw content of library.json (library projects)
+ * @param dataTypeFiles - Raw datatypes/*.dt files; when any are present they
+ *   win over the legacy `project.json` `data.dataTypes` field
  */
 export function parseProjectFiles(
   projectPath: string,
@@ -397,6 +406,7 @@ export function parseProjectFiles(
   serverFiles: RawProjectFile[],
   remoteDeviceFiles: RawProjectFile[],
   libraryManifest: string = '',
+  dataTypeFiles: RawProjectFile[] = [],
 ): ParsedProjectData {
   const warnings: string[] = []
 
@@ -525,6 +535,26 @@ export function parseProjectFiles(
     }
   }
 
+  // Parse data type files (datatypes/<Name>.dt).  Own loop — never
+  // through parsePouFile (pou-path detection throws for datatypes/).
+  // The declared name must match the file name; a mismatch or any
+  // parse failure preserves the raw file so the save flow writes it
+  // back verbatim instead of silently dropping it from disk.
+  const dataTypesFromFiles: PLCDataType[] = []
+  const unparsedDataTypeFiles: RawProjectFile[] = []
+  for (const file of dataTypeFiles) {
+    const expectedName = getBaseNameFromPath(file.relativePath)
+    const result = parseDataTypeFromText(file.content, expectedName)
+    if (result.dataType) {
+      dataTypesFromFiles.push(result.dataType)
+    } else {
+      warnings.push(
+        `Data type file "${file.relativePath}" could not be parsed and was preserved as-is: ${result.error ?? 'unknown error'}`,
+      )
+      unparsedDataTypeFiles.push(file)
+    }
+  }
+
   // Extract project data fields
   const data = project.data ?? {}
   const configuration = (data.configuration ??
@@ -552,7 +582,10 @@ export function parseProjectFiles(
   return {
     meta,
     projectData: {
-      dataTypes: (data.dataTypes as PLCDataType[]) ?? [],
+      // Migration rule: any .dt file present ⇒ the files are the
+      // source of truth; the legacy JSON field is only the fallback
+      // for projects that predate the format.
+      dataTypes: dataTypeFiles.length > 0 ? dataTypesFromFiles : ((data.dataTypes as PLCDataType[]) ?? []),
       pous,
       configurations: configuration,
       servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
@@ -574,5 +607,6 @@ export function parseProjectFiles(
     deviceConfiguration,
     devicePinMapping,
     warnings: warnings.length > 0 ? warnings : undefined,
+    ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
   }
 }

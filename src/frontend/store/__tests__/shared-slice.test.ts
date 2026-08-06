@@ -469,6 +469,24 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.dataTypes[0].derivation).toBe('structure')
       })
 
+      it('rejects a name owned by an unreadable .dt file', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.create({ name: 'Ghost', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('rejects a name differing only by case (one file per name on case-folding disks)', () => {
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        const result = store.getState().datatypeActions.create({ name: 'motor', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type already exists')
+        expect(store.getState().project.data.dataTypes).toHaveLength(1)
+      })
+
       it('creates an enumerated data type', () => {
         const result = store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
         expect(result.ok).toBe(true)
@@ -554,6 +572,41 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('NewDT')
       })
 
+      it('queues the old datatypes/<name>.dt path for deletion', () => {
+        store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
+      })
+
+      it('rejects a name owned by an unreadable .dt file (case-insensitive)', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.rename('OldDT', 'ghost')
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
+      })
+
+      it('rejects a rename that collides with another type only by case', () => {
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'array' })
+        const result = store.getState().datatypeActions.rename('OldDT', 'motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toEqual(['OldDT', 'Motor'])
+      })
+
+      it('rejects a case-only rename of the type itself', () => {
+        // Writing olddt.dt then deleting OldDT.dt is the same file
+        // where the filesystem folds case — the type would vanish.
+        const result = store.getState().datatypeActions.rename('OldDT', 'olddt')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+      })
+
+      it('allows a no-op rename to the identical name', () => {
+        const result = store.getState().datatypeActions.rename('OldDT', 'OldDT')
+        expect(result.ok).toBe(true)
+      })
+
       it('returns error when new name already exists', () => {
         store.getState().datatypeActions.create({ name: 'Existing', derivation: 'array' })
         const result = store.getState().datatypeActions.rename('OldDT', 'Existing')
@@ -605,6 +658,21 @@ describe('createSharedSlice', () => {
         const result = store.getState().datatypeActions.duplicate('NonExistent', 'Copy')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type not found')
+      })
+
+      it('rejects a duplicate name differing only by case', () => {
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'sourcedt')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+      })
+
+      it('rejects a duplicate name owned by an unreadable .dt file', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'Ghost')
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
       })
 
       it('returns error when new name already exists', () => {

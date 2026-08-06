@@ -1129,11 +1129,50 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.dataTypes).toHaveLength(0)
     })
 
+    it('queues the datatypes/<name>.dt path for deletion', () => {
+      const dt: PLCDataType = { name: 'MyStruct', derivation: 'structure', variable: [] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.deleteDatatype('MyStruct')
+      expect(store.getState().pendingDeletions).toContain('datatypes/MyStruct.dt')
+    })
+
     it('does nothing when data type not found', () => {
       const dt: PLCDataType = { name: 'A', derivation: 'structure', variable: [] }
       store.getState().projectActions.createDatatype({ data: dt })
       store.getState().projectActions.deleteDatatype('NonExistent')
       expect(store.getState().project.data.dataTypes).toHaveLength(1)
+    })
+  })
+
+  describe('updateDatatypeName', () => {
+    it('renames the data type and queues the old .dt path for deletion', () => {
+      const dt: PLCDataType = { name: 'OldName', derivation: 'structure', variable: [] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.updateDatatypeName('OldName', 'NewName')
+      expect(store.getState().project.data.dataTypes[0].name).toBe('NewName')
+      expect(store.getState().pendingDeletions).toContain('datatypes/OldName.dt')
+    })
+
+    it('does nothing when the data type is not found', () => {
+      store.getState().projectActions.updateDatatypeName('Ghost', 'NewName')
+      expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      expect(store.getState().pendingDeletions).toHaveLength(0)
+    })
+  })
+
+  describe('setUnparsedDataTypeFiles', () => {
+    it('replaces the stashed raw .dt files', () => {
+      const raw = [{ relativePath: 'datatypes/Broken.dt', content: 'TYPE garbage' }]
+      store.getState().projectActions.setUnparsedDataTypeFiles(raw)
+      expect(store.getState().unparsedDataTypeFiles).toEqual(raw)
+      store.getState().projectActions.setUnparsedDataTypeFiles([])
+      expect(store.getState().unparsedDataTypeFiles).toEqual([])
+    })
+
+    it('is reset by clearProjects', () => {
+      store.getState().projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/X.dt', content: 'x' }])
+      store.getState().projectActions.clearProjects()
+      expect(store.getState().unparsedDataTypeFiles).toEqual([])
     })
   })
 
