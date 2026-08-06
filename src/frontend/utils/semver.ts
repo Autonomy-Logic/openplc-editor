@@ -26,6 +26,10 @@
  *   - a missing component is zero:  `4.3` === `4.3.0`,  `4` === `4.0.0`
  *   - anything else is UNKNOWN:     `"dev"`, `"garbage"`, `""` → null
  *
+ * "Readable" means *exactly* readable: a component too large to hold without
+ * rounding is UNKNOWN too, rather than a number that no longer matches the
+ * string it came from.
+ *
  * "Unknown" is never a version. It does not become 0.0.0 behind the caller's
  * back and it never satisfies a declared floor — a peer that cannot say what
  * it is does not get to claim it is new enough.
@@ -63,6 +67,21 @@ const VERSION_RE = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+](.+))?$/
 const ZERO: ParsedVersion = { major: 0, minor: 0, patch: 0 }
 
 /**
+ * A single numeric component, or null when it is not one we can hold exactly.
+ *
+ * `Number.parseInt` answers a *finite* number for a 17-digit component and
+ * quietly rounds it: `"9007199254740993"` comes back as `…992`. That breaks the
+ * only promise this parser makes — readable means exact, and anything else is
+ * UNKNOWN. A component we can only approximate is not readable, so it is null
+ * rather than a number that no longer matches what was written.
+ */
+function parseComponent(raw: string | undefined): number | null {
+  if (raw === undefined) return 0
+  const value = Number.parseInt(raw, 10)
+  return Number.isSafeInteger(value) ? value : null
+}
+
+/**
  * Parse a version string, or return null when the string is not a version.
  *
  * Missing trailing components are zero, so a floor written as `"4.3"` means
@@ -74,12 +93,11 @@ export function parseVersion(raw: string | null | undefined): ParsedVersion | nu
   if (!raw) return null
   const match = raw.trim().match(VERSION_RE)
   if (!match) return null
-  return {
-    major: Number.parseInt(match[1], 10),
-    minor: match[2] === undefined ? 0 : Number.parseInt(match[2], 10),
-    patch: match[3] === undefined ? 0 : Number.parseInt(match[3], 10),
-    prerelease: match[4],
-  }
+  const major = parseComponent(match[1])
+  const minor = parseComponent(match[2])
+  const patch = parseComponent(match[3])
+  if (major === null || minor === null || patch === null) return null
+  return { major, minor, patch, prerelease: match[4] }
 }
 
 /** True when `raw` is a version this codebase can compare. */
