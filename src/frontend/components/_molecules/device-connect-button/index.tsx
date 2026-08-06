@@ -51,15 +51,19 @@ const DeviceConnectButton = ({
         onClick={isConnected ? onDisconnect : onConnect}
         disabled={disabled}
         title={blockedReason ?? (isConnected ? 'Disconnect from the device' : 'Connect to the device')}
+        // text-sm, not the project's text-cp-sm: cn() runs twMerge, which does not
+        // know the custom cp-* font scale and therefore treated `text-cp-sm` as
+        // conflicting with `text-white`, dropping the size entirely. The button fell
+        // back to the browser default and rendered larger than its own neighbours.
+        // h-8/text-sm also matches the sibling brand buttons on this screen.
         className={cn(
-          'h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white',
+          'h-8 rounded-md bg-brand px-4 font-caption text-sm font-medium text-white',
           'hover:bg-brand-medium-dark disabled:opacity-50',
         )}
       >
         {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
       </button>
 
-      {isConnected && <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>}
       {status === 'error' && <span className='text-xs text-red-600 dark:text-red-400'>● Connection failed</span>}
       {children}
     </div>
