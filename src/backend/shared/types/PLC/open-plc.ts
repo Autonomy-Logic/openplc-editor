@@ -85,6 +85,9 @@ const PLCStructureVariableSchema = z.object({
       }),
     })
     .optional(),
+  // Preserved through load — the .dt serializer emits it as a
+  // trailing (* … *) comment; omitting it here strips it on open.
+  documentation: z.string().optional(),
 })
 const PLCStructureDatatypeSchema = z.object({
   name: z.string(),

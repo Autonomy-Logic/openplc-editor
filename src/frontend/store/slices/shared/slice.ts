@@ -279,10 +279,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
-      const updatedDatatype = { ...datatype, name: newName }
-
       return renameElement(state, oldName, newName, () => {
-        state.projectActions.updateDatatype(oldName, updatedDatatype)
+        // Renames via the dedicated action so the old .dt path gets
+        // queued for deletion — a plain updateDatatype would strand
+        // the old file on disk.
+        state.projectActions.updateDatatypeName(oldName, newName)
       })
     },
 
@@ -615,6 +616,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         meta: data.meta,
         data: data.projectData,
       })
+      // Raw .dt files that failed to parse — stashed so saves echo
+      // them back verbatim; always set so a reopen clears stale ones.
+      getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
       // Add ladder and FBD flows for graphical POUs.
       //

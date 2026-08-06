@@ -554,6 +554,11 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('NewDT')
       })
 
+      it('queues the old datatypes/<name>.dt path for deletion', () => {
+        store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
+      })
+
       it('returns error when new name already exists', () => {
         store.getState().datatypeActions.create({ name: 'Existing', derivation: 'array' })
         const result = store.getState().datatypeActions.rename('OldDT', 'Existing')

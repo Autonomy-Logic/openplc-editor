@@ -11,6 +11,7 @@
  */
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { isDataTypeFilesEnabled } from '../../../frontend/utils/feature-flags'
 import type {
   CreatePouParams,
   CreateProjectParams,
@@ -202,6 +203,9 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
+        // .dt files only feed the parser while the flag is on —
+        // off keeps legacy project.json as the source of truth.
+        isDataTypeFilesEnabled() ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },
@@ -221,6 +225,9 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
+        // .dt files only feed the parser while the flag is on —
+        // off keeps legacy project.json as the source of truth.
+        isDataTypeFilesEnabled() ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },
