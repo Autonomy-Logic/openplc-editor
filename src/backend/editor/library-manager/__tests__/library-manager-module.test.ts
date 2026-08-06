@@ -463,7 +463,12 @@ describe('LibraryManagerModule', () => {
       const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
 
       await mod.installFromCatalog([
-        makePublicLibrary({ id: 'pub-1', name: 'alpha-lib', displayName: '', description: archive.manifest.description }),
+        makePublicLibrary({
+          id: 'pub-1',
+          name: 'alpha-lib',
+          displayName: '',
+          description: archive.manifest.description,
+        }),
       ])
 
       const persistedText = readFileSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'), 'utf-8')
