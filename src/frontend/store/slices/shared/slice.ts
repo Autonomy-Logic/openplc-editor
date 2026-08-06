@@ -64,6 +64,14 @@ function validateElementName(name: string): { ok: true } | { ok: false; message:
 }
 
 /**
+ * Data type names are compared case-insensitively: each one becomes a
+ * `datatypes/<Name>.dt` path, and macOS/Windows fold filename case, so
+ * `Foo` and `foo` would silently overwrite each other on save. IEC
+ * identifiers are case-insensitive anyway.
+ */
+const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
  * A raw datatypes/<Name>.dt file that failed to parse still owns its
  * name: letting a new data type take it would make the save emit two
  * specs for one path (and the raw echo would win). Case-insensitive —
@@ -255,7 +263,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   datatypeActions: {
     create: ({ name, derivation }) => {
       const state = getState()
-      const existing = state.project.data.dataTypes.find((d) => d.name === name)
+      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, name))
       if (existing) return { ok: false, message: 'Data type already exists' }
 
       const fileCollision = collidesWithUnparsedDataTypeFile(state, name)
@@ -294,8 +302,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
-      const existing = state.project.data.dataTypes.find((d) => d.name === newName)
-      if (existing) return { ok: false, message: 'Data type name already exists' }
+      // Includes the type being renamed: a case-only change writes the
+      // new file and then deletes the old path — the same file where
+      // the filesystem folds case.
+      const collides = newName !== oldName && state.project.data.dataTypes.some((d) => nameMatches(d.name, newName))
+      if (collides) return { ok: false, message: 'Data type name already exists' }
 
       const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
       if (!fileCollision.ok) return fileCollision
@@ -316,7 +327,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const source = state.project.data.dataTypes.find((d) => d.name === sourceName)
       if (!source) return { ok: false, message: 'Data type not found' }
 
-      const existing = state.project.data.dataTypes.find((d) => d.name === newName)
+      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, newName))
       if (existing) return { ok: false, message: 'Data type name already exists' }
 
       const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
