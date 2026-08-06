@@ -63,6 +63,26 @@ describe('parseVersion', () => {
     expect(parseVersion(null)).toBeNull()
     expect(parseVersion(undefined)).toBeNull()
   })
+
+  // `Number.parseInt` answers a finite number here and quietly rounds it —
+  // 9007199254740993 comes back as …992. A component we can only approximate is
+  // not readable, and returning a number that no longer matches the string it
+  // came from would break the one promise the parser makes.
+  it('rejects a component too large to hold exactly', () => {
+    expect(parseVersion('9007199254740993.0.0')).toBeNull()
+    expect(parseVersion('4.9007199254740993.0')).toBeNull()
+    expect(parseVersion('4.1.9007199254740993')).toBeNull()
+    // The largest value that IS exact still parses.
+    expect(parseVersion('9007199254740991.0.0')?.major).toBe(9007199254740991)
+  })
+
+  it('leaves an oversized version unable to clear any floor', () => {
+    // Fails closed as a candidate, declares nothing as a floor — the same
+    // treatment every other unreadable string gets.
+    expect(isVersionAtLeast('9007199254740993.0.0', '4.1.0')).toBe(false)
+    expect(isVersionAtLeast('4.1.0', '9007199254740993.0.0')).toBe(true)
+    expect(isValidVersion('9007199254740993.0.0')).toBe(false)
+  })
 })
 
 describe('isValidVersion', () => {
