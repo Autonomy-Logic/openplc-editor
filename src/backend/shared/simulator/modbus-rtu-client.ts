@@ -1,7 +1,8 @@
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import { buildPlcSetStateRequest, parsePlcSetStateResponse } from '@root/backend/shared/debug/modbus-pdu'
+import type { DebugStatusResult, Md5ProbeResult, PlcControlResult } from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 
-import { ModbusDebugResponse, ModbusFunctionCode } from './types'
+import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from './types'
 
 export interface SerialPortLike {
   isOpen: boolean
@@ -458,6 +459,133 @@ export class ModbusRtuClient {
       }
 
       return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Always-on debugger extras (FC 0x46/0x47/0x48). Each is a bare-FC request.
+  // Response offsets account for the 6-byte TCP-compat padding sendRequestImpl
+  // prepends: slaveId@6, FC@7, status@8, payload@9+.
+  // -------------------------------------------------------------------------
+
+  async getStatus(): Promise<DebugStatusResult> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_STATUS, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_STATUS as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+      if (response.length < 18) {
+        return { success: false, error: `Incomplete status response (${response.length} bytes, expected at least 18)` }
+      }
+
+      return {
+        success: true,
+        running: readUint8(response, 9) !== 0,
+        // Same byte as `running`, as the tri-state the run/stop machine has.
+        plcState: readUint8(response, 9),
+        tick: readUint32BE(response, 10),
+        uptimeMs: readUint32BE(response, 14),
+        // Appended by firmware carrying the run/stop state machine; absent on
+        // older firmware, which callers read as "no switch gating".
+        ...(response.length >= 19 ? { switchPosition: readUint8(response, 18) } : {}),
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async getVersion(): Promise<{ success: boolean; version?: string; error?: string }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_VERSION, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_VERSION as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      const version = new TextDecoder().decode(response.slice(9)).replace(/\0+$/, '').trim()
+      return { success: true, version }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async getBoardId(): Promise<{ success: boolean; boardId?: Uint8Array; boardIdHex?: string; error?: string }> {
+    try {
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, allocBytes(0))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 10) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 10)` }
+      }
+
+      const functionCodeResponse = readUint8(response, 7)
+      const statusCode = readUint8(response, 8)
+
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_BOARD_ID as number)) {
+        return { success: false, error: 'Function code mismatch' }
+      }
+      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
+        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
+      }
+
+      const idLen = readUint8(response, 9)
+      if (response.length < 10 + idLen) {
+        return {
+          success: false,
+          error: `Incomplete board-id data (expected ${idLen} bytes, got ${response.length - 10})`,
+        }
+      }
+
+      const boardId = response.slice(10, 10 + idLen)
+      const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
+      return { success: true, boardId, boardIdHex }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * FC 0x4b -- ask the runtime to run or stop.
+   *
+   * Command only: reading the state is `getStatus()` (FC 0x46), which already
+   * reports it. A RUN request is refused (not queued) while the mode switch
+   * reads STOP; `refusedBySwitch` says so.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    try {
+      // buildPlcSetStateRequest returns [FC][state]; assembleRequest writes the
+      // FC + slaveId itself, so hand it only the trailing payload.
+      const pdu = buildPlcSetStateRequest(state)
+      const response = await this.sendRequest(this.assembleRequest(ModbusFunctionCode.PLC_SET_STATE, pdu.subarray(1)))
+      if (response.length < 8) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes)` }
+      }
+      return parsePlcSetStateResponse(response.subarray(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

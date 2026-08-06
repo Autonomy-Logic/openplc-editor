@@ -12,6 +12,9 @@ export type ProjectDefaultFilesMapKeys = keyof typeof projectDefaultFilesMapSche
 export type ProjectDefaultFilesMapValues = (typeof projectDefaultFilesMapSchema)[ProjectDefaultFilesMapKeys]
 
 export const projectPouDirectories = ['pous/functions', 'pous/function-blocks', 'pous/programs'] as const
-export const projectDefaultDirectories = ['devices', ...projectPouDirectories] as const
+// Kept out of projectPouDirectories: pou-path detection
+// (detectPouTypeFromPath) must never see datatypes/ entries.
+export const projectDataTypeDirectories = ['datatypes'] as const
+export const projectDefaultDirectories = ['devices', ...projectPouDirectories, ...projectDataTypeDirectories] as const
 export const projectDefaultDirectoriesValidation = [...projectDefaultDirectories, 'build'] as readonly string[]
 export type ProjectDefaultDirectories = (typeof projectDefaultDirectories)[number]

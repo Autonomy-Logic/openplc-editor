@@ -1,17 +1,13 @@
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  type DebugResolverContext,
-  type DebugSpec,
-  resolveDebugConnection,
-} from '../../../../backend/shared/hardware/debug-spec'
-import type { DebugConnectionConfig } from '../../../../middleware/shared/ports/types'
+import { resolveDeviceLinkCandidates } from '../../../../backend/shared/hardware/debug-spec'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import {
   useCapabilities,
   useCompiler,
   useDebugger,
+  useDevice,
   useProject,
   useRuntime,
   useSimulator,
@@ -19,11 +15,14 @@ import {
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
+import { buildDeviceResolverContext, showDeviceDialog } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
+import { isOpenPLCRuntimeTarget } from '../../../utils/device'
+import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -32,37 +31,6 @@ import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play
 import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
 import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
-
-const showDebuggerMessage = (
-  type: 'info' | 'warning' | 'error' | 'question',
-  title: string,
-  message: string,
-  buttons: string[],
-  options?: { primaryButtonIndex?: number; dismissButtonIndex?: number },
-): Promise<number> => {
-  return new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-message', {
-      type,
-      title,
-      message,
-      buttons,
-      ...options,
-      onResponse: (buttonIndex: number) => resolve(buttonIndex),
-    })
-  })
-}
-
-const showDebuggerIpInput = (title: string, message: string, defaultValue: string): Promise<string | null> => {
-  return new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
-      title,
-      message,
-      defaultValue,
-      onSubmit: (value: string) => resolve(value),
-      onCancel: () => resolve(null),
-    })
-  })
-}
 
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
@@ -91,6 +59,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const runtime = useRuntime()
   const simulator = useSimulator()
   const debuggerPort = useDebugger()
+  const device = useDevice()
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const debugSession = useDebugSession()
@@ -100,9 +69,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
   const [simulatorRunning, setSimulatorRunning] = useState(false)
   const pendingSimulatorDebugRef = useRef(false)
+  // True while a debug session is running OVER THE DEVICE CONNECTION (a baremetal
+  // target, whatever transport that connection uses). Such a session shares the
+  // connection, so it has to end when the connection does — which the drop handler
+  // below acts on. A runtime or simulator session owns its own channel and is
+  // unaffected, so this stays false for them.
+  const debugSessionRidesDeviceRef = useRef(false)
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  const switchPosition = useOpenPLCStore((state) => state.runtimeConnection.switchPosition)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const canEdit = useOpenPLCStore((state) => state.workspace.canEdit)
@@ -110,18 +86,68 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
 
-  // Sync simulatorRunning when the simulator stops externally
+  const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
+
+  // Run/stop travels over the session's control channel, so the button is live
+  // exactly when a SESSION exists — one question, asked once, for every target type.
+  // Every session publishes its status: a device connection, a runtime login, a
+  // running simulator. Asking the target's kind first (`directUsbUpload ? … : …`)
+  // meant asking "did the user log in" for a runtime, which is not the same question
+  // and diverged in practice: logged in, session never opened, every command
+  // refused. "Can a payload be delivered?" is what the button actually needs.
+  //
+  // Deliberately NOT applied to Build & Upload. Uploading is how a blank board stops
+  // being blank, so it cannot require a connection — see `handleBuild`, where the
+  // connection is consulted only to hand the serial port over to arduino-cli.
+  //
+  // A target that does not implement run/stop at all is blocked for a DIFFERENT
+  // reason, and says so. `handlePlcControl` refuses such a target anyway, so
+  // without this the button looked live and the click did nothing at all — no
+  // command, no error, no log line.
+  const plcStateControlSupported = resolveTargetCapabilities(currentBoardInfo).plcStateControl
+  const plcControlBlocked = !plcStateControlSupported || deviceConnectionStatus !== 'connected'
+  const plcControlBlockedReason = plcStateControlSupported
+    ? 'Connect to the target first'
+    : 'This target does not support Start/Stop from the editor'
+
+  // The emulator stopping is a session ending, and a debug session riding it ends
+  // with it — which the drop handler below already does for every target. This
+  // only mirrors the emulator's own state into the button.
   useEffect(() => {
     const unsub = simulator.onStopped(() => {
       pendingSimulatorDebugRef.current = false
       setSimulatorRunning(false)
-      const { workspace } = useOpenPLCStore.getState()
-      if (workspace.isDebuggerVisible) {
-        void debugSession.stopSession()
-      }
     })
     return unsub
-  }, [simulator, debugSession])
+  }, [simulator])
+
+  // A serial debug session lives on the device connection: it shares that
+  // client, so when the link drops (unplug, reset, liveness failure, or the user
+  // pressing Disconnect) the session has no transport left and must end. Leaving
+  // it "active" would show a frozen variable table over a dead port and leave the
+  // debugger unable to reconnect.
+  //
+  // Modbus TCP sessions are deliberately untouched — they own their own socket
+  // and never depended on the serial link.
+  // Only 'connected' is tolerated. 'connecting' covers RECOVERY too (the
+  // connection died and the main process is reopening it), and by then the client
+  // the session was sharing is already closed — waiting for the recovery verdict
+  // would just keep a dead session on screen for the whole retry window. A session
+  // can only have started from 'connected', so the initial connect's 'connecting'
+  // never reaches this: no session is active to stop.
+  useEffect(() => {
+    if (deviceConnectionStatus === 'connected') return
+    if (!debugSessionRidesDeviceRef.current) return
+    if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
+
+    addLog({
+      id: crypto.randomUUID(),
+      level: 'warning',
+      message: 'Device disconnected — stopping the debug session (serial debugging runs over the device connection).',
+    })
+    debugSessionRidesDeviceRef.current = false
+    void debugSession.stopSession()
+  }, [deviceConnectionStatus, debugSession, addLog])
 
   // Stop simulator if the board is switched away while it's running
   const prevIsSimulatorBoardRef = useRef(isSimulatorBoard)
@@ -204,7 +230,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const requiresRuntimeConnection = !resolveTargetCapabilities(boardInfo).directUsbUpload
         const { connectionStatus: connStatus, plcStatus: runStatus } = state.runtimeConnection
         if (requiresRuntimeConnection && connStatus === 'connected' && runStatus === 'RUNNING') {
-          const response = await showDebuggerMessage(
+          const response = await showDeviceDialog(
             'warning',
             'Stop PLC',
             'The PLC must be stopped before continuing.',
@@ -218,7 +244,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             setIsCompiling(false)
             return
           }
-          const stopResult = await runtime.stopPlc()
+          // Same unified control path as the Start/Stop button: the session routes
+          // it, so this works for a runtime and a device alike.
+          const stopResult = (await debuggerPort.setPlcState?.('STOPPED')) ?? {
+            success: false,
+            error: 'This target does not support run/stop control',
+          }
           if (!stopResult.success) {
             addLog({
               id: crypto.randomUUID(),
@@ -241,6 +272,26 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // compile pipeline reads `variable.location` verbatim — it never sees
       // aliases.
       const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
+
+      // Serial handoff (D72): a held device connection owns the serial port that
+      // arduino-cli needs for a direct-USB upload. Release it before the build so
+      // the upload can take the port; reconnect afterwards (auto-reconnect).
+      const caps = resolveTargetCapabilities(currentBoardInfo)
+      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      // Release ONLY if the held connection is the serial one arduino-cli needs.
+      // A connection over Modbus TCP is untouched, so debugging and run/stop keep
+      // working across the upload; disconnecting unconditionally used to throw it
+      // away. `released` also tells us whether to reconnect afterwards.
+      let serialWasReleased = false
+      if (willUpload && useOpenPLCStore.getState().deviceConnection.status === 'connected') {
+        try {
+          serialWasReleased = await device.releaseSerialPort(
+            useOpenPLCStore.getState().deviceDefinitions.configuration.communicationPort ?? null,
+          )
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
 
       try {
         // Track whether the compile stream already surfaced an error so we
@@ -290,13 +341,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                   addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
                   if (pendingSimulatorDebugRef.current) {
                     pendingSimulatorDebugRef.current = false
-                    // Simulator's debug spec resolves to the trivial
-                    // `{ connectionType: 'simulator' }` config — see
-                    // the hals.json entry.  Pass it explicitly so the
-                    // session's downstream MD5-verification path has
-                    // the right transport instead of falling back to
-                    // `connectAndStart`'s internal default.
-                    void debugSession.connectAndStart({ connectionType: 'simulator', connectionParams: {} })
+                    // Rides the emulator's session, so it ends when the emulator
+                    // does — through the same handler a pulled cable goes through.
+                    debugSessionRidesDeviceRef.current = true
+                    // No config: starting the emulator opened its session, so the
+                    // connection manager already knows how to reach it.
+                    void debugSession.connectAndStart()
                   }
                 } else {
                   pendingSimulatorDebugRef.current = false
@@ -314,6 +364,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         if (!result.success && !streamedError) {
           addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
         }
+
+        // Serial handoff (D72): if we released a held device connection for this
+        // upload, reconnect it now that arduino-cli is done with the port.
+        // Silent (no dialogs) — the user just flashed on purpose.
+        if (serialWasReleased && result.success) {
+          const boardTarget = deviceDefinitions.configuration.deviceBoard
+          const spec = currentBoardInfo?.debug
+          // Same candidate resolution Connect uses, so the link comes back the way
+          // the user established it. Only the serial link is ever released for an
+          // upload, but resolving the full list lets the reconnect land on Modbus
+          // TCP if that is what now answers.
+          // `deferPrompts`: this reconnect is silent and automatic (the user just
+          // flashed), so it must never pop an address dialog behind their back. A
+          // DHCP-only target simply stays disconnected until they press Connect.
+          const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
+            transports: caps.debuggerTransports,
+            deferPrompts: true,
+          })
+          if (candidates.kind === 'candidates') {
+            try {
+              await device.connect(candidates.candidates.map((candidate) => candidate.config))
+            } catch {
+              // best-effort: the user can press Connect again.
+            }
+          }
+        }
       } catch (err: unknown) {
         addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
       } finally {
@@ -322,9 +398,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
     [
       compiler,
-      projectData,
       projectMeta,
       deviceDefinitions,
+      currentBoardInfo,
       isSimulatorBoard,
       simulator,
       debugSession,
@@ -340,6 +416,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const handleBuildRef = useRef(handleBuild)
   handleBuildRef.current = handleBuild
+
+  // CONNECT flow (D72): the device screen's "No Firmware Detected" dialog lives
+  // in board.tsx but Build & Upload lives here. When the user chooses to flash,
+  // that dialog fires a decoupled event we answer by running the same build.
+  useEffect(() => {
+    return onDeviceFlashRequest(() => {
+      void handleBuildRef.current()
+    })
+  }, [])
 
   // ---------------------------------------------------------------------------
   // Build Library (.stlib)
@@ -423,46 +508,107 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // PLC control (Start/Stop for runtime targets)
   // ---------------------------------------------------------------------------
 
-  const handlePlcControl = useCallback(async (): Promise<void> => {
-    if (!jwtToken || connectionStatus !== 'connected') return
+  /**
+   * Tell the user the hardware mode switch is holding the device in STOP.
+   *
+   * Shown both when the editor blocks a start locally (pre-check) and when the
+   * device refuses one, so the two paths read identically. `switchLabel` comes
+   * from the VPP manifest's optional `stateControl.modeSwitch.label` when the
+   * package provides it, so a P1AM says "CPU switch" rather than the generic
+   * wording.
+   */
+  const warnSwitchInStop = useCallback(async (deviceName: string, switchLabel?: string): Promise<void> => {
+    await showDeviceDialog(
+      'warning',
+      'Device is in STOP',
+      `The ${switchLabel ?? 'mode switch'} on ${deviceName} is in the STOP position. ` +
+        'The PLC cannot be started from the editor while the switch is in STOP.\n\n' +
+        'Flip the switch to RUN and try again.',
+      ['OK'],
+    )
+  }, [])
 
+  const handlePlcControl = useCallback(async (): Promise<void> => {
+    const boardTarget = deviceDefinitions.configuration.deviceBoard
+    const boardInfo = availableBoards.get(boardTarget)
+    const caps = resolveTargetCapabilities(boardInfo)
+    if (!caps.plcStateControl) return
+
+    const switchLabel = (boardInfo as { stateControl?: { modeSwitch?: { label?: string } } } | undefined)?.stateControl
+      ?.modeSwitch?.label
+
+    // ONE path for every target. "Start the PLC" is the same request whether it
+    // travels as Modbus FC 0x4b down a cable or as an HTTP POST to a runtime; the
+    // connection manager routes it over whatever the session's control channel is.
+    // Branching here on target type is what kept two copies of the switch
+    // pre-check, the refusal handling and the error reporting in step by hand.
+    //
+    // Reads are NOT done here: the session's status poll keeps `plcStatus` and
+    // `switchPosition` in the store, so the pre-check is a store lookup rather than
+    // another round trip over a medium the poll is already using.
     try {
-      if (plcStatus === 'RUNNING') {
-        const result = await runtime.stopPlc()
-        if (!result.success) {
-          addLog({
-            id: crypto.randomUUID(),
-            level: 'error',
-            message: `Failed to stop PLC: ${result.error ?? 'Unknown error'}`,
-          })
-          return
-        }
-      } else {
-        const result = await runtime.startPlc()
-        if (!result.success) {
-          addLog({
-            id: crypto.randomUUID(),
-            level: 'error',
-            message: `Failed to start PLC: ${result.error ?? 'Unknown error'}`,
-          })
-          return
-        }
+      const wantRun = plcStatus !== 'RUNNING'
+
+      // Never send a start to a device whose switch reads STOP. `null` means
+      // "unknown / no switch", which must NOT block: a board with no physical
+      // switch, or firmware predating the state machine, would otherwise be
+      // un-startable.
+      if (wantRun && switchPosition === 'stop') {
+        await warnSwitchInStop(boardTarget, switchLabel)
+        return
       }
 
-      const statusResult = await runtime.getStatus()
-      if (statusResult.success && statusResult.status) {
+      const result = await debuggerPort.setPlcState?.(wantRun ? 'RUNNING' : 'STOPPED')
+      if (!result) return
+
+      if (result.unsupported) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message: 'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
+        })
+        return
+      }
+      // Covers the race where the switch moved between the store's last poll and
+      // this command: the device is authoritative, so its refusal wins.
+      if (result.refusedBySwitch) {
+        await warnSwitchInStop(boardTarget, switchLabel)
+        return
+      }
+      if (!result.success) {
+        addLog({
+          id: crypto.randomUUID(),
+          level: 'error',
+          message: `Failed to ${wantRun ? 'start' : 'stop'} PLC: ${result.error ?? 'Unknown error'}`,
+        })
+        return
+      }
+
+      // No re-read: the target settles into the new state on its next scan and the
+      // status poll picks it up within one tick. Reflecting the acknowledgement
+      // keeps the button responsive without a round trip that could still read the
+      // pre-change value.
+      if (result.state !== undefined) {
         useOpenPLCStore
           .getState()
-          .deviceActions.setPlcRuntimeStatus(statusResult.status as NonNullable<RuntimeConnection['plcStatus']>)
+          .deviceActions.setPlcRuntimeStatus(
+            (result.state === 1 ? 'RUNNING' : result.state === 2 ? 'ERROR' : 'STOPPED') as NonNullable<
+              RuntimeConnection['plcStatus']
+            >,
+          )
       }
     } catch (error: unknown) {
       addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
     }
-  }, [runtime, jwtToken, connectionStatus, plcStatus, addLog])
-
-  // ---------------------------------------------------------------------------
-  // Simulator control (Start/Stop simulator + auto-debug)
-  // ---------------------------------------------------------------------------
+  }, [
+    deviceDefinitions.configuration.deviceBoard,
+    availableBoards,
+    plcStatus,
+    switchPosition,
+    debuggerPort,
+    addLog,
+    warnSwitchInStop,
+  ])
 
   const handleSimulatorControl = useCallback(async (): Promise<void> => {
     try {
@@ -486,18 +632,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // MD5 verification — runs after debug compilation for non-simulator
   // ---------------------------------------------------------------------------
 
-  const handleMd5Verification = async (
-    projectPath: string,
-    boardTarget: string,
-    debugConfig: DebugConnectionConfig,
-    isRuntimeTarget: boolean,
-  ) => {
+  const handleMd5Verification = async (projectPath: string, boardTarget: string, isRuntimeTarget: boolean) => {
     const { consoleActions, runtimeConnection, deviceActions } = useOpenPLCStore.getState()
 
     try {
       // If runtime target + PLC stopped, offer to start
       if (isRuntimeTarget && runtimeConnection.plcStatus === 'STOPPED' && runtimeConnection.jwtToken) {
-        const response = await showDebuggerMessage(
+        const response = await showDeviceDialog(
           'question',
           'PLC Stopped',
           'The PLC is currently stopped. The debugger requires the PLC to be running. Would you like to start the PLC now?',
@@ -510,9 +651,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
 
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting PLC...' })
-        const startResult = await runtime.startPlc()
+        const startResult = (await debuggerPort.setPlcState?.('RUNNING')) ?? {
+          success: false,
+          error: 'This target does not support run/stop control',
+        }
         if (!startResult.success) {
-          await showDebuggerMessage(
+          await showDeviceDialog(
             'error',
             'Start PLC Failed',
             `Could not start the PLC: ${startResult.error || 'Unknown error'}`,
@@ -529,7 +673,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Verifying program MD5...' })
       const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
       if (!md5Result.success || !md5Result.md5) {
-        await showDebuggerMessage('error', 'MD5 Extraction Failed', md5Result.error ?? 'Could not extract MD5', ['OK'])
+        await showDeviceDialog('error', 'MD5 Extraction Failed', md5Result.error ?? 'Could not extract MD5', ['OK'])
         setIsDebuggerProcessing(false)
         return
       }
@@ -537,22 +681,22 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // Connect debug transport before MD5 verification — the web platform
       // needs an active transport (WebRTC or HTTP fallback) to query the device.
       // connect() is idempotent: connectAndStart will reuse this connection.
-      const preConnectResult = await debuggerPort.connect(debugConfig)
+      const preConnectResult = await debuggerPort.connect()
       if (!preConnectResult.success) {
-        await showDebuggerMessage(
+        await showDeviceDialog(
           'error',
-          'Connection Error',
-          `Could not connect to debug target: ${preConnectResult.error ?? 'Unknown error'}`,
+          "Can't Start Debugger",
+          `Can't start the debugger — ${preConnectResult.error ?? 'unknown error'}.`,
           ['OK'],
         )
         setIsDebuggerProcessing(false)
         return
       }
 
-      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5, debugConfig)
+      const verifyResult = await debuggerPort.verifyMd5(md5Result.md5)
       if (!verifyResult.success) {
         await debuggerPort.disconnect()
-        await showDebuggerMessage(
+        await showDeviceDialog(
           'error',
           'Connection Error',
           `Could not verify MD5: ${verifyResult.error ?? 'Unknown error'}`,
@@ -564,17 +708,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (verifyResult.match) {
         consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
-        // Surface the active transport in the store so transport-specific
-        // pollers (useDebugPolling) can size their batches against the
-        // real frame budget rather than guessing from the board target.
-        useOpenPLCStore.getState().workspaceActions.setDebugConnectionType(debugConfig.connectionType)
         // Persist the target's byte order — detected from the MD5
         // response trailer in the runtime — so the swap layer at the
         // read / write boundaries flips on BE targets.  Default to
         // `'le'` when the trailer was missing or malformed (older
         // runtimes); detectTargetEndian already logged a warning.
         useOpenPLCStore.getState().workspaceActions.setDebugTargetEndian(verifyResult.targetEndian ?? 'le')
-        await debugSession.connectAndStart(debugConfig)
+        await debugSession.connectAndStart()
         setIsDebuggerProcessing(false)
       } else {
         // Disconnect before re-upload; the recursive call will reconnect
@@ -585,7 +725,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           level: 'warning',
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
-        const response = await showDebuggerMessage(
+        const response = await showDeviceDialog(
           'warning',
           'Program Mismatch',
           'The program on the target does not match. Upload the current project?',
@@ -615,7 +755,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               message: 'Upload completed. Re-verifying...',
             })
             await new Promise((resolve) => setTimeout(resolve, 2000))
-            void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+            void handleMd5Verification(projectPath, boardTarget, isRuntimeTarget)
           } else {
             consoleActions.addLog({
               id: crypto.randomUUID(),
@@ -640,111 +780,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }
 
   // ---------------------------------------------------------------------------
-  // Debug-spec resolver — surface picker / prompt / error dialogs and
-  // return a connection-ready DebugConnectionConfig, or null if the
-  // user cancelled or no config could be resolved.
-  // ---------------------------------------------------------------------------
-
-  // Renderer-local prompt cache for the DHCP-IP-style flows.  Keyed
-  // by `<packageId>|<deviceId>|<cacheKey>` (or `builtin|<board>|<cacheKey>`
-  // for hals.json entries) so two boards sharing a `cacheKey` value
-  // don't see each other's last-entered IP.  Lives on a ref so it
-  // survives across re-renders without triggering them.
-  const promptCacheRef = useRef<Record<string, Record<string, string>>>({})
-
-  const resolveDebugConfigWithUx = useCallback(
-    async (boardTarget: string, spec: DebugSpec | undefined): Promise<DebugConnectionConfig | null> => {
-      if (!spec) {
-        await showDebuggerMessage(
-          'warning',
-          'Debugging Not Available',
-          "This board hasn't declared a debug spec.  The VPP package (or hals.json entry) must provide a `debug` block.",
-          ['OK'],
-        )
-        return null
-      }
-
-      // Build resolver context from current store state on each call —
-      // captures the user's freshest screen edits without forcing the
-      // user to save first.
-      const buildContext = (): DebugResolverContext => {
-        const store = useOpenPLCStore.getState()
-        const cfg = store.deviceDefinitions.configuration
-        const rtConn = store.runtimeConnection
-        // `vendorScreenData` is already keyed by section ID (e.g.
-        // `modbus_rtu`); resolver state's `screens` shape matches
-        // 1:1 so we pass it straight through.
-        const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
-        const cacheBucketKey = `${cfg.deviceBoard}`
-        const promptCache = promptCacheRef.current[cacheBucketKey] ?? {}
-        return {
-          state: {
-            configuration: {
-              deviceBoard: cfg.deviceBoard,
-              ...(cfg.communicationPort ? { communicationPort: cfg.communicationPort } : {}),
-              ...(cfg.runtimeIpAddress ? { runtimeIpAddress: cfg.runtimeIpAddress } : {}),
-            },
-            screens,
-            runtimeConnection: {
-              ...(rtConn.connectionStatus ? { connectionStatus: rtConn.connectionStatus } : {}),
-              ...(rtConn.jwtToken ? { jwtToken: rtConn.jwtToken } : {}),
-            },
-            promptCache,
-          },
-          capabilities: {
-            runtimeConnected: runtime.isReadyForDebug?.() === true && rtConn.connectionStatus === 'connected',
-            jwtToken: Boolean(rtConn.jwtToken),
-          },
-        }
-      }
-
-      let selectedChannelIndex: number | undefined
-      // Loop: pickers/prompts re-invoke the resolver with extra state
-      // until it returns config or error/unsupported/cancelled.
-      // Capped at 8 iterations as a defensive guard against spec
-      // bugs that could otherwise loop forever.
-      for (let iteration = 0; iteration < 8; iteration += 1) {
-        const outcome = resolveDebugConnection(spec, buildContext(), selectedChannelIndex)
-        if (outcome.kind === 'config') {
-          return outcome.config
-        }
-        if (outcome.kind === 'error') {
-          await showDebuggerMessage('warning', outcome.title, outcome.body, ['OK'])
-          return null
-        }
-        if (outcome.kind === 'unsupported') {
-          // Defensive — buildContext already errored at top-level on
-          // missing spec, so we shouldn't reach here normally.
-          return null
-        }
-        if (outcome.kind === 'pick') {
-          const buttons = outcome.channels.map((c) => c.label)
-          const choice = await showDebuggerMessage('question', outcome.title, outcome.body, buttons)
-          if (choice < 0 || choice >= outcome.channels.length) return null
-          selectedChannelIndex = outcome.channels[choice].index
-          continue
-        }
-        if (outcome.kind === 'prompt') {
-          const bucketKey = boardTarget
-          const bucket = (promptCacheRef.current[bucketKey] ??= {})
-          for (const field of outcome.fields) {
-            const previous = field.cacheKey ? bucket[field.cacheKey] : undefined
-            const result = await showDebuggerIpInput(field.title, field.message, previous ?? field.defaultValue ?? '')
-            if (result === null) return null
-            const trimmed = result.trim()
-            if (!trimmed) return null
-            if (field.cacheKey) bucket[field.cacheKey] = trimmed
-          }
-          selectedChannelIndex = outcome.channelIndex
-          continue
-        }
-      }
-      return null
-    },
-    [runtime],
-  )
-
-  // ---------------------------------------------------------------------------
   // Debugger click — full orchestration for non-simulator targets
   // ---------------------------------------------------------------------------
 
@@ -759,11 +794,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     // Toggle off
     if (workspace.isDebuggerVisible) {
+      debugSessionRidesDeviceRef.current = false
       await debugSession.stopSession()
       return
     }
 
     if (isDebuggerProcessing) return
+
     setIsDebuggerProcessing(true)
 
     try {
@@ -785,8 +822,38 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const projectPath = project.meta.path
       const boardInfo = availableBoards.get(boardTarget)
 
-      const debugConfig = await resolveDebugConfigWithUx(boardTarget, boardInfo?.debug)
-      if (!debugConfig) {
+      // No resolution here at all. Every target's session is established before a
+      // debug session can start — a device by Connect, a runtime by logging in, the
+      // simulator by pressing Start — so the only question left is whether that
+      // session exists. Which medium it uses is the connection manager's to know.
+      const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
+
+      // A session the manager holds (a device or the simulator) also OWNS the debug
+      // channel, so the session ending ends the debug session — see the drop handler
+      // above. A runtime's debug channel is its own and outlives nothing.
+      debugSessionRidesDeviceRef.current = !isRuntime
+
+      // One question for every target: does the manager hold a session? A simulator's
+      // session is its running emulator, a device's is Connect, a runtime's is the
+      // login — all three publish the same status.
+      const sessionStatus = useOpenPLCStore.getState().deviceConnection.status
+      addLog({
+        id: crypto.randomUUID(),
+        level: 'info',
+        message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
+      })
+
+      // Connect first. Starting a debug session must never establish the connection
+      // itself: connecting is the user's explicit action and reports what it found.
+      if (sessionStatus !== 'connected') {
+        await showDeviceDialog(
+          'warning',
+          'Connection Required',
+          isRuntime
+            ? 'Connect to the runtime first. The debugger runs over that connection, so it must be established before a debug session can start.'
+            : 'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
+          ['OK'],
+        )
         setIsDebuggerProcessing(false)
         return
       }
@@ -810,12 +877,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // `isRuntimeTarget` here only gates the "PLC stopped, start it?"
-      // dialog inside MD5 verification.  Tied to whether the active
-      // channel needs the runtime alive — websocket/tcp targets do,
-      // rtu/simulator targets don't.
-      const isRuntimeTarget = debugConfig.connectionType === 'websocket' || debugConfig.connectionType === 'tcp'
-      void handleMd5Verification(projectPath, boardTarget, debugConfig, isRuntimeTarget)
+      // Only gates the "PLC stopped, start it?" dialog inside MD5 verification,
+      // which applies to an OpenPLC runtime (v3/v4) — a fact about the TARGET, not
+      // about which transport happens to carry the session.
+      void handleMd5Verification(projectPath, boardTarget, isRuntime)
     } catch (error: unknown) {
       consoleActions.addLog({
         id: crypto.randomUUID(),
@@ -838,7 +903,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     canEdit,
     executeSave,
     addLog,
-    resolveDebugConfigWithUx,
+    currentBoardInfo,
   ])
 
   // ---------------------------------------------------------------------------
@@ -902,8 +967,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 ? simulatorRunning
                   ? 'Stop Simulator'
                   : 'Start Simulator'
-                : connectionStatus !== 'connected'
-                  ? 'Connect to runtime first'
+                : plcControlBlocked
+                  ? plcControlBlockedReason
                   : plcStatus === 'RUNNING'
                     ? 'Stop PLC'
                     : 'Start PLC'
@@ -911,13 +976,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           >
             <PlayButton
               onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : connectionStatus !== 'connected'}
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : plcControlBlocked}
               className={cn(
                 isSimulatorBoard
                   ? isCompiling || isDebuggerProcessing
                     ? disabledButtonClass
                     : ''
-                  : connectionStatus !== 'connected'
+                  : plcControlBlocked
                     ? disabledButtonClass
                     : '',
               )}

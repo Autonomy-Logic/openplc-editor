@@ -21,6 +21,7 @@ const StructureDataType = () => {
     },
     editorActions: { updateModelStructure },
     projectActions: { updateDatatype, rearrangeStructureVariables },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -65,6 +66,7 @@ const StructureDataType = () => {
     const current = dataTypes.find((dt) => dt.name === editor.meta.name)
     if (!current || current.derivation !== 'structure') return
     updateDatatype(editor.meta.name, { ...current, variable: newVariables })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleCreateStructureVariable = () => {
@@ -178,6 +180,7 @@ const StructureDataType = () => {
       rowId: row ?? parseInt(editorStructure.selectedRow),
       newIndex: (row ?? parseInt(editorStructure.selectedRow)) + index,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
     updateModelStructure({
       selectedRow: parseInt(editorStructure.selectedRow) + index,
     })

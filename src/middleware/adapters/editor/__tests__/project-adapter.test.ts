@@ -97,6 +97,7 @@ const mockRawProjectFiles = {
     ],
     serverFiles: [],
     remoteDeviceFiles: [],
+    dataTypeFiles: [],
   },
 }
 
@@ -367,6 +368,7 @@ describe('createEditorProjectAdapter', () => {
       pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PROGRAM main\nEND_PROGRAM' }],
       serverFiles: [],
       remoteDeviceFiles: [],
+      dataTypeFiles: [],
       deletions: [],
     }
 

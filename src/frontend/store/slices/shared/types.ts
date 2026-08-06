@@ -1,6 +1,8 @@
+import type { RawProjectFile } from '../../../../middleware/shared/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
+  PLCDataType,
   PLCProjectData,
   PLCVariable,
   ProjectMeta,
@@ -58,10 +60,14 @@ export type SharedResponse = {
 
 export type PouHistorySnapshot = {
   variables: PLCVariable[]
+  /** POU body; `null` for data type snapshots (`dataTypes` carries the state instead). */
   body: unknown
   globalVariables?: PLCVariable[]
   ladderFlow?: unknown
   fbdFlow?: unknown
+  /** Set when the history key is a data type instead of a POU. Always a
+   *  single element today — the array shape mirrors `HistorySnapshot.dataTypes`. */
+  dataTypes?: PLCDataType[]
 }
 
 export type PouHistory = {
@@ -116,10 +122,13 @@ export type EtherCATDeviceActions = {
 
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
+  renameHistory: (oldName: string, newName: string) => void
   markSaved: (pouName: string) => void
-  markAllSaved: () => void
-  undo: (pouName: string) => void
-  redo: (pouName: string) => void
+  markAllSaved: (except?: readonly string[]) => void
+  /** @returns `false` when the POU's graphical body is stale, so history was left untouched. */
+  undo: (pouName: string) => boolean
+  /** @returns `false` when the POU's graphical body is stale, so history was left untouched. */
+  redo: (pouName: string) => boolean
 }
 
 export type OpenProjectResponseData = {
@@ -132,6 +141,9 @@ export type OpenProjectResponseData = {
   devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
   /** Warnings from parsing (e.g. dropped files that failed validation). */
   warnings?: string[]
+  /** `datatypes/*.dt` files that failed to parse on load, preserved
+   *  raw so the save flow echoes them back verbatim. */
+  unparsedDataTypeFiles?: RawProjectFile[]
   /**
    * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
    * `false` puts the workspace in read-only mode; `true` / `undefined`

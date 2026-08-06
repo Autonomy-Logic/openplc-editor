@@ -22,20 +22,16 @@ describe('toCalloutPath', () => {
 })
 
 describe('mergeSerialPortList', () => {
-  it('labels a port with the arduino-cli board name when identified', () => {
+  it('reports both descriptors when both scans knew one', () => {
+    // The merge no longer picks a winner: it reports what each scan found and
+    // lets `serialPortDisplay` apply the precedence. That split is why the
+    // renderer can no longer mistake one shape for another.
     const boards = boardMap([['/dev/cu.usbmodem1', 'Arduino Uno']])
     const manufacturers = boardMap([['/dev/cu.usbmodem1', 'Arduino LLC']])
 
     expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-      { name: '/dev/cu.usbmodem1 (Arduino Uno)', address: '/dev/cu.usbmodem1' },
+      { address: '/dev/cu.usbmodem1', boardName: 'Arduino Uno', manufacturer: 'Arduino LLC' },
     ])
-  })
-
-  it('prefers the board name over the manufacturer when both are present', () => {
-    const boards = boardMap([['COM1', 'Opta']])
-    const manufacturers = boardMap([['COM1', 'Arduino']])
-
-    expect(mergeSerialPortList(boards, manufacturers)[0].name).toBe('COM1 (Opta)')
   })
 
   it('falls back to the manufacturer when the board is detected but not identified', () => {
@@ -43,7 +39,7 @@ describe('mergeSerialPortList', () => {
     const manufacturers = boardMap([['COM6', 'com0com - serial port emulator']])
 
     expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-      { name: 'COM6 (com0com - serial port emulator)', address: 'COM6' },
+      { address: 'COM6', manufacturer: 'com0com - serial port emulator' },
     ])
   })
 
@@ -51,14 +47,14 @@ describe('mergeSerialPortList', () => {
     const boards = boardMap([])
     const manufacturers = boardMap([['/dev/ttyUSB0', undefined]])
 
-    expect(mergeSerialPortList(boards, manufacturers)).toEqual([{ name: '/dev/ttyUSB0', address: '/dev/ttyUSB0' }])
+    expect(mergeSerialPortList(boards, manufacturers)).toEqual([{ address: '/dev/ttyUSB0' }])
   })
 
   it('treats an empty-string descriptor as absent', () => {
     const boards = boardMap([['COM1', '']])
     const manufacturers = boardMap([['COM1', '']])
 
-    expect(mergeSerialPortList(boards, manufacturers)).toEqual([{ name: 'COM1', address: 'COM1' }])
+    expect(mergeSerialPortList(boards, manufacturers)).toEqual([{ address: 'COM1' }])
   })
 
   it('unions both scans, keeps serialport ordering, and dedupes by path', () => {
@@ -73,9 +69,9 @@ describe('mergeSerialPortList', () => {
     ])
 
     expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-      { name: 'COM3 (FTDI)', address: 'COM3' },
-      { name: 'COM4 (Arduino Mega)', address: 'COM4' },
-      { name: 'COM9 (Arduino Nano)', address: 'COM9' },
+      { address: 'COM3', manufacturer: 'FTDI' },
+      { address: 'COM4', boardName: 'Arduino Mega' },
+      { address: 'COM9', boardName: 'Arduino Nano' },
     ])
   })
 
@@ -89,7 +85,7 @@ describe('mergeSerialPortList', () => {
       const boards = boardMap([['/dev/cu.usbmodem11301', 'Opta']])
 
       expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
+        { address: '/dev/cu.usbmodem11301', boardName: 'Opta', manufacturer: 'Arduino' },
       ])
     })
 
@@ -97,7 +93,7 @@ describe('mergeSerialPortList', () => {
       const manufacturers = boardMap([['/dev/tty.usbserial-99', 'FTDI']])
 
       expect(mergeSerialPortList(boardMap([]), manufacturers)).toEqual([
-        { name: '/dev/cu.usbserial-99 (FTDI)', address: '/dev/cu.usbserial-99' },
+        { address: '/dev/cu.usbserial-99', manufacturer: 'FTDI' },
       ])
     })
 
@@ -117,10 +113,10 @@ describe('mergeSerialPortList', () => {
       ])
 
       expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-        { name: '/dev/cu.debug-console', address: '/dev/cu.debug-console' },
-        { name: '/dev/cu.Bluetooth-Incoming-Port', address: '/dev/cu.Bluetooth-Incoming-Port' },
-        { name: '/dev/cu.usbserial-1140 (Prolific Technology Inc.)', address: '/dev/cu.usbserial-1140' },
-        { name: '/dev/cu.usbmodem11301 (Opta)', address: '/dev/cu.usbmodem11301' },
+        { address: '/dev/cu.debug-console' },
+        { address: '/dev/cu.Bluetooth-Incoming-Port' },
+        { address: '/dev/cu.usbserial-1140', manufacturer: 'Prolific Technology Inc.' },
+        { address: '/dev/cu.usbmodem11301', boardName: 'Opta', manufacturer: 'Arduino' },
       ])
     })
 
@@ -132,8 +128,8 @@ describe('mergeSerialPortList', () => {
       const boards = boardMap([['/dev/ttyACM0', 'Arduino Uno']])
 
       expect(mergeSerialPortList(boards, manufacturers)).toEqual([
-        { name: '/dev/ttyUSB0 (FTDI)', address: '/dev/ttyUSB0' },
-        { name: '/dev/ttyACM0 (Arduino Uno)', address: '/dev/ttyACM0' },
+        { address: '/dev/ttyUSB0', manufacturer: 'FTDI' },
+        { address: '/dev/ttyACM0', boardName: 'Arduino Uno' },
       ])
     })
   })

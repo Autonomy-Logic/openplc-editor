@@ -34,31 +34,26 @@ function toCalloutMap(byPath: Map<string, string | undefined>): Map<string, stri
 }
 
 /**
- * Merge the two independent serial-port scans into the `{ name, address }`
- * shape the renderer's communication-port dropdown expects.
+ * Merge the two independent serial-port scans into one entry per device.
  *
- * The device path (`address`) is ALWAYS the primary, guaranteed-unique
- * label — this mirrors the Arduino IDE, which keys every entry on the
- * port path (`COM3`, `/dev/ttyACM0`, `/dev/cu.usbmodem…`) and never
- * collapses ports to a shared vendor string. A descriptor is appended
- * in parentheses when available, in order of usefulness:
- *
- *  1. the arduino-cli-identified board name (from the connected core's
- *     `boards.txt` VID/PID — e.g. `COM3 (Arduino Uno)`), else
- *  2. the OS manufacturer/vendor string reported by `serialport`
- *     (e.g. `COM6 (com0com - serial port emulator)`), else
- *  3. nothing — just the bare path.
+ * Reports FACTS, not a display string: the device path plus whichever
+ * descriptors each scan knew. How that reads in the picker — the path leading,
+ * the descriptor in parentheses, arduino-cli's board name preferred over the
+ * OS vendor string — is `serialPortDisplay`'s decision, and lives there so a
+ * single code path serves every platform. Composing here as well is what
+ * previously let the board name be dropped: the renderer could not tell a bare
+ * manufacturer from an already-composed label.
  *
  * Both scans are first canonicalized to the macOS call-out node
- * (`toCalloutPath`), so a device is keyed identically regardless of which
- * scan reported it; the merge is then a plain union deduped by path.
- * `serialport` provides the reliable, instant set of ports and is folded
- * in first so its ordering is preserved; arduino-cli only enriches those
- * entries and may contribute additional ports it discovered on its own.
+ * (`toCalloutPath`), so a device is keyed identically regardless of which scan
+ * reported it; the merge is then a plain union deduped by path. `serialport`
+ * provides the reliable, instant set of ports and is folded in first so its
+ * ordering is preserved; arduino-cli only enriches those entries and may
+ * contribute additional ports it discovered on its own.
  *
- * @param boardNamesByPath    path → arduino-cli board name (`undefined` when
+ * @param boardNamesByPath    path -> arduino-cli board name (`undefined` when
  *                            the port was detected but no board matched)
- * @param manufacturersByPath path → `serialport` manufacturer/vendor string
+ * @param manufacturersByPath path -> `serialport` manufacturer/vendor string
  */
 export function mergeSerialPortList(
   boardNamesByPath: Map<string, string | undefined>,
@@ -72,11 +67,14 @@ export function mergeSerialPortList(
   const addresses = new Set<string>([...manufacturers.keys(), ...boardNames.keys()])
 
   return [...addresses].map((address) => {
-    // Board name (more specific) wins; `||` so an empty descriptor falls through.
-    const descriptor = boardNames.get(address) || manufacturers.get(address)
+    // Empty strings are normalised away so the renderer only has to check for
+    // absence, not for blank-but-present descriptors.
+    const boardName = boardNames.get(address)?.trim() || undefined
+    const manufacturer = manufacturers.get(address)?.trim() || undefined
     return {
-      name: descriptor ? `${address} (${descriptor})` : address,
       address,
+      ...(boardName ? { boardName } : {}),
+      ...(manufacturer ? { manufacturer } : {}),
     }
   })
 }

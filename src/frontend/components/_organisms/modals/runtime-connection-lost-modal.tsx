@@ -6,7 +6,11 @@ const RuntimeConnectionLostModal = () => {
   const { modals, modalActions } = useOpenPLCStore()
 
   const isOpen = modals['runtime-connection-lost']?.open || false
-  const modalData = modals['runtime-connection-lost']?.data as { label?: string } | undefined
+  // `body` lets a caller state WHICH link died and what to do about it, while the
+  // default keeps the Runtime v4 copy this modal was written for. The serial link
+  // (baremetal Connect) reuses the same dialog rather than cloning it — the shape
+  // of the news is identical: a held connection is gone after retries failed.
+  const modalData = modals['runtime-connection-lost']?.data as { label?: string; body?: string } | undefined
   const label = modalData?.label ?? 'Unknown'
 
   const handleClose = () => {
@@ -32,8 +36,12 @@ const RuntimeConnectionLostModal = () => {
               Connection to runtime lost
             </p>
             <p className='mt-2 w-full text-center text-sm text-gray-500 dark:text-neutral-300'>
-              The connection to <strong>{label}</strong> has been lost after multiple failed attempts. Please check that
-              the runtime is running and accessible.
+              {modalData?.body ?? (
+                <>
+                  The connection to <strong>{label}</strong> has been lost after multiple failed attempts. Please check
+                  that the runtime is running and accessible.
+                </>
+              )}
             </p>
           </div>
           <div className='flex w-[340px] flex-col gap-2 text-sm'>
