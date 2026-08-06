@@ -112,6 +112,7 @@ import {
   buildModuleConfigEntries,
   generateVendorPluginConfig,
 } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import type { MessagePortMain } from 'electron/main'
@@ -2634,6 +2635,11 @@ class CompilerModule {
         cleanBuild: cleanBuild ?? false,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
+        // VPP runtime floor (DOPE-448). Constructed per call rather than
+        // held on the class because the registry is read off disk and may
+        // have changed since the last compile (a package installed or
+        // removed mid-session).
+        getVppRuntimeFloor: (board: string) => new PackageManagerModule().getRuntimeFloorForBoard(board),
         pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
         pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
         startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
@@ -2716,6 +2722,12 @@ class CompilerModule {
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
         vendorScreenData: effectiveVendorScreenData,
+        // Compared against the `minEditorVersion` a runtime publishes at
+        // `/api/capabilities` (DOPE-448). Injected because the pipeline
+        // lives in `backend/shared/`, which the layer rules keep out of
+        // `frontend/data/` — which build is running is a fact about the
+        // host app, not about the compile.
+        editorVersion: APP_VERSION,
       },
       platformPort,
       (event) => {
