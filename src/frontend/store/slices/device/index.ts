@@ -3,6 +3,8 @@ export type {
   ConnectionStatus,
   DeviceActions,
   DeviceAvailableOptions,
+  DeviceConnection,
+  DeviceConnectionStatus,
   DevicePinMapping,
   DeviceSlice,
   DeviceState,

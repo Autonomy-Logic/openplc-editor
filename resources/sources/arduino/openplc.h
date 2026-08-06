@@ -74,6 +74,20 @@ extern IEC_ULINT *lint_memory[MAX_MEMORY_LWORD];
 
 #endif
 
+/*********************/
+/*  Run/stop state   */
+/*********************/
+
+// Mode-switch positions reported by hardwareStateSwitch().
+#define PLC_SWITCH_STOP     0
+#define PLC_SWITCH_RUN      1
+
+// Externally visible runtime states, as reported by runtime_get_plc_state()
+// and over Modbus FC 0x49.
+#define PLC_STATE_STOPPED   0
+#define PLC_STATE_RUNNING   1
+#define PLC_STATE_ERROR     2
+
 //Hardware Layer (implemented in arduino.cpp HAL file, compiled as extern "C")
 #ifdef __cplusplus
 extern "C" {
@@ -81,6 +95,33 @@ extern "C" {
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
+
+/* ---- Optional: physical mode switch ------------------------------------
+ * Weak default in arduino_runtime_glue.cpp returns PLC_SWITCH_RUN, so a HAL
+ * that does not define this behaves exactly as before this interface
+ * existed: the runtime boots into RUNNING and the editor has full software
+ * control.
+ *
+ * Override with a strong extern "C" definition in the HAL .cpp -- the same
+ * mechanism the P1AM HAL already uses for strucpp::iec_runtime_fault.
+ *
+ * Called once per scan cycle, in every state, from the scan path. MUST
+ * return quickly and MUST NOT block. HOW it does so is the HAL's decision:
+ * a GPIO is cheap enough to read synchronously, while a switch behind a
+ * slow bus (I2C expander, fieldbus backplane) should be sampled elsewhere
+ * and returned here from a cached value. The runtime never polls on the
+ * HAL's behalf and never imposes a sampling period.
+ * ---------------------------------------------------------------------- */
+uint8_t hardwareStateSwitch(void);
+
+/* ---- Optional: state indication ----------------------------------------
+ * There is no indication callback. The runtime holds the state; a HAL with
+ * a status LED reads it inside updateOutputBuffers() (which the runtime
+ * calls every cycle in every state, so the LED is correct from the first
+ * cycle even on a board that boots into STOP) and drives its own pin. A
+ * HAL with no LED reads nothing and the runtime never knows the difference.
+ * ---------------------------------------------------------------------- */
+uint8_t runtime_get_plc_state(void);
 #ifdef __cplusplus
 }
 #endif

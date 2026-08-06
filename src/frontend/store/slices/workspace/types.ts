@@ -1,6 +1,5 @@
 import type {
   Architecture,
-  DebugConnectionType,
   DebugTreeNode,
   FbInstanceInfo,
   Platform,
@@ -97,10 +96,6 @@ export type WorkspaceState = {
     debugGraphList: string[]
     debugDataStale: boolean
     debugMd5Mismatch: { runtimeMd5: string; localMd5: string } | null
-    /** Active transport for the running debug session — drives the
-     *  per-poll batch size and any other transport-specific behaviour.
-     *  Null when no session is active. */
-    debugConnectionType: DebugConnectionType | null
     /** Target's native byte order for multi-byte variable values on
      *  the wire.  Detected from the 0xDEAD sentinel in the MD5
      *  response: LE target writes the trailer as `[0xAD, 0xDE]`, BE
@@ -185,7 +180,6 @@ export type WorkspaceActions = {
   setDebugGraphList: (list: string[]) => void
   setDebugDataStale: (stale: boolean) => void
   setDebugMd5Mismatch: (mismatch: { runtimeMd5: string; localMd5: string } | null) => void
-  setDebugConnectionType: (connectionType: DebugConnectionType | null) => void
   setDebugTargetEndian: (endian: 'le' | 'be') => void
   clearDebugState: () => void
   clearFbDebugContext: () => void

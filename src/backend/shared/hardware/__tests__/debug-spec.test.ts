@@ -65,7 +65,10 @@ describe('resolveDebugConnection', () => {
   })
 
   describe('channel selection', () => {
-    it('errors with `noneEnabled` message when no channel matches', () => {
+    it('falls back to the serial (rtu) channel when no channel matches (always-on debugger)', () => {
+      // The always-on debugger keeps serial debug compiled into every
+      // baremetal firmware even with Modbus disabled, so an rtu channel is
+      // always usable as a fallback instead of surfacing "Modbus Required".
       const spec: DebugSpec = {
         channels: [
           { label: 'RTU', channel: 'rtu', enabledWhen: { $ref: 'screens.modbus_rtu.enabled' }, params: {} },
@@ -74,14 +77,30 @@ describe('resolveDebugConnection', () => {
         messages: { noneEnabled: { title: 'Modbus Required', body: 'Enable RTU or TCP.' } },
       }
       const result = resolveDebugConnection(spec, makeContext())
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        expect(result.config.connectionType).toBe('rtu')
+        expect(result.channelLabel).toBe('RTU')
+      }
+    })
+
+    it('errors with `noneEnabled` message when nothing matches and there is no serial fallback', () => {
+      // Only a non-serial channel exists, so there is no always-on serial
+      // fallback — the board genuinely has no usable debug channel.
+      const spec: DebugSpec = {
+        channels: [{ label: 'TCP', channel: 'tcp', enabledWhen: { $ref: 'screens.modbus_tcp.enabled' }, params: {} }],
+        messages: { noneEnabled: { title: 'Modbus Required', body: 'Enable RTU or TCP.' } },
+      }
+      const result = resolveDebugConnection(spec, makeContext())
       expect(result).toEqual({ kind: 'error', title: 'Modbus Required', body: 'Enable RTU or TCP.' })
     })
 
-    it('falls back to generic copy when `noneEnabled` message is absent', () => {
-      // `messages.noneEnabled` is optional — boards may omit it and
-      // expect the resolver to provide a sensible default.
+    it('falls back to generic copy when `noneEnabled` message is absent and no serial fallback', () => {
+      // `messages.noneEnabled` is optional — boards may omit it and expect the
+      // resolver to provide a sensible default. Uses a tcp-only spec so the
+      // serial fallback does not apply.
       const spec: DebugSpec = {
-        channels: [{ label: 'RTU', channel: 'rtu', enabledWhen: { $ref: 'screens.modbus_rtu.enabled' }, params: {} }],
+        channels: [{ label: 'TCP', channel: 'tcp', enabledWhen: { $ref: 'screens.modbus_tcp.enabled' }, params: {} }],
       }
       const result = resolveDebugConnection(spec, makeContext())
       expect(result).toEqual({
@@ -89,6 +108,25 @@ describe('resolveDebugConnection', () => {
         title: 'No Debug Channel',
         body: 'No debug channel is enabled for this board.',
       })
+    })
+
+    it('does NOT fall back to serial when a non-serial channel is enabled (TCP-only Modbus)', () => {
+      // TCP-only Modbus build: the tcp channel matches, so the resolver uses
+      // it and never offers serial (which the firmware does not expose here).
+      const spec: DebugSpec = {
+        channels: [
+          { label: 'RTU', channel: 'rtu', enabledWhen: { $ref: 'screens.modbus_rtu.enabled' }, params: {} },
+          { label: 'TCP', channel: 'tcp', enabledWhen: { $ref: 'screens.modbus_tcp.enabled' }, params: {} },
+        ],
+      }
+      const result = resolveDebugConnection(
+        spec,
+        makeContext({ state: { screens: { modbus_tcp: { enabled: true } } } }),
+      )
+      expect(result.kind).toBe('config')
+      if (result.kind === 'config') {
+        expect(result.config.connectionType).toBe('tcp')
+      }
     })
 
     it('returns `pick` when multiple channels match', () => {

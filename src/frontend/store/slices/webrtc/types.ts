@@ -2,8 +2,6 @@ import type { WebRTCConnectionStatus } from '../../../../middleware/shared/ports
 
 export type { WebRTCConnectionStatus }
 
-export type DebugTransport = 'http' | 'webrtc'
-
 // ---------------------------------------------------------------------------
 // WebRTC session state
 // ---------------------------------------------------------------------------
@@ -16,7 +14,16 @@ export type WebRTCSession = {
   status: WebRTCConnectionStatus
   error: string | null
   reconnectAttempt: number
-  debugTransport: DebugTransport
+  /**
+   * Is the WebRTC DEBUG data channel open?
+   *
+   * A fact about this WebRTC session, deliberately not a medium name: which
+   * medium the debug poller then rides is derived from this once, by the web
+   * connection manager, and published as `deviceConnection.debugTransport`.
+   * Naming a medium here as well gave two fields the same vocabulary and let
+   * them disagree.
+   */
+  debugChannelOpen: boolean
 }
 
 export type WebRTCState = {
@@ -35,7 +42,7 @@ export type WebRTCActions = {
   setStatus: (status: WebRTCConnectionStatus) => void
   setError: (error: string | null) => void
   setReconnectAttempt: (attempt: number) => void
-  setDebugTransport: (transport: DebugTransport) => void
+  setDebugChannelOpen: (open: boolean) => void
   startSession: (params: { deviceId: string; deviceName: string; agentId: string }) => void
   endSession: () => void
   reset: () => void
