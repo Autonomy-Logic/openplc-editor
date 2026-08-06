@@ -8,6 +8,7 @@ import { createEditorSlice } from '../slices/editor/slice'
 import { createFBDFlowSlice } from '../slices/fbd/slice'
 import { createFileSlice } from '../slices/file/slice'
 import { createHistorySlice } from '../slices/history/slice'
+import type { LadderFlowType } from '../slices/ladder'
 import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
 import { createModalSlice } from '../slices/modal/slice'
@@ -468,6 +469,24 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.dataTypes[0].derivation).toBe('structure')
       })
 
+      it('rejects a name owned by an unreadable .dt file', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.create({ name: 'Ghost', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('rejects a name differing only by case (one file per name on case-folding disks)', () => {
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        const result = store.getState().datatypeActions.create({ name: 'motor', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type already exists')
+        expect(store.getState().project.data.dataTypes).toHaveLength(1)
+      })
+
       it('creates an enumerated data type', () => {
         const result = store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
         expect(result.ok).toBe(true)
@@ -553,6 +572,41 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('NewDT')
       })
 
+      it('queues the old datatypes/<name>.dt path for deletion', () => {
+        store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
+      })
+
+      it('rejects a name owned by an unreadable .dt file (case-insensitive)', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.rename('OldDT', 'ghost')
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
+      })
+
+      it('rejects a rename that collides with another type only by case', () => {
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'array' })
+        const result = store.getState().datatypeActions.rename('OldDT', 'motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toEqual(['OldDT', 'Motor'])
+      })
+
+      it('rejects a case-only rename of the type itself', () => {
+        // Writing olddt.dt then deleting OldDT.dt is the same file
+        // where the filesystem folds case — the type would vanish.
+        const result = store.getState().datatypeActions.rename('OldDT', 'olddt')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+      })
+
+      it('allows a no-op rename to the identical name', () => {
+        const result = store.getState().datatypeActions.rename('OldDT', 'OldDT')
+        expect(result.ok).toBe(true)
+      })
+
       it('returns error when new name already exists', () => {
         store.getState().datatypeActions.create({ name: 'Existing', derivation: 'array' })
         const result = store.getState().datatypeActions.rename('OldDT', 'Existing')
@@ -604,6 +658,21 @@ describe('createSharedSlice', () => {
         const result = store.getState().datatypeActions.duplicate('NonExistent', 'Copy')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type not found')
+      })
+
+      it('rejects a duplicate name differing only by case', () => {
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'sourcedt')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('Data type name already exists')
+      })
+
+      it('rejects a duplicate name owned by an unreadable .dt file', () => {
+        store
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
+        const result = store.getState().datatypeActions.duplicate('SourceDT', 'Ghost')
+        expect(result.ok).toBe(false)
+        expect(result.message).toMatch(/could not be read/)
       })
 
       it('returns error when new name already exists', () => {
@@ -1079,6 +1148,23 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // renameHistory
+    // -----------------------------------------------------------------------
+    describe('renameHistory', () => {
+      it('moves the undo/redo bucket to the new key', () => {
+        store.getState().snapshotActions.pushToHistory('Old', snapshot1)
+        store.getState().snapshotActions.renameHistory('Old', 'New')
+        expect(store.getState().undoRedo['Old']).toBeUndefined()
+        expect(store.getState().undoRedo['New'].past).toEqual([snapshot1])
+      })
+
+      it('does nothing when the old key has no history', () => {
+        store.getState().snapshotActions.renameHistory('Missing', 'New')
+        expect(store.getState().undoRedo['New']).toBeUndefined()
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // undo
     // -----------------------------------------------------------------------
     describe('undo', () => {
@@ -1102,6 +1188,34 @@ describe('createSharedSlice', () => {
         // Another undo should be a no-op
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].past).toHaveLength(0)
+      })
+
+      it('does nothing when the POU flow fails its write-back', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        store.getState().pouActions.create({ type: 'program', name: 'Graphical', language: 'ld' })
+        store.getState().snapshotActions.pushToHistory('Graphical', snapshot1)
+        // `rungs` entries without `defaultBounds` fail the ladder schema, so the
+        // body stays stale and a snapshot here would pair it with a fresh flow.
+        store.getState().ladderFlowActions.addLadderFlow({
+          name: 'Graphical',
+          updated: true,
+          rungs: [{ id: 'r1', comment: '', nodes: [], edges: [] }],
+        } as unknown as LadderFlowType)
+        store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Graphical', updated: true })
+
+        // `false` is what drives the "History unavailable" toast in the UI.
+        expect(store.getState().snapshotActions.undo('Graphical')).toBe(false)
+        expect(store.getState().snapshotActions.redo('Graphical')).toBe(false)
+
+        expect(store.getState().undoRedo['Graphical'].past).toHaveLength(1)
+        expect(store.getState().undoRedo['Graphical'].future).toHaveLength(0)
+        warn.mockRestore()
+      })
+
+      it('reports success when there is simply nothing to undo', () => {
+        expect(store.getState().snapshotActions.undo('Main')).toBe(true)
+        store.getState().snapshotActions.pushToHistory('Main', snapshot1)
+        expect(store.getState().snapshotActions.undo('Main')).toBe(true)
       })
 
       it('undo falls back to empty array when POU has no interface', () => {
@@ -1432,6 +1546,147 @@ describe('createSharedSlice', () => {
         // Redo: restore v2-state
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v2')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // undo / redo for data types
+    // -----------------------------------------------------------------------
+    describe('undo/redo for data types', () => {
+      const edited = {
+        name: 'Colors',
+        derivation: 'enumerated' as const,
+        values: [{ description: 'RED' }],
+        initialValue: '',
+      }
+
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
+      })
+
+      const getColorsDataType = () => {
+        const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')
+        if (!dataType) throw new Error('Colors data type missing')
+        return dataType
+      }
+
+      it('undo restores the snapshot data type and moves the current entry to future', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+
+        expect(store.getState().snapshotActions.undo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(initial)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        expect(history.future[0].dataTypes).toEqual([edited])
+      })
+
+      it('redo reapplies the undone data type edit', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().snapshotActions.redo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(1)
+        expect(history.future).toHaveLength(0)
+        expect(history.past[0].dataTypes).toEqual([initial])
+      })
+
+      it('undo marks the data type file saved when history returns to the saved depth', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.markSaved('Colors')
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: false })
+
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(true)
+      })
+
+      it('undo marks the data type file unsaved when history diverges from the saved depth', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [edited] })
+        store.getState().snapshotActions.markSaved('Colors')
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(false)
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('redo marks the data type file unsaved when history diverges from the saved depth', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.undo('Colors')
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().snapshotActions.redo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(false)
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('undo leaves the data type untouched when the snapshot has no dataTypes entry', () => {
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null })
+
+        expect(store.getState().snapshotActions.undo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(0)
+        expect(history.future).toHaveLength(1)
+        expect(history.future[0].dataTypes).toEqual([edited])
+      })
+
+      it('rename keeps the history and undo restores content under the new name', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+
+        expect(store.getState().datatypeActions.rename('Colors', 'Palette').ok).toBe(true)
+        expect(store.getState().undoRedo['Colors']).toBeUndefined()
+        expect(store.getState().undoRedo['Palette'].past).toHaveLength(1)
+
+        store.getState().snapshotActions.undo('Palette')
+
+        // Content reverts, but the name stays pinned to the current key so
+        // tabs/files/editors (already rekeyed by the rename) don't desync.
+        const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Palette')
+        expect(dataType).toEqual({ ...initial, name: 'Palette' })
+      })
+
+      it('redo leaves the data type untouched when the future snapshot has no dataTypes entry', () => {
+        store.getState().projectActions.updateDatatype('Colors', edited)
+        store.setState({
+          undoRedo: {
+            Colors: {
+              past: [],
+              future: [{ variables: [], body: null }],
+              savedAtDepth: null,
+            },
+          },
+        })
+
+        expect(store.getState().snapshotActions.redo('Colors')).toBe(true)
+
+        expect(store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')).toEqual(edited)
+        const history = store.getState().undoRedo['Colors']
+        expect(history.past).toHaveLength(1)
+        expect(history.past[0].dataTypes).toEqual([edited])
       })
     })
   })
@@ -2157,6 +2412,16 @@ describe('createSharedSlice', () => {
 
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
         expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(2)
+      })
+
+      it('skips the excluded POUs', () => {
+        store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
+        store.getState().snapshotActions.pushToHistory('P2', { variables: [], body: 'v1' })
+
+        store.getState().snapshotActions.markAllSaved(['P2'])
+
+        expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
+        expect(store.getState().undoRedo['P2'].savedAtDepth).toBe(0)
       })
     })
 

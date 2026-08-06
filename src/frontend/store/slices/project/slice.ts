@@ -517,6 +517,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
   },
   pendingDeletions: [],
+  unparsedDataTypeFiles: [],
   iecAliasMemory: {},
 
   projectActions: {
@@ -552,6 +553,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             },
           }
           slice.pendingDeletions = []
+          slice.unparsedDataTypeFiles = []
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
@@ -1063,6 +1065,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     deleteDatatype: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
+          // Harmless while the file doesn't exist yet (flag off): the
+          // editor's deletion pass is existence-checked, the web's
+          // relies on delete-by-omission.
+          slice.pendingDeletions.push(`datatypes/${name}.dt`)
           slice.project.data.dataTypes = slice.project.data.dataTypes.filter((d) => d.name !== name)
         }),
       )
@@ -1075,6 +1081,18 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (data) {
             slice.project.data.dataTypes[idx] = data
           }
+        }),
+      )
+    },
+    updateDatatypeName: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const dt = slice.project.data.dataTypes.find((d) => d.name === oldName)
+          if (!dt) return
+          // Queue the OLD path — the next save serializes the type
+          // under its new name (model: updatePouName).
+          slice.pendingDeletions.push(`datatypes/${oldName}.dt`)
+          dt.name = newName
         }),
       )
     },
@@ -1104,6 +1122,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         produce((slice: ProjectSlice) => {
           const idx = slice.project.data.dataTypes.findIndex((d) => d.name === name)
           if (idx !== -1) slice.project.data.dataTypes[idx] = data
+        }),
+      )
+    },
+    setUnparsedDataTypeFiles: (files) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.unparsedDataTypeFiles = files
         }),
       )
     },

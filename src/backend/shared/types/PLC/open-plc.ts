@@ -85,6 +85,9 @@ const PLCStructureVariableSchema = z.object({
       }),
     })
     .optional(),
+  // Preserved through load — the .dt serializer emits it as a
+  // trailing (* … *) comment; omitting it here strips it on open.
+  documentation: z.string().optional(),
 })
 const PLCStructureDatatypeSchema = z.object({
   name: z.string(),
@@ -803,7 +806,10 @@ const PLCProjectLibraryRefSchema = z.object({
 type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
 
 const PLCProjectDataSchema = z.object({
-  dataTypes: z.array(PLCDataTypeSchema),
+  // Defaulted: once data types live in datatypes/<Name>.dt files the
+  // field disappears from newly-written project.json (DOPE-385);
+  // legacy projects still carry it and keep validating.
+  dataTypes: z.array(PLCDataTypeSchema).default([]),
   pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),

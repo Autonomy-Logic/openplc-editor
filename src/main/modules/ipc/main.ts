@@ -197,6 +197,7 @@ class MainProcessBridge implements MainIpcModule {
   // ===================== RUNTIME API HANDLERS =====================
   private readonly RUNTIME_API_PORT = 8443
   private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
+  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
 
   /**
    * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
@@ -207,6 +208,7 @@ class MainProcessBridge implements MainIpcModule {
     url: string
     body?: string
     headers?: Record<string, string>
+    timeoutMs?: number
   }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
     return new Promise((resolve, reject) => {
       const parsedUrl = new URL(options.url)
@@ -236,7 +238,7 @@ class MainProcessBridge implements MainIpcModule {
           resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
         })
       })
-      req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+      req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
         req.destroy()
         reject(new Error('Connection timeout'))
       })
@@ -361,6 +363,7 @@ class MainProcessBridge implements MainIpcModule {
         method: 'POST',
         url: this.runtimeUrl(ipAddress, '/api/login'),
         body: JSON.stringify({ username, password }),
+        timeoutMs: this.RUNTIME_LOGIN_TIMEOUT_MS,
       })
       if (res.statusCode === 200) {
         try {

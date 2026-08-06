@@ -173,11 +173,13 @@ describe('flow write-back scheduler', () => {
       } as unknown as LadderFlowType)
       store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Main', updated: true })
 
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       scheduleFlowWriteBack(getState, 'Main', 'ld')
       vi.advanceTimersByTime(FLOW_WRITEBACK_DEBOUNCE_MS)
 
       expect(ladderBody('Main')?.rungs).toHaveLength(0)
       expect(store.getState().ladderFlows.find((f) => f.name === 'Main')?.updated).toBe(true)
+      warn.mockRestore()
     })
   })
 
@@ -210,13 +212,67 @@ describe('flow write-back scheduler', () => {
       expect(ladderBody('B')?.rungs).toHaveLength(1)
     })
 
-    it('is a no-op when nothing is pending', () => {
+    it('leaves the other language untouched when scoped to one POU', () => {
       makeDirtyLadderPou('Main')
+      store.getState().pouActions.create({ type: 'program', name: 'FbdMain', language: 'fbd' })
+      store.getState().fbdFlowActions.startFBDRung({ editorName: 'FbdMain' })
+      store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'FbdMain', updated: true })
+
+      expect(flushFlowWriteBacks(getState, 'Main')).toEqual([])
+      expect(store.getState().fbdFlows.find((f) => f.name === 'FbdMain')?.updated).toBe(true)
+    })
+
+    it('writes back an updated flow that has no pending timer', () => {
+      makeDirtyLadderPou('Main')
+
+      expect(flushFlowWriteBacks(getState)).toEqual([])
+      expect(ladderBody('Main')?.rungs).toHaveLength(1)
+      expect(store.getState().ladderFlows.find((f) => f.name === 'Main')?.updated).toBe(false)
+    })
+
+    it('is a no-op when no flow is marked updated', () => {
+      makeDirtyLadderPou('Main')
+      flushFlowWriteBacks(getState)
       const bodyBefore = ladderBody('Main')
 
-      flushFlowWriteBacks(getState)
-
+      expect(flushFlowWriteBacks(getState)).toEqual([])
       expect(ladderBody('Main')).toBe(bodyBefore)
+    })
+
+    it('reports the POU and leaves the body stale when the flow fails validation', () => {
+      makeDirtyLadderPou('Main')
+      flushFlowWriteBacks(getState)
+      const bodyBefore = ladderBody('Main')
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const flow = store.getState().ladderFlows.find((f) => f.name === 'Main')
+      store.getState().ladderFlowActions.setRungs({
+        editorName: 'Main',
+        // `defaultBounds` is required by the schema — dropping it makes the flow invalid.
+        rungs: (flow?.rungs ?? []).map(({ defaultBounds: _defaultBounds, ...rung }) => rung) as never,
+      })
+
+      expect(flushFlowWriteBacks(getState)).toEqual(['Main'])
+      expect(ladderBody('Main')).toBe(bodyBefore)
+      expect(store.getState().ladderFlows.find((f) => f.name === 'Main')?.updated).toBe(true)
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
+    })
+
+    it('reports a failing FBD flow', () => {
+      store.getState().pouActions.create({ type: 'program', name: 'FbdMain', language: 'fbd' })
+      store.getState().fbdFlowActions.startFBDRung({ editorName: 'FbdMain' })
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      // `nodes` is required by the schema — dropping it makes the flow invalid.
+      store.getState().fbdFlowActions.setRung({
+        editorName: 'FbdMain',
+        rung: { comment: '', edges: [], selectedNodes: [] } as never,
+      })
+
+      expect(flushFlowWriteBacks(getState)).toEqual(['FbdMain'])
+      expect(warn).toHaveBeenCalled()
+      warn.mockRestore()
     })
   })
 

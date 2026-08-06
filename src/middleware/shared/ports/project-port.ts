@@ -53,6 +53,9 @@ export interface ProjectResponse {
     devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
     /** Warnings from parsing (e.g. dropped files that failed validation). */
     warnings?: string[]
+    /** `datatypes/*.dt` files that failed to parse on load, preserved
+     *  raw so the save flow echoes them back verbatim. */
+    unparsedDataTypeFiles?: RawProjectFile[]
     /**
      * Raw file contents as returned by the backend (path → text), captured
      * before parsing. Used by the save flow to upload byte-identical content
@@ -122,6 +125,10 @@ export interface WriteProjectFiles {
   serverFiles: RawProjectFile[]
   /** Remote device config files with pre-serialized JSON content */
   remoteDeviceFiles: RawProjectFile[]
+  /** Data type files (`datatypes/<Name>.dt`) with pre-serialized ST
+   *  `TYPE…END_TYPE` content, one declaration per file.  Empty until
+   *  the `.dt` write path is switched on (DOPE-533). */
+  dataTypeFiles: RawProjectFile[]
   /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
   deletions: string[]
 }
@@ -172,6 +179,9 @@ export interface RawProjectFiles {
     serverFiles: RawProjectFile[]
     /** Raw remote device config files from devices/remote/ */
     remoteDeviceFiles: RawProjectFile[]
+    /** Raw data type files from datatypes/ (`.dt`, one ST `TYPE…END_TYPE`
+     *  declaration each).  Empty on projects that predate the format. */
+    dataTypeFiles: RawProjectFile[]
     /** See {@link ProjectResponse.data.canEdit}.  Carried through the
      *  raw layer so adapters that build `ProjectResponse` from a raw
      *  fetch don't have to round-trip the details endpoint twice. */

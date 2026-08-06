@@ -13,14 +13,17 @@
 
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
-import type { PLCPou } from '../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
+import { isDataTypeFilesEnabled } from '../utils/feature-flags'
 import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
 import { notifyNoWritePermission } from '../utils/notify-no-write-permission'
+import { serializeDataTypeToText } from '../utils/PLC/data-type-serializer'
+import { parseDataTypeFromText } from '../utils/PLC/data-type-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../utils/PLC/pou-text-parser'
 import { serializePouToText } from '../utils/PLC/pou-text-serializer'
@@ -46,6 +49,7 @@ type ProjectFileCategory =
   | 'pin-mapping'
   | 'project-json'
   | 'library-manifest'
+  | 'data-type'
 
 type ProjectFileSpec = {
   path: string
@@ -71,7 +75,9 @@ function buildProjectJsonContent(state: StoreState): string {
     {
       meta: { name: project.meta.name, type: metaType },
       data: {
-        dataTypes: project.data.dataTypes,
+        // With .dt persistence on, types live in their own files and
+        // project.json stops carrying them (same shape as `pous`).
+        dataTypes: isDataTypeFilesEnabled() ? [] : project.data.dataTypes,
         pous: [],
         configuration: project.data.configurations,
         libraries,
@@ -92,6 +98,14 @@ function buildPouSpec(pou: PLCPou, state: StoreState): ProjectFileSpec {
     path: `pous/${folder}/${pou.name}${ext}`,
     content: serializePouToText(sanitized),
     category: 'pou',
+  }
+}
+
+function buildDataTypeSpec(dt: PLCDataType): ProjectFileSpec {
+  return {
+    path: `datatypes/${dt.name}.dt`,
+    content: serializeDataTypeToText(dt),
+    category: 'data-type',
   }
 }
 
@@ -122,6 +136,20 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
 
   for (const pou of project.data.pous) {
     yield buildPouSpec(pou, state)
+  }
+
+  if (isDataTypeFilesEnabled()) {
+    for (const dt of project.data.dataTypes) {
+      yield buildDataTypeSpec(dt)
+    }
+    // Raw .dt files that failed to parse on load — echoed verbatim
+    // so an unreadable file is never silently dropped from disk.
+    // A parsed type claiming the same path wins: guards non-UI entry
+    // points (e.g. XML import) from yielding duplicate paths.
+    for (const f of state.unparsedDataTypeFiles) {
+      if (project.data.dataTypes.some((dt) => `datatypes/${dt.name}.dt` === f.relativePath)) continue
+      yield { path: f.relativePath, content: f.content, category: 'data-type' }
+    }
   }
 
   if (!isLibrary) {
@@ -254,7 +282,12 @@ function serializeProjectFile(
     return [{ path: 'library.json', content, category: 'library-manifest' }]
   }
 
-  // data-type, resource: live in project.json
+  if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+    const dt = project.data.dataTypes.find((d) => d.name === fileName)
+    return dt ? [buildDataTypeSpec(dt)] : []
+  }
+
+  // resource (and data-type while the .dt flag is off): live in project.json
   return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
 }
 
@@ -324,8 +357,9 @@ export async function executeSaveProject(
 ): Promise<{ success: boolean }> {
   // Run any pending debounced graphical write-backs before reading state:
   // a save landing inside the debounce window must serialize the fresh
-  // POU bodies, not the pre-edit ones.
-  flushFlowWriteBacks(openPLCStoreBase.getState)
+  // POU bodies, not the pre-edit ones.  Flows that fail validation keep a
+  // stale body, so they must not be reported as saved (DOPE-495).
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
   const state = openPLCStoreBase.getState()
   // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
   // a rename/delete, the AI panel — funnels through here.  When the viewer
@@ -339,7 +373,7 @@ export async function executeSaveProject(
   }
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
-  const { setAllToSaved } = state.fileActions
+  const { setAllToSaved, updateFile } = state.fileActions
   const { markAllSaved } = state.snapshotActions
 
   const deletionsBeforeSave = [...pendingDeletions]
@@ -367,6 +401,7 @@ export async function executeSaveProject(
     const pouFiles: RawProjectFile[] = []
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
+    const dataTypeFiles: RawProjectFile[] = []
     let projectJson = ''
     // `deviceConfig` / `pinMapping` / `libraryManifest` stay
     // `undefined` when the iterator doesn't yield them.  Library
@@ -390,6 +425,9 @@ export async function executeSaveProject(
           break
         case 'remote-device':
           remoteDeviceFiles.push({ relativePath: spec.path, content })
+          break
+        case 'data-type':
+          dataTypeFiles.push({ relativePath: spec.path, content })
           break
         case 'device-config':
           deviceConfig = content
@@ -415,6 +453,7 @@ export async function executeSaveProject(
       pouFiles,
       serverFiles,
       remoteDeviceFiles,
+      dataTypeFiles,
       deletions: [...pendingDeletions],
     }
 
@@ -432,28 +471,45 @@ export async function executeSaveProject(
         ...pouFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),
+        ...dataTypeFiles.map((f) => ({ path: f.relativePath, content: f.content })),
       ]
       state.versionControlActions.recordSavedFiles({
         saved: savedRecords,
         deleted: deletionsBeforeSave,
       })
 
-      state.projectActions.clearPendingDeletions()
-      setEditingState('saved')
-      setAllToSaved()
-      markAllSaved()
+      const isStale = new Set(staleFlows)
 
-      // Reset graphical flow state: clear selections and updated flags
+      state.projectActions.clearPendingDeletions()
+      setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
+      setAllToSaved()
+      markAllSaved(staleFlows)
+
+      // Reset graphical flow state: clear selections and updated flags.
+      // A stale flow keeps `updated` set and its file dirty — clearing them
+      // would strand the in-memory edit with no way back to disk.
       for (const flow of state.ladderFlows) {
         state.ladderFlowActions.clearSelections({ editorName: flow.name })
+        if (isStale.has(flow.name)) continue
         state.ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
       for (const flow of state.fbdFlows) {
         state.fbdFlowActions.clearSelections({ editorName: flow.name })
+        if (isStale.has(flow.name)) continue
         state.fbdFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }
+      // Must stay after `setAllToSaved()` above, which marks every file saved.
+      for (const name of staleFlows) {
+        updateFile({ name, saved: false })
+      }
 
-      if (!capabilities.isNativeApplication) {
+      if (staleFlows.length > 0) {
+        toast({
+          title: 'Some changes were not saved',
+          description: `The graphical body of ${staleFlows.join(', ')} is invalid and could not be written to disk. Every other file was saved.`,
+          variant: 'fail',
+        })
+      } else if (!capabilities.isNativeApplication) {
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',
@@ -468,7 +524,9 @@ export async function executeSaveProject(
         variant: 'fail',
       })
     }
-    return { success: res.success }
+    // A stale flow means the user's graphical edit never reached disk, so
+    // callers that gate on the save (build, close-project) must not proceed.
+    return { success: res.success && staleFlows.length === 0 }
   } catch {
     setEditingState('unsaved')
     toast({
@@ -496,8 +554,9 @@ export async function executeSaveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // See executeSaveProject — same pending write-back flush requirement.
-  flushFlowWriteBacks(openPLCStoreBase.getState)
+  // See executeSaveProject — same pending write-back flush requirement, scoped
+  // to the target so a single-file save doesn't touch unrelated POUs.
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {
@@ -522,6 +581,12 @@ export async function executeSaveFile(
     setEditingState('unsaved')
     toast({ title: 'Error saving file', description, variant: 'fail' })
     return { success: false }
+  }
+
+  // Writing the stale body would overwrite disk with pre-edit content and
+  // then report success — abort instead (DOPE-495).
+  if (staleFlows.includes(fileName)) {
+    return fail(`The graphical body of "${fileName}" is invalid, so the file was not written to disk.`)
   }
 
   try {
@@ -599,12 +664,15 @@ export async function executeSaveFile(
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
       if (!res.success) return fail(res.error ?? 'Save failed')
+    } else if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+      const spec = specs[0]
+      if (!spec) return fail(`Data type "${fileName}" not found.`)
+      const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
+      if (!res.success) return fail(res.error ?? 'Save failed')
     } else {
-      // data-type, resource: live in project.json (legacy whole-file
-      // write).  These editors don't yet have a surgical save path —
-      // they still cross-contaminate each other today, which we accept
-      // until each is migrated to its own read-modify-write branch
-      // mirroring the library-manager case above.
+      // resource (and data-type while the .dt flag is off): live in
+      // project.json (legacy whole-file write) — cross-contamination
+      // accepted until each is migrated to its own branch.
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
@@ -772,6 +840,34 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
 
     return { success: true }
   } catch {
+    return { success: false }
+  }
+}
+
+/**
+ * Reload a single data type from its `datatypes/<Name>.dt` file,
+ * discarding in-memory changes ("Don't save" on a datatype tab).
+ * Same parser the project-open path uses; the name-must-match-file
+ * rule applies, so a hand-tampered file fails the reload rather than
+ * silently rekeying the type.
+ */
+export async function reloadDataTypeFromDisk(name: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
+  const state = openPLCStoreBase.getState()
+  const dt = state.project.data.dataTypes.find((d) => d.name === name)
+  if (!dt) return { success: false }
+
+  try {
+    const fullPath = joinPath(state.project.meta.path, 'datatypes', `${name}.dt`)
+    const result = await projectPort.readFileContent(fullPath)
+    if (!result.success || !result.content) return { success: false }
+
+    const parsed = parseDataTypeFromText(result.content, name)
+    if (!parsed.dataType) return { success: false }
+
+    state.projectActions.applyDatatypeSnapshot(name, parsed.dataType)
+    return { success: true }
+  } catch (error) {
+    console.error(`Failed to reload data type "${name}" from disk:`, error)
     return { success: false }
   }
 }
@@ -1049,6 +1145,9 @@ export async function reloadFileFromDisk(fileName: string, projectPort: ProjectP
   }
   if (file.type === 'library-manifest') {
     return reloadLibraryManifestFromCleanState(fileName)
+  }
+  if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+    return reloadDataTypeFromDisk(fileName, projectPort)
   }
   // Everything else routes through the POU-specific reload.  Non-POU
   // file types that need a revert path should add a branch above
