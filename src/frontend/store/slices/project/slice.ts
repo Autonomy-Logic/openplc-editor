@@ -32,6 +32,7 @@ import {
 } from '../../../../middleware/shared/utils/iec-address/registry'
 import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
@@ -1093,6 +1094,25 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // under its new name (model: updatePouName).
           slice.pendingDeletions.push(`datatypes/${oldName}.dt`)
           dt.name = newName
+        }),
+      )
+    },
+    propagateDatatypeRename: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            for (const variable of pou.interface?.variables ?? []) {
+              const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
+              if (nextType) variable.type = nextType
+            }
+          }
+          for (const variable of slice.project.data.configurations.resource.globalVariables) {
+            const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
+            if (nextType) variable.type = nextType
+          }
+          slice.project.data.dataTypes = slice.project.data.dataTypes.map(
+            (dataType) => renameDataTypeInDataType(dataType, oldName, newName) ?? dataType,
+          )
         }),
       )
     },

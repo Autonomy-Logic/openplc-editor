@@ -218,8 +218,13 @@ export type ProjectActions = {
   deleteDatatype: (name: string) => void
   updateDatatype: (name: string, data?: PLCDataType) => void
   /** Rename + queue the old `datatypes/<oldName>.dt` path for deletion
-   *  (model: `updatePouName`).  Reference propagation is DOPE-536. */
+   *  (model: `updatePouName`).  Reference propagation is
+   *  `propagateDatatypeRename`, driven by `datatypeActions.rename`. */
   updateDatatypeName: (oldName: string, newName: string) => void
+  /** Rewrite every reference to data type `oldName` (POU variables, global
+   *  variables, other data types' fields / array base types) to `newName`.
+   *  Does not touch the type's own entry — `updateDatatypeName` owns that. */
+  propagateDatatypeRename: (oldName: string, newName: string) => void
   createArrayDimension: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => void
   rearrangeStructureVariables: (args: { associatedDataType?: string; rowId: number; newIndex: number }) => void
   applyDatatypeSnapshot: (name: string, data: PLCDataType) => void
