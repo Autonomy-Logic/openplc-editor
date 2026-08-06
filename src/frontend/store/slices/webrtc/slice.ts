@@ -11,7 +11,7 @@ const initialSession: WebRTCSession = {
   status: 'disconnected',
   error: null,
   reconnectAttempt: 0,
-  debugTransport: 'http',
+  debugChannelOpen: false,
 }
 
 const createWebRTCSlice: StateCreator<WebRTCSlice, [], [], WebRTCSlice> = (setState) => ({
@@ -67,10 +67,10 @@ const createWebRTCSlice: StateCreator<WebRTCSlice, [], [], WebRTCSlice> = (setSt
         }),
       )
     },
-    setDebugTransport: (transport) => {
+    setDebugChannelOpen: (open) => {
       setState(
         produce(({ session }: WebRTCSlice) => {
-          session.debugTransport = transport
+          session.debugChannelOpen = open
         }),
       )
     },
@@ -93,7 +93,7 @@ const createWebRTCSlice: StateCreator<WebRTCSlice, [], [], WebRTCSlice> = (setSt
           session.status = 'disconnected'
           session.error = null
           session.reconnectAttempt = 0
-          session.debugTransport = 'http'
+          session.debugChannelOpen = false
         }),
       )
     },

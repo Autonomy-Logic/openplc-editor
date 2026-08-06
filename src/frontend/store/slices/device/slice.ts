@@ -50,6 +50,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     jwtToken: null,
     connectionStatus: 'disconnected',
     plcStatus: null,
+    switchPosition: null,
     ipAddress: null,
     runtimeVersion: null,
     selectedDevice: null,
@@ -58,6 +59,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     includeTimingStatsInPolling: false,
     ethercatStatus: null,
     includeEthercatStatsInPolling: false,
+  },
+  deviceConnection: {
+    status: 'disconnected',
+    port: null,
+    transport: null,
+    debugTransport: null,
   },
 
   deviceActions: {
@@ -109,7 +116,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceConnection }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pinsByBoard: {},
@@ -126,6 +133,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.includeTimingStatsInPolling = false
           runtimeConnection.ethercatStatus = null
           runtimeConnection.includeEthercatStatsInPolling = false
+          // The held device link is meaningless once the project is closed —
+          // reset it so a stale connection can't leak into the next one.
+          deviceConnection.status = 'disconnected'
+          deviceConnection.port = null
+          deviceConnection.transport = null
+          deviceConnection.debugTransport = null
         }),
       )
     },
@@ -461,6 +474,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setPlcSwitchPosition: (position): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.switchPosition = position
+        }),
+      )
+    },
     setSelectedDevice: (device): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -524,6 +544,26 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.includeTimingStatsInPolling = false
           runtimeConnection.ethercatStatus = null
           runtimeConnection.includeEthercatStatsInPolling = false
+        }),
+      )
+    },
+    setDeviceConnectionStatus: (status, port, transport, debugTransport): void => {
+      setState(
+        produce(({ deviceConnection }: DeviceSlice) => {
+          deviceConnection.status = status
+          if (port !== undefined) deviceConnection.port = port
+          if (transport !== undefined) deviceConnection.transport = transport
+          if (debugTransport !== undefined) deviceConnection.debugTransport = debugTransport
+        }),
+      )
+    },
+    clearDeviceConnection: (): void => {
+      setState(
+        produce(({ deviceConnection }: DeviceSlice) => {
+          deviceConnection.status = 'disconnected'
+          deviceConnection.port = null
+          deviceConnection.transport = null
+          deviceConnection.debugTransport = null
         }),
       )
     },

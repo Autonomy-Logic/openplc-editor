@@ -1,4 +1,5 @@
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { DeviceConnectionStatusPayload } from '@root/middleware/shared/ports/device-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -21,6 +22,7 @@ import type {
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
+import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
@@ -347,11 +349,11 @@ const rendererProcessBridge = {
       }
     >
   > => ipcRenderer.invoke('hardware:get-available-boards'),
-  getAvailableCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+  getAvailableCommunicationPorts: (): Promise<{ address: string; boardName?: string; manufacturer?: string }[]> =>
     ipcRenderer.invoke('hardware:get-available-communication-ports'),
   refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-available-boards'),
-  refreshCommunicationPorts: (): Promise<{ name: string; address: string }[]> =>
+  refreshCommunicationPorts: (): Promise<{ address: string; boardName?: string; manufacturer?: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
   // ===================== PACKAGE MANAGER METHODS =====================
@@ -404,17 +406,22 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('util:read-debug-file', projectPath, boardTarget),
 
   debuggerVerifyMd5: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
     expectedMd5: string,
   ): Promise<{ success: boolean; match?: boolean; targetMd5?: string; error?: string }> =>
-    ipcRenderer.invoke('debugger:verify-md5', connectionType, connectionParams, expectedMd5),
+    ipcRenderer.invoke('debugger:verify-md5', expectedMd5),
+
+  /** FC 0x4b run/stop command. Reads come from `onDevicePlcState` (the device
+   *  status poll), not from here. */
+  debuggerPlcControl: (
+    action: 'run' | 'stop',
+  ): Promise<{
+    success: boolean
+    state?: number
+    switchPosition?: number
+    refusedBySwitch?: boolean
+    unsupported?: boolean
+    error?: string
+  }> => ipcRenderer.invoke('debugger:plc-control', action),
 
   debuggerReadProgramStMd5: (
     projectPath: string,
@@ -440,19 +447,64 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('debugger:set-variable', variableIndex, force, valueBuffer),
 
-  debuggerConnect: (
-    connectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator',
-    connectionParams: {
-      ipAddress?: string
-      port?: string
-      baudRate?: number
-      slaveId?: number
-      jwtToken?: string
-    },
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('debugger:connect', connectionType, connectionParams),
+  debuggerConnect: (): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('debugger:connect'),
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
+
+  // Persistent device connection (D72): try the ordered candidates and HOLD the
+  // first that answers, returning how the kept channel classified.
+  deviceConnect: (
+    candidates: DebugConnectionConfig[],
+  ): Promise<{
+    status: 'connected-with-firmware' | 'no-firmware' | 'no-response' | 'error'
+    error?: string
+  }> => ipcRenderer.invoke('device:connect', candidates),
+
+  // Close the held serial link (Disconnect).
+  deviceDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('device:disconnect'),
+
+  // A Runtime v3/v4 session: control over REST at `address`, debug over the channel
+  // the board declares (opened later, on the debugger's request).
+  openRuntimeSession: (params: {
+    address: string
+    debug: DebugConnectionConfig
+  }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('session:open-runtime', params),
+
+  closeRuntimeSession: (): Promise<{ success: boolean }> => ipcRenderer.invoke('session:close-runtime'),
+
+  // Upload handoff: give up the link ONLY if it is the serial one holding `port`.
+  deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>
+    ipcRenderer.invoke('device:release-serial-port', port),
+
+  // Diagnostic trace of the device connection (candidate attempts, poll verdicts,
+  // which connection served each command), mirrored into the editor console so it
+  // can be read and copied while reproducing a problem.
+  onDeviceLinkLog: (callback: (message: string) => void): (() => void) => {
+    const listener = (_event: unknown, message: string) => callback(message)
+    ipcRenderer.on('device:link-log', listener)
+    return () => ipcRenderer.removeListener('device:link-log', listener)
+  },
+
+  // Main pushes live link status here (liveness failure, upload/debug handoff).
+  onDeviceConnectionStatus: (callback: (payload: DeviceConnectionStatusPayload) => void): (() => void) => {
+    const listener = (_event: unknown, payload: DeviceConnectionStatusPayload) => callback(payload)
+    ipcRenderer.on('device:connection-status', listener)
+    return () => ipcRenderer.removeListener('device:connection-status', listener)
+  },
+
+  /**
+   * Subscribe to run/stop state pushed from the held device link. Emitted on
+   * every liveness tick (FC 0x46 carries the state), so a switch flipped by hand
+   * at the panel surfaces within one interval without any extra traffic.
+   */
+  onDevicePlcState: (
+    callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
+  ): (() => void) => {
+    const listener = (_event: unknown, payload: { port: string; plcState?: number; switchPosition?: number }) =>
+      callback(payload)
+    ipcRenderer.on('device:plc-state', listener)
+    return () => ipcRenderer.removeListener('device:plc-state', listener)
+  },
 
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
@@ -503,6 +555,8 @@ const rendererProcessBridge = {
         overruns: number
       }>
     }
+    /** Run/stop mode-switch position; absent on older runtimes. */
+    switchPosition?: 'run' | 'stop'
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
   runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>

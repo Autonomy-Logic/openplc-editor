@@ -30,6 +30,7 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: true,
+  plcStateControl: false,
   directUsbUpload: true,
 }
 
@@ -46,6 +47,12 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  // v3 exposes the SAME run/stop REST API as v4 (`/api/start-plc`,
+  // `/api/stop-plc`, JWT-authenticated) — only the debug channel differs
+  // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
+  // command over REST for both, so the only thing that ever stopped v3
+  // was this flag.
+  plcStateControl: true,
   directUsbUpload: false,
 }
 
@@ -64,6 +71,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: true,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: false,
 }
 
@@ -83,5 +91,6 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: true,
 }

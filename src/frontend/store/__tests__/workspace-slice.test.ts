@@ -61,7 +61,6 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
-    expect(workspace.debugConnectionType).toBeNull()
   })
 
   // -------------------------------------------------------------------------
@@ -431,19 +430,6 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.debugMd5Mismatch).toBeNull()
   })
 
-  it('setDebugConnectionType', () => {
-    expect(store.getState().workspace.debugConnectionType).toBeNull()
-
-    store.getState().workspaceActions.setDebugConnectionType('websocket')
-    expect(store.getState().workspace.debugConnectionType).toBe('websocket')
-
-    store.getState().workspaceActions.setDebugConnectionType('rtu')
-    expect(store.getState().workspace.debugConnectionType).toBe('rtu')
-
-    store.getState().workspaceActions.setDebugConnectionType(null)
-    expect(store.getState().workspace.debugConnectionType).toBeNull()
-  })
-
   // -------------------------------------------------------------------------
   // clearDebugState
   // -------------------------------------------------------------------------
@@ -482,7 +468,6 @@ describe('createWorkspaceSlice', () => {
     store.getState().workspaceActions.setDebugGraphList(['a'])
     store.getState().workspaceActions.setDebugDataStale(true)
     store.getState().workspaceActions.setDebugMd5Mismatch({ runtimeMd5: 'r', localMd5: 'l' })
-    store.getState().workspaceActions.setDebugConnectionType('websocket')
 
     store.getState().workspaceActions.clearDebugState()
 
@@ -503,7 +488,6 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
-    expect(workspace.debugConnectionType).toBeNull()
   })
 
   // -------------------------------------------------------------------------
@@ -616,7 +600,6 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)
     expect(workspace.debugMd5Mismatch).toBeNull()
-    expect(workspace.debugConnectionType).toBeNull()
     expect(workspace.isPlcLogsVisible).toBe(false)
     expect(workspace.plcLogs).toBe('')
     expect(workspace.plcLogsLastId).toBeNull()

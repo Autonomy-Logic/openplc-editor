@@ -628,6 +628,18 @@ export interface BoardInfo {
    */
   platformOptions?: PlatformOption[]
   /**
+   * Hardware serial ports this board exposes (e.g. `['Serial', 'Serial1']`),
+   * mirrored from the VPP manifest device's `serialPorts`. Consumed by VPP
+   * screen `select` fields via `optionsRef: 'board.serialPorts'` (the Modbus
+   * RTU port picker) and by the always-on serial/debugger. Absent → the editor
+   * assumes a single `Serial`.
+   */
+  serialPorts?: string[]
+  /** Name of the default serial port (usually the USB CDC port) where the
+   *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
+   *  `Serial`. */
+  defaultSerial?: string
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
@@ -798,6 +810,13 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
+     *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
+     *  `select` fields via `optionsRef: 'board.serialPorts'`. */
+    serialPorts?: string[]
+    /** Name of the default serial port (usually the USB CDC port). Surfaced onto
+     *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
+    defaultSerial?: string
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
@@ -908,9 +927,25 @@ export interface VendorIoMapping {
   entries: IoMappingEntry[]
 }
 
+/**
+ * A serial port offered in the communication-port picker.
+ *
+ * Deliberately NOT a pre-composed display string. The producer reports facts
+ * and the renderer decides how they read (`serialPortDisplay`) — conflating the
+ * two is what let the board name get dropped: the label had to guess whether
+ * `name` held a bare manufacturer or an already-composed `"COM5 (Arduino Uno)"`.
+ */
 export interface CommunicationPort {
-  name: string
+  /** OS-canonical port identifier, and the value actually opened: `COM5` on
+   *  Windows, `/dev/ttyUSB0` on Linux, `/dev/cu.usbmodem*` on macOS. Always the
+   *  primary label — never replaced by a descriptor. */
   address: string
+  /** Board name identified by arduino-cli from the connected core's VID/PID
+   *  (e.g. `Arduino MKR`). Absent when no core matched the device. */
+  boardName?: string
+  /** Manufacturer / vendor string from `serialport` (e.g. `wch.cn` for a
+   *  CH340). The fallback descriptor when arduino-cli identified no board. */
+  manufacturer?: string
 }
 
 export interface SerialPort {
@@ -1030,7 +1065,39 @@ export interface RuntimeLogEntry {
 // Debugger
 // ---------------------------------------------------------------------------
 
+/**
+ * A channel kind a board's `debug` spec can declare. This is the SPEC's
+ * vocabulary — what a package author writes — not necessarily what a live
+ * session ends up riding. See `DebugMedium` for that.
+ */
 export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
+
+/**
+ * What a live debug session actually rides — the one fact the connection manager
+ * publishes and the debug poller consumes.
+ *
+ * Wider than `DebugConnectionType` because the browser reaches a runtime two ways
+ * that no spec distinguishes, and they behave differently enough that the poller
+ * must tell them apart:
+ *
+ *   `webrtc`      a data channel straight to the orchestrator agent, which relays
+ *                 to the runtime's debug socket.
+ *   `http-relay`  the same request, hop by hop: browser -> Autonomy Edge ->
+ *                 agent (over its always-on websocket) -> runtime. The fallback
+ *                 when a data channel cannot be opened.
+ *
+ * Both terminate at the SAME endpoint on the device, so they carry the same frame
+ * budget and differ only in latency — which is exactly the split
+ * `DEBUG_MEDIUM_PROFILE` encodes.
+ */
+export type DebugMedium = DebugConnectionType | 'webrtc' | 'http-relay'
+
+/**
+ * Media that can carry a CONTROL channel — one the connection manager physically
+ * holds open and polls. Narrower than `DebugMedium` on purpose: a REST-controlled
+ * runtime holds nothing, and the browser's media are debug-only.
+ */
+export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
 
 export interface DebugConnectionConfig {
   connectionType: DebugConnectionType

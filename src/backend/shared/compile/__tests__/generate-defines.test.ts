@@ -153,6 +153,149 @@ describe('generateDefinesContent — simulator comms block', () => {
   })
 })
 
+describe('generateDefinesContent — Debugger block (always-on debug)', () => {
+  it('emits DEBUGGER_ENABLED for a baremetal arduino-cli target with no Modbus', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
+  })
+
+  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+  })
+
+  it('emits DEBUGGER_ENABLED even when full Modbus is enabled (always-on serial debugger)', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      vppModbusState: {
+        serial: { baud_rate: '9600' },
+        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
+      },
+      defaultSerial: 'Serial',
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+    // RTU on the default serial → shares the debugger's port (single begin()).
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('emits DEBUG_IFACE from defaultSerial and DEBUG_BAUD from the Serial section', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: { baud_rate: '9600' } },
+    })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+  })
+
+  it('falls back to DEBUG_IFACE Serial and DEBUG_BAUD 115200 when unset', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('#define DEBUG_IFACE Serial')
+    expect(out).toContain('#define DEBUG_BAUD 115200')
+  })
+
+  // A PUBLISHED VPP has no `serial` section — only the legacy RTU fields. The
+  // debugger and the RTU then share one port, so ONE rate must come out of this
+  // file. Emitting 115200 while MBSERIAL_BAUD said 9600 built a firmware the
+  // editor could not talk to, and the user was told "No Firmware Detected" about
+  // a board that was running fine.
+  it('aligns DEBUG_BAUD with MBSERIAL_BAUD for a published VPP (no `serial` section)', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 1 },
+      },
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+  })
+
+  // The reported failure, end to end: Modbus off, 9600 saved on the screen. The
+  // editor dials 9600 (spec params ignore `enabledWhen`), so a firmware built at
+  // 115200 opened the port and answered nothing — "No Firmware Detected" on a
+  // healthy board.
+  it('aligns DEBUG_BAUD with the screen baud when Modbus is DISABLED', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } },
+    })
+    expect(out).toContain('#define DEBUGGER_ENABLED')
+    expect(out).toContain('#define DEBUG_BAUD 9600')
+    // Modbus itself stays out of the build.
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+  })
+
+  it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600', rtu_slave_id: 1 },
+      },
+    })
+    // Two distinct ports, two distinct rates — and the debugger keeps the default.
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).toContain('#define DEBUG_BAUD 115200')
+  })
+
+  it('emits DEBUG_SLAVE from the RTU screen so it matches the id the editor addresses', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: {
+        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 3 },
+      },
+    })
+    expect(out).toContain('#define MBSERIAL_SLAVE 3')
+    expect(out).toContain('#define DEBUG_SLAVE 3')
+  })
+
+  // The slave-id twin of the DEBUG_BAUD regression above, and the harsher one:
+  // Connect sweeps baud rates, but nothing sweeps slave ids. With Modbus off and
+  // slave id 7 saved on the screen, the editor addresses 7 while a firmware left
+  // on modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback frames on 1 — every
+  // frame dropped at the id check, reported as "No Firmware Detected".
+  it('aligns DEBUG_SLAVE with the screen slave id when Modbus is DISABLED', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { modbus_rtu: { enabled: false, rtu_slave_id: 7 } },
+    })
+    expect(out).toContain('#define DEBUG_SLAVE 7')
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+  })
+
+  it('falls back to DEBUG_SLAVE 1 when the project states no slave id', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
+    expect(out).toContain('#define DEBUG_SLAVE 1')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for the simulator (it uses the full Modbus path)', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+
+  it('does NOT emit DEBUGGER_ENABLED for openplc-compiler runtimes', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'openplc-compiler' })
+    expect(out).not.toContain('DEBUGGER_ENABLED')
+  })
+})
+
 describe('generateDefinesContent — IO Config (pin masks)', () => {
   it('emits empty pin masks when devicePinMapping is empty', () => {
     const out = generateDefinesContent(EMPTY_INPUTS)
@@ -357,6 +500,13 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '//Program MD5',
         '#define PROGRAM_MD5 "ffffffffffffffffffffffffffffffff"',
+        '',
+        '//Debugger',
+        '#define DEBUGGER_ENABLED',
+        '#define DEBUG_IFACE Serial',
+        '#define DEBUG_BAUD 115200',
+        '#define DEBUG_SLAVE 1',
+        '',
         '',
         '//IO Config',
         '#define PINMASK_DIN ',

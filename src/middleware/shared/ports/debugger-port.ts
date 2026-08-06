@@ -28,15 +28,18 @@
  *   - DebugTransport interface implementations
  */
 
-import type { DebugConnectionConfig, DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
+import type { PlcControlResult } from '../../../backend/shared/debug/types'
+import type { DebugSetResult, DebugVariableResult, Md5VerifyResult, Unsubscribe } from './types'
 
 export interface DebuggerPort {
   /**
-   * Connect to a debug target.
-   * @param config — Connection target (TCP host, RTU serial, WebSocket, or simulator).
-   *                 The adapter maps this to the platform's transport mechanism.
+   * Start a debug session over the session the connection manager holds.
+   *
+   * Takes nothing: every target's session is established before this — a device by
+   * Connect, a runtime by logging in, the simulator by starting. Naming a medium
+   * here is what made a Stop over serial ask for a DHCP address.
    */
-  connect(config: DebugConnectionConfig): Promise<{ success: boolean; error?: string }>
+  connect(): Promise<{ success: boolean; error?: string }>
 
   /** Disconnect from the current debug target. */
   disconnect(): Promise<{ success: boolean }>
@@ -61,7 +64,7 @@ export interface DebuggerPort {
    * Used to detect program mismatch before starting a debug session.
    * @param config — Connection target used for the verification request.
    */
-  verifyMd5(expectedMd5: string, config: DebugConnectionConfig): Promise<Md5VerifyResult>
+  verifyMd5(expectedMd5: string): Promise<Md5VerifyResult>
 
   /**
    * Read the MD5 hash of the compiled ST program from the debug artifacts.
@@ -85,6 +88,19 @@ export interface DebuggerPort {
    * Returns unsubscribe function.
    */
   onDisconnected(callback: () => void): Unsubscribe
+
+  /**
+   * Ask the target to run or stop (Modbus FC 0x4b).
+   *
+   * Command only — the state is READ from the device status poll (FC 0x46),
+   * which already reports it, so there is deliberately no `getPlcState` here.
+   *
+   * A RUN request is REFUSED, not queued, while the hardware mode switch reads
+   * STOP; the result carries `refusedBySwitch` so the caller shows the "flip the
+   * switch to RUN" warning. `unsupported` means the firmware predates the
+   * run/stop state machine.
+   */
+  setPlcState?(state: 'RUNNING' | 'STOPPED'): Promise<PlcControlResult>
 
   /** Check if the debugger is currently connected. */
   isConnected(): boolean
