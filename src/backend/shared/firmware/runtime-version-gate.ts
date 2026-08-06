@@ -22,37 +22,41 @@
  * orchestrator-agent the same way).
  */
 
-/** Minimum runtime version that speaks the STruC++ wire format. */
-export const MIN_STRUCPP_RUNTIME_VERSION = '4.1.0'
+// Relative import on purpose: `npm run validate:arch` only inspects relative
+// specifiers, so this path is actually checked against the layer rules —
+// `backend-shared -> utils` is allowed, and using `@root/` here would have
+// skipped the check rather than passed it.
+import type { ParsedVersion } from '../../../frontend/utils/semver'
+import { parseVersionStrict } from '../../../frontend/utils/semver'
 
-export interface ParsedRuntimeVersion {
-  major: number
-  minor: number
-  patch: number
-  /** Pre-release identifier (e.g. `rc.3`) if present, otherwise undefined. */
-  prerelease?: string
-}
+/**
+ * Oldest runtime this editor will upload to — the editor's own
+ * `minRuntimeVersion` declaration (DOPE-448).  4.1.0 is the floor
+ * because that is where the STruC++ pipeline landed.
+ *
+ * `MIN_STRUCPP_RUNTIME_VERSION` is kept as an alias so existing call
+ * sites and their tests keep working; new code should use the plain
+ * name, which says what the constant is rather than why it was
+ * introduced.
+ */
+export const MIN_RUNTIME_VERSION = '4.1.0'
+
+/** @deprecated Use `MIN_RUNTIME_VERSION`. */
+export const MIN_STRUCPP_RUNTIME_VERSION = MIN_RUNTIME_VERSION
+
+/** @deprecated Use `ParsedVersion` from `shared/utils/version-compare`. */
+export type ParsedRuntimeVersion = ParsedVersion
 
 /**
  * Parses a runtime version string.  Returns null when the string
- * doesn't carry enough information to compare against
- * `MIN_STRUCPP_RUNTIME_VERSION` — e.g. the legacy `"v4"` or `"dev"`
- * builds.  Callers treat null as "incompatible".
+ * doesn't carry enough information to compare — e.g. the legacy `"v4"`
+ * or `"dev"` builds.  Callers treat null as "incompatible".
+ *
+ * Delegates to the shared strict parser so the VPP surface and the
+ * runtime gates can never drift apart on what `"v4"` or `"4.1"` means.
  */
 export function parseRuntimeVersion(raw: string | null | undefined): ParsedRuntimeVersion | null {
-  if (!raw) return null
-  const trimmed = raw.trim()
-  if (trimmed.length === 0) return null
-  // Require all three numeric components — `v4` alone is the legacy
-  // hardcoded header and must be rejected.
-  const match = trimmed.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/)
-  if (!match) return null
-  return {
-    major: parseInt(match[1], 10),
-    minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
-    prerelease: match[4],
-  }
+  return parseVersionStrict(raw)
 }
 
 /**
@@ -104,7 +108,51 @@ export function describeIncompatibleRuntime(raw: string | null | undefined): str
   const reported = raw && raw.trim().length > 0 ? raw.trim() : 'unknown'
   return (
     `Runtime version ${reported} is not compatible with this editor.  ` +
-    `Upload requires OpenPLC Runtime v${MIN_STRUCPP_RUNTIME_VERSION} or newer (STruC++ pipeline).  ` +
+    `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline).  ` +
     `Please upgrade the runtime on the target device before pushing this build.`
+  )
+}
+
+/**
+ * The other direction: this runtime declared a `minEditorVersion` at
+ * `GET /api/capabilities` and this editor is below it.
+ *
+ * Names both versions and the single action that fixes it — a bare
+ * "incompatible versions" turns into a support ticket.
+ */
+export function describeEditorTooOldForRuntime(args: {
+  runtimeVersion: string | null | undefined
+  minEditorVersion: string
+  editorVersion: string
+  deviceLabel?: string
+}): string {
+  const runtime = args.runtimeVersion?.trim() ?? 'unknown'
+  const where = args.deviceLabel ? ` on ${args.deviceLabel}` : ''
+  return (
+    `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer.  ` +
+    `This editor is ${args.editorVersion}.  ` +
+    `Update the editor, or connect to a runtime that accepts ${args.editorVersion}.`
+  )
+}
+
+/**
+ * The VPP providing the selected board declares a runtime floor the
+ * connected runtime does not meet.
+ *
+ * Names the package's board rather than the package id — the board is
+ * what the user picked and recognises.
+ */
+export function describeVppRuntimeMismatch(args: {
+  boardTarget: string
+  minRuntimeVersion: string
+  runtimeVersion: string | null | undefined
+  deviceLabel?: string
+}): string {
+  const runtime = args.runtimeVersion?.trim() ?? 'unknown'
+  const where = args.deviceLabel ? `The runtime at ${args.deviceLabel} reports` : 'The connected runtime reports'
+  return (
+    `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer.  ` +
+    `${where} ${runtime}.  ` +
+    `Upgrade the runtime on that device, or select a board supported by ${runtime}.`
   )
 }
