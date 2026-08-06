@@ -595,9 +595,11 @@ const ProjectTreeLeaf = ({
 
     if (isDatatype) {
       // Async: a referenced type awaits the impact modal before renaming.
-      void renameDatatype(label, newLabel).then((res) => {
-        if (!res.ok) setNewLabel(label || '')
-      })
+      void renameDatatype(label, newLabel)
+        .then((res) => {
+          if (!res.ok) setNewLabel(label || '')
+        })
+        .catch(() => setNewLabel(label || ''))
       return
     }
 

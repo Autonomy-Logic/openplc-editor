@@ -3,6 +3,7 @@ import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
+import { getErrorMessage } from '../../../../utils/get-error-message'
 import { InputWithRef } from '../../../_atoms/input'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../_molecules/data-types/enumerated'
@@ -54,16 +55,22 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       // `datatypeActions.rename` validates the new name and rekeys the
       // editor model, tab, and file entry, then flags the file dirty.
       // Async: a referenced type awaits the impact modal first.
-      void rename(dataTypeName, value).then((result) => {
-        if (!result.ok) {
-          setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
-          // A declined impact modal is a user choice, not a failure.
-          if (!result.cancelled) {
-            toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+      void rename(dataTypeName, value)
+        .then((result) => {
+          if (!result.ok) {
+            setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
+            // A declined impact modal is a user choice, not a failure.
+            if (!result.cancelled) {
+              toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+            }
           }
-        }
-        setIsEditing(false)
-      })
+          setIsEditing(false)
+        })
+        .catch((error: unknown) => {
+          setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
+          toast({ title: 'Rename failed', description: getErrorMessage(error), variant: 'fail' })
+          setIsEditing(false)
+        })
     }
   }
 

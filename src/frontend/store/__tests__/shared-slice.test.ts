@@ -806,6 +806,28 @@ describe('createSharedSlice', () => {
         expect(store.getState().pendingDatatypeRename).toBeNull()
       })
 
+      it('rejects a second rename while one is awaiting confirmation', async () => {
+        const first = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        const pendingBefore = store.getState().pendingDatatypeRename
+
+        store.getState().datatypeActions.create({ name: 'Other', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Other', {
+          name: 'Other',
+          derivation: 'structure',
+          variable: [{ name: 'f', type: { definition: 'user-data-type', value: 'Chassis' } }],
+        })
+        const second = await store.getState().datatypeActions.rename('Chassis', 'Frame')
+
+        expect(second.ok).toBe(false)
+        expect(second.message).toBe('Another data type rename is awaiting confirmation')
+        // The first request's resolver is untouched and still completes.
+        expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
+        store.getState().datatypeActions.respondToPendingRename(true)
+        const result = await first
+        expect(result).toEqual({ ok: true })
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toContain('NewDT')
+      })
+
       it('respondToPendingRename without a pending request is a no-op', () => {
         const before = store.getState()
         store.getState().datatypeActions.respondToPendingRename(true)

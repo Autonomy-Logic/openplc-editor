@@ -370,6 +370,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           state.project.data.dataTypes,
         )
         if (impact.totalReferences > 0) {
+          // Overwriting a pending request would drop its resolver and strand
+          // the first caller's await forever (e.g. Enter + blur double-fire).
+          if (getState().pendingDatatypeRename) {
+            return { ok: false, message: 'Another data type rename is awaiting confirmation' }
+          }
           const confirmed = await new Promise<boolean>((resolve) => {
             setState({ pendingDatatypeRename: { oldName, newName, impact, resolve } })
           })
