@@ -155,6 +155,103 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
+
+    it('has a disconnected serial connection', () => {
+      const store = makeStore()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
+  describe('serial connection', () => {
+    it('setDeviceConnectionStatus updates status and port', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connecting',
+        port: 'COM5',
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus leaves the port unchanged when omitted', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('connected')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connected',
+        port: 'COM5',
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus can explicitly clear the port with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('error', null)
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'error',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus records both media when the manager reports them', () => {
+      // What `useDeviceConnectionMonitor` actually forwards. `debugTransport` is a
+      // separate fact from `transport`: the debug poll sizes its batches to the
+      // debug medium, and a v4 session (control over REST, debug over a WebSocket)
+      // has no control transport at all.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '192.168.0.9', null, 'websocket')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connected',
+        port: '192.168.0.9',
+        transport: null,
+        debugTransport: 'websocket',
+      })
+    })
+
+    it('setDeviceConnectionStatus records a shared medium on both slots', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      expect(store.getState().deviceConnection).toMatchObject({ transport: 'rtu', debugTransport: 'rtu' })
+    })
+
+    it('setDeviceConnectionStatus leaves the media untouched when they are omitted', () => {
+      // A status-only update (the optimistic 'connecting') must not wipe what the
+      // manager last reported.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connecting',
+        port: '/dev/ttyACM0',
+        transport: 'rtu',
+        debugTransport: 'rtu',
+      })
+    })
+
+    it('clearDeviceConnection resets to disconnected/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceConnection()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -173,7 +270,7 @@ describe('createDeviceSlice', () => {
 
     it('sets available communication ports', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM3', address: '/dev/ttyUSB0' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       expect(store.getState().deviceAvailableOptions.availableCommunicationPorts).toEqual(ports)
     })
@@ -185,14 +282,14 @@ describe('createDeviceSlice', () => {
       ])
       store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
       store.getState().deviceActions.setAvailableOptions({
-        availableCommunicationPorts: [{ name: 'COM1', address: '/dev/tty1' }],
+        availableCommunicationPorts: [{ address: '/dev/tty1' }],
       })
       expect(store.getState().deviceAvailableOptions.availableBoards.size).toBe(1)
     })
 
     it('does not overwrite ports when only boards given', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM1', address: '/dev/tty1' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/tty1' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       store.getState().deviceActions.setAvailableOptions({
         availableBoards: new Map<string, BoardInfo>(),
@@ -303,6 +400,18 @@ describe('createDeviceSlice', () => {
       expect(rc.includeTimingStatsInPolling).toBe(false)
       expect(rc.ethercatStatus).toBeNull()
       expect(rc.includeEthercatStatsInPolling).toBe(false)
+    })
+
+    it('resets the serial connection', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
     })
   })
 
@@ -1252,6 +1361,33 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setPlcRuntimeStatus('RUNNING')
       store.getState().deviceActions.setPlcRuntimeStatus(null)
       expect(store.getState().runtimeConnection.plcStatus).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setPlcSwitchPosition
+  // -----------------------------------------------------------------------
+  describe('setPlcSwitchPosition', () => {
+    it('defaults to null — unknown, not "no gating"', () => {
+      // The start pre-check must be able to tell "the switch says RUN" from "this
+      // target has no switch / firmware too old to report one". Only 'stop' blocks
+      // a start; null must not, or a board without a switch is un-startable.
+      expect(makeStore().getState().runtimeConnection.switchPosition).toBeNull()
+    })
+
+    it('records the switch reading', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('stop')
+      store.getState().deviceActions.setPlcSwitchPosition('run')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('run')
+    })
+
+    it('clears back to null on disconnect', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      store.getState().deviceActions.setPlcSwitchPosition(null)
+      expect(store.getState().runtimeConnection.switchPosition).toBeNull()
     })
   })
 

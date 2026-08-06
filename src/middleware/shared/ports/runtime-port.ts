@@ -116,6 +116,11 @@ export interface RuntimeStatusResult {
   success: boolean
   status?: PlcStatus | (string & {})
   timingStats?: TimingStats
+  /** Run/stop mode-switch position reported by the runtime (`'run'` /
+   *  `'stop'`).  Devices with no switch-aware VPP plugin always report
+   *  `'run'`, and runtimes older than this field omit it entirely — treat
+   *  `undefined` as "no gating". */
+  switchPosition?: 'run' | 'stop'
   error?: string
 }
 

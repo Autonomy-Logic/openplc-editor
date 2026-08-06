@@ -19,6 +19,15 @@
 #include "generated.hpp"
 #include "debug_dispatch.hpp"
 
+// Placement new, used by runtime_reinit_program() to re-run the program's
+// initializers over storage that already exists. Available on every target the
+// editor builds for, AVR included (the bundled avr-libstdcpp ships <new>, and
+// the strucpp headers above already pull it in transitively via <algorithm>).
+// Note this is the PLACEMENT form only -- it allocates nothing.
+#include <new>
+// std::is_trivially_destructible, for the diagnostic static_assert below.
+#include <type_traits>
+
 // ---------------------------------------------------------------------------
 // Runtime fault hook
 // ---------------------------------------------------------------------------
@@ -45,6 +54,53 @@ static size_t                  total_programs = 0;
 
 unsigned long long base_tick_ns = 20000000ULL;
 uint32_t           scan_counter = 0;
+
+// ---------------------------------------------------------------------------
+// Run/stop state. See the contract comment in arduino_runtime_glue.h.
+//
+// `software_stop` is the latch set by runtime_request_plc_state(); `plc_state`
+// is derived from it plus the switch every cycle, so it is never written from
+// anywhere but runtime_plc_cycle() / runtime_init_plc_state().
+// ---------------------------------------------------------------------------
+static uint8_t plc_state      = PLC_STATE_RUNNING;
+static uint8_t switch_position = PLC_SWITCH_RUN;
+static uint8_t last_switch     = PLC_SWITCH_RUN;
+static bool    software_stop   = false;
+
+// Weak default: boards with no physical mode switch always read RUN, so the
+// gate collapses to "software request only" and the boot state is RUNNING --
+// identical to the behaviour before this interface existed. A VPP HAL
+// provides a strong extern "C" override.
+extern "C" __attribute__((weak)) uint8_t hardwareStateSwitch(void)
+{
+    return PLC_SWITCH_RUN;
+}
+
+extern "C" uint8_t runtime_get_plc_state(void)
+{
+    return plc_state;
+}
+
+extern "C" uint8_t runtime_get_switch_position(void)
+{
+    return switch_position;
+}
+
+extern "C" uint8_t runtime_request_plc_state(uint8_t desired_state)
+{
+    if (desired_state == PLC_STATE_RUNNING) {
+        // Hardware is authoritative: refuse rather than queue, so the caller
+        // can tell the user to flip the switch instead of silently waiting.
+        if (hardwareStateSwitch() == PLC_SWITCH_STOP) return PLC_CTRL_REFUSED_SWITCH_STOP;
+        software_stop = false;
+        return PLC_CTRL_OK;
+    }
+    if (desired_state == PLC_STATE_STOPPED) {
+        software_stop = true;
+        return PLC_CTRL_OK;
+    }
+    return PLC_CTRL_INVALID;
+}
 
 // ---------------------------------------------------------------------------
 // GCD utility — used by discoverTasks for the base-tick computation
@@ -235,25 +291,147 @@ void runtime_apply_located_forces()
 }
 
 // ---------------------------------------------------------------------------
-// One scan cycle: copy inputs → run scheduled programs → copy outputs →
-// advance IEC TIME() so TON/TOF/TP can progress.
+// De-energise the output image.
+//
+// Called every cycle while stopped, immediately before updateOutputBuffers()
+// pushes the image to hardware. Two consequences worth keeping in mind:
+//
+//   - A Modbus client writing coils between cycles cannot energise a physical
+//     output while stopped: its write lands in the image and is zeroed here
+//     before the HAL ever sees it.
+//   - Memory areas (int_memory / dint_memory / lint_memory) are deliberately
+//     NOT cleared. They are not physical outputs.
+//
+// The image slots alias the located variables' IECVar storage, so this also
+// zeroes the program's own %QX / %QW / %QD variables. That is intended: a
+// stopped PLC holds no output state.
+// ---------------------------------------------------------------------------
+static void runtime_zero_output_image()
+{
+    for (int i = 0; i < MAX_DIGITAL_OUTPUT; ++i) {
+        if (bool_output[i / 8][i % 8]) *bool_output[i / 8][i % 8] = 0;
+    }
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; ++i) {
+        if (int_output[i]) *int_output[i] = 0;
+    }
+#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+    for (int i = 0; i < MAX_REAL_OUTPUT; ++i) {
+        if (real_output[i]) *real_output[i] = 0.0f;
+    }
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// Cold-stop the program: re-run every IEC initial value so the next start
+// begins at cycle 1 rather than resuming mid-flight.
+//
+// NO DYNAMIC ALLOCATION. g_config is a file-scope object with static storage
+// duration (.bss/.data), and placement new constructs into that existing
+// storage — it calls neither malloc nor operator new(size_t). Everything the
+// generated Configuration holds is by value and fixed size, and nothing in
+// the strucpp runtime allocates (IECVar is three value members; IEC_STRING is
+// a fixed char array).
+//
+// Every pointer into g_config survives, because placement new reuses the same
+// storage with the same layout: locatedVars[i].pointer, the image-table slots,
+// the ProgramBase* entries cached in all_programs[] and in the configuration's
+// own task_programs_storage[], and the flash-resident Entry tables in
+// generated_debug.cpp that hold raw void* into g_config members.
+//
+// runtime_discover_tasks() is deliberately NOT re-run: it new[]-allocates
+// all_programs / task_divisors, so calling it twice would leak. The tables it
+// built stay correct.
+//
+// Two documented consequences: debugger forces are cleared (force state lives
+// inside each IECVar), and a program using the explicit IEC NEW operator must
+// DELETE before stopping or it leaks across restarts — nothing frees those
+// allocations automatically, at re-init or otherwise.
+// ---------------------------------------------------------------------------
+static void runtime_reinit_program()
+{
+    // Destroy then re-construct in place. The destructor call matters:
+    // Configuration_CONFIG0 derives from strucpp::ConfigurationInstance, which
+    // declares `virtual ~ConfigurationInstance() = default` (iec_std_lib.hpp),
+    // so the type is NOT trivially destructible even though it owns nothing.
+    // Pairing the destructor with the placement new is correct either way --
+    // for a defaulted virtual destructor it compiles to nothing, and if a
+    // future strucpp change adds a genuinely owning member it runs that
+    // member's cleanup instead of leaking it. Neither call allocates.
+    g_config.~Configuration_CONFIG0();
+    new (&g_config) strucpp::Configuration_CONFIG0();
+
+    runtime_zero_output_image();
+    runtime_bind_located_vars();   // idempotent, allocation-free
+    scan_counter = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Establish the initial state. Called once from setup(), after hardwareInit()
+// so the HAL's switch pin is already configured.
+// ---------------------------------------------------------------------------
+void runtime_init_plc_state()
+{
+    switch_position = hardwareStateSwitch();
+    last_switch     = switch_position;
+    software_stop   = false;
+    plc_state = (switch_position == PLC_SWITCH_STOP) ? PLC_STATE_STOPPED : PLC_STATE_RUNNING;
+}
+
+// ---------------------------------------------------------------------------
+// One scan cycle: resolve run/stop → copy inputs → run scheduled programs →
+// copy outputs → advance IEC TIME() so TON/TOF/TP can progress.
+//
+// While stopped the loop keeps cycling: inputs are still refreshed (so the
+// debugger and Modbus clients see live field data during commissioning),
+// outputs stay de-energised, updateOutputBuffers() is still called (so a HAL
+// driving a status LED from it stays correct), and IEC time is frozen.
 // ---------------------------------------------------------------------------
 void runtime_plc_cycle()
 {
+    // 1. Resolve the state from the mode switch and the software latch.
+    const uint8_t sw = hardwareStateSwitch();
+    // A physical flip to RUN always puts the PLC in RUN — clearing a software
+    // stop, so the switch is never overridden by a stale editor command.
+    if (sw == PLC_SWITCH_RUN && last_switch == PLC_SWITCH_STOP) software_stop = false;
+    last_switch     = sw;
+    switch_position = sw;
+
+    const uint8_t new_state =
+        (sw == PLC_SWITCH_STOP || software_stop) ? PLC_STATE_STOPPED : PLC_STATE_RUNNING;
+
+    // Entering STOP is a cold stop: zero the outputs and re-initialise the
+    // program exactly once, on the transition.
+    if (new_state == PLC_STATE_STOPPED && plc_state != PLC_STATE_STOPPED) {
+        runtime_reinit_program();
+    }
+    plc_state = new_state;
+
+    // 2. Inputs, in both states.
     updateInputBuffers();
     // HAL just wrote raw input storage directly — re-impose any forced input.
     runtime_apply_located_forces();
 
-    for (size_t i = 0; i < total_programs; ++i) {
-        if (task_divisors[i] == 0 || (scan_counter % task_divisors[i]) == 0) {
-            all_programs[i]->run();
+    if (plc_state == PLC_STATE_RUNNING) {
+        for (size_t i = 0; i < total_programs; ++i) {
+            if (task_divisors[i] == 0 || (scan_counter % task_divisors[i]) == 0) {
+                all_programs[i]->run();
+            }
         }
+        ++scan_counter;
+    } else {
+        // Re-zero every stopped cycle, not just on the transition: a Modbus
+        // client may have written coils into the image since the last cycle.
+        runtime_zero_output_image();
     }
-    ++scan_counter;
 
+    // 3. Outputs, in both states — zeros while stopped.
     updateOutputBuffers();
 
-    strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
+    // 4. IEC time advances only while running, so TON/TOF/TP resume where
+    //    they left off instead of jumping by the stop duration.
+    if (plc_state == PLC_STATE_RUNNING) {
+        strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
+    }
 }
 
 // ---------------------------------------------------------------------------

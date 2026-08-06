@@ -15,6 +15,7 @@ import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-p
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
 import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphical-variable-modal'
+import { DebuggerIpInputModal } from '../_organisms/modals/debugger-ip-input-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
@@ -151,6 +152,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           )}
           {modals?.['runtime-connection-lost']?.open === true && <RuntimeConnectionLostModal />}
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
+          {modals?.['debugger-ip-input']?.open === true && <DebuggerIpInputModal />}
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
           {modals?.['public-catalog-browser']?.open === true && <PublicCatalogBrowserModal />}
           {modals?.['confirm-install-libraries']?.open === true && <ConfirmInstallLibrariesModal />}

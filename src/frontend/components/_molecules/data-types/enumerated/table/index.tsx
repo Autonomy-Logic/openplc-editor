@@ -38,6 +38,7 @@ const EnumeratedTable = ({
       data: { dataTypes },
     },
     projectActions: { updateDatatype },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -50,6 +51,7 @@ const EnumeratedTable = ({
     const current = dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'enumerated') return
     updateDatatype(name, { ...current, values: newValues })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const columnHelper = createColumnHelper<{ description: string }>()

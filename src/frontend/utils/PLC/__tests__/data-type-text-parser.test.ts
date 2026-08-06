@@ -183,6 +183,10 @@ describe('parseDataTypeFromText errors', () => {
   it('rejects invalid structure field names', () => {
     const badName = 'TYPE\n  P : STRUCT\n    2bad : INT;\n  END_STRUCT;\nEND_TYPE\n'
     expect(parseDataTypeFromText(badName).error).toMatch(/invalid structure field name: "2bad"/)
+    // Reserved words are rejected too — same isLegalIdentifier rule
+    // the structure form enforces at entry.
+    const keywordName = 'TYPE\n  P : STRUCT\n    IF : INT;\n  END_STRUCT;\nEND_TYPE\n'
+    expect(parseDataTypeFromText(keywordName).error).toMatch(/invalid structure field name: "IF" — is a reserved word/)
   })
 
   it('rejects unrecognized declarations with a hint', () => {
@@ -193,6 +197,9 @@ describe('parseDataTypeFromText errors', () => {
 
   it('rejects an invalid type name', () => {
     expect(parseDataTypeFromText('TYPE\n  2bad : (Red);\nEND_TYPE\n').error).toMatch(/invalid type name/)
+    expect(parseDataTypeFromText('TYPE\n  ARRAY : (Red);\nEND_TYPE\n').error).toMatch(
+      /invalid type name: "ARRAY" — is a reserved word/,
+    )
   })
 
   it('rejects a declared name that does not match the expected name', () => {

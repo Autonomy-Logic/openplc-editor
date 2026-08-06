@@ -22,6 +22,7 @@ export const useRuntimePolling = () => {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const setPlcRuntimeStatus = useOpenPLCStore((state) => state.deviceActions.setPlcRuntimeStatus)
+  const setPlcSwitchPosition = useOpenPLCStore((state) => state.deviceActions.setPlcSwitchPosition)
   const setTimingStats = useOpenPLCStore((state) => state.deviceActions.setTimingStats)
   const setEthercatStatus = useOpenPLCStore((state) => state.deviceActions.setEthercatStatus)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
@@ -36,6 +37,7 @@ export const useRuntimePolling = () => {
     deviceActions.setRuntimeJwtToken(null)
     deviceActions.setRuntimeConnectionStatus('disconnected')
     deviceActions.setPlcRuntimeStatus(null)
+    deviceActions.setPlcSwitchPosition(null)
     deviceActions.setTimingStats(null)
     deviceActions.setEthercatStatus(null)
   }, [])
@@ -116,6 +118,9 @@ export const useRuntimePolling = () => {
           ? (rawStatus as PlcStatus)
           : 'UNKNOWN'
         setPlcRuntimeStatus(plcStatus)
+        // Runtime v4 reports the mode-switch position alongside the state;
+        // absent on older runtimes, which means "no gating".
+        setPlcSwitchPosition(statusResult.switchPosition ?? null)
 
         if (includeTimingStatsInPolling && statusResult.timingStats) {
           setTimingStats(statusResult.timingStats)
@@ -169,7 +174,7 @@ export const useRuntimePolling = () => {
     } finally {
       isPollingRef.current = false
     }
-  }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setTimingStats, setEthercatStatus])
+  }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setPlcSwitchPosition, setTimingStats, setEthercatStatus])
 
   // Keep the store's connection token in lock-step with the platform's token
   // authority. When the authority transparently refreshes an expired token

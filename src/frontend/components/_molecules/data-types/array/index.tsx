@@ -1,4 +1,4 @@
-import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
+import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useRef, useState } from 'react'
 
 import { baseTypeEnum } from '../../../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
@@ -30,6 +30,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
@@ -72,7 +73,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
 
   const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
-  const [initialValueData, setInitialValueData] = useState<string>('')
+  const [initialValueData, setInitialValueData] = useState<string>(data.initialValue || '')
   const [baseType, setBaseType] = useState<string>(data.baseType.value)
 
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>([])
@@ -81,10 +82,21 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     setTableData(data.dimensions)
   }, [data.dimensions])
 
+  // One history entry per typing burst: armed on the first keystroke,
+  // rearmed on blur or when the store value changes under us (undo/redo).
+  const initialValueCaptured = useRef(false)
+  // `data` lags one render behind the store (the parent copies it via effect),
+  // so compare against our own last write to spot genuinely external changes.
+  const lastWrittenInitialValue = useRef(data.initialValue || '')
+
   useEffect(() => {
-    setInitialValueData(data.initialValue || '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const storeValue = data.initialValue || ''
+    if (storeValue !== lastWrittenInitialValue.current) {
+      setInitialValueData(storeValue)
+      lastWrittenInitialValue.current = storeValue
+      initialValueCaptured.current = false
+    }
+  }, [data.initialValue])
 
   useEffect(() => {
     setBaseType(data.baseType.value)
@@ -92,17 +104,25 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInitialValueData(e.target.value)
+    lastWrittenInitialValue.current = e.target.value
+    if (!initialValueCaptured.current) {
+      captureAndPush(editor.meta.name)
+      initialValueCaptured.current = true
+    }
     const updatedData = { ...data }
     updatedData.initialValue = e.target.value
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleSelect = (definition: string, value: string) => {
     setBaseType(value)
+    captureAndPush(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       baseType: { value, definition },
     } as PLCArrayDatatype)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   // `updateDatatype` is a full replace — never pass a partial object,
@@ -110,16 +130,14 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   // gets stripped and downstream selectors lose the entry.
   const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
     updateDatatype(data.name, { ...data, dimensions: newRows })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const addNewRow = () => {
-    setTableData((prevRows) => {
-      const isFirst = prevRows.length === 0
-      const newRows = [...prevRows, { dimension: '' }]
+    captureAndPush(editor.meta.name)
 
-      if (isFirst) {
-        captureAndPush(editor.meta.name)
-      }
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, { dimension: '' }]
 
       setArrayTable({ selectedRow: newRows.length - 1 })
       writeDimensions(newRows)
@@ -211,6 +229,9 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             </label>
             <InputWithRef
               onChange={handleInitialValueChange}
+              onBlur={() => {
+                initialValueCaptured.current = false
+              }}
               value={initialValueData}
               className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />

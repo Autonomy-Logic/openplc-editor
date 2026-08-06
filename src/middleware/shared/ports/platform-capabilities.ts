@@ -113,7 +113,7 @@ export interface PlatformCapabilities {
    * autonomy-node runs no WebRTC signaling relay and wants this to match
    * its general-purpose poll rate.
    */
-  debugHttpFallbackPollIntervalMs: number
+  debugRelayPollIntervalMs: number
 
   // --- Environment ---
 
@@ -150,7 +150,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasDirectProgramUpload: false,
   hasPackageManager: true,
   hasEthercat: true,
-  debugHttpFallbackPollIntervalMs: 1000,
+  debugRelayPollIntervalMs: 1000,
   isDevMode: false,
 }
 
@@ -194,6 +194,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasDirectProgramUpload: true,
   hasPackageManager: false,
   hasEthercat: false,
-  debugHttpFallbackPollIntervalMs: 1000,
+  debugRelayPollIntervalMs: 1000,
   isDevMode: false,
 }

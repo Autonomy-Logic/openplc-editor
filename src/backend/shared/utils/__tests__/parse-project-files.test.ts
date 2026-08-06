@@ -823,3 +823,89 @@ describe('parseProjectFiles — POU name derivation', () => {
     expect(result.projectData.pous[0].name).toBe('Derived')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Data type files (datatypes/<Name>.dt) — hydration matrix (DOPE-533)
+// ---------------------------------------------------------------------------
+
+describe('data type file hydration', () => {
+  const legacyEnum = {
+    name: 'Color',
+    derivation: 'enumerated',
+    initialValue: '',
+    values: [{ description: 'Red' }, { description: 'Green' }],
+  }
+
+  const parse = (dataTypeFiles: RawProjectFile[], jsonDataTypes: unknown[] = []) =>
+    parseProjectFiles(
+      '/p',
+      makeProjectJson({ dataTypes: jsonDataTypes }),
+      makeDeviceConfig(),
+      makePinMapping(),
+      [],
+      [],
+      [],
+      '',
+      dataTypeFiles,
+    )
+
+  it('parses .dt files into dataTypes (files win over legacy JSON)', () => {
+    const result = parse(
+      [{ relativePath: 'datatypes/Mode.dt', content: 'TYPE\n  Mode : (Auto, Manual);\nEND_TYPE\n' }],
+      [legacyEnum],
+    )
+    expect(result.projectData.dataTypes).toEqual([
+      {
+        name: 'Mode',
+        derivation: 'enumerated',
+        values: [{ description: 'Auto' }, { description: 'Manual' }],
+        initialValue: '',
+      },
+    ])
+    expect(result.warnings).toBeUndefined()
+    expect(result.unparsedDataTypeFiles).toBeUndefined()
+  })
+
+  it('falls back to legacy project.json dataTypes when no .dt files exist', () => {
+    const result = parse([], [legacyEnum])
+    expect(result.projectData.dataTypes).toEqual([legacyEnum])
+  })
+
+  it('yields an empty list when neither files nor legacy JSON carry types', () => {
+    const result = parse([], [])
+    expect(result.projectData.dataTypes).toEqual([])
+  })
+
+  it('preserves unparseable .dt files raw with a warning instead of dropping them', () => {
+    const broken = { relativePath: 'datatypes/Broken.dt', content: 'TYPE\n  Broken : ???;\nEND_TYPE\n' }
+    const result = parse([broken, { relativePath: 'datatypes/Ok.dt', content: 'TYPE\n  Ok : (A);\nEND_TYPE\n' }])
+    expect(result.projectData.dataTypes.map((d) => d.name)).toEqual(['Ok'])
+    expect(result.unparsedDataTypeFiles).toEqual([broken])
+    expect(result.warnings?.some((w) => w.includes('datatypes/Broken.dt'))).toBe(true)
+  })
+
+  it('treats a declared-name/file-name mismatch as unparseable (raw preserved)', () => {
+    const mismatched = { relativePath: 'datatypes/Alpha.dt', content: 'TYPE\n  Beta : (A);\nEND_TYPE\n' }
+    const result = parse([mismatched])
+    expect(result.projectData.dataTypes).toEqual([])
+    expect(result.unparsedDataTypeFiles).toEqual([mismatched])
+    expect(result.warnings?.some((w) => w.includes('does not match'))).toBe(true)
+  })
+
+  it('keeps struct field documentation through schema validation (legacy JSON)', () => {
+    const structWithDoc = {
+      name: 'Motor',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'speed',
+          type: { definition: 'base-type', value: 'INT' },
+          initialValue: { simpleValue: { value: '' } },
+          documentation: 'target speed in rpm',
+        },
+      ],
+    }
+    const result = parse([], [structWithDoc])
+    expect(result.projectData.dataTypes).toEqual([structWithDoc])
+  })
+})

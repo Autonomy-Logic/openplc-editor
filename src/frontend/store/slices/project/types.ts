@@ -1,3 +1,4 @@
+import type { RawProjectFile } from '../../../../middleware/shared/ports/project-port'
 import type {
   EthercatConfig,
   ModbusBufferMapping,
@@ -216,9 +217,15 @@ export type ProjectActions = {
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void
   updateDatatype: (name: string, data?: PLCDataType) => void
+  /** Rename + queue the old `datatypes/<oldName>.dt` path for deletion
+   *  (model: `updatePouName`).  Reference propagation is DOPE-536. */
+  updateDatatypeName: (oldName: string, newName: string) => void
   createArrayDimension: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => void
   rearrangeStructureVariables: (args: { associatedDataType?: string; rowId: number; newIndex: number }) => void
   applyDatatypeSnapshot: (name: string, data: PLCDataType) => void
+  /** Stash raw `.dt` files that failed to parse on load so saves echo
+   *  them back verbatim (no silent data loss). */
+  setUnparsedDataTypeFiles: (files: RawProjectFile[]) => void
 
   // Tasks
   createTask: (dto: TaskDTO & { rowToInsert?: number }) => ProjectResponse
@@ -324,6 +331,10 @@ export type ProjectSlice = {
   project: ProjectState
   /** Relative file paths queued for deletion on next full project save. */
   pendingDeletions: string[]
+  /** Raw `datatypes/*.dt` files that failed to parse on load.  Echoed
+   *  back verbatim by the save flow until they parse — an unreadable
+   *  file must never be silently dropped from disk. */
+  unparsedDataTypeFiles: RawProjectFile[]
   /**
    * Session-scoped IEC alias memory: `memoryKey -> alias`, where `memoryKey`
    * is a channel's stable semantic identity (`vpp:moduleId:slot:channel`,
