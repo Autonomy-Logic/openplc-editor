@@ -14,8 +14,8 @@
  *   util:get-preview-image                      (invoke)
  */
 
-import type { DevicePort } from '../../shared/ports/device-port'
-import type { BoardInfo, CommunicationPort } from '../../shared/ports/types'
+import type { DeviceConnectionStatusPayload, DeviceConnectResult, DevicePort } from '../../shared/ports/device-port'
+import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
 
 export function createEditorDeviceAdapter(): DevicePort {
   return {
@@ -37,6 +37,42 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     getPreviewImage(imageName: string, packagePath?: string): Promise<string> {
       return window.bridge.getPreviewImage(imageName, packagePath)
+    },
+
+    connect(candidates: DebugConnectionConfig[]): Promise<DeviceConnectResult> {
+      return window.bridge.deviceConnect(candidates)
+    },
+
+    openRuntimeSession(params: { address: string; debug: DebugConnectionConfig }): Promise<{
+      success: boolean
+      error?: string
+    }> {
+      return window.bridge.openRuntimeSession(params)
+    },
+
+    closeRuntimeSession(): Promise<{ success: boolean }> {
+      return window.bridge.closeRuntimeSession()
+    },
+
+    async releaseSerialPort(port: string | null | undefined): Promise<boolean> {
+      const result = await window.bridge.deviceReleaseSerialPort(port)
+      return result.released
+    },
+
+    disconnect(): Promise<{ success: boolean }> {
+      return window.bridge.deviceDisconnect()
+    },
+
+    onLinkLog(callback: (message: string) => void): () => void {
+      return window.bridge.onDeviceLinkLog(callback)
+    },
+
+    onConnectionStatus(callback: (payload: DeviceConnectionStatusPayload) => void): () => void {
+      return window.bridge.onDeviceConnectionStatus(callback)
+    },
+
+    onPlcState(callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void): () => void {
+      return window.bridge.onDevicePlcState(callback)
     },
   }
 }

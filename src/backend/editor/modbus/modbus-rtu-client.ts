@@ -1,6 +1,21 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import {
+  buildGetBoardIdRequest,
+  buildGetStatusRequest,
+  buildPlcSetStateRequest,
+  parseGetBoardIdResponse,
+  parseGetStatusResponse,
+  parsePlcSetStateResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
+import type {
+  DebugBoardIdResult,
+  DebugStatusResult,
+  DeviceModbusTransport,
+  Md5ProbeResult,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
@@ -22,7 +37,7 @@ const MD5_REQUEST_RETRY_DELAY_MS = 500
 
 const FRAME_COMPLETE_TIMEOUT_MS = 10
 
-export class ModbusRtuClient {
+export class ModbusRtuClient implements DeviceModbusTransport {
   private port: string
   private baudRate: number
   private slaveId: number
@@ -447,6 +462,81 @@ export class ModbusRtuClient {
       }
 
       return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). Response offsets
+   * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
+   * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
+   * to the shared parseGetBoardIdResponse rather than parsing inline.
+   */
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    try {
+      // buildGetBoardIdRequest() returns the [FC] PDU; assembleRequest writes
+      // the function code + slaveId itself and expects only the trailing payload
+      // (empty for board-id), so strip the leading FC byte.
+      const pdu = buildGetBoardIdRequest()
+      const payload = Buffer.from(pdu.subarray(1))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(response, 7)
+      return parseGetBoardIdResponse(pduResponse)
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+  /**
+   * FC 0x46 -- runtime status. Reports the run/stop state, the scan counter and
+   * uptime in one bare-FC round trip.
+   *
+   * This is the single read path for run/stop state: the frame's `running` byte
+   * carries it, so no second function code is needed. It also doubles as the
+   * liveness probe for a held link (any successful reply proves the firmware is
+   * answering), which is why the device liveness poll uses it.
+   */
+  async getStatus(): Promise<DebugStatusResult> {
+    try {
+      // buildGetStatusRequest() returns the [FC] PDU; assembleRequest writes the
+      // function code + slaveId itself and expects only the trailing payload
+      // (empty here), so strip the leading FC byte.
+      const pdu = buildGetStatusRequest()
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_STATUS, Buffer.from(pdu.subarray(1)))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseGetStatusResponse(Uint8Array.prototype.slice.call(response, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x4b -- ask the runtime to run or stop.
+   *
+   * Command only; reads go through `getStatus()`. A RUN request is refused (not
+   * queued) while the mode switch reads STOP, and the result says so via
+   * `refusedBySwitch` so the caller can tell the user to flip the switch.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    try {
+      const pdu = buildPlcSetStateRequest(state)
+      const request = this.assembleRequest(ModbusFunctionCode.PLC_SET_STATE, Buffer.from(pdu.subarray(1)))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 8) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes)` }
+      }
+      return parsePlcSetStateResponse(Uint8Array.prototype.slice.call(response, 7))
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

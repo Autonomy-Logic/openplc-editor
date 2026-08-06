@@ -9,6 +9,8 @@ import type {
   PinUpdateResponse,
   RuntimeConnection,
   SelectedDevice,
+  DeviceConnection,
+  DeviceConnectionStatus,
   StoredCredentials,
 } from '../slices/device'
 
@@ -95,6 +97,7 @@ describe('Device slice types', () => {
         jwtToken: null,
         connectionStatus: 'disconnected',
         plcStatus: null,
+        switchPosition: null,
         ipAddress: null,
         runtimeVersion: null,
         selectedDevice: null,
@@ -137,6 +140,7 @@ describe('Device slice types', () => {
         jwtToken: 'token',
         connectionStatus: 'connected',
         plcStatus: 'RUNNING',
+        switchPosition: 'run',
         ipAddress: '192.168.1.1',
         runtimeVersion: 'v4.1.9',
         selectedDevice: {
@@ -178,6 +182,7 @@ describe('Device slice types', () => {
           jwtToken: null,
           connectionStatus: 'disconnected',
           plcStatus: null,
+          switchPosition: null,
           ipAddress: null,
           runtimeVersion: null,
           selectedDevice: null,
@@ -187,11 +192,29 @@ describe('Device slice types', () => {
           ethercatStatus: null,
           includeEthercatStatsInPolling: false,
         },
+        deviceConnection: { status: 'disconnected', port: null, transport: null, debugTransport: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
       expect(state.deviceUpdated).toBeDefined()
       expect(state.runtimeConnection).toBeDefined()
+      expect(state.deviceConnection).toBeDefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // DeviceConnection
+  // -----------------------------------------------------------------------
+  describe('DeviceConnection', () => {
+    it('accepts every status', () => {
+      const statuses: DeviceConnectionStatus[] = ['disconnected', 'connecting', 'connected', 'error']
+      const conns: DeviceConnection[] = statuses.map((status) => ({
+        status,
+        port: status === 'connected' ? 'COM5' : null,
+        transport: status === 'connected' ? 'rtu' : null,
+        debugTransport: status === 'connected' ? 'rtu' : null,
+      }))
+      expect(conns).toHaveLength(4)
     })
   })
 

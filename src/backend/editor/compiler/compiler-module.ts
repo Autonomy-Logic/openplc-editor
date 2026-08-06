@@ -195,6 +195,10 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
+    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
+    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
+    // so the lib must be installed for every Arduino build.
+    'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
     'CONTROLLINO',
@@ -1459,7 +1463,25 @@ class CompilerModule {
 
     // Build the .o path list synchronously up-front so the archive members
     // land in source-file order regardless of the concurrent compile result.
-    const objectFiles = sources.map((sourcePath) => join(objDir, path.basename(sourcePath).replace(/\.cpp$/, '.o')))
+    //
+    // The `.cpp` is KEPT in the object name (`foo.cpp.o`, not `foo.o`) — the same
+    // convention arduino-cli uses for sketch objects, and on ESP8266 it decides
+    // whether the code runs from flash or from IRAM.
+    //
+    // esp8266's linker script sends code to flash by matching the OBJECT NAME:
+    //
+    //     .irom0.text : { *.c.o(.literal* .text*)
+    //                     *.cpp.o(EXCLUDE_FILE (umm_malloc.cpp.o) .literal* … .text*)
+    //                     *.cc.o(.literal* .text*)  … }
+    //
+    // Anything it does not match falls through to `.text1`, a catch-all mapped
+    // into `iram1_0_seg` — 32 KB shared with the WiFi/SDK core. Named `foo.o`,
+    // every translation unit of libOpenPLCUserLib.a landed there: measured at
+    // 7387 bytes of IRAM for a small project (glue 3781 + configuration 3149 +
+    // pou_MAIN 457), which overflowed the segment and failed the link with
+    // "section `.text1' will not fit in region `iram1_0_seg'" — a message that
+    // names neither this archive nor the reason.
+    const objectFiles = sources.map((sourcePath) => join(objDir, `${path.basename(sourcePath)}.o`))
 
     // Cap concurrent toolchain spawns at the host's logical core count.
     // An unbounded `sources.map(async …)` was dispatching one g++ per TU
@@ -2506,6 +2528,33 @@ class CompilerModule {
             })
           }
         }
+        // An arduino-cli target CANNOT work without its HAL: `hardwareInit` /
+        // `updateInputBuffers` / `updateOutputBuffers` have no other definition,
+        // so the build either dies at link with an undefined-reference wall or —
+        // if anything ever weak-defines them — silently produces firmware that
+        // drives no I/O at all. Both were observed as "the program runs but the
+        // outputs never move", with the real cause (the board resolved without a
+        // HAL, e.g. a VPP whose manifest didn't load) reported only as a warning
+        // several hundred log lines earlier.
+        //
+        // Fail here instead, naming the board and the path, so the message says
+        // what is wrong rather than what it broke.
+        // Runtime v3 legitimately has no HAL (its on-device MatIEC compiles the
+        // ST itself and it never links Arduino firmware), so this only applies to
+        // targets that actually build a sketch.
+        if (!boardHalContent && !isRuntimeV3) {
+          const where = boardInfo.halSourceFile
+            ? `its HAL source could not be read from ${boardInfo.halSourceFile}`
+            : 'it did not resolve a HAL source file (a VPP package may have failed to load — try reinstalling it)'
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message:
+              `Board "${boardTarget}" cannot be compiled: ${where}. ` +
+              'Without a HAL the firmware has no hardware I/O layer.\nStopping compilation process.',
+          })
+          _mainProcessPort.close()
+          return
+        }
         // Re-key strucpp runtime headers from
         // `strucpp_runtime/include/X` into `src/X` so arduino-cli's
         // `--library src` pass finds them; also drop the board HAL
@@ -2614,6 +2663,8 @@ class CompilerModule {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         const vendorScreenData = deviceConfig.vendorScreenData ?? {}
         vppModbusState = {
+          serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
+          network: vendorScreenData['network'] as VppModbusScreenState['network'],
           modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
           modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }

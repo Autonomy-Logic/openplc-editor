@@ -10,6 +10,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // ---------------------------------------------------------------------------
 // Layer definitions
@@ -118,7 +119,12 @@ const LAYER_RULES: Record<LayerName, LayerRule> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SRC_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..')
+// `new URL(...).pathname` yields a URL-encoded path that, on win32, carries a
+// leading slash before the drive letter (/C:/Users/...). Passing that into
+// resolve() prepends the current drive, producing a doubled C:\C:\Users\...
+// prefix — which made validate:arch fail to even scan the tree. fileURLToPath
+// does the file:// -> filesystem conversion correctly on every platform.
+const SRC_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function collectFiles(dir: string, ext: string[]): string[] {
   const results: string[] = []
@@ -180,36 +186,25 @@ function getLayer(filePath: string): LayerName | null {
   return null
 }
 
-/** Extract import/export-from paths from a TypeScript source string */
+/**
+ * Every `import ... from '...'` / `export ... from '...'` / bare `import '...'`,
+ * with the line it starts on.
+ *
+ * Scans the whole source rather than line by line: a MULTI-LINE import — the
+ * default once a statement names more than a couple of symbols — puts the
+ * `import` keyword and the module path on different lines, so a per-line regex
+ * silently sees neither. That blind spot hid real violations of these very rules,
+ * which is worse than having no gate, because the gate reported success.
+ */
 function extractImports(source: string): { path: string; line: number }[] {
   const results: { path: string; line: number }[] = []
-  const lines = source.split('\n')
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-
-    // Static imports: import ... from '...'
-    // Re-exports:     export ... from '...'
-    const staticMatch = line.match(/(?:import|export)\s+.*?\s+from\s+['"]([^'"]+)['"]/)
-    if (staticMatch) {
-      results.push({ path: staticMatch[1], line: i + 1 })
-      continue
-    }
-
-    // Side-effect imports: import '...'
-    const sideEffectMatch = line.match(/^\s*import\s+['"]([^'"]+)['"]/)
-    if (sideEffectMatch) {
-      results.push({ path: sideEffectMatch[1], line: i + 1 })
-      continue
-    }
-
-    // Dynamic imports: import('...')
-    const dynamicMatch = line.match(/import\(\s*['"]([^'"]+)['"]\s*\)/)
-    if (dynamicMatch) {
-      results.push({ path: dynamicMatch[1], line: i + 1 })
-    }
+  const pattern = /(?:^|\n)\s*(?:import|export)\b[\s\S]*?from\s+['"]([^'"]+)['"]|(?:^|\n)\s*import\s+['"]([^'"]+)['"]/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(source)) !== null) {
+    const path = match[1] ?? match[2]
+    if (!path) continue
+    results.push({ path, line: source.slice(0, match.index).split('\n').length })
   }
-
   return results
 }
 
@@ -279,6 +274,31 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
+  // via the shared `resolveDebugConnection` resolver, same as the activity bar's
+  // debugger/post-flash paths.
+  'frontend/hooks/use-device-connect.ts': ['backend-shared'],
+  // Baremetal run/stop mirror — maps the PROTOCOL's run/stop and switch wire
+  // values (`PlcRuntimeState` / `PlcSwitchPosition`, defined next to the RTU
+  // client that reads them) onto the store's `PlcStatus` union. Same D72 device
+  // link as the sibling entry above. The alternative is either duplicating the
+  // numeric constants in the frontend or hoisting the two enums into
+  // ports/types.ts; both were judged worse than one documented import.
+  'frontend/hooks/use-device-plc-state.ts': ['backend-shared'],
+  // Run/stop control port — `PlcControlResult` is the FC 0x4b acknowledgement
+  // shape, defined with the protocol types it is built from (`PlcRuntimeState`).
+  // Type-only import; hoisting it into ports/types.ts would drag the wire enums
+  // along with it, so the contract stays where the protocol is described.
+  'middleware/shared/ports/debugger-port.ts': ['backend-shared'],
+  // Device connect/debug resolution — interprets the board's declarative `debug`
+  // spec (backend/shared/hardware/debug-spec.ts), which is the ONE place that spec
+  // is read. The alternative is a second interpreter in the frontend, which is how
+  // Connect and the debugger came to disagree about what a spec meant.
+  'frontend/services/device-link-resolution.ts': ['backend-shared'],
+  // Activity bar — resolves the same spec for the post-upload reconnect and the
+  // debug session. Pre-existing; it was invisible until `extractImports` learned
+  // to read multi-line imports.
+  'frontend/components/_organisms/workspace-activity-bar/default.tsx': ['backend-shared'],
   // PLCopen export — needs the shared XmlGenerator composing function
   // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No

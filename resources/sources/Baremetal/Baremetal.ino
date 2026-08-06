@@ -30,7 +30,7 @@
 #include "defines.h"
 #include "arduino_runtime_glue.h"
 
-#ifdef MODBUS_ENABLED
+#if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
 #endif
 
@@ -128,8 +128,20 @@ void setup()
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 
+    // Establish the run/stop state. Must follow hardwareInit() so the HAL has
+    // already configured its mode-switch pin: a board powered up with the
+    // switch in STOP must never execute a scan. Boards with no mode switch
+    // read RUN and start immediately, as they always have.
+    runtime_init_plc_state();
+
+
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
+            #ifdef MBSERIAL_ON_SECONDARY
+                // Dual-serial: Modbus RTU runs on a secondary UART (below) while
+                // the always-on debugger keeps the default serial — bring it up.
+                DEBUG_IFACE.begin(DEBUG_BAUD);
+            #endif
             #ifdef MBSERIAL_TXPIN
                 // Disable TX pin from OpenPLC hardware layer
                 for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
@@ -155,6 +167,18 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
+            // NOTE (single-serial model): the debugger and Modbus RTU share one
+            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
+            // port IS the debugger's default serial, so this single begin() also
+            // brings up the debugger. Running the debugger on the default USB
+            // serial while RTU uses a *different* UART simultaneously would need
+            // a second serial handler — a documented follow-up.
+        #elif defined(DEBUGGER_ENABLED)
+            // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
+            // still needs the default serial up on mb_serialport to respond.
+            DEBUG_IFACE.begin(DEBUG_BAUD);
+            mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+            modbus.slaveid = DEBUG_SLAVE;
         #endif
 
         #ifdef MBTCP
@@ -178,6 +202,15 @@ void setup()
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
+    #elif defined(DEBUGGER_ENABLED)
+        // Always-on debugger without full Modbus: bring up the serial port and
+        // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
+        // variables directly through the strucpp debug table (openplc_debug_*),
+        // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
+        // deliberately not called here, saving SRAM on small boards.
+        DEBUG_IFACE.begin(DEBUG_BAUD);
+        mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
+        modbus.slaveid = DEBUG_SLAVE;
     #endif
 
     setupCycleDelay(base_tick_ns);
@@ -369,8 +402,12 @@ void scheduler()
         sketch_loop();
     #endif
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
         modbusTask();
+    #elif defined(DEBUGGER_ENABLED)
+        // Debug-only: poll the serial transport for debugger requests. No buffer
+        // sync (modbusTask's mirror loops) because there are no operation buffers.
+        mbtask();
     #endif
 
     if (!first_cycle)
@@ -392,11 +429,17 @@ void loop()
         last_run += scan_cycle;
     }
 
-    #ifdef MODBUS_ENABLED
+    #if defined(MODBUS_ENABLED)
     // Only run Modbus task again if we have at least 10ms gap until the next cycle
     if ((micros() - last_run) >= 10000)
     {
         modbusTask();
+    }
+    #elif defined(DEBUGGER_ENABLED)
+    // Debug-only: give the debugger extra serial-poll time between cycles too.
+    if ((micros() - last_run) >= 10000)
+    {
+        mbtask();
     }
     #endif
 

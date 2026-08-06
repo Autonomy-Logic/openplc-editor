@@ -31,7 +31,7 @@ import {
   parseGetMd5Response,
   parseSetVariableResponse,
 } from './modbus-pdu'
-import type { DebugSetResult, DebugTransport, DebugTransportResult, Md5ProbeResult } from './types'
+import type { DebugSetResult, DebugTransport, DebugTransportResult, DeviceDebugChannel, Md5ProbeResult } from './types'
 
 const REQUEST_TIMEOUT_MS = 5000
 const CONNECT_TIMEOUT_MS = 5000
@@ -67,7 +67,7 @@ function hexSpacedToBytes(hex: string): Uint8Array {
   return out
 }
 
-export class WebSocketDebugTransport implements DebugTransport {
+export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChannel {
   private host: string
   private port: number
   private token: string
