@@ -20,7 +20,13 @@ import {
 } from '../tabs/utils'
 import { cancelFlowWriteBacks, flushFlowWriteBacks } from './flow-writeback'
 import type { PouHistorySnapshot, SharedRootState, SharedSlice } from './types'
-import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
+import {
+  createDatatypeObject,
+  createEditorObjectForDatatype,
+  createEditorObjectForPou,
+  createPouObject,
+  guessDatatypeDerivation,
+} from './utils'
 
 const MAX_HISTORY_SIZE = 50
 
@@ -318,12 +324,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
-      return renameElement(state, oldName, newName, () => {
+      // Fold pending code-view edits in first, so the rename doesn't
+      // regenerate over them.  Invalid text blocks the rename instead
+      // of silently discarding what the user typed.
+      const reconcile = state.projectActions.reconcileDatatypeText(oldName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      const result = renameElement(state, oldName, newName, () => {
         // Renames via the dedicated action so the old .dt path gets
         // queued for deletion — a plain updateDatatype would strand
         // the old file on disk.
         state.projectActions.updateDatatypeName(oldName, newName)
       })
+      // After renameElement: both the type and its editor model are
+      // keyed by newName, so the buffer's TYPE line can be refreshed.
+      if (result.ok) getState().projectActions.regenerateDatatypeText(newName)
+      return result
     },
 
     duplicate: (sourceName, newName) => {
@@ -662,6 +678,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
+      // No PLCDataType exists for an unreadable file, so it can't show
+      // up in the project tree. Collected here to get a file entry and a
+      // pre-opened code-mode tab further down — the only way the user
+      // can find and fix the declaration without leaving the editor.
+      const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
+        const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
+        return name ? [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }] : []
+      })
+
       // Add ladder and FBD flows for graphical POUs.
       //
       // The flow object embeds its own `name` field — historically the
@@ -870,6 +895,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       data.projectData.dataTypes.forEach((dt) => {
         files[dt.name] = { type: 'data-type', filePath: dt.name, saved: true }
       })
+      unparsedDataTypes.forEach(({ name }) => {
+        files[name] = { type: 'data-type', filePath: name, saved: true }
+      })
       const servers = data.projectData.servers
       if (servers) {
         servers.forEach((s) => {
@@ -969,6 +997,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             code: pouWithText.variablesText,
           })
         }
+      })
+
+      // Same idea for unreadable .dt files, except the tab has to be
+      // created too: without a PLCDataType there is no tree leaf to
+      // click. Focus stays on the auto-opened POU above.
+      unparsedDataTypes.forEach(({ name, content, derivation }) => {
+        const tabToBeCreated: TabsProps = {
+          name,
+          path: `/data/data-types/${derivation}/${name}`,
+          elementType: { type: 'data-type', derivation },
+        }
+        getState().tabsActions.updateTabs(tabToBeCreated)
+        getState().editorActions.addModel(createEditorObjectForDatatype(name, derivation))
+        getState().editorActions.updateModelStructureForName(name, { display: 'code', code: content })
       })
 
       // Reset all graphical flow updated flags at the very end of project open.

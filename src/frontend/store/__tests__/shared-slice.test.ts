@@ -577,6 +577,35 @@ describe('createSharedSlice', () => {
         expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
       })
 
+      it('folds pending code-view edits in and rewrites the buffer under the new name', () => {
+        store.getState().editorActions.updateModelStructureForName('OldDT', {
+          display: 'code',
+          code: 'TYPE\nOldDT : STRUCT\nspeed : INT;\nEND_STRUCT;\nEND_TYPE\n',
+        })
+
+        expect(store.getState().datatypeActions.rename('OldDT', 'NewDT').ok).toBe(true)
+
+        const renamed = store.getState().project.data.dataTypes[0]
+        expect(renamed.name).toBe('NewDT')
+        expect(renamed.derivation === 'structure' && renamed.variable.map((v) => v.name)).toEqual(['speed'])
+
+        const model = store.getState().editor
+        expect(model.type === 'plc-datatype' && model.structure.display === 'code' && model.structure.code).toContain(
+          'NewDT : STRUCT',
+        )
+      })
+
+      it('refuses the rename while the code view holds invalid text', () => {
+        store
+          .getState()
+          .editorActions.updateModelStructureForName('OldDT', { display: 'code', code: 'TYPE\ngarbage\nEND_TYPE\n' })
+
+        const result = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(result.ok).toBe(false)
+        expect(store.getState().project.data.dataTypes[0].name).toBe('OldDT')
+        expect(store.getState().pendingDeletions).not.toContain('datatypes/OldDT.dt')
+      })
+
       it('rejects a name owned by an unreadable .dt file (case-insensitive)', () => {
         store
           .getState()
@@ -1968,6 +1997,33 @@ describe('createSharedSlice', () => {
         expect(state.files['main'].saved).toBe(true)
         expect(state.files['Resource']).toBeDefined()
         expect(state.files['Configuration']).toBeDefined()
+      })
+
+      it('pre-opens an unreadable .dt file as a code-mode tab without stealing focus', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          unparsedDataTypeFiles: [
+            { relativePath: 'datatypes/Broken.dt', content: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n' },
+            // No name to derive — skipped rather than registered under ''.
+            { relativePath: '', content: 'orphan' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
+        expect(state.files['Broken']).toEqual({ type: 'data-type', filePath: 'Broken', saved: true })
+        expect(state.files['']).toBeUndefined()
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main', 'Broken'])
+        // Focus stays on the auto-opened POU.
+        expect(state.selectedTab).toBe('main')
+
+        const model = state.editors.find((editor) => editor.meta.name === 'Broken')
+        expect(model?.type === 'plc-datatype' && model.meta.derivation).toBe('structure')
+        expect(model?.type === 'plc-datatype' && model.structure).toEqual({
+          display: 'code',
+          code: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n',
+        })
       })
 
       it('logs warnings to console when present', () => {

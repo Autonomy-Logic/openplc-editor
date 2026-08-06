@@ -94,7 +94,7 @@ describe('tabs/utils', () => {
       expect(result.type).toBe('plc-datatype')
       if (result.type === 'plc-datatype') {
         expect(result.meta.derivation).toBe('enumerated')
-        expect(result.structure).toEqual({ selectedRow: '-1', description: '' })
+        expect(result.structure).toEqual({ display: 'table', selectedRow: '-1', description: '' })
       }
     })
 

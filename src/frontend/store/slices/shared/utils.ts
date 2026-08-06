@@ -141,8 +141,18 @@ export function createEditorObjectForDatatype(name: string, derivation: string):
   return {
     type: 'plc-datatype',
     meta: { name, derivation: derivation as 'enumerated' | 'structure' | 'array' },
-    structure: { description: '', selectedRow: '' },
+    structure: { display: 'table', description: '', selectedRow: '-1' },
   }
+}
+
+/**
+ * Best-effort derivation for a `.dt` file that failed to parse — it only
+ * picks the tab/tree icon, since no `PLCDataType` exists to read it from.
+ */
+export function guessDatatypeDerivation(content: string): 'enumerated' | 'structure' | 'array' {
+  if (/\bSTRUCT\b/i.test(content)) return 'structure'
+  if (/\bARRAY\b/i.test(content)) return 'array'
+  return 'enumerated'
 }
 
 export function createEditorObjectForServer(
