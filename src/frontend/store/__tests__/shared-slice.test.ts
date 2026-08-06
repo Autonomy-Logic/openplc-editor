@@ -2026,6 +2026,32 @@ describe('createSharedSlice', () => {
         })
       })
 
+      it('does not let an unreadable .dt displace a POU or a parsed type of the same name', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.dataTypes = [
+          { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+        ] as typeof data.projectData.dataTypes
+        const withCollisions = {
+          ...data,
+          unparsedDataTypeFiles: [
+            // Case-insensitive: the filesystem folds case, the registry doesn't.
+            { relativePath: 'datatypes/MAIN.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+            { relativePath: 'datatypes/colors.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(withCollisions)
+
+        const state = store.getState()
+        // The POU keeps its own registry entry, tab and model.
+        expect(state.files['main'].type).toBe('program')
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main'])
+        expect(state.editors.every((editor) => editor.type !== 'plc-datatype')).toBe(true)
+        expect(state.files['MAIN']).toBeUndefined()
+        expect(state.files['colors']).toBeUndefined()
+        // Still preserved, so the next save echoes both files back verbatim.
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
+      })
+
       it('logs warnings to console when present', () => {
         const data = {
           ...makeMinimalProjectResponse(),

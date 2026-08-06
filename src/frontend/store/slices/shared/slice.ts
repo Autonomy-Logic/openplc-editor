@@ -325,8 +325,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
       // Fold pending code-view edits in first, so the rename doesn't
-      // regenerate over them.  Invalid text blocks the rename instead
-      // of silently discarding what the user typed.
+      // regenerate over them.
       const reconcile = state.projectActions.reconcileDatatypeText(oldName)
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
@@ -336,8 +335,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         // the old file on disk.
         state.projectActions.updateDatatypeName(oldName, newName)
       })
-      // After renameElement: both the type and its editor model are
-      // keyed by newName, so the buffer's TYPE line can be refreshed.
+      // Only after renameElement are the type and its model both keyed by newName.
       if (result.ok) getState().projectActions.regenerateDatatypeText(newName)
       return result
     },
@@ -678,13 +676,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
-      // No PLCDataType exists for an unreadable file, so it can't show
-      // up in the project tree. Collected here to get a file entry and a
-      // pre-opened code-mode tab further down — the only way the user
-      // can find and fix the declaration without leaving the editor.
+      // Unreadable files have no PLCDataType, so no tree leaf to click.
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
         const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
-        return name ? [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }] : []
+        if (!name) return []
+        // The file registry is keyed by raw name across both kinds: a
+        // colliding file would retype the real element and misroute its save.
+        const taken = [...data.projectData.pous, ...data.projectData.dataTypes].some(
+          (element) => element.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (taken) return []
+        return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
       })
 
       // Add ladder and FBD flows for graphical POUs.
@@ -999,9 +1001,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       })
 
-      // Same idea for unreadable .dt files, except the tab has to be
-      // created too: without a PLCDataType there is no tree leaf to
-      // click. Focus stays on the auto-opened POU above.
+      // Tab included, and focus stays on the auto-opened POU above.
       unparsedDataTypes.forEach(({ name, content, derivation }) => {
         const tabToBeCreated: TabsProps = {
           name,

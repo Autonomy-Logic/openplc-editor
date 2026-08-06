@@ -145,10 +145,7 @@ export function createEditorObjectForDatatype(name: string, derivation: string):
   }
 }
 
-/**
- * Best-effort derivation for a `.dt` file that failed to parse — it only
- * picks the tab/tree icon, since no `PLCDataType` exists to read it from.
- */
+/** Best-effort derivation for an unparseable `.dt` — only picks the icon. */
 export function guessDatatypeDerivation(content: string): 'enumerated' | 'structure' | 'array' {
   if (/\bSTRUCT\b/i.test(content)) return 'structure'
   if (/\bARRAY\b/i.test(content)) return 'array'

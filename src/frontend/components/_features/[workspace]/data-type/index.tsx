@@ -40,17 +40,15 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   } = useOpenPLCStore()
   const { captureAndPush } = usePouSnapshot()
 
-  // Every open data type is mounted at once (workspace-screen keeps the
-  // inactive ones hidden), so the view state has to come from this
-  // type's own model — never from the active `editor`.
+  // Every open data type is mounted at once, so the view state comes from
+  // this type's own model — never from the active `editor`.
   const model = editor.meta.name === dataTypeName ? editor : editors.find((e) => e.meta.name === dataTypeName)
   const modelStructure = model?.type === 'plc-datatype' ? model.structure : undefined
   const codeViewEnabled = isDataTypeFilesEnabled()
   const display = codeViewEnabled && modelStructure?.display === 'code' ? 'code' : 'table'
   const modelCode = modelStructure?.display === 'code' ? modelStructure.code : undefined
 
-  // A `.dt` file that failed to parse has no entry in `dataTypes`; the
-  // raw text is all there is until the user fixes it.
+  // An unparseable file has no entry in `dataTypes` — raw text is all there is.
   const rawFile = unparsedDataTypeFiles.find(
     (file) => file.relativePath.split('/').pop()?.replace(/\.dt$/i, '') === dataTypeName,
   )
@@ -68,6 +66,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const latestCodeRef = useRef(editorCode)
   const latestDisplayRef = useRef(display)
   const lastParsedCodeRef = useRef(editorCode)
+  const lastRejectedCodeRef = useRef<string | null>(null)
   const lastMirroredCodeRef = useRef(editorCode)
   const isParsingRef = useRef(false)
   const commitCodeRef = useRef<() => boolean>(() => false)
@@ -77,20 +76,17 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     if (dataType) setEditorContent(dataType)
   }, [dataTypes, dataTypeName])
 
-  // Keep the buffer serialized from the form while in table mode, so the
-  // toggle already holds the right text the moment it flips.
+  // In table mode the form is the committed state: it seeds both the buffer
+  // and the watermark, so the toggle is instant and can't commit a no-op.
   useEffect(() => {
     if (display === 'code') return
     const text = editorContent ? serializeDataTypeToText(editorContent) : (rawFile?.content ?? '')
     setEditorCode(text)
-    // In table mode the form is the committed state, so this is also
-    // the watermark the next outside-click compares against.
     lastParsedCodeRef.current = text
   }, [editorContent, display, rawFile?.content])
 
-  // Adopt buffers written by the store (a tree rename or an undo
-  // regenerates them), but never the echo of our own mirror below —
-  // that would race the keystroke that produced it.
+  // Adopt store-written buffers (rename, undo), never the echo of our own
+  // mirror below — that would race the keystroke that produced it.
   useEffect(() => {
     if (display !== 'code' || typeof modelCode !== 'string') return
     if (modelCode === lastMirroredCodeRef.current) return
@@ -116,8 +112,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     }
   }, [dataTypeName, updateModelStructureForName])
 
-  // A type that doesn't exist yet is a broken file on disk: show why it
-  // is broken while the user edits, instead of only on commit.
+  // No type yet means a broken file — surface why while editing, not on commit.
   useEffect(() => {
     if (display !== 'code' || editorContent) return
     setParseError(parseDataTypeFromText(editorCode, dataTypeName).error ?? null)
@@ -159,11 +154,20 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   useEffect(() => {
     if (display !== 'code') return
 
+    // Clicking away raises mousedown then focusout, and the commit is
+    // synchronous, so `isParsingRef` is clear by the second one. Both
+    // watermarks make the pair one attempt whatever its outcome.
     const tryCommit = () => {
       if (isParsingRef.current) return
       if (editorCode === lastParsedCodeRef.current) return
+      if (editorCode === lastRejectedCodeRef.current) return
       isParsingRef.current = true
-      if (commitCodeRef.current()) lastParsedCodeRef.current = editorCode
+      if (commitCodeRef.current()) {
+        lastParsedCodeRef.current = editorCode
+        lastRejectedCodeRef.current = null
+      } else {
+        lastRejectedCodeRef.current = editorCode
+      }
       isParsingRef.current = false
     }
 
@@ -173,8 +177,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       tryCommit()
     }
 
-    // Covers keyboard navigation, Tab and shortcuts — anything that
-    // moves focus away without a mousedown.
+    // Covers focus moves with no mousedown: Tab, shortcuts.
     const onFocusOut = (e: FocusEvent) => {
       if (!containerRef.current) return
       const newTarget = e.relatedTarget as Node | null

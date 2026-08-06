@@ -506,18 +506,7 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
   state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
 }
 
-// ---------------------------------------------------------------------------
-// Data-type text ⇄ data-type form reconcile helpers
-// ---------------------------------------------------------------------------
-//
-// Same contract as the variables pair above, for the per-type `.dt`
-// code view.  The form molecules only render in table mode, so the
-// reachable divergence cases are a tree rename and an undo/disk
-// revert landing while the type sits in code mode with a diverged
-// buffer.  Rename reconciles first (and refuses when the text is
-// invalid, so uncommitted edits are never silently discarded);
-// rename and snapshot restore both regenerate afterwards so Monaco
-// shows the new state.
+// Same contract as the variables pair above, for the `.dt` code view.
 
 const findDatatypeEditorCode = (name: string, getState: ProjectGetState): string | undefined => {
   const state = getState()
