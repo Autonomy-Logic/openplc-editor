@@ -63,6 +63,32 @@ function validateElementName(name: string): { ok: true } | { ok: false; message:
   return legal ? { ok: true } : { ok: false, message: `'${name}' ${reason}` }
 }
 
+/**
+ * Data type names are compared case-insensitively: each one becomes a
+ * `datatypes/<Name>.dt` path, and macOS/Windows fold filename case, so
+ * `Foo` and `foo` would silently overwrite each other on save. IEC
+ * identifiers are case-insensitive anyway.
+ */
+const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
+ * A raw datatypes/<Name>.dt file that failed to parse still owns its
+ * name: letting a new data type take it would make the save emit two
+ * specs for one path (and the raw echo would win). Case-insensitive —
+ * the file name is the identity and common filesystems fold case.
+ */
+function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string): { ok: boolean; message?: string } {
+  const collides = state.unparsedDataTypeFiles.some(
+    (f) => f.relativePath.split('/').pop()?.replace(/\.dt$/i, '').toLowerCase() === name.toLowerCase(),
+  )
+  return collides
+    ? {
+        ok: false,
+        message: `A data type file named "${name}.dt" exists on disk but could not be read — fix or remove it first`,
+      }
+    : { ok: true }
+}
+
 function renameElement(
   state: SharedRootState,
   oldName: string,
@@ -90,6 +116,10 @@ function renameElement(
   // LD/FBD POUs will have a flow entry to rekey.
   state.ladderFlowActions.renameLadderFlow(oldName, newName)
   state.fbdFlowActions.renameFBDFlow(oldName, newName)
+
+  // Follow the undo/redo stacks to the new key — otherwise the history is
+  // orphaned under the old name and undo becomes a silent no-op after rename.
+  state.snapshotActions.renameHistory(oldName, newName)
 
   afterRename?.(oldName, newName)
 
@@ -237,8 +267,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   datatypeActions: {
     create: ({ name, derivation }) => {
       const state = getState()
-      const existing = state.project.data.dataTypes.find((d) => d.name === name)
+      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, name))
       if (existing) return { ok: false, message: 'Data type already exists' }
+
+      const fileCollision = collidesWithUnparsedDataTypeFile(state, name)
+      if (!fileCollision.ok) return fileCollision
 
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
@@ -273,16 +306,23 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
-      const existing = state.project.data.dataTypes.find((d) => d.name === newName)
-      if (existing) return { ok: false, message: 'Data type name already exists' }
+      // Includes the type being renamed: a case-only change writes the
+      // new file and then deletes the old path — the same file where
+      // the filesystem folds case.
+      const collides = newName !== oldName && state.project.data.dataTypes.some((d) => nameMatches(d.name, newName))
+      if (collides) return { ok: false, message: 'Data type name already exists' }
+
+      const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
+      if (!fileCollision.ok) return fileCollision
 
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
-      const updatedDatatype = { ...datatype, name: newName }
-
       return renameElement(state, oldName, newName, () => {
-        state.projectActions.updateDatatype(oldName, updatedDatatype)
+        // Renames via the dedicated action so the old .dt path gets
+        // queued for deletion — a plain updateDatatype would strand
+        // the old file on disk.
+        state.projectActions.updateDatatypeName(oldName, newName)
       })
     },
 
@@ -291,8 +331,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const source = state.project.data.dataTypes.find((d) => d.name === sourceName)
       if (!source) return { ok: false, message: 'Data type not found' }
 
-      const existing = state.project.data.dataTypes.find((d) => d.name === newName)
+      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, newName))
       if (existing) return { ok: false, message: 'Data type name already exists' }
+
+      const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
+      if (!fileCollision.ok) return fileCollision
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
@@ -615,6 +658,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         meta: data.meta,
         data: data.projectData,
       })
+      // Raw .dt files that failed to parse — stashed so saves echo
+      // them back verbatim; always set so a reopen clears stale ones.
+      getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
       // Add ladder and FBD flows for graphical POUs.
       //
@@ -968,6 +1014,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       )
     },
 
+    renameHistory: (oldName, newName) => {
+      setState(
+        produce((state: SharedRootState) => {
+          const history = state.undoRedo[oldName]
+          if (!history) return
+          delete state.undoRedo[oldName]
+          state.undoRedo[newName] = history
+        }),
+      )
+    },
+
     markSaved: (pouName) => {
       setState(
         produce((state: SharedRootState) => {
@@ -1002,17 +1059,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.past[history.past.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to future. Plain references — the store is
       // immer-managed (frozen, copy-on-write), so later edits can never
       // reach a captured snapshot.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1025,28 +1089,40 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state
       const afterUndo = getState().undoRedo[pouName]
       if (afterUndo?.savedAtDepth !== null && afterUndo?.savedAtDepth === afterUndo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },
@@ -1060,15 +1136,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.future[history.future.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to past. Plain references — see undo.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1081,28 +1164,40 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state
       const afterRedo = getState().undoRedo[pouName]
       if (afterRedo?.savedAtDepth !== null && afterRedo?.savedAtDepth === afterRedo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },

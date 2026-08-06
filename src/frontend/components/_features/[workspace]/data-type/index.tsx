@@ -7,6 +7,7 @@ import { InputWithRef } from '../../../_atoms/input'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../_molecules/data-types/enumerated'
 import { StructureDataType } from '../../../_molecules/data-types/structure'
+import { toast } from '../../[app]/toast/use-toast'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
@@ -17,9 +18,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     project: {
       data: { dataTypes },
     },
-    tabsActions: { updateTabName },
-    editorActions: { updateEditorModel },
-    projectActions: { updateDatatype },
+    datatypeActions: { rename },
     searchQuery,
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
@@ -52,14 +51,13 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value } = e.target
     if (dataTypeName !== value) {
-      // `updateDatatype` is a full replace.  Spread the current
-      // entry so the rename only changes `name` — without this the
-      // entry would lose every other field (variable / values /
-      // dimensions / baseType / initialValue).
-      if (!editorContent) return
-      updateDatatype(dataTypeName, { ...editorContent, name: value })
-      updateEditorModel(dataTypeName, value)
-      updateTabName(dataTypeName, value)
+      // `datatypeActions.rename` validates the new name and rekeys the
+      // editor model, tab, and file entry, then flags the file dirty.
+      const result = rename(dataTypeName, value)
+      if (!result.ok) {
+        setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
+        toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+      }
       setIsEditing(false)
     }
   }

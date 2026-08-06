@@ -19,6 +19,7 @@
 import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
 import { parseArrayType } from '../generate-iec-string-to-variables'
+import { isLegalIdentifier } from '../keywords'
 
 export interface ParseDataTypeResult {
   dataType?: PLCDataType
@@ -70,8 +71,9 @@ function parseStructure(name: string, body: string[]): ParseDataTypeResult {
     if (groups?.name === undefined || type === null) {
       return { error: `invalid structure field: "${line}". Possible cause: ${guessErrorReason(line)}` }
     }
-    if (!identifierRegex.test(groups.name)) {
-      return { error: `invalid structure field name: "${groups.name}"` }
+    const [fieldNameLegal, fieldNameReason] = isLegalIdentifier(groups.name)
+    if (!fieldNameLegal) {
+      return { error: `invalid structure field name: "${groups.name}" — ${fieldNameReason}` }
     }
     variable.push({
       name: groups.name,
@@ -144,8 +146,12 @@ export function parseDataTypeFromText(content: string, expectedName?: string): P
         : parseSingleLine(body[0])
 
   if (result.dataType === undefined) return result
-  if (!identifierRegex.test(result.dataType.name)) {
-    return { error: `invalid type name: "${result.dataType.name}"` }
+  // Same rule the UI enforces at creation/rename (keywords, literals,
+  // identifier shape) — a hand-written file can't smuggle in a name
+  // the editor would refuse to work with.
+  const [nameLegal, nameReason] = isLegalIdentifier(result.dataType.name)
+  if (!nameLegal) {
+    return { error: `invalid type name: "${result.dataType.name}" — ${nameReason}` }
   }
 
   if (expectedName !== undefined) {
