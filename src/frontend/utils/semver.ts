@@ -12,25 +12,23 @@
  *
  * This file used to answer only #3, with `firmware/runtime-version-gate.ts`
  * carrying its own parser for the runtime side. The two disagreed on exactly
- * the inputs that show up in the field:
+ * the inputs that show up in the field — `"v4"` and `"4.1"` parsed in one and
+ * were rejected by the other — and a first pass at unifying them kept that
+ * split alive as a lenient parser and a strict parser chosen by name.
  *
- *   input        | catalog parser   | runtime parser
- *   -------------|------------------|----------------
- *   "v4"         | 4.0.0            | rejected
- *   "4.1"        | 4.1.0            | rejected
- *   "garbage"    | 0.0.0 (lowest)   | rejected
+ * That was still one parser too many. The same string has to mean the same
+ * thing everywhere, or a floor is enforced in one place and ignored in
+ * another: `minEditorVersion: "4.3"` refused an install while the identical
+ * value from a runtime sailed through unnoticed. So there is now exactly
+ * ONE parser, and it applies one rule:
  *
- * Neither behaviour was wrong for its own caller. A package manifest carrying
- * a corrupt version should not crash the catalog UI, and an unidentifiable
- * runtime must not receive an upload. What was wrong is that the DIFFERENCE
- * lived in two separate parsers, where nothing named it and nothing tested it
- * side by side.
+ *   - a `v` prefix is decoration:   `v4.3.2` === `4.3.2`
+ *   - a missing component is zero:  `4.3` === `4.3.0`,  `4` === `4.0.0`
+ *   - anything else is UNKNOWN:     `"dev"`, `"garbage"`, `""` → null
  *
- * So: one parse, one comparison, and the lenient-vs-strict choice made
- * explicitly by name at the call site. `parseVersionStrict` returns null for
- * anything it cannot fully identify — callers that must fail closed use it.
- * `parseVersionLenient` fills missing components with 0 and degrades garbage to
- * 0.0.0 — callers rendering untrusted metadata use it.
+ * "Unknown" is never a version. It does not become 0.0.0 behind the caller's
+ * back and it never satisfies a declared floor — a peer that cannot say what
+ * it is does not get to claim it is new enough.
  *
  * Pre-release and build suffixes (`-rc.1`, `+build.5`) are parsed but do NOT
  * affect ordering: `4.1.0-rc.3` compares equal to `4.1.0`. This is deliberate
@@ -52,48 +50,55 @@ export interface ParsedVersion {
   prerelease?: string
 }
 
-/** `v4.1.0-rc.3` / `4.1.0` — all three numeric components required. */
-const STRICT_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+](.+))?$/
+/**
+ * `4`, `4.3`, `4.3.2`, `v4.3.2`, `4.3.2-rc.1`, `4.3.2+build.5`.
+ *
+ * Anchored at both ends on purpose: a trailing-garbage input like `"4.1 beta"`
+ * must fail rather than silently parse as `4.1.0`, because a value nobody can
+ * read is a mistake worth surfacing, not a version worth guessing.
+ */
+const VERSION_RE = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+](.+))?$/
+
+/** Lowest possible version — what an unknown string is worth in a total order. */
+const ZERO: ParsedVersion = { major: 0, minor: 0, patch: 0 }
 
 /**
- * Parse a version string, requiring all three numeric components.
+ * Parse a version string, or return null when the string is not a version.
  *
- * Returns null for anything else — `"v4"`, `"4.1"`, `"dev"`, `""`, null. Use
- * this when an unidentifiable version must block an action: the caller cannot
- * accidentally treat "I don't know" as "old enough" or "new enough", because
- * there is no number to compare.
+ * Missing trailing components are zero, so a floor written as `"4.3"` means
+ * exactly what `"4.3.0"` means and is enforced identically. A leading `v` is
+ * stripped. Everything else — `"dev"`, `"garbage"`, `""`, `"4.1 beta"`, null —
+ * is UNKNOWN, and callers decide what unknown costs them.
  */
-export function parseVersionStrict(raw: string | null | undefined): ParsedVersion | null {
+export function parseVersion(raw: string | null | undefined): ParsedVersion | null {
   if (!raw) return null
-  const match = raw.trim().match(STRICT_RE)
+  const match = raw.trim().match(VERSION_RE)
   if (!match) return null
   return {
     major: Number.parseInt(match[1], 10),
-    minor: Number.parseInt(match[2], 10),
-    patch: Number.parseInt(match[3], 10),
+    minor: match[2] === undefined ? 0 : Number.parseInt(match[2], 10),
+    patch: match[3] === undefined ? 0 : Number.parseInt(match[3], 10),
     prerelease: match[4],
   }
 }
 
+/** True when `raw` is a version this codebase can compare. */
+export function isValidVersion(raw: string | null | undefined): boolean {
+  return parseVersion(raw) !== null
+}
+
 /**
- * Parse a version string, filling in whatever is missing with zero.
+ * A version string as it should appear in a message to the user: trimmed, or
+ * the word `unknown` when there is nothing readable to show.
  *
- * `"4.1"` becomes 4.1.0; `"garbage"` and `""` become 0.0.0 — the lowest
- * possible version, so a corrupt value loses every comparison instead of
- * winning one. Use this for untrusted metadata being rendered rather than
- * enforced, where a malformed field should degrade the display and not throw.
+ * Exists so that every "incompatible versions" message renders an unreadable
+ * peer the same way. Printing an empty string leaves a hole in the sentence
+ * ("Runtime  on 10.0.0.1 requires…") and tells the user nothing about which
+ * of the two versions the editor failed to establish.
  */
-export function parseVersionLenient(raw: string | null | undefined): ParsedVersion {
-  // Deliberately unanchored at the end: it consumes as many leading numeric
-  // components as it finds and ignores whatever follows, so `4.1.9-rc.1` and
-  // `4.1` both parse without a separate suffix-stripping pass.
-  const match = (raw ?? '').trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/)
-  if (!match) return { major: 0, minor: 0, patch: 0 }
-  const toInt = (value: string | undefined): number => {
-    const parsed = Number.parseInt(value ?? '', 10)
-    return Number.isFinite(parsed) ? parsed : 0
-  }
-  return { major: toInt(match[1]), minor: toInt(match[2]), patch: toInt(match[3]) }
+export function formatVersionForDisplay(raw: string | null | undefined): string {
+  const trimmed = raw?.trim() ?? ''
+  return trimmed.length > 0 ? trimmed : 'unknown'
 }
 
 /**
@@ -108,44 +113,48 @@ export function compareParsedVersions(a: ParsedVersion, b: ParsedVersion): -1 | 
 }
 
 /**
- * `candidate >= minimum`, where an unparseable `candidate` fails closed.
+ * `candidate >= minimum` — the one comparison every DOPE-448 gate asks.
  *
- * This is the shape every DOPE-448 gate wants: "may I proceed?" answered
- * `false` when the peer cannot be identified. An absent `minimum` means no
- * constraint was declared, which is a pass — a peer that asks for nothing gets
- * nothing enforced, which is what keeps runtimes predating
- * `/api/capabilities` working unchanged.
+ * Three inputs and what each costs:
+ *
+ *   - `minimum` absent or empty → **pass**. A peer that declares no floor
+ *     constrains nothing; this is every runtime predating `/api/capabilities`
+ *     and it is what makes shipping the gates safe.
+ *   - `minimum` present but unreadable → **pass**, because an unknown floor is
+ *     worth 0.0.0 and everything clears 0.0.0. Callers that can see the string
+ *     should say so out loud rather than let it vanish — the manifest schema
+ *     rejects such a value outright, and the runtime probe logs a warning.
+ *   - `candidate` unreadable against a real floor → **fail**. An unknown
+ *     version never satisfies a declared minimum.
  */
 export function isVersionAtLeast(candidate: string | null | undefined, minimum: string | null | undefined): boolean {
-  if (!minimum) return true
-  const min = parseVersionStrict(minimum)
-  if (!min) return true // a floor we cannot read declares nothing
-  const version = parseVersionStrict(candidate)
-  if (!version) return false // an unidentifiable peer never clears a real floor
+  const min = parseVersion(minimum)
+  if (!min) return true
+  const version = parseVersion(candidate)
+  if (!version) return false
   return compareParsedVersions(version, min) >= 0
 }
 
-// ---------------------------------------------------------------------------
-// Lenient VPP-surface helpers
-// ---------------------------------------------------------------------------
-
 /**
- * Lenient comparison, used by the VPP catalog and the package install gate.
+ * Order two version strings for display purposes — sorting catalog rows,
+ * deciding whether an available version is newer than the installed one.
  *
- * Lenient is right *here* specifically: a package manifest is untrusted
- * third-party metadata, and a corrupt `version` string should sort as the
- * lowest possible version rather than break a card in the catalog UI. Gates
- * deciding whether to talk to a runtime use `isVersionAtLeast` instead.
+ * This is the ONE place an unknown version is coerced to 0.0.0, because a
+ * sortable list needs a total order and a corrupt `version` field in somebody
+ * else's manifest should sort to the bottom rather than break the UI. Nothing
+ * is gated on the result. Every gate uses `isVersionAtLeast`.
  */
 export function compareSemver(a: string, b: string): -1 | 0 | 1 {
-  return compareParsedVersions(parseVersionLenient(a), parseVersionLenient(b))
+  return compareParsedVersions(parseVersion(a) ?? ZERO, parseVersion(b) ?? ZERO)
 }
 
 /**
- * True when `current` satisfies `minRequired`. An absent or empty minimum
- * means the package declared no floor, which is a pass.
+ * True when `current` satisfies the `minRequired` a package declares.
+ *
+ * Delegates to `isVersionAtLeast` so the install gate and the runtime gates
+ * cannot disagree about what a given string means — the bug this consolidation
+ * exists to prevent.
  */
 export function isCompatibleEditorVersion(minRequired: string | undefined, current: string): boolean {
-  if (!minRequired) return true
-  return compareSemver(current, minRequired) >= 0
+  return isVersionAtLeast(current, minRequired)
 }

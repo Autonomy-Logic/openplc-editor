@@ -27,6 +27,11 @@
  * Pure: no I/O.  Caller supplies the transport via `fetchVersion`.
  */
 
+// Relative import on purpose: `npm run validate:arch` only inspects relative
+// specifiers, so this path is actually checked against the layer rules —
+// `backend-shared -> utils` is allowed.
+import { isValidVersion } from '../../../frontend/utils/semver'
+
 /** Outcome of the transport-level fetch.  Adapters return this from
  *  their HTTPS / orchestrator round-trip; the shared helper takes
  *  it from here. */
@@ -146,7 +151,21 @@ async function tryFetchCapabilities(opts: ProbeRuntimeVersionOptions): Promise<P
     }
     const version = extractStringField(result.body, 'runtimeVersion')
     if (version === null) return null
-    return { version, minEditorVersion: extractStringField(result.body, 'minEditorVersion') }
+    const minEditorVersion = extractStringField(result.body, 'minEditorVersion')
+    // A floor that is present but unreadable is the one case that must not
+    // pass in silence.  `isVersionAtLeast` treats it as "declares nothing",
+    // which is the safe answer for an upload but the wrong one for whoever
+    // wrote it: the runtime believes it is enforcing a constraint that is
+    // not being applied, and without this line the only way to find out is a
+    // field incident.  Accepted shorthands (`"4.3"`, `"4"`, `"v5"`) parse, so
+    // this fires on genuine junk only.
+    if (minEditorVersion !== null && !isValidVersion(minEditorVersion)) {
+      opts.log(
+        `Runtime declared an unreadable minEditorVersion ("${minEditorVersion}") — the editor-version floor is not being enforced.`,
+        'warning',
+      )
+    }
+    return { version, minEditorVersion }
   } catch {
     return null
   }

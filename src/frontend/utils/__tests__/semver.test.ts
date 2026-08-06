@@ -1,78 +1,101 @@
 import {
   compareParsedVersions,
   compareSemver,
+  formatVersionForDisplay,
   isCompatibleEditorVersion,
+  isValidVersion,
   isVersionAtLeast,
-  parseVersionLenient,
-  parseVersionStrict,
+  parseVersion,
 } from '../semver'
 
-describe('parseVersionStrict', () => {
+describe('parseVersion', () => {
   it('parses a plain three-part version', () => {
-    expect(parseVersionStrict('4.1.9')).toEqual({ major: 4, minor: 1, patch: 9, prerelease: undefined })
+    expect(parseVersion('4.1.9')).toEqual({ major: 4, minor: 1, patch: 9, prerelease: undefined })
   })
 
-  it('accepts the tag-style v prefix the runtime reports', () => {
-    expect(parseVersionStrict('v4.2.0')).toEqual({ major: 4, minor: 2, patch: 0, prerelease: undefined })
+  // A `v` prefix is decoration, not meaning: the runtime reports `v4.2.0`, git
+  // tags carry `v`, and hand-written manifests use both. They must compare the
+  // same or the same release is two different versions depending on who typed it.
+  it('treats a v prefix as identical to no prefix', () => {
+    expect(parseVersion('v4.3.2')).toEqual(parseVersion('4.3.2'))
+    expect(compareSemver('v4.3.2', '4.3.2')).toBe(0)
+    expect(isVersionAtLeast('v4.3.2', '4.3.2')).toBe(true)
+    expect(isVersionAtLeast('4.3.2', 'v4.3.2')).toBe(true)
+  })
+
+  // A floor written as `"4.3"` means 4.3.0 and is enforced as 4.3.0. Anything
+  // else and the same shorthand is honoured by one gate and ignored by another.
+  it('fills missing components with zero', () => {
+    expect(parseVersion('4.3')).toEqual(parseVersion('4.3.0'))
+    expect(parseVersion('4')).toEqual(parseVersion('4.0.0'))
+    expect(parseVersion('v4')).toEqual(parseVersion('4.0.0'))
+    expect(parseVersion('4.3')).toEqual({ major: 4, minor: 3, patch: 0, prerelease: undefined })
+    expect(parseVersion('4')).toEqual({ major: 4, minor: 0, patch: 0, prerelease: undefined })
   })
 
   it('captures pre-release and build suffixes without failing', () => {
-    expect(parseVersionStrict('4.1.0-rc.3')?.prerelease).toBe('rc.3')
-    expect(parseVersionStrict('4.1.0+build.5')?.prerelease).toBe('build.5')
+    expect(parseVersion('4.1.0-rc.3')?.prerelease).toBe('rc.3')
+    expect(parseVersion('4.1.0+build.5')?.prerelease).toBe('build.5')
+    expect(parseVersion('4.1-rc.3')).toEqual({ major: 4, minor: 1, patch: 0, prerelease: 'rc.3' })
   })
 
   it('tolerates surrounding whitespace', () => {
-    expect(parseVersionStrict('  4.1.9  ')).toEqual({ major: 4, minor: 1, patch: 9, prerelease: undefined })
+    expect(parseVersion('  4.1.9  ')).toEqual({ major: 4, minor: 1, patch: 9, prerelease: undefined })
   })
 
-  // The whole point of the strict parser: these are the values a runtime in
-  // the field actually reports when it cannot identify itself, and every one
-  // of them must stay unparseable so a gate fails closed instead of guessing.
+  // Unknown is not a version. It must not silently become 0.0.0 inside the
+  // parser, because a caller that cannot tell "unknown" from "0.0.0" cannot
+  // fail closed on the first and pass on the second.
   it.each([
-    ['v4', 'the legacy hardcoded header'],
-    ['4.1', 'a two-part version'],
     ['dev', 'a source build with no CI tag'],
     ['garbage', 'anything else'],
     ['', 'an empty string'],
+    ['   ', 'whitespace only'],
+    ['4.1 beta', 'trailing garbage after a valid prefix'],
+    ['abc.def.ghi', 'non-numeric components'],
+    ['4,3,0', 'the wrong separator'],
+    ['.1.2', 'a missing major'],
   ])('returns null for %p (%s)', (input) => {
-    expect(parseVersionStrict(input)).toBeNull()
+    expect(parseVersion(input)).toBeNull()
   })
 
   it('returns null for null and undefined', () => {
-    expect(parseVersionStrict(null)).toBeNull()
-    expect(parseVersionStrict(undefined)).toBeNull()
+    expect(parseVersion(null)).toBeNull()
+    expect(parseVersion(undefined)).toBeNull()
   })
 })
 
-describe('parseVersionLenient', () => {
-  it('parses a plain three-part version', () => {
-    expect(parseVersionLenient('4.1.9')).toEqual({ major: 4, minor: 1, patch: 9 })
+describe('isValidVersion', () => {
+  it('accepts every shorthand the parser accepts', () => {
+    for (const raw of ['4.3.2', 'v4.3.2', '4.3', '4', 'v5', '4.1.0-rc.1', '4.1.0+build.5']) {
+      expect(isValidVersion(raw)).toBe(true)
+    }
   })
 
-  it('fills missing components with zero', () => {
-    expect(parseVersionLenient('4.1')).toEqual({ major: 4, minor: 1, patch: 0 })
-    expect(parseVersionLenient('4')).toEqual({ major: 4, minor: 0, patch: 0 })
+  it('rejects what the parser cannot read', () => {
+    for (const raw of ['garbage', 'next', '', '   ', '4,3,0', null, undefined]) {
+      expect(isValidVersion(raw)).toBe(false)
+    }
+  })
+})
+
+describe('formatVersionForDisplay', () => {
+  it('trims a readable version', () => {
+    expect(formatVersionForDisplay('  v4.2.0 ')).toBe('v4.2.0')
   })
 
-  it('strips the v prefix and any suffix before parsing', () => {
-    expect(parseVersionLenient('v4.1.9')).toEqual({ major: 4, minor: 1, patch: 9 })
-    expect(parseVersionLenient('4.1.9-rc.1')).toEqual({ major: 4, minor: 1, patch: 9 })
-    expect(parseVersionLenient('4.1.9+build.5')).toEqual({ major: 4, minor: 1, patch: 9 })
-  })
-
-  // Degrading to the lowest possible version means a corrupt manifest field
-  // loses every comparison rather than winning one.
-  it.each([
-    ['garbage', 'a non-numeric string'],
-    ['abc.def.ghi', 'non-numeric components'],
+  // Every "incompatible versions" message must render an unestablished version
+  // the same way. A blank leaves a hole in the sentence and tells the user
+  // nothing about which of the two versions could not be read.
+  const UNREADABLE: Array<[string | null | undefined, string]> = [
     ['', 'an empty string'],
-  ])('degrades %p to 0.0.0 (%s)', (input) => {
-    expect(parseVersionLenient(input)).toEqual({ major: 0, minor: 0, patch: 0 })
-  })
+    ['   ', 'whitespace only'],
+    [null, 'null'],
+    [undefined, 'undefined'],
+  ]
 
-  it('degrades null and undefined to 0.0.0', () => {
-    expect(parseVersionLenient(null)).toEqual({ major: 0, minor: 0, patch: 0 })
-    expect(parseVersionLenient(undefined)).toEqual({ major: 0, minor: 0, patch: 0 })
+  it.each(UNREADABLE)('renders %p as "unknown" (%s)', (raw) => {
+    expect(formatVersionForDisplay(raw)).toBe('unknown')
   })
 })
 
@@ -113,6 +136,11 @@ describe('isVersionAtLeast', () => {
     expect(isVersionAtLeast('4.2.10', '4.2.1')).toBe(true)
   })
 
+  it('compares numerically, not lexicographically', () => {
+    expect(isVersionAtLeast('4.10.0', '4.9.0')).toBe(true)
+    expect(isVersionAtLeast('4.9.0', '4.10.0')).toBe(false)
+  })
+
   it('passes when the candidate sits exactly on the floor', () => {
     expect(isVersionAtLeast('4.2.1', '4.2.1')).toBe(true)
   })
@@ -123,6 +151,18 @@ describe('isVersionAtLeast', () => {
 
   it('passes a pre-release build of the required version', () => {
     expect(isVersionAtLeast('v4.1.9-rc.1', '4.1.9')).toBe(true)
+  })
+
+  // The shorthand case. `"4.3"` as a floor must block a 4.2.10 editor exactly
+  // as `"4.3.0"` would — this is the asymmetry that let a runtime publish a
+  // floor nobody enforced.
+  it('enforces a partial floor exactly as its zero-filled equivalent', () => {
+    expect(isVersionAtLeast('4.2.10', '4.3')).toBe(false)
+    expect(isVersionAtLeast('4.2.10', '4.3.0')).toBe(false)
+    expect(isVersionAtLeast('4.3.0', '4.3')).toBe(true)
+    expect(isVersionAtLeast('4.2.10', '5')).toBe(false)
+    expect(isVersionAtLeast('5.0.0', '5')).toBe(true)
+    expect(isVersionAtLeast('4.2.10', 'v4.3')).toBe(false)
   })
 
   // A peer that asks for nothing gets nothing enforced — this is what keeps
@@ -137,22 +177,35 @@ describe('isVersionAtLeast', () => {
     expect(isVersionAtLeast('4.2.0', floor)).toBe(true)
   })
 
-  it('passes when the floor itself is unparseable, since it declares nothing', () => {
+  // An unreadable floor is worth 0.0.0 and everything clears 0.0.0. It is not
+  // silent, though: the manifest schema refuses it outright and the runtime
+  // probe logs a warning, so nobody believes a constraint is applying when it
+  // is not.
+  it('passes when the floor itself is unreadable, since it declares nothing', () => {
     expect(isVersionAtLeast('4.2.0', 'garbage')).toBe(true)
-    expect(isVersionAtLeast('4.2.0', 'v4')).toBe(true)
+    expect(isVersionAtLeast('4.2.0', 'next')).toBe(true)
   })
 
   // Fails closed: an unidentifiable peer never clears a real floor.
   const UNIDENTIFIABLE: Array<[string | null | undefined, string]> = [
-    ['v4', 'the legacy header'],
     ['dev', 'a source build'],
     ['garbage', 'a corrupt value'],
+    ['', 'a blank answer'],
     [null, 'an unreachable peer'],
     [undefined, 'a missing value'],
   ]
 
   it.each(UNIDENTIFIABLE)('fails when the candidate is %p (%s) and a real floor exists', (candidate) => {
     expect(isVersionAtLeast(candidate, '4.1.0')).toBe(false)
+  })
+
+  // The legacy hardcoded header now parses (as 4.0.0) instead of being
+  // rejected as junk, and still loses — for the honest reason that 4.0.0
+  // predates the floor rather than because the string looked odd.
+  it('reads the legacy "v4" header as 4.0.0, which still fails a 4.1.0 floor', () => {
+    expect(parseVersion('v4')).toEqual({ major: 4, minor: 0, patch: 0, prerelease: undefined })
+    expect(isVersionAtLeast('v4', '4.1.0')).toBe(false)
+    expect(isVersionAtLeast('v4', '4.0.0')).toBe(true)
   })
 })
 
@@ -181,18 +234,28 @@ describe('compareSemver', () => {
   })
 
   it('strips pre-release suffix before comparing', () => {
-    // The function intentionally ignores pre-release ordering; both compare
-    // as the same `4.1.1` triple. If we ever ship pre-releases for real this
-    // contract needs revisiting, but ignoring is the safer default today.
     expect(compareSemver('4.1.1-rc.1', '4.1.1')).toBe(0)
     expect(compareSemver('4.1.1+build.5', '4.1.1-rc.1')).toBe(0)
   })
 
-  it('treats malformed inputs as 0.0.0 (defensive against corrupt manifests)', () => {
+  // A v-prefixed catalog version used to parse as 0.0.0 and sort below every
+  // plain-numbered release, so "update available" was wrong for it.
+  it('ranks a v-prefixed version by its number, not below everything', () => {
+    expect(compareSemver('v2.0.0', '1.0.0')).toBe(1)
+    expect(compareSemver('1.0.0', 'v2.0.0')).toBe(-1)
+    expect(compareSemver('v1.2.3', '1.2.3')).toBe(0)
+  })
+
+  // Sorting needs a total order, so this is the one place unknown becomes
+  // 0.0.0 — a corrupt `version` in somebody else's manifest sorts to the
+  // bottom instead of breaking the catalog. Nothing is gated on the result.
+  it('sorts an unreadable version as the lowest possible one', () => {
     expect(compareSemver('not-a-version', '0.0.0')).toBe(0)
     expect(compareSemver('', '0.0.0')).toBe(0)
-    expect(compareSemver('1.2', '1.2.0')).toBe(0) // missing patch defaults to 0
-    expect(compareSemver('abc.def.ghi', '0.0.1')).toBe(-1) // bogus < 0.0.1
+    expect(compareSemver('1.2', '1.2.0')).toBe(0)
+    expect(compareSemver('abc.def.ghi', '0.0.1')).toBe(-1)
+    expect(compareSemver('0.0.1', 'abc.def.ghi')).toBe(1)
+    expect(compareSemver('garbage', 'nonsense')).toBe(0)
   })
 })
 
@@ -214,5 +277,20 @@ describe('isCompatibleEditorVersion', () => {
   it('returns false when the editor is older than required', () => {
     expect(isCompatibleEditorVersion('5.0.0', '4.1.1')).toBe(false)
     expect(isCompatibleEditorVersion('4.2.0', '4.1.1')).toBe(false)
+  })
+
+  // The install gate and the runtime gates must answer identically for every
+  // string, or the same floor is enforced in one place and ignored in the
+  // other. This is that contract, asserted directly.
+  it.each([
+    ['4.3', '4.2.10'],
+    ['4', '4.2.10'],
+    ['v5', '4.2.10'],
+    ['4.2.10', '4.2.10'],
+    ['garbage', '4.2.10'],
+    ['', '4.2.10'],
+    ['99.0.0', '4.2.10'],
+  ])('agrees with isVersionAtLeast for floor %p against editor %p', (floor, current) => {
+    expect(isCompatibleEditorVersion(floor, current)).toBe(isVersionAtLeast(current, floor))
   })
 })

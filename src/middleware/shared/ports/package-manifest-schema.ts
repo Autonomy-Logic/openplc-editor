@@ -34,7 +34,27 @@
 
 import { z } from 'zod'
 
+import { isValidVersion } from '../../../frontend/utils/semver'
 import type { PackageManifest } from './types'
+
+/**
+ * A compatibility floor must be a version this codebase can compare.
+ *
+ * This is the exception to the "the editor is agnostic to manifest
+ * contents" rule above, and it earns it: an unreadable floor is not
+ * inert, it is a constraint the package author believes is being
+ * enforced and which silently is not. `"4.3"`, `"4"` and `"v5"` are all
+ * accepted — they mean 4.3.0 / 4.0.0 / 5.0.0 — so in practice only
+ * genuine junk (`"garbage"`, `"next"`, `"4,3,0"`) is refused.
+ *
+ * It matters most for the path this gate exists for: a `.vpp` added
+ * from disk never passes through openplc-packages' `scripts/validate.ts`,
+ * so for sideloaded packages this schema is the only boundary there is.
+ */
+const versionFloor = z
+  .string()
+  .min(1)
+  .refine(isValidVersion, { message: 'must be a version like "4.3.2", "4.3", "4" or "v4.3.2"' })
 
 export const PackageManifestSchema = z
   .object({
@@ -53,8 +73,10 @@ export const PackageManifestSchema = z
         // Authoring-side rules (minRuntimeVersion required iff a device targets
         // runtime-v4, rejected otherwise) live in openplc-packages'
         // `scripts/validate.ts`, per this file's split of responsibilities.
-        minEditorVersion: z.string().min(1).optional(),
-        minRuntimeVersion: z.string().min(1).optional(),
+        // The *format* is checked here because a floor nobody can parse is a
+        // constraint that silently does not apply — see `versionFloor`.
+        minEditorVersion: versionFloor.optional(),
+        minRuntimeVersion: versionFloor.optional(),
       })
       .passthrough(),
     devices: z.array(z.object({}).passthrough()).min(1),
