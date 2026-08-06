@@ -1,9 +1,17 @@
 # Editor + Runtime + VPP Version Compatibility — Strategy
 
-> Status: **agreed design** (Marcone + Thiago Alves, 2026-08-05)
+> Status: **agreed design, implemented** (Marcone + Thiago Alves, 2026-08-05)
 > Jira: [DOPE-448](https://autonomylogic.atlassian.net/browse/DOPE-448) (epic DOPE-317 — VPP in the Editor)
 > Scope: `openplc-editor` + `openplc-web` (shared surface — byte-identical),
 > `openplc-runtime`, `openplc-packages`
+> Shipped in: openplc-editor#993 · openplc-runtime#163 · openplc-packages#28 ·
+> openplc-web#652 — see §8 for what each one covers.
+
+**Reading this later:** §1 is the design and stays true. **§2 is a snapshot of
+the state _before_ this work, dated 2026-08-05** — it describes gaps the PRs
+above have since closed, and is kept because the reasoning only makes sense
+against what it was fixing. §8 marks what landed. Do not read §2 as a to-do
+list.
 
 ## 1. The decision
 
@@ -32,7 +40,11 @@ The accepted trade-off: the runtime _advertises_ rather than _enforces_, so a
 client that skips the check can still upload. This protects the real case (our
 editor against our runtime) and is not a security boundary — see §7.
 
-## 2. What is missing today, per declaration
+## 2. What was missing, per declaration — baseline as of 2026-08-05
+
+_Historical. Every gap below is closed by the PRs listed at the top; §8 says
+which. Kept verbatim because the design decisions in §1 and §3 only make sense
+against the state they were correcting._
 
 ### 2.1 VPP — the field exists, nothing checks it
 
@@ -71,9 +83,11 @@ or scan time.
 via `ARG RUNTIME_VERSION`), exposed at `GET /api/version` and on the
 `X-OpenPLC-Runtime-Version` header (`webserver/restapi.py:46`).
 
-There is no endpoint where the runtime states what it needs from an editor.
-`handle_upload_file` accepts any ZIP that passes `analyze_zip` (path traversal,
-size, ZIP-bomb ratio, denylisted executable extensions).
+At the time of writing there was no endpoint where the runtime stated what it
+needs from an editor, and `handle_upload_file` accepted any ZIP that passed
+`analyze_zip` (path traversal, size, ZIP-bomb ratio, denylisted executable
+extensions). `GET /api/capabilities` (§3.1) closes this in openplc-runtime#163;
+the upload path itself is deliberately left untouched — see §7.
 
 ### 2.3 Editor — the constant exists under a narrower name
 
@@ -148,21 +162,28 @@ Reverse case — editor **4.2.0** against the same runtime:
 editor 4.2.0   >= runtime's minEditorVersion (4.2.1)?     NO   → blocked
 ```
 
-Nothing is sent. This is the "and vice-versa" direction from the card, and it is
-what does not exist today.
+Nothing is sent. This is the "and vice-versa" direction from the card — the one
+that had no enforcement at all before this work.
 
-**Legacy runtime** — `GET /api/capabilities` returns `404`:
+**Legacy runtime** — `GET /api/capabilities` fails. In practice with **401**,
+not 404: the runtime's `restapi.py` ends in a
+`@restapi_bp.route("/<command>")` catch-all behind `@jwt_required()`, so an
+unknown path under `/api/` falls into it and comes back "Missing Authorization
+Header". Verified against a real pre-change container. The probe treats any
+unreadable answer the same way, so both shapes fall back identically:
 
 ```
-GET /api/version  →  {"version": "v4.1.7"}
+GET /api/capabilities  →  401 (or 404)
+GET /api/version       →  {"version": "v4.1.7"}
 
 runtime declares no floor         → nothing to check in that direction
 runtime 4.1.7 >= MIN_RUNTIME_VERSION (4.1.0)?  yes  → upload proceeds
 user-management needs 4.1.9?      no  → screen hidden
 ```
 
-Identical to today's behaviour, plus one console warning that the runtime does
-not publish its requirements.
+Identical to the previous behaviour. The fallback is deliberately **silent** —
+that 401 is the normal answer from every runtime already deployed, so warning on
+it would nag on every upload.
 
 ### 3.2 VPP → Editor, at install time
 
@@ -208,15 +229,19 @@ connected runtime reports v4.1.7
 
 ## 4. Where each check lives
 
-| Check                              | Gate                                                              | Failure surface                    |
-| ---------------------------------- | ----------------------------------------------------------------- | ---------------------------------- |
-| runtime new enough for this editor | `probe-runtime-version.ts` + `MIN_RUNTIME_VERSION`                | upload blocked pre-compile         |
-| editor new enough for this runtime | `probe-runtime-version.ts` + `minEditorVersion` from the endpoint | upload blocked pre-compile         |
-| editor new enough for this VPP     | `package-manager-module.ts::install` (+ on load)                  | install rejected; package unusable |
-| runtime new enough for this VPP    | compile pipeline, `runtime-v4` targets                            | compile blocked                    |
-| per-feature runtime capability     | existing predicates in `runtime-version-gate.ts`                  | UI surface hidden                  |
+| Check                              | Gate                                                              | Failure surface                       |
+| ---------------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| runtime new enough for this editor | `probe-runtime-version.ts` + `MIN_RUNTIME_VERSION`                | upload blocked pre-compile            |
+| editor new enough for this runtime | `probe-runtime-version.ts` + `minEditorVersion` from the endpoint | upload blocked pre-compile            |
+| editor new enough for this VPP     | `package-manager-module.ts::install`                              | install rejected, both versions named |
+| runtime new enough for this VPP    | compile pipeline, `runtime-v4` targets                            | compile blocked                       |
+| per-feature runtime capability     | existing predicates in `runtime-version-gate.ts`                  | UI surface hidden                     |
 
 Every row is decided in the editor. The runtime and the VPP only declare.
+
+**Not covered: an already-installed package after an editor downgrade.** The
+gate runs at install, so a package installed under 4.3 keeps loading on 4.2.
+Re-checking on load would close it — see §10 for why it is still open.
 
 ## 5. Error messages
 
@@ -251,11 +276,19 @@ never "incompatible versions".
 Everything already in the field predates this work, so absence must be a
 supported state rather than an error.
 
-| Peer state                                               | Behaviour                                                                                    |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Runtime without `/api/capabilities`                      | no editor floor to check; existing `MIN_RUNTIME_VERSION` gate still applies; console warning |
-| Runtime version unparseable (`"v4"`, `"dev"`)            | fail closed — current behaviour, unchanged                                                   |
-| VPP without `minRuntimeVersion` on a `runtime-v4` target | install allowed, runtime match unverifiable, console warning at install                      |
+| Peer state                                               | Behaviour as implemented                                                                       |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Runtime without `/api/capabilities`                      | no editor floor to check; `MIN_RUNTIME_VERSION` gate still applies; **silent** — see below     |
+| Runtime version unparseable (`"v4"`, `"dev"`)            | fail closed — previous behaviour, unchanged                                                    |
+| Runtime declares an _unreadable_ floor (`"4.2"`, junk)   | floor ignored, upload proceeds, **no signal** — known gap, see §10                             |
+| VPP without `minRuntimeVersion` on a `runtime-v4` target | install allowed, runtime match unverifiable, no warning; blocked at package build time instead |
+
+The first row is silent **on purpose**: a runtime with no `/api/capabilities` is
+every device currently deployed, so warning there would fire on every upload from
+every editor. The third row is different — a floor that is present but malformed
+is a mistake someone made, and swallowing it means a constraint the runtime
+believes it is enforcing silently is not. That one deserves a warning and does
+not have one yet.
 
 Because the runtime never enforces, no closing window is needed on the upload
 path: an old runtime simply contributes no constraint. The only future tightening
@@ -276,49 +309,54 @@ not be described as one. If enforcement is ever needed, the natural follow-up is
 for the editor to send its version on upload and for the runtime to compare —
 additive, and not required by anything in this plan.
 
-## 8. Delivery phases
+## 8. Delivery — what landed where
 
-No ordering constraint between phases: the runtime never blocks, so a phase
-shipping early cannot break a peer. Ordered by value delivered.
+**All six phases are implemented.** There was deliberately no ordering
+constraint between them: the runtime never blocks, so a phase shipping early
+cannot break a peer.
 
-**Phase 1 — one semver parser.** Unify `frontend/utils/semver.ts` and
-`parseRuntimeVersion` into a single shared helper with one explicit policy for
-malformed and pre-release inputs. Existing call sites keep their current
-functions as thin wrappers so no behaviour changes and existing tests pass
-untouched. Precondition for phases 2–4, which all compare version strings.
-_Repos: editor + web (byte-identical) · ~half a day._
+| #   | Phase                               | Repos             | Landed in                                |
+| --- | ----------------------------------- | ----------------- | ---------------------------------------- |
+| 1   | One semver parser                   | editor + web      | openplc-editor#993 · openplc-web#652     |
+| 2   | VPP install gate                    | editor + web      | openplc-editor#993 · openplc-web#652     |
+| 3   | `minRuntimeVersion` in the manifest | packages + editor | openplc-packages#28 · openplc-editor#993 |
+| 4   | `GET /api/capabilities`             | runtime           | openplc-runtime#163                      |
+| 5   | Editor consumes the endpoint        | editor + web      | openplc-editor#993 · openplc-web#652     |
+| 6   | Tests                               | editor + web      | openplc-editor#993 · openplc-web#652     |
 
-**Phase 2 — VPP install gate.** `package-manager-module.ts::install` checks
-`minEditorVersion` against `APP_VERSION`, next to the signature verification;
-same check when loading an already-installed package. `catalog-browser.tsx`
-derives its state from the shared helper. Correct
-`openplc-packages/docs/package-format.md:69` — it becomes true.
-_Repos: editor + web · ~1 day._
+**Phase 1 — one semver parser.** `frontend/utils/semver.ts` owns the parse and
+the ordering; `parseRuntimeVersion` and `compareSemver` became thin wrappers, so
+no call site changed and existing tests passed untouched. It lives in
+`frontend/utils/` rather than `backend/shared/` because the layer rules allow
+`backend-shared → utils` and not the reverse.
 
-**Phase 3 — `minRuntimeVersion` in the manifest.** Add the field to
-`schema/manifest.schema.json`, conditionally required when any device targets
-`runtime-v4`; enforce in `scripts/validate.ts` so a malformed package never
-reaches a user; check it in the compile pipeline against the connected runtime.
-_Repos: packages + editor + web · ~1 day._
+**Phase 2 — VPP install gate.** `package-manager-module.ts::install` compares
+`minEditorVersion` against `APP_VERSION`, next to the signature verification, so
+one gate covers both the catalog and the "Add from file…" path.
+`openplc-packages/docs/package-format.md:69` is now true.
 
-**Phase 4 — `GET /api/capabilities`.** New unauthenticated endpoint returning
-`runtimeVersion` + `minEditorVersion`, with the constant living beside
-`RUNTIME_VERSION` in `webserver/version.py`.
-_Repo: runtime · ~half a day._
+**Phase 3 — `minRuntimeVersion` in the manifest.** Field added to the schema,
+conditionally required when any device targets `runtime-v4` and rejected
+otherwise, enforced in `scripts/validate.ts`; compared in the compile pipeline
+against the connected runtime.
 
-**Phase 5 — editor consumes it.** `probe-runtime-version.ts` reads the endpoint,
-treats `404` as "declares nothing", and blocks upload when
-`APP_VERSION < minEditorVersion`. Rename `MIN_STRUCPP_RUNTIME_VERSION` to
-`MIN_RUNTIME_VERSION` (keeping the old name as an alias) so the global reads as
-what it is.
-_Repos: editor + web · ~1 day._
+**Phase 4 — `GET /api/capabilities`.** Unauthenticated endpoint returning
+`runtimeVersion` + `minEditorVersion`, constant beside `RUNTIME_VERSION` in
+`webserver/version.py`.
 
-**Phase 6 — tests.** Table of `(editorVersion, runtimeVersion, vppManifest) →
-allow | block | warn` covering each of the four comparisons plus the
-declares-nothing and unparseable rows.
-_Repos: editor + web · ~half a day._
+**Phase 5 — editor consumes it.** `probe-runtime-version.ts` prefers the
+endpoint and falls back to `/api/version`. Note the correction to the original
+plan: a runtime predating the endpoint answers **401**, not 404 — its
+`restapi.py` ends in a `@restapi_bp.route("/<command>")` catch-all behind
+`@jwt_required()`, so an unknown path lands there. Verified against a real
+pre-change container. The probe therefore keys off "can I read a version out of
+this answer" rather than off a status code, and covers both shapes.
+`MIN_STRUCPP_RUNTIME_VERSION` renamed to `MIN_RUNTIME_VERSION`, old name kept as
+an alias.
 
-Total: **~4,5 days**.
+**Phase 6 — tests.** Automated coverage of all four comparisons plus the
+declares-nothing and unparseable rows. Also verified manually end-to-end with
+negative controls, including against a real Raspberry Pi reporting `v4.1.9`.
 
 ## 9. Explicitly out of scope
 
@@ -336,15 +374,48 @@ Considered and dropped, so nobody re-derives them:
   releases that do not exist yet is unknowable — any value either blocks
   compatible future peers or does nothing.
 
-## 10. Open questions
+## 10. Open questions and known gaps
 
-1. **What value does the runtime publish as `minEditorVersion` today?** Needs a
-   concrete audit of when the current bundle layout stabilised. Publishing a
-   floor that is too high locks out working editors; too low makes the field
-   decorative. Safest start is the oldest editor known to work with the strucpp
-   pipeline.
-2. **Does an installed-but-incompatible VPP get hidden or shown-as-unusable?**
-   Hiding is cleaner; showing explains why a board disappeared after an editor
-   downgrade.
-3. **Warning surface for peers that declare nothing** (§6) — console only, or a
-   one-time notice in the UI?
+**Decided**
+
+1. ~~**What value does the runtime publish as `minEditorVersion`?**~~ →
+   **`4.1.0`**, set in `webserver/version.py`. That is where the STruC++
+   pipeline landed, so it locks out nobody who works today; 4.0.x editors
+   emitted MatIEC artefacts the runtime cannot build at all. The rule for
+   raising it is stated on the constant itself: only when an older editor
+   genuinely produces a bundle this runtime would mis-compile. It is not a build
+   counter.
+2. ~~**Warning surface for a runtime that declares nothing?**~~ → **silent**, for
+   the reason in §6: that is every deployed device.
+
+**Still open**
+
+3. **An unreadable floor is discarded with no signal.** `isVersionAtLeast`
+   returns `true` when it cannot parse the _minimum_, so
+   `minEditorVersion: "4.2"` — a plausible hand-written shorthand — disables the
+   gate entirely and says nothing. The asymmetry is the problem: the same string
+   is fatal as the _candidate_, with a user-visible message, and invisible as the
+   _floor_. The log channel is already threaded through the probe; this needs one
+   warning. No test can catch it today because the symptom is the absence of a
+   symptom.
+4. **A malformed floor in a VPP manifest becomes "no floor".**
+   `package-manifest-schema.ts` accepts any non-empty string and the install gate
+   compares leniently, so `minEditorVersion: "garbage"` installs anywhere.
+   `openplc-packages`' `scripts/validate.ts` covers published packages, but the
+   install gate exists precisely because a sideloaded `.vpp` never passes through
+   that validator — for that entry path this schema is the only boundary. Cost of
+   requiring a strict `x.y.z` is nil: `"4.3"` and `"v5"` are already honoured, so
+   only total junk changes behaviour.
+5. **An installed-but-incompatible VPP keeps loading after an editor downgrade**
+   (§4). Re-checking `minEditorVersion` on load would close it. Open sub-question
+   if we do: hide the package, or show it as unusable? Hiding is cleaner; showing
+   explains why a board disappeared.
+6. **Three hand-rolled comparators remain** in `runtime-version-gate.ts`
+   (`isStrucppCompatibleRuntime`, `isUserManagementCapableRuntime`) doing their
+   own `if (v.major > 4) …` next to the constants they compare. Both are exactly
+   equivalent to `isVersionAtLeast(raw, <constant>)`, `null` handling included.
+   Not a bug — the same duplication this work set out to remove, one level up:
+   the parser got unified, the comparators did not.
+
+Items 3–6 were raised in review of openplc-editor#993. Items 3, 4 and 6 touch
+shared-surface files, so any fix needs the mirrored commit in openplc-web.
