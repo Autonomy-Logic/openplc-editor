@@ -51,7 +51,7 @@ const EnumeratedTable = ({
     const current = dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'enumerated') return
     updateDatatype(name, { ...current, values: newValues })
-    handleFileAndWorkspaceSavedState(name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const columnHelper = createColumnHelper<{ description: string }>()

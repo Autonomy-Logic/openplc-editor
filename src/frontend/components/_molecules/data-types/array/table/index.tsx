@@ -49,7 +49,7 @@ const DimensionsTable = ({
     const current = dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'array') return
     updateDatatype(name, { ...current, dimensions: newDimensions })
-    handleFileAndWorkspaceSavedState(name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const columnHelper = createColumnHelper<{ dimension: string }>()

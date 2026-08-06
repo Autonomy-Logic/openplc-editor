@@ -91,6 +91,10 @@ function renameElement(
   state.ladderFlowActions.renameLadderFlow(oldName, newName)
   state.fbdFlowActions.renameFBDFlow(oldName, newName)
 
+  // Follow the undo/redo stacks to the new key — otherwise the history is
+  // orphaned under the old name and undo becomes a silent no-op after rename.
+  state.snapshotActions.renameHistory(oldName, newName)
+
   afterRename?.(oldName, newName)
 
   // A rename is an unsaved structural change — flag it dirty (the renamed file
@@ -968,6 +972,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       )
     },
 
+    renameHistory: (oldName, newName) => {
+      setState(
+        produce((state: SharedRootState) => {
+          const history = state.undoRedo[oldName]
+          if (!history) return
+          delete state.undoRedo[oldName]
+          state.undoRedo[newName] = history
+        }),
+      )
+    },
+
     markSaved: (pouName) => {
       setState(
         produce((state: SharedRootState) => {
@@ -1052,7 +1067,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       } else {
         const restoredDataType = snapshot.dataTypes?.[0]
-        if (restoredDataType) state.projectActions.applyDatatypeSnapshot(pouName, restoredDataType)
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state
@@ -1123,7 +1142,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       } else {
         const restoredDataType = snapshot.dataTypes?.[0]
-        if (restoredDataType) state.projectActions.applyDatatypeSnapshot(pouName, restoredDataType)
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state

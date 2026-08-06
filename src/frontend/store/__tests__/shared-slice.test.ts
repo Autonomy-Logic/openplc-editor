@@ -1080,6 +1080,23 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // renameHistory
+    // -----------------------------------------------------------------------
+    describe('renameHistory', () => {
+      it('moves the undo/redo bucket to the new key', () => {
+        store.getState().snapshotActions.pushToHistory('Old', snapshot1)
+        store.getState().snapshotActions.renameHistory('Old', 'New')
+        expect(store.getState().undoRedo['Old']).toBeUndefined()
+        expect(store.getState().undoRedo['New'].past).toEqual([snapshot1])
+      })
+
+      it('does nothing when the old key has no history', () => {
+        store.getState().snapshotActions.renameHistory('Missing', 'New')
+        expect(store.getState().undoRedo['New']).toBeUndefined()
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // undo
     // -----------------------------------------------------------------------
     describe('undo', () => {
@@ -1565,6 +1582,23 @@ describe('createSharedSlice', () => {
         expect(history.past).toHaveLength(0)
         expect(history.future).toHaveLength(1)
         expect(history.future[0].dataTypes).toEqual([edited])
+      })
+
+      it('rename keeps the history and undo restores content under the new name', () => {
+        const initial = getColorsDataType()
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().projectActions.updateDatatype('Colors', edited)
+
+        expect(store.getState().datatypeActions.rename('Colors', 'Palette').ok).toBe(true)
+        expect(store.getState().undoRedo['Colors']).toBeUndefined()
+        expect(store.getState().undoRedo['Palette'].past).toHaveLength(1)
+
+        store.getState().snapshotActions.undo('Palette')
+
+        // Content reverts, but the name stays pinned to the current key so
+        // tabs/files/editors (already rekeyed by the rename) don't desync.
+        const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Palette')
+        expect(dataType).toEqual({ ...initial, name: 'Palette' })
       })
 
       it('redo leaves the data type untouched when the future snapshot has no dataTypes entry', () => {

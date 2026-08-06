@@ -112,7 +112,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     const updatedData = { ...data }
     updatedData.initialValue = e.target.value
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
-    handleFileAndWorkspaceSavedState(data.name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleSelect = (definition: string, value: string) => {
@@ -122,7 +122,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       ...data,
       baseType: { value, definition },
     } as PLCArrayDatatype)
-    handleFileAndWorkspaceSavedState(data.name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   // `updateDatatype` is a full replace — never pass a partial object,
@@ -130,7 +130,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   // gets stripped and downstream selectors lose the entry.
   const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
     updateDatatype(data.name, { ...data, dimensions: newRows })
-    handleFileAndWorkspaceSavedState(data.name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const addNewRow = () => {

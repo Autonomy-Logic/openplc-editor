@@ -46,7 +46,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
       ...data,
       initialValue: value,
     })
-    handleFileAndWorkspaceSavedState(data.name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   // `updateDatatype` is a full replace — spread `data` first so we
@@ -54,7 +54,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   // downstream consumers.
   const writeValues = (newValues: PLCEnumeratedDatatype['values']) => {
     updateDatatype(data.name, { ...data, values: newValues })
-    handleFileAndWorkspaceSavedState(data.name)
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const addNewRow = () => {
