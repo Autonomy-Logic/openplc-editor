@@ -1479,8 +1479,14 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
       })
 
+      const getColorsDataType = () => {
+        const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')
+        if (!dataType) throw new Error('Colors data type missing')
+        return dataType
+      }
+
       it('undo restores the snapshot data type and moves the current entry to future', () => {
-        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().projectActions.updateDatatype('Colors', edited)
 
@@ -1494,7 +1500,7 @@ describe('createSharedSlice', () => {
       })
 
       it('redo reapplies the undone data type edit', () => {
-        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().projectActions.updateDatatype('Colors', edited)
         store.getState().snapshotActions.undo('Colors')
@@ -1509,7 +1515,7 @@ describe('createSharedSlice', () => {
       })
 
       it('undo marks the data type file saved when history returns to the saved depth', () => {
-        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().snapshotActions.markSaved('Colors')
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
@@ -1522,7 +1528,7 @@ describe('createSharedSlice', () => {
       })
 
       it('undo marks the data type file unsaved when history diverges from the saved depth', () => {
-        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [edited] })
         store.getState().snapshotActions.markSaved('Colors')
@@ -1536,7 +1542,7 @@ describe('createSharedSlice', () => {
       })
 
       it('redo marks the data type file unsaved when history diverges from the saved depth', () => {
-        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().snapshotActions.undo('Colors')
         store.getState().fileActions.updateFile({ name: 'Colors', saved: true })
