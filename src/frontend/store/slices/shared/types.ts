@@ -2,6 +2,7 @@ import type { RawProjectFile } from '../../../../middleware/shared/ports/project
 import type {
   DeviceConfiguration,
   DevicePin,
+  PLCDataType,
   PLCProjectData,
   PLCVariable,
   ProjectMeta,
@@ -59,10 +60,14 @@ export type SharedResponse = {
 
 export type PouHistorySnapshot = {
   variables: PLCVariable[]
+  /** POU body; `null` for data type snapshots (`dataTypes` carries the state instead). */
   body: unknown
   globalVariables?: PLCVariable[]
   ladderFlow?: unknown
   fbdFlow?: unknown
+  /** Set when the history key is a data type instead of a POU. Always a
+   *  single element today — the array shape mirrors `HistorySnapshot.dataTypes`. */
+  dataTypes?: PLCDataType[]
 }
 
 export type PouHistory = {
@@ -117,6 +122,7 @@ export type EtherCATDeviceActions = {
 
 export type SnapshotActions = {
   pushToHistory: (pouName: string, snapshot: PouHistorySnapshot) => void
+  renameHistory: (oldName: string, newName: string) => void
   markSaved: (pouName: string) => void
   markAllSaved: (except?: readonly string[]) => void
   /** @returns `false` when the POU's graphical body is stale, so history was left untouched. */

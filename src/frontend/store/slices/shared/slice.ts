@@ -117,6 +117,10 @@ function renameElement(
   state.ladderFlowActions.renameLadderFlow(oldName, newName)
   state.fbdFlowActions.renameFBDFlow(oldName, newName)
 
+  // Follow the undo/redo stacks to the new key — otherwise the history is
+  // orphaned under the old name and undo becomes a silent no-op after rename.
+  state.snapshotActions.renameHistory(oldName, newName)
+
   afterRename?.(oldName, newName)
 
   // A rename is an unsaved structural change — flag it dirty (the renamed file
@@ -1010,6 +1014,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       )
     },
 
+    renameHistory: (oldName, newName) => {
+      setState(
+        produce((state: SharedRootState) => {
+          const history = state.undoRedo[oldName]
+          if (!history) return
+          delete state.undoRedo[oldName]
+          state.undoRedo[newName] = history
+        }),
+      )
+    },
+
     markSaved: (pouName) => {
       setState(
         produce((state: SharedRootState) => {
@@ -1044,17 +1059,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.past[history.past.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to future. Plain references — the store is
       // immer-managed (frozen, copy-on-write), so later edits can never
       // reach a captured snapshot.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1067,28 +1089,40 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state
       const afterUndo = getState().undoRedo[pouName]
       if (afterUndo?.savedAtDepth !== null && afterUndo?.savedAtDepth === afterUndo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },
@@ -1102,15 +1136,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       const snapshot = history.future[history.future.length - 1]
       const pou = state.project.data.pous.find((p) => p.name === pouName)
-      if (!pou) return true
+      const dataType = pou ? undefined : state.project.data.dataTypes.find((d) => d.name === pouName)
 
       // Save current state to past. Plain references — see undo.
-      const currentSnapshot: PouHistorySnapshot = {
-        variables: pou.interface?.variables ?? [],
-        body: pou.body.value,
-        ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
-        fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
-        globalVariables: state.project.data.configurations.resource.globalVariables,
+      let currentSnapshot: PouHistorySnapshot
+      if (pou) {
+        currentSnapshot = {
+          variables: pou.interface?.variables ?? [],
+          body: pou.body.value,
+          ladderFlow: state.ladderFlows.find((f) => f.name === pouName),
+          fbdFlow: state.fbdFlows.find((f) => f.name === pouName),
+          globalVariables: state.project.data.configurations.resource.globalVariables,
+        }
+      } else if (dataType) {
+        currentSnapshot = { variables: [], body: null, dataTypes: [dataType] }
+      } else {
+        return true
       }
 
       setState(
@@ -1123,28 +1164,40 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }),
       )
 
-      state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
-        language: pou.body.language,
-        value: snapshot.body,
-      })
-      if (snapshot.globalVariables) {
-        state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
-      }
-      // Restore graphical flow state (nodes, edges, positions)
-      if (snapshot.ladderFlow) {
-        state.ladderFlowActions.applyLadderFlowSnapshot({
-          editorName: pouName,
-          snapshot: snapshot.ladderFlow as LadderFlowType,
+      if (pou) {
+        state.projectActions.applyPouSnapshot(pouName, snapshot.variables, {
+          language: pou.body.language,
+          value: snapshot.body,
         })
-      }
-      if (snapshot.fbdFlow) {
-        state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        if (snapshot.globalVariables) {
+          state.projectActions.setGlobalVariables({ variables: snapshot.globalVariables })
+        }
+        // Restore graphical flow state (nodes, edges, positions)
+        if (snapshot.ladderFlow) {
+          state.ladderFlowActions.applyLadderFlowSnapshot({
+            editorName: pouName,
+            snapshot: snapshot.ladderFlow as LadderFlowType,
+          })
+        }
+        if (snapshot.fbdFlow) {
+          state.fbdFlowActions.applyFBDFlowSnapshot({ editorName: pouName, snapshot: snapshot.fbdFlow as FBDFlowType })
+        }
+      } else {
+        const restoredDataType = snapshot.dataTypes?.[0]
+        // Pin the name to the current key: snapshots taken before a rename
+        // carry the old name, and restoring it would desync tabs/files/editors.
+        if (restoredDataType) {
+          state.projectActions.applyDatatypeSnapshot(pouName, { ...restoredDataType, name: pouName })
+        }
       }
 
       // Check if we've returned to the saved state
       const afterRedo = getState().undoRedo[pouName]
       if (afterRedo?.savedAtDepth !== null && afterRedo?.savedAtDepth === afterRedo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },
