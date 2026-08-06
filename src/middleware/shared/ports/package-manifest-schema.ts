@@ -44,6 +44,17 @@ export const PackageManifestSchema = z
         id: z.string().min(1),
         name: z.string().min(1),
         version: z.string().min(1),
+        // Compatibility floors (DOPE-448). Optional on purpose: packages built
+        // before these fields existed must keep installing, and a package that
+        // declares no floor declares no constraint. They are typed here rather
+        // than left to `.passthrough()` because the install gate compares them
+        // — a field a gate reads should not reach it as `unknown`.
+        //
+        // Authoring-side rules (minRuntimeVersion required iff a device targets
+        // runtime-v4, rejected otherwise) live in openplc-packages'
+        // `scripts/validate.ts`, per this file's split of responsibilities.
+        minEditorVersion: z.string().min(1).optional(),
+        minRuntimeVersion: z.string().min(1).optional(),
       })
       .passthrough(),
     devices: z.array(z.object({}).passthrough()).min(1),
