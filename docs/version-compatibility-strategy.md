@@ -279,22 +279,29 @@ supported state rather than an error.
 | Peer state                                               | Behaviour as implemented                                                                       |
 | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Runtime without `/api/capabilities`                      | no editor floor to check; `MIN_RUNTIME_VERSION` gate still applies; **silent** — see below     |
-| Runtime version unparseable (`"v4"`, `"dev"`)            | fail closed — previous behaviour, unchanged                                                    |
-| Runtime declares an _unreadable_ floor (`"4.2"`, junk)   | floor ignored, upload proceeds, **no signal** — known gap, see §10                             |
+| Runtime version unreadable (`"dev"`, junk)               | fail closed — previous behaviour, unchanged                                                    |
+| Runtime declares a partial floor (`"4.3"`, `"4"`)        | enforced as `4.3.0` / `4.0.0` — a missing component is zero everywhere                         |
+| Runtime declares an _unreadable_ floor (junk)            | floor ignored, upload proceeds, **warning logged** to the compile console                      |
 | VPP without `minRuntimeVersion` on a `runtime-v4` target | install allowed, runtime match unverifiable, no warning; blocked at package build time instead |
+| VPP with an _unreadable_ floor                           | manifest rejected at install — the schema refuses a floor it cannot parse                      |
 
 The first row is silent **on purpose**: a runtime with no `/api/capabilities` is
 every device currently deployed, so warning there would fire on every upload from
-every editor. The third row is different — a floor that is present but malformed
+every editor. The fourth row is different — a floor that is present but malformed
 is a mistake someone made, and swallowing it means a constraint the runtime
-believes it is enforcing silently is not. That one deserves a warning and does
-not have one yet.
+believes it is enforcing silently is not. That one now warns.
+
+Note the third row: `"4.3"` is **not** an unreadable floor. A missing component
+is zero throughout the codebase, so a hand-written shorthand is enforced exactly
+as its zero-filled equivalent. Only genuine junk reaches the fourth row, which is
+why refusing it in a manifest costs nothing.
 
 Because the runtime never enforces, no closing window is needed on the upload
-path: an old runtime simply contributes no constraint. The only future tightening
-worth scheduling is making `minRuntimeVersion` mandatory for `runtime-v4`
-packages, which is enforced at **package build time** (`scripts/validate.ts`) and
-so never breaks an installed package.
+path: an old runtime simply contributes no constraint. Making `minRuntimeVersion`
+mandatory for `runtime-v4` packages already ships, enforced at **package build
+time** (`scripts/validate.ts`), so it never breaks an installed package. The
+remaining gap is install-time enforcement for sideloaded packages, which never
+pass through that validator — see §10.
 
 ## 7. Accepted limitation
 
@@ -325,10 +332,25 @@ cannot break a peer.
 | 6   | Tests                               | editor + web      | openplc-editor#993 · openplc-web#652     |
 
 **Phase 1 — one semver parser.** `frontend/utils/semver.ts` owns the parse and
-the ordering; `parseRuntimeVersion` and `compareSemver` became thin wrappers, so
-no call site changed and existing tests passed untouched. It lives in
-`frontend/utils/` rather than `backend/shared/` because the layer rules allow
-`backend-shared → utils` and not the reverse.
+the ordering; `parseRuntimeVersion` and `compareSemver` are thin wrappers over
+it. It lives in `frontend/utils/` rather than `backend/shared/` because the layer
+rules allow `backend-shared → utils` and not the reverse.
+
+The first cut of this kept _two_ parsers — a strict one and a lenient one, chosen
+by name at the call site — which review showed was still one too many: the same
+string meant different things depending on which a caller reached for, and that
+is the defect the phase existed to remove (see §10 items 3 and 6). There is now
+exactly one `parseVersion`, applying one rule: a `v` prefix is decoration, a
+missing component is zero, anything else is UNKNOWN (`null`). Unknown never
+becomes `0.0.0` behind a caller's back, so a gate can still distinguish "I cannot
+read this" from "this is old" and fail closed on the first. The one place a total
+order is genuinely required — sorting catalog rows — coerces unknown to `0.0.0`
+explicitly, inside `compareSemver`, where nothing is gated on the result.
+
+Consequence worth recording: the legacy `"v4"` header now parses as `4.0.0`
+instead of being rejected as unreadable. No gate's answer changes — `4.0.0` is
+below `MIN_RUNTIME_VERSION` either way — but it is refused because it is old,
+not because the string looked odd.
 
 **Phase 2 — VPP install gate.** `package-manager-module.ts::install` compares
 `minEditorVersion` against `APP_VERSION`, next to the signature verification, so
@@ -388,34 +410,49 @@ Considered and dropped, so nobody re-derives them:
 2. ~~**Warning surface for a runtime that declares nothing?**~~ → **silent**, for
    the reason in §6: that is every deployed device.
 
+3. ~~**An unreadable floor is discarded with no signal.**~~ → **fixed**
+   (openplc-editor#993 · openplc-web#652). Two halves. The one that mattered in
+   practice was that `"4.2"` was not "unreadable" in one gate and was in another:
+   the install gate honoured it as 4.2.0 while `isVersionAtLeast` dropped it. A
+   missing component is now zero everywhere, so a partial floor is enforced
+   exactly as its zero-filled equivalent, and `isCompatibleEditorVersion`
+   delegates to `isVersionAtLeast` so the two gates cannot disagree at all. What
+   remains genuinely unreadable is junk, and `probe-runtime-version.ts` logs a
+   warning when a runtime publishes it. The upload still proceeds — refusing a
+   device over a typo in its metadata would be worse — but a constraint the
+   runtime believes it is enforcing can no longer go missing in silence.
+4. ~~**A malformed floor in a VPP manifest becomes "no floor".**~~ → **fixed**
+   (openplc-editor#993 · openplc-web#652). `package-manifest-schema.ts` refuses a
+   `minEditorVersion` / `minRuntimeVersion` it cannot parse, naming the field in
+   the error. As predicted, the cost is nil: `"4.3"`, `"4"`, `"v5"` and
+   pre-release suffixes all pass, so only genuine junk changes behaviour. This is
+   the only boundary a sideloaded `.vpp` crosses, which is the entry path the
+   install gate exists for.
+5. ~~**Hand-rolled comparators remain**~~ → **fixed** (openplc-editor#993 ·
+   openplc-web#652). `isStrucppCompatibleRuntime` and
+   `isUserManagementCapableRuntime` are now `isVersionAtLeast(raw, <constant>)`.
+   (The item said "three" and named two — there were two.) The equivalence was
+   verified exhaustively before the swap, but the reason to do it turned out to
+   be sharper than duplication: the hand-rolled bodies hardcoded the _shape_ of
+   the constant beside them. `return v.minor >= 1` is correct only because the
+   floor ends in `.0`; raise `MIN_RUNTIME_VERSION` to `4.1.5` and it keeps
+   admitting 4.1.0 while every behavioural test still passes, because those tests
+   were written against the old floor too. Guard tests now derive their
+   expectations from the constants, so a re-inlined comparison fails immediately.
+
 **Still open**
 
-3. **An unreadable floor is discarded with no signal.** `isVersionAtLeast`
-   returns `true` when it cannot parse the _minimum_, so
-   `minEditorVersion: "4.2"` — a plausible hand-written shorthand — disables the
-   gate entirely and says nothing. The asymmetry is the problem: the same string
-   is fatal as the _candidate_, with a user-visible message, and invisible as the
-   _floor_. The log channel is already threaded through the probe; this needs one
-   warning. No test can catch it today because the symptom is the absence of a
-   symptom.
-4. **A malformed floor in a VPP manifest becomes "no floor".**
-   `package-manifest-schema.ts` accepts any non-empty string and the install gate
-   compares leniently, so `minEditorVersion: "garbage"` installs anywhere.
-   `openplc-packages`' `scripts/validate.ts` covers published packages, but the
-   install gate exists precisely because a sideloaded `.vpp` never passes through
-   that validator — for that entry path this schema is the only boundary. Cost of
-   requiring a strict `x.y.z` is nil: `"4.3"` and `"v5"` are already honoured, so
-   only total junk changes behaviour.
 5. **An installed-but-incompatible VPP keeps loading after an editor downgrade**
    (§4). Re-checking `minEditorVersion` on load would close it. Open sub-question
    if we do: hide the package, or show it as unusable? Hiding is cleaner; showing
    explains why a board disappeared.
-6. **Three hand-rolled comparators remain** in `runtime-version-gate.ts`
-   (`isStrucppCompatibleRuntime`, `isUserManagementCapableRuntime`) doing their
-   own `if (v.major > 4) …` next to the constants they compare. Both are exactly
-   equivalent to `isVersionAtLeast(raw, <constant>)`, `null` handling included.
-   Not a bug — the same duplication this work set out to remove, one level up:
-   the parser got unified, the comparators did not.
+6. **`minRuntimeVersion` is not enforced at install time for sideloaded
+   packages.** `scripts/validate.ts` requires it for `runtime-v4` packages at
+   authoring time, and the compile pipeline compares it against the connected
+   runtime — but a `.vpp` added from disk declaring no floor installs and only
+   fails later, at compile. Lower priority than 5: the compile-time gate catches
+   the mismatch before anything reaches a device.
 
-Items 3–6 were raised in review of openplc-editor#993. Items 3, 4 and 6 touch
-shared-surface files, so any fix needs the mirrored commit in openplc-web.
+Items 3–6 were raised in review of openplc-editor#993; 3, 4 and 6 were fixed in
+the same PR (mirrored in openplc-web#652, both on shared-surface files). Item 7
+was split out of CodeRabbit's read of §6. Items 5 and 7 need their own tickets.
