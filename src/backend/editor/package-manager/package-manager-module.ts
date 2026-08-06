@@ -3,6 +3,8 @@ import extract from 'extract-zip'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
+import { APP_VERSION } from '../../../frontend/data/constants/app-version'
+import { isCompatibleEditorVersion } from '../../../frontend/utils/semver'
 import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
 import { validatePathId } from '../../shared/utils/path-safety'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
@@ -76,6 +78,28 @@ class PackageManagerModule {
         const verification = verifyPackageSignature(tempDir, TRUSTED_PACKAGE_KEYS)
         if (!verification.valid) {
           return { success: false, error: `Package signature verification failed: ${verification.error}` }
+        }
+      }
+
+      // Compatibility floor (DOPE-448). This is the ONLY place the editor
+      // enforces `minEditorVersion`, and it sits here because both entry paths
+      // — remote catalog install and the local "Add from file…" picker —
+      // converge on this method. The catalog UI's "Editor outdated" button
+      // state is a courtesy that stops the user earlier; it is not the gate,
+      // and before this check existed a `.vpp` dragged in from disk bypassed
+      // the constraint entirely.
+      //
+      // A package declares a floor when it needs an editor feature it cannot
+      // work without — a UI engine, a new screen widget, a layout the renderer
+      // learned in some release. Installing it on an older editor produces a
+      // board that renders wrong rather than an error, so refuse up front.
+      if (!isCompatibleEditorVersion(manifest.package.minEditorVersion, APP_VERSION)) {
+        return {
+          success: false,
+          error:
+            `Package "${manifest.package.name}" ${manifest.package.version} requires ` +
+            `OpenPLC Editor ${manifest.package.minEditorVersion} or newer. This editor is ${APP_VERSION}. ` +
+            `Update the editor, or install an older version of this package.`,
         }
       }
 
@@ -276,6 +300,34 @@ class PackageManagerModule {
     const registry = this.readRegistry()
     const pkg = registry.packages[packageId]
     return pkg?.path ?? null
+  }
+
+  /**
+   * `package.minRuntimeVersion` of the installed package that provides
+   * `boardName`, or null when no installed package does, when the
+   * matching device is not a `runtime-v4` target, or when the package
+   * declares no floor (DOPE-448).
+   *
+   * Board lookup is by device *name* because that is the identifier the
+   * compile pipeline carries as `boardTarget` — the same match
+   * `handleVendorPluginPackaging` performs.
+   *
+   * Only runtime-v4 devices can carry a meaningful floor: their HAL is
+   * plugin code built against the runtime's API. An `arduino-cli`
+   * device never talks to the runtime, so a floor there would be a
+   * claim nothing can check — openplc-packages' `validate.ts` rejects
+   * it at authoring time, and this returns null if one slips through.
+   */
+  getRuntimeFloorForBoard(boardName: string): string | null {
+    for (const pkg of this.listInstalled()) {
+      const manifest = this.getInstalledPackageManifest(pkg.packageId)
+      if (!manifest) continue
+      const device = manifest.devices.find((d) => d.name === boardName)
+      if (!device) continue
+      if (device.target.type !== 'runtime-v4') return null
+      return manifest.package.minRuntimeVersion ?? null
+    }
+    return null
   }
 
   private readRegistry(): PackageRegistry {

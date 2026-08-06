@@ -718,7 +718,19 @@ export interface PackageManifest {
     }
     description: string
     license?: string
+    /**
+     * Oldest editor that may install this package. The install gate refuses a
+     * package whose floor is above `APP_VERSION` — this is how a package
+     * requires an editor feature it cannot work without (DOPE-448).
+     */
     minEditorVersion?: string
+    /**
+     * Oldest runtime this package works with. Declared only by packages with a
+     * `runtime-v4` target, whose plugin code executes inside the runtime
+     * process. Checked at compile time, not install time: the target device is
+     * unknown until the user connects to one.
+     */
+    minRuntimeVersion?: string
   }
   devices: Array<{
     id: string
