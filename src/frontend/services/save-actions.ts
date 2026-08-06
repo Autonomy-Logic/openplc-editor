@@ -144,7 +144,10 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     }
     // Raw .dt files that failed to parse on load — echoed verbatim
     // so an unreadable file is never silently dropped from disk.
+    // A parsed type claiming the same path wins: guards non-UI entry
+    // points (e.g. XML import) from yielding duplicate paths.
     for (const f of state.unparsedDataTypeFiles) {
+      if (project.data.dataTypes.some((dt) => `datatypes/${dt.name}.dt` === f.relativePath)) continue
       yield { path: f.relativePath, content: f.content, category: 'data-type' }
     }
   }

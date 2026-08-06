@@ -205,7 +205,9 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.libraryManifest,
         // .dt files only feed the parser while the flag is on —
         // off keeps legacy project.json as the source of truth.
-        isDataTypeFilesEnabled() ? raw.data.dataTypeFiles : [],
+        // Array guard: the IPC payload is a cast, not validated — a
+        // version-skewed main process must not crash project open.
+        isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },
@@ -227,7 +229,9 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.libraryManifest,
         // .dt files only feed the parser while the flag is on —
         // off keeps legacy project.json as the source of truth.
-        isDataTypeFilesEnabled() ? raw.data.dataTypeFiles : [],
+        // Array guard: the IPC payload is a cast, not validated — a
+        // version-skewed main process must not crash project open.
+        isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },
