@@ -120,7 +120,6 @@ import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
-import type { PackageManifest } from '../package-manager'
 import { PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -2012,27 +2011,15 @@ class CompilerModule {
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     try {
-      const packageManager = new PackageManagerModule()
-      const installed = packageManager.listInstalled()
+      const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
-      let matchingPackagePath: string | null = null
-      let matchingDevice: PackageManifest['devices'][number] | null = null
-
-      for (const pkg of installed) {
-        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-        if (!manifest) continue
-        const device = manifest.devices.find((d) => d.name === boardTarget)
-        if (device) {
-          matchingPackagePath = pkg.path
-          matchingDevice = device
-          break
-        }
-      }
-
-      if (!matchingDevice || !matchingPackagePath) {
+      if (!match) {
         handleOutputData(`Board "${boardTarget}" is not from a VPP package, skipping VPP packaging`, 'info')
         return
       }
+
+      const matchingPackagePath = match.pkg.path
+      const matchingDevice = match.device
 
       if (matchingDevice.target.type !== 'runtime-v4') {
         handleOutputData(
@@ -2290,26 +2277,12 @@ class CompilerModule {
     vendorScreenData: Record<string, unknown>,
   ): Promise<Array<{ slot: number; bytes: number[] }>> {
     try {
-      const packageManager = new PackageManagerModule()
-      const installed = packageManager.listInstalled()
+      const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
-      let matchingPackagePath: string | null = null
-      let matchingDevice: PackageManifest['devices'][number] | null = null
-      for (const pkg of installed) {
-        const manifest = packageManager.getInstalledPackageManifest(pkg.packageId)
-        if (!manifest) continue
-        const device = manifest.devices.find((d) => d.name === boardTarget)
-        if (device) {
-          matchingPackagePath = pkg.path
-          matchingDevice = device
-          break
-        }
-      }
+      const rawModules = match?.device.moduleSystem?.modules
+      if (!match || !rawModules || rawModules.length === 0) return []
 
-      const rawModules = matchingDevice?.moduleSystem?.modules
-      if (!matchingDevice || !matchingPackagePath || !rawModules || rawModules.length === 0) return []
-
-      const pkgPath = matchingPackagePath
+      const pkgPath = match.pkg.path
       const modules = await Promise.all(
         rawModules.map(async (m) => {
           let configScreenDefinition: unknown

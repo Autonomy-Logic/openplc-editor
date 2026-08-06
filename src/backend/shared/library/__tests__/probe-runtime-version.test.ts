@@ -133,6 +133,43 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
     expect(log).not.toHaveBeenCalled()
   })
 
+  // The shorthands a runtime is likely to publish by hand all parse, and are
+  // enforced as their zero-filled equivalent — no warning, because nothing is
+  // being dropped.
+  it.each([['4.2'], ['4'], ['v5'], ['4.2.1-rc.1']])(
+    'passes a %p floor through without complaint',
+    async (minEditorVersion) => {
+      const log = jest.fn()
+      const result = await probeRuntimeVersion({
+        fetchCapabilities: async () => ({ success: true, body: { runtimeVersion: 'v4.2.0', minEditorVersion } }),
+        fetchVersion: versionMustNotBeCalled(),
+        log,
+      })
+      expect(result).toEqual({ version: 'v4.2.0', minEditorVersion })
+      expect(log).not.toHaveBeenCalled()
+    },
+  )
+
+  // A floor that is present but unreadable declares nothing, which is the safe
+  // answer for the upload and the wrong one for whoever wrote it: the runtime
+  // believes it is enforcing a constraint that is not being applied. The
+  // upload still proceeds — refusing to talk to a device over a typo in its
+  // metadata would be worse — but it can no longer happen in silence.
+  it('warns when the runtime declares a floor nobody can read, and still returns it', async () => {
+    const log = jest.fn()
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: async () => ({
+        success: true,
+        body: { runtimeVersion: 'v4.2.0', minEditorVersion: 'garbage' },
+      }),
+      fetchVersion: versionMustNotBeCalled(),
+      log,
+    })
+    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: 'garbage' })
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('unreadable minEditorVersion ("garbage")'), 'warning')
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('not being enforced'), 'warning')
+  })
+
   it('reports minEditorVersion=null when the endpoint answers without that field', async () => {
     const log = jest.fn()
     const result = await probeRuntimeVersion({

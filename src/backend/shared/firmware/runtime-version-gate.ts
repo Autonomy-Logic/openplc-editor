@@ -14,8 +14,17 @@
  *
  * The string is the GitHub release tag baked in at image build time
  * (see openplc-runtime/.github/workflows/docker.yml).  Older
- * runtimes that pre-date this work return a hardcoded "v4" string;
- * that's intentionally unparseable here so the gate blocks them.
+ * runtimes that pre-date this work return a hardcoded "v4" string,
+ * which reads as 4.0.0 and is blocked on its merits — 4.0.0 is the
+ * MatIEC line.
+ *
+ * Every gate below is a MINIMUM VERSION and nothing else, so each one
+ * is a constant plus a call to `isVersionAtLeast`.  No gate open-codes
+ * its own comparison: a hand-rolled `v.minor >= 1` hardcodes the shape
+ * of the constant beside it, and the two then drift the moment someone
+ * raises the constant to a version whose patch is not zero — the gate
+ * keeps answering for the old floor and every test still passes.
+ * Adding a capability gate means adding a constant, not a comparator.
  *
  * Shared by both openplc-editor (which uploads to remote runtimes)
  * and openplc-web (which gates push-to-device through the
@@ -27,7 +36,7 @@
 // `backend-shared -> utils` is allowed, and using `@root/` here would have
 // skipped the check rather than passed it.
 import type { ParsedVersion } from '../../../frontend/utils/semver'
-import { parseVersionStrict } from '../../../frontend/utils/semver'
+import { formatVersionForDisplay, isVersionAtLeast, parseVersion } from '../../../frontend/utils/semver'
 
 /**
  * Oldest runtime this editor will upload to — the editor's own
@@ -44,39 +53,42 @@ export const MIN_RUNTIME_VERSION = '4.1.0'
 /** @deprecated Use `MIN_RUNTIME_VERSION`. */
 export const MIN_STRUCPP_RUNTIME_VERSION = MIN_RUNTIME_VERSION
 
-/** @deprecated Use `ParsedVersion` from `shared/utils/version-compare`. */
+/** @deprecated Use `ParsedVersion` from `frontend/utils/semver`. */
 export type ParsedRuntimeVersion = ParsedVersion
 
 /**
- * Parses a runtime version string.  Returns null when the string
- * doesn't carry enough information to compare — e.g. the legacy `"v4"`
- * or `"dev"` builds.  Callers treat null as "incompatible".
+ * Parses a runtime version string.  Returns null when the string is not
+ * a version at all — `"dev"`, `"garbage"`, `""`.  Callers treat null as
+ * "incompatible", so a runtime that cannot say what it is never clears
+ * a floor.
  *
- * Delegates to the shared strict parser so the VPP surface and the
- * runtime gates can never drift apart on what `"v4"` or `"4.1"` means.
+ * Note what is NOT null: the legacy `"v4"` header parses as `4.0.0` and
+ * `"4.1"` as `4.1.0`, because a missing component is zero everywhere in
+ * this codebase.  Neither changes any gate's answer — `4.0.0` is still
+ * below `MIN_RUNTIME_VERSION`, so the legacy header is still refused,
+ * now for the honest reason that 4.0.0 predates STruC++ rather than
+ * because the string looked odd.
+ *
+ * Delegates to the shared parser so the VPP surface and the runtime
+ * gates can never drift apart on what a given string means.
  */
 export function parseRuntimeVersion(raw: string | null | undefined): ParsedRuntimeVersion | null {
-  return parseVersionStrict(raw)
+  return parseVersion(raw)
 }
 
 /**
  * Returns true iff the runtime version string represents a runtime
- * that speaks the STruC++ wire format (i.e. ≥ 4.1.0, including
- * pre-release tags like `v4.1.0-rc.3`).
+ * that speaks the STruC++ wire format (i.e. ≥ `MIN_RUNTIME_VERSION`,
+ * including pre-release tags like `v4.1.0-rc.3`).
  *
  * Note: by strict semver, `4.1.0-rc.3 < 4.1.0`.  We deliberately
  * deviate here because the rc tags on the v4.1.0 line ARE the
  * builds shipping STruC++ — there is no "older 4.1.0" the rc lineage
- * would be a pre-release of.
+ * would be a pre-release of.  `isVersionAtLeast` ignores pre-release
+ * in ordering for exactly this reason.
  */
 export function isStrucppCompatibleRuntime(raw: string | null | undefined): boolean {
-  const v = parseRuntimeVersion(raw)
-  if (!v) return false
-  if (v.major > 4) return true
-  if (v.major < 4) return false
-  // major === 4: minor must be ≥ 1 (i.e. v4.1.x is the strucpp line).
-  // patch + prerelease don't matter past that.
-  return v.minor >= 1
+  return isVersionAtLeast(raw, MIN_RUNTIME_VERSION)
 }
 
 /** Minimum runtime version that ships the user-management API
@@ -92,11 +104,7 @@ export const MIN_USER_MANAGEMENT_RUNTIME_VERSION = '4.1.9'
  * gate's treatment of the rc lineage.
  */
 export function isUserManagementCapableRuntime(raw: string | null | undefined): boolean {
-  const v = parseRuntimeVersion(raw)
-  if (!v) return false
-  if (v.major !== 4) return v.major > 4
-  if (v.minor !== 1) return v.minor > 1
-  return v.patch >= 9
+  return isVersionAtLeast(raw, MIN_USER_MANAGEMENT_RUNTIME_VERSION)
 }
 
 /**
@@ -105,7 +113,7 @@ export function isUserManagementCapableRuntime(raw: string | null | undefined): 
  * "unknown") is included so the user can match it to the device.
  */
 export function describeIncompatibleRuntime(raw: string | null | undefined): string {
-  const reported = raw && raw.trim().length > 0 ? raw.trim() : 'unknown'
+  const reported = formatVersionForDisplay(raw)
   return (
     `Runtime version ${reported} is not compatible with this editor.  ` +
     `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline).  ` +
@@ -126,7 +134,7 @@ export function describeEditorTooOldForRuntime(args: {
   editorVersion: string
   deviceLabel?: string
 }): string {
-  const runtime = args.runtimeVersion?.trim() ?? 'unknown'
+  const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? ` on ${args.deviceLabel}` : ''
   return (
     `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer.  ` +
@@ -148,7 +156,7 @@ export function describeVppRuntimeMismatch(args: {
   runtimeVersion: string | null | undefined
   deviceLabel?: string
 }): string {
-  const runtime = args.runtimeVersion?.trim() ?? 'unknown'
+  const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? `The runtime at ${args.deviceLabel} reports` : 'The connected runtime reports'
   return (
     `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer.  ` +

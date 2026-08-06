@@ -6,6 +6,8 @@ import { join } from 'path'
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
 import { isCompatibleEditorVersion } from '../../../frontend/utils/semver'
 import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
+import type { VppDeviceMatch } from '../../shared/hardware/find-vpp-device'
+import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { validatePathId } from '../../shared/utils/path-safety'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
@@ -303,14 +305,24 @@ class PackageManagerModule {
   }
 
   /**
+   * The installed VPP device named `boardName`, with its package and
+   * manifest — or null when no installed package provides it.
+   *
+   * `boardTarget` travels through the compile pipeline as a device
+   * *name*, so every consumer that needs the package behind a board
+   * starts here. Delegates to the shared `findVppDeviceByBoardName` so
+   * this and `board-info-resolver` (which cannot import this module)
+   * resolve a board the same way.
+   */
+  findDeviceByBoardName(boardName: string): VppDeviceMatch | null {
+    return findVppDeviceByBoardName(this, boardName)
+  }
+
+  /**
    * `package.minRuntimeVersion` of the installed package that provides
    * `boardName`, or null when no installed package does, when the
    * matching device is not a `runtime-v4` target, or when the package
    * declares no floor (DOPE-448).
-   *
-   * Board lookup is by device *name* because that is the identifier the
-   * compile pipeline carries as `boardTarget` — the same match
-   * `handleVendorPluginPackaging` performs.
    *
    * Only runtime-v4 devices can carry a meaningful floor: their HAL is
    * plugin code built against the runtime's API. An `arduino-cli`
@@ -319,15 +331,9 @@ class PackageManagerModule {
    * it at authoring time, and this returns null if one slips through.
    */
   getRuntimeFloorForBoard(boardName: string): string | null {
-    for (const pkg of this.listInstalled()) {
-      const manifest = this.getInstalledPackageManifest(pkg.packageId)
-      if (!manifest) continue
-      const device = manifest.devices.find((d) => d.name === boardName)
-      if (!device) continue
-      if (device.target.type !== 'runtime-v4') return null
-      return manifest.package.minRuntimeVersion ?? null
-    }
-    return null
+    const match = this.findDeviceByBoardName(boardName)
+    if (!match || match.device.target.type !== 'runtime-v4') return null
+    return match.manifest.package.minRuntimeVersion ?? null
   }
 
   private readRegistry(): PackageRegistry {
