@@ -1521,6 +1521,33 @@ describe('createSharedSlice', () => {
         expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(true)
       })
 
+      it('undo marks the data type file unsaved when history diverges from the saved depth', () => {
+        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [edited] })
+        store.getState().snapshotActions.markSaved('Colors')
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().snapshotActions.undo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(false)
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('redo marks the data type file unsaved when history diverges from the saved depth', () => {
+        const initial = store.getState().project.data.dataTypes.find((d) => d.name === 'Colors')!
+        store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
+        store.getState().snapshotActions.undo('Colors')
+        store.getState().fileActions.updateFile({ name: 'Colors', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        store.getState().snapshotActions.redo('Colors')
+
+        expect(store.getState().fileActions.getSavedState({ name: 'Colors' })).toBe(false)
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
       it('undo leaves the data type untouched when the snapshot has no dataTypes entry', () => {
         store.getState().projectActions.updateDatatype('Colors', edited)
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null })

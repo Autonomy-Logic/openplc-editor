@@ -33,8 +33,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [data.initialValue])
 
   useEffect(() => {
     setTableData(data.values)

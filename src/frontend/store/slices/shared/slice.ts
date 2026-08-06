@@ -1059,6 +1059,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const afterUndo = getState().undoRedo[pouName]
       if (afterUndo?.savedAtDepth !== null && afterUndo?.savedAtDepth === afterUndo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },
@@ -1127,6 +1130,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const afterRedo = getState().undoRedo[pouName]
       if (afterRedo?.savedAtDepth !== null && afterRedo?.savedAtDepth === afterRedo?.past.length) {
         getState().fileActions.updateFile({ name: pouName, saved: true })
+      } else {
+        // Diverged from the on-disk state — flag it or the next save-all skips the revert.
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
       }
       return true
     },
