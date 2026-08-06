@@ -277,7 +277,29 @@ describe('createEditorCompilerPlatformPort', () => {
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleVendorPluginPackaging }), makeContext())
     const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
     expect(handleVendorPluginPackaging).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ files: {} })
+    // No `getVppRuntimeFloor` in the default context, so no floor is known —
+    // which the pipeline reads as "no constraint".
+    expect(result).toEqual({ files: {}, minRuntimeVersion: null })
+  })
+
+  it('packageVppPlugin surfaces the VPP runtime floor when the context can resolve one', async () => {
+    const getVppRuntimeFloor = jest.fn(() => '4.1.9')
+    const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ getVppRuntimeFloor }))
+    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    expect(getVppRuntimeFloor).toHaveBeenCalledWith('SLM-RP4')
+    expect(result.minRuntimeVersion).toBe('4.1.9')
+  })
+
+  it('packageVppPlugin reports no floor when the resolver throws', async () => {
+    // A gate that failed the build because it could not read its own metadata
+    // would be worse than the mismatch it exists to catch.
+    const getVppRuntimeFloor = jest.fn(() => {
+      throw new Error('registry unreadable')
+    })
+    const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ getVppRuntimeFloor }))
+    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    expect(result.minRuntimeVersion).toBeNull()
+    expect(result.errors).toBeUndefined()
   })
 
   it('packageVppPlugin returns an errors[] when the handler throws', async () => {
@@ -327,7 +349,48 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       () => undefined,
     )
-    expect(result).toEqual({ ok: true, version: '4.1.2' })
+    // This stub answers every endpoint with a `/api/version` body, so
+    // `/api/capabilities` yields no usable `runtimeVersion` and the probe
+    // falls back — the exact shape of a runtime predating the endpoint.
+    expect(result).toEqual({ ok: true, version: '4.1.2', minEditorVersion: null })
+  })
+
+  it('checkRuntimeVersion reads the editor floor from /api/capabilities when the device serves it', async () => {
+    const makeRuntimeApiRequest = jest.fn(async (_ip: string, endpoint: string) => {
+      if (endpoint === '/api/capabilities') {
+        return { success: true as const, data: { runtimeVersion: 'v4.2.0', minEditorVersion: '4.2.1' } }
+      }
+      return { success: true as const, data: { version: 'SHOULD-NOT-BE-USED' } }
+    }) as unknown as EditorCompilerPlatformPortContext['mainProcessBridge']['makeRuntimeApiRequest']
+    const port = createEditorCompilerPlatformPort(
+      makeHandlers(),
+      makeContext({ mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload: jest.fn() } }),
+    )
+    const result = await port.checkRuntimeVersion(
+      { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
+      () => undefined,
+    )
+    expect(result).toEqual({ ok: true, version: 'v4.2.0', minEditorVersion: '4.2.1' })
+  })
+
+  it('checkRuntimeVersion falls back to /api/version when capabilities 404s', async () => {
+    const makeRuntimeApiRequest = jest.fn(async (_ip: string, endpoint: string) => {
+      if (endpoint === '/api/capabilities') return { success: false as const, error: '404 Not Found' }
+      return { success: true as const, data: { version: 'v4.1.7' } }
+    }) as unknown as EditorCompilerPlatformPortContext['mainProcessBridge']['makeRuntimeApiRequest']
+    const log = jest.fn()
+    const port = createEditorCompilerPlatformPort(
+      makeHandlers(),
+      makeContext({ mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload: jest.fn() } }),
+    )
+    const result = await port.checkRuntimeVersion(
+      { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
+      log,
+    )
+    expect(result).toEqual({ ok: true, version: 'v4.1.7', minEditorVersion: null })
+    // The 404 is the normal answer from every deployed runtime — it must not
+    // nag the user on every upload.
+    expect(log).not.toHaveBeenCalled()
   })
 
   it('checkRuntimeVersion returns version=null and logs a warning on probe failure', async () => {
@@ -344,7 +407,7 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       log,
     )
-    expect(result).toEqual({ ok: true, version: null })
+    expect(result).toEqual({ ok: true, version: null, minEditorVersion: null })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not reach runtime'), 'warning')
   })
 
@@ -361,7 +424,7 @@ describe('createEditorCompilerPlatformPort', () => {
       { context: { kind: 'editor-https', ip: '10.0.0.1', jwt: 'token' } },
       log,
     )
-    expect(result).toEqual({ ok: true, version: null })
+    expect(result).toEqual({ ok: true, version: null, minEditorVersion: null })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('probe blew up'), 'warning')
   })
 })
