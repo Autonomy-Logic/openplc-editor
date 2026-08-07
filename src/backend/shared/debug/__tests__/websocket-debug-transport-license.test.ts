@@ -7,10 +7,20 @@
  * serial and TCP clients send, so a network target licenses through one code path
  * instead of a second, medium-specific one. The runtime answers these FCs at the
  * webserver level (covered by the runtime's own tests).
+ *
+ * MOCKING, IN BOTH RUNNERS. This file is on the byte-identical shared surface, so
+ * it runs under Vitest (web) and Jest (editor, which aliases `vi` to `jest`).
+ * Hence `vi.mock`, never `jest.mock` — the latter is undefined in Vitest, the
+ * factory never installs, and the real socket.io-client tries to dial a server.
+ *
+ * The `import { WebSocketDebugTransport }` below sits AFTER the `vi.mock` call,
+ * and that position is LOAD-BEARING:
+ *   - Vitest hoists `vi.mock` above the imports, so it would work either way.
+ *   - The editor's Jest does NOT hoist it (ts-jest only hoists literal
+ *     `jest.mock`), so the call has to physically precede the import.
+ * Do not move it into the import block at the top.
  */
 import type { Socket } from 'socket.io-client'
-
-import { WebSocketDebugTransport } from '../websocket-debug-transport'
 
 type Handler = (arg: unknown) => void
 type Responder = (commandHex: string) => { success: boolean; data?: string; error?: string }
@@ -48,9 +58,12 @@ function makeFakeSocket(responder: Responder): Socket {
 
 let currentResponder: Responder = () => ({ success: false, error: 'no responder' })
 
-jest.mock('socket.io-client', () => ({
-  io: jest.fn(() => makeFakeSocket((cmd) => currentResponder(cmd))),
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => makeFakeSocket((cmd) => currentResponder(cmd))),
 }))
+
+// Deliberately AFTER `vi.mock` — see the module docstring.
+import { WebSocketDebugTransport } from '../websocket-debug-transport'
 
 async function connected(): Promise<WebSocketDebugTransport> {
   const transport = new WebSocketDebugTransport({ host: '127.0.0.1', port: 8443, token: 'jwt' })
