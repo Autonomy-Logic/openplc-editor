@@ -19,6 +19,7 @@
  * buy again or hides a real failure behind a reassuring badge.
  */
 
+import * as Popover from '@radix-ui/react-popover'
 import type { DeviceLicenseReport } from '@root/middleware/shared/ports/device-port'
 import { useState } from 'react'
 
@@ -131,7 +132,6 @@ function describeOutcome(report: DeviceLicenseReport): {
 }
 
 export function DeviceLicenseStatus({ report, isChecking, buyUrl, onBuy, onRecheck }: DeviceLicenseStatusProps) {
-  const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Nothing has run: every non-licensable board stays here, and so does a
@@ -154,34 +154,56 @@ export function DeviceLicenseStatus({ report, isChecking, buyUrl, onBuy, onReche
   const offerPurchase = !!buyUrl && report.outcome.state === 'unlicensed' && report.outcome.entitlementChecked === true
 
   return (
-    <div className='flex flex-col gap-1'>
-      <button
-        type='button'
-        aria-label='Licence status'
-        aria-expanded={expanded}
-        onClick={() => setExpanded((open) => !open)}
-        className='flex w-fit items-center gap-1 font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'
-      >
-        {isChecking ? <ShieldUnknownIcon size={10} /> : <Icon size={10} />}
-        <span className={cn(negative && 'border-b border-dashed border-neutral-400 dark:border-neutral-700')}>
-          {isChecking ? 'Checking licence…' : label}
-        </span>
-      </button>
+    // Radix Popover, PORTALLED. The details used to be a conditional <div> in the
+    // flow, which is what broke the layout: opening it pushed "Specs" and the
+    // board image down and displaced the Connected label, because the panel is
+    // ~140px tall and this badge sits inside the connect row. A portalled popover
+    // is out of the flow entirely, so the row never changes height.
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type='button'
+          aria-label='Licence status'
+          className={cn(
+            'flex w-fit items-center gap-1 font-caption text-cp-xs font-medium outline-none',
+            negative
+              ? 'text-neutral-700 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white'
+              : 'text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white',
+          )}
+        >
+          {isChecking ? <ShieldUnknownIcon size={10} /> : <Icon size={10} />}
+          <span className={cn(negative && 'border-b border-dashed border-neutral-400 dark:border-neutral-700')}>
+            {isChecking ? 'Checking licence…' : label}
+          </span>
+        </button>
+      </Popover.Trigger>
 
-      {expanded ? (
-        <div className='flex flex-col gap-2 rounded-md border border-neutral-200 p-2 dark:border-neutral-800'>
-          <div className='flex items-center gap-1.5 text-neutral-700 dark:text-neutral-300'>
-            <Icon />
-            <span className='font-caption text-cp-xs font-medium'>{label}</span>
+      <Popover.Portal>
+        <Popover.Content
+          side='bottom'
+          align='start'
+          sideOffset={8}
+          // Fixed width so the panel's own content can never stretch the trigger
+          // row, and a high z so it clears the board image next to it.
+          className='box z-[100] flex w-[300px] flex-col gap-3 rounded-lg bg-white p-4 dark:bg-neutral-950'
+        >
+          <div className='flex items-center gap-2.5'>
+            <span className='flex h-[30px] w-[30px] flex-none items-center justify-center rounded-md border border-neutral-100 text-neutral-950 dark:border-neutral-850 dark:text-white'>
+              <Icon />
+            </span>
+            <div className='min-w-0'>
+              <p className='font-caption text-cp-base font-semibold text-neutral-950 dark:text-white'>{label}</p>
+              <p className='whitespace-pre-line break-words font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
+                {detail}
+              </p>
+            </div>
           </div>
-
-          <p className='whitespace-pre-line font-caption text-cp-xs text-neutral-500 dark:text-neutral-400'>{detail}</p>
 
           {deviceId ? (
             <div className='flex flex-col gap-1'>
               <span className='font-caption text-cp-xs text-neutral-500 dark:text-neutral-500'>Device ID</span>
-              <div className='flex items-center gap-2'>
-                <code className='break-all font-mono text-cp-xs text-neutral-700 dark:text-neutral-300'>
+              <div className='flex items-start gap-2'>
+                <code className='min-w-0 break-all font-mono text-cp-xs text-neutral-700 dark:text-neutral-300'>
                   {deviceId}
                 </code>
                 <button
@@ -219,8 +241,8 @@ export function DeviceLicenseStatus({ report, isChecking, buyUrl, onBuy, onReche
               </button>
             ) : null}
           </div>
-        </div>
-      ) : null}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }

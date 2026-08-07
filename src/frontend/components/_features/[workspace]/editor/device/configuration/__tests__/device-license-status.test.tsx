@@ -94,6 +94,35 @@ describe('DeviceLicenseStatus', () => {
     }
   })
 
+  it('keeps the details OUT of the layout flow, so opening them cannot move the page', () => {
+    // The regression this exists for: the panel used to be a conditional <div>
+    // next to the trigger, so opening it grew the connect row by ~140px and
+    // pushed "Specs" and the board image down. A portalled popover renders under
+    // document.body, so the row's own subtree never changes.
+    const { container } = render(
+      <DeviceLicenseStatus
+        report={{ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } }}
+        isChecking={false}
+        buyUrl={BUY_URL}
+        onBuy={jest.fn()}
+        onRecheck={jest.fn()}
+      />,
+    )
+
+    const before = container.innerHTML
+    expand()
+
+    // The panel is visible…
+    expect(screen.getByText('Device ID')).toBeTruthy()
+    // …and it is NOT inside the component's own container.
+    expect(container.querySelector('code')).toBeNull()
+    // The trigger's subtree is byte-identical apart from the attributes Radix
+    // toggles on it (aria-expanded / data-state).
+    expect(before.replace(/(aria-expanded|data-state)="[^"]*"/g, '')).toBe(
+      container.innerHTML.replace(/(aria-expanded|data-state)="[^"]*"/g, ''),
+    )
+  })
+
   describe('details panel', () => {
     it('exposes the device id and copies it on request', () => {
       const writeText = jest.fn().mockResolvedValue(undefined)

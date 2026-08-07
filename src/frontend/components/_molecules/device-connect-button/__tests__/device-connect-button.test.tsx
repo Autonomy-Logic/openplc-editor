@@ -30,11 +30,13 @@ describe('DeviceConnectButton', () => {
     expect(onConnect).not.toHaveBeenCalled()
   })
 
-  it('confirms a live connection on screen', () => {
-    // The baremetal copy never showed this, so a connected device looked the same
-    // as a disconnected one apart from the button label.
+  it('does not repeat the connection state next to the button', () => {
+    // The button label IS the state: it reads "Disconnect" when connected. A second
+    // "Connected" beside it said the same thing twice, and on the device screen it
+    // sat next to the licence badge making the row read as three separate facts.
     render(<DeviceConnectButton status='connected' onConnect={jest.fn()} onDisconnect={jest.fn()} />)
-    expect(screen.getByText('● Connected')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Disconnect' })).not.toBeNull()
+    expect(screen.queryByText(/Connected/)).toBeNull()
   })
 
   it('reports a failed attempt', () => {

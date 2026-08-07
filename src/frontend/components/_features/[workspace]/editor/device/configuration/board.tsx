@@ -29,15 +29,6 @@ import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-edi
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
 
-/**
- * Confirms the held device link on the device screen: a quiet, monochrome line
- * that appears once Connect has settled on a channel a firmware answered.
- */
-function DeviceConnectedIndicator({ isConnected }: { isConnected: boolean }) {
-  if (!isConnected) return null
-  return <span className='font-caption text-cp-xs font-medium text-neutral-600 dark:text-neutral-400'>Connected</span>
-}
-
 const Board = memo(function () {
   const capabilities = useCapabilities()
   const device = useDevice()
@@ -640,13 +631,8 @@ const Board = memo(function () {
                 onConnect={handleConnectToRuntime}
                 onDisconnect={handleConnectToRuntime}
               >
-                {connectionStatus === 'connected' && (
-                  <>
-                    {plcStatus && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
-                    )}
-                    <DeviceConnectedIndicator isConnected={connectionStatus === 'connected'} />
-                  </>
+                {connectionStatus === 'connected' && plcStatus && (
+                  <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
               </DeviceConnectButton>
             </>
@@ -725,11 +711,10 @@ const Board = memo(function () {
                   ? { blockedReason: 'Select a communication port first' }
                   : {})}
               >
-                <DeviceConnectedIndicator isConnected={isConnected} />
-                {/* Licensing sits next to the link indicator because they answer
-                    adjacent questions about the same device — but it renders
-                    nothing at all unless this board's VPP is sold licensed AND a
-                    check has landed, so a free board's screen is unchanged. */}
+                {/* Licensing sits in the connect row because it answers an adjacent
+                    question about the same device -- but it renders nothing at all
+                    unless this board's VPP is sold licensed AND a check has landed,
+                    so a free board's row is unchanged. */}
                 {licensing.isLicensable ? (
                   <DeviceLicenseStatus
                     report={licensing.report}
