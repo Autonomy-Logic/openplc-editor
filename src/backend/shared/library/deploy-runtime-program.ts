@@ -23,12 +23,30 @@ import { startPlcAfterBuild, type StartPlcAfterBuildOptions } from './start-plc-
 
 export type DeployRuntimeProgramOutcome =
   | 'STARTED'
+  | 'UPLOADED_NOT_STARTED'
   | 'UPLOAD_FAILED'
   | 'BUILD_FAILED'
   | 'BUILD_TIMEOUT'
   | 'BUILD_ERROR'
   | 'START_FAILED'
   | 'START_TIMEOUT'
+
+/**
+ * Did the program reach the device?
+ *
+ * Distinct from "did it start", because those are different questions and the
+ * upload step must only fail for the first one. A runtime that refuses to start
+ * while its hardware mode switch reads STOP has still taken the program, and
+ * reporting that as a failed upload sends the user looking for a problem that
+ * does not exist.
+ *
+ * Shared rather than re-derived per platform: the editor and web adapters both
+ * turn this outcome into `UploadResult.ok`, and they must not drift on which
+ * outcomes count.
+ */
+export function deployReachedDevice(outcome: DeployRuntimeProgramOutcome): boolean {
+  return outcome === 'STARTED' || outcome === 'UPLOADED_NOT_STARTED'
+}
 
 export type DeployRuntimeProgramLogLevel = 'info' | 'error' | 'warning' | 'debug'
 
@@ -109,6 +127,9 @@ export async function deployRuntimeProgram(opts: DeployRuntimeProgramOptions): P
     pollIntervalMs: opts.startIntervalMs,
   })
   if (startOutcome === 'STARTED') return 'STARTED'
+  // Refused by the hardware mode switch: uploaded, deliberately not running.
+  // startPlcAfterBuild has already explained it as a warning.
+  if (startOutcome === 'SWITCH_IN_STOP') return 'UPLOADED_NOT_STARTED'
   if (startOutcome === 'TIMEOUT') return 'START_TIMEOUT'
   return 'START_FAILED'
 }
