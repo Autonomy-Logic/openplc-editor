@@ -6,6 +6,7 @@ import {
   createEditorObjectForServer,
   createPouObject,
   createTabObject,
+  guessDatatypeDerivation,
 } from '../slices/shared/utils'
 
 describe('shared/utils', () => {
@@ -236,7 +237,7 @@ describe('shared/utils', () => {
       expect(result).toEqual({
         type: 'plc-datatype',
         meta: { name: 'IntArray', derivation: 'array' },
-        structure: { description: '', selectedRow: '' },
+        structure: { display: 'table', description: '', selectedRow: '-1' },
       })
     })
 
@@ -254,6 +255,23 @@ describe('shared/utils', () => {
       if (result.type === 'plc-datatype') {
         expect(result.meta.derivation).toBe('enumerated')
       }
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // guessDatatypeDerivation
+  // -------------------------------------------------------------------------
+  describe('guessDatatypeDerivation', () => {
+    it('detects a structure', () => {
+      expect(guessDatatypeDerivation('TYPE\nPoint : STRUCT\nx : INT;\nEND_STRUCT;\nEND_TYPE')).toBe('structure')
+    })
+
+    it('detects an array', () => {
+      expect(guessDatatypeDerivation('TYPE\nBuf : ARRAY [0..9] OF INT;\nEND_TYPE')).toBe('array')
+    })
+
+    it('falls back to enumerated', () => {
+      expect(guessDatatypeDerivation('TYPE\nColors : (RED, GREEN);\nEND_TYPE')).toBe('enumerated')
     })
   })
 
