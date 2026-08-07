@@ -6,7 +6,15 @@ type RenameImpactModalProps = {
   oldName?: string
   newName?: string
   changes?: Array<{ oldName: string; newName?: string; oldType?: string; newType?: string }>
-  impact: ReferenceImpactAnalysis
+  // The modal only renders the aggregate maps, so any location shape works.
+  impact: ReferenceImpactAnalysis<unknown>
+  // Copy overrides — defaults keep the original variable-rename wording.
+  title?: string
+  affectedListLabel?: string
+  byKindLabel?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  cancelDescription?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -17,6 +25,12 @@ export const RenameImpactModal = ({
   newName,
   changes,
   impact,
+  title = 'Variable Changes: Impact Analysis',
+  affectedListLabel = 'Affected POUs:',
+  byKindLabel = 'By Editor Type:',
+  confirmLabel = 'Yes, rename references',
+  cancelLabel = 'No, keep references unchanged',
+  cancelDescription = 'References will remain with the old name and will no longer match the renamed variable, causing them to become unresolved references',
   onConfirm,
   onCancel,
 }: RenameImpactModalProps) => {
@@ -32,9 +46,7 @@ export const RenameImpactModal = ({
         onClose={onCancel}
       >
         <ModalHeader>
-          <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
-            Variable Changes: Impact Analysis
-          </ModalTitle>
+          <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>{title}</ModalTitle>
         </ModalHeader>
 
         <div className='flex flex-col gap-3 overflow-y-auto'>
@@ -91,7 +103,9 @@ export const RenameImpactModal = ({
 
             {impact.byPou.size > 0 && (
               <div className='mb-3'>
-                <div className='mb-1 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Affected POUs:</div>
+                <div className='mb-1 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                  {affectedListLabel}
+                </div>
                 <ul className='list-inside list-disc space-y-1 text-xs text-neutral-600 dark:text-neutral-400'>
                   {Array.from(impact.byPou.entries()).map(([pouName, count]) => (
                     <li key={pouName}>
@@ -104,7 +118,7 @@ export const RenameImpactModal = ({
 
             {impact.byEditorType.size > 0 && (
               <div>
-                <div className='mb-1 text-xs font-medium text-neutral-700 dark:text-neutral-300'>By Editor Type:</div>
+                <div className='mb-1 text-xs font-medium text-neutral-700 dark:text-neutral-300'>{byKindLabel}</div>
                 <ul className='list-inside list-disc space-y-1 text-xs text-neutral-600 dark:text-neutral-400'>
                   {Array.from(impact.byEditorType.entries()).map(([editorType, count]) => (
                     <li key={editorType}>
@@ -120,12 +134,11 @@ export const RenameImpactModal = ({
             <p className='font-medium'>What would you like to do?</p>
             <ul className='mt-2 list-inside list-disc space-y-1'>
               <li>
-                <span className='font-semibold'>Yes, rename references:</span> All references will be updated to use the
-                new name
+                <span className='font-semibold'>{confirmLabel}:</span> All references will be updated to use the new
+                name
               </li>
               <li>
-                <span className='font-semibold'>No, keep references unchanged:</span> References will remain with the
-                old name and will no longer match the renamed variable, causing them to become unresolved references
+                <span className='font-semibold'>{cancelLabel}:</span> {cancelDescription}
               </li>
             </ul>
           </div>
@@ -136,10 +149,10 @@ export const RenameImpactModal = ({
             onClick={onCancel}
             className='h-8 w-full rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
           >
-            No, keep references unchanged
+            {cancelLabel}
           </button>
           <button onClick={onConfirm} className='h-8 w-full rounded bg-brand px-3 py-1 text-xs text-white'>
-            Yes, rename references
+            {confirmLabel}
           </button>
         </ModalFooter>
       </ModalContent>

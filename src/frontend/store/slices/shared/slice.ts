@@ -2,6 +2,8 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
+import { findAllReferencesToDataType } from '../../../utils/data-type-references'
+import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
@@ -95,6 +97,51 @@ function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string):
     : { ok: true }
 }
 
+/**
+ * Post-propagation bookkeeping for a confirmed data type rename:
+ *
+ *   1. Flag every touched container's file dirty — single-file save and the
+ *      close-project check read these flags, and the propagated content
+ *      would otherwise be silently dropped on disk.
+ *   2. Regenerate code-mode variable buffers of affected POUs. `sanitizePou`
+ *      persists `editor.variable.code` as the authoritative variables block,
+ *      so a stale buffer would resurrect the old type name on save.
+ *   3. Regenerate the `.dt` code buffers of affected data types — committing
+ *      a stale buffer (commitCode → updateDatatype) would do the same.
+ */
+function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeReferenceImpactAnalysis): void {
+  const dirtyFiles = new Set<string>()
+  const affectedPous = new Set<string>()
+  const affectedDatatypes = new Set<string>()
+  for (const ref of impact.references) {
+    // Global variables persist through the Resource entry in the file slice.
+    dirtyFiles.add(ref.kind === 'global-variable' ? 'Resource' : ref.container)
+    if (ref.kind === 'pou-variable') affectedPous.add(ref.container)
+    if (ref.kind === 'data-type-field' || ref.kind === 'data-type-base-type') affectedDatatypes.add(ref.container)
+  }
+  for (const name of dirtyFiles) {
+    state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+  }
+
+  // No-op for types whose code view isn't active.
+  for (const datatypeName of affectedDatatypes) {
+    state.projectActions.regenerateDatatypeText(datatypeName)
+  }
+
+  for (const pouName of affectedPous) {
+    const model = state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
+    if (!model || (model.type !== 'plc-textual' && model.type !== 'plc-graphical')) continue
+    if (model.variable.display !== 'code') continue
+    const pou = state.project.data.pous.find((p) => p.name === pouName)
+    /* istanbul ignore next -- defensive: a pou-variable reference implies the POU exists */
+    if (!pou) continue
+    state.editorActions.updateModelVariablesForName(pouName, {
+      display: 'code',
+      code: generateIecVariablesToString(pou.interface?.variables ?? []),
+    })
+  }
+}
+
 function renameElement(
   state: SharedRootState,
   oldName: string,
@@ -139,6 +186,7 @@ function renameElement(
 
 const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (setState, getState) => ({
   undoRedo: {},
+  pendingDatatypeRename: null,
 
   pouActions: {
     create: ({ type, name, language }) => {
@@ -310,7 +358,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteDatatype(n)),
 
-    rename: (oldName, newName) => {
+    rename: async (oldName, newName) => {
       const state = getState()
       // Includes the type being renamed: a case-only change writes the
       // new file and then deletes the old path — the same file where
@@ -324,20 +372,55 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
+      // renameElement validates too, but checked up front so the impact
+      // modal never opens for a rename that would fail afterwards.
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
       // Fold pending code-view edits in first, so the rename doesn't
-      // regenerate over them.
+      // regenerate over them — and so the reference scan sees them.
       const reconcile = state.projectActions.reconcileDatatypeText(oldName)
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
-      const result = renameElement(state, oldName, newName, () => {
+      if (newName !== oldName) {
+        const freshState = getState()
+        const impact = findAllReferencesToDataType(
+          oldName,
+          freshState.project.data.pous,
+          freshState.project.data.configurations.resource.globalVariables,
+          freshState.project.data.dataTypes,
+        )
+        if (impact.totalReferences > 0) {
+          // Overwriting a pending request would drop its resolver and strand
+          // the first caller's await forever (e.g. Enter + blur double-fire).
+          if (getState().pendingDatatypeRename) {
+            return { ok: false, message: 'Another data type rename is awaiting confirmation' }
+          }
+          const confirmed = await new Promise<boolean>((resolve) => {
+            setState({ pendingDatatypeRename: { oldName, newName, impact, resolve } })
+          })
+          if (!confirmed) return { ok: false, cancelled: true, message: 'Rename cancelled' }
+          getState().projectActions.propagateDatatypeRename(oldName, newName)
+          syncAfterDatatypePropagation(getState(), impact)
+        }
+      }
+
+      const result = renameElement(getState(), oldName, newName, () => {
         // Renames via the dedicated action so the old .dt path gets
         // queued for deletion — a plain updateDatatype would strand
         // the old file on disk.
-        state.projectActions.updateDatatypeName(oldName, newName)
+        getState().projectActions.updateDatatypeName(oldName, newName)
       })
       // Only after renameElement are the type and its model both keyed by newName.
       if (result.ok) getState().projectActions.regenerateDatatypeText(newName)
       return result
+    },
+
+    respondToPendingRename: (confirmed) => {
+      const pending = getState().pendingDatatypeRename
+      if (!pending) return
+      setState({ pendingDatatypeRename: null })
+      pending.resolve(confirmed)
     },
 
     duplicate: (sourceName, newName) => {

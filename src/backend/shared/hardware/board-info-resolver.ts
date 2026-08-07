@@ -26,6 +26,7 @@
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
+import { findVppDeviceByBoardName } from './find-vpp-device'
 
 // ---------------------------------------------------------------------------
 // Public shapes
@@ -272,14 +273,8 @@ export class BoardInfoResolver {
   #tryVppLookup(
     boardName: string,
   ): Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> | null {
-    for (const pkg of this.config.packageManager.listInstalled()) {
-      const manifest = this.config.packageManager.getInstalledPackageManifest(pkg.packageId)
-      if (!manifest) continue
-      const device = manifest.devices.find((d) => d.name === boardName)
-      if (!device) continue
-      return this.#fromVppDevice(device, pkg, manifest)
-    }
-    return null
+    const match = findVppDeviceByBoardName(this.config.packageManager, boardName)
+    return match ? this.#fromVppDevice(match.device, match.pkg, match.manifest) : null
   }
 
   #fromVppDevice(

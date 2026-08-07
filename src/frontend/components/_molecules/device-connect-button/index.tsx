@@ -51,6 +51,10 @@ const DeviceConnectButton = ({
         onClick={isConnected ? onDisconnect : onConnect}
         disabled={disabled}
         title={blockedReason ?? (isConnected ? 'Disconnect from the device' : 'Connect to the device')}
+        // Same classes main used for this button. They render correctly again now
+        // that cn() knows the cp-* font scale -- before that, twMerge dropped
+        // `text-cp-sm` as a conflict with `text-white` and the button jumped to the
+        // browser default size.
         className={cn(
           'h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white',
           'hover:bg-brand-medium-dark disabled:opacity-50',

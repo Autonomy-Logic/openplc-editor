@@ -21,12 +21,17 @@
  *   - 150-ms interval between attempts.
  *   - `START:OK` or `ALREADY_RUNNING` in the runtime's reply → SUCCESS.
  *   - `BUSY` in the reply → keep retrying.
+ *   - `ERROR_SWITCH_STOP` → SWITCH_IN_STOP: not an error.  The runtime
+ *     refuses to start while a hardware mode switch reads STOP, and
+ *     leaving the switch there is a normal thing for someone to do
+ *     while uploading.  The upload succeeded; only the start was
+ *     declined, and the user decides when to allow it.
  *   - Any other reply → terminal failure (e.g. invalid program).
  *   - Network error on the fetch → terminal failure.
  *   - Deadline elapsed → TIMEOUT (a warning, not a fatal error).
  */
 
-export type StartPlcAfterBuildOutcome = 'STARTED' | 'FAILED' | 'TIMEOUT'
+export type StartPlcAfterBuildOutcome = 'STARTED' | 'FAILED' | 'TIMEOUT' | 'SWITCH_IN_STOP'
 
 export type StartPlcAfterBuildLogLevel = 'info' | 'error' | 'warning'
 
@@ -72,6 +77,18 @@ export async function startPlcAfterBuild(opts: StartPlcAfterBuildOptions): Promi
     if (status.includes('START:OK') || status.includes('ALREADY_RUNNING')) {
       opts.onLog('info', 'PLC started.')
       return 'STARTED'
+    }
+
+    // A hardware mode switch in STOP is a refusal, not a failure: the
+    // program is on the device, and the runtime is doing exactly what it
+    // should by declining to run it until the switch says so. Retrying
+    // would be wrong too — nothing changes until someone moves it.
+    if (status.includes('ERROR_SWITCH_STOP')) {
+      opts.onLog(
+        'warning',
+        'Program uploaded. The PLC was not started because the mode switch is in STOP — move it to RUN to start.',
+      )
+      return 'SWITCH_IN_STOP'
     }
 
     // Only BUSY is retryable — everything else is a real error

@@ -7,6 +7,7 @@ import type {
   PLCVariable,
   ProjectMeta,
 } from '../../../../middleware/shared/ports/types'
+import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
 import type { AISlice } from '../ai'
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
@@ -93,11 +94,30 @@ export type PouActions = {
   duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
+export type DatatypeRenameResponse = SharedResponse & {
+  /** True when the user declined the reference-impact modal — a user choice, not an error. */
+  cancelled?: boolean
+}
+
+/** A rename waiting on the reference-impact modal. `resolve` releases the
+ *  `datatypeActions.rename` await; the modal fires it via
+ *  `datatypeActions.respondToPendingRename`. */
+export type PendingDatatypeRename = {
+  oldName: string
+  newName: string
+  impact: DataTypeReferenceImpactAnalysis
+  resolve: (confirmed: boolean) => void
+}
+
 export type DatatypeActions = {
   create: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => SharedResponse
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
-  rename: (oldName: string, newName: string) => SharedResponse
+  /** Async: a rename of a referenced type awaits the impact modal before
+   *  propagating the new name into every reference. Cancel = no state change. */
+  rename: (oldName: string, newName: string) => Promise<DatatypeRenameResponse>
+  /** Confirm (`true`) or cancel (`false`) the pending rename's impact modal. */
+  respondToPendingRename: (confirmed: boolean) => void
   duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
@@ -178,6 +198,7 @@ export type SharedWorkspaceActions = {
 
 export type SharedSlice = {
   undoRedo: Record<string, PouHistory>
+  pendingDatatypeRename: PendingDatatypeRename | null
   pouActions: PouActions
   datatypeActions: DatatypeActions
   serverActions: ServerActions

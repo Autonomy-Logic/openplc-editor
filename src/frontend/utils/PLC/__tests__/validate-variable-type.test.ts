@@ -1,4 +1,9 @@
-import { getVariableRestrictionType, validateVariableType } from '../validate-variable-type'
+import {
+  getVariableRestrictionType,
+  isGenericTypeName,
+  resolveNewVariableType,
+  validateVariableType,
+} from '../validate-variable-type'
 
 describe('validateVariableType', () => {
   it('accepts anything for the bare ANY generic', () => {
@@ -128,6 +133,10 @@ describe('getVariableRestrictionType', () => {
     expect(restriction.values).toContain('TIME')
   })
 
+  it('keeps the single-entry shape for a singleton generic', () => {
+    expect(getVariableRestrictionType('ANY_STRING')).toEqual({ values: ['STRING'], definition: 'base-type' })
+  })
+
   it('returns the concrete base-type name uppercased', () => {
     expect(getVariableRestrictionType('BOOL')).toEqual({ values: 'BOOL', definition: 'base-type' })
   })
@@ -136,6 +145,106 @@ describe('getVariableRestrictionType', () => {
     expect(getVariableRestrictionType('MyDerivedType')).toEqual({
       values: 'MyDerivedType',
       definition: 'derived',
+    })
+  })
+})
+
+describe('isGenericTypeName', () => {
+  it('recognises ANY and every ANY_* family, case-insensitively', () => {
+    expect(isGenericTypeName('ANY')).toBe(true)
+    expect(isGenericTypeName('any')).toBe(true)
+    expect(isGenericTypeName('ANY_NUM')).toBe(true)
+    expect(isGenericTypeName('any_int')).toBe(true)
+    expect(isGenericTypeName('ANY_ELEMENTARY')).toBe(true)
+  })
+
+  it('rejects concrete and user-defined type names', () => {
+    expect(isGenericTypeName('INT')).toBe(false)
+    expect(isGenericTypeName('BOOL')).toBe(false)
+    expect(isGenericTypeName('TIME')).toBe(false)
+    expect(isGenericTypeName('MyStruct')).toBe(false)
+    expect(isGenericTypeName('')).toBe(false)
+  })
+})
+
+describe('resolveNewVariableType', () => {
+  it('falls back to DINT when the box is not wired to any pin', () => {
+    expect(resolveNewVariableType(undefined)).toEqual({ definition: 'base-type', value: 'dint' })
+  })
+
+  it('mirrors a concrete pin type, ignoring any bound siblings', () => {
+    expect(resolveNewVariableType('TIME')).toEqual({ definition: 'base-type', value: 'TIME' })
+    expect(resolveNewVariableType('BOOL', [{ pinType: 'ANY', variableType: 'REAL' }])).toEqual({
+      definition: 'base-type',
+      value: 'BOOL',
+    })
+  })
+
+  it('keeps a derived (user-defined) pin type as-is', () => {
+    expect(resolveNewVariableType('MyStruct')).toEqual({ definition: 'derived', value: 'MyStruct' })
+  })
+
+  describe('generic pins (issue #479)', () => {
+    it('adopts the type already bound to another generic pin of the same block', () => {
+      // MOVE: IN : ANY bound to an INT, so OUT : ANY must be an INT too.
+      expect(resolveNewVariableType('ANY', [{ pinType: 'ANY', variableType: 'INT' }])).toEqual({
+        definition: 'base-type',
+        value: 'INT',
+      })
+      // ADD: IN1 : ANY_NUM bound to a REAL — used to create a SINT.
+      expect(resolveNewVariableType('ANY_NUM', [{ pinType: 'ANY_NUM', variableType: 'REAL' }])).toEqual({
+        definition: 'base-type',
+        value: 'REAL',
+      })
+    })
+
+    it('accepts a user-defined type bound to an ANY pin', () => {
+      expect(resolveNewVariableType('ANY', [{ pinType: 'ANY', variableType: 'MyStruct' }])).toEqual({
+        definition: 'derived',
+        value: 'MyStruct',
+      })
+    })
+
+    it('ignores siblings sitting on concrete pins', () => {
+      // MOVE's EN : BOOL says nothing about how the ANY pins resolved.
+      expect(resolveNewVariableType('ANY_NUM', [{ pinType: 'BOOL', variableType: 'BOOL' }])).toEqual({
+        definition: 'base-type',
+        value: 'DINT',
+      })
+    })
+
+    it('ignores siblings whose type the pin would reject', () => {
+      expect(resolveNewVariableType('ANY_INT', [{ pinType: 'ANY_NUM', variableType: 'REAL' }])).toEqual({
+        definition: 'base-type',
+        value: 'DINT',
+      })
+    })
+
+    it('ignores siblings with no bound type, or a still-generic one', () => {
+      expect(
+        resolveNewVariableType('ANY_INT', [
+          { pinType: 'ANY_INT', variableType: '' },
+          { pinType: 'ANY_INT', variableType: 'ANY_INT' },
+          { pinType: 'ANY_INT', variableType: 'LINT' },
+        ]),
+      ).toEqual({ definition: 'base-type', value: 'LINT' })
+    })
+
+    it('prefers DINT over the first flattened entry when there is nothing to infer from', () => {
+      // The flattened ANY_NUM/ANY_INT sets start at SINT — the old default.
+      expect(resolveNewVariableType('ANY_NUM')).toEqual({ definition: 'base-type', value: 'DINT' })
+      expect(resolveNewVariableType('ANY_INT')).toEqual({ definition: 'base-type', value: 'DINT' })
+      expect(resolveNewVariableType('ANY')).toEqual({ definition: 'base-type', value: 'DINT' })
+    })
+
+    it('honours the restriction when DINT is not in it', () => {
+      expect(resolveNewVariableType('ANY_BIT')).toEqual({ definition: 'base-type', value: 'BOOL' })
+      expect(resolveNewVariableType('ANY_REAL')).toEqual({ definition: 'base-type', value: 'REAL' })
+      expect(resolveNewVariableType('ANY_STRING')).toEqual({ definition: 'base-type', value: 'STRING' })
+    })
+
+    it('falls back to DINT for an unknown generic name', () => {
+      expect(resolveNewVariableType('ANY_NOT_A_GENERIC')).toEqual({ definition: 'base-type', value: 'dint' })
     })
   })
 })
