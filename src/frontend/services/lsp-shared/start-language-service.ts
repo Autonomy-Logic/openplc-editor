@@ -84,6 +84,14 @@ export interface LanguageService {
   changeDocument(uri: string, content: string, version?: number): void
   /** Send `textDocument/didClose`. */
   closeDocument(uri: string): void
+  /**
+   * Ask Monaco to re-query semantic tokens for every model in this
+   * language.  Needed when a model's tokens derive from a *different*
+   * document (the datatype `.dt` view reads the aggregate doc), where
+   * a change to that document leaves the model's text untouched and
+   * therefore triggers no re-query of its own.
+   */
+  refreshSemanticTokens(): void
   /** Tear down providers + transport. */
   dispose(): void
 }
@@ -232,6 +240,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
       openDocument: () => undefined,
       changeDocument: () => undefined,
       closeDocument: () => undefined,
+      refreshSemanticTokens: () => undefined,
       dispose: () => undefined,
     }
   }
@@ -332,6 +341,10 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
 
   return {
     ready,
+
+    refreshSemanticTokens() {
+      semanticTokensRegistration?.refresh()
+    },
 
     openDocument(uri, content) {
       if (disposed) return

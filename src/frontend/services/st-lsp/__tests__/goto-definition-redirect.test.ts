@@ -1,8 +1,9 @@
 /**
  * @jest-environment jsdom
  */
-import type { PLCPou } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou } from '../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../store'
+import * as featureFlags from '../../../utils/feature-flags'
 import { setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import { redirectDefinitionToStore } from '../goto-definition-redirect'
 
@@ -60,6 +61,87 @@ describe('redirectDefinitionToStore', () => {
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
       }),
     ).toBe(false)
+  })
+
+  describe('datatypes URI with data types present', () => {
+    // Aggregate doc: line 0 `TYPE`, 1 `Colors : (...)`, then Motor's
+    // STRUCT spans 2..4 (declaration, one field, END_STRUCT).
+    const dataTypes: PLCDataType[] = [
+      { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+      {
+        name: 'Motor',
+        derivation: 'structure',
+        variable: [{ name: 'speed', type: { definition: 'base-type', value: 'INT' } }],
+      },
+    ]
+
+    beforeEach(() => {
+      setProjectPous([])
+      openPLCStoreBase.setState((s) => ({
+        ...s,
+        project: { ...s.project, data: { ...s.project.data, dataTypes } },
+      }))
+      jest.spyOn(featureFlags, 'isDataTypeFilesEnabled').mockReturnValue(true)
+    })
+
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
+    it('opens the owning type in code mode with the cursor on its declaration line', () => {
+      expect(
+        redirectDefinitionToStore({
+          uri: 'inmemory://datatypes/__project__.st',
+          range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+        }),
+      ).toBe(true)
+
+      const state = openPLCStoreBase.getState()
+      expect(state.selectedTab).toBe('Colors')
+      // The active editor holds the fresh model — `updateModelStructureForName`
+      // writes there when the name matches, leaving `editors[]` behind.
+      const model = state.editor
+      expect(model.type === 'plc-datatype' && model.structure.display).toBe('code')
+      // Entry line 0 sits below the view's own `TYPE` frame → Monaco line 2.
+      expect(model.cursorPosition).toEqual({ lineNumber: 2, column: 3, offset: 0, target: 'data-type' })
+    })
+
+    it('lands on a struct field line inside the owning type', () => {
+      // Aggregate line 3 = Motor's `speed` field (entry starts at 2).
+      expect(
+        redirectDefinitionToStore({
+          uri: 'inmemory://datatypes/__project__.st',
+          range: { start: { line: 3, character: 4 }, end: { line: 3, character: 9 } },
+        }),
+      ).toBe(true)
+
+      const state = openPLCStoreBase.getState()
+      expect(state.selectedTab).toBe('Motor')
+      expect(state.editor.cursorPosition?.lineNumber).toBe(3)
+    })
+
+    it('returns false for the END_TYPE framing line past the last entry', () => {
+      expect(
+        redirectDefinitionToStore({
+          uri: 'inmemory://datatypes/__project__.st',
+          range: { start: { line: 5, character: 0 }, end: { line: 5, character: 0 } },
+        }),
+      ).toBe(false)
+    })
+
+    it('opens the form tab without a cursor when the code view is not built in', () => {
+      jest.spyOn(featureFlags, 'isDataTypeFilesEnabled').mockReturnValue(false)
+      expect(
+        redirectDefinitionToStore({
+          uri: 'inmemory://datatypes/__project__.st',
+          range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } },
+        }),
+      ).toBe(true)
+
+      const model = openPLCStoreBase.getState().editor
+      expect(model.type === 'plc-datatype' && model.structure.display).toBe('table')
+      expect(model.cursorPosition).toBeUndefined()
+    })
   })
 
   it('returns false when the target POU does not exist in the project', () => {
