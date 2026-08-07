@@ -28,7 +28,8 @@ const StructureDataType = () => {
 
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
-  const [editorStructure, setEditorStructure] = useState<StructureTableType>({
+  const [editorStructure, setEditorStructure] = useState<Extract<StructureTableType, { display: 'table' }>>({
+    display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
     description: '',
   })
@@ -47,9 +48,14 @@ const StructureDataType = () => {
 
   useEffect(() => {
     const foundDataType = dataTypes.find((dataType) => dataType?.derivation === 'structure')
-    if (editor.type === 'plc-datatype' && foundDataType && 'variable' in foundDataType) {
+    if (
+      editor.type === 'plc-datatype' &&
+      editor.structure.display === 'table' &&
+      foundDataType &&
+      'variable' in foundDataType
+    ) {
       const { description, selectedRow } = editor.structure
-      setEditorStructure({ description: description, selectedRow: selectedRow })
+      setEditorStructure({ display: 'table', description: description, selectedRow: selectedRow })
     }
   }, [editor])
 
