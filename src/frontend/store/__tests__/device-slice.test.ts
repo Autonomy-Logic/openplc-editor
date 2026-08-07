@@ -349,6 +349,34 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
     })
 
+    it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
+      // setDeviceBoard already wipes everything else that is board-specific
+      // (platform options, the pin-table row, vendor-screen data). A licence
+      // report is just as board-specific: it was verified against the previous
+      // board's deviceId and its VPP's productId. Kept across a switch, the badge
+      // asserts possession for hardware that is no longer selected, and the buy
+      // link is built from the NEW package id and the OLD device id.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
+      // The device screen re-sets the board on several paths; only an actual
+      // change invalidates the licence.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+    })
+
     it('clearDeviceDefinitions clears licensing — a new project may select another board', () => {
       // A "Licensed" badge carried across a project close would be an assertion
       // about hardware that is not even connected.

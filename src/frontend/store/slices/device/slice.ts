@@ -381,7 +381,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     setDeviceBoard: (deviceBoard): void => {
       const previousBoard = getState().deviceDefinitions.configuration.deviceBoard
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated, deviceLicense }: DeviceSlice) => {
           deviceUpdated.updated = true
           // Wipe platformOption selections when the board changes — they're
           // declared per-board in the VPP manifest, so a `cpu=atmega328old`
@@ -407,6 +407,14 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             const cfg = deviceDefinitions.configuration
             syncActiveBoardVendorBucket(cfg)
             cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
+            // A licence report is board-specific for the same reason all of the
+            // above is: it was verified against the PREVIOUS board's `deviceId`
+            // and its VPP's `productId`. Carried across a switch, the badge
+            // asserts possession for hardware that is no longer selected, and
+            // the buy link gets built from the NEW package id paired with the
+            // OLD device id — binding a purchase to the wrong board.
+            deviceLicense.phase = 'idle'
+            deviceLicense.report = null
           }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
