@@ -938,9 +938,18 @@ class CompilerModule {
   // and the Arduino sketch walks them dynamically for I/O binding.
   // The debugger will be redesigned in Phase 4.
 
-  // TODO: This method is used to update the index of the Arduino core.
-  // We should validate if this is necessary and if it works correctly.
-  async handleCoreUpdateIndex(handleOutputData: HandleOutputDataCallback) {
+  /**
+   * `arduino-cli core update-index` — refetch the platform indexes.
+   *
+   * Required before installing a core that lives in a third-party index:
+   * passing `--additional-urls` to `core install` alone is not enough,
+   * because the CLI resolves the platform against its *cached* index and
+   * reports "Platform not found" until that cache has seen the vendor URL.
+   *
+   * `additionalUrls` is forwarded so the refresh covers the vendor index
+   * as well as the ones configured in `arduino-cli.yaml`.
+   */
+  async handleCoreUpdateIndex(handleOutputData: HandleOutputDataCallback, additionalUrls?: string) {
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
       let binaryPath = this.arduinoCliBinaryPath
       const [flag, configFilePath] = this.arduinoCliBaseParameters
@@ -949,7 +958,13 @@ class CompilerModule {
         // INFO: On Windows, we need to add the .exe extension to the binary path.
         binaryPath += '.exe'
       }
-      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, configFilePath])
+      const executeCommand = spawn(binaryPath, [
+        'core',
+        'update-index',
+        ...(additionalUrls ? ['--additional-urls', additionalUrls] : []),
+        flag,
+        configFilePath,
+      ])
 
       let stderrData = ''
 
@@ -971,10 +986,24 @@ class CompilerModule {
     })
   }
 
+  /**
+   * Install the Arduino core a board needs, pulling it from a vendor
+   * board-manager index when the board declares one.
+   *
+   * `boardManagerUrl` comes from the VPP manifest (`target.boardManagerUrl`)
+   * or hals.json (`board_manager_url`).  Cores outside arduino-cli's
+   * built-in index — `industrialshields:esp32`, for example — are
+   * unresolvable without it, and the install dies with
+   * "Platform '<id>' not found" (exit 7).  When one is supplied we refresh
+   * the index against that URL first, then install with the same
+   * `--additional-urls`; both steps are needed, since `core install`
+   * resolves against the cached index.
+   */
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
     coreVersion?: string,
+    boardManagerUrl?: string,
   ) {
     if (boardCore === null) return
 
@@ -994,6 +1023,25 @@ class CompilerModule {
       handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
     }
 
+    // Refresh the platform index against the vendor URL before installing.
+    // Non-fatal: a transient network failure here should not mask the far
+    // more useful error that `core install` produces a moment later.
+    if (boardManagerUrl) {
+      handleOutputData(`Using vendor board index: ${boardManagerUrl}`, 'info')
+      try {
+        // `handleCoreUpdateIndex` logs at the wider 'info' | 'warning' |
+        // 'error' level set; this callback only accepts 'info' | 'error',
+        // so fold 'warning' down to 'info'.
+        await this.handleCoreUpdateIndex(
+          (chunk, level) => handleOutputData(chunk, level === 'error' ? 'error' : 'info'),
+          boardManagerUrl,
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        handleOutputData(`Warning: could not refresh the board index (${message}). Continuing.`, 'info')
+      }
+    }
+
     let binaryPath = this.arduinoCliBinaryPath
 
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -1001,7 +1049,13 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', coreRef, ...this.arduinoCliBaseParameters])
+      const executeCommand = spawn(binaryPath, [
+        'core',
+        'install',
+        coreRef,
+        ...(boardManagerUrl ? ['--additional-urls', boardManagerUrl] : []),
+        ...this.arduinoCliBaseParameters,
+      ])
 
       let stderrData = ''
 
