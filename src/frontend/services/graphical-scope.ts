@@ -20,7 +20,12 @@
  */
 
 import type { PLCVariable } from '../../middleware/shared/ports/types'
-import { getVariableRestrictionType, validateVariableType } from '../utils/PLC/validate-variable-type'
+import type { BoundBlockPin } from '../utils/PLC/validate-variable-type'
+import {
+  getVariableRestrictionType,
+  resolveNewVariableType,
+  validateVariableType,
+} from '../utils/PLC/validate-variable-type'
 import { getScopedQueryApi } from './st-lsp'
 
 /**
@@ -171,19 +176,25 @@ export async function isExpressionValidForType(
   return validateVariableType(result.type, expectedType).isValid
 }
 
-/** Concrete `{definition, value}` to type a brand-new variable created from a box's expected type. */
-export function newVariableTypeForExpected(expectedType: string | undefined): {
+/**
+ * Concrete `{definition, value}` to type a brand-new variable created from a
+ * box's expected type. `boundSiblings` are the pins of the same block instance
+ * that already have a variable on them — a generic pin (`ANY`, `ANY_NUM`, …)
+ * adopts the concrete type the block resolved to instead of guessing (#479).
+ * Decision logic lives in {@link resolveNewVariableType} so it stays testable.
+ */
+export function newVariableTypeForExpected(
+  expectedType: string | undefined,
+  boundSiblings: BoundBlockPin[] = [],
+): {
   definition: PLCVariable['type']['definition']
   value: string
 } {
-  if (!expectedType) return { definition: 'base-type', value: 'dint' }
-  const restriction = getVariableRestrictionType(expectedType)
-  const value = restriction.values
-    ? Array.isArray(restriction.values)
-      ? restriction.values[0]
-      : restriction.values
-    : 'dint'
-  return { definition: (restriction.definition as PLCVariable['type']['definition']) ?? 'base-type', value }
+  const resolved = resolveNewVariableType(expectedType, boundSiblings)
+  return {
+    definition: (resolved.definition as PLCVariable['type']['definition']) ?? 'base-type',
+    value: resolved.value,
+  }
 }
 
 /** Build the variable reference a graphical node stores when an LSP completion is chosen. */
