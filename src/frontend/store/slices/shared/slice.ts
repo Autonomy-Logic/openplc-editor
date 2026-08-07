@@ -22,7 +22,13 @@ import {
 } from '../tabs/utils'
 import { cancelFlowWriteBacks, flushFlowWriteBacks } from './flow-writeback'
 import type { PouHistorySnapshot, SharedRootState, SharedSlice } from './types'
-import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
+import {
+  createDatatypeObject,
+  createEditorObjectForDatatype,
+  createEditorObjectForPou,
+  createPouObject,
+  guessDatatypeDerivation,
+} from './utils'
 
 const MAX_HISTORY_SIZE = 50
 
@@ -100,17 +106,26 @@ function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string):
  *   2. Regenerate code-mode variable buffers of affected POUs. `sanitizePou`
  *      persists `editor.variable.code` as the authoritative variables block,
  *      so a stale buffer would resurrect the old type name on save.
+ *   3. Regenerate the `.dt` code buffers of affected data types — committing
+ *      a stale buffer (commitCode → updateDatatype) would do the same.
  */
 function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeReferenceImpactAnalysis): void {
   const dirtyFiles = new Set<string>()
   const affectedPous = new Set<string>()
+  const affectedDatatypes = new Set<string>()
   for (const ref of impact.references) {
     // Global variables persist through the Resource entry in the file slice.
     dirtyFiles.add(ref.kind === 'global-variable' ? 'Resource' : ref.container)
     if (ref.kind === 'pou-variable') affectedPous.add(ref.container)
+    if (ref.kind === 'data-type-field' || ref.kind === 'data-type-base-type') affectedDatatypes.add(ref.container)
   }
   for (const name of dirtyFiles) {
     state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+  }
+
+  // No-op for types whose code view isn't active.
+  for (const datatypeName of affectedDatatypes) {
+    state.projectActions.regenerateDatatypeText(datatypeName)
   }
 
   for (const pouName of affectedPous) {
@@ -362,12 +377,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
 
+      // Fold pending code-view edits in first, so the rename doesn't
+      // regenerate over them — and so the reference scan sees them.
+      const reconcile = state.projectActions.reconcileDatatypeText(oldName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
       if (newName !== oldName) {
+        const freshState = getState()
         const impact = findAllReferencesToDataType(
           oldName,
-          state.project.data.pous,
-          state.project.data.configurations.resource.globalVariables,
-          state.project.data.dataTypes,
+          freshState.project.data.pous,
+          freshState.project.data.configurations.resource.globalVariables,
+          freshState.project.data.dataTypes,
         )
         if (impact.totalReferences > 0) {
           // Overwriting a pending request would drop its resolver and strand
@@ -384,12 +405,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       }
 
-      return renameElement(getState(), oldName, newName, () => {
+      const result = renameElement(getState(), oldName, newName, () => {
         // Renames via the dedicated action so the old .dt path gets
         // queued for deletion — a plain updateDatatype would strand
         // the old file on disk.
         getState().projectActions.updateDatatypeName(oldName, newName)
       })
+      // Only after renameElement are the type and its model both keyed by newName.
+      if (result.ok) getState().projectActions.regenerateDatatypeText(newName)
+      return result
     },
 
     respondToPendingRename: (confirmed) => {
@@ -735,6 +759,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
+      // Unreadable files have no PLCDataType, so no tree leaf to click.
+      const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
+        const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
+        if (!name) return []
+        // The file registry is keyed by raw name across both kinds: a
+        // colliding file would retype the real element and misroute its save.
+        const taken = [...data.projectData.pous, ...data.projectData.dataTypes].some(
+          (element) => element.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (taken) return []
+        return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
+      })
+
       // Add ladder and FBD flows for graphical POUs.
       //
       // The flow object embeds its own `name` field — historically the
@@ -943,6 +980,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       data.projectData.dataTypes.forEach((dt) => {
         files[dt.name] = { type: 'data-type', filePath: dt.name, saved: true }
       })
+      unparsedDataTypes.forEach(({ name }) => {
+        files[name] = { type: 'data-type', filePath: name, saved: true }
+      })
       const servers = data.projectData.servers
       if (servers) {
         servers.forEach((s) => {
@@ -1042,6 +1082,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             code: pouWithText.variablesText,
           })
         }
+      })
+
+      // Tab included, and focus stays on the auto-opened POU above.
+      unparsedDataTypes.forEach(({ name, content, derivation }) => {
+        const tabToBeCreated: TabsProps = {
+          name,
+          path: `/data/data-types/${derivation}/${name}`,
+          elementType: { type: 'data-type', derivation },
+        }
+        getState().tabsActions.updateTabs(tabToBeCreated)
+        getState().editorActions.addModel(createEditorObjectForDatatype(name, derivation))
+        getState().editorActions.updateModelStructureForName(name, { display: 'code', code: content })
       })
 
       // Reset all graphical flow updated flags at the very end of project open.

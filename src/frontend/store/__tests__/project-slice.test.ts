@@ -21,6 +21,7 @@ import type {
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from '../../utils/generate-iec-variables-to-string'
+import { serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
 import { createEditorSlice } from '../slices/editor'
@@ -46,6 +47,19 @@ function makeStore() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function openDatatypeInCodeMode(store: ReturnType<typeof makeStore>, name: string, code: string) {
+  store.getState().editorActions.addModel({
+    type: 'plc-datatype',
+    meta: { name, derivation: 'enumerated' },
+    structure: { display: 'code', code },
+  })
+}
+
+function codeOf(store: ReturnType<typeof makeStore>, name: string): string | undefined {
+  const model = store.getState().editors.find((e) => e.meta.name === name)
+  return model?.type === 'plc-datatype' && model.structure.display === 'code' ? model.structure.code : undefined
+}
 
 function makeVariable(name: string, cls: PLCVariable['class'] = 'local'): PLCVariable {
   return {
@@ -1432,6 +1446,104 @@ describe('createProjectSlice', () => {
       const replacement: PLCDataType = { name: 'Z', derivation: 'structure', variable: [] }
       store.getState().projectActions.applyDatatypeSnapshot('NonExistent', replacement)
       expect(store.getState().project.data.dataTypes[0].name).toBe('A')
+    })
+
+    it('regenerates the code buffer of a type shown in code mode', () => {
+      const dt: PLCDataType = { name: 'A', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      openDatatypeInCodeMode(store, 'A', 'stale text')
+
+      store.getState().projectActions.applyDatatypeSnapshot('A', {
+        name: 'A',
+        derivation: 'enumerated',
+        values: [{ description: 'BLUE' }],
+      })
+
+      expect(codeOf(store, 'A')).toContain('BLUE')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Data-type code view
+  // -------------------------------------------------------------------------
+  describe('reconcileDatatypeText', () => {
+    const enumType: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+
+    it('is a no-op when the type is not shown in code mode', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+
+    it('is a no-op when the buffer still matches the serialized type', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', serializeDataTypeToText(enumType))
+
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+
+    it('is a no-op when the type no longer exists', () => {
+      openDatatypeInCodeMode(store, 'Ghost', 'TYPE\nGhost : (RED);\nEND_TYPE\n')
+      expect(store.getState().projectActions.reconcileDatatypeText('Ghost').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes).toHaveLength(0)
+    })
+
+    it('folds a diverged buffer back into the type', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', 'TYPE\nColors : (RED, GREEN);\nEND_TYPE\n')
+
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      const updated = store.getState().project.data.dataTypes[0]
+      expect(updated.derivation === 'enumerated' && updated.values).toEqual([
+        { description: 'RED' },
+        { description: 'GREEN' },
+      ])
+    })
+
+    it('refuses when the buffer does not parse', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', 'TYPE\nnot a declaration\nEND_TYPE\n')
+
+      const response = store.getState().projectActions.reconcileDatatypeText('Colors')
+      expect(response.ok).toBe(false)
+      expect(response.title).toBe('Data type text is invalid')
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+  })
+
+  describe('regenerateDatatypeText', () => {
+    it('re-serializes the type into its buffer', () => {
+      const dt: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      openDatatypeInCodeMode(store, 'Colors', 'stale text')
+
+      store.getState().projectActions.regenerateDatatypeText('Colors')
+      expect(codeOf(store, 'Colors')).toBe(serializeDataTypeToText(dt))
+    })
+
+    it('does nothing when the type is not shown in code mode', () => {
+      const dt: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.regenerateDatatypeText('Colors')
+      expect(store.getState().editors).toHaveLength(0)
+    })
+
+    it('does nothing when the type no longer exists', () => {
+      openDatatypeInCodeMode(store, 'Ghost', 'raw')
+      store.getState().projectActions.regenerateDatatypeText('Ghost')
+      expect(codeOf(store, 'Ghost')).toBe('raw')
+    })
+  })
+
+  describe('removeUnparsedDataTypeFile', () => {
+    it('drops only the matching path', () => {
+      store.getState().projectActions.setUnparsedDataTypeFiles([
+        { relativePath: 'datatypes/A.dt', content: 'a' },
+        { relativePath: 'datatypes/B.dt', content: 'b' },
+      ])
+      store.getState().projectActions.removeUnparsedDataTypeFile('datatypes/A.dt')
+      expect(store.getState().unparsedDataTypeFiles).toEqual([{ relativePath: 'datatypes/B.dt', content: 'b' }])
     })
   })
 

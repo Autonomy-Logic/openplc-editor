@@ -37,6 +37,8 @@ import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
+import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
+import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -503,6 +505,48 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
   const pou = state.project.data.pous.find((p) => p.name === pouName)
   const newText = generateIecVariablesToString(pou?.interface?.variables ?? [])
   state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
+}
+
+// Same contract as the variables pair above, for the `.dt` code view.
+
+const findDatatypeEditorCode = (name: string, getState: ProjectGetState): string | undefined => {
+  const state = getState()
+  const editorModel = state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
+  if (editorModel?.type !== 'plc-datatype') return undefined
+  if (editorModel.structure.display !== 'code') return undefined
+  return editorModel.structure.code
+}
+
+const reconcileDatatypeText = (name: string, getState: ProjectGetState, setState: ProjectSetState): ProjectResponse => {
+  const code = findDatatypeEditorCode(name, getState)
+  if (typeof code !== 'string') return ok()
+
+  const current = getState().project.data.dataTypes.find((d) => d.name === name)
+  if (!current) return ok()
+  // Buffer is a verbatim serialisation of the current type — nothing to fold in.
+  if (code === serializeDataTypeToText(current)) return ok()
+
+  const { dataType, error } = parseDataTypeFromText(code, name)
+  if (!dataType) return fail(error ?? 'Unknown parse error.', 'Data type text is invalid')
+
+  setState(
+    produce((slice: ProjectSlice) => {
+      const idx = slice.project.data.dataTypes.findIndex((d) => d.name === name)
+      if (idx !== -1) slice.project.data.dataTypes[idx] = dataType
+    }),
+  )
+  return ok()
+}
+
+const regenerateDatatypeText = (name: string, getState: ProjectGetState): void => {
+  if (findDatatypeEditorCode(name, getState) === undefined) return
+  const state = getState()
+  const dataType = state.project.data.dataTypes.find((d) => d.name === name)
+  if (!dataType) return
+  state.editorActions.updateModelStructureForName(name, {
+    display: 'code',
+    code: serializeDataTypeToText(dataType),
+  })
 }
 
 const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
@@ -1144,11 +1188,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (idx !== -1) slice.project.data.dataTypes[idx] = data
         }),
       )
+      regenerateDatatypeText(name, getState)
     },
+    reconcileDatatypeText: (name) => reconcileDatatypeText(name, getState, setState),
+    regenerateDatatypeText: (name) => regenerateDatatypeText(name, getState),
     setUnparsedDataTypeFiles: (files) => {
       setState(
         produce((slice: ProjectSlice) => {
           slice.unparsedDataTypeFiles = files
+        }),
+      )
+    },
+    removeUnparsedDataTypeFile: (relativePath) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.unparsedDataTypeFiles = slice.unparsedDataTypeFiles.filter((f) => f.relativePath !== relativePath)
         }),
       )
     },

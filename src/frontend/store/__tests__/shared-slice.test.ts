@@ -577,6 +577,35 @@ describe('createSharedSlice', () => {
         expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
       })
 
+      it('folds pending code-view edits in and rewrites the buffer under the new name', async () => {
+        store.getState().editorActions.updateModelStructureForName('OldDT', {
+          display: 'code',
+          code: 'TYPE\nOldDT : STRUCT\nspeed : INT;\nEND_STRUCT;\nEND_TYPE\n',
+        })
+
+        expect((await store.getState().datatypeActions.rename('OldDT', 'NewDT')).ok).toBe(true)
+
+        const renamed = store.getState().project.data.dataTypes[0]
+        expect(renamed.name).toBe('NewDT')
+        expect(renamed.derivation === 'structure' && renamed.variable.map((v) => v.name)).toEqual(['speed'])
+
+        const model = store.getState().editor
+        expect(model.type === 'plc-datatype' && model.structure.display === 'code' && model.structure.code).toContain(
+          'NewDT : STRUCT',
+        )
+      })
+
+      it('refuses the rename while the code view holds invalid text', async () => {
+        store
+          .getState()
+          .editorActions.updateModelStructureForName('OldDT', { display: 'code', code: 'TYPE\ngarbage\nEND_TYPE\n' })
+
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(result.ok).toBe(false)
+        expect(store.getState().project.data.dataTypes[0].name).toBe('OldDT')
+        expect(store.getState().pendingDeletions).not.toContain('datatypes/OldDT.dt')
+      })
+
       it('rejects a name owned by an unreadable .dt file (case-insensitive)', async () => {
         store
           .getState()
@@ -875,6 +904,23 @@ describe('createSharedSlice', () => {
         await promise
 
         expect(getVariableView('Main')?.display).toBe('table')
+      })
+
+      it('regenerates the .dt code buffer of an affected data type', async () => {
+        store.getState().editorActions.updateModelStructureForName('Chassis', {
+          display: 'code',
+          code: 'TYPE\n  Chassis : STRUCT\n    front : OldDT;\n  END_STRUCT;\nEND_TYPE\n',
+        })
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        const model = store.getState().editorActions.getEditorFromEditors('Chassis')
+        const code =
+          model?.type === 'plc-datatype' && model.structure.display === 'code' ? model.structure.code : undefined
+        expect(code).toContain('NewDT')
+        expect(code).not.toContain('OldDT')
       })
 
       it('tolerates an affected POU without an editor model', async () => {
@@ -2239,6 +2285,59 @@ describe('createSharedSlice', () => {
         expect(state.files['main'].saved).toBe(true)
         expect(state.files['Resource']).toBeDefined()
         expect(state.files['Configuration']).toBeDefined()
+      })
+
+      it('pre-opens an unreadable .dt file as a code-mode tab without stealing focus', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          unparsedDataTypeFiles: [
+            { relativePath: 'datatypes/Broken.dt', content: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n' },
+            // No name to derive — skipped rather than registered under ''.
+            { relativePath: '', content: 'orphan' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
+        expect(state.files['Broken']).toEqual({ type: 'data-type', filePath: 'Broken', saved: true })
+        expect(state.files['']).toBeUndefined()
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main', 'Broken'])
+        // Focus stays on the auto-opened POU.
+        expect(state.selectedTab).toBe('main')
+
+        const model = state.editors.find((editor) => editor.meta.name === 'Broken')
+        expect(model?.type === 'plc-datatype' && model.meta.derivation).toBe('structure')
+        expect(model?.type === 'plc-datatype' && model.structure).toEqual({
+          display: 'code',
+          code: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n',
+        })
+      })
+
+      it('does not let an unreadable .dt displace a POU or a parsed type of the same name', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.dataTypes = [
+          { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+        ] as typeof data.projectData.dataTypes
+        const withCollisions = {
+          ...data,
+          unparsedDataTypeFiles: [
+            // Case-insensitive: the filesystem folds case, the registry doesn't.
+            { relativePath: 'datatypes/MAIN.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+            { relativePath: 'datatypes/colors.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(withCollisions)
+
+        const state = store.getState()
+        // The POU keeps its own registry entry, tab and model.
+        expect(state.files['main'].type).toBe('program')
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main'])
+        expect(state.editors.every((editor) => editor.type !== 'plc-datatype')).toBe(true)
+        expect(state.files['MAIN']).toBeUndefined()
+        expect(state.files['colors']).toBeUndefined()
+        // Still preserved, so the next save echoes both files back verbatim.
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
       })
 
       it('logs warnings to console when present', () => {
