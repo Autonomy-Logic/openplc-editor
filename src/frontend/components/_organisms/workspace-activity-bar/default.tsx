@@ -110,15 +110,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // everything except PING and STATUS, and the state it will settle on is not
   // decided yet, so the icon is drawn from a state that is about to change.
   // Clicking then cannot do what it appears to.
+  //
+  // The reason chain runs in the same order as the blocks it explains, most
+  // fundamental first: a target that cannot do run/stop at all, then no session
+  // to send over, then a transition in flight. Asking about the transition first
+  // would answer "PLC is changing state..." to someone who is not connected,
+  // reporting a state we last saw rather than the reason the button is inert —
+  // `plcStatus` is polled and survives the drop. Reached only when blocked, so
+  // the tail needs no test of its own: supported and connected and still blocked
+  // leaves exactly one reason.
   const plcStateControlSupported = resolveTargetCapabilities(currentBoardInfo).plcStateControl
   const plcTransitioning = plcStatus === 'TRANSITIONING'
-  const plcControlBlocked =
-    !plcStateControlSupported || deviceConnectionStatus !== 'connected' || plcTransitioning
+  const plcControlBlocked = !plcStateControlSupported || deviceConnectionStatus !== 'connected' || plcTransitioning
   const plcControlBlockedReason = !plcStateControlSupported
     ? 'This target does not support Start/Stop from the editor'
-    : plcTransitioning
-      ? 'PLC is changing state...'
-      : 'Connect to the target first'
+    : deviceConnectionStatus !== 'connected'
+      ? 'Connect to the target first'
+      : 'PLC is changing state...'
 
   // The emulator stopping is a session ending, and a debug session riding it ends
   // with it — which the drop handler below already does for every target. This
