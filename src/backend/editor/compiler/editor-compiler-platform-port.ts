@@ -24,7 +24,7 @@
  * `middleware/adapters/web/`.
  */
 
-import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
+import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
   fromSchemaShape,
@@ -403,7 +403,11 @@ export function createEditorCompilerPlatformPort(
           startIntervalMs: context.startIntervalMs,
         })
 
-        return { ok: deployOutcome === 'STARTED' }
+        // 'STARTED' is not the only success: a runtime that refused to start
+        // because its hardware mode switch reads STOP has still taken the
+        // program. deployReachedDevice keeps that judgement in one place, shared
+        // with the web adapter.
+        return { ok: deployReachedDevice(deployOutcome) }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log(`Runtime v4 upload failed: ${message}`, 'error')
@@ -502,7 +506,11 @@ export function createEditorCompilerPlatformPort(
           startTimeoutMs: context.startTimeoutMs,
           startIntervalMs: context.startIntervalMs,
         })
-        return { ok: deployOutcome === 'STARTED' }
+        // 'STARTED' is not the only success: a runtime that refused to start
+        // because its hardware mode switch reads STOP has still taken the
+        // program. deployReachedDevice keeps that judgement in one place, shared
+        // with the web adapter.
+        return { ok: deployReachedDevice(deployOutcome) }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log(`Runtime v3 upload failed: ${message}`, 'error')
