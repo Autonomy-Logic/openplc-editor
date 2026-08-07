@@ -76,13 +76,15 @@ export type CursorPosition = {
    *     editor.  Triggers a forced switch to text mode if the panel
    *     is currently in table mode, and the body editor ignores
    *     positions tagged this way.
+   *   - `data-type` — targets a data type's `.dt` code view, with the
+   *     same forced switch out of table mode.
    *
    * Used by Go to Definition redirects: when the LSP points at a
    * variable declaration (synthesized header line), we surface that
    * line inside the variables panel instead of clamping the cursor
    * to the body's line 1.
    */
-  target?: 'body' | 'variables'
+  target?: 'body' | 'variables' | 'data-type'
 }
 
 // ---------------------------------------------------------------------------

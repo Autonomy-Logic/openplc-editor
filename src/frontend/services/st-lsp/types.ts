@@ -32,6 +32,13 @@ export const STUB_URI_AUTHORITY = 'stub'
 export const POUVARS_URI_AUTHORITY = 'pouvars'
 
 /**
+ * URI scheme for the per-type `.dt` code view. Like `pouvars://`, the
+ * LSP never indexes it — requests remap onto `DATA_TYPES_URI` with the
+ * type's line span as the offset.
+ */
+export const DTVIEW_URI_AUTHORITY = 'dtview'
+
+/**
  * URI for the synthesized `TYPE…END_TYPE` document carrying every
  * user-defined `PLCDataType` (structures, enumerations, arrays).
  * Strucpp parses this once at sync time so any POU that references
@@ -142,6 +149,18 @@ export function parsePouVarsUri(uri: string): string | null {
   return decodeURIComponent(match[1])
 }
 
+/** Make a synthetic in-memory URI for a data type's `.dt` code view. */
+export function dtViewUri(name: string): string {
+  return `${POU_URI_SCHEME}://${DTVIEW_URI_AUTHORITY}/${encodeURIComponent(name)}.dt`
+}
+
+/** If `uri` is a `dtview://` URI, return the data type name; otherwise null. */
+export function parseDtViewUri(uri: string): string | null {
+  const match = new RegExp(`^${POU_URI_SCHEME}://${DTVIEW_URI_AUTHORITY}/(.+)\\.dt$`).exec(uri)
+  if (!match) return null
+  return decodeURIComponent(match[1])
+}
+
 /**
  * Number of lines the synthesized declaration occupies before the
  * VAR blocks.  Currently always 1 ("PROGRAM main", "FUNCTION foo :
@@ -150,6 +169,13 @@ export function parsePouVarsUri(uri: string): string | null {
  * Monaco-line → LSP-line shift.
  */
 export const POU_DECLARATION_LINE_COUNT = 1
+
+/**
+ * Lines the `.dt` code view renders before the type's own declaration —
+ * its local `TYPE` frame line. The aggregate document has the same
+ * frame, so a type's shift between the two is `span.start - DT_VIEW_FRAME_LINE_COUNT`.
+ */
+export const DT_VIEW_FRAME_LINE_COUNT = 1
 
 /**
  * Returns the POU name encoded in a URI minted by `pouUri` or

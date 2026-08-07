@@ -111,6 +111,33 @@ export function serializeDataTypesToLines(dataTypes: PLCDataType[]): SerializedD
   return out
 }
 
+/** Where one data type's lines sit inside the aggregate `TYPE…END_TYPE` block. */
+export interface DataTypeLineSpan {
+  /** 0-indexed first line of the entry in the aggregate document. */
+  start: number
+  /** Line count of the entry. */
+  length: number
+}
+
+/**
+ * Line spans of every entry in the aggregate document, keyed by name.
+ * Line 0 is the `TYPE` frame, so entries start at 1.
+ *
+ * The per-type `.dt` code view renders the same lines under its own
+ * `TYPE…END_TYPE` frame, so `start - 1` is the shift between the two
+ * frames — that is what the LSP layer needs to talk to the aggregate
+ * document on a per-type buffer's behalf.
+ */
+export function dataTypeLineSpans(dataTypes: PLCDataType[]): Map<string, DataTypeLineSpan> {
+  const spans = new Map<string, DataTypeLineSpan>()
+  let start = 1
+  for (const entry of serializeDataTypesToLines(dataTypes)) {
+    spans.set(entry.name, { start, length: entry.lines.length })
+    start += entry.lines.length
+  }
+  return spans
+}
+
 /**
  * Serialise every entry in `dataTypes` to a single ST `TYPE` block.
  * Returns `''` when there's nothing to emit — the LSP sync layer

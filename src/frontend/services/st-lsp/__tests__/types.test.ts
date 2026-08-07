@@ -1,4 +1,13 @@
-import { parsePouUri, parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri, pouVarsUri, stubUri } from '../types'
+import {
+  dtViewUri,
+  parseDtViewUri,
+  parsePouUri,
+  parsePouVarsUri,
+  POU_DECLARATION_LINE_COUNT,
+  pouUri,
+  pouVarsUri,
+  stubUri,
+} from '../types'
 
 describe('pouUri / stubUri', () => {
   it('produces well-formed in-memory URIs', () => {
@@ -69,5 +78,22 @@ describe('POU_DECLARATION_LINE_COUNT', () => {
     // contract ever changes, the providers' line-offset translation
     // for the variables-text view needs to update with it.
     expect(POU_DECLARATION_LINE_COUNT).toBe(1)
+  })
+})
+
+describe('dtViewUri / parseDtViewUri', () => {
+  it('round-trips a data type name, encoding included', () => {
+    expect(dtViewUri('Motor')).toBe('inmemory://dtview/Motor.dt')
+    expect(parseDtViewUri(dtViewUri('My Type'))).toBe('My Type')
+  })
+
+  it('returns null for the other ST URI shapes', () => {
+    expect(parseDtViewUri(pouUri('Motor'))).toBeNull()
+    expect(parseDtViewUri(pouVarsUri('Motor'))).toBeNull()
+    expect(parseDtViewUri('inmemory://datatypes/__project__.st')).toBeNull()
+  })
+
+  it('does not collide with the pouvars parser', () => {
+    expect(parsePouVarsUri(dtViewUri('Motor'))).toBeNull()
   })
 })
