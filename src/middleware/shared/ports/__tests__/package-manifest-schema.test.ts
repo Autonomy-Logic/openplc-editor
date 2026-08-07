@@ -1,4 +1,4 @@
-import { PackageManifestSchema } from '../package-manifest-schema'
+import { PackageManifestSchema, parseInstalledPackageManifest } from '../package-manifest-schema'
 
 /** A minimal manifest the schema accepts, with room to override `package`. */
 const manifest = (pkg: Record<string, unknown> = {}) => ({
@@ -62,5 +62,79 @@ describe('PackageManifestSchema — compatibility floors', () => {
     // deliberate exception, not a new general policy.
     const result = PackageManifestSchema.safeParse(manifest({ vendorExtension: { anything: true } }))
     expect(result.success).toBe(true)
+  })
+})
+
+// The other half of the same rule: strict where a package ENTERS the editor,
+// tolerant where an installed one is READ BACK. Without this split, the format
+// check above would retroactively unresolve a package installed by an older
+// editor — its boards would vanish from the board lookup with no message, on an
+// upgrade where the user did nothing.
+describe('parseInstalledPackageManifest — the load path', () => {
+  let warnSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warnSpy.mockRestore()
+  })
+
+  it('reads a well-formed manifest exactly as the strict parser does', () => {
+    const parsed = parseInstalledPackageManifest(manifest({ minEditorVersion: '4.3' }))
+    expect(parsed?.package.minEditorVersion).toBe('4.3')
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['minEditorVersion', 'garbage'],
+    ['minRuntimeVersion', '4,3,0'],
+  ])('drops an uncomparable %s and keeps the package readable', (field, value) => {
+    const parsed = parseInstalledPackageManifest(manifest({ [field]: value }))
+
+    // The package still resolves — this is the whole point — and the floor it
+    // could never have enforced is simply gone.
+    expect(parsed?.package.id).toBe('vendor.board')
+    expect(parsed?.package).not.toHaveProperty(field)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(field))
+  })
+
+  it('drops a floor that is not even a string', () => {
+    const parsed = parseInstalledPackageManifest(manifest({ minEditorVersion: 43 }))
+    expect(parsed?.package).not.toHaveProperty('minEditorVersion')
+  })
+
+  it('drops only the unreadable floor, leaving the readable one enforced', () => {
+    const parsed = parseInstalledPackageManifest(manifest({ minEditorVersion: 'garbage', minRuntimeVersion: '4.2' }))
+    expect(parsed?.package).not.toHaveProperty('minEditorVersion')
+    expect(parsed?.package.minRuntimeVersion).toBe('4.2')
+  })
+
+  it('leaves every other field of the package untouched', () => {
+    const parsed = parseInstalledPackageManifest(
+      manifest({ minEditorVersion: 'garbage', vendorExtension: { anything: true } }),
+    )
+    expect(parsed?.package).toMatchObject({
+      id: 'vendor.board',
+      name: 'Vendor Board',
+      version: '1.0.0',
+      vendorExtension: { anything: true },
+    })
+  })
+
+  it('still rejects a manifest that is malformed for any other reason', () => {
+    // Tolerance is scoped to the floors. A document missing `devices` is not a
+    // manifest, and reading it as one would crash deeper in the loader.
+    expect(parseInstalledPackageManifest({ formatVersion: '1.0', package: { id: 'x' } })).toBeNull()
+  })
+
+  it.each([
+    ['a non-object', 'not a manifest'],
+    ['null', null],
+    ['an array', []],
+    ['a manifest whose package is not an object', { formatVersion: '1.0', package: 'nope', devices: [{ id: 'a' }] }],
+  ])('passes %s straight to the schema rather than guessing at it', (_label, value) => {
+    expect(parseInstalledPackageManifest(value)).toBeNull()
   })
 })
