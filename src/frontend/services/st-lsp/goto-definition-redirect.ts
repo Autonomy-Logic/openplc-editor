@@ -111,11 +111,11 @@ function openDataTypeEditor(dataType: PLCDataType): boolean {
 }
 
 /**
- * Open the type's tab in code mode with the cursor on `lineInEntry`
- * (0 = its declaration line). Falls back to the form tab when the
- * `.dt` code view isn't built into this release.
+ * Open the type's tab in code mode at a Monaco position in its `.dt`
+ * view. Falls back to the form tab when the code view isn't built into
+ * this release.
  */
-function routeToDataTypeCodeView(dataType: PLCDataType, lineInEntry: number, characterLsp: number): boolean {
+function routeToDataTypeCodeView(dataType: PLCDataType, monacoLine: number, monacoColumn: number): boolean {
   if (!openDataTypeEditor(dataType)) return false
   if (!isDataTypeFilesEnabled()) return true
   const {
@@ -123,9 +123,8 @@ function routeToDataTypeCodeView(dataType: PLCDataType, lineInEntry: number, cha
   } = openPLCStoreBase.getState()
   updateModelStructureForName(dataType.name, { display: 'code' })
   setEditorCursor(dataType.name, {
-    // The view renders its own `TYPE` frame line before the entry.
-    lineNumber: lineInEntry + DT_VIEW_FRAME_LINE_COUNT + 1,
-    column: Math.max(1, characterLsp + 1),
+    lineNumber: monacoLine,
+    column: monacoColumn,
     offset: 0,
     target: 'data-type',
   })
@@ -237,7 +236,13 @@ export function redirectDefinitionToStore(loc: Location | LocationLink): boolean
     const dataTypes = openPLCStoreBase.getState().project.data.dataTypes
     const hit = findDataTypeAtLine(target.lineLsp, dataTypes)
     if (!hit) return false
-    return routeToDataTypeCodeView(hit.dataType, hit.lineInEntry, target.characterLsp)
+    // Entry-relative line → `.dt` view line (its own `TYPE` frame sits
+    // above the entry) → Monaco's 1-indexed frame.
+    return routeToDataTypeCodeView(
+      hit.dataType,
+      hit.lineInEntry + DT_VIEW_FRAME_LINE_COUNT + 1,
+      target.characterLsp + 1,
+    )
   }
 
   const parsed = parsePouUri(target.uri)

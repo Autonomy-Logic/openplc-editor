@@ -36,6 +36,7 @@ import {
 } from 'vscode-languageserver-protocol'
 
 import { openPLCStoreBase } from '../../store'
+import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans, serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
@@ -47,6 +48,7 @@ import {
   suppressNoDefinitionFound,
 } from '../lsp-shared'
 import { parseScopedCompletionType } from './completion-type'
+import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
@@ -106,26 +108,15 @@ function resolveStLspContext(modelUri: string): LspContext {
   }
   const dtName = parseDtViewUri(modelUri)
   if (dtName !== null) {
-    const span = dataTypeLineSpans(openPLCStoreBase.getState().project.data.dataTypes).get(dtName)
-    // An unknown name (type deleted while its tab is open) keeps the
-    // frame shift so requests stay inside the document.
-    return { lspUri: DATA_TYPES_URI, lineOffset: (span?.start ?? 1) - DT_VIEW_FRAME_LINE_COUNT }
+    const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
+    // A name absent from the document (unparseable `.dt` file) has no
+    // span to shift by. Pass the view's own URI through: the worker
+    // never indexed it, so every provider answers nothing rather than
+    // answering for whichever type happens to be first.
+    if (!span) return { lspUri: modelUri, lineOffset: 0 }
+    return { lspUri: DATA_TYPES_URI, lineOffset: dtViewLineOffset(span) }
   }
   return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
-}
-
-/**
- * Aggregate-document line window backing a `.dt` code view, or null.
- * Holds the entry's own lines only — widening it to cover the view's
- * `TYPE` frame would pull in the previous entry's last line, whose
- * columns overrun that 4-character frame line.
- */
-function dtViewWindow(modelUri: string): { start: number; endExclusive: number } | null {
-  const dtName = parseDtViewUri(modelUri)
-  if (dtName === null) return null
-  const span = dataTypeLineSpans(openPLCStoreBase.getState().project.data.dataTypes).get(dtName)
-  if (!span) return null
-  return { start: span.start, endExclusive: span.start + span.length }
 }
 
 /**
@@ -150,14 +141,12 @@ function applyDataTypeDiagnostics(monacoApi: typeof monaco, markerOwner: string,
   for (const [name, span] of dataTypeLineSpans(openPLCStoreBase.getState().project.data.dataTypes)) {
     const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === dtViewUri(name))
     if (!model) continue
-    const shift = span.start - DT_VIEW_FRAME_LINE_COUNT
-    const owned = lastDataTypeDiagnostics.filter(
-      (d) => d.range.start.line >= span.start && d.range.start.line < span.start + span.length,
-    )
     monacoApi.editor.setModelMarkers(
       model,
       markerOwner,
-      owned.map((d) => lspDiagnosticToMonaco(d, monacoApi, shift, defaultSource)),
+      diagnosticsInSpan(lastDataTypeDiagnostics, span).map((d) =>
+        lspDiagnosticToMonaco(d, monacoApi, dtViewLineOffset(span), defaultSource),
+      ),
     )
   }
 }
@@ -217,17 +206,13 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     resolveSemanticTokensViewport: (lspUri, modelUri, lineOffset) => {
       const dtName = parseDtViewUri(modelUri)
       if (dtName !== null) {
-        const dtWindow = dtViewWindow(modelUri)
+        const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
         // Empty window while the buffer is uncommitted: no colours beats
         // colours describing the previous text.
-        if (!dtWindow || !monacoApi || !dtViewMatchesStore(dtName, monacoApi)) {
+        if (!span || !monacoApi || !dtViewMatchesStore(dtName, monacoApi)) {
           return { startLine: 0, endLineExclusive: 0 }
         }
-        return {
-          startLine: dtWindow.start,
-          endLineExclusive: dtWindow.endExclusive,
-          outputStartLine: DT_VIEW_FRAME_LINE_COUNT,
-        }
+        return { ...dtViewWindow(span), outputStartLine: DT_VIEW_FRAME_LINE_COUNT }
       }
       const isVarsView = parsePouVarsUri(modelUri) !== null
       return {
@@ -286,12 +271,16 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   // so a change there leaves the model's own text untouched and Monaco
   // never re-queries on its own. Re-drive both from the store instead.
   const dtViewSyncDisposables: Array<() => void> = []
-  if (monacoApi) {
+  if (monacoApi && isDataTypeFilesEnabled()) {
     const api = monacoApi
+    const hasDtViewModel = () => api.editor.getModels().some((m) => parseDtViewUri(m.uri.toString()) !== null)
     dtViewSyncDisposables.push(
       openPLCStoreBase.subscribe(
         (state) => state.project.data.dataTypes,
         () => {
+          // `refresh()` re-tokenises every ST model in the language, so it
+          // must not fire for a datatype edit made with no `.dt` view open.
+          if (!hasDtViewModel()) return
           sharedService.refreshSemanticTokens()
           applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
         },
