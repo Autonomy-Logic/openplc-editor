@@ -141,7 +141,8 @@ export function compareParsedVersions(a: ParsedVersion, b: ParsedVersion): -1 | 
  *   - `minimum` present but unreadable → **pass**, because an unknown floor is
  *     worth 0.0.0 and everything clears 0.0.0. Callers that can see the string
  *     should say so out loud rather than let it vanish — the manifest schema
- *     rejects such a value outright, and the runtime probe logs a warning.
+ *     rejects such a value when a package is installed and logs it when one
+ *     already installed is read back, and the runtime probe logs a warning.
  *   - `candidate` unreadable against a real floor → **fail**. An unknown
  *     version never satisfies a declared minimum.
  */

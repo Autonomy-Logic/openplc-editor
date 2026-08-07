@@ -355,7 +355,9 @@ not because the string looked odd.
 **Phase 2 — VPP install gate.** `package-manager-module.ts::install` compares
 `minEditorVersion` against `APP_VERSION`, next to the signature verification, so
 one gate covers both the catalog and the "Add from file…" path.
-`openplc-packages/docs/package-format.md:69` is now true.
+`openplc-packages/docs/package-format.md:69` is now true. Reading an installed
+package's manifest back off disk goes through `parseInstalledPackageManifest`
+instead, which tolerates a floor it cannot compare — see §10 item 4.
 
 **Phase 3 — `minRuntimeVersion` in the manifest.** Field added to the schema,
 conditionally required when any device targets `runtime-v4` and rejected
@@ -428,6 +430,19 @@ Considered and dropped, so nobody re-derives them:
    pre-release suffixes all pass, so only genuine junk changes behaviour. This is
    the only boundary a sideloaded `.vpp` crosses, which is the entry path the
    install gate exists for.
+
+   Second-order effect, raised in re-review and fixed with it: the same schema is
+   also used to read the `manifest.json` of an **already-installed** package, so
+   the new format rule would have made a package installed before this change —
+   carrying a floor only genuine junk could produce — stop resolving on load, and
+   its boards disappear from the board lookup with no message, on an upgrade
+   where the user did nothing. The rule is therefore strict where the artefact
+   **enters** and tolerant where we are only **reading** what is already on disk:
+   `parseInstalledPackageManifest` drops an uncomparable floor and logs it, the
+   install path still refuses it. Dropping costs nothing that was not already
+   lost — an unreadable floor never gated anything — and refusing stays where
+   refusing belongs.
+
 5. ~~**Hand-rolled comparators remain**~~ → **fixed** (openplc-editor#993 ·
    openplc-web#652). `isStrucppCompatibleRuntime` and
    `isUserManagementCapableRuntime` are now `isVersionAtLeast(raw, <constant>)`.

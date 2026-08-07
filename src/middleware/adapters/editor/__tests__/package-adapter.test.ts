@@ -126,6 +126,24 @@ describe('createEditorPackageAdapter', () => {
       expect(await adapter.getManifest('missing')).toBeNull()
     })
 
+    it('keeps the manifest usable when its stored compatibility floor is unreadable', async () => {
+      // Read path, not the install boundary (DOPE-448): a package installed
+      // before the floor format was checked must still render and still
+      // provide its boards. The floor is dropped with a log, not the manifest.
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      ;(window.bridge.getPackageManifest as jest.Mock).mockResolvedValue({
+        ...validManifest,
+        package: { ...validManifest.package, minEditorVersion: 'nightly' },
+      })
+
+      const result = await adapter.getManifest('acme-controller')
+
+      expect(result?.package.id).toBe('acme-controller')
+      expect(result?.package).not.toHaveProperty('minEditorVersion')
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('minEditorVersion'))
+      warnSpy.mockRestore()
+    })
+
     it('returns null when the bridge returns a malformed manifest (zod rejection)', async () => {
       // Suppress the validation warning the schema emits; we want to
       // assert the rejection, not the noise.

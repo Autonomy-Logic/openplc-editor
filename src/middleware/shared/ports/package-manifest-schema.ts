@@ -50,6 +50,11 @@ import type { PackageManifest } from './types'
  * It matters most for the path this gate exists for: a `.vpp` added
  * from disk never passes through openplc-packages' `scripts/validate.ts`,
  * so for sideloaded packages this schema is the only boundary there is.
+ *
+ * Refusing applies to the artefact ENTERING the editor. Reading a
+ * package that is already installed goes through
+ * `parseInstalledPackageManifest` below, which drops such a floor
+ * instead of rejecting the manifest around it.
  */
 const versionFloor = z
   .string()
@@ -101,4 +106,64 @@ export function parsePackageManifest(value: unknown): PackageManifest | null {
   // editor code reads — at the cost of trusting authoring-side
   // validation in openplc-packages for the deeper fields.
   return parsed.data as unknown as PackageManifest
+}
+
+/** The manifest fields `versionFloor` guards, as read by the load path. */
+const FLOOR_FIELDS: readonly string[] = ['minEditorVersion', 'minRuntimeVersion']
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** A floor that is absent constrains nothing; one that is present must be comparable. */
+function isUsableFloor(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && isValidVersion(value))
+}
+
+/**
+ * Return `value` with any compatibility floor this codebase cannot
+ * compare removed, logging each one. Anything else is passed through
+ * untouched, including a shape that is not a manifest at all — deciding
+ * that is the schema's job, not this function's.
+ */
+function withComparableFloorsOnly(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.package)) return value
+
+  const kept: Record<string, unknown> = {}
+  let droppedAny = false
+  for (const [field, fieldValue] of Object.entries(value.package)) {
+    if (FLOOR_FIELDS.includes(field) && !isUsableFloor(fieldValue)) {
+      console.warn(
+        `[package-manifest] installed package declares an unreadable ${field} (${JSON.stringify(fieldValue)}); ` +
+          `ignoring it — the compatibility floor it intends cannot be enforced`,
+      )
+      droppedAny = true
+      continue
+    }
+    kept[field] = fieldValue
+  }
+
+  return droppedAny ? { ...value, package: kept } : value
+}
+
+/**
+ * Validate a manifest read back from a package that is ALREADY
+ * INSTALLED, dropping a floor this codebase cannot compare rather than
+ * rejecting the whole document.
+ *
+ * Strict where the artefact enters, tolerant where we are only reading
+ * what is already on disk. `importFromFile` refuses an unreadable floor
+ * — that is the boundary, and refusing there is what makes the promise
+ * in `docs/package-format.md` true. But a package installed BEFORE that
+ * boundary existed can carry such a floor, and rejecting its manifest on
+ * load would make the boards it provides disappear from the board lookup
+ * with no message, on an upgrade where the user did nothing.
+ *
+ * Dropping the field leaves the package exactly as unconstrained as it
+ * already was — an unreadable floor never gated anything (see
+ * `isVersionAtLeast`) — while the log keeps the cause visible instead of
+ * silently trading one invisible outcome for another.
+ */
+export function parseInstalledPackageManifest(value: unknown): PackageManifest | null {
+  return parsePackageManifest(withComparableFloorsOnly(value))
 }

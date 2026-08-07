@@ -5,7 +5,10 @@ import { join } from 'path'
 
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
 import { isCompatibleEditorVersion } from '../../../frontend/utils/semver'
-import { PackageManifestSchema } from '../../../middleware/shared/ports/package-manifest-schema'
+import {
+  PackageManifestSchema,
+  parseInstalledPackageManifest,
+} from '../../../middleware/shared/ports/package-manifest-schema'
 import type { VppDeviceMatch } from '../../shared/hardware/find-vpp-device'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { validatePathId } from '../../shared/utils/path-safety'
@@ -294,8 +297,13 @@ class PackageManagerModule {
     } catch {
       return null
     }
-    const parsed = PackageManifestSchema.safeParse(raw)
-    return parsed.success ? (parsed.data as unknown as PackageManifest) : null
+    // Read path, not the trust boundary: `importFromFile` above is where a
+    // manifest is refused. Here the package is already installed, and a
+    // manifest that was accepted by an older editor — one whose schema did
+    // not yet check the floor format (DOPE-448) — must keep resolving, or the
+    // boards it provides vanish from the board lookup with no message. An
+    // unreadable floor is dropped and logged; everything else still rejects.
+    return parseInstalledPackageManifest(raw)
   }
 
   getPackagePath(packageId: string): string | null {
