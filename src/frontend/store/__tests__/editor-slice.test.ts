@@ -58,7 +58,7 @@ function makeDatatype(name: string): EditorModel {
   return {
     type: 'plc-datatype',
     meta: { name, derivation: 'structure' },
-    structure: { selectedRow: '-1', description: '' },
+    structure: { display: 'table', selectedRow: '-1', description: '' },
   }
 }
 
@@ -217,7 +217,11 @@ describe('editor slice', () => {
       a.setEditor(makeTextual('M'))
       a.updateModelVariablesForName('DT', { display: 'table', selectedRow: 1 })
       const dtEditor = store.getState().editors.find((e) => e.meta.name === 'DT')!
-      expect(editorAs<DatatypeEditor>(dtEditor).structure.selectedRow).toBe('-1')
+      expect(editorAs<DatatypeEditor>(dtEditor).structure).toEqual({
+        display: 'table',
+        selectedRow: '-1',
+        description: '',
+      })
     })
   })
 
@@ -281,12 +285,14 @@ describe('editor slice', () => {
 
       a.updateModelStructure({ selectedRow: 3, description: 'desc' })
       expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'table',
         selectedRow: '3',
         description: 'desc',
       })
       // undefined selectedRow → keeps; empty description → keeps (falsy)
       a.updateModelStructure({ description: '' })
       expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'table',
         selectedRow: '3',
         description: 'desc',
       })
@@ -295,6 +301,77 @@ describe('editor slice', () => {
     it('no-op for non-datatype', () => {
       store.getState().editorActions.updateModelStructure({ selectedRow: 1, description: 'x' })
       expect(store.getState().editor.type).toBe('available')
+    })
+
+    it('switches to code mode keeping the buffer, and back to table with defaults', () => {
+      const { editorActions: a } = store.getState()
+      const dt = makeDatatype('S')
+      a.addModel(dt)
+      a.setEditor(dt)
+
+      a.updateModelStructure({ selectedRow: 2, description: 'desc' })
+      a.updateModelStructure({ display: 'code', code: 'TYPE\nS : (A);\nEND_TYPE\n' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'code',
+        code: 'TYPE\nS : (A);\nEND_TYPE\n',
+      })
+
+      // no `code` on a code→code update keeps the existing buffer
+      a.updateModelStructure({ display: 'code' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'code',
+        code: 'TYPE\nS : (A);\nEND_TYPE\n',
+      })
+
+      // the table arm's fields don't survive a round trip through code mode
+      a.updateModelStructure({ display: 'table' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'table',
+        selectedRow: '-1',
+        description: '',
+      })
+    })
+  })
+
+  describe('updateModelStructureForName', () => {
+    it('updates a non-active model', () => {
+      const { editorActions: a } = store.getState()
+      const active = makeDatatype('Active')
+      const background = makeDatatype('Background')
+      a.addModel(active)
+      a.addModel(background)
+      a.setEditor(active)
+
+      a.updateModelStructureForName('Background', { display: 'code', code: 'raw' })
+
+      const stored = store.getState().editors.find((e) => e.meta.name === 'Background')
+      expect(stored && editorAs<DatatypeEditor>(stored).structure).toEqual({ display: 'code', code: 'raw' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({
+        display: 'table',
+        selectedRow: '-1',
+        description: '',
+      })
+    })
+
+    it('updates the active model when the name matches', () => {
+      const { editorActions: a } = store.getState()
+      const dt = makeDatatype('S')
+      a.addModel(dt)
+      a.setEditor(dt)
+
+      a.updateModelStructureForName('S', { display: 'code', code: 'raw' })
+      expect(editorAs<DatatypeEditor>(store.getState().editor).structure).toEqual({ display: 'code', code: 'raw' })
+    })
+
+    it('no-op for an unknown name or a non-datatype model', () => {
+      const { editorActions: a } = store.getState()
+      const textual = makeTextual('P')
+      a.addModel(textual)
+      a.setEditor(textual)
+
+      a.updateModelStructureForName('missing', { display: 'code', code: 'raw' })
+      a.updateModelStructureForName('P', { display: 'code', code: 'raw' })
+      expect(store.getState().editor.type).toBe('plc-textual')
     })
   })
 
