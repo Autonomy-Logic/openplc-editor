@@ -25,6 +25,7 @@
  * disposed only at shutdown.
  */
 
+import type * as monaco from 'monaco-editor'
 import {
   type CompletionItem as LspCompletionItem,
   type CompletionList,
@@ -35,6 +36,8 @@ import {
 } from 'vscode-languageserver-protocol'
 
 import { openPLCStoreBase } from '../../store'
+import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
+import { dataTypeLineSpans, serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
   getBodyLineOffset,
@@ -45,10 +48,15 @@ import {
   suppressNoDefinitionFound,
 } from '../lsp-shared'
 import { parseScopedCompletionType } from './completion-type'
+import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
 import {
+  DATA_TYPES_URI,
+  DT_VIEW_FRAME_LINE_COUNT,
+  dtViewUri,
+  parseDtViewUri,
   parsePouUri,
   parsePouVarsUri,
   POU_DECLARATION_LINE_COUNT,
@@ -85,6 +93,9 @@ interface LoadStlibBufferParams {
  *     that's `pou://`; for graphical/hybrid POUs it's `stub://`.
  *     Either way the declaration is a single line at LSP index 0,
  *     so the offset is a constant 1.
+ *   - `dtview://<name>.dt` (per-type code view): remap to the
+ *     aggregate datatypes document. Both frames open with a `TYPE`
+ *     line, so the shift is the type's span start minus that frame.
  *   - Anything else: pass through unchanged.
  */
 function resolveStLspContext(modelUri: string): LspContext {
@@ -95,7 +106,49 @@ function resolveStLspContext(modelUri: string): LspContext {
     const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
     return { lspUri, lineOffset: POU_DECLARATION_LINE_COUNT }
   }
+  const dtName = parseDtViewUri(modelUri)
+  if (dtName !== null) {
+    const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
+    // A name absent from the document (unparseable `.dt` file) has no
+    // span to shift by. Pass the view's own URI through: the worker
+    // never indexed it, so every provider answers nothing rather than
+    // answering for whichever type happens to be first.
+    if (!span) return { lspUri: modelUri, lineOffset: 0 }
+    return { lspUri: DATA_TYPES_URI, lineOffset: dtViewLineOffset(span) }
+  }
   return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
+}
+
+/**
+ * True while a `.dt` model's text still matches what the store would
+ * serialise for that type.  An uncommitted edit breaks the match, and
+ * tokens resolved against the aggregate document would then be painted
+ * onto text they don't describe — wrong colours, and columns past the
+ * end of shorter lines.
+ */
+function dtViewMatchesStore(dtName: string, monacoApi: typeof monaco): boolean {
+  const dataType = openPLCStoreBase.getState().project.data.dataTypes.find((d) => d.name === dtName)
+  if (!dataType) return false
+  const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === dtViewUri(dtName))
+  if (!model) return false
+  return model.getValue() === serializeDataTypeToText(dataType)
+}
+
+let lastDataTypeDiagnostics: Diagnostic[] = []
+
+/** Fan the aggregate doc's diagnostics out to every mounted `.dt` model. */
+function applyDataTypeDiagnostics(monacoApi: typeof monaco, markerOwner: string, defaultSource: string): void {
+  for (const [name, span] of dataTypeLineSpans(openPLCStoreBase.getState().project.data.dataTypes)) {
+    const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === dtViewUri(name))
+    if (!model) continue
+    monacoApi.editor.setModelMarkers(
+      model,
+      markerOwner,
+      diagnosticsInSpan(lastDataTypeDiagnostics, span).map((d) =>
+        lspDiagnosticToMonaco(d, monacoApi, dtViewLineOffset(span), defaultSource),
+      ),
+    )
+  }
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
@@ -151,6 +204,16 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // VAR-block region; body editors keep everything from the
     // body line onwards.
     resolveSemanticTokensViewport: (lspUri, modelUri, lineOffset) => {
+      const dtName = parseDtViewUri(modelUri)
+      if (dtName !== null) {
+        const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
+        // Empty window while the buffer is uncommitted: no colours beats
+        // colours describing the previous text.
+        if (!span || !monacoApi || !dtViewMatchesStore(dtName, monacoApi)) {
+          return { startLine: 0, endLineExclusive: 0 }
+        }
+        return { ...dtViewWindow(span), outputStartLine: DT_VIEW_FRAME_LINE_COUNT }
+      }
       const isVarsView = parsePouVarsUri(modelUri) !== null
       return {
         startLine: lineOffset,
@@ -162,6 +225,16 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
     diagnosticsMirror: (params, ctx) => {
+      // Same trick for the aggregate datatypes doc: strucpp publishes
+      // against one URI, but each type renders in its own `.dt` view.
+      if (params.uri === DATA_TYPES_URI) {
+        // Replayed whenever a `.dt` model mounts later — the mirror is
+        // event-driven, so a model created after the last publish would
+        // otherwise show no markers at all.
+        lastDataTypeDiagnostics = params.diagnostics
+        applyDataTypeDiagnostics(ctx.monacoApi, ctx.markerOwner, ctx.defaultSource)
+        return
+      }
       // Mirror VAR-block diagnostics onto the variables-text editor
       // for the same POU (if mounted).  The variables editor uses a
       // separate Monaco model under `pouvars://<name>.st`; strucpp
@@ -193,6 +266,32 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     },
     ...(onCrash ? { onCrash } : {}),
   })
+
+  // A `.dt` view's colours and markers come from the aggregate document,
+  // so a change there leaves the model's own text untouched and Monaco
+  // never re-queries on its own. Re-drive both from the store instead.
+  const dtViewSyncDisposables: Array<() => void> = []
+  if (monacoApi && isDataTypeFilesEnabled()) {
+    const api = monacoApi
+    const hasDtViewModel = () => api.editor.getModels().some((m) => parseDtViewUri(m.uri.toString()) !== null)
+    dtViewSyncDisposables.push(
+      openPLCStoreBase.subscribe(
+        (state) => state.project.data.dataTypes,
+        () => {
+          // `refresh()` re-tokenises every ST model in the language, so it
+          // must not fire for a datatype edit made with no `.dt` view open.
+          if (!hasDtViewModel()) return
+          sharedService.refreshSemanticTokens()
+          applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+        },
+      ),
+    )
+    const onModelAdded = api.editor.onDidCreateModel((model) => {
+      if (parseDtViewUri(model.uri.toString()) === null) return
+      applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+    })
+    dtViewSyncDisposables.push(() => onModelAdded.dispose())
+  }
 
   // ---------------------------------------------------------------------------
   // Scoped completion for the graphical (LD/FBD) editors.
@@ -435,6 +534,9 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
     dispose() {
       registerScopedQueryApi(null)
+      for (const off of dtViewSyncDisposables) off()
+      dtViewSyncDisposables.length = 0
+      lastDataTypeDiagnostics = []
       sharedService.dispose()
     },
   }
