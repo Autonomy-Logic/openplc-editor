@@ -1174,6 +1174,131 @@ describe('createProjectSlice', () => {
     })
   })
 
+  describe('propagateDatatypeRename', () => {
+    const directRef = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+    })
+    const arrayRef = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: {
+        definition: 'array',
+        value: `ARRAY [0..4] OF ${typeName}`,
+        data: {
+          baseType: { definition: 'user-data-type', value: typeName },
+          dimensions: [{ dimension: '0..4' }],
+        },
+      },
+      location: '',
+      documentation: '',
+    })
+
+    beforeEach(() => {
+      store.getState().projectActions.createPou({
+        type: 'program',
+        data: {
+          language: 'st',
+          name: 'Main',
+          variables: [directRef('motor', 'MotorDef'), arrayRef('motors', 'motordef'), makeVariable('plain')],
+          body: makeBody(),
+          documentation: '',
+        },
+      })
+      store.getState().projectActions.setGlobalVariables({
+        variables: [{ ...directRef('gMotor', 'MotorDef'), class: 'global' }, makeVariable('gPlain', 'global')],
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'MotorDef',
+          derivation: 'structure',
+          variable: [{ name: 'speed', type: { definition: 'base-type', value: 'INT' } }],
+        },
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [
+            { name: 'front', type: { definition: 'user-data-type', value: 'MotorDef' } },
+            { name: 'id', type: { definition: 'base-type', value: 'INT' } },
+          ],
+        },
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'MotorBank',
+          derivation: 'array',
+          baseType: { definition: 'user-data-type', value: 'MotorDef' },
+          initialValue: '',
+          dimensions: [{ dimension: '1..8' }],
+        },
+      })
+    })
+
+    it('rewrites direct and array POU variable references (case-insensitive)', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const variables = store.getState().project.data.pous[0].interface?.variables ?? []
+      expect(variables[0].type).toEqual({ definition: 'user-data-type', value: 'DriveDef' })
+      expect(variables[1].type).toEqual({
+        definition: 'array',
+        value: 'ARRAY [0..4] OF DriveDef',
+        data: {
+          baseType: { definition: 'user-data-type', value: 'DriveDef' },
+          dimensions: [{ dimension: '0..4' }],
+        },
+      })
+      expect(variables[2].type).toEqual({ definition: 'base-type', value: 'INT' })
+    })
+
+    it('rewrites global variable references', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const globals = store.getState().project.data.configurations.resource.globalVariables
+      expect(globals[0].type).toEqual({ definition: 'user-data-type', value: 'DriveDef' })
+      expect(globals[1].type).toEqual({ definition: 'base-type', value: 'INT' })
+    })
+
+    it('rewrites other data types and leaves the renamed type entry itself alone', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const dataTypes = store.getState().project.data.dataTypes
+      // The type's own entry is updateDatatypeName's job.
+      expect(dataTypes[0].name).toBe('MotorDef')
+      expect(dataTypes[1]).toEqual({
+        name: 'Chassis',
+        derivation: 'structure',
+        variable: [
+          { name: 'front', type: { definition: 'user-data-type', value: 'DriveDef' } },
+          { name: 'id', type: { definition: 'base-type', value: 'INT' } },
+        ],
+      })
+      expect(dataTypes[2]).toEqual({
+        name: 'MotorBank',
+        derivation: 'array',
+        baseType: { definition: 'user-data-type', value: 'DriveDef' },
+        initialValue: '',
+        dimensions: [{ dimension: '1..8' }],
+      })
+    })
+
+    it('is a no-op when nothing references the type', () => {
+      const before = store.getState().project
+      store.getState().projectActions.propagateDatatypeRename('Ghost', 'Phantom')
+      const after = store.getState().project
+
+      expect(after.data.pous).toEqual(before.data.pous)
+      expect(after.data.configurations.resource.globalVariables).toEqual(
+        before.data.configurations.resource.globalVariables,
+      )
+      expect(after.data.dataTypes).toEqual(before.data.dataTypes)
+    })
+  })
+
   describe('setUnparsedDataTypeFiles', () => {
     it('replaces the stashed raw .dt files', () => {
       const raw = [{ relativePath: 'datatypes/Broken.dt', content: 'TYPE garbage' }]
