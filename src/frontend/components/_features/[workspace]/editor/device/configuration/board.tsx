@@ -9,6 +9,7 @@ import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
+import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
@@ -25,6 +26,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 /**
@@ -70,6 +72,10 @@ const Board = memo(function () {
     isConnected,
     status: serialStatus,
   } = useDeviceConnect(currentBoardInfo)
+
+  // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
+  // every built-in board — `isLicensable` gates the whole affordance.
+  const licensing = useDeviceLicense(currentBoardInfo)
 
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
@@ -720,6 +726,19 @@ const Board = memo(function () {
                   : {})}
               >
                 <DeviceConnectedIndicator isConnected={isConnected} />
+                {/* Licensing sits next to the link indicator because they answer
+                    adjacent questions about the same device — but it renders
+                    nothing at all unless this board's VPP is sold licensed AND a
+                    check has landed, so a free board's screen is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                  />
+                ) : null}
               </DeviceConnectButton>
             </>
           ) : null}

@@ -67,6 +67,11 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     debugTransport: null,
   },
 
+  deviceLicense: {
+    phase: 'idle',
+    report: null,
+  },
+
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
       setState(
@@ -116,7 +121,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection, deviceConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceConnection, deviceLicense }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pinsByBoard: {},
@@ -139,6 +144,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceConnection.port = null
           deviceConnection.transport = null
           deviceConnection.debugTransport = null
+          // Same for licensing, and for a sharper reason: the next project may
+          // select a different board entirely, and a "Licensed" badge carried over
+          // from the previous one would be an assertion about hardware that is not
+          // even connected.
+          deviceLicense.phase = 'idle'
+          deviceLicense.report = null
         }),
       )
     },
@@ -564,6 +575,30 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceConnection.port = null
           deviceConnection.transport = null
           deviceConnection.debugTransport = null
+        }),
+      )
+    },
+    startDeviceLicenseCheck: (): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'checking'
+          // `report` is deliberately left alone — see the action's docstring.
+        }),
+      )
+    },
+    setDeviceLicenseReport: (report): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'done'
+          deviceLicense.report = report
+        }),
+      )
+    },
+    clearDeviceLicense: (): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'idle'
+          deviceLicense.report = null
         }),
       )
     },

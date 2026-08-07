@@ -32,6 +32,14 @@ beforeEach(() => {
     openRuntimeSession: jest.fn().mockResolvedValue({ success: true }),
     closeRuntimeSession: jest.fn().mockResolvedValue({ success: true }),
     deviceReleaseSerialPort: jest.fn().mockResolvedValue({ released: true }),
+    deviceReadLicense: jest.fn().mockResolvedValue({
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'licensed', how: 'already-stored' },
+    }),
+    deviceRefreshLicense: jest.fn().mockResolvedValue({
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'unlicensed', entitlementChecked: true },
+    }),
     onDeviceLinkLog: jest.fn().mockReturnValue(() => undefined),
     onDevicePlcState: jest.fn().mockReturnValue(() => undefined),
   } as unknown as typeof window.bridge
@@ -150,5 +158,28 @@ describe('createEditorDeviceAdapter', () => {
     const unsub = adapter.onPlcState?.(cb)
     expect(window.bridge.onDevicePlcState).toHaveBeenCalledWith(cb)
     expect(typeof unsub).toBe('function')
+  })
+
+  it('delegates readLicense to the local-only license channel', async () => {
+    const request = { packageId: 'com.openplc.espressif-licensed' }
+
+    await expect(adapter.readLicense?.(request)).resolves.toEqual({
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'licensed', how: 'already-stored' },
+    })
+    expect(window.bridge.deviceReadLicense).toHaveBeenCalledWith(request)
+    // The cheap channel must not be the one that reaches the network.
+    expect(window.bridge.deviceRefreshLicense).not.toHaveBeenCalled()
+  })
+
+  it('delegates refreshLicense to the recovering license channel', async () => {
+    const request = { packageId: 'com.openplc.espressif-licensed' }
+
+    await expect(adapter.refreshLicense?.(request)).resolves.toEqual({
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'unlicensed', entitlementChecked: true },
+    })
+    expect(window.bridge.deviceRefreshLicense).toHaveBeenCalledWith(request)
+    expect(window.bridge.deviceReadLicense).not.toHaveBeenCalled()
   })
 })

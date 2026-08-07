@@ -2566,6 +2566,60 @@ class CompilerModule {
           strucppRuntimeHeaders: v4Layout,
           boardHalContent,
         })
+
+        // VPP-provided license-store backend source(s). Mirrors the HAL read
+        // above: each path is an absolute one `BoardInfoResolver` produced from
+        // `device.hal.licenseStore` through the same traversal-guarded
+        // `resolvePackageRelativePath`.
+        //
+        // Unlike the HAL (which lands at the canonical `src/arduino.cpp`), these
+        // keep their distinctive basenames and land in the SKETCH directory next
+        // to `license_store.h` / `license_blob.h`, so their
+        // `#include "license_store.h"` resolves and they define the STRONG
+        // `license_store_*` symbols that override the skeleton's
+        // `license_store_weak.cpp`. Boards without a VPP backend inject nothing
+        // and link the weak default, which answers LIC_UNSUPPORTED.
+        //
+        // A read failure is a WARNING, not a hard stop, and the asymmetry with the
+        // HAL check above is deliberate: a missing HAL means no I/O at all, while a
+        // missing store backend means the board answers "cannot store a licence" —
+        // degraded, correctly reported to the editor, and still a working PLC.
+        for (const licenseStoreFile of boardInfo.licenseStoreFiles ?? []) {
+          try {
+            const content = await readFile(licenseStoreFile, 'utf-8')
+            firmwareSkeleton[`examples/Baremetal/${path.basename(licenseStoreFile)}`] = content
+            // Logged on SUCCESS, not only on failure. Without this line the build
+            // output is identical whether the backend went in or not, and the only
+            // symptom of it missing appears much later and somewhere else: the
+            // board answers LIC_UNSUPPORTED and the editor says "this device
+            // cannot store a licence" — which reads as a hardware limitation
+            // rather than a firmware that was built without the backend.
+            _mainProcessPort.postMessage({
+              logLevel: 'info',
+              message: `License store backend included: ${path.basename(licenseStoreFile)}`,
+            })
+          } catch (lsErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message:
+                `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}. ` +
+                'This board will report that it cannot store a licence.',
+            })
+          }
+        }
+        // A licensable board that resolves NO backend is a manifest fault: every
+        // licensable VPP targets hardware that persists a licence, so the storage
+        // source is not optional for one. Saying it here is far cheaper than
+        // deducing it from a badge three steps later.
+        if (boardInfo.capabilities?.isLicensable === true && (boardInfo.licenseStoreFiles ?? []).length === 0) {
+          _mainProcessPort.postMessage({
+            logLevel: 'warning',
+            message:
+              `Board "${boardTarget}" belongs to a licensed VPP but its manifest declares no ` +
+              '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
+              'firmware will link the weak default and report that its licence storage is missing.',
+          })
+        }
       }
       try {
         // `devices/pin-mapping.json` ships in one of two shapes (the

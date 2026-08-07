@@ -74,6 +74,72 @@ export interface DeviceConnectionStatusPayload {
   reason?: 'lost'
 }
 
+// ---------------------------------------------------------------------------
+// VPP licensing over the held link
+// ---------------------------------------------------------------------------
+
+/**
+ * What the licensing step concluded about a connected device.
+ *
+ * A discriminated union rather than a status string plus flags, so the three
+ * things the UI may assert stay three separate variants. In particular
+ * `unlicensed` (the backend says there is no purchase — demo is correct, offer to
+ * buy) and `checkFailed` (we could not find out) must never be rendered the same
+ * way: showing "Not licensed" for a rate-limited request tells someone who
+ * already paid to buy again.
+ *
+ * `licensed` asserts POSSESSION of a well-formed license bound to this device and
+ * this VPP — not that the closed license-core will run FULL. Only the core can say
+ * that, so the badge says "Licensed", never "Full mode".
+ */
+export type DeviceLicenseState =
+  /** A well-formed license bound to this device and this VPP is stored. */
+  | { state: 'licensed'; how: 'already-stored' | 'activated' }
+  /**
+   * The device does NOT hold a valid license.
+   *
+   * `entitlementChecked` says how far we got, and the UI must branch on it:
+   *   - `true`  — the backend was asked and reported no purchase for this device.
+   *               Demo mode is correct and BUYING is the fix. `backendReason`
+   *               carries the backend's own wording when it gave one.
+   *   - `false` — we only know the device is holding nothing usable; nobody has
+   *               asked whether a purchase exists. The fix to OFFER is "check for
+   *               a license" (a refresh), not "buy" — telling someone who already
+   *               paid to pay again is the worst outcome this union exists to
+   *               prevent.
+   */
+  | { state: 'unlicensed'; entitlementChecked: boolean; backendReason?: string }
+  /**
+   * The running firmware reports no licence storage.
+   *
+   * On a licensable board this is a FIRMWARE fault, not a hardware limitation:
+   * every licensable VPP targets hardware that persists a licence across a
+   * reboot, so a board answering this was built without its storage backend.
+   * The fix is always "rebuild and upload", never "buy a different board" —
+   * which is why this variant carries no detail to vary the message with.
+   */
+  | { state: 'unsupported' }
+  /** Possession could not be determined. Never render as "not licensed". */
+  | { state: 'check-failed'; error: string }
+
+/** Result of a licensing operation over the held link. */
+export interface DeviceLicenseReport {
+  outcome: DeviceLicenseState
+  /**
+   * The licensing identity, 32 lowercase hex chars. Derived main-side (it needs
+   * `node:crypto`), so the renderer cannot compute it and must be handed it: it
+   * feeds the license popover, the copy button, and the buy deep link. Absent only
+   * when there was no usable hardware anchor, which is itself a `checkFailed`.
+   */
+  deviceId?: string
+}
+
+/** Arguments both licensing calls take, resolved by `resolveLicensingTarget`. */
+export interface DeviceLicenseRequest {
+  /** Reverse-domain VPP package id (`package.id`). */
+  packageId: string
+}
+
 export interface DevicePort {
   /**
    * Get all available boards with their hardware specs and pin configurations.
@@ -158,6 +224,36 @@ export interface DevicePort {
 
   /** Close a held serial link. Editor: `device:disconnect`. */
   disconnect(): Promise<{ success: boolean }>
+
+  /**
+   * Ask the connected device what license it is holding RIGHT NOW: read FC 0x4A
+   * and verify the bytes. Never contacts the backend, so it is cheap and safe to
+   * call on a poll or a screen open.
+   *
+   * The verification is the point. A device answering `SUCCESS` does not mean the
+   * stored license is good — the targets disagree about what they check first —
+   * so a caller that trusted the status byte would show "Licensed" on a board
+   * running demo.
+   *
+   * Optional: only platforms that hold a device link implement it. Editor:
+   * `device:read-license`.
+   */
+  readLicense?(request: DeviceLicenseRequest): Promise<DeviceLicenseReport>
+
+  /**
+   * Run the FULL licensing flow over the held link: read, verify, and when the
+   * device holds nothing usable, ask the backend and write what it returns
+   * (re-reading to confirm).
+   *
+   * Separate from `readLicense` because this one can take seconds and reaches the
+   * network — a connect must not block on it, and it is also what the UI calls
+   * again after a purchase so a device gets its license without disconnecting or
+   * reflashing.
+   *
+   * Optional: only platforms that hold a device link implement it. Editor:
+   * `device:refresh-license`.
+   */
+  refreshLicense?(request: DeviceLicenseRequest): Promise<DeviceLicenseReport>
 
   /**
    * Subscribe to live serial-link status pushed by the main process (liveness

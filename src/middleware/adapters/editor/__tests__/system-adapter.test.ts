@@ -69,3 +69,18 @@ describe('log', () => {
     expect(window.bridge.log).toHaveBeenCalledWith('error', 'error message')
   })
 })
+
+describe('getEdgeFrontendUrl', () => {
+  it('resolves an absolute Edge WEB app URL, distinct from the API host', () => {
+    // The `/buy` page lives on the web app, not the API. Deriving one host from
+    // the other by string surgery breaks the moment either moves, so this must be
+    // its own value — and it must be absolute, or `buildLicenseBuyUrl` falls back
+    // to a root-relative link that Electron cannot open.
+    const url = adapter.getEdgeFrontendUrl()
+
+    expect(url).toMatch(/^https?:\/\//)
+    expect(url).not.toContain('api.autonomylogic.com')
+    // No trailing slash: the URL builder appends `/buy` itself.
+    expect(url.endsWith('/')).toBe(false)
+  })
+})

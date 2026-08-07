@@ -21,6 +21,8 @@ import { useCallback } from 'react'
 import { resolveDeviceLinkWithUx } from '../services/device-link-resolution'
 import { useOpenPLCStore } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
+import { explainLicenseOutcome } from '../utils/license-outcome-dialog'
+import { useDeviceLicense } from './use-device-license'
 
 export interface UseDeviceConnectResult {
   /** Open + hold the link for the given board. Never throws. */
@@ -38,7 +40,9 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const device = useDevice()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const setDeviceConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setDeviceConnectionStatus)
+  const clearDeviceLicense = useOpenPLCStore((s) => s.deviceActions.clearDeviceLicense)
   const status = useOpenPLCStore((s) => s.deviceConnection.status)
+  const licensing = useDeviceLicense(boardInfo)
 
   const connect = useCallback(async (): Promise<void> => {
     const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
@@ -119,6 +123,32 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
             if (buttonIndex === 0) requestDeviceFlash()
           },
         })
+        return
+      }
+
+      // The link is up and a firmware answered. If this board's VPP is sold
+      // licensed, settle its licence now — over the link that is already open.
+      //
+      // AWAITED, not fired and forgotten: the whole flow runs on one held Modbus
+      // link, and letting the connect return first invites the user to click
+      // Upload or Debug into the middle of a read/write sequence. It is also why
+      // this is the LAST thing connect does — a non-licensable board (the common
+      // case) never reaches it, and pays nothing.
+      if (licensing.isLicensable) {
+        const report = await licensing.refresh()
+        if (report) {
+          explainLicenseOutcome(report, {
+            openModal,
+            buy: licensing.buy,
+            // A retry re-runs the flow and explains the NEW outcome, so a
+            // transient failure or a purchase completed in the browser resolves
+            // without disconnecting.
+            retry: async () => {
+              const next = await licensing.refresh()
+              if (next) explainLicenseOutcome(next, { openModal, buy: licensing.buy })
+            },
+          })
+        }
       }
     } finally {
       // 'connecting' is set OPTIMISTICALLY above, and normally only the main process
@@ -140,12 +170,17 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
         setDeviceConnectionStatus('disconnected', null)
       }
     }
-  }, [boardInfo, device, openModal, setDeviceConnectionStatus])
+  }, [boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
 
   const disconnect = useCallback(async (): Promise<void> => {
     await device.disconnect()
     setDeviceConnectionStatus('disconnected', null)
-  }, [device, setDeviceConnectionStatus])
+    // A DELIBERATE disconnect is the one link event that should drop the licence
+    // too: the user is done with this device, and leaving a badge behind would
+    // assert possession for hardware nothing is talking to. A link that merely
+    // DROPS keeps it — see `clearDeviceConnection` in the device slice.
+    clearDeviceLicense()
+  }, [clearDeviceLicense, device, setDeviceConnectionStatus])
 
   return {
     connect,

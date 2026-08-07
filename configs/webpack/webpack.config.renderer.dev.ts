@@ -173,6 +173,11 @@ const configuration: webpack.Configuration = {
       // `npm run dev` to point at staging or localhost:
       //   `VPP_CATALOG_URL=http://localhost:3333 npm run dev`
       VPP_CATALOG_URL: '',
+      // Same mechanism for the Edge WEB app (the `/buy` license page), which is
+      // a DIFFERENT origin from the API above.  Falls back to the production
+      // host hardcoded in `system-adapter.ts` when unset:
+      //   `OPENPLC_EDGE_WEB_URL=http://localhost:5173 npm run dev`
+      OPENPLC_EDGE_WEB_URL: '',
     }),
 
     new webpack.DefinePlugin({

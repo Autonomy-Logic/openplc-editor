@@ -1,0 +1,18 @@
+{
+  "_comment": "Golden cross-language fixture for lic_blob_t (OLS-14). Shared by the TS test (license-blob.test.ts) and the C host-test (T04). 'input' is the structured license; 'expectedBytesHex' is the deterministic 98-byte LE serialization produced by serializeLicenseBlob; 'expectedCrc32' is CRC-32/ISO-HDLC over [payload||signature] (offsets 0..93). Any byte here MUST match both the TS serializer and the C memcpy of the packed struct. Do not hand-edit expectedBytesHex.",
+  "input": {
+    "magic": 1129074767,
+    "fmtVersion": 1,
+    "keyId": 0,
+    "deviceId": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "productId": [160, 161, 162, 163, 164, 165, 166, 167],
+    "signature": [
+      17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+      17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+      17, 17, 17, 17, 17, 17, 17, 17
+    ],
+    "crc32": 0
+  },
+  "expectedBytesHex": "4f504c430100000102030405060708090a0b0c0d0e0fa0a1a2a3a4a5a6a711111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111b6311445",
+  "expectedCrc32": 1158951350
+}

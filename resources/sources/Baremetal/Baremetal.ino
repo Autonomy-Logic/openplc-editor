@@ -29,6 +29,8 @@
 #include "openplc.h"
 #include "defines.h"
 #include "arduino_runtime_glue.h"
+#include "license_gate.h"
+#include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
 
 #if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
@@ -134,6 +136,41 @@ void setup()
     // read RUN and start immediately, as they always have.
     runtime_init_plc_state();
 
+    // -----------------------------------------------------------------------
+    // License gate. Hand the stored license blob to the license-core so it can
+    // verify it and arm its demo timer.
+    //
+    // With no license-core linked, `license_gate_init()` is the weak default in
+    // license_gate_weak.cpp and this whole block is a harmless no-op: actuation
+    // then stays unconditionally allowed, i.e. a board that never had licensing
+    // behaves exactly as before. `millis()` gives the core the same time base the
+    // runtime uses, with no esp_timer dependency.
+    //
+    // THE HARDWARE ANCHOR IS NOT PASSED IN. An earlier design read `UniqueID`
+    // here and handed the bytes over, which made the board's IDENTITY a claim
+    // made by the OPEN firmware: licensing hardware you do not own cost one edit
+    // to this file, substituting the target's anchor. The license-core reads the
+    // silicon itself, inside the closed artifact, so there is nothing here to
+    // substitute. (FC 0x48 still REPORTS the anchor to the editor, so a purchase
+    // can be bound to this board — reporting an identity and asserting one are
+    // different things.)
+    // -----------------------------------------------------------------------
+    {
+        // Zero-initialised: on a failed read the core is handed length 0, and a
+        // buffer of indeterminate bytes behind a zero length is the kind of detail
+        // that turns into a hard-to-place bug the first time someone reads past it.
+        uint8_t lic_blob[LIC_BLOB_SIZE] = {0};
+        size_t  lic_len = 0;
+        if (license_store_read(lic_blob, sizeof(lic_blob), &lic_len) != LIC_STORE_OK)
+        {
+            // EMPTY / CORRUPT / UNSUPPORTED / any error: nothing usable was read,
+            // so present a zero-length blob. The core's verify rejects it and
+            // starts the demo window; with no core the weak gate ignores the args.
+            lic_len = 0;
+        }
+
+        license_gate_init(lic_blob, lic_len, (uint32_t)millis());
+    }
 
     #ifdef MODBUS_ENABLED
         #ifdef MBSERIAL
