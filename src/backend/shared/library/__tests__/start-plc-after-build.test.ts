@@ -54,6 +54,25 @@ describe('startPlcAfterBuild', () => {
     expect(calls()).toBe(3)
   })
 
+  it('treats a mode switch in STOP as a warning, not a failure', async () => {
+    // The runtime refuses to start while a hardware switch reads STOP. The
+    // program is on the device, so this must NOT read as a failed upload -- that
+    // sent users hunting for a problem that did not exist.
+    const { fetch, calls } = scriptedFetch(['START:ERROR_SWITCH_STOP'])
+    const logs: Array<{ level: string; message: string }> = []
+    const outcome = await startPlcAfterBuild({
+      fetchStart: fetch,
+      onLog: (level, message) => logs.push({ level, message }),
+      pollIntervalMs: 1,
+    })
+    expect(outcome).toBe('SWITCH_IN_STOP')
+    // Not retried: nothing changes until a human moves the switch.
+    expect(calls()).toBe(1)
+    expect(logs[logs.length - 1].level).toBe('warning')
+    expect(logs[logs.length - 1].message).toMatch(/uploaded/i)
+    expect(logs[logs.length - 1].message).toMatch(/switch is in STOP/i)
+  })
+
   it('bails with FAILED on a non-BUSY error reply', async () => {
     const { fetch, calls } = scriptedFetch(['ERROR:INVALID_PROGRAM'])
     const logs: Array<{ level: string; message: string }> = []

@@ -20,7 +20,7 @@
  * importFromFile`) can run unchanged.
  */
 
-import { parsePackageManifest } from '../../shared/ports/package-manifest-schema'
+import { parseInstalledPackageManifest } from '../../shared/ports/package-manifest-schema'
 import type { PackagePort } from '../../shared/ports/package-port'
 import type {
   ImportResult,
@@ -92,9 +92,14 @@ export function createEditorPackageAdapter(): PackagePort {
       // manifest.json. Validate the shape here before handing it to UI
       // code — drift between port type and on-disk JSON is a real risk
       // that an unchecked cast would silently absorb.
+      //
+      // Same read-path tolerance as the main process applies (DOPE-448): this
+      // manifest belongs to an installed package, so an unreadable
+      // compatibility floor is dropped rather than taking the whole manifest —
+      // and the package's boards — down with it.
       const raw = await window.bridge.getPackageManifest(packageId)
       if (raw === null || raw === undefined) return null
-      return parsePackageManifest(raw)
+      return parseInstalledPackageManifest(raw)
     },
 
     async listRemoteCatalog(): Promise<RemoteCatalog> {

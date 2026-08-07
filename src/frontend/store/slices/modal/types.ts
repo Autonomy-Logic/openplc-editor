@@ -1,3 +1,5 @@
+import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
+
 // ---------------------------------------------------------------------------
 // Modal types — superset of both editor and web
 // ---------------------------------------------------------------------------
@@ -42,6 +44,41 @@ export type ModalTypes =
    *  item. Acts on whatever project is currently open — no targeted
    *  data payload (unlike `confirm-delete-project`). */
   | 'confirm-plcopen-import'
+  /** "Add variable" on a GENERIC block pin (`ANY`, `ANY_NUM`, …) in a
+   *  graphical editor: the pin doesn't dictate a type, so the user
+   *  confirms name / class / type instead of the editor guessing
+   *  (issue #479). Data shape: `CreateGraphicalVariableModalData` —
+   *  carries the pin type, the suggested values and an `onConfirm`
+   *  the caller uses to create + bind the variable. */
+  | 'create-graphical-variable'
+
+/**
+ * Payload of the `create-graphical-variable` modal. Lives here so the graphical
+ * editors (`_atoms`) and the modal (`_organisms`) share one contract without
+ * importing across the atomic-design grain.
+ *
+ * `onConfirm` keeps creation + node binding with the caller: each editor
+ * already knows how to bind a variable into its own graph.
+ */
+export type CreateGraphicalVariableModalData = {
+  /** Declared type of the pin the box sits on (e.g. `ANY`, `ANY_NUM`). */
+  pinType: string
+  /** Name the user typed into the box. */
+  name: string
+  /** Type the editor inferred from the block's bound pins — the pre-selection. */
+  suggestedType: { definition: PLCVariable['type']['definition']; value: string }
+  onConfirm: (choice: {
+    name: string
+    class: VariableClass
+    type: { definition: PLCVariable['type']['definition']; value: string }
+  }) => void
+  /**
+   * Undo the box's provisional state. Opening the dialog blurs the box, which
+   * binds the typed text as a raw (unresolved) reference — abandoning the
+   * dialog must not leave that behind.
+   */
+  onCancel?: () => void
+}
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

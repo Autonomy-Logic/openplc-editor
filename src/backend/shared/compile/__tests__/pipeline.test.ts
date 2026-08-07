@@ -40,6 +40,17 @@ jest.mock('../../firmware/runtime-version-gate', () => ({
   describeIncompatibleRuntime: jest.fn(
     (v: string | null) => `Runtime ${String(v)} is too old; please upgrade to 4.1.0+.`,
   ),
+  // The two DOPE-448 message builders. Only the message text is stubbed —
+  // the *decisions* are made by `isVersionAtLeast` from
+  // `frontend/utils/semver`, which is deliberately NOT mocked so these tests
+  // exercise the real comparison.
+  describeEditorTooOldForRuntime: jest.fn(
+    (a: { minEditorVersion: string }) => `This editor is older than the runtime requires (${a.minEditorVersion}).`,
+  ),
+  describeVppRuntimeMismatch: jest.fn(
+    (a: { boardTarget: string; minRuntimeVersion: string }) =>
+      `Board "${a.boardTarget}" needs runtime ${a.minRuntimeVersion} or newer.`,
+  ),
 }))
 // Mock the conf-generator step so tests can deterministically force
 // the runtime-v4 confs branch to throw (covers the pipeline's outer
@@ -377,6 +388,122 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(result.success).toBe(false)
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     expect(events.some((e) => /too old|upgrade/i.test(e.message))).toBe(true)
+  })
+
+  // -------------------------------------------------------------------------
+  // DOPE-448: the two floors the runtime and the VPP declare
+  // -------------------------------------------------------------------------
+
+  const v4Args = (overrides: Partial<RunCompilePipelineArgs> = {}) =>
+    makeArgs({
+      isSimulator: false,
+      isRuntimeV4: true,
+      boardRuntime: 'openplc-compiler',
+      deviceContext: deviceContextFixture,
+      // The host app injects its own version; `4.2.0` is low enough to be
+      // refused by the floors below and high enough to clear the passing ones.
+      editorVersion: '4.2.0',
+      ...overrides,
+    })
+
+  it('aborts when the runtime declares a minEditorVersion above this editor', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({
+        ok: true,
+        version: 'v4.2.0',
+        minEditorVersion: '4.2.1',
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(false)
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => /older than the runtime requires \(4\.2\.1\)/.test(e.message))).toBe(true)
+  })
+
+  // The second, independent way the gate stays inert: a caller that never
+  // opts in. Web passes no `editorVersion` until its adapter wires one up,
+  // and must keep uploading.
+  it('uploads when the caller passes no editorVersion, even against a declared floor', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.2.0', minEditorVersion: '99.0.0' }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args({ editorVersion: undefined }), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  // This is every runtime currently in the field: it answers /api/version
+  // only, so no floor reaches the pipeline. The gate must be completely
+  // inert for them — that is what makes shipping this safe.
+  const NO_FLOOR_DECLARED: Array<[string | null | undefined, string]> = [
+    [undefined, 'the field is absent (runtime predates /api/capabilities)'],
+    [null, 'the runtime declares no floor'],
+  ]
+
+  it.each(NO_FLOOR_DECLARED)('uploads normally when minEditorVersion is %p — %s', async (minEditorVersion) => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.1.7', minEditorVersion }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(result.uploaded).toBe(true)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  it('uploads when this editor satisfies the runtime-declared floor', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.2.0', minEditorVersion: '1.0.0' }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts when the VPP requires a newer runtime than the device reports', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.1.7' }),
+      packageVppPlugin: jest.fn().mockResolvedValue({ files: {}, minRuntimeVersion: '4.1.9' }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(false)
+    // Blocked BEFORE the upload: the failure this prevents is a vendor plugin
+    // that loads on a live PLC and dies at scan time.
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => /needs runtime 4\.1\.9 or newer/.test(e.message))).toBe(true)
+  })
+
+  it('uploads when the runtime satisfies the VPP floor', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.2.0' }),
+      packageVppPlugin: jest.fn().mockResolvedValue({ files: {}, minRuntimeVersion: '4.1.9' }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  it('uploads when the board is not from a VPP (no floor declared)', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.1.7' }),
+      packageVppPlugin: jest.fn().mockResolvedValue({ files: {}, minRuntimeVersion: null }),
+    })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(v4Args(), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
   })
 
   it('compileOnly on v4 returns success without invoking checkRuntimeVersion or uploadRuntimeV4', async () => {
