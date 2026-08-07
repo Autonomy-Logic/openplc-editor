@@ -21,12 +21,32 @@
  * no C test harness to hang one on today.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { crc32IsoHdlc, LIC_BLOB_SIZE, LIC_MAGIC_LE, LIC_PAYLOAD_SIZE } from '../license-blob'
 
-const HEADER_PATH = join(__dirname, '..', '..', '..', '..', '..', 'resources', 'sources', 'Baremetal', 'license_blob.h')
+/**
+ * This test file is byte-identical across openplc-editor and openplc-web, but the
+ * firmware sources it reads are NOT in the same place: the sync gate maps the
+ * editor's `resources/sources/Baremetal` onto the web's `src/assets/firmware/
+ * Baremetal` (MAPPED_SURFACES in compare-surfaces.py) rather than mirroring the
+ * path. So resolve whichever one this checkout has.
+ *
+ * Deliberately throws when neither exists instead of skipping. A parity test that
+ * quietly disappears when it cannot find the header is worse than no test: the
+ * suite goes green while the layout it is supposed to pin drifts unwatched.
+ */
+const HEADER_CANDIDATES = [
+  join(__dirname, '..', '..', '..', '..', '..', 'resources', 'sources', 'Baremetal', 'license_blob.h'),
+  join(__dirname, '..', '..', '..', '..', 'assets', 'firmware', 'Baremetal', 'license_blob.h'),
+]
+
+const HEADER_PATH = HEADER_CANDIDATES.find((candidate) => existsSync(candidate))
+
+if (HEADER_PATH === undefined) {
+  throw new Error(`license_blob.h not found. Looked in:\n${HEADER_CANDIDATES.join('\n')}`)
+}
 
 const header = readFileSync(HEADER_PATH, 'utf-8')
 
