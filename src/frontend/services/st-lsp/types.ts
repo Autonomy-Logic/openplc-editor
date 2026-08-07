@@ -146,7 +146,7 @@ export function pouVarsUri(name: string): string {
 export function parsePouVarsUri(uri: string): string | null {
   const match = new RegExp(`^${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/(.+)\\.st$`).exec(uri)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  return decodeUriSegment(match[1])
 }
 
 /** Make a synthetic in-memory URI for a data type's `.dt` code view. */
@@ -158,7 +158,7 @@ export function dtViewUri(name: string): string {
 export function parseDtViewUri(uri: string): string | null {
   const match = new RegExp(`^${POU_URI_SCHEME}://${DTVIEW_URI_AUTHORITY}/(.+)\\.dt$`).exec(uri)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  return decodeUriSegment(match[1])
 }
 
 /**
@@ -178,6 +178,21 @@ export const POU_DECLARATION_LINE_COUNT = 1
 export const DT_VIEW_FRAME_LINE_COUNT = 1
 
 /**
+ * Decode a name segment out of a synthetic URI, or `null` when the
+ * encoding is malformed. These parsers run on every model URI the LSP
+ * providers see, so a bare `decodeURIComponent` would turn a stray
+ * `%ZZ` into a thrown `URIError` and take hover / completion down with
+ * it for that model.
+ */
+function decodeUriSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Returns the POU name encoded in a URI minted by `pouUri` or
  * `stubUri`, or `null` if the URI doesn't match one of those
  * patterns.  Callers use this to map LSP definition / reference
@@ -186,8 +201,7 @@ export const DT_VIEW_FRAME_LINE_COUNT = 1
 export function parsePouUri(uri: string): { kind: 'pou' | 'stub'; name: string } | null {
   const match = new RegExp(`^${POU_URI_SCHEME}://(${POU_URI_AUTHORITY}|${STUB_URI_AUTHORITY})/(.+)\\.st$`).exec(uri)
   if (!match) return null
-  return {
-    kind: match[1] === POU_URI_AUTHORITY ? 'pou' : 'stub',
-    name: decodeURIComponent(match[2]),
-  }
+  const name = decodeUriSegment(match[2])
+  if (name === null) return null
+  return { kind: match[1] === POU_URI_AUTHORITY ? 'pou' : 'stub', name }
 }

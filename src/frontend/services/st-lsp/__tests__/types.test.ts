@@ -97,3 +97,20 @@ describe('dtViewUri / parseDtViewUri', () => {
     expect(parsePouVarsUri(dtViewUri('Motor'))).toBeNull()
   })
 })
+
+describe('malformed percent encoding', () => {
+  // These parsers run on every model URI the providers see, so a throw
+  // here would take hover / completion down for that model.
+  it('returns null instead of throwing, for every synthetic URI shape', () => {
+    expect(parsePouUri('inmemory://pou/%ZZ.st')).toBeNull()
+    expect(parsePouUri('inmemory://stub/%ZZ.st')).toBeNull()
+    expect(parsePouVarsUri('inmemory://pouvars/%ZZ.st')).toBeNull()
+    expect(parseDtViewUri('inmemory://dtview/%ZZ.dt')).toBeNull()
+  })
+
+  it('still decodes well-formed encodings', () => {
+    expect(parsePouUri(pouUri('My POU'))?.name).toBe('My POU')
+    expect(parsePouVarsUri(pouVarsUri('My POU'))).toBe('My POU')
+    expect(parseDtViewUri(dtViewUri('My Type'))).toBe('My Type')
+  })
+})
