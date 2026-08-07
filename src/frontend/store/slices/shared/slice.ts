@@ -20,7 +20,13 @@ import {
 } from '../tabs/utils'
 import { cancelFlowWriteBacks, flushFlowWriteBacks } from './flow-writeback'
 import type { PouHistorySnapshot, SharedRootState, SharedSlice } from './types'
-import { createDatatypeObject, createEditorObjectForDatatype, createEditorObjectForPou, createPouObject } from './utils'
+import {
+  createDatatypeObject,
+  createEditorObjectForDatatype,
+  createEditorObjectForPou,
+  createPouObject,
+  guessDatatypeDerivation,
+} from './utils'
 
 const MAX_HISTORY_SIZE = 50
 
@@ -318,12 +324,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
 
-      return renameElement(state, oldName, newName, () => {
+      // Fold pending code-view edits in first, so the rename doesn't
+      // regenerate over them.
+      const reconcile = state.projectActions.reconcileDatatypeText(oldName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      const result = renameElement(state, oldName, newName, () => {
         // Renames via the dedicated action so the old .dt path gets
         // queued for deletion — a plain updateDatatype would strand
         // the old file on disk.
         state.projectActions.updateDatatypeName(oldName, newName)
       })
+      // Only after renameElement are the type and its model both keyed by newName.
+      if (result.ok) getState().projectActions.regenerateDatatypeText(newName)
+      return result
     },
 
     duplicate: (sourceName, newName) => {
@@ -662,6 +676,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
 
+      // Unreadable files have no PLCDataType, so no tree leaf to click.
+      const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
+        const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
+        if (!name) return []
+        // The file registry is keyed by raw name across both kinds: a
+        // colliding file would retype the real element and misroute its save.
+        const taken = [...data.projectData.pous, ...data.projectData.dataTypes].some(
+          (element) => element.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (taken) return []
+        return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
+      })
+
       // Add ladder and FBD flows for graphical POUs.
       //
       // The flow object embeds its own `name` field — historically the
@@ -870,6 +897,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       data.projectData.dataTypes.forEach((dt) => {
         files[dt.name] = { type: 'data-type', filePath: dt.name, saved: true }
       })
+      unparsedDataTypes.forEach(({ name }) => {
+        files[name] = { type: 'data-type', filePath: name, saved: true }
+      })
       const servers = data.projectData.servers
       if (servers) {
         servers.forEach((s) => {
@@ -969,6 +999,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             code: pouWithText.variablesText,
           })
         }
+      })
+
+      // Tab included, and focus stays on the auto-opened POU above.
+      unparsedDataTypes.forEach(({ name, content, derivation }) => {
+        const tabToBeCreated: TabsProps = {
+          name,
+          path: `/data/data-types/${derivation}/${name}`,
+          elementType: { type: 'data-type', derivation },
+        }
+        getState().tabsActions.updateTabs(tabToBeCreated)
+        getState().editorActions.addModel(createEditorObjectForDatatype(name, derivation))
+        getState().editorActions.updateModelStructureForName(name, { display: 'code', code: content })
       })
 
       // Reset all graphical flow updated flags at the very end of project open.

@@ -57,7 +57,7 @@ const CreateEditorModelObject = (
     return {
       type: 'plc-datatype',
       meta: { name, derivation },
-      structure: { selectedRow: '-1', description: '' },
+      structure: { display: 'table', selectedRow: '-1', description: '' },
     }
   }
 
