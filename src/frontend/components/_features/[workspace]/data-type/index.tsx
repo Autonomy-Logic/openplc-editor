@@ -8,6 +8,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import { cn } from '../../../../utils/cn'
 import { isDataTypeFilesEnabled } from '../../../../utils/feature-flags'
+import { getErrorMessage } from '../../../../utils/get-error-message'
 import { serializeDataTypeToText } from '../../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../../utils/PLC/data-type-text-parser'
 import { InputWithRef } from '../../../_atoms/input'
@@ -221,12 +222,23 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     if (dataTypeName !== value) {
       // `datatypeActions.rename` validates the new name and rekeys the
       // editor model, tab, and file entry, then flags the file dirty.
-      const result = rename(dataTypeName, value)
-      if (!result.ok) {
-        setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
-        toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
-      }
-      setIsEditing(false)
+      // Async: a referenced type awaits the impact modal first.
+      void rename(dataTypeName, value)
+        .then((result) => {
+          if (!result.ok) {
+            setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
+            // A declined impact modal is a user choice, not a failure.
+            if (!result.cancelled) {
+              toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+            }
+          }
+          setIsEditing(false)
+        })
+        .catch((error: unknown) => {
+          setEditorContent((prevContent) => (prevContent ? { ...prevContent, name: dataTypeName } : prevContent))
+          toast({ title: 'Rename failed', description: getErrorMessage(error), variant: 'fail' })
+          setIsEditing(false)
+        })
     }
   }
 

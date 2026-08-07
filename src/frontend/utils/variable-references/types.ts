@@ -10,9 +10,9 @@ export type VariableReferenceLocation = {
   columnEnd?: number
 }
 
-export type ReferenceImpactAnalysis = {
+export type ReferenceImpactAnalysis<Location = VariableReferenceLocation> = {
   totalReferences: number
   byPou: Map<string, number>
   byEditorType: Map<string, number>
-  references: VariableReferenceLocation[]
+  references: Location[]
 }
