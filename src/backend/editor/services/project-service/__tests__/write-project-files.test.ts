@@ -87,6 +87,37 @@ describe('ProjectService.writeProjectFiles', () => {
     expect(writtenPaths()).not.toContain('/projects/demo/project.json')
   })
 
+  // Returning while a write is still in flight lets a straggler from the
+  // failed save land after — and overwrite — a write from the user's retry.
+  it('waits for the slow writes before reporting a failure', async () => {
+    let releasePou = () => {}
+    const pouWritePending = new Promise<void>((resolve) => {
+      releasePou = resolve
+    })
+    writeFile.mockImplementation((path: string) => {
+      if (String(path).endsWith('.dt')) return Promise.reject(new Error('ENOSPC'))
+      if (String(path).endsWith('.st')) return pouWritePending
+      return Promise.resolve(undefined)
+    })
+
+    let saveResolved = false
+    const saving = service.writeProjectFiles(makeFiles()).then((result) => {
+      saveResolved = true
+      return result
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // The `.dt` write has already rejected. Returning here would hand control
+    // back while the POU write is still outstanding.
+    expect(saveResolved).toBe(false)
+
+    releasePou()
+    const result = await saving
+
+    expect(result.success).toBe(false)
+    expect(writtenPaths()).not.toContain('/projects/demo/project.json')
+  })
+
   it('leaves project.json untouched when a POU write rejects', async () => {
     writeFile.mockImplementation((path: string) =>
       String(path).endsWith('.st') ? Promise.reject(new Error('EACCES')) : Promise.resolve(undefined),

@@ -497,7 +497,13 @@ class ProjectService {
       const projectJson = entries.filter((e) => e.category === 'project-json')
       const contents = entries.filter((e) => e.category !== 'project-json')
 
-      await Promise.all(contents.map(writeEntry))
+      // `allSettled`, not `all`: a rejection must not return control while the
+      // other writes are still touching the disk, or a straggler from a failed
+      // save can land after — and overwrite — a write from the user's retry.
+      const settled = await Promise.allSettled(contents.map(writeEntry))
+      const rejected = settled.find((result) => result.status === 'rejected')
+      if (rejected?.status === 'rejected') throw rejected.reason
+
       await Promise.all(projectJson.map(writeEntry))
 
       // Process deletions

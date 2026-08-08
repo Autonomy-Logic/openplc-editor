@@ -8,10 +8,10 @@ const loadFlags = async () => {
 }
 
 describe('feature flags', () => {
-  const globals = globalThis as { DATATYPES_DT_FILES?: boolean }
+  const injectFlag = (value: boolean) => Reflect.set(globalThis, 'DATATYPES_DT_FILES', value)
 
   afterEach(() => {
-    delete globals.DATATYPES_DT_FILES
+    Reflect.deleteProperty(globalThis, 'DATATYPES_DT_FILES')
   })
 
   it('reads .dt data type persistence as off when the build injects nothing', async () => {
@@ -20,13 +20,13 @@ describe('feature flags', () => {
   })
 
   it('is on when the build injects it', async () => {
-    globals.DATATYPES_DT_FILES = true
+    injectFlag(true)
     const { isDataTypeFilesEnabled } = await loadFlags()
     expect(isDataTypeFilesEnabled()).toBe(true)
   })
 
   it('is off when the build injects it false', async () => {
-    globals.DATATYPES_DT_FILES = false
+    injectFlag(false)
     const { isDataTypeFilesEnabled } = await loadFlags()
     expect(isDataTypeFilesEnabled()).toBe(false)
   })

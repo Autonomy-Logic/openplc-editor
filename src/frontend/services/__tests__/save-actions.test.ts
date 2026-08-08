@@ -122,7 +122,7 @@ describe('save-actions', () => {
     // that left them on disk would let a pre-rollback copy outrank the legacy
     // JSON the next time the flag is on.
     describe('.dt cleanup on a flag-off save', () => {
-      const savedFiles = (port: ProjectPort) => (port.saveProject as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      const savedFiles = (port: ProjectPort) => vi.mocked(port.saveProject).mock.calls[0][0]
 
       it('queues the .dt file of every data type for deletion', async () => {
         openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
