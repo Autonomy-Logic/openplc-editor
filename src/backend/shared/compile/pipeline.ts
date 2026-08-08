@@ -20,6 +20,7 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
   CompilerPlatformPort,
   PlatformDeviceContext,
@@ -30,7 +31,12 @@ import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
-import { describeIncompatibleRuntime, isStrucppCompatibleRuntime } from '../firmware/runtime-version-gate'
+import {
+  describeEditorTooOldForRuntime,
+  describeIncompatibleRuntime,
+  describeVppRuntimeMismatch,
+  isStrucppCompatibleRuntime,
+} from '../firmware/runtime-version-gate'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import type { DevicePin } from '../types/PLC/devices'
@@ -211,6 +217,19 @@ export interface RunCompilePipelineArgs {
    *  addresses without re-reading the file.  Called once per
    *  successful strucpp compile. */
   cacheDebugData?: (md5: string, debugMapJson: string) => void
+  /**
+   * This editor's own version, compared against the `minEditorVersion`
+   * a runtime publishes at `GET /api/capabilities` (DOPE-448).
+   *
+   * Injected rather than imported: `APP_VERSION` lives in
+   * `frontend/data/`, and the layer rules forbid `backend/shared/`
+   * from reaching into `data` — correctly, since which build is
+   * running is a fact about the host app, not about the compile.
+   *
+   * Absent means the caller opts out of the check, so the gate is
+   * inert for callers written before it existed.
+   */
+  editorVersion?: string
   /** Persisted VPP Modbus screen state for the target device,
    *  sourced from `DeviceConfiguration.vendorScreenData` under
    *  the `modbus_rtu` / `modbus_tcp` keys.  Threaded straight
@@ -353,6 +372,7 @@ async function runCompilePipelineInner(
     cacheDebugData,
     vppModbusState,
     vendorScreenData,
+    editorVersion,
   } = args
 
   // Resolve the board's effective capabilities from `boardEntry`.
@@ -586,6 +606,51 @@ async function runCompilePipelineInner(
     )
     if (!isStrucppCompatibleRuntime(versionCheck.version)) {
       return bailError(emit, 'runtime-version', describeIncompatibleRuntime(versionCheck.version))
+    }
+
+    // The other direction (DOPE-448): the runtime published a
+    // `minEditorVersion` at `/api/capabilities` and this editor is below
+    // it.  Inert in two independent ways, both of which describe the
+    // world as it is today: `versionCheck.minEditorVersion` is null for
+    // every runtime predating that endpoint, and `editorVersion` is
+    // absent for any caller that hasn't opted in — `isVersionAtLeast`
+    // passes on an absent floor either way.
+    if (editorVersion && !isVersionAtLeast(editorVersion, versionCheck.minEditorVersion)) {
+      return bailError(
+        emit,
+        'runtime-version',
+        describeEditorTooOldForRuntime({
+          runtimeVersion: versionCheck.version,
+          // Narrowed by the guard above: `isVersionAtLeast` only returns
+          // false when it parsed a real floor out of this field.
+          minEditorVersion: versionCheck.minEditorVersion ?? '',
+          editorVersion,
+          // Only the editor's direct-HTTPS context knows an address the
+          // user would recognise; on web the device sits behind an
+          // orchestrator agent, so the message omits the label rather
+          // than printing an agent id nobody can act on.
+          deviceLabel: deviceContext.kind === 'editor-https' ? deviceContext.ip : undefined,
+        }),
+      )
+    }
+
+    // Arc 4 (DOPE-448): the VPP whose HAL is about to be built on this
+    // device declares a runtime floor, and this runtime is below it.
+    // Checked here rather than at install time because the target device
+    // is unknown until the user connects to one — and checked BEFORE the
+    // upload, because the failure mode it prevents is a plugin that
+    // loads on a live PLC and dies at scan time.
+    if (!isVersionAtLeast(versionCheck.version, vppResult.minRuntimeVersion)) {
+      return bailError(
+        emit,
+        'runtime-version',
+        describeVppRuntimeMismatch({
+          boardTarget,
+          minRuntimeVersion: vppResult.minRuntimeVersion ?? '',
+          runtimeVersion: versionCheck.version,
+          deviceLabel: deviceContext.kind === 'editor-https' ? deviceContext.ip : undefined,
+        }),
+      )
     }
 
     emit({ stage: 'upload', message: 'Uploading Runtime v4 bundle...', level: 'info' })

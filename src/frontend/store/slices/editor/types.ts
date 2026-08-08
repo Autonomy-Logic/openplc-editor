@@ -25,10 +25,16 @@ export type GlobalVariablesTableType =
       code?: string
     }
 
-export type StructureTableType = {
-  description: string
-  selectedRow: string
-}
+export type StructureTableType =
+  | {
+      display: 'table'
+      description: string
+      selectedRow: string
+    }
+  | {
+      display: 'code'
+      code?: string
+    }
 
 export type TaskType = { display: 'table'; selectedRow: string } | { display: 'code' }
 
@@ -70,13 +76,15 @@ export type CursorPosition = {
    *     editor.  Triggers a forced switch to text mode if the panel
    *     is currently in table mode, and the body editor ignores
    *     positions tagged this way.
+   *   - `data-type` — targets a data type's `.dt` code view, with the
+   *     same forced switch out of table mode.
    *
    * Used by Go to Definition redirects: when the LSP points at a
    * variable declaration (synthesized header line), we surface that
    * line inside the variables panel instead of clamping the cursor
    * to the body's line 1.
    */
-  target?: 'body' | 'variables'
+  target?: 'body' | 'variables' | 'data-type'
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +261,17 @@ export type EditorActions = {
       code?: string
     },
   ) => void
-  updateModelStructure: (data: { selectedRow?: number; description?: string }) => void
+  /** `display` is optional so table-mode row/description updates can't flip the view. */
+  updateModelStructure: (data: {
+    display?: 'code' | 'table'
+    selectedRow?: number
+    description?: string
+    code?: string
+  }) => void
+  updateModelStructureForName: (
+    name: string,
+    data: { display?: 'code' | 'table'; selectedRow?: number; description?: string; code?: string },
+  ) => void
   updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) => void
   updateModelInstances: (instances: { selectedRow?: number; display: 'code' | 'table' }) => void
   updateModelLadder: (data: { openRung?: { rungId: string; open: boolean } }) => void

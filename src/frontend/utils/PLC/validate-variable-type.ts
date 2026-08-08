@@ -151,3 +151,80 @@ export const getVariableRestrictionType = (variableType: string) => {
     definition: isABaseType.success ? 'base-type' : 'derived',
   }
 }
+
+/**
+ * A pin of the same block instance that already has a variable bound to it:
+ * the pin's DECLARED type (`pinType`, possibly generic) plus the CONCRETE type
+ * of the variable sitting on it (`variableType`).
+ */
+export type BoundBlockPin = {
+  pinType: string
+  variableType: string
+}
+
+/**
+ * True for a generic pin type — `ANY` or any `ANY_*` family. Such a pin has no
+ * type of its own: IEC resolves it from the block's other pins, so it is the
+ * one case where the editor cannot type a new variable on its own.
+ * Case-insensitive.
+ */
+export const isGenericTypeName = (typeName: string): boolean => {
+  const upper = typeName.toUpperCase()
+  return upper === 'ANY' || upper.includes('ANY_')
+}
+
+/** Canonical `{definition, value}` for a concrete type name, via the restriction table. */
+const newTypeFromConcrete = (concreteType: string): { definition: string | undefined; value: string } => {
+  const restriction = getVariableRestrictionType(concreteType)
+  // Concrete names always come back as a single string — the array shape is
+  // reserved for `ANY_*` inputs, which never reach here.
+  const value = Array.isArray(restriction.values) ? restriction.values[0] : restriction.values
+  return { definition: restriction.definition, value: value ?? 'dint' }
+}
+
+/**
+ * The `{definition, value}` to type a brand-new variable created from a box's
+ * expected type.
+ *
+ * IEC 61131-3 resolves every generic pin (`ANY`, `ANY_NUM`, …) of one block
+ * instance to the SAME concrete type. `validateVariableType` only judges a pin
+ * in isolation — `ANY` accepts anything and `SINT` is a legal `ANY_NUM` — so
+ * typing a new variable from its own pin alone silently produced a type the
+ * transpiler then rejects (issue #479: a MOVE fed by an `INT` created a `DINT`
+ * sink). Feeding the pins already bound on the same block instance lets a
+ * generic pin adopt the type the block has actually resolved to.
+ *
+ * Only siblings sitting on GENERIC pins count: a concrete pin (MOVE's
+ * `EN : BOOL`) says nothing about how the generic ones resolved.
+ */
+export const resolveNewVariableType = (
+  expectedType: string | undefined,
+  boundSiblings: BoundBlockPin[] = [],
+): { definition: string | undefined; value: string } => {
+  // Box not wired to any pin — nothing constrains it.
+  if (!expectedType) return { definition: 'base-type', value: 'dint' }
+
+  const upperExpectedType = expectedType.toUpperCase()
+  if (!isGenericTypeName(upperExpectedType)) return newTypeFromConcrete(expectedType)
+
+  const inferred = boundSiblings.find(
+    (sibling) =>
+      isGenericTypeName(sibling.pinType) &&
+      sibling.variableType.length > 0 &&
+      !isGenericTypeName(sibling.variableType) &&
+      validateVariableType(sibling.variableType, upperExpectedType).isValid,
+  )
+  if (inferred) return newTypeFromConcrete(inferred.variableType)
+
+  // Nothing bound yet, so nothing to infer from (first variable on a fresh
+  // block). Pick a default that at least satisfies the restriction, preferring
+  // DINT — the IEC default integer, and already what a plain `ANY` fell back to
+  // — over the first entry of the flattened set, which is SINT for every
+  // numeric generic.
+  const flattened = flattenGenericToBaseTypes(upperExpectedType)
+  if (flattened.includes('DINT')) return { definition: 'base-type', value: 'DINT' }
+  if (flattened.length > 0) return { definition: 'base-type', value: flattened[0] }
+  // Unknown generic name (a malformed block definition) — no restriction to
+  // honour, fall back to the unconstrained default.
+  return { definition: 'base-type', value: 'dint' }
+}

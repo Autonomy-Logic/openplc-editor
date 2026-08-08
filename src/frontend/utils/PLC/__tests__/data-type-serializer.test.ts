@@ -11,7 +11,12 @@
  * one of these up.
  */
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
-import { serializeDataTypesToLines, serializeDataTypesToST, serializeDataTypeToText } from '../data-type-serializer'
+import {
+  dataTypeLineSpans,
+  serializeDataTypesToLines,
+  serializeDataTypesToST,
+  serializeDataTypeToText,
+} from '../data-type-serializer'
 
 const enumerated = (name: string, values: string[], initialValue?: string): PLCDataType => ({
   name,
@@ -253,5 +258,52 @@ describe('serializeDataTypesToLines', () => {
     const entries = serializeDataTypesToLines(dataTypes)
     const reconstructed = `TYPE\n${entries.flatMap((e) => e.lines).join('\n')}\nEND_TYPE\n`
     expect(reconstructed).toBe(flat)
+  })
+})
+
+describe('dataTypeLineSpans', () => {
+  it('places entries after the TYPE frame and accumulates multi-line spans', () => {
+    const spans = dataTypeLineSpans([
+      { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+      {
+        name: 'Motor',
+        derivation: 'structure',
+        variable: [
+          { name: 'speed', type: { definition: 'base-type', value: 'INT' } },
+          { name: 'torque', type: { definition: 'base-type', value: 'INT' } },
+        ],
+      },
+      {
+        name: 'Buffer',
+        derivation: 'array',
+        dimensions: [{ dimension: '0..9' }],
+        baseType: { definition: 'base-type', value: 'INT' },
+        initialValue: '',
+      },
+    ])
+
+    // Line 0 is `TYPE`; the struct occupies declaration + 2 fields + END_STRUCT.
+    expect(spans.get('Colors')).toEqual({ start: 1, length: 1 })
+    expect(spans.get('Motor')).toEqual({ start: 2, length: 4 })
+    expect(spans.get('Buffer')).toEqual({ start: 6, length: 1 })
+  })
+
+  it('agrees with the rendered aggregate document', () => {
+    const dataTypes: PLCDataType[] = [
+      { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+      {
+        name: 'Motor',
+        derivation: 'structure',
+        variable: [{ name: 'speed', type: { definition: 'base-type', value: 'INT' } }],
+      },
+    ]
+    const lines = serializeDataTypesToST(dataTypes).split('\n')
+    for (const [name, span] of dataTypeLineSpans(dataTypes)) {
+      expect(lines[span.start]).toContain(name)
+    }
+  })
+
+  it('is empty for no data types', () => {
+    expect(dataTypeLineSpans([]).size).toBe(0)
   })
 })

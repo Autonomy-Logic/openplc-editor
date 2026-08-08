@@ -28,13 +28,28 @@ jest.mock('electron', () => ({
   MessageChannelMain: class {},
 }))
 
+type FindVppDevice = typeof import('../../../shared/hardware/find-vpp-device')
+
 const listInstalled = jest.fn()
 const getInstalledPackageManifest = jest.fn()
 jest.mock('../../package-manager', () => ({
-  PackageManagerModule: jest.fn().mockImplementation(() => ({
-    listInstalled,
-    getInstalledPackageManifest,
-  })),
+  PackageManagerModule: jest.fn().mockImplementation(() => {
+    const port = { listInstalled, getInstalledPackageManifest }
+    return {
+      ...port,
+      // Board lookup runs through the shared `findVppDeviceByBoardName`, and
+      // the mock runs the real one over these two stubs rather than
+      // re-implementing the search — a stub that resolved boards its own way
+      // would let the production lookup change without a test noticing.
+      // `require` (not a top-level import) because jest.mock factories are
+      // hoisted above the import block.
+      findDeviceByBoardName: (boardName: string) =>
+        (jest.requireActual('../../../shared/hardware/find-vpp-device') as FindVppDevice).findVppDeviceByBoardName(
+          port,
+          boardName,
+        ),
+    }
+  }),
 }))
 
 // eslint-disable-next-line import/first

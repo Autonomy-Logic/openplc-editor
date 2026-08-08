@@ -561,8 +561,8 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
       })
 
-      it('renames data type across all slices', () => {
-        const result = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+      it('renames data type across all slices', async () => {
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
         expect(result).toEqual({ ok: true })
 
         const state = store.getState()
@@ -572,60 +572,377 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('NewDT')
       })
 
-      it('queues the old datatypes/<name>.dt path for deletion', () => {
-        store.getState().datatypeActions.rename('OldDT', 'NewDT')
+      it('queues the old datatypes/<name>.dt path for deletion', async () => {
+        await store.getState().datatypeActions.rename('OldDT', 'NewDT')
         expect(store.getState().pendingDeletions).toContain('datatypes/OldDT.dt')
       })
 
-      it('rejects a name owned by an unreadable .dt file (case-insensitive)', () => {
+      it('folds pending code-view edits in and rewrites the buffer under the new name', async () => {
+        store.getState().editorActions.updateModelStructureForName('OldDT', {
+          display: 'code',
+          code: 'TYPE\nOldDT : STRUCT\nspeed : INT;\nEND_STRUCT;\nEND_TYPE\n',
+        })
+
+        expect((await store.getState().datatypeActions.rename('OldDT', 'NewDT')).ok).toBe(true)
+
+        const renamed = store.getState().project.data.dataTypes[0]
+        expect(renamed.name).toBe('NewDT')
+        expect(renamed.derivation === 'structure' && renamed.variable.map((v) => v.name)).toEqual(['speed'])
+
+        const model = store.getState().editor
+        expect(model.type === 'plc-datatype' && model.structure.display === 'code' && model.structure.code).toContain(
+          'NewDT : STRUCT',
+        )
+      })
+
+      it('refuses the rename while the code view holds invalid text', async () => {
+        store
+          .getState()
+          .editorActions.updateModelStructureForName('OldDT', { display: 'code', code: 'TYPE\ngarbage\nEND_TYPE\n' })
+
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(result.ok).toBe(false)
+        expect(store.getState().project.data.dataTypes[0].name).toBe('OldDT')
+        expect(store.getState().pendingDeletions).not.toContain('datatypes/OldDT.dt')
+      })
+
+      it('rejects a name owned by an unreadable .dt file (case-insensitive)', async () => {
         store
           .getState()
           .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Ghost.dt', content: 'TYPE garbage' }])
-        const result = store.getState().datatypeActions.rename('OldDT', 'ghost')
+        const result = await store.getState().datatypeActions.rename('OldDT', 'ghost')
         expect(result.ok).toBe(false)
         expect(result.message).toMatch(/could not be read/)
       })
 
-      it('rejects a rename that collides with another type only by case', () => {
+      it('rejects a rename that collides with another type only by case', async () => {
         store.getState().datatypeActions.create({ name: 'Motor', derivation: 'array' })
-        const result = store.getState().datatypeActions.rename('OldDT', 'motor')
+        const result = await store.getState().datatypeActions.rename('OldDT', 'motor')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
         expect(store.getState().project.data.dataTypes.map((d) => d.name)).toEqual(['OldDT', 'Motor'])
       })
 
-      it('rejects a case-only rename of the type itself', () => {
+      it('rejects a case-only rename of the type itself', async () => {
         // Writing olddt.dt then deleting OldDT.dt is the same file
         // where the filesystem folds case — the type would vanish.
-        const result = store.getState().datatypeActions.rename('OldDT', 'olddt')
+        const result = await store.getState().datatypeActions.rename('OldDT', 'olddt')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
       })
 
-      it('allows a no-op rename to the identical name', () => {
-        const result = store.getState().datatypeActions.rename('OldDT', 'OldDT')
+      it('allows a no-op rename to the identical name', async () => {
+        const result = await store.getState().datatypeActions.rename('OldDT', 'OldDT')
         expect(result.ok).toBe(true)
       })
 
-      it('returns error when new name already exists', () => {
+      it('returns error when new name already exists', async () => {
         store.getState().datatypeActions.create({ name: 'Existing', derivation: 'array' })
-        const result = store.getState().datatypeActions.rename('OldDT', 'Existing')
+        const result = await store.getState().datatypeActions.rename('OldDT', 'Existing')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
       })
 
-      it('returns error when data type not found', () => {
-        const result = store.getState().datatypeActions.rename('NonExistent', 'NewName')
+      it('returns error when data type not found', async () => {
+        const result = await store.getState().datatypeActions.rename('NonExistent', 'NewName')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type not found')
       })
 
-      it('updates editor name when renaming the current editor', () => {
+      it('updates editor name when renaming the current editor', async () => {
         // OldDT is the current editor
         expect(store.getState().editor.meta.name).toBe('OldDT')
-        const result = store.getState().datatypeActions.rename('OldDT', 'RenamedDT')
+        const result = await store.getState().datatypeActions.rename('OldDT', 'RenamedDT')
         expect(result.ok).toBe(true)
         expect(store.getState().editor.meta.name).toBe('RenamedDT')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // rename with references (impact modal)
+    // -----------------------------------------------------------------------
+    describe('rename with references (impact modal)', () => {
+      const directRef = (name: string, typeName: string): PLCVariable => ({
+        name,
+        class: 'local',
+        type: { definition: 'user-data-type', value: typeName },
+        location: '',
+        documentation: '',
+      })
+      const arrayRef = (name: string, typeName: string): PLCVariable => ({
+        name,
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: `ARRAY [0..4] OF ${typeName}`,
+          data: {
+            baseType: { definition: 'user-data-type', value: typeName },
+            dimensions: [{ dimension: '0..4' }],
+          },
+        },
+        location: '',
+        documentation: '',
+      })
+
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Chassis', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Chassis', {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+        store.getState().datatypeActions.create({ name: 'Bank', derivation: 'array' })
+        store.getState().projectActions.updateDatatype('Bank', {
+          name: 'Bank',
+          derivation: 'array',
+          baseType: { definition: 'user-data-type', value: 'OldDT' },
+          initialValue: '',
+          dimensions: [{ dimension: '1..8' }],
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().projectActions.setPouVariables({
+          pouName: 'Main',
+          variables: [directRef('motor', 'OldDT'), arrayRef('motors', 'olddt')],
+        })
+        store.getState().projectActions.setGlobalVariables({
+          variables: [{ ...directRef('gMotor', 'OldDT'), class: 'global' }],
+        })
+        store.getState().fileActions.addFile({ name: 'Resource', type: 'resource', filePath: 'Resource' })
+        store.getState().fileActions.setAllToSaved()
+        store.getState().workspaceActions.setEditingState('saved')
+      })
+
+      // The variables view of a POU model — active editor or stored model,
+      // same preference order the propagation sync uses.
+      const getVariableView = (name: string) => {
+        const state = store.getState()
+        const model = state.editor.meta.name === name ? state.editor : state.editorActions.getEditorFromEditors(name)
+        if (!model || (model.type !== 'plc-textual' && model.type !== 'plc-graphical')) return undefined
+        return model.variable
+      }
+      const getCodeBuffer = (name: string) => {
+        const view = getVariableView(name)
+        return view?.display === 'code' ? view.code : undefined
+      }
+
+      it('parks a pending rename and leaves the store untouched until answered', async () => {
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+
+        const pending = store.getState().pendingDatatypeRename
+        expect(pending?.oldName).toBe('OldDT')
+        expect(pending?.newName).toBe('NewDT')
+        expect(pending?.impact.totalReferences).toBe(5)
+        expect(Array.from(pending?.impact.byPou.entries() ?? [])).toEqual([
+          ['Main', 2],
+          ['Global Variables', 1],
+          ['Chassis', 1],
+          ['Bank', 1],
+        ])
+        // Nothing renamed while the modal is open.
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toEqual(['OldDT', 'Chassis', 'Bank'])
+
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+      })
+
+      it('confirm propagates every reference shape, then renames', async () => {
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        const result = await promise
+
+        expect(result).toEqual({ ok: true })
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+
+        const state = store.getState()
+        const variables = state.project.data.pous[0].interface?.variables ?? []
+        expect(variables[0].type).toEqual({ definition: 'user-data-type', value: 'NewDT' })
+        expect(variables[1].type).toEqual({
+          definition: 'array',
+          value: 'ARRAY [0..4] OF NewDT',
+          data: {
+            baseType: { definition: 'user-data-type', value: 'NewDT' },
+            dimensions: [{ dimension: '0..4' }],
+          },
+        })
+        expect(state.project.data.configurations.resource.globalVariables[0].type).toEqual({
+          definition: 'user-data-type',
+          value: 'NewDT',
+        })
+        const chassis = state.project.data.dataTypes.find((d) => d.name === 'Chassis')
+        expect(chassis?.derivation === 'structure' && chassis.variable[0].type.value).toBe('NewDT')
+        const bank = state.project.data.dataTypes.find((d) => d.name === 'Bank')
+        expect(bank?.derivation === 'array' && bank.baseType.value).toBe('NewDT')
+
+        // The type itself was renamed and the old file queued for deletion.
+        expect(state.project.data.dataTypes.map((d) => d.name)).toEqual(['NewDT', 'Chassis', 'Bank'])
+        expect(state.pendingDeletions).toContain('datatypes/OldDT.dt')
+      })
+
+      it('confirm flags every affected container file dirty', async () => {
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        const files = store.getState().files
+        expect(files['Main'].saved).toBe(false)
+        expect(files['Resource'].saved).toBe(false)
+        expect(files['Chassis'].saved).toBe(false)
+        expect(files['Bank'].saved).toBe(false)
+        expect(store.getState().workspace.editingState).toBe('unsaved')
+      })
+
+      it('cancel leaves the store completely untouched', async () => {
+        const before = store.getState()
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(false)
+        const result = await promise
+
+        expect(result).toEqual({ ok: false, cancelled: true, message: 'Rename cancelled' })
+        const after = store.getState()
+        expect(after.pendingDatatypeRename).toBeNull()
+        // Same object references — no slice was written at all.
+        expect(after.project).toBe(before.project)
+        expect(after.files).toBe(before.files)
+        expect(after.tabs).toBe(before.tabs)
+        expect(after.pendingDeletions).toBe(before.pendingDeletions)
+      })
+
+      it('skips the modal when nothing references the type', async () => {
+        store.getState().datatypeActions.create({ name: 'Lonely', derivation: 'enumerated' })
+        const result = await store.getState().datatypeActions.rename('Lonely', 'Hermit')
+
+        expect(result).toEqual({ ok: true })
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toContain('Hermit')
+      })
+
+      it('skips the reference scan on a no-op rename to the identical name', async () => {
+        const result = await store.getState().datatypeActions.rename('OldDT', 'OldDT')
+
+        expect(result.ok).toBe(true)
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+        // References untouched — there was nothing to propagate.
+        const variables = store.getState().project.data.pous[0].interface?.variables ?? []
+        expect(variables[0].type.value).toBe('OldDT')
+      })
+
+      it('rejects an invalid new name before opening the modal', async () => {
+        const result = await store.getState().datatypeActions.rename('OldDT', 'bad name')
+
+        expect(result.ok).toBe(false)
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+      })
+
+      it('rejects a second rename while one is awaiting confirmation', async () => {
+        const first = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        const pendingBefore = store.getState().pendingDatatypeRename
+
+        store.getState().datatypeActions.create({ name: 'Other', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Other', {
+          name: 'Other',
+          derivation: 'structure',
+          variable: [{ name: 'f', type: { definition: 'user-data-type', value: 'Chassis' } }],
+        })
+        const second = await store.getState().datatypeActions.rename('Chassis', 'Frame')
+
+        expect(second.ok).toBe(false)
+        expect(second.message).toBe('Another data type rename is awaiting confirmation')
+        // The first request's resolver is untouched and still completes.
+        expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
+        store.getState().datatypeActions.respondToPendingRename(true)
+        const result = await first
+        expect(result).toEqual({ ok: true })
+        expect(store.getState().project.data.dataTypes.map((d) => d.name)).toContain('NewDT')
+      })
+
+      it('respondToPendingRename without a pending request is a no-op', () => {
+        const before = store.getState()
+        store.getState().datatypeActions.respondToPendingRename(true)
+        expect(store.getState()).toBe(before)
+      })
+
+      it('regenerates the code-mode variables buffer when the affected POU is the active editor', async () => {
+        // pouActions.create left Main as the active editor.
+        expect(store.getState().editor.meta.name).toBe('Main')
+        store.getState().editorActions.updateModelVariablesForName('Main', {
+          display: 'code',
+          code: '  VAR\n    motor : OldDT;\n  END_VAR',
+        })
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        const code = getCodeBuffer('Main')
+        expect(code).toContain('NewDT')
+        expect(code).not.toContain('OldDT')
+      })
+
+      it('regenerates the buffer of a stored (non-active) POU model', async () => {
+        // Make something else the active editor so Main only lives in editors[].
+        store.getState().datatypeActions.create({ name: 'Scratch', derivation: 'structure' })
+        expect(store.getState().editor.meta.name).toBe('Scratch')
+        store.getState().editorActions.updateModelVariablesForName('Main', {
+          display: 'code',
+          code: '  VAR\n    motor : OldDT;\n  END_VAR',
+        })
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        const code = getCodeBuffer('Main')
+        expect(code).toContain('NewDT')
+        expect(code).not.toContain('OldDT')
+      })
+
+      it('leaves table-mode variable views alone', async () => {
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        expect(getVariableView('Main')?.display).toBe('table')
+      })
+
+      it('regenerates the .dt code buffer of an affected data type', async () => {
+        store.getState().editorActions.updateModelStructureForName('Chassis', {
+          display: 'code',
+          code: 'TYPE\n  Chassis : STRUCT\n    front : OldDT;\n  END_STRUCT;\nEND_TYPE\n',
+        })
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        await promise
+
+        const model = store.getState().editorActions.getEditorFromEditors('Chassis')
+        const code =
+          model?.type === 'plc-datatype' && model.structure.display === 'code' ? model.structure.code : undefined
+        expect(code).toContain('NewDT')
+        expect(code).not.toContain('OldDT')
+      })
+
+      it('tolerates an affected POU without an editor model', async () => {
+        store.getState().projectActions.createPou({
+          type: 'program',
+          data: {
+            language: 'st',
+            name: 'Headless',
+            variables: [directRef('m', 'OldDT')],
+            body: { language: 'st', value: '' },
+            documentation: '',
+          },
+        })
+        store.getState().fileActions.addFile({ name: 'Headless', type: 'program', filePath: 'Headless' })
+
+        const promise = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        store.getState().datatypeActions.respondToPendingRename(true)
+        const result = await promise
+
+        expect(result).toEqual({ ok: true })
+        const headless = store.getState().project.data.pous.find((p) => p.name === 'Headless')
+        expect(headless?.interface?.variables[0].type.value).toBe('NewDT')
       })
     })
 
@@ -1652,12 +1969,12 @@ describe('createSharedSlice', () => {
         expect(history.future[0].dataTypes).toEqual([edited])
       })
 
-      it('rename keeps the history and undo restores content under the new name', () => {
+      it('rename keeps the history and undo restores content under the new name', async () => {
         const initial = getColorsDataType()
         store.getState().snapshotActions.pushToHistory('Colors', { variables: [], body: null, dataTypes: [initial] })
         store.getState().projectActions.updateDatatype('Colors', edited)
 
-        expect(store.getState().datatypeActions.rename('Colors', 'Palette').ok).toBe(true)
+        expect((await store.getState().datatypeActions.rename('Colors', 'Palette')).ok).toBe(true)
         expect(store.getState().undoRedo['Colors']).toBeUndefined()
         expect(store.getState().undoRedo['Palette'].past).toHaveLength(1)
 
@@ -1968,6 +2285,59 @@ describe('createSharedSlice', () => {
         expect(state.files['main'].saved).toBe(true)
         expect(state.files['Resource']).toBeDefined()
         expect(state.files['Configuration']).toBeDefined()
+      })
+
+      it('pre-opens an unreadable .dt file as a code-mode tab without stealing focus', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          unparsedDataTypeFiles: [
+            { relativePath: 'datatypes/Broken.dt', content: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n' },
+            // No name to derive — skipped rather than registered under ''.
+            { relativePath: '', content: 'orphan' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
+        expect(state.files['Broken']).toEqual({ type: 'data-type', filePath: 'Broken', saved: true })
+        expect(state.files['']).toBeUndefined()
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main', 'Broken'])
+        // Focus stays on the auto-opened POU.
+        expect(state.selectedTab).toBe('main')
+
+        const model = state.editors.find((editor) => editor.meta.name === 'Broken')
+        expect(model?.type === 'plc-datatype' && model.meta.derivation).toBe('structure')
+        expect(model?.type === 'plc-datatype' && model.structure).toEqual({
+          display: 'code',
+          code: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n',
+        })
+      })
+
+      it('does not let an unreadable .dt displace a POU or a parsed type of the same name', () => {
+        const data = makeMinimalProjectResponse()
+        data.projectData.dataTypes = [
+          { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }], initialValue: '' },
+        ] as typeof data.projectData.dataTypes
+        const withCollisions = {
+          ...data,
+          unparsedDataTypeFiles: [
+            // Case-insensitive: the filesystem folds case, the registry doesn't.
+            { relativePath: 'datatypes/MAIN.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+            { relativePath: 'datatypes/colors.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
+          ],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(withCollisions)
+
+        const state = store.getState()
+        // The POU keeps its own registry entry, tab and model.
+        expect(state.files['main'].type).toBe('program')
+        expect(state.tabs.map((tab) => tab.name)).toEqual(['main'])
+        expect(state.editors.every((editor) => editor.type !== 'plc-datatype')).toBe(true)
+        expect(state.files['MAIN']).toBeUndefined()
+        expect(state.files['colors']).toBeUndefined()
+        // Still preserved, so the next save echoes both files back verbatim.
+        expect(state.unparsedDataTypeFiles).toHaveLength(2)
       })
 
       it('logs warnings to console when present', () => {

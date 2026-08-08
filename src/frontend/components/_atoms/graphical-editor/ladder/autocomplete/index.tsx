@@ -10,8 +10,11 @@ import {
   scopeCompletionToVariable,
 } from '../../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../../store'
+import type { CreateGraphicalVariableModalData } from '../../../../../store/slices/modal/types'
 import { cn } from '../../../../../utils/cn'
 import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
+import type { BoundBlockPin } from '../../../../../utils/PLC/validate-variable-type'
+import { isGenericTypeName } from '../../../../../utils/PLC/validate-variable-type'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
@@ -48,6 +51,32 @@ const expectedTypeForBlock = (
   }
 }
 
+/**
+ * The pins of the same block instance that already carry a variable. A generic
+ * pin (`ANY`, `ANY_NUM`, …) has no type of its own, so a variable created on it
+ * takes the concrete type the block already settled on elsewhere (#479).
+ *
+ * Read from the rung's own variable nodes: each one knows both its pin's
+ * declared type and the variable bound to it.
+ */
+const boundPinsOfSameBlock = (nodes: Node[], variableNode: VariableNode): BoundBlockPin[] => {
+  const blockId = variableNode.data.block?.id
+  if (!blockId) return []
+
+  const pins: BoundBlockPin[] = []
+  for (const node of nodes) {
+    if (node.id === variableNode.id) continue
+    const data = node.data as Partial<VariableNode['data']>
+    if (data.block?.id !== blockId) continue
+
+    const pinType = data.block.variableType?.type?.value
+    const variable = data.variable
+    const variableType = variable && 'type' in variable ? variable.type.value : undefined
+    if (pinType && variableType) pins.push({ pinType, variableType })
+  }
+  return pins
+}
+
 const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAutoCompleteProps>(
   (
     { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
@@ -57,6 +86,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const pous = useOpenPLCStore((state) => state.project.data.pous)
     const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
     const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
+    const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
     const expectedType = expectedTypeForBlock(block, blockType)
 
@@ -202,17 +232,78 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
 
-      const variableType = newVariableTypeForExpected(expectedType)
+      const variableType = newVariableTypeForExpected(
+        expectedType,
+        blockType === 'variable' ? boundPinsOfSameBlock(rung.nodes, block as VariableNode) : [],
+      )
+
+      // A generic pin accepts several types, so the inferred one is a proposal,
+      // not a fact — let the user confirm it instead of creating silently
+      // (issue #479). Concrete pins (BOOL contacts/coils, a TIME pin, …) leave
+      // no room for choice and keep creating straight away.
+      if (expectedType && isGenericTypeName(expectedType)) {
+        openModal('create-graphical-variable', {
+          pinType: expectedType,
+          name: variableName,
+          suggestedType: variableType,
+          onConfirm: (choice) => createAndBindVariable(choice),
+          onCancel: clearBoundVariable,
+        } satisfies CreateGraphicalVariableModalData)
+        return
+      }
+
+      createAndBindVariable({ name: variableName, class: 'local', type: variableType })
+    }
+
+    /**
+     * Empty this box. Opening the type dialog blurs the box, which binds the
+     * typed text as a raw reference — abandoning the dialog must not leave that
+     * dangling name behind.
+     */
+    const clearBoundVariable = () => {
+      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
+        nodeId: (block as Node<BasicNodeData>).id,
+      })
+      if (!rung || !node) return
+
+      updateNode({
+        editorName: pouName,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: { ...node, data: { ...node.data, variable: { id: '', name: '' } } },
+      })
+    }
+
+    /**
+     * Create the local variable and bind it to this box. Reads the rung/node
+     * fresh from the store because the type dialog may have resolved long after
+     * the dropdown that started this closed.
+     */
+    const createAndBindVariable = ({
+      name,
+      class: variableClass,
+      type,
+    }: {
+      name: string
+      class: PLCVariable['class']
+      type: { definition: PLCVariable['type']['definition']; value: string }
+    }) => {
+      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
+        nodeId: (block as Node<BasicNodeData>).id,
+      })
+      if (!rung || !node) return
 
       const res = createVariable({
         data: {
           id: uuidv4(),
-          name: variableName,
+          name,
           type: {
-            definition: variableType.definition,
-            value: variableType.value,
+            definition: type.definition,
+            value: type.value,
           },
-          class: 'local',
+          class: variableClass,
           location: '',
           documentation: '',
           debug: false,
