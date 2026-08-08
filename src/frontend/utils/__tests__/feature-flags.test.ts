@@ -1,11 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Autonomy / OpenPLC Project
-import { isDataTypeFilesEnabled } from '../feature-flags'
+
+/** Re-import the module so it re-reads the injected global at load time. */
+const loadFlags = async () => {
+  jest.resetModules()
+  return import('../feature-flags')
+}
 
 describe('feature flags', () => {
-  it('ships with the .dt data type persistence switched off', () => {
-    // Flipped to true by the DOPE-385 release PR; until then every
-    // build must behave exactly like the legacy project.json format.
+  const globals = globalThis as { DATATYPES_DT_FILES?: boolean }
+
+  afterEach(() => {
+    delete globals.DATATYPES_DT_FILES
+  })
+
+  it('reads .dt data type persistence as off when the build injects nothing', async () => {
+    const { isDataTypeFilesEnabled } = await loadFlags()
+    expect(isDataTypeFilesEnabled()).toBe(false)
+  })
+
+  it('is on when the build injects it', async () => {
+    globals.DATATYPES_DT_FILES = true
+    const { isDataTypeFilesEnabled } = await loadFlags()
+    expect(isDataTypeFilesEnabled()).toBe(true)
+  })
+
+  it('is off when the build injects it false', async () => {
+    globals.DATATYPES_DT_FILES = false
+    const { isDataTypeFilesEnabled } = await loadFlags()
     expect(isDataTypeFilesEnabled()).toBe(false)
   })
 })

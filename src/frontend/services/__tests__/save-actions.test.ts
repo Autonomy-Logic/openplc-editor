@@ -117,6 +117,63 @@ describe('save-actions', () => {
       expect(result.success).toBe(true)
       expect(fileSaved('Healthy')).toBe(true)
     })
+
+    // Hydration prefers `.dt` files whenever they exist, so a rollback save
+    // that left them on disk would let a pre-rollback copy outrank the legacy
+    // JSON the next time the flag is on.
+    describe('.dt cleanup on a flag-off save', () => {
+      const savedFiles = (port: ProjectPort) => (port.saveProject as ReturnType<typeof vi.fn>).mock.calls[0][0]
+
+      it('queues the .dt file of every data type for deletion', async () => {
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        expect(savedFiles(projectPort).deletions).toEqual(
+          expect.arrayContaining(['datatypes/Motor.dt', 'datatypes/Colors.dt']),
+        )
+        expect(savedFiles(projectPort).dataTypeFiles).toEqual([])
+      })
+
+      it('queues an unparseable .dt file too', async () => {
+        openPLCStoreBase
+          .getState()
+          .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE not valid' }])
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        expect(savedFiles(projectPort).deletions).toContain('datatypes/Broken.dt')
+      })
+
+      it('leaves the .dt files alone when the write side is on', async () => {
+        const flags = await import('../../utils/feature-flags')
+        vi.spyOn(flags, 'isDataTypeFilesEnabled').mockReturnValue(true)
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Motor.dt')
+        expect(savedFiles(projectPort).dataTypeFiles).toEqual(
+          expect.arrayContaining([expect.objectContaining({ relativePath: 'datatypes/Motor.dt' })]),
+        )
+      })
+
+      it('does not repeat a path the store already queued', async () => {
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        openPLCStoreBase.getState().datatypeActions.delete('Motor')
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        const deletions: string[] = savedFiles(projectPort).deletions
+        expect(deletions.filter((d) => d === 'datatypes/Motor.dt')).toHaveLength(1)
+      })
+    })
   })
 
   describe('executeSaveFile', () => {

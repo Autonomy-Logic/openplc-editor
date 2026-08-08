@@ -482,13 +482,23 @@ class ProjectService {
       // shared iterator.  Each yielded entry is one independent
       // file write; the batch fans out in parallel since paths
       // are distinct and mkdir(recursive) is idempotent.
-      await Promise.all(
-        Array.from(iterateWriteProjectFiles(files), async (entry) => {
-          const filePath = join(dir, entry.relativePath)
-          await promises.mkdir(dirname(filePath), { recursive: true })
-          await promises.writeFile(filePath, entry.content, 'utf-8')
-        }),
-      )
+      const writeEntry = async (entry: { relativePath: string; content: string }) => {
+        const filePath = join(dir, entry.relativePath)
+        await promises.mkdir(dirname(filePath), { recursive: true })
+        await promises.writeFile(filePath, entry.content, 'utf-8')
+      }
+
+      // `project.json` goes last, on its own. It is the index that declares
+      // what the content files no longer hold — `dataTypes: []` once a type
+      // lives in `datatypes/<Name>.dt`, `pous: []` likewise. Landing it while
+      // a content write rejects would leave the project describing files that
+      // were never written, losing that element from both places.
+      const entries = Array.from(iterateWriteProjectFiles(files))
+      const projectJson = entries.filter((e) => e.category === 'project-json')
+      const contents = entries.filter((e) => e.category !== 'project-json')
+
+      await Promise.all(contents.map(writeEntry))
+      await Promise.all(projectJson.map(writeEntry))
 
       // Process deletions
       for (const relativePath of deletions) {
