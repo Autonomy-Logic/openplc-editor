@@ -199,6 +199,42 @@ describe('runCompilePipeline — simulator path', () => {
     expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
   })
 
+  // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
+  // was resolved onto boardEntry but never forwarded to installArduinoCore,
+  // so vendor cores outside arduino-cli's built-in index could not be
+  // installed — "Platform 'industrialshields:esp32' not found".
+  it('forwards boardEntry.boardManagerUrl to installArduinoCore', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const boardManagerUrl =
+      'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        boardEntry: {
+          platform: 'industrialshields:esp32:esp32plc',
+          core: 'industrialshields:esp32',
+          boardManagerUrl,
+        },
+      }),
+      port,
+      emit,
+    )
+    expect(port.installArduinoCore).toHaveBeenCalledWith(
+      expect.objectContaining({ coreId: 'industrialshields:esp32', boardManagerUrl }),
+      expect.any(Function),
+    )
+  })
+
+  it('omits boardManagerUrl for boards that do not declare one', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
+    const [coreArgs] = port.installArduinoCore.mock.calls[0]
+    expect(coreArgs).not.toHaveProperty('boardManagerUrl')
+  })
+
   it('calls installArduinoCore + installArduinoLib before compileArduino (no-op semantics for web)', async () => {
     const port = makePort()
     const { emit } = captureEvents()

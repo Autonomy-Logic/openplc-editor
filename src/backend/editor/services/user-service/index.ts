@@ -1,7 +1,7 @@
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
+import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
@@ -144,21 +144,57 @@ class UserService {
   }
 
   /**
-   * Checks if the Arduino CLI configuration file exists and creates it if it doesn't.
+   * Ensure the Arduino CLI configuration file exists and carries every
+   * board-manager URL the editor ships with.
+   *
+   * This used to write with `{ flag: 'wx' }` and swallow `EEXIST`, which
+   * made the file effectively write-once: any URL added to `ARDUINO_DATA`
+   * after a user's first launch never reached them, and the only fix was
+   * deleting the file by hand.  Now missing URLs are merged into the
+   * existing config on every start.
+   *
+   * Merge, never overwrite: users add their own indexes and change other
+   * settings in this file, and clobbering it would silently discard them.
+   * Anything already present is left untouched, including ordering.
    */
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
     try {
       await writeFile(pathToArduinoCliConfig, UserService.ARDUINO_FILE_CONTENT, { flag: 'wx' })
+      return
     } catch (err) {
-      // If the error is due to the file already existing, log a warning and continue.
-      if (err instanceof Error && err.message.includes('EEXIST')) {
-        console.warn(`File already exists at ${pathToArduinoCliConfig}.\nSkipping creation.`)
-      } else if (err instanceof Error) {
+      if (!(err instanceof Error && err.message.includes('EEXIST'))) {
         console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
-      } else {
-        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
+        return
       }
+    }
+
+    // File already exists — reconcile its `additional_urls` with ours.
+    try {
+      const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
+      const shipped = UserService.ARDUINO_FILE_CONTENT.match(/^\s*-\s*(https?:\/\/\S+)\s*$/gm) ?? []
+      const missing = shipped.map((line) => line.trim().replace(/^-\s*/, '')).filter((url) => !existing.includes(url))
+
+      if (missing.length === 0) return
+
+      // Splice the missing entries in under the existing `additional_urls:`
+      // key, matching its indentation so the YAML stays valid.
+      const anchor = existing.match(/^(\s*)additional_urls:\s*$/m)
+      if (!anchor) {
+        console.warn(
+          `Arduino CLI config at ${pathToArduinoCliConfig} has no 'additional_urls' key. ` +
+            `Leaving it alone; missing board indexes: ${missing.join(', ')}`,
+        )
+        return
+      }
+      const firstEntry = existing.match(/^(\s*)-\s*https?:\/\//m)
+      const indent = firstEntry ? firstEntry[1] : `${anchor[1]}    `
+      const updated = existing.replace(anchor[0], `${anchor[0]}\n${missing.map((u) => `${indent}- ${u}`).join('\n')}`)
+
+      await writeFile(pathToArduinoCliConfig, updated, 'utf-8')
+      console.warn(`Added ${missing.length} missing board manager URL(s) to ${pathToArduinoCliConfig}.`)
+    } catch (err) {
+      console.error(`Error updating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
     }
   }
 

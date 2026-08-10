@@ -209,6 +209,12 @@ export function createEditorCompilerPlatformPort(
      * `handleCoreInstallation` already takes a core id and a log
      * callback — direct passthrough modulo the log-shape
      * translation.
+     *
+     * `args.boardManagerUrl` (the VPP's `target.boardManagerUrl`) is
+     * forwarded so vendor cores outside arduino-cli's built-in index
+     * install automatically rather than failing with "Platform not
+     * found".  `handleCoreInstallation` refreshes the index against
+     * that URL before installing.
      */
     async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
       try {
@@ -219,6 +225,7 @@ export function createEditorCompilerPlatformPort(
             log(message, level ?? 'info')
           },
           args.coreVersion,
+          args.boardManagerUrl,
         )
         return { ok: true }
       } catch (error) {

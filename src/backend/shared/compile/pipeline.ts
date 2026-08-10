@@ -118,6 +118,11 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
+  /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
+   *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
+   *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
+   *  `--additional-urls` so cores outside the built-in index resolve. */
+  boardManagerUrl?: string
   /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
    *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
    *  preset lookup — without this the resolver can't pick the right
@@ -719,6 +724,12 @@ async function runCompilePipelineInner(
       coreId: typeof boardEntry.platform === 'string' ? deriveArduinoCoreFromPlatform(boardEntry.platform) : '',
       // Pin the exact core version for prebuilt arduino libraries (ABI-locked).
       ...(boardEntry.coreVersion ? { coreVersion: boardEntry.coreVersion } : {}),
+      // Vendor board-manager index for cores outside arduino-cli's built-in
+      // list.  Resolved from the VPP manifest's `target.boardManagerUrl`; the
+      // editor turns it into `--additional-urls` (and refreshes the index)
+      // so the core can be auto-installed instead of erroring out with
+      // "Platform not found".
+      ...(boardEntry.boardManagerUrl ? { boardManagerUrl: boardEntry.boardManagerUrl } : {}),
     },
     makePlatformLog(emit, 'core-install'),
   )
