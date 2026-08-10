@@ -19,7 +19,7 @@ import type { DebugMap, DebugVariableEntry } from './debug-parser'
 import { packDebugAddr } from './debug-parser'
 import { buildDebugTree } from './debug-tree-builder'
 import { buildDebugPathPrefix, findInstanceName, type PLCInstanceMapping } from './debug-variable-finder'
-import { collapseCarriageReturns } from './terminal-output'
+import { collapseCarriageReturns, stripProgressBar } from './terminal-output'
 
 // ---------------------------------------------------------------------------
 // 0. logCompilerEvent — shared log helper for compile/debug progress
@@ -87,7 +87,11 @@ export function logCompilerEvent(
 
   lines.forEach((rawLine, index) => {
     const redraw = rawLine.includes('\r')
-    const message = collapseCarriageReturns(rawLine)
+    // The ASCII bar is sized to a width arduino-cli guesses, never the panel's,
+    // so a wide bar wraps into several visual lines and undoes the whole point
+    // of collapsing the redraws. Drop it and keep the numbers.
+    const collapsed = collapseCarriageReturns(rawLine)
+    const message = redraw ? stripProgressBar(collapsed) : collapsed
     if (!message.trim()) return
 
     const isFinalLine = index === lines.length - 1

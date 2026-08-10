@@ -142,6 +142,34 @@ export function parseAnsi(text: string): LogSegment[] {
 }
 
 /**
+ * An ASCII progress bar: a bracketed run of bar glyphs, as arduino-cli draws
+ * when it thinks it knows the terminal width. The 8-character floor keeps this
+ * away from ordinary bracketed text.
+ */
+const PROGRESS_BAR_PATTERN = /\s*\[[=>#\s-]{8,}\]\s*/g
+
+/**
+ * Drop the ASCII bar from a progress line, leaving the numbers.
+ *
+ * arduino-cli sizes the bar to a width it guesses from its own environment,
+ * which is never the width of the console panel — the panel is resizable, and
+ * the side bar moves. A 150-glyph bar in a narrower panel wraps into several
+ * visual lines, which is exactly what the carriage-return handling exists to
+ * prevent. There is no width we could pass to fix this at the source.
+ *
+ * Removing it is not a loss: the bar is a redundant rendering of the
+ * percentage that follows it, and this is the same compact form arduino-cli
+ * itself emits when it cannot determine a width
+ * (`tool 2.60 MiB / 34.99 MiB   7.44% 00m04s`).
+ *
+ * Only ever applied to carriage-return redraws, so ordinary output containing
+ * bracketed text is untouched.
+ */
+export function stripProgressBar(line: string): string {
+  return line.includes('[') ? line.replace(PROGRESS_BAR_PATTERN, '  ') : line
+}
+
+/**
  * Collapse a carriage-return redraw to what a terminal would leave on screen.
  *
  * `\r` returns the cursor to column 0, so only the text written after the
