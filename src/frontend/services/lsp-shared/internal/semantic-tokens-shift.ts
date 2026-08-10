@@ -7,9 +7,14 @@
  *   1. Decode deltas to absolute (line, col) positions.
  *   2. Keep tokens whose line is in `[startLine, endLineExclusive)`.
  *      Both ends are LSP coordinates.
- *   3. Subtract `startLine` from each surviving token's line so the
+ *   3. Rebase each surviving token onto `outputStartLine` so the
  *      output is Monaco-relative.
  *   4. Re-encode as a delta stream Monaco can consume directly.
+ *
+ * `outputStartLine` exists so a view that renders its own framing
+ * above the window doesn't have to widen the window to compensate:
+ * doing that drags in the preceding line's tokens, whose columns can
+ * overrun the shorter frame line ("end character > line length").
  *
  * Used in two modes by the ST LSP today:
  *   - **Body view**: `startLine = bodyLineOffset` (preamble line count),
@@ -29,6 +34,7 @@ export function shiftSemanticTokensToBody(
   data: number[],
   startLine: number,
   endLineExclusive: number = Number.POSITIVE_INFINITY,
+  outputStartLine: number = 0,
 ): Uint32Array {
   // Decode to absolute positions.
   const abs: Array<{ line: number; col: number; len: number; type: number; mods: number }> = []
@@ -51,7 +57,7 @@ export function shiftSemanticTokensToBody(
   for (const t of abs) {
     if (t.line < startLine) continue
     if (t.line >= endLineExclusive) continue
-    const shiftedLine = t.line - startLine
+    const shiftedLine = t.line - startLine + outputStartLine
     const dLine = shiftedLine - prevLine
     const dStart = dLine === 0 ? t.col - prevCol : t.col
     out.push(dLine, dStart, t.len, t.type, t.mods)

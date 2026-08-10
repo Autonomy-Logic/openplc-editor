@@ -2,12 +2,18 @@ import {
   buildGetBoardIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
   parseGetBoardIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
   DebugBoardIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
   DebugStatusResult,
   DeviceModbusTransport,
   Md5ProbeResult,
@@ -27,6 +33,10 @@ export enum ModbusFunctionCode {
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
   DEBUG_GET_BOARD_ID = 0x48,
+  /** Store a license blob on the device. Write-only; the read back is 0x4A. */
+  DEBUG_WRITE_LICENSE = 0x49,
+  /** Read the stored license blob back off the device. */
+  DEBUG_READ_LICENSE = 0x4a,
   /** Set the runtime run/stop state. Reads go through DEBUG_GET_STATUS (0x46),
    *  which already reports it. */
   PLC_SET_STATE = 0x4b,
@@ -36,6 +46,12 @@ export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
+  /** DEBUG_READ_LICENSE only: virgin storage — no license provisioned. */
+  LIC_EMPTY = 0x83,
+  /** DEBUG_READ_LICENSE only: the magic matched but the crc32 did not. */
+  LIC_CORRUPT = 0x84,
+  /** Licensing FCs: the target has no on-device license-store backend. */
+  LIC_UNSUPPORTED = 0x85,
   /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
   REFUSED_BY_SWITCH = 0x86,
@@ -472,6 +488,54 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'Transaction ID mismatch' }
       }
       return parsePlcSetStateResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // On-device license storage (FC 0x49/0x4A). TCP frame: [MBAP:6][FC@7][...].
+  // The wire `len` is BIG-ENDIAN (matches the other FCs) while the blob content
+  // it frames is little-endian — do not confuse the two.
+  //
+  // No size-aware framing is needed here, unlike RTU: `sendTcpRequest` reads the
+  // MBAP length field, so a 98-byte blob is already framed by the protocol.
+  // -------------------------------------------------------------------------
+
+  /**
+   * FC 0x49 — store a license blob. Storing is NOT validation (see the RTU
+   * client): read the blob back to learn what the board actually holds.
+   */
+  async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      const { request, transactionId } = this.buildTcpFrame(buildWriteLicenseRequest(blob))
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      return parseWriteLicenseResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /** FC 0x4A — read the stored license blob back. */
+  async readLicense(): Promise<DebugLicenseReadResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      const { request, transactionId } = this.buildTcpFrame(buildReadLicenseRequest())
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      return parseReadLicenseResponse(Uint8Array.prototype.slice.call(data, 7))
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

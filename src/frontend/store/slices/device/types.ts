@@ -1,3 +1,4 @@
+import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
   BoardInfo,
@@ -119,6 +120,34 @@ export type DeviceConnection = {
 }
 
 // ---------------------------------------------------------------------------
+// VPP licensing
+// ---------------------------------------------------------------------------
+
+/**
+ * What the UI knows about the connected device's VPP license.
+ *
+ * Separate from `deviceConnection` on purpose: that is about whether the LINK is
+ * up, this is about what the device is entitled to run. They change for unrelated
+ * reasons — a link can drop and come back without the license changing, and a
+ * license can be recovered without the link ever moving — and merging them made
+ * every reader of one depend on the other.
+ *
+ * `report` is null until a licensing call has landed, which is also the state for
+ * every non-licensable board: nothing runs, so nothing is known, and the UI shows
+ * no licensing affordance at all.
+ */
+export type DeviceLicenseInfo = {
+  /** In flight, so the UI can show progress and refuse to start a second one. */
+  phase: 'idle' | 'checking' | 'done'
+  /**
+   * The last landed report from `readLicense` / `refreshLicense`. Carries the
+   * outcome union and the derived `deviceId` (which the renderer cannot compute —
+   * it needs `node:crypto` — and which feeds the copy button and the buy link).
+   */
+  report: DeviceLicenseReport | null
+}
+
+// ---------------------------------------------------------------------------
 // Device state
 // ---------------------------------------------------------------------------
 
@@ -134,6 +163,7 @@ export type DeviceState = {
   }
   runtimeConnection: RuntimeConnection
   deviceConnection: DeviceConnection
+  deviceLicense: DeviceLicenseInfo
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +242,20 @@ export type DeviceActions = {
   ) => void
   /** Reset the serial link to disconnected/null. */
   clearDeviceConnection: () => void
+  /**
+   * Mark a licensing call as in flight.
+   *
+   * Deliberately KEEPS the last report rather than clearing it. Blanking it would
+   * make the badge flicker from "Licensed" to nothing and back on every refresh —
+   * and worse, a refresh that fails would leave the UI with less information than
+   * it had before asking. The `phase` is what says "asking"; the report stays as
+   * the last thing actually known.
+   */
+  startDeviceLicenseCheck: () => void
+  /** Land a finished licensing call: `phase='done'`, store the report. */
+  setDeviceLicenseReport: (report: DeviceLicenseReport) => void
+  /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
+  clearDeviceLicense: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

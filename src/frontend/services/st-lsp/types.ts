@@ -32,6 +32,13 @@ export const STUB_URI_AUTHORITY = 'stub'
 export const POUVARS_URI_AUTHORITY = 'pouvars'
 
 /**
+ * URI scheme for the per-type `.dt` code view. Like `pouvars://`, the
+ * LSP never indexes it — requests remap onto `DATA_TYPES_URI` with the
+ * type's line span as the offset.
+ */
+export const DTVIEW_URI_AUTHORITY = 'dtview'
+
+/**
  * URI for the synthesized `TYPE…END_TYPE` document carrying every
  * user-defined `PLCDataType` (structures, enumerations, arrays).
  * Strucpp parses this once at sync time so any POU that references
@@ -139,7 +146,19 @@ export function pouVarsUri(name: string): string {
 export function parsePouVarsUri(uri: string): string | null {
   const match = new RegExp(`^${POU_URI_SCHEME}://${POUVARS_URI_AUTHORITY}/(.+)\\.st$`).exec(uri)
   if (!match) return null
-  return decodeURIComponent(match[1])
+  return decodeUriSegment(match[1])
+}
+
+/** Make a synthetic in-memory URI for a data type's `.dt` code view. */
+export function dtViewUri(name: string): string {
+  return `${POU_URI_SCHEME}://${DTVIEW_URI_AUTHORITY}/${encodeURIComponent(name)}.dt`
+}
+
+/** If `uri` is a `dtview://` URI, return the data type name; otherwise null. */
+export function parseDtViewUri(uri: string): string | null {
+  const match = new RegExp(`^${POU_URI_SCHEME}://${DTVIEW_URI_AUTHORITY}/(.+)\\.dt$`).exec(uri)
+  if (!match) return null
+  return decodeUriSegment(match[1])
 }
 
 /**
@@ -152,6 +171,28 @@ export function parsePouVarsUri(uri: string): string | null {
 export const POU_DECLARATION_LINE_COUNT = 1
 
 /**
+ * Lines the `.dt` code view renders before the type's own declaration —
+ * its local `TYPE` frame line. The aggregate document has the same
+ * frame, so a type's shift between the two is `span.start - DT_VIEW_FRAME_LINE_COUNT`.
+ */
+export const DT_VIEW_FRAME_LINE_COUNT = 1
+
+/**
+ * Decode a name segment out of a synthetic URI, or `null` when the
+ * encoding is malformed. These parsers run on every model URI the LSP
+ * providers see, so a bare `decodeURIComponent` would turn a stray
+ * `%ZZ` into a thrown `URIError` and take hover / completion down with
+ * it for that model.
+ */
+function decodeUriSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Returns the POU name encoded in a URI minted by `pouUri` or
  * `stubUri`, or `null` if the URI doesn't match one of those
  * patterns.  Callers use this to map LSP definition / reference
@@ -160,8 +201,7 @@ export const POU_DECLARATION_LINE_COUNT = 1
 export function parsePouUri(uri: string): { kind: 'pou' | 'stub'; name: string } | null {
   const match = new RegExp(`^${POU_URI_SCHEME}://(${POU_URI_AUTHORITY}|${STUB_URI_AUTHORITY})/(.+)\\.st$`).exec(uri)
   if (!match) return null
-  return {
-    kind: match[1] === POU_URI_AUTHORITY ? 'pou' : 'stub',
-    name: decodeURIComponent(match[2]),
-  }
+  const name = decodeUriSegment(match[2])
+  if (name === null) return null
+  return { kind: match[1] === POU_URI_AUTHORITY ? 'pou' : 'stub', name }
 }

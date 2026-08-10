@@ -193,12 +193,16 @@ describe('Device slice types', () => {
           includeEthercatStatsInPolling: false,
         },
         deviceConnection: { status: 'disconnected', port: null, transport: null, debugTransport: null },
+        deviceLicense: { phase: 'idle', report: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
       expect(state.deviceUpdated).toBeDefined()
       expect(state.runtimeConnection).toBeDefined()
       expect(state.deviceConnection).toBeDefined()
+      // Licensing is its own top-level key, not a field on the connection: the
+      // link being up and the device being entitled change for unrelated reasons.
+      expect(state.deviceLicense).toBeDefined()
     })
   })
 

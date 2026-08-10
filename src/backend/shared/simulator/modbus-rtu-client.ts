@@ -1,5 +1,18 @@
-import { buildPlcSetStateRequest, parsePlcSetStateResponse } from '@root/backend/shared/debug/modbus-pdu'
-import type { DebugStatusResult, Md5ProbeResult, PlcControlResult } from '@root/backend/shared/debug/types'
+import {
+  buildPlcSetStateRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
+  parsePlcSetStateResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
+import type {
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugStatusResult,
+  Md5ProbeResult,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 
 import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from './types'
@@ -586,6 +599,50 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes)` }
       }
       return parsePlcSetStateResponse(response.subarray(7))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * FC 0x49 DEBUG_WRITE_LICENSE. Storing is not validation — read the blob back
+   * to learn what the target now holds.
+   */
+  async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+    try {
+      // buildWriteLicenseRequest returns [FC][len:u16BE][blob]; assembleRequest
+      // writes the FC + slaveId itself, so hand it only the trailing payload.
+      const pdu = buildWriteLicenseRequest(blob)
+      const response = await this.sendRequest(
+        this.assembleRequest(ModbusFunctionCode.DEBUG_WRITE_LICENSE, pdu.subarray(1)),
+      )
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseWriteLicenseResponse(response.subarray(7))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * FC 0x4A DEBUG_READ_LICENSE. Bare `[FC]` request; the response carries the
+   * blob framed by a big-endian length (the content itself is little-endian).
+   *
+   * No size-aware framing here, unlike the editor's serial client: this transport
+   * runs against an in-process virtual port, so a 98-byte reply arrives in one
+   * piece and there is no inter-chunk gap to be truncated by.
+   */
+  async readLicense(): Promise<DebugLicenseReadResult> {
+    try {
+      const pdu = buildReadLicenseRequest()
+      const response = await this.sendRequest(
+        this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, pdu.subarray(1)),
+      )
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseReadLicenseResponse(response.subarray(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

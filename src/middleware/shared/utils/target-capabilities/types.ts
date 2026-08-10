@@ -111,4 +111,30 @@ export interface TargetCapabilities {
    *  in-process Simulator. Runtime v3 / v4 require an established
    *  network connection. */
   directUsbUpload: boolean
+
+  /** The selected board's VPP is sold as a licensed product, so the
+   *  licensing flow runs for it.  Flows verbatim from the VPP manifest's
+   *  `device.capabilities.isLicensable`, exactly like `vppIo`.
+   *
+   *  This is THE gate on the whole flow, and the reason it is a
+   *  capability rather than an inference: when it is `false` a connect is
+   *  an ordinary connect — no anchor read beyond the usual
+   *  classification, no license FCs, no backend call. Every board that
+   *  does not declare it is `false`, which is every built-in hals.json
+   *  board, plain Runtime v3/v4, Linux, Arduino, and the Simulator.
+   *
+   *  There is deliberately NO companion "can this board store a licence"
+   *  capability. Every licensable VPP targets hardware that persists a
+   *  licence across a reboot — that is a product rule, not something a
+   *  manifest gets to vary — so the answer would be `true` wherever
+   *  `isLicensable` is true and irrelevant everywhere else. What the
+   *  build actually needs is the storage SOURCE, which travels as
+   *  `BoardBuildInfo.licenseStoreFiles`; a second derived boolean on top
+   *  of it bought one diagnostic sentence and one more way for two
+   *  representations of one fact to disagree.
+   *
+   *  A licensable board that answers `LIC_UNSUPPORTED` on the wire is
+   *  therefore a FIRMWARE fault (built without the backend), never a
+   *  hardware limitation — and the flow says exactly that. */
+  isLicensable: boolean
 }

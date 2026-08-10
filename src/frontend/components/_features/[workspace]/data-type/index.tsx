@@ -1,9 +1,10 @@
-import { ComponentPropsWithoutRef, useEffect, useRef, useState } from 'react'
+import { ComponentPropsWithoutRef, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
 import { CodeIcon } from '../../../../assets/icons/interface/CodeIcon'
 import { TableIcon } from '../../../../assets/icons/interface/TableIcon'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
+import { dtViewUri } from '../../../../services/st-lsp/types'
 import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import { cn } from '../../../../utils/cn'
@@ -151,6 +152,29 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   useEffect(() => {
     commitCodeRef.current = commitCode
   })
+
+  // Stable reference, or the child's cursor-jump effect re-fires every
+  // keystroke and re-selects the navigated line.
+  const codeCursorPosition = useMemo(
+    () =>
+      model?.cursorPosition?.target === 'data-type'
+        ? {
+            lineNumber: model.cursorPosition.lineNumber,
+            column: model.cursorPosition.column,
+            target: 'data-type' as const,
+          }
+        : undefined,
+    [model?.cursorPosition?.target, model?.cursorPosition?.lineNumber, model?.cursorPosition?.column],
+  )
+
+  // Goto-definition can land here while the tab is still in table mode.
+  // Keyed on the cursor alone: including `display` would re-fire on the
+  // user's own switch back to table and pin the tab in code mode.
+  useEffect(() => {
+    if (!codeCursorPosition || display === 'code') return
+    updateModelStructureForName(dataTypeName, { display: 'code', code: editorCode })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeCursorPosition])
 
   useEffect(() => {
     if (display !== 'code') return
@@ -327,6 +351,8 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
                 code={editorCode}
                 onCodeChange={setEditorCode}
                 shouldUseDarkMode={shouldUseDarkMode}
+                modelUri={dtViewUri(dataTypeName)}
+                cursorPosition={codeCursorPosition}
               />
             </div>
             {parseError && <p className='mt-2 shrink-0 text-xs text-red-500'>Error: {parseError}</p>}

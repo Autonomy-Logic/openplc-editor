@@ -120,7 +120,7 @@ import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
-import { PackageManagerModule } from '../package-manager'
+import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -2064,6 +2064,24 @@ class CompilerModule {
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
+    // Second gate, deliberately re-run here rather than trusted from
+    // `compileProgram` (DOPE-539). This step is what copies vendor C into the
+    // bundle the runtime compiles ON the PLC, and it runs late — transpile,
+    // strucpp and the v4 bundle compose happen in between, which on a large
+    // project is minutes of wall clock during which the package directory is
+    // still writable. Checking again costs one directory hash.
+    //
+    // This sits OUTSIDE the catch-all below on purpose. Every other failure in
+    // this method degrades the build and reports it; this one has to stop it,
+    // and `packageVppPlugin` in the platform port turns a throw into the
+    // `errors[]` the pipeline bails on.
+    const integrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!integrity.ok) {
+      const message = formatPackageIntegrityError(boardTarget, integrity)
+      handleOutputData(message, 'error')
+      throw new Error(message)
+    }
+
     try {
       const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
@@ -2424,6 +2442,22 @@ class CompilerModule {
       Record<string, unknown> | undefined,
     ]
 
+    // VPP integrity gate (DOPE-539). FIRST, before the manifest is read for
+    // anything else: from here on this method trusts the package directory for
+    // the HAL it links, the licence-store backend it injects and every
+    // capability it branches on. The import check and the project-open sweep
+    // are both behind us and neither says anything about the package as it
+    // exists right now.
+    const boardPackageIntegrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!boardPackageIntegrity.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${formatPackageIntegrityError(boardTarget, boardPackageIntegrity)}\nStopping compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     // Resolve board info uniformly across hals.json + installed VPP
     // packages via the shared `resolveBoardSelection` helper — the
     // same code path runs on web (no VPP packages installed → falls
@@ -2594,6 +2628,60 @@ class CompilerModule {
           strucppRuntimeHeaders: v4Layout,
           boardHalContent,
         })
+
+        // VPP-provided license-store backend source(s). Mirrors the HAL read
+        // above: each path is an absolute one `BoardInfoResolver` produced from
+        // `device.hal.licenseStore` through the same traversal-guarded
+        // `resolvePackageRelativePath`.
+        //
+        // Unlike the HAL (which lands at the canonical `src/arduino.cpp`), these
+        // keep their distinctive basenames and land in the SKETCH directory next
+        // to `license_store.h` / `license_blob.h`, so their
+        // `#include "license_store.h"` resolves and they define the STRONG
+        // `license_store_*` symbols that override the skeleton's
+        // `license_store_weak.cpp`. Boards without a VPP backend inject nothing
+        // and link the weak default, which answers LIC_UNSUPPORTED.
+        //
+        // A read failure is a WARNING, not a hard stop, and the asymmetry with the
+        // HAL check above is deliberate: a missing HAL means no I/O at all, while a
+        // missing store backend means the board answers "cannot store a licence" —
+        // degraded, correctly reported to the editor, and still a working PLC.
+        for (const licenseStoreFile of boardInfo.licenseStoreFiles ?? []) {
+          try {
+            const content = await readFile(licenseStoreFile, 'utf-8')
+            firmwareSkeleton[`examples/Baremetal/${path.basename(licenseStoreFile)}`] = content
+            // Logged on SUCCESS, not only on failure. Without this line the build
+            // output is identical whether the backend went in or not, and the only
+            // symptom of it missing appears much later and somewhere else: the
+            // board answers LIC_UNSUPPORTED and the editor says "this device
+            // cannot store a licence" — which reads as a hardware limitation
+            // rather than a firmware that was built without the backend.
+            _mainProcessPort.postMessage({
+              logLevel: 'info',
+              message: `License store backend included: ${path.basename(licenseStoreFile)}`,
+            })
+          } catch (lsErr) {
+            _mainProcessPort.postMessage({
+              logLevel: 'warning',
+              message:
+                `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}. ` +
+                'This board will report that it cannot store a licence.',
+            })
+          }
+        }
+        // A licensable board that resolves NO backend is a manifest fault: every
+        // licensable VPP targets hardware that persists a licence, so the storage
+        // source is not optional for one. Saying it here is far cheaper than
+        // deducing it from a badge three steps later.
+        if (boardInfo.capabilities?.isLicensable === true && (boardInfo.licenseStoreFiles ?? []).length === 0) {
+          _mainProcessPort.postMessage({
+            logLevel: 'warning',
+            message:
+              `Board "${boardTarget}" belongs to a licensed VPP but its manifest declares no ` +
+              '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
+              'firmware will link the weak default and report that its licence storage is missing.',
+          })
+        }
       }
       try {
         // `devices/pin-mapping.json` ships in one of two shapes (the
@@ -2828,6 +2916,21 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting debug compilation process...' })
 
     const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
+
+    // Same gate as `compileProgram` (DOPE-539). The debug build is a smaller
+    // consumer of the package — it resolves the board and its debug spec — but
+    // it is still a build the user runs against a live device, and letting it
+    // through on a package the normal compile just refused would only teach
+    // that the check is avoidable.
+    const debugPackageIntegrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!debugPackageIntegrity.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${formatPackageIntegrityError(boardTarget, debugPackageIntegrity)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
 
     const debugResolver = await this.#createBoardInfoResolver()
     const { boardRuntime } = debugResolver.resolve(boardTarget)

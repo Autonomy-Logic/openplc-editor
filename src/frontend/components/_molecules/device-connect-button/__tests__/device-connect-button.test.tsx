@@ -32,7 +32,9 @@ describe('DeviceConnectButton', () => {
 
   it('says Disconnect when connected, and nothing else', () => {
     // The label IS the status: "Disconnect" can only appear while connected, so a
-    // separate "Connected" badge beside it was saying the same thing twice.
+    // separate "Connected" badge beside it was saying the same thing twice — and on
+    // the device screen it sat next to the licence badge, making the row read as
+    // three separate facts when it is two.
     render(<DeviceConnectButton status='connected' onConnect={jest.fn()} onDisconnect={jest.fn()} />)
     expect(screen.getByRole('button').textContent).toBe('Disconnect')
     expect(screen.queryByText(/Connected/)).toBeNull()

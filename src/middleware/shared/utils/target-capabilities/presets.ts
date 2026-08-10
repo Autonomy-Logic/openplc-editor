@@ -32,6 +32,11 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: true,
   plcStateControl: false,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
@@ -54,6 +59,11 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   // was this flag.
   plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
@@ -73,6 +83,11 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
@@ -93,4 +108,9 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: true,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }

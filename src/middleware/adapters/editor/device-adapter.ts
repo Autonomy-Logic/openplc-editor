@@ -12,9 +12,17 @@
  *   hardware:refresh-available-boards           (invoke)
  *   hardware:refresh-communication-ports        (invoke)
  *   util:get-preview-image                      (invoke)
+ *   device:read-license                         (invoke)
+ *   device:refresh-license                      (invoke)
  */
 
-import type { DeviceConnectionStatusPayload, DeviceConnectResult, DevicePort } from '../../shared/ports/device-port'
+import type {
+  DeviceConnectionStatusPayload,
+  DeviceConnectResult,
+  DeviceLicenseReport,
+  DeviceLicenseRequest,
+  DevicePort,
+} from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
 
 export function createEditorDeviceAdapter(): DevicePort {
@@ -61,6 +69,14 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     disconnect(): Promise<{ success: boolean }> {
       return window.bridge.deviceDisconnect()
+    },
+
+    readLicense(request: DeviceLicenseRequest): Promise<DeviceLicenseReport> {
+      return window.bridge.deviceReadLicense(request)
+    },
+
+    refreshLicense(request: DeviceLicenseRequest): Promise<DeviceLicenseReport> {
+      return window.bridge.deviceRefreshLicense(request)
     },
 
     onLinkLog(callback: (message: string) => void): () => void {

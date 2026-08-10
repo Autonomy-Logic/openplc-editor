@@ -40,7 +40,13 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
         case MB_FC_DEBUG_GET_STATUS:
         case MB_FC_DEBUG_GET_VERSION:
         case MB_FC_DEBUG_GET_BOARD_ID:
+        case MB_FC_DEBUG_READ_LICENSE:
             return 4;                                   // [id][fc][crc:2]
+        case MB_FC_DEBUG_WRITE_LICENSE:
+            if (n < 4) return 0;                        // len (BE) lives at f[2..3]
+            // [id][fc][len:2][blob:len][crc:2] -> overhead 6 + blob len.
+            // NOTE: len is BIG-ENDIAN on the wire (blob content is little-endian).
+            return 6 + (int32_t)(((uint16_t)f[2] << 8) | f[3]);
         case MB_FC_PLC_SET_STATE:
             return 5;                                   // [id][fc][state:1][crc:2]
         default:
@@ -63,6 +69,8 @@ bool mb_pdu_skips_crc(uint8_t fc)
         case MB_FC_DEBUG_GET_STATUS:
         case MB_FC_DEBUG_GET_VERSION:
         case MB_FC_DEBUG_GET_BOARD_ID:
+        case MB_FC_DEBUG_WRITE_LICENSE:
+        case MB_FC_DEBUG_READ_LICENSE:
             return true;
         default:
             return false;
@@ -176,6 +184,20 @@ void process_mbpacket()
 
         case MB_FC_DEBUG_GET_BOARD_ID:
             debugGetBoardId();
+        break;
+
+        case MB_FC_DEBUG_WRITE_LICENSE:
+        {
+            // PDU: [FC:1][len:u16 BE][blob...]
+            // len is BIG-ENDIAN (same convention as GET_LIST/SET); the blob
+            // CONTENT it carries is little-endian.
+            uint16_t lic_len = (uint16_t)mb_frame[2] << 8 | (uint16_t)mb_frame[3];
+            debugWriteLicense(lic_len, &mb_frame[4]);
+        }
+        break;
+
+        case MB_FC_DEBUG_READ_LICENSE:
+            debugReadLicense();
         break;
 
         case MB_FC_PLC_SET_STATE:
