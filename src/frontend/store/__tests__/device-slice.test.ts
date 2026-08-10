@@ -1712,4 +1712,160 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('Custom')
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Pin edits drive the central IEC recalculation (DOPE-440)
+  // -------------------------------------------------------------------------
+
+  describe('pin edits recompact the other address producers (DOPE-440)', () => {
+    /** A board that hosts BOTH fixed pins and Modbus remote I/O — the only
+     *  configuration where the two producers share an address space. */
+    function seedPinAndModbusBoard(store: ReturnType<typeof makeStore>) {
+      store.getState().deviceActions.setAvailableOptions({
+        availableBoards: new Map<string, BoardInfo>([
+          [
+            'GPIO Runtime v4',
+            {
+              compiler: 'openplc-compiler',
+              core: 'rt-v4',
+              preview: '',
+              specs: {},
+              capabilities: {
+                pinMapping: true,
+                vppIo: false,
+                modbusTcpRemote: true,
+                ethercat: false,
+                modbusTcpServer: true,
+                opcuaServer: true,
+                s7Server: true,
+                debuggerTransports: ['websocket'],
+                pythonFunctionBlocks: true,
+                arduinoApiCompletions: false,
+                hasRuntimeStats: true,
+                isInProcessSimulator: false,
+                directUsbUpload: false,
+              },
+            },
+          ],
+        ]),
+      })
+      store.getState().deviceActions.setDeviceBoard('GPIO Runtime v4')
+    }
+
+    /** Three digital-input pins occupying %IX0.0–%IX0.2, plus a two-point
+     *  Modbus FC1 group that allocates immediately after them. */
+    function seedPinsAndGroup(store: ReturnType<typeof makeStore>) {
+      seedPinAndModbusBoard(store)
+      store.getState().deviceActions.setDeviceDefinitions({
+        pinMapping: [
+          makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' }),
+          makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
+          makePin({ pin: 'D2', pinType: 'digitalInput', address: '%IX0.2' }),
+        ],
+      })
+      const project = store.getState().project
+      store.getState().projectActions.setProject({
+        ...project,
+        data: {
+          ...project.data,
+          remoteDevices: [
+            {
+              name: 'Dev1',
+              protocol: 'modbus-tcp',
+              modbusTcpConfig: { host: '127.0.0.1', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] },
+            },
+          ],
+        },
+      })
+      store.getState().projectActions.addIOGroup('Dev1', {
+        id: 'g1',
+        name: 'group-g1',
+        functionCode: '1',
+        cycleTime: 100,
+        offset: '0',
+        length: 2,
+        errorHandling: 'keep-last-value',
+        ioPoints: [],
+      })
+    }
+
+    const modbusAddresses = (store: ReturnType<typeof makeStore>) =>
+      store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!.map((p) => p.iecLocation)
+
+    /** Count store writes from here on. The actions are frozen by Immer so
+     *  `recalculateIecAddresses` can't be spied on directly — but it always
+     *  issues its own `setState`, so a pin edit that recalculates writes twice
+     *  and one that skips it writes once. */
+    function countWrites(store: ReturnType<typeof makeStore>) {
+      let writes = 0
+      store.subscribe(() => {
+        writes += 1
+      })
+      return () => writes
+    }
+
+    it('removePin lets the Modbus group reclaim the freed pin slot', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      expect(modbusAddresses(store)).toEqual(['%IX0.3', '%IX0.4'])
+
+      store.getState().deviceActions.selectPinTableRow(1)
+      store.getState().deviceActions.removePin()
+
+      // The pin block shrank to %IX0.0–%IX0.1; the group used to stay put at
+      // %IX0.3/.4, leaving %IX0.2 stranded.
+      expect(activePins(store.getState()).map((p) => p.address)).toEqual(['%IX0.0', '%IX0.1'])
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('createNewPin pushes the Modbus group off the slot it just claimed', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+
+      // `createNewPin` mints highest+1 = %IX0.3, checking only OTHER PINS for a
+      // collision — so it lands squarely on the group's first point.
+      store.getState().deviceActions.selectPinTableRow(2)
+      store.getState().deviceActions.createNewPin()
+
+      expect(activePins(store.getState()).map((p) => p.address)).toContain('%IX0.3')
+      // Pins are fixed hardware and stay pinned, so the group moves instead.
+      expect(modbusAddresses(store)).toEqual(['%IX0.4', '%IX0.5'])
+    })
+
+    it('updatePin recalculates when a pin type change rewrites addresses', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ pinType: 'digitalOutput' })
+
+      expect(writes()).toBe(2)
+      // %IX0.0 moved to the output space and the remaining inputs slid down,
+      // so the group follows into the freed slot.
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('updatePin does not recalculate for an alias-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ alias: 'Start' })
+
+      expect(writes()).toBe(1)
+    })
+
+    it('updatePin does not recalculate for a pin-number-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ pin: 'D9' })
+
+      expect(writes()).toBe(1)
+    })
+  })
 })

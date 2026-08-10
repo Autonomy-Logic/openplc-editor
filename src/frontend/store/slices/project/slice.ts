@@ -12,6 +12,7 @@ import type {
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
 import {
+  type AddressPool,
   buildAddressPool,
   buildAliasRegistry,
   describeSource,
@@ -30,8 +31,15 @@ import {
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
 } from '../../../../middleware/shared/utils/iec-address/registry'
-import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
-import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import type {
+  AddressProducerCapabilities,
+  BoardInfoLike,
+  TargetCapabilities,
+} from '../../../../middleware/shared/utils/target-capabilities'
+import {
+  ALL_ADDRESS_PRODUCERS_ACTIVE,
+  resolveTargetCapabilities,
+} from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
@@ -257,7 +265,7 @@ type VppMappingEntry = {
 function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
   return (
     (
-      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
+      live.deviceDefinitions?.configuration?.vendorScreenData?.['io-mapping'] as
         | { entries?: VppMappingEntry[] }
         | undefined
     )?.entries ?? []
@@ -278,6 +286,91 @@ function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
   return kinds
 }
 
+/** The active target's BoardInfo, or `undefined` when the board id doesn't
+ *  resolve — a VPP board whose package isn't installed, a project authored on
+ *  another machine, or the catalogue not having loaded yet. */
+function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
+  return live.deviceAvailableOptions?.availableBoards?.get(live.deviceDefinitions?.configuration?.deviceBoard ?? '')
+}
+
+/**
+ * Capabilities for ADDRESS ALLOCATION. Never use for UI / feature gating.
+ *
+ * A target that answered is honoured exactly as declared. A target that did
+ * NOT resolve is permissive instead of empty: `resolveTargetCapabilities`
+ * returns `EMPTY_CAPABILITIES` for an unknown board, which is the safe answer
+ * for gating and the wrong one here — it reads as "this target supports no
+ * producers", so every consumer drops out of allocation and the recompaction
+ * silently keeps whatever stale addresses each point already had (DOPE-440).
+ */
+function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabilities {
+  const boardInfo = resolveBoardInfo(live)
+  return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
+}
+
+/**
+ * Consumer kinds to scope allocation to, or `undefined` for "every kind" —
+ * exactly how `allocateAddresses` reads a missing `activeKinds`.
+ *
+ * Only an UNRESOLVED target gets `undefined`. A resolved board that declares
+ * `modbusTcpRemote: false` must still deactivate that kind, so its space frees
+ * up and the still-active producers compact into it — that's the deliberate
+ * target-switch behaviour documented on `activeKindsFromCapabilities`, and the
+ * empty Set an unresolved board used to produce is indistinguishable from it.
+ */
+function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
+  const boardInfo = resolveBoardInfo(live)
+  return boardInfo ? activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo)) : undefined
+}
+
+/**
+ * Provisional address pool for a Modbus IO-group edit — the claims a new or
+ * resized group must not land on. The final addresses come from
+ * `recalculateIecAddresses`; this only seeds the point structure.
+ *
+ * `modbus-tcp-remote` is forced active regardless of the target. Every other
+ * producer's editor is itself capability-gated (pin mapping, the VPP layouts
+ * and EtherCAT only render when their flag is on), so "capability off" and
+ * "screen unreachable" coincide there. Remote devices are the outlier: the
+ * explorer branch is gated on the project TYPE, not on the target, so the user
+ * can edit IO groups against a Runtime v3 or unresolved board — and with the
+ * kind filtered out of the pool, `nextFreeAddress` cannot see the sibling
+ * groups and restarts every one of them at `%IW0`, persisting duplicates.
+ *
+ * `clearGroup` drops one group's own points from the pool so a resize can
+ * reuse the addresses it is about to give up.
+ */
+function buildModbusProducerPool(
+  live: ProjectSliceRoot,
+  clearGroup?: { deviceName: string; groupId: string },
+): AddressPool {
+  const board = live.deviceDefinitions?.configuration?.deviceBoard ?? ''
+  const remoteDevices = clearGroup
+    ? live.project.data.remoteDevices?.map((d) =>
+        d.name !== clearGroup.deviceName || !d.modbusTcpConfig
+          ? d
+          : {
+              ...d,
+              modbusTcpConfig: {
+                ...d.modbusTcpConfig,
+                ioGroups: d.modbusTcpConfig.ioGroups.map((g) =>
+                  g.id === clearGroup.groupId ? { ...g, ioPoints: [] } : g,
+                ),
+              },
+            },
+      )
+    : live.project.data.remoteDevices
+
+  return buildAddressPool(
+    {
+      pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pinsByBoard[board] ?? [] },
+      vendorIoMapping: { entries: readVppEntries(live) },
+      remoteDevices,
+    },
+    { ...allocationCapabilities(live), modbusTcpRemote: true },
+  )
+}
+
 /**
  * Build the capability-scoped registry from live producer state: derive
  * consumers (pins/VPP/Modbus/EtherCAT), restore any aliases held in the
@@ -287,15 +380,15 @@ function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
  */
 function buildIecRegistry(live: ProjectSliceRoot): IecAddressRegistry {
   const board = live.deviceDefinitions.configuration.deviceBoard
-  const boardInfo = live.deviceAvailableOptions.availableBoards.get(board ?? '')
   const seeded = migrateToRegistry({
     pinMapping: { pins: live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
     vendorIoMapping: { entries: readVppEntries(live) },
     remoteDevices: live.project.data.remoteDevices,
   })
   const restored = restoreAliasesFromMemory(seeded, live.iecAliasMemory ?? {})
-  const activeKinds = activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo))
-  return recalculateRegistry(unpinAllocatableChannels(restored, ALLOCATED_KINDS), { activeKinds }).registry
+  const activeKinds = activeKindsForAllocation(live)
+  const unpinned = unpinAllocatableChannels(restored, ALLOCATED_KINDS)
+  return recalculateRegistry(unpinned, activeKinds ? { activeKinds } : {}).registry
 }
 
 /**
@@ -1779,29 +1872,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // Read producer state from the live store before entering produce
       // so the pool reflects every active source (pin-mapping, VPP,
       // every Modbus / EtherCAT remote device — including this one's
-      // existing groups, which must not be reclaimed) under the
-      // current target's capabilities.
-      const live = getState()
-      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-        live.deviceDefinitions.configuration.deviceBoard ?? '',
-      )
-      const ioMapping =
-        (
-          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined
-        )?.entries ?? []
-
-      const pool = buildAddressPool(
-        {
-          pinMapping: {
-            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-          },
-          vendorIoMapping: { entries: ioMapping },
-          remoteDevices: live.project.data.remoteDevices,
-        },
-        resolveTargetCapabilities(boardInfo),
-      )
+      // existing groups, which must not be reclaimed).
+      const pool = buildModbusProducerPool(getState())
 
       setState(
         produce((slice: ProjectSlice) => {
@@ -1831,42 +1903,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // group's current points (all other Modbus groups, pin-mapping, VPP
       // and EtherCAT claims are still honoured). Existing aliases are
       // carried over positionally.
-      const live = getState()
-      const boardInfo = live.deviceAvailableOptions.availableBoards.get(
-        live.deviceDefinitions.configuration.deviceBoard ?? '',
-      )
-      const ioMapping =
-        (
-          live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined
-        )?.entries ?? []
-
-      // Clone remoteDevices with the edited group's points cleared so its
-      // own addresses are free for re-allocation without disturbing the
-      // rest of the project.
-      const remoteDevicesForPool = live.project.data.remoteDevices?.map((d) =>
-        d.name !== deviceName || !d.modbusTcpConfig
-          ? d
-          : {
-              ...d,
-              modbusTcpConfig: {
-                ...d.modbusTcpConfig,
-                ioGroups: d.modbusTcpConfig.ioGroups.map((g) => (g.id === groupId ? { ...g, ioPoints: [] } : g)),
-              },
-            },
-      )
-
-      const pool = buildAddressPool(
-        {
-          pinMapping: {
-            pins: live.deviceDefinitions.pinMapping.pinsByBoard[live.deviceDefinitions.configuration.deviceBoard] ?? [],
-          },
-          vendorIoMapping: { entries: ioMapping },
-          remoteDevices: remoteDevicesForPool,
-        },
-        resolveTargetCapabilities(boardInfo),
-      )
+      const pool = buildModbusProducerPool(getState(), { deviceName, groupId })
 
       setState(
         produce((slice: ProjectSlice) => {
@@ -1903,29 +1940,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // rationale.
       const live = getState()
       const sourceRef = { kind: 'modbus-tcp-remote' as const, ref: `${deviceName}:${pointId}` }
-      const boardInfo = live.deviceAvailableOptions?.availableBoards?.get(
-        live.deviceDefinitions?.configuration?.deviceBoard ?? '',
-      )
-      const ioMapping =
-        (
-          live.deviceDefinitions?.configuration?.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined
-        )?.entries ?? []
-      const pool = buildAddressPool(
-        {
-          pinMapping: {
-            pins:
-              live.deviceDefinitions?.pinMapping?.pinsByBoard[
-                live.deviceDefinitions?.configuration?.deviceBoard ?? ''
-              ] ?? [],
-          },
-          vendorIoMapping: { entries: ioMapping },
-          remoteDevices: live.project.data.remoteDevices,
-        },
-        resolveTargetCapabilities(boardInfo),
-      )
-      const registry = buildAliasRegistry(pool)
+      const registry = buildAliasRegistry(buildModbusProducerPool(live))
       const validation = validateAliasEdit(registry, alias, sourceRef)
       if (!validation.ok) {
         return {

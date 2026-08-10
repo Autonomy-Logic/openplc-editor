@@ -109,6 +109,42 @@ to call on every mutation, on project load, and pre-compile.
 Determinism (stable order + stable channel order) guarantees reproducible
 results across sessions, so a re-open never gratuitously renumbers.
 
+### 5.1 Capability scoping vs. unresolved targets
+
+Allocation is scoped to the consumer kinds the active target supports
+(`allocateAddresses`'s `activeKinds`). Deactivating a kind is deliberate and
+load-bearing: switching to a board without VPP frees the VPP space, and the
+still-active producers compact into it on the next recalculation.
+
+The invariant that makes that safe:
+
+> **An unknown target is permissive for allocation and empty for feature
+> gating.**
+
+`resolveTargetCapabilities(undefined)` answers `EMPTY_CAPABILITIES`, which is
+correct for gating — never offer an affordance the target can't back. Feeding
+that same answer to the allocator is not: an empty `activeKinds` set is
+indistinguishable from "this target supports nothing", so **every** consumer
+is filtered out, `assignments` comes back empty, and the write-back leaves the
+stale addresses in place while reporting success. A board id fails to resolve
+whenever the VPP package isn't installed, the project was authored elsewhere,
+or the catalogue hasn't loaded yet — all ordinary situations.
+
+So the store distinguishes the two cases (`allocationCapabilities` /
+`activeKindsForAllocation` in the project slice): a target that **answered** is
+honoured exactly as declared; a target that **didn't resolve** allocates with
+every producer active (`ALL_ADDRESS_PRODUCERS_ACTIVE`). Permissive is the safe
+direction — the worst case is compaction for a producer the eventual target
+turns out not to support, and selecting that target recalculates anyway.
+
+One producer is additionally forced active in its own **provisional** pool:
+`buildModbusProducerPool` always counts `modbus-tcp-remote`. Every other
+producer's editor is itself capability-gated, so "capability off" and "screen
+unreachable" coincide there; the Remote Devices branch is gated on the project
+TYPE instead, so a user can edit IO groups against a target that declares no
+remote I/O. Without the override, `nextFreeAddress` can't see the sibling
+groups and restarts each one at `%IW0`, persisting duplicates.
+
 ## 6. Aliases and variable binding
 
 - **Aliases live only in the registry**, attached to channels. Uniqueness
@@ -228,7 +264,15 @@ Shipped on `feat/central-iec-address-registry` (editor + web, byte-identical):
   Invoked from every producer mutation and on target switch.
 - **Pins** participate as **fixed constraints** — hardware addresses are never
   reallocated; their aliases persist per-board and flow through the same
-  registry uniqueness gate. Nothing to route.
+  registry uniqueness gate. But a pin edit MOVES those constraints, so
+  `createNewPin` / `removePin` / `updatePin` drive the central recalculation
+  whenever the pin address signature changes (alias-only and pin-number-only
+  edits skip it). Without that, `removePin` slid the freed slot to the end of
+  the pin block and left it stranded, and `createNewPin` could mint an address
+  already held by a VPP or Modbus channel — an unreported two-producer
+  collision.
+- **Unresolved targets** allocate permissively rather than as if the target
+  supported nothing — see §5.1.
 - **Aliases** resolve to concrete IEC addresses **in the editor** (each
   variable's `location` is kept resolved); the compiler/runtime are untouched.
 

@@ -358,6 +358,48 @@ function seedVppBoard(store: ReturnType<typeof makeStore>) {
   store.getState().deviceActions.setDeviceBoard('VPP Board')
 }
 
+/** Seed a Runtime v3 target: a target that RESOLVED and genuinely declares no
+ *  remote I/O. Distinct from an unresolved board — allocation must keep
+ *  honouring the declaration here (DOPE-440). */
+function seedRuntimeV3Board(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'OpenPLC Runtime v3',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v3',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: false,
+            vppIo: false,
+            modbusTcpRemote: false,
+            ethercat: false,
+            modbusTcpServer: false,
+            opcuaServer: false,
+            s7Server: false,
+            debuggerTransports: ['modbus-tcp'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: false,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v3')
+}
+
+/** Point the project at a board id that is NOT in `availableBoards` — a VPP
+ *  board whose package isn't installed, or a project authored elsewhere.
+ *  `resolveTargetCapabilities(undefined)` answers EMPTY_CAPABILITIES there. */
+function selectUnresolvedBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setDeviceBoard('Uninstalled VPP Board')
+}
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -2904,6 +2946,113 @@ describe('createProjectSlice', () => {
       expect(groups).toHaveLength(1)
       // g2 slides down into the freed slots — no gap left behind.
       expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+  })
+
+  describe('allocation against an unresolved or incapable target (DOPE-440)', () => {
+    /** A device whose group already carries addresses — the shape a project
+     *  file has on load, before any edit. */
+    function seedDeviceAt(name: string, addresses: string[]) {
+      seedRemoteDevice(store, {
+        ...makeRemoteDevice(name),
+        modbusTcpConfig: {
+          host: '127.0.0.1',
+          port: 502,
+          slaveId: 1,
+          timeout: 1000,
+          ioGroups: [
+            {
+              ...makeIOGroup('g1', '3', addresses.length),
+              ioPoints: addresses.map((iecLocation, i) => ({
+                id: `group-g1_${i}`,
+                name: `group-g1_${i}`,
+                type: 'Analog Input (Holding Register)',
+                iecLocation,
+                alias: '',
+              })),
+            },
+          ],
+        },
+      })
+    }
+
+    const addressesOf = (deviceIndex = 0) =>
+      store
+        .getState()
+        .project.data.remoteDevices![deviceIndex].modbusTcpConfig!.ioGroups.flatMap((g) =>
+          g.ioPoints!.map((p) => p.iecLocation),
+        )
+
+    it('recompacts after a delete even when the board id does not resolve', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
+      // The VPP package goes missing, or the project is opened on another
+      // machine: the board id no longer resolves to a BoardInfo.
+      selectUnresolvedBoard(store)
+
+      store.getState().projectActions.deleteIOGroup('Dev1', 'g1')
+
+      // Used to keep %IW2,3 — every consumer was filtered out of allocation,
+      // so the recompaction wrote nothing and reported success.
+      expect(addressesOf()).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('does not mint duplicate addresses when the board id does not resolve', () => {
+      selectUnresolvedBoard(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
+
+      // Both groups used to restart at %IW0 — the pool couldn't see the sibling.
+      expect(addressesOf()).toEqual(['%IW0', '%IW1', '%IW2', '%IW3'])
+    })
+
+    it('does not mint duplicate addresses on a target that declares no remote I/O', () => {
+      // Runtime v3 RESOLVED and said `modbusTcpRemote: false`, so the central
+      // recalculation rightly leaves these addresses alone. That makes the
+      // provisional pool the only thing standing between the two groups.
+      seedRuntimeV3Board(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
+
+      const addresses = addressesOf()
+      expect(new Set(addresses).size).toBe(addresses.length)
+    })
+
+    it('still honours a resolved target that declares no remote I/O', () => {
+      // The other half of the invariant, and the guard against "simplifying"
+      // the fix into dropping capability scoping altogether: a board that
+      // ANSWERED keeps its declaration, so the inactive kind is not reallocated.
+      seedRuntimeV3Board(store)
+      seedDeviceAt('Dev1', ['%IW4', '%IW5'])
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      expect(addressesOf()).toEqual(['%IW4', '%IW5'])
+    })
+
+    it('compacts the same gap once the target is merely unresolved', () => {
+      selectUnresolvedBoard(store)
+      seedDeviceAt('Dev1', ['%IW4', '%IW5'])
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      expect(addressesOf()).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('keeps the alias-uniqueness gate working when the board id does not resolve', () => {
+      selectUnresolvedBoard(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', 'group-g1_0', 'Temp')
+
+      const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', 'group-g1_1', 'Temp')
+
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Alias already in use')
     })
   })
 
