@@ -173,9 +173,7 @@ class UserService {
     try {
       const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
       const shipped = UserService.ARDUINO_FILE_CONTENT.match(/^\s*-\s*(https?:\/\/\S+)\s*$/gm) ?? []
-      const missing = shipped
-        .map((line) => line.trim().replace(/^-\s*/, ''))
-        .filter((url) => !existing.includes(url))
+      const missing = shipped.map((line) => line.trim().replace(/^-\s*/, '')).filter((url) => !existing.includes(url))
 
       if (missing.length === 0) return
 

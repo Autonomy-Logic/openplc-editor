@@ -61,6 +61,39 @@ const versionFloor = z
   .min(1)
   .refine(isValidVersion, { message: 'must be a version like "4.3.2", "4.3", "4" or "v4.3.2"' })
 
+/**
+ * A vendor board-manager index URL must be one we are willing to hand to
+ * arduino-cli as `--additional-urls`.
+ *
+ * Same reasoning as `versionFloor`: a field a gate reads should not reach it
+ * as `unknown`. This one goes further than a gate — it becomes an argument to
+ * a subprocess that downloads a board package, and board packages carry
+ * toolchain executables that later builds run.
+ *
+ * The signature on a VPP vouches for the manifest, not for what the URL
+ * serves. arduino-cli's package checksums live INSIDE the index it fetches,
+ * so a plaintext index is MITM-able and the board package that lands is
+ * whatever the intercepting index points at. Requiring https closes that.
+ *
+ * Only the scheme is constrained. arduino-cli accepts compressed indexes
+ * (`.json.gz`, `.zip`, `.bz2`) as well as plain `.json`, so pinning the path
+ * suffix would refuse valid vendors for no security gain.
+ *
+ * Authoring-side, openplc-packages' `schema/manifest.schema.json` carries the
+ * same constraint, so a package that would be refused here cannot be built
+ * there either.
+ */
+const boardManagerUrl = z.string().refine(
+  (value) => {
+    try {
+      return new URL(value).protocol === 'https:'
+    } catch {
+      return false
+    }
+  },
+  { message: 'must be an https:// URL' },
+)
+
 export const PackageManifestSchema = z
   .object({
     formatVersion: z.string().min(1),
@@ -84,7 +117,17 @@ export const PackageManifestSchema = z
         minRuntimeVersion: versionFloor.optional(),
       })
       .passthrough(),
-    devices: z.array(z.object({}).passthrough()).min(1),
+    devices: z
+      .array(
+        z
+          .object({
+            // Only `boardManagerUrl` is declared; everything else on a device
+            // — and on `target` itself — still flows through untouched.
+            target: z.object({ boardManagerUrl: boardManagerUrl.optional() }).passthrough().optional(),
+          })
+          .passthrough(),
+      )
+      .min(1),
   })
   .passthrough()
 
@@ -146,6 +189,45 @@ function withComparableFloorsOnly(value: unknown): unknown {
   return droppedAny ? { ...value, package: kept } : value
 }
 
+/** True for a board-manager URL this codebase is willing to pass to arduino-cli. */
+function isUsableBoardManagerUrl(value: unknown): boolean {
+  return value === undefined || (typeof value === 'string' && boardManagerUrl.safeParse(value).success)
+}
+
+/**
+ * Return `value` with any board-manager URL we would refuse removed, logging
+ * each one.
+ *
+ * Same strict-at-entry / tolerant-on-read split as the floors above, and for
+ * the same reason: a package installed before this constraint existed must not
+ * have all of its boards disappear from the board lookup on an upgrade where
+ * the user did nothing. Dropping the field leaves the package exactly as
+ * capable as it was before the vendor-index feature existed — the core simply
+ * is not auto-installed — while the log keeps the cause visible.
+ */
+function withUsableBoardManagerUrlsOnly(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value.devices)) return value
+
+  let droppedAny = false
+  // `Array.isArray` narrows `unknown` to `any[]`; keep the element type honest
+  // so the record checks below are doing real work.
+  const devices = (value.devices as unknown[]).map((device: unknown) => {
+    if (!isRecord(device) || !isRecord(device.target)) return device
+    if (isUsableBoardManagerUrl(device.target.boardManagerUrl)) return device
+
+    console.warn(
+      `[package-manifest] installed device declares a board manager URL that is not https ` +
+        `(${JSON.stringify(device.target.boardManagerUrl)}); ignoring it — the vendor core it ` +
+        `points at will not be installed automatically`,
+    )
+    droppedAny = true
+    const { boardManagerUrl: _dropped, ...target } = device.target
+    return { ...device, target }
+  })
+
+  return droppedAny ? { ...value, devices } : value
+}
+
 /**
  * Validate a manifest read back from a package that is ALREADY
  * INSTALLED, dropping a floor this codebase cannot compare rather than
@@ -165,5 +247,5 @@ function withComparableFloorsOnly(value: unknown): unknown {
  * silently trading one invisible outcome for another.
  */
 export function parseInstalledPackageManifest(value: unknown): PackageManifest | null {
-  return parsePackageManifest(withComparableFloorsOnly(value))
+  return parsePackageManifest(withUsableBoardManagerUrlsOnly(withComparableFloorsOnly(value)))
 }

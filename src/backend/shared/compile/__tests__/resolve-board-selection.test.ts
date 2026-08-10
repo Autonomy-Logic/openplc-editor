@@ -280,7 +280,7 @@ describe('resolveBoardSelection', () => {
           },
         },
       ],
-    } as unknown as PackageManifest
+    }
     const packageManager: PackageManagerPort = {
       listInstalled: () => [pkg],
       getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
