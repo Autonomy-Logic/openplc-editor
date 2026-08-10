@@ -2791,6 +2791,14 @@ describe('createProjectSlice', () => {
       expect(points[0].iecLocation).toBe('%IW0')
       expect(points[1].iecLocation).toBe('%IW1')
     })
+
+    it('clamps a non-positive length on create', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', -2))
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      expect(group.length).toBe(1)
+    })
   })
 
   describe('updateIOGroup', () => {
@@ -2871,6 +2879,43 @@ describe('createProjectSlice', () => {
       expect(points).toHaveLength(3)
       expect(points[0].alias).toBe('Temp') // survived the reshuffle
       expect(points[2].alias).toBe('') // freshly allocated slot
+    })
+
+    it('clamps a negative length to a single point, normalizing the stored field', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: -5 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      // `length` is what reaches the runtime as `len` — it must be normalized too.
+      expect(group.length).toBe(1)
+    })
+
+    it('clamps a zero length to a single point', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 0 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      expect(group.length).toBe(1)
+    })
+
+    it('floors a fractional length', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3.7 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(3)
+      expect(group.length).toBe(3)
+    })
+
+    it('forces a single point when the function code becomes single-element (FC 5)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4)) // FC3 -> %IW
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { functionCode: '5' }) // FC5 -> %QX, single
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.length).toBe(1)
+      expect(group.ioPoints!.map((p) => p.iecLocation)).toEqual(['%QX0.0'])
     })
   })
 
