@@ -2976,12 +2976,11 @@ describe('createProjectSlice', () => {
       })
     }
 
-    const addressesOf = (deviceIndex = 0) =>
-      store
-        .getState()
-        .project.data.remoteDevices![deviceIndex].modbusTcpConfig!.ioGroups.flatMap((g) =>
-          g.ioPoints!.map((p) => p.iecLocation),
-        )
+    /** Every IEC address the first remote device's groups currently hold. */
+    function addressesOf(): string[] {
+      const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+      return groups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+    }
 
     it('recompacts after a delete even when the board id does not resolve', () => {
       seedRuntimeV4Board(store)
