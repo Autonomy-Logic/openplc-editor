@@ -155,6 +155,72 @@ describe('logCompilerEvent', () => {
     expect(entries[0].id).not.toBe(entries[1].id)
   })
 
+  // -------------------------------------------------------------------------
+  // Carriage-return progress redraws.
+  //
+  // arduino-cli rewrites one line with `\r` while downloading. Each chunk has
+  // to collapse to the frame a terminal would show, and be flagged so the
+  // console overwrites the previous frame instead of stacking a new entry.
+  // -------------------------------------------------------------------------
+  describe('carriage-return progress output', () => {
+    /** Collector that also records the per-write `redraw` directive. */
+    function createRedrawCollector() {
+      const writes: { message: string; transient?: boolean; redraw?: boolean }[] = []
+      const log = (
+        entry: { id: string; level: string; message: string; transient?: boolean },
+        options?: { redraw?: boolean },
+      ) => {
+        writes.push({ message: entry.message, transient: entry.transient, redraw: options?.redraw })
+      }
+      return { writes, log: log as Parameters<typeof logCompilerEvent>[1] }
+    }
+
+    it('collapses a multi-frame chunk to the frame left on screen', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\rDownloading 10%\rDownloading 60%\rDownloading 99%' }, log)
+
+      expect(writes).toHaveLength(1)
+      expect(writes[0].message).toBe('Downloading 99%')
+      expect(writes[0].redraw).toBe(true)
+    })
+
+    it('marks a chunk that ended mid-line as still open', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\rcore 54.94 MiB / 93.67 MiB  58.65%' }, log)
+
+      expect(writes[0].transient).toBe(true)
+    })
+
+    it('commits the line when the redraw arrives with a trailing newline', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\rDownloading index: package_index.tar.bz2 downloaded\n' }, log)
+
+      // Still a redraw (it overwrites the progress frame above it) but no
+      // longer open, so the next download starts a fresh line.
+      expect(writes[0].redraw).toBe(true)
+      expect(writes[0].transient).toBe(false)
+    })
+
+    it('leaves ordinary output untouched — no redraw, never transient', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: 'Linking everything together...\n' }, log)
+
+      expect(writes[0].redraw).toBe(false)
+      expect(writes[0].transient).toBe(false)
+    })
+
+    it('preserves indentation on gcc caret lines while trimming block edges', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\nsketch.ino:3:3: error: nope\n   undefinedFunction(42);\n   ^~~~~~~\n' }, log)
+
+      expect(writes.map((w) => w.message)).toEqual([
+        'sketch.ino:3:3: error: nope',
+        '   undefinedFunction(42);',
+        '   ^~~~~~~',
+      ])
+    })
+  })
+
   describe('with compileError attached (structured strucpp diagnostic)', () => {
     const sampleErr = {
       message: 'Cannot assign WSTRING to BOOL',

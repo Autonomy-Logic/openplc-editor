@@ -1,10 +1,11 @@
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
+import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
+import { reconcileArduinoCliConfig } from './data/arduino-cli-config'
 import { ARDUINO_DATA, HISTORY_DATA, SETTINGS_DATA } from './data/types'
 import type { ArduinoListOutput } from './types'
 
@@ -144,21 +145,38 @@ class UserService {
   }
 
   /**
-   * Checks if the Arduino CLI configuration file exists and creates it if it doesn't.
+   * Create the Arduino CLI configuration file, or bring an existing one up to
+   * date with what the editor ships.
+   *
+   * Previously this wrote with `{ flag: 'wx' }` and swallowed `EEXIST`, so the
+   * file was effectively write-once. Any install that had launched an older
+   * build kept a stale config forever — including the now-obsolete
+   * `output.no_color`, which would keep the console monochrome even though it
+   * renders SGR colour itself now. See `reconcileArduinoCliConfig` for the
+   * (deliberately narrow) merge rules.
    */
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
+
     try {
       await writeFile(pathToArduinoCliConfig, UserService.ARDUINO_FILE_CONTENT, { flag: 'wx' })
+      return
     } catch (err) {
-      // If the error is due to the file already existing, log a warning and continue.
-      if (err instanceof Error && err.message.includes('EEXIST')) {
-        console.warn(`File already exists at ${pathToArduinoCliConfig}.\nSkipping creation.`)
-      } else if (err instanceof Error) {
+      if (!(err instanceof Error && err.message.includes('EEXIST'))) {
         console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
-      } else {
-        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
+        return
       }
+    }
+
+    try {
+      const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
+      const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)
+      if (!updated) return
+
+      await writeFile(pathToArduinoCliConfig, updated, 'utf-8')
+      console.warn(`Updated Arduino CLI config at ${pathToArduinoCliConfig}.`)
+    } catch (err) {
+      console.error(`Error updating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
     }
   }
 
