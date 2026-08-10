@@ -5,6 +5,7 @@ export type {
   DeviceAvailableOptions,
   DeviceConnection,
   DeviceConnectionStatus,
+  DeviceLicenseInfo,
   DevicePinMapping,
   DeviceSlice,
   DeviceState,

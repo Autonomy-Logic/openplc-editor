@@ -1159,4 +1159,133 @@ describe('ModbusRtuClient', () => {
       expect(result.error).toContain('timeout')
     })
   })
+
+  // -----------------------------------------------------------------------
+  // On-device license storage (FC 0x49 write / 0x4A read)
+  //
+  // The end-to-end coverage against a real license store needs firmware built
+  // with the store backend compiled in, so without these the wire framing here
+  // is unexercised on an ordinary test run.
+  // -----------------------------------------------------------------------
+  describe('writeLicense / readLicense', () => {
+    /** A recognisable 98-byte blob whose first byte is the 'O' of the LE magic. */
+    function sampleBlob(): Uint8Array {
+      const blob = new Uint8Array(98)
+      for (let i = 0; i < blob.length; i++) blob[i] = i & 0xff
+      blob[0] = 0x4f
+      return blob
+    }
+
+    it('frames a write as [FC][len:u16BE][blob] and reports SUCCESS', async () => {
+      await connectClient()
+      const blob = sampleBlob()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.SUCCESS])),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.writeLicense(blob)
+
+      // [slaveId][FC][len hi][len lo][blob...] + CRC. The length is BIG-endian
+      // even though the blob content it frames is little-endian.
+      expect(written[0][1]).toBe(ModbusFunctionCode.DEBUG_WRITE_LICENSE)
+      expect(written[0][2]).toBe(0x00)
+      expect(written[0][3]).toBe(98)
+      expect(written[0][4]).toBe(0x4f)
+      expect(result).toMatchObject({ success: true, status: ModbusDebugResponse.SUCCESS })
+    })
+
+    it('reports LIC_UNSUPPORTED on a write as a valid device state, not a failure', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_UNSUPPORTED])),
+      )
+
+      const result = await client.writeLicense(sampleBlob())
+
+      expect(result).toMatchObject({ success: true, unsupported: true })
+    })
+
+    it('reads the stored blob back byte-for-byte', async () => {
+      await connectClient()
+      const blob = sampleBlob()
+      const payload = new Uint8Array(3 + blob.length)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload[1] = 0x00 // len hi
+      payload[2] = blob.length // len lo
+      payload.set(blob, 3)
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, payload))
+
+      const result = await client.readLicense()
+
+      expect(result.success).toBe(true)
+      expect(Array.from(result.blob ?? [])).toEqual(Array.from(blob))
+      // The LE uint32 magic 0x434C504F serializes to 4F 50 4C 43, so a leading
+      // 0x4F proves the byte order survived the write -> store -> read path.
+      expect(result.blob?.[0]).toBe(0x4f)
+    })
+
+    it('classifies LIC_EMPTY as virgin storage rather than an error', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_EMPTY])),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result).toMatchObject({ success: true, empty: true })
+      expect(result.blob).toBeUndefined()
+    })
+
+    it('classifies LIC_CORRUPT as a valid device state rather than an error', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_CORRUPT])),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result).toMatchObject({ success: true, corrupt: true })
+    })
+
+    it('rejects a read whose declared length exceeds the bytes received', async () => {
+      await connectClient()
+      // len says 98, only 2 blob bytes follow — the truncation must be reported,
+      // not silently handed on as a short "license".
+      autoRespond(
+        buildResponse(
+          1,
+          ModbusFunctionCode.DEBUG_READ_LICENSE,
+          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00, 98, 0x4f, 0x50]),
+        ),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete license blob')
+    })
+
+    it('returns an error on a read timeout', async () => {
+      await connectClient()
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+
+    it('returns an error on a write timeout', async () => {
+      await connectClient()
+      const result = await client.writeLicense(sampleBlob())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
 })

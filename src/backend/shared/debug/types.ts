@@ -71,6 +71,48 @@ export interface DebugBoardIdResult {
 }
 
 /**
+ * Result of a write-license call (FC 0x49). The device stores the raw blob
+ * bytes; `status` is the ModbusDebugResponse code the target returned
+ * (SUCCESS/ERROR_OUT_OF_BOUNDS/ERROR_OUT_OF_MEMORY). `unsupported` (status
+ * LIC_UNSUPPORTED) means the board has no license-store backend — a valid
+ * device state (`success: true`), not a transport failure.
+ *
+ * A `success: true` here means ONLY "the bytes were accepted for storage". No
+ * target validates magic, crc32, `deviceId` or `productId` on write, so a caller
+ * that needs to know what the board now holds must read it back (FC 0x4A) and
+ * verify — see the write path in the licensing flow.
+ */
+export interface DebugLicenseWriteResult {
+  success: boolean
+  status?: number
+  unsupported?: boolean
+  error?: string
+}
+
+/**
+ * Result of a read-license call (FC 0x4A). `blob` is present only on SUCCESS.
+ * `empty` (status LIC_EMPTY) means virgin storage — no license provisioned;
+ * `corrupt` (status LIC_CORRUPT) means the magic matched but the crc32 failed.
+ * `unsupported` (status LIC_UNSUPPORTED) means the board has no license-store
+ * backend at all. All three are `success: true` — they are valid device
+ * states, not transport failures — the caller distinguishes via the flags.
+ *
+ * A SUCCESS status does NOT mean the stored license is good: the two targets
+ * disagree about what they check before answering it (bare metal validates magic
+ * + crc32; the Linux runtime only checks the file length). Callers must verify
+ * the returned bytes themselves.
+ */
+export interface DebugLicenseReadResult {
+  success: boolean
+  status?: number
+  empty?: boolean
+  corrupt?: boolean
+  unsupported?: boolean
+  blob?: Uint8Array
+  error?: string
+}
+
+/**
  * Result of an MD5-probe call.  The `md5` is the runtime's program hash;
  * `targetEndian` is the byte order detected from the 2-byte sentinel the
  * runtime writes into the response trailer via a native `uint16_t*`
@@ -128,6 +170,15 @@ export interface DeviceChannelTransport {
   /** Run/stop command (FC 0x4b). Reads go through `getStatus()`. Optional for
    *  the same reason as `getStatus`. */
   setPlcState?(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+  /** Read the stored VPP license blob (FC 0x4A). Optional here because not every
+   *  medium carries it — but unlike run/stop, every medium that CAN is expected
+   *  to: licensing is a property of the device, not of the target family, so the
+   *  Modbus clients and the runtime-v4 WebSocket all implement it (see
+   *  `DeviceModbusTransport`, where it is required). */
+  readLicense?(): Promise<DebugLicenseReadResult>
+  /** Store a VPP license blob (FC 0x49). Optional for the same reason as
+   *  `readLicense`. Storing does not validate — read back to confirm. */
+  writeLicense?(blob: Uint8Array): Promise<DebugLicenseWriteResult>
 }
 
 /**
@@ -175,6 +226,12 @@ export interface DeviceDebugChannel extends DeviceChannelTransport {
  * `DeviceChannelTransport`: both Modbus clients implement run/stop, and only the
  * runtime-v4 WebSocket (a different protocol, driving run/stop over REST) does
  * not.
+ *
+ * `readLicense` / `writeLicense` are required for a different reason: the license
+ * FCs are transport-agnostic by design, so device activation runs identically on
+ * serial and on TCP. A Modbus link that could not carry them would give the
+ * licensing flow a second, target-dependent shape — which is the divergence the
+ * one-transport-interface refactor exists to prevent.
  */
 export interface DeviceModbusTransport
   extends Omit<DebugTransport, 'getVariablesList' | 'setVariable'>,
@@ -182,6 +239,8 @@ export interface DeviceModbusTransport
   getBoardId(): Promise<DebugBoardIdResult>
   getStatus(): Promise<DebugStatusResult>
   setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+  readLicense(): Promise<DebugLicenseReadResult>
+  writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
   /**
    * The two payload-carrying operations, restated for the main process.
    *

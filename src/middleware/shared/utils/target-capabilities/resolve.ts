@@ -51,6 +51,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   isInProcessSimulator: false,
   plcStateControl: false,
   directUsbUpload: false,
+  isLicensable: false,
 }
 
 /**
@@ -90,7 +91,8 @@ function inferFromCompiler(boardInfo: BoardInfoLike): TargetCapabilities {
  *   1. If `boardInfo.capabilities` is present, it's authoritative.
  *      Missing fields are filled in from the matching preset (compiler
  *      + vpp hint), so a manifest can declare only the overrides it
- *      cares about (e.g. SLM-RP4 just sets `vppIo: true`).
+ *      cares about (e.g. SLM-RP4 just sets `vppIo: true`; a licensed VPP
+ *      sets `isLicensable: true`).
  *   2. Otherwise, the preset matching the legacy `compiler` field.
  *   3. Otherwise, an empty (everything-disabled) block.
  *
