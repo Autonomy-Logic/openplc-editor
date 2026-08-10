@@ -1,2 +1,2 @@
-export { PackageManagerModule } from './package-manager-module'
-export type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
+export { formatPackageIntegrityError, PackageManagerModule } from './package-manager-module'
+export type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
