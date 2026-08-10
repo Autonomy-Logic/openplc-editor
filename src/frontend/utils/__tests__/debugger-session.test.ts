@@ -201,26 +201,6 @@ describe('logCompilerEvent', () => {
       expect(writes[0].transient).toBe(false)
     })
 
-    it('strips the ASCII bar so the frame cannot wrap across visual lines', () => {
-      // The exact frame that rendered as three wrapped lines in the console.
-      const { writes, log } = createRedrawCollector()
-      const bar = '[' + '='.repeat(21) + '>' + '-'.repeat(129) + ']'
-      logCompilerEvent({ message: `\resp32:esp-x32@2601 44.48 MiB / 311.65 MiB ${bar}  14.27% 00m26s` }, log)
-
-      expect(writes).toHaveLength(1)
-      expect(writes[0].message).toBe('esp32:esp-x32@2601 44.48 MiB / 311.65 MiB  14.27% 00m26s')
-      expect(writes[0].message.length).toBeLessThan(80)
-      // Still an open in-place line, so the console keeps overwriting it.
-      expect(writes[0].transient).toBe(true)
-    })
-
-    it('does not strip brackets from non-redraw output', () => {
-      const { writes, log } = createRedrawCollector()
-      logCompilerEvent({ message: '[MANUAL_OVERRIDE / body line 7]\n' }, log)
-
-      expect(writes[0].message).toBe('[MANUAL_OVERRIDE / body line 7]')
-    })
-
     it('leaves ordinary output untouched — no redraw, never transient', () => {
       const { writes, log } = createRedrawCollector()
       logCompilerEvent({ message: 'Linking everything together...\n' }, log)

@@ -21,10 +21,6 @@ type LogComponentProps = ComponentPropsWithoutRef<'p'> & {
   /** Styled runs when the tool emitted SGR colour; `message` is the same
    *  text with the escapes stripped. */
   segments?: LogSegment[]
-  /** An in-place progress line a terminal would still be overwriting. Renders
-   *  without wrapping so a long frame stays one line — the console scrolls
-   *  horizontally instead of breaking it across several. */
-  transient?: boolean
   /** When set, the bracketed POU prefix on the first line becomes a
    *  click-to-open button that calls {@link onCompileErrorClick}.
    *  Multi-line gcc-style snippet renders as plain pre-wrapped text
@@ -155,7 +151,6 @@ const LogComponent = ({
   tstamp,
   searchTerm,
   segments,
-  transient,
   compileError,
   onCompileErrorClick,
   ...rest
@@ -193,18 +188,7 @@ const LogComponent = ({
     <>
       {message && (
         <div className='group flex items-start gap-1'>
-          <p
-            className={cn(
-              'flex-1 font-mono font-normal',
-              // Ordinary output wraps so long compiler diagnostics stay
-              // readable. A progress redraw must not: wrapping it into several
-              // visual lines is the very thing collapsing the redraws avoids,
-              // and the panel is resizable so no fixed width would hold.
-              transient ? 'overflow-x-auto whitespace-pre' : 'whitespace-pre-wrap break-words',
-              classForMessage,
-            )}
-            {...rest}
-          >
+          <p className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)} {...rest}>
             {level && tstamp && (
               <>
                 [<HighlightedText text={tstamp} searchTerm={searchTerm} />

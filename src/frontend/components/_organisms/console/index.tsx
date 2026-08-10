@@ -137,7 +137,6 @@ const Console = memo(() => {
             tstamp={formatTimestamp(log.tstamp ?? new Date(), filters.timestampFormat)}
             searchTerm={filters.searchTerm}
             segments={log.segments}
-            transient={log.transient}
             compileError={log.compileError}
             onCompileErrorClick={navigateToCompileError}
           />

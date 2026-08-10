@@ -1,4 +1,4 @@
-import { collapseCarriageReturns, hasAnsi, parseAnsi, stripAnsi, stripProgressBar } from '../terminal-output'
+import { collapseCarriageReturns, hasAnsi, parseAnsi, stripAnsi } from '../terminal-output'
 
 const ESC = '\u001B'
 
@@ -85,43 +85,6 @@ describe('parseAnsi', () => {
     // 48;5;21 (256-colour background) is not mapped; the text must survive.
     const segments = parseAnsi(`${ESC}[48;5;21mstill here${ESC}[0m`)
     expect(segments.map((s) => s.text).join('')).toBe('still here')
-  })
-})
-
-describe('stripProgressBar', () => {
-  // Captured from a real core install in the editor console.
-  const REAL_FRAME =
-    'esp32:esp-x32@2601 44.48 MiB / 311.65 MiB [=====================>' + '-'.repeat(129) + ']  14.27% 00m26s'
-
-  it('removes the bar and keeps every number', () => {
-    const stripped = stripProgressBar(REAL_FRAME)
-    expect(stripped).toBe('esp32:esp-x32@2601 44.48 MiB / 311.65 MiB  14.27% 00m26s')
-  })
-
-  it('brings a 200-character frame under the width that was wrapping', () => {
-    expect(REAL_FRAME.length).toBeGreaterThan(190)
-    expect(stripProgressBar(REAL_FRAME).length).toBeLessThan(80)
-  })
-
-  it('matches the compact form arduino-cli emits when it cannot size a bar', () => {
-    // Real non-TTY output: no bar, same fields.
-    const noBar = 'arduino:avr-gcc@7.3.0-atmel3.6.1-arduino7 2.60 MiB / 34.99 MiB   7.44% 00m04s'
-    expect(stripProgressBar(noBar)).toBe(noBar)
-  })
-
-  it('leaves a completion line alone', () => {
-    const done = 'Downloading index: package_index.tar.bz2 downloaded'
-    expect(stripProgressBar(done)).toBe(done)
-  })
-
-  it('does not touch ordinary bracketed text', () => {
-    const diagnostic = '[MANUAL_OVERRIDE / body line 7]'
-    expect(stripProgressBar(diagnostic)).toBe(diagnostic)
-    expect(stripProgressBar('array[0] = x - y')).toBe('array[0] = x - y')
-  })
-
-  it('ignores short bracketed runs that merely look bar-like', () => {
-    expect(stripProgressBar('step [1-2]')).toBe('step [1-2]')
   })
 })
 
