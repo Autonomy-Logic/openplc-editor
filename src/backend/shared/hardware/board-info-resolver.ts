@@ -161,6 +161,21 @@ export interface BoardBuildInfo {
    *  library dir, linked via a 2nd `--library`. Its presence marks an arduino
    *  prebuilt board (the source HAL still compiles as the integration layer). */
   precompiledLibraryDir?: string
+  /** Resolved paths of the VPP's on-device license-storage backend sources
+   *  (`device.hal.licenseStore`), injected into the Baremetal sketch so they
+   *  define the STRONG `license_store_*` symbols over the weak default.
+   *
+   *  This is the ONE representation of "this VPP ships storage". There is
+   *  deliberately no capability mirroring it: every licensable VPP targets
+   *  hardware that persists a licence, so a second derived boolean would be
+   *  true wherever `isLicensable` is and only add a way for the two to
+   *  disagree. */
+  licenseStoreFiles?: string[]
+  /** Per-VPP signing key id (`device.hal.licenseKeyId`). Informational in the
+   *  editor: the activation request carries only `{ deviceId, packageId }` and
+   *  the backend resolves its own key. Carried for the build side and for
+   *  diagnosing a board that stores a blob and still runs demo. */
+  licenseKeyId?: string
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From `target.coreVersion`. */
   coreVersion?: string
@@ -298,6 +313,17 @@ export class BoardInfoResolver {
     if (flags) info.compilerFlags = flags
     if (device.hal.define) info.define = device.hal.define
     if (device.hal.extraArduinoLibraries) info.extraArduinoLibraries = device.hal.extraArduinoLibraries
+    if (device.hal.licenseKeyId) info.licenseKeyId = device.hal.licenseKeyId
+
+    // `hal.licenseStore` resolves to build inputs and nothing else. It used to
+    // ALSO derive a `capabilities.licenseStore` boolean; that is gone, because
+    // every licensable VPP targets hardware that persists a licence, so the
+    // boolean was true wherever `isLicensable` was and its only job was one
+    // diagnostic sentence.
+    const licenseStoreFiles = normalizeToArray(device.hal.licenseStore)
+    if (licenseStoreFiles.length > 0) {
+      info.licenseStoreFiles = licenseStoreFiles.map((file) => resolveRel(pkg.path, file))
+    }
     if (device.capabilities) info.capabilities = device.capabilities
 
     if (device.hal.pluginType === 'python' || device.hal.pluginType === 'native') {
@@ -335,4 +361,15 @@ export class BoardInfoResolver {
     if (ld) out.ld_flags = ld
     return out
   }
+}
+
+/**
+ * A manifest field declared as `string | string[]` as a flat list of non-empty
+ * entries. Blank strings are dropped rather than resolved: a `licenseStore: ""`
+ * would otherwise resolve to the package root and read as "storage present".
+ */
+function normalizeToArray(value: string | string[] | undefined): string[] {
+  if (value === undefined) return []
+  const list = Array.isArray(value) ? value : [value]
+  return list.filter((entry) => entry.trim().length > 0)
 }

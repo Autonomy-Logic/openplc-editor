@@ -20,6 +20,7 @@
 import https from 'https'
 
 import type { CatalogQueryParams, CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
+import { defaultPortFor, httpModuleFor } from '../utils/http-module'
 
 /** Default base URL when no env override is set. */
 const DEFAULT_EDGE_API_URL = 'https://api.autonomylogic.com'
@@ -77,7 +78,7 @@ function requestText(url: string, signal?: AbortSignal): Promise<string> {
     const parsed = new URL(url)
     const reqOptions: https.RequestOptions = {
       hostname: parsed.hostname,
-      port: parsed.port || undefined,
+      port: parsed.port || defaultPortFor(parsed),
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
@@ -86,7 +87,8 @@ function requestText(url: string, signal?: AbortSignal): Promise<string> {
       },
     }
 
-    const req = https.request(reqOptions, (res) => {
+    // Scheme-driven, so OPENPLC_EDGE_API_URL can point at a local http backend.
+    const req = httpModuleFor(parsed).request(reqOptions, (res) => {
       // Accumulate as a single utf-8 string instead of buffering raw
       // chunks — sidesteps the Buffer[] vs Uint8Array[] friction in
       // recent @types/node and matches the existing httpRequest in

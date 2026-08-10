@@ -41,6 +41,15 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define MB_DEBUG_SUCCESS                 0x7E
 #define MB_DEBUG_ERROR_OUT_OF_BOUNDS     0x81
 #define MB_DEBUG_ERROR_OUT_OF_MEMORY     0x82
+// License storage semantic states. The editor distinguishes all three: EMPTY and
+// CORRUPT both mean "recover from the backend", while UNSUPPORTED means the board
+// cannot hold a license at all and buying one would not help. They don't collide
+// with Modbus exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
+#define MB_DEBUG_LIC_EMPTY               0x83
+#define MB_DEBUG_LIC_CORRUPT             0x84
+// No license-store backend on this board (weak default): the licensing FCs
+// degrade gracefully instead of failing as a transport error.
+#define MB_DEBUG_LIC_UNSUPPORTED         0x85
 // MB_FC_PLC_SET_STATE only: a RUN request was refused because the hardware mode
 // switch reads STOP. The editor turns this into a "flip the switch to RUN"
 // warning rather than a generic failure. It doesn't collide with Modbus
@@ -82,6 +91,8 @@ enum {
     MB_FC_DEBUG_GET_STATUS = 0x46, // Debug get PLC status (running, scan tick, uptime)
     MB_FC_DEBUG_GET_VERSION = 0x47, // Debug get runtime firmware version
     MB_FC_DEBUG_GET_BOARD_ID = 0x48, // Debug get unique hardware board ID
+    MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
+    MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
 };
 

@@ -7,6 +7,12 @@ export enum ModbusFunctionCode {
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
   DEBUG_GET_BOARD_ID = 0x48,
+  /** Store a license blob on the device (VPP licensing). Write-only: the read
+   *  back is DEBUG_READ_LICENSE, and it is a SEPARATE round trip on purpose —
+   *  0x49 only stores bytes, it validates nothing. */
+  DEBUG_WRITE_LICENSE = 0x49,
+  /** Read the stored license blob back off the device. */
+  DEBUG_READ_LICENSE = 0x4a,
   /** Set the runtime run/stop state. Reads go through DEBUG_GET_STATUS (0x46),
    *  which already reports the state — there is deliberately no second FC for
    *  querying it. */
@@ -17,6 +23,13 @@ export enum ModbusDebugResponse {
   SUCCESS = 0x7e,
   ERROR_OUT_OF_BOUNDS = 0x81,
   ERROR_OUT_OF_MEMORY = 0x82,
+  /** DEBUG_READ_LICENSE only: virgin storage — no license has been provisioned. */
+  LIC_EMPTY = 0x83,
+  /** DEBUG_READ_LICENSE only: the magic matched but the crc32 did not. */
+  LIC_CORRUPT = 0x84,
+  /** Licensing FCs: the target has no on-device license-store backend at all.
+   *  A valid device state, not a transport failure. */
+  LIC_UNSUPPORTED = 0x85,
   /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
   REFUSED_BY_SWITCH = 0x86,

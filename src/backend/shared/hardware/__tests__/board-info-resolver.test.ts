@@ -360,6 +360,87 @@ describe('BoardInfoResolver', () => {
       ])
     })
 
+    // ---------------------------------------------------------------------
+    // Licensing fields (hal.licenseStore / hal.licenseKeyId)
+    //
+    // `hal.licenseStore` resolves to BUILD INPUTS and nothing else. There is no
+    // capability mirroring it: every licensable VPP targets hardware that
+    // persists a licence, so a second derived boolean would be true wherever
+    // `isLicensable` is. These pin that the paths resolve and that the
+    // capability block is passed through untouched.
+    // ---------------------------------------------------------------------
+
+    /** A licensed-VPP device, with whatever licensing fields the test is about. */
+    function licensedDevice(hal: Record<string, unknown>) {
+      return {
+        id: 'esp32-generic',
+        name: 'ESP32 Generic',
+        preview: 'p.png',
+        target: { type: 'arduino-cli', core: 'esp32:esp32', platform: 'esp32:esp32:esp32' },
+        hal: { type: 'arduino-hal', source: 'hal/arduino/esp32.cpp', ...hal },
+        capabilities: { isLicensable: true },
+      } as PackageManifest['devices'][number]
+    }
+
+    function resolveLicensed(hal: Record<string, unknown>) {
+      const pkg = makePkg()
+      const manifest = makeManifest({ devices: [licensedDevice(hal)] })
+      return makeResolver({}, makePackageManager([pkg], { [pkg.packageId]: manifest })).resolve('ESP32 Generic')
+    }
+
+    it('resolves hal.licenseStore to package-relative paths and flips the licenseStore capability', () => {
+      const info = resolveLicensed({
+        licenseStore: 'hal/arduino/license_store_esp32.cpp',
+        licenseKeyId: 'espressif-licensed-2026',
+      })
+
+      // Asserted through the same platform-supplied resolver the production code
+      // is handed, which is the actual contract — hard-coding a joined path bakes
+      // in POSIX assumptions the resolver does not make.
+      expect(info.licenseStoreFiles).toEqual([packageRelative(PKG_PATH, 'hal/arduino/license_store_esp32.cpp')])
+      expect(info.licenseKeyId).toBe('espressif-licensed-2026')
+      // The capability block is whatever the manifest declared — nothing derived
+      // into it, so it cannot disagree with `licenseStoreFiles`.
+      expect(info.capabilities).toEqual({ isLicensable: true })
+    })
+
+    it('accepts hal.licenseStore as an array of sources', () => {
+      const info = resolveLicensed({ licenseStore: ['hal/a.cpp', 'hal/b.cpp'] })
+
+      expect(info.licenseStoreFiles).toEqual([
+        packageRelative(PKG_PATH, 'hal/a.cpp'),
+        packageRelative(PKG_PATH, 'hal/b.cpp'),
+      ])
+      expect(info.capabilities).toEqual({ isLicensable: true })
+    })
+
+    it('resolves no store files for a licensable VPP that ships no backend', () => {
+      // A PACKAGING fault, not a device state: the compiler warns, and the board
+      // links the weak default and reports its storage as missing.
+      const info = resolveLicensed({})
+
+      expect(info.licenseStoreFiles).toBeUndefined()
+      expect(info.capabilities).toEqual({ isLicensable: true })
+    })
+
+    it('treats a blank licenseStore as absent rather than resolving it to the package root', () => {
+      // `''` would resolve to PKG_PATH itself and read as "storage present",
+      // advertising a backend that is not there.
+      const info = resolveLicensed({ licenseStore: '   ' })
+
+      expect(info.licenseStoreFiles).toBeUndefined()
+    })
+
+    it('does not invent a capability block for a device that declares nothing', () => {
+      const pkg = makePkg()
+      const manifest = makeManifest()
+      const info = makeResolver({}, makePackageManager([pkg], { [pkg.packageId]: manifest })).resolve('Arduino Mega')
+
+      expect(info.capabilities).toBeUndefined()
+      expect(info.licenseStoreFiles).toBeUndefined()
+      expect(info.licenseKeyId).toBeUndefined()
+    })
+
     it('omits platformOptions when the manifest does not declare any', () => {
       const pkg = makePkg()
       const manifest = makeManifest({

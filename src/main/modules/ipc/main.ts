@@ -13,6 +13,7 @@ import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -66,6 +67,7 @@ import {
   modbusTransportKind,
 } from '../../../backend/editor/hardware/device-transport-factory'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
+import { inspectDeviceLicense, resolveDeviceLicense } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -1081,6 +1083,10 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('device:connect', this.handleDeviceConnect)
     this.registerHandle('device:disconnect', this.handleDeviceDisconnect)
     this.registerHandle('device:release-serial-port', this.handleDeviceReleaseSerialPort)
+    // VPP licensing over the HELD link — callable any time the device is
+    // connected, deliberately not folded into `device:connect`. See the handlers.
+    this.registerHandle('device:read-license', this.handleDeviceReadLicense)
+    this.registerHandle('device:refresh-license', this.handleDeviceRefreshLicense)
     this.registerHandle('session:open-runtime', this.handleOpenRuntimeSession)
     this.registerHandle('session:close-runtime', this.handleCloseRuntimeSession)
 
@@ -2406,6 +2412,112 @@ class MainProcessBridge implements MainIpcModule {
     this.deviceLinkProbe = null
     this.tracedChannelUses.clear()
     return { success: true }
+  }
+
+  // ===================== VPP LICENSING OVER THE HELD LINK =====================
+  //
+  // WHY THESE ARE ON-DEMAND, AND NOT PART OF `device:connect`.
+  //
+  // Two reasons, both learned the hard way. First, `refreshLicense` reaches the
+  // NETWORK: folding it into connect makes every connect to a licensed board wait
+  // on an HTTP round trip that may be rate-limited or time out, and a connect that
+  // hangs looks like a broken cable. Second, a purchase happens AFTER the user has
+  // already been told they are in demo mode — with licensing bolted to connect, the
+  // only way to pick up a licence they just bought is to disconnect and reconnect,
+  // or reflash. Exposing the step means the buy dialog can simply call it again on
+  // the link that is already open.
+  //
+  // Both ride the CONTROL channel (`requireControl`): the license FCs are ordinary
+  // frames on the same held Modbus link as run/stop and the status poll, so they
+  // queue behind the same mutex and need no connection of their own.
+
+  /**
+   * True while a COMPOUND licensing sequence is running over the held client.
+   *
+   * The transports already serialise individual FRAMES, and that is not enough
+   * here. `refreshLicense` is read -> HTTP -> write -> read, and two of them
+   * running at once would each see perfectly atomic frames while interleaving a
+   * read and a write of the SAME license — one sequence reading back the other's
+   * blob and drawing a conclusion about it. The frame mutex cannot see the
+   * sequence, so the sequence needs its own guard.
+   */
+  private deviceLicenseSequenceInFlight = false
+
+  /**
+   * Read the anchor the licensing identity derives from, over the held link.
+   *
+   * Read FRESH on every licensing call rather than cached at connect. The anchor
+   * IS the device identity, and a board swapped on the same serial path would
+   * otherwise inherit the previous one's — deciding a license question for
+   * hardware that is no longer there. One extra frame on an operation that already
+   * spends several is not worth that risk.
+   */
+  private async readLicenseAnchor(client: DeviceModbusTransport): Promise<{ anchor: Uint8Array } | { error: string }> {
+    const board = await client.getBoardId()
+    if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
+    this.deviceSession.noteTraffic()
+    return { anchor: board.boardId ?? new Uint8Array(0) }
+  }
+
+  /**
+   * `device:read-license` — what license is this board holding right now?
+   *
+   * Read + verify only; never contacts the backend, so it is cheap enough for a
+   * screen open. It answers the question the badge asks, which `device:connect`
+   * deliberately does not.
+   */
+  handleDeviceReadLicense = async (
+    _event: IpcMainInvokeEvent,
+    request: DeviceLicenseRequest,
+  ): Promise<DeviceLicenseReport> => {
+    const control = this.requireControl('read license')
+    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+
+    try {
+      const anchor = await this.readLicenseAnchor(control.client)
+      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+
+      return await inspectDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
+    } catch (error) {
+      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+    }
+  }
+
+  /**
+   * `device:refresh-license` — the full flow, including the backend recovery.
+   *
+   * Called after a connect to a licensable board, and again after a purchase so a
+   * device gets its license without disconnecting or reflashing.
+   */
+  handleDeviceRefreshLicense = async (
+    _event: IpcMainInvokeEvent,
+    request: DeviceLicenseRequest,
+  ): Promise<DeviceLicenseReport> => {
+    const control = this.requireControl('refresh license')
+    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+
+    if (this.deviceLicenseSequenceInFlight) {
+      // Reported rather than queued: the caller is a button or a connect, and a
+      // second answer arriving later for a question already being answered is
+      // noise at best and a contradictory badge at worst.
+      return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
+    }
+    this.deviceLicenseSequenceInFlight = true
+
+    try {
+      const anchor = await this.readLicenseAnchor(control.client)
+      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+
+      const report = await resolveDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
+      // The license FCs are device traffic like any other: without noting them the
+      // liveness poll can fall due mid-sequence and declare a healthy link lost.
+      this.deviceSession.noteTraffic()
+      return report
+    } catch (error) {
+      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+    } finally {
+      this.deviceLicenseSequenceInFlight = false
+    }
   }
 
   handleDebuggerSetVariable = async (

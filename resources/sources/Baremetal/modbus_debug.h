@@ -1,5 +1,5 @@
 /*
-modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x48, 0x4B)
+modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4B)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The debugger PDU handlers, dispatched from process_mbpacket. Kept ungated: the
@@ -24,6 +24,10 @@ void debugGetMd5(void *endianness);
 void debugGetStatus(void);
 void debugGetVersion(void);
 void debugGetBoardId(void);
+// On-device license storage (0x49/0x4A). `len` is the BIG-ENDIAN wire length
+// (already unpacked by the dispatcher); the blob CONTENT is little-endian.
+void debugWriteLicense(uint16_t len, const uint8_t *blob);  // 0x49
+void debugReadLicense(void);                                // 0x4A
 // FC 0x4B -- set the runtime run/stop state. Command only; the state is read
 // back through debugGetStatus (FC 0x46), which reports it.
 void plcSetState(uint8_t desired);
