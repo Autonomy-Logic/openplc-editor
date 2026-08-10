@@ -209,9 +209,7 @@ function withUsableBoardManagerUrlsOnly(value: unknown): unknown {
   if (!isRecord(value) || !Array.isArray(value.devices)) return value
 
   let droppedAny = false
-  // `Array.isArray` narrows `unknown` to `any[]`; keep the element type honest
-  // so the record checks below are doing real work.
-  const devices = (value.devices as unknown[]).map((device: unknown) => {
+  const devices = value.devices.map((device: unknown) => {
     if (!isRecord(device) || !isRecord(device.target)) return device
     if (isUsableBoardManagerUrl(device.target.boardManagerUrl)) return device
 
