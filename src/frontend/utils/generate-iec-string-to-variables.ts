@@ -27,22 +27,37 @@ export const DISALLOWED_LOCATION_CLASSES: ReadonlyArray<PLCVariable['class']> = 
   'temp',
 ]
 
+// The type group accepts a comma so a multi-dimensional array can be declared
+// inline: `m : ARRAY[0..1, 0..2] OF INT;`.  `parseArrayType` below has always
+// split multi-dimensional bounds, and the data-type text parser
+// (`PLC/data-type-text-parser.ts`) already allows the comma — without it here,
+// the only way to declare a 2D/3D array was to name an ARRAY data type first,
+// and writing it inline failed the whole POU with "invalid or unsupported
+// characters".
+//
+// The group stays lazy and is bounded by the following `AT` / `:=` / `;`, and a
+// comma is never valid between a declaration's name and its type, so this can't
+// swallow anything it didn't before.  Note this does NOT enable multi-name
+// declarations (`a, b : INT;`) — `name` is a single `\w+` followed by `:`.
+
 // Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\]\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\],\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 // Alternate format: name AT location : type := initialValue ; (* documentation *)
 // This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
 const alternateLineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\],\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
   if (!line.includes(':')) return 'missing colon (:) between name and type'
+  // Comma is legal — multi-dimensional array bounds and comma-separated initial
+  // values both use it — so it must not be reported as an unsupported character.
   // eslint-disable-next-line no-useless-escape
-  if (/[^A-Za-z0-9_\s:;=%()/*\-.\[\]]/.test(line)) return 'invalid or unsupported characters'
+  if (/[^A-Za-z0-9_\s:;=%()/*\-.,\[\]]/.test(line)) return 'invalid or unsupported characters'
   return 'unrecognized declaration format'
 }
 
