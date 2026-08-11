@@ -126,3 +126,72 @@ describe('handleCoreInstallation (prebuilt core pin = exact manifest version)', 
     expect(message).toMatch(/already installed/)
   })
 })
+
+/**
+ * Vendor board-manager index support.
+ *
+ * Regression cover for "Platform 'industrialshields:esp32' not found": a VPP
+ * declaring `target.boardManagerUrl` must reach arduino-cli as
+ * `--additional-urls`, on BOTH `core update-index` and `core install`.  The
+ * index refresh is what makes the install resolvable — `core install` alone
+ * matches against the cached index and still fails.
+ */
+describe('handleCoreInstallation (vendor board manager URL)', () => {
+  const VENDOR_URL = 'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
+  let compilerModule: CompilerModule
+
+  beforeEach(() => {
+    compilerModule = new CompilerModule()
+    jest.mocked(spawn).mockReset()
+    jest.mocked(spawn).mockImplementation(() => fakeChild(0) as unknown as ReturnType<typeof spawn>)
+    jest.spyOn(compilerModule, 'getArduinoInstalledCores').mockResolvedValue({} as InstalledCores)
+  })
+
+  it('refreshes the index against the vendor URL BEFORE installing', async () => {
+    await compilerModule.handleCoreInstallation('industrialshields:esp32', jest.fn(), undefined, VENDOR_URL)
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    const [, updateArgv] = jest.mocked(spawn).mock.calls[0]
+    const [, installArgv] = jest.mocked(spawn).mock.calls[1]
+    expect(updateArgv).toEqual(expect.arrayContaining(['core', 'update-index', '--additional-urls', VENDOR_URL]))
+    expect(installArgv).toEqual(
+      expect.arrayContaining(['core', 'install', 'industrialshields:esp32', '--additional-urls', VENDOR_URL]),
+    )
+  })
+
+  it('passes --additional-urls alongside a pinned core version', async () => {
+    await compilerModule.handleCoreInstallation('industrialshields:esp32', jest.fn(), '2.7.1', VENDOR_URL)
+
+    const [, installArgv] = jest.mocked(spawn).mock.calls[1]
+    expect(installArgv).toEqual(
+      expect.arrayContaining(['core', 'install', 'industrialshields:esp32@2.7.1', '--additional-urls', VENDOR_URL]),
+    )
+  })
+
+  it('omits --additional-urls entirely when the board declares no vendor index', async () => {
+    await compilerModule.handleCoreInstallation('arduino:avr', jest.fn(), '1.8.6')
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const [, argv] = jest.mocked(spawn).mock.calls[0]
+    expect(argv).not.toContain('--additional-urls')
+    expect(argv).toEqual(expect.arrayContaining(['core', 'install', 'arduino:avr@1.8.6']))
+  })
+
+  it('still attempts the install when the index refresh fails', async () => {
+    // First spawn (update-index) fails, second (install) succeeds. A flaky
+    // network on the refresh must not mask the install's own error.
+    let call = 0
+    jest.mocked(spawn).mockImplementation(() => {
+      call += 1
+      return fakeChild(call === 1 ? 1 : 0) as unknown as ReturnType<typeof spawn>
+    })
+
+    await expect(
+      compilerModule.handleCoreInstallation('industrialshields:esp32', jest.fn(), undefined, VENDOR_URL),
+    ).resolves.not.toThrow()
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    const [, installArgv] = jest.mocked(spawn).mock.calls[1]
+    expect(installArgv).toEqual(expect.arrayContaining(['core', 'install', 'industrialshields:esp32']))
+  })
+})

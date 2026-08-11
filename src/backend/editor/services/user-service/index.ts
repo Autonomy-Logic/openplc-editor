@@ -148,12 +148,17 @@ class UserService {
    * Create the Arduino CLI configuration file, or bring an existing one up to
    * date with what the editor ships.
    *
-   * Previously this wrote with `{ flag: 'wx' }` and swallowed `EEXIST`, so the
-   * file was effectively write-once. Any install that had launched an older
-   * build kept a stale config forever — including the now-obsolete
-   * `output.no_color`, which would keep the console monochrome even though it
-   * renders SGR colour itself now. See `reconcileArduinoCliConfig` for the
-   * (deliberately narrow) merge rules.
+   * This used to write with `{ flag: 'wx' }` and swallow `EEXIST`, which made
+   * the file effectively write-once: an install that had launched an older
+   * build kept a stale config forever, and the only fix was deleting it by
+   * hand. Two things went stale that way — board-manager URLs added to
+   * `ARDUINO_DATA` never reached existing users, and `output.no_color` stayed
+   * on, which would keep the console monochrome even though it renders SGR
+   * colour itself now.
+   *
+   * Merge, never overwrite: users add their own indexes and change other
+   * settings in this file, and clobbering it would silently discard them.
+   * See `reconcileArduinoCliConfig` for the (deliberately narrow) rules.
    */
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
@@ -168,6 +173,7 @@ class UserService {
       }
     }
 
+    // File already exists — reconcile it with what we ship.
     try {
       const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
       const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)

@@ -16,7 +16,7 @@ import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
-import type { ImportResult, InstalledPackage, PackageManifest, PackageRegistry } from './types'
+import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
 
 /**
  * Enforce cryptographic signature verification on every import. Strict by
@@ -203,6 +203,41 @@ class PackageManagerModule {
   }
 
   /**
+   * Re-verify the package that provides `boardName`, at the moment a build is
+   * about to consume it (DOPE-539).
+   *
+   * The import check and the project-open sweep both happen strictly BEFORE
+   * this point, and nothing between them and the compile stops the user from
+   * editing the installed package: `getInstalledPackageManifest`, the HAL
+   * source, the licence-store backend and the runtime-v4 plugin payload are
+   * all read straight off `userData/packages/<id>/` when the build runs. So a
+   * package that passed on open is not evidence about the package being
+   * compiled — an edit lands in the firmware, or in C the runtime compiles on
+   * a live PLC, and (because `capabilities.isLicensable` is a manifest field)
+   * can switch the whole licensing flow off.
+   *
+   * This is the gate that actually protects a build, so it fails CLOSED and
+   * the callers refuse to compile. It deliberately does NOT de-list or delete
+   * the package the way the open-time sweep does: tearing a directory out from
+   * under a build in flight is a worse failure than stopping the build and
+   * saying why. The sweep still owns removal.
+   *
+   * A built-in hals.json board has no package behind it and is `ok` — the
+   * common case, and the reason this costs nothing for most builds.
+   */
+  verifyBoardPackageIntegrity(boardName: string): PackageIntegrityResult {
+    if (!REQUIRE_SIGNATURE) return { ok: true }
+
+    const match = this.findDeviceByBoardName(boardName)
+    if (!match) return { ok: true }
+
+    const reason = this.signatureRejectionReason(match.pkg.packageId, match.pkg.path)
+    if (!reason) return { ok: true }
+
+    return { ok: false, packageId: match.pkg.packageId, reason }
+  }
+
+  /**
    * Returns null when the installed package recorded at `packagePath` is
    * genuinely signed by a trusted key, or a short human-readable reason when it
    * is not (bad id shape, path escaping packagesDir, missing files, or any
@@ -360,4 +395,21 @@ class PackageManagerModule {
   }
 }
 
-export { PackageManagerModule }
+/**
+ * The one wording every build-time integrity refusal uses.
+ *
+ * Three call sites in the compiler abort on the same condition, and the user
+ * reads exactly one of the three; they must not each explain it differently.
+ * The message names the package (what to reinstall), the reason (what is
+ * wrong) and the remedy, because "signature verification failed" on its own
+ * reads as an editor bug rather than as "the file on your disk changed".
+ */
+function formatPackageIntegrityError(boardName: string, failure: { packageId: string; reason: string }): string {
+  return (
+    `Board "${boardName}" is provided by the VPP package "${failure.packageId}", which no longer matches ` +
+    `its signature: ${failure.reason}. The package files appear to have been modified after installation, ` +
+    'so they cannot be trusted for a build. Reinstall the package from a trusted .vpp file and try again.'
+  )
+}
+
+export { formatPackageIntegrityError, PackageManagerModule }
