@@ -138,3 +138,90 @@ describe('parseInstalledPackageManifest — the load path', () => {
     expect(parseInstalledPackageManifest(value)).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Board-manager URL
+//
+// The URL becomes an `--additional-urls` argument to arduino-cli, which then
+// downloads a board package containing toolchain executables. The manifest
+// signature vouches for the URL, not for what it serves — and arduino-cli's
+// package checksums live inside the index it fetches, so a plaintext index is
+// MITM-able.
+// ---------------------------------------------------------------------------
+
+/** A manifest whose single device carries the given `target`. */
+const withTarget = (target: Record<string, unknown>) => ({
+  formatVersion: '1.0',
+  package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+  devices: [{ id: 'esp32-plc-21', name: 'ESP32 PLC 21', target }],
+})
+
+const VENDOR_INDEX = 'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
+
+describe('PackageManifestSchema — board manager URL', () => {
+  it('accepts a device that declares no target at all', () => {
+    expect(PackageManifestSchema.safeParse(manifest()).success).toBe(true)
+  })
+
+  it('accepts a target with no board manager URL', () => {
+    expect(PackageManifestSchema.safeParse(withTarget({ type: 'arduino-cli', core: 'arduino:avr' })).success).toBe(true)
+  })
+
+  it('accepts the real https vendor index', () => {
+    expect(PackageManifestSchema.safeParse(withTarget({ boardManagerUrl: VENDOR_INDEX })).success).toBe(true)
+  })
+
+  it('accepts a compressed index — the scheme is constrained, not the suffix', () => {
+    // arduino-cli reads .json.gz / .zip / .bz2 indexes too.
+    expect(PackageManifestSchema.safeParse(withTarget({ boardManagerUrl: 'https://x.dev/i.json.gz' })).success).toBe(
+      true,
+    )
+  })
+
+  it.each([
+    ['plaintext http', 'http://x.dev/package_index.json'],
+    ['a local file', 'file:///etc/passwd'],
+    ['a bare path', '/tmp/package_index.json'],
+    ['junk', 'not a url'],
+    ['an empty string', ''],
+  ])('rejects %s', (_label, url) => {
+    const result = PackageManifestSchema.safeParse(withTarget({ boardManagerUrl: url }))
+    expect(result.success).toBe(false)
+  })
+
+  it('leaves the rest of target untouched', () => {
+    const parsed = PackageManifestSchema.safeParse(
+      withTarget({ type: 'arduino-cli', core: 'industrialshields:esp32', boardManagerUrl: VENDOR_INDEX }),
+    )
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.devices[0]).toMatchObject({
+        target: { type: 'arduino-cli', core: 'industrialshields:esp32', boardManagerUrl: VENDOR_INDEX },
+      })
+    }
+  })
+})
+
+describe('parseInstalledPackageManifest — board manager URL', () => {
+  it('keeps a usable URL', () => {
+    const parsed = parseInstalledPackageManifest(withTarget({ boardManagerUrl: VENDOR_INDEX }))
+    expect(parsed?.devices[0].target.boardManagerUrl).toBe(VENDOR_INDEX)
+  })
+
+  it('drops a non-https URL instead of hiding every board in the package', () => {
+    // A package installed before this constraint existed must keep loading;
+    // rejecting it would make its boards vanish on an upgrade the user did
+    // not ask for.
+    const parsed = parseInstalledPackageManifest(
+      withTarget({ type: 'arduino-cli', core: 'x:y', boardManagerUrl: 'http://x.dev/i.json' }),
+    )
+    expect(parsed).not.toBeNull()
+    expect(parsed?.devices[0].target.boardManagerUrl).toBeUndefined()
+    // Everything else about the device survives.
+    expect(parsed?.devices[0]).toMatchObject({ id: 'esp32-plc-21', target: { type: 'arduino-cli', core: 'x:y' } })
+  })
+
+  it('leaves a device with no target alone', () => {
+    expect(parseInstalledPackageManifest(manifest())).not.toBeNull()
+  })
+})

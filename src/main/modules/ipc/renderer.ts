@@ -1,5 +1,9 @@
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
-import type { DeviceConnectionStatusPayload } from '@root/middleware/shared/ports/device-port'
+import type {
+  DeviceConnectionStatusPayload,
+  DeviceLicenseReport,
+  DeviceLicenseRequest,
+} from '@root/middleware/shared/ports/device-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -476,6 +480,15 @@ const rendererProcessBridge = {
   // Upload handoff: give up the link ONLY if it is the serial one holding `port`.
   deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>
     ipcRenderer.invoke('device:release-serial-port', port),
+
+  // VPP licensing over the HELD link. `read` is local-only (read + verify) and
+  // cheap; `refresh` may reach the network and write, which is why they are
+  // separate channels and neither is part of `device:connect`.
+  deviceReadLicense: (request: DeviceLicenseRequest): Promise<DeviceLicenseReport> =>
+    ipcRenderer.invoke('device:read-license', request),
+
+  deviceRefreshLicense: (request: DeviceLicenseRequest): Promise<DeviceLicenseReport> =>
+    ipcRenderer.invoke('device:refresh-license', request),
 
   // Diagnostic trace of the device connection (candidate attempts, poll verdicts,
   // which connection served each command), mirrored into the editor console so it

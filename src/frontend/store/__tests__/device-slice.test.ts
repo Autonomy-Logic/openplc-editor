@@ -252,6 +252,139 @@ describe('createDeviceSlice', () => {
         debugTransport: null,
       })
     })
+
+    it('clearDeviceConnection leaves licensing alone — the link and the entitlement are separate facts', () => {
+      // A link that drops and comes back does not change what the device is
+      // entitled to run. Clearing the licence here would make the badge blank on
+      // every reconnect and force a needless round trip to learn nothing new.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'licensed', how: 'already-stored' },
+      })
+      store.getState().deviceActions.clearDeviceConnection()
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // VPP licensing
+  // -----------------------------------------------------------------------
+  describe('device licensing', () => {
+    const LICENSED = {
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'licensed' as const, how: 'already-stored' as const },
+    }
+
+    it('starts idle with nothing known', () => {
+      // The state every non-licensable board stays in: nothing runs, so nothing is
+      // known, and the UI shows no licensing affordance at all.
+      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('startDeviceLicenseCheck marks the call in flight', () => {
+      const store = makeStore()
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null })
+    })
+
+    it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
+      // Blanking would make the badge flicker Licensed -> nothing -> Licensed on
+      // every refresh, and a refresh that failed would leave the UI knowing LESS
+      // than before it asked. `phase` is what says "asking".
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED })
+    })
+
+    it('setDeviceLicenseReport lands the report and settles the phase', () => {
+      const store = makeStore()
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED })
+    })
+
+    it('preserves the outcome union verbatim, including the entitlement distinction', () => {
+      // The whole point of the union surviving to the store: the UI branches on
+      // `entitlementChecked` to decide between offering a purchase and offering a
+      // re-check. A store that flattened this to a boolean would lose it.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: false },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'unlicensed',
+        entitlementChecked: false,
+      })
+
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true, backendReason: 'no active subscription' },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'unlicensed',
+        entitlementChecked: true,
+        backendReason: 'no active subscription',
+      })
+    })
+
+    it('keeps a check-failed outcome distinct from unlicensed', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        outcome: { state: 'check-failed', error: 'Activation request failed: 429' },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'check-failed',
+        error: 'Activation request failed: 429',
+      })
+      expect(store.getState().deviceLicense.report?.deviceId).toBeUndefined()
+    })
+
+    it('clearDeviceLicense resets to idle/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.clearDeviceLicense()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
+      // setDeviceBoard already wipes everything else that is board-specific
+      // (platform options, the pin-table row, vendor-screen data). A licence
+      // report is just as board-specific: it was verified against the previous
+      // board's deviceId and its VPP's productId. Kept across a switch, the badge
+      // asserts possession for hardware that is no longer selected, and the buy
+      // link is built from the NEW package id and the OLD device id.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
+      // The device screen re-sets the board on several paths; only an actual
+      // change invalidates the licence.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+    })
+
+    it('clearDeviceDefinitions clears licensing — a new project may select another board', () => {
+      // A "Licensed" badge carried across a project close would be an assertion
+      // about hardware that is not even connected.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
   })
 
   // -----------------------------------------------------------------------

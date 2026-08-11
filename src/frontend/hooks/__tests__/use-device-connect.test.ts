@@ -16,14 +16,22 @@ const mockSetDeviceConnectionStatus = jest.fn((status: string, port: string | nu
 /** The status the store ended up in — what the Connect button actually reads. */
 const currentStatus = (): string => (mockState.deviceConnection as { status: string }).status
 
+const mockStartLicenseCheck = jest.fn()
+const mockSetLicenseReport = jest.fn()
+const mockClearDeviceLicense = jest.fn()
+
 const mockState: Record<string, unknown> = {
   deviceDefinitions: { configuration: { deviceBoard: 'Test Board', communicationPort: 'COM5', vendorScreenData: {} } },
   deviceConnection: { status: 'disconnected', port: null },
+  deviceLicense: { phase: 'idle', report: null },
   runtimeConnection: { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' },
   modalActions: { openModal: mockOpenModal },
   consoleActions: { addLog: mockAddLog },
   deviceActions: {
     setDeviceConnectionStatus: mockSetDeviceConnectionStatus,
+    startDeviceLicenseCheck: mockStartLicenseCheck,
+    setDeviceLicenseReport: mockSetLicenseReport,
+    clearDeviceLicense: mockClearDeviceLicense,
   },
 }
 
@@ -47,12 +55,22 @@ const serialCandidate = {
 /** Shape the hook consumes: what can be tried now, and what needs input first. */
 let mockResolution: unknown = { candidates: [serialCandidate], awaitingInput: [] }
 
+const mockReadLicense = jest.fn()
+const mockRefreshLicense = jest.fn()
+const mockOpenExternalLink = jest.fn().mockResolvedValue({ success: true })
+
 jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
 jest.mock('@root/middleware/shared/providers/platform-context', () => ({
   useDevice: () => ({
     connect: mockConnect,
     disconnect: mockDisconnect,
     onConnectionStatus: mockOnConnectionStatus,
+    readLicense: mockReadLicense,
+    refreshLicense: mockRefreshLicense,
+  }),
+  useSystem: () => ({
+    getEdgeFrontendUrl: () => 'https://edge.example.com',
+    openExternalLink: mockOpenExternalLink,
   }),
 }))
 jest.mock('../../services/device-link-resolution', () => ({
@@ -277,6 +295,165 @@ describe('useDeviceConnect', () => {
       await result.current.connect()
       expect(currentStatus()).toBe('connecting')
       expect(mockSetDeviceConnectionStatus).not.toHaveBeenCalledWith('disconnected', null)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // VPP licensing
+  // -----------------------------------------------------------------------
+  describe('licensing', () => {
+    /** A board whose VPP is sold licensed. `board` above deliberately is not. */
+    const licensedBoard = {
+      compiler: 'arduino-cli',
+      core: 'esp32:esp32',
+      preview: '',
+      specs: {},
+      debug: {},
+      capabilities: { isLicensable: true },
+      vpp: {
+        packageId: 'com.openplc.espressif-licensed',
+        vendor: 'Espressif',
+        deviceId: 'esp32-generic',
+        packagePath: '/pkg',
+        screens: {},
+        moduleSystem: { enabled: false, maxSlots: 0, modules: [] },
+      },
+    } as unknown as BoardInfo
+
+    it('runs NO licensing traffic for a board whose VPP is not sold licensed', async () => {
+      // The common case, and the reason licensability is the first gate: a free
+      // board's connect must be exactly what it was before licensing existed.
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+
+      const { result } = renderHook(() => useDeviceConnect(board))
+      await result.current.connect()
+
+      expect(mockRefreshLicense).not.toHaveBeenCalled()
+      expect(mockReadLicense).not.toHaveBeenCalled()
+      expect(mockOpenModal).not.toHaveBeenCalled()
+    })
+
+    it('settles the licence over the held link after a successful connect', async () => {
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      mockRefreshLicense.mockResolvedValue({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'licensed', how: 'already-stored' },
+      })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      expect(mockRefreshLicense).toHaveBeenCalledWith({ packageId: 'com.openplc.espressif-licensed' })
+      expect(mockSetLicenseReport).toHaveBeenCalledWith({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'licensed', how: 'already-stored' },
+      })
+      // A licensed device is a silent success — no dialog on every connect.
+      expect(mockOpenModal).not.toHaveBeenCalled()
+    })
+
+    it('does not touch licensing when no firmware answered', async () => {
+      // There is nothing to ask: the flash dialog is the whole message, and a
+      // licence dialog stacked on top of it would bury it.
+      mockConnect.mockResolvedValue({ status: 'no-firmware' })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      expect(mockRefreshLicense).not.toHaveBeenCalled()
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'No Firmware Detected' })
+    })
+
+    it('does not touch licensing when the device never answered at all', async () => {
+      mockConnect.mockResolvedValue({ status: 'no-response' })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      expect(mockRefreshLicense).not.toHaveBeenCalled()
+    })
+
+    it('prompts about demo mode and offers a purchase when the backend reports no entitlement', async () => {
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      mockRefreshLicense.mockResolvedValue({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true },
+      })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      const [, props] = mockOpenModal.mock.calls[0]
+      expect(props).toMatchObject({ title: 'No Licence For This Device' })
+      expect((props as { buttons: string[] }).buttons).toEqual(['Buy Licence', 'Continue in Demo Mode'])
+
+      // Buying opens the device-BOUND purchase page: the id derived main-side is
+      // what makes the purchase attach to this board rather than to nothing.
+      latestOnResponse()(0)
+      await Promise.resolve()
+      expect(mockOpenExternalLink).toHaveBeenCalledWith(
+        'https://edge.example.com/buy?vppId=com.openplc.espressif-licensed&deviceId=659a3520540f803625ddc34081e893d3',
+      )
+    })
+
+    it('reports a failed check as a failure, never as "not licensed"', async () => {
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      mockRefreshLicense.mockResolvedValue({
+        outcome: { state: 'check-failed', error: 'Activation request failed: 429' },
+      })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      const [, props] = mockOpenModal.mock.calls[0]
+      expect(props).toMatchObject({ title: 'Licence Check Failed' })
+      expect((props as { buttons: string[] }).buttons).not.toContain('Buy Licence')
+    })
+
+    it('re-runs the flow when the user retries, and explains the NEW outcome', async () => {
+      // What makes a purchase completed in the browser land without a reconnect.
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      mockRefreshLicense
+        .mockResolvedValueOnce({ outcome: { state: 'check-failed', error: 'Request timeout' } })
+        .mockResolvedValueOnce({
+          deviceId: '659a3520540f803625ddc34081e893d3',
+          outcome: { state: 'licensed', how: 'activated' },
+        })
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+      expect(mockOpenModal).toHaveBeenCalledTimes(1)
+
+      latestOnResponse()(0)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(mockRefreshLicense).toHaveBeenCalledTimes(2)
+      // The retry succeeded, and success is silent — no second dialog.
+      expect(mockOpenModal).toHaveBeenCalledTimes(1)
+    })
+
+    it('turns a rejected licensing IPC call into check-failed rather than losing it', async () => {
+      mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
+      mockRefreshLicense.mockRejectedValue(new Error('bridge is gone'))
+
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.connect()
+
+      expect(mockSetLicenseReport).toHaveBeenCalledWith({
+        outcome: { state: 'check-failed', error: 'bridge is gone' },
+      })
+      expect(mockOpenModal.mock.calls[0][1]).toMatchObject({ title: 'Licence Check Failed' })
+    })
+
+    it('drops the licence on a DELIBERATE disconnect', async () => {
+      // The user is done with this device; a badge left behind would assert
+      // possession for hardware nothing is talking to. A link that merely DROPS
+      // keeps it — that is the device slice's job, not this hook's.
+      const { result } = renderHook(() => useDeviceConnect(licensedBoard))
+      await result.current.disconnect()
+
+      expect(mockClearDeviceLicense).toHaveBeenCalledTimes(1)
     })
   })
 })

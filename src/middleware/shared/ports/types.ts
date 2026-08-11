@@ -791,6 +791,29 @@ export interface PackageManifest {
        * integration layer (hal.source).
        */
       precompiledLibrary?: string
+      /**
+       * On-device license-storage backend: source file(s) injected into the
+       * Baremetal sketch and recompiled against the editor's `license_blob.h`.
+       *
+       * PRESENCE is the signal — it is what resolves
+       * `TargetCapabilities.licenseStore` and what drives the backend into the
+       * build, so one declaration serves both and they cannot disagree. Absence
+       * means the board answers `LIC_UNSUPPORTED` and the licensing flow reports
+       * that instead of writing.
+       */
+      licenseStore?: string | string[]
+      /**
+       * Per-VPP signing key id (e.g. `espressif-licensed-2026`). Names which key
+       * the backend/KMS signs this VPP's licenses with and which public key the
+       * closed artifact embeds.
+       *
+       * INFORMATIONAL in the editor: the activation request sends only
+       * `{ deviceId, packageId }` and the backend resolves its own signing key
+       * from the package id. The real trust root is the public key compiled into
+       * the VPP, not this string — it is carried for the build side and for
+       * diagnosing "the board stored the blob and still runs demo".
+       */
+      licenseKeyId?: string
       compilerFlags?: {
         c_flags?: string[]
         cxx_flags?: string[]
@@ -1287,6 +1310,16 @@ export function isV3Logs(logs: PlcLogs): logs is string {
 // Console
 // ---------------------------------------------------------------------------
 
+/**
+ * A run of log text sharing one style, produced by the SGR colour a tool
+ * emitted (see `frontend/utils/terminal-output`). `className` is a Tailwind
+ * class string, absent when the run is unstyled.
+ */
+export interface LogSegment {
+  text: string
+  className?: string
+}
+
 export interface LogObject {
   id: string
   level?: 'debug' | 'info' | 'warning' | 'error'
@@ -1299,6 +1332,20 @@ export interface LogObject {
    * progress / informational logs leave this undefined.
    */
   compileError?: StructuredCompileError
+  /**
+   * Styled runs, set only when the source emitted SGR colour. `message`
+   * always holds the same text with the escapes stripped, so search,
+   * filtering and copy stay on clean text and only the renderer needs to
+   * know about colour.
+   */
+  segments?: LogSegment[]
+  /**
+   * True while this entry is an in-place line a terminal would still be
+   * overwriting — a progress redraw not yet terminated by a newline. The
+   * next redraw replaces it instead of appending; a newline clears the flag
+   * and the line becomes permanent.
+   */
+  transient?: boolean
 }
 
 // ---------------------------------------------------------------------------

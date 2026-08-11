@@ -63,6 +63,10 @@ const DeviceConnectButton = ({
         {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
       </button>
 
+      {/* No "Connected" confirmation: the button itself reads "Disconnect" when
+          connected, so a second label said the same thing twice. The ERROR state
+          below stays, because there the button reads "Connect" and the failure
+          would otherwise be invisible. */}
       {status === 'error' && <span className='text-xs text-red-600 dark:text-red-400'>● Connection failed</span>}
       {children}
     </div>

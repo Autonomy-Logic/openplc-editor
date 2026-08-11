@@ -18,4 +18,4 @@
  * compares a per-deploy `BUILD_ID` (git commit SHA), not this version, so a
  * stale tab is detected on every deploy even without a version bump.
  */
-export const APP_VERSION = '4.2.10'
+export const APP_VERSION = '4.2.11'

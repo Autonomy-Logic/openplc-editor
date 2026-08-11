@@ -67,6 +67,11 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     debugTransport: null,
   },
 
+  deviceLicense: {
+    phase: 'idle',
+    report: null,
+  },
+
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
       setState(
@@ -116,7 +121,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     clearDeviceDefinitions: (): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection, deviceConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceConnection, deviceLicense }: DeviceSlice) => {
           deviceDefinitions.configuration = defaultDeviceConfiguration
           deviceDefinitions.pinMapping = {
             pinsByBoard: {},
@@ -139,6 +144,12 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceConnection.port = null
           deviceConnection.transport = null
           deviceConnection.debugTransport = null
+          // Same for licensing, and for a sharper reason: the next project may
+          // select a different board entirely, and a "Licensed" badge carried over
+          // from the previous one would be an assertion about hardware that is not
+          // even connected.
+          deviceLicense.phase = 'idle'
+          deviceLicense.report = null
         }),
       )
     },
@@ -370,7 +381,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     setDeviceBoard: (deviceBoard): void => {
       const previousBoard = getState().deviceDefinitions.configuration.deviceBoard
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated, deviceLicense }: DeviceSlice) => {
           deviceUpdated.updated = true
           // Wipe platformOption selections when the board changes — they're
           // declared per-board in the VPP manifest, so a `cpu=atmega328old`
@@ -396,6 +407,14 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             const cfg = deviceDefinitions.configuration
             syncActiveBoardVendorBucket(cfg)
             cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
+            // A licence report is board-specific for the same reason all of the
+            // above is: it was verified against the PREVIOUS board's `deviceId`
+            // and its VPP's `productId`. Carried across a switch, the badge
+            // asserts possession for hardware that is no longer selected, and
+            // the buy link gets built from the NEW package id paired with the
+            // OLD device id — binding a purchase to the wrong board.
+            deviceLicense.phase = 'idle'
+            deviceLicense.report = null
           }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
@@ -564,6 +583,30 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           deviceConnection.port = null
           deviceConnection.transport = null
           deviceConnection.debugTransport = null
+        }),
+      )
+    },
+    startDeviceLicenseCheck: (): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'checking'
+          // `report` is deliberately left alone — see the action's docstring.
+        }),
+      )
+    },
+    setDeviceLicenseReport: (report): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'done'
+          deviceLicense.report = report
+        }),
+      )
+    },
+    clearDeviceLicense: (): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.phase = 'idle'
+          deviceLicense.report = null
         }),
       )
     },

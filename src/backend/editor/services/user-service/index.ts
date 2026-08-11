@@ -1,10 +1,11 @@
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
+import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
+import { reconcileArduinoCliConfig } from './data/arduino-cli-config'
 import { ARDUINO_DATA, HISTORY_DATA, SETTINGS_DATA } from './data/types'
 import type { ArduinoListOutput } from './types'
 
@@ -144,21 +145,52 @@ class UserService {
   }
 
   /**
-   * Checks if the Arduino CLI configuration file exists and creates it if it doesn't.
+   * Create the Arduino CLI configuration file, or bring an existing one up to
+   * date with what the editor ships.
+   *
+   * This used to write with `{ flag: 'wx' }` and swallow `EEXIST`, which made
+   * the file effectively write-once: an install that had launched an older
+   * build kept a stale config forever, and the only fix was deleting it by
+   * hand. Two things went stale that way — board-manager URLs added to
+   * `ARDUINO_DATA` never reached existing users, and `output.no_color` stayed
+   * on, which would keep the console monochrome even though it renders SGR
+   * colour itself now.
+   *
+   * Merge, never overwrite: users add their own indexes and change other
+   * settings in this file, and clobbering it would silently discard them.
+   * See `reconcileArduinoCliConfig` for the (deliberately narrow) rules.
    */
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
+
     try {
       await writeFile(pathToArduinoCliConfig, UserService.ARDUINO_FILE_CONTENT, { flag: 'wx' })
+      return
     } catch (err) {
-      // If the error is due to the file already existing, log a warning and continue.
-      if (err instanceof Error && err.message.includes('EEXIST')) {
-        console.warn(`File already exists at ${pathToArduinoCliConfig}.\nSkipping creation.`)
-      } else if (err instanceof Error) {
+      if (!(err instanceof Error && err.message.includes('EEXIST'))) {
         console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
-      } else {
-        console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
+        return
       }
+    }
+
+    // File already exists — reconcile it with what we ship.
+    try {
+      const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
+      const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)
+      if (!updated) return
+
+      // Write via a sibling temp file and rename over the original. This runs
+      // on every start against a file the user owns and arduino-cli must be
+      // able to parse; a crash midway through a direct write would leave it
+      // truncated and break every build until the user deleted it by hand.
+      // `rename` within the same directory is atomic, so the config is either
+      // the old one or the new one, never half of each.
+      const tempPath = `${pathToArduinoCliConfig}.tmp`
+      await writeFile(tempPath, updated, 'utf-8')
+      await rename(tempPath, pathToArduinoCliConfig)
+      console.warn(`Updated Arduino CLI config at ${pathToArduinoCliConfig}.`)
+    } catch (err) {
+      console.error(`Error updating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
     }
   }
 

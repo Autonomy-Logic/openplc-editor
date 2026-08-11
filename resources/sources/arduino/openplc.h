@@ -122,6 +122,31 @@ uint8_t hardwareStateSwitch(void);
  * HAL with no LED reads nothing and the runtime never knows the difference.
  * ---------------------------------------------------------------------- */
 uint8_t runtime_get_plc_state(void);
+
+/* ---- Raw I/O ops, for LICENSABLE VPP targets only ----------------------
+ * Two mutually exclusive shapes exist, and there is deliberately NO weak
+ * fallback for the gated wrappers above:
+ *
+ *   - Licensable VPP HAL: defines ONLY these raw ops. The gated
+ *     updateInputBuffers / updateOutputBuffers come from inside the closed
+ *     license-core .a, which asks license_gate_actuation_allowed() and then
+ *     calls hal_read_inputs / hal_write_outputs — or hal_disable_all_outputs
+ *     once the demo window has expired.
+ *
+ *   - Every other HAL (the bundled resources/sources/hal/*.cpp, and any
+ *     unlicensed VPP): defines updateInput/OutputBuffers itself and leaves
+ *     these raw ops undeclared-but-unused. No gate is involved.
+ *
+ * THE CONSEQUENCE IS THE POINT: dropping the license-core .a from a licensable
+ * VPP does not silently degrade to unenforced I/O — the firmware fails to LINK,
+ * with undefined updateInputBuffers / updateOutputBuffers. The only weak
+ * defaults shipped are license_gate_weak.cpp (gate query -> UNSUPPORTED,
+ * actuation allowed) and license_store_weak.cpp (blob store -> UNSUPPORTED),
+ * which keep NON-licensable boards linking; neither provides these wrappers.
+ * ---------------------------------------------------------------------- */
+void hal_read_inputs(void);
+void hal_write_outputs(void);
+void hal_disable_all_outputs(void);
 #ifdef __cplusplus
 }
 #endif

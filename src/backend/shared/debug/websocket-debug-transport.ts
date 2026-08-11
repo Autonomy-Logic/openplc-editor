@@ -26,12 +26,24 @@ import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
   buildGetListRequest,
   buildGetMd5Request,
+  buildReadLicenseRequest,
   buildSetVariableRequest,
+  buildWriteLicenseRequest,
   parseGetListResponse,
   parseGetMd5Response,
+  parseReadLicenseResponse,
   parseSetVariableResponse,
+  parseWriteLicenseResponse,
 } from './modbus-pdu'
-import type { DebugSetResult, DebugTransport, DebugTransportResult, DeviceDebugChannel, Md5ProbeResult } from './types'
+import type {
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugSetResult,
+  DebugTransport,
+  DebugTransportResult,
+  DeviceDebugChannel,
+  Md5ProbeResult,
+} from './types'
 
 const REQUEST_TIMEOUT_MS = 5000
 const CONNECT_TIMEOUT_MS = 5000
@@ -145,6 +157,28 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     )
   }
 
+  // License function codes (0x49/0x4A), byte-identical to the serial/TCP
+  // clients: the runtime answers them at the webserver level, but the editor sees
+  // ONE transport-agnostic contract, so the licensing flow has a single shape on
+  // every target instead of a network-specific branch.
+  //
+  // `getBoardId` (0x48) stays absent on purpose: a runtime-v4 target's identity
+  // comes from the REST login, so it never answers that FC. That is why
+  // `DeviceChannelTransport` declares the license methods optional — this class
+  // implements the pair it can serve without claiming the one it cannot.
+
+  async readLicense(): Promise<DebugLicenseReadResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildReadLicenseRequest(), (bytes) => parseReadLicenseResponse(bytes), 'resolve')
+  }
+
+  async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildWriteLicenseRequest(blob), (bytes) => parseWriteLicenseResponse(bytes), 'resolve')
+  }
+
   /**
    * Send a Modbus PDU over the `debug_command` event and parse the
    * matching `debug_response`.  `errorMode` controls whether a
@@ -157,11 +191,9 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
    * client method routes through here, so the hex encoding /
    * timeout / event registration logic lives in exactly one place.
    */
-  private sendCommand<T extends DebugTransportResult | DebugSetResult>(
-    pdu: Uint8Array,
-    parse: (bytes: Uint8Array) => T,
-    errorMode: 'resolve',
-  ): Promise<T>
+  private sendCommand<
+    T extends DebugTransportResult | DebugSetResult | DebugLicenseReadResult | DebugLicenseWriteResult,
+  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve'): Promise<T>
   private sendCommand<T extends Md5ProbeResult>(
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,

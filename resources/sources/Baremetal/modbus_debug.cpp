@@ -1,9 +1,10 @@
 /*
-modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x48)
+modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_debug.h"
+#include "license_store.h"   // license_store_read/write + lic_status_to_mb
 // Debug surface comes via the extern "C" shims in arduino_runtime_glue.h
 // (openplc_debug_*, scan_counter) so this TU stays free of strucpp's
 // template-heavy headers and compiles cleanly under arduino-cli's default C++
@@ -432,4 +433,87 @@ void debugGetBoardId()
     mb_frame[3] = 0; // no unique-id support on this core
     mb_frame_len = 4;
 #endif
+}
+
+// ---------------------------------------------------------------------------
+// On-device license storage (FC 0x49 write / 0x4A read)
+//
+// These two only MOVE BYTES. They do not verify a signature and do not decide
+// anything about execution: that is the closed license-core's job, via
+// license_gate.h. Keeping them dumb is what lets the open firmware carry them.
+// ---------------------------------------------------------------------------
+
+// PDU request:  [FC][len:u16 BE][blob...]   (dispatcher passes `len` already unpacked)
+// PDU response: [FC][STATUS]
+//
+// NOTE on endianness: `len` on the wire is BIG-ENDIAN (matches every other debug
+// FC, e.g. GET_LIST/SET). The blob CONTENT it carries is little-endian — the two
+// are independent. `blob` points at mb_frame[4], and the response is only written
+// after license_store_write has consumed it, so there is no overlap hazard.
+void debugWriteLicense(uint16_t len, const uint8_t *blob)
+{
+    // The license blob is a FIXED 98 bytes; anything else is not one, so refuse
+    // before the store ever sees it. Two separate problems close here.
+    //
+    // 1. CONTRACT. The two targets disagreed about this exact field: the Linux
+    //    runtime answers LIC_CORRUPT for len != 98, while bare metal used to pass
+    //    `len` straight through — so [0x49][len=0x0004][4 bytes] came back
+    //    SUCCESS. One command, two contracts, and the editor believing whichever
+    //    target it happened to be talking to.
+    //
+    // 2. OVERREAD. `len` is read from mb_frame[2..3] and can be up to 0xFFFF,
+    //    while `blob` points into `mb_frame`, a static buffer of MAX_MB_FRAME
+    //    (128 on 328P, 256 elsewhere). Over RTU this was already unreachable:
+    //    mb_pdu_request_len() computes 6 + len, modbus_serial.cpp drops any frame
+    //    whose expected length exceeds MAX_MB_FRAME, and it waits for the bytes to
+    //    actually arrive. Over TCP nothing checked it: modbus_tcp.cpp bounds only
+    //    the MBAP length (mb_frame_len) and never cross-checks it against this
+    //    field, so a 6-byte packet declaring len = 0xFFFF would make
+    //    license_store_write read ~64 KB past the frame. Testing `len` here is the
+    //    one check that covers both transports at once.
+    if ((size_t)len != (size_t)LIC_BLOB_SIZE)
+    {
+        mb_frame[1] = MB_FC_DEBUG_WRITE_LICENSE;
+        mb_frame[2] = lic_status_to_mb(LIC_STORE_CORRUPT);
+        mb_frame_len = 3;
+        return;
+    }
+
+    lic_store_status_t st = license_store_write(blob, (size_t)len);
+    mb_frame[1] = MB_FC_DEBUG_WRITE_LICENSE;
+    mb_frame[2] = lic_status_to_mb(st);
+    mb_frame_len = 3;
+}
+
+// PDU request:  [FC]
+// PDU response (OK):                  [FC][STATUS][len:u16 BE][blob...]
+// PDU response (EMPTY/CORRUPT/error): [FC][STATUS]   (no len, no blob)
+//
+// Absolute mb_frame indices (index 0 is the slave id, the PDU starts at 1,
+// exactly like debugGetBoardId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
+//
+// The store reads straight into &mb_frame[5]: the frame IS the static buffer, so
+// there is no malloc on AVR. READ carries no request payload, so writing at [5]
+// cannot clobber an input. `out_len` is unknown until after the read, and the len
+// field lives at [3..4] — BEFORE the blob — so filling it afterwards never
+// overlaps the blob bytes. A 98-byte blob fits MAX_MB_FRAME comfortably.
+void debugReadLicense(void)
+{
+    size_t out_len = 0;
+    lic_store_status_t st =
+        license_store_read(&mb_frame[5], MAX_MB_FRAME - 5, &out_len);
+
+    mb_frame[1] = MB_FC_DEBUG_READ_LICENSE;
+    mb_frame[2] = lic_status_to_mb(st);
+    if (st == LIC_STORE_OK)
+    {
+        // len BIG-ENDIAN at [3..4] (blob content stays little-endian).
+        mb_frame[3] = (uint8_t)((out_len >> 8) & 0xFF);
+        mb_frame[4] = (uint8_t)(out_len & 0xFF);
+        mb_frame_len = 5 + out_len;
+    }
+    else
+    {
+        mb_frame_len = 3;   // [FC][STATUS] only
+    }
 }
