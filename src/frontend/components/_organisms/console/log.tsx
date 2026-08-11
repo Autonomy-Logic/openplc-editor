@@ -1,4 +1,4 @@
-import type { StructuredCompileError } from '@root/middleware/shared/ports/types'
+import type { LogSegment, StructuredCompileError } from '@root/middleware/shared/ports/types'
 import { Copy } from 'lucide-react'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
 
@@ -18,6 +18,9 @@ type LogComponentProps = ComponentPropsWithoutRef<'p'> & {
   message: string
   tstamp: string
   searchTerm?: string
+  /** Styled runs when the tool emitted SGR colour; `message` is the same
+   *  text with the escapes stripped. */
+  segments?: LogSegment[]
   /** When set, the bracketed POU prefix on the first line becomes a
    *  click-to-open button that calls {@link onCompileErrorClick}.
    *  Multi-line gcc-style snippet renders as plain pre-wrapped text
@@ -61,6 +64,35 @@ const HighlightedText = ({ text, searchTerm }: { text: string; searchTerm?: stri
   }
 
   return <>{parts}</>
+}
+
+/**
+ * The message body of a log line.
+ *
+ * Applies the tool's SGR colour when the line carried any, and otherwise
+ * renders exactly as before. Search highlighting runs inside each styled run
+ * so a match spanning a colour change still highlights correctly.
+ */
+const MessageBody = ({
+  message,
+  segments,
+  searchTerm,
+}: {
+  message: string
+  segments?: LogSegment[]
+  searchTerm?: string
+}) => {
+  if (!segments?.length) return <HighlightedText text={message} searchTerm={searchTerm} />
+
+  return (
+    <>
+      {segments.map((segment, index) => (
+        <span key={index} className={segment.className}>
+          <HighlightedText text={segment.text} searchTerm={searchTerm} />
+        </span>
+      ))}
+    </>
+  )
 }
 
 /**
@@ -118,6 +150,7 @@ const LogComponent = ({
   message,
   tstamp,
   searchTerm,
+  segments,
   compileError,
   onCompileErrorClick,
   ...rest
@@ -156,22 +189,13 @@ const LogComponent = ({
       {message && (
         <div className='group flex items-start gap-1'>
           <p className={cn('flex-1 whitespace-pre-wrap break-words font-mono font-normal', classForMessage)} {...rest}>
-            {level && tstamp ? (
+            {level && tstamp && (
               <>
                 [<HighlightedText text={tstamp} searchTerm={searchTerm} />
                 ]:{' '}
-                {compileError ? (
-                  <CompileErrorMessage
-                    message={message}
-                    searchTerm={searchTerm}
-                    compileError={compileError}
-                    onCompileErrorClick={onCompileErrorClick}
-                  />
-                ) : (
-                  <HighlightedText text={message} searchTerm={searchTerm} />
-                )}
               </>
-            ) : compileError ? (
+            )}
+            {compileError ? (
               <CompileErrorMessage
                 message={message}
                 searchTerm={searchTerm}
@@ -179,7 +203,7 @@ const LogComponent = ({
                 onCompileErrorClick={onCompileErrorClick}
               />
             ) : (
-              <HighlightedText text={message} searchTerm={searchTerm} />
+              <MessageBody message={message} segments={segments} searchTerm={searchTerm} />
             )}
           </p>
           <button
