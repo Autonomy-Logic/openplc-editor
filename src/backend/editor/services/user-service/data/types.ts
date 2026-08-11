@@ -11,8 +11,6 @@ board_manager:
       - https://raw.githubusercontent.com/VEA-SRL/IRUINO_Library/main/package_vea_index.json
       - https://github.com/CONTROLLINO-PLC/controllino_rp2/releases/download/global/package_controllino_rp2_index.json
       - https://downloads.arduino.cc/packages/package_zephyr_index.json
-output:
-  no_color: true
 `
 
 export const HISTORY_DATA = {

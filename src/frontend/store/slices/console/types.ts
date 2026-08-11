@@ -21,8 +21,19 @@ export type ConsoleState = {
   followRequestId: number
 }
 
+/** Per-write directives for {@link ConsoleActions.addLog}. */
+export type AddLogOptions = {
+  /**
+   * This line came from a carriage-return redraw, so it overwrites the
+   * in-place line above it when that line is still open (`transient`).
+   * A write directive rather than entity state — whether the line stays
+   * open afterwards is recorded on the entry itself.
+   */
+  redraw?: boolean
+}
+
 export type ConsoleActions = {
-  addLog: (log: LogObject) => void
+  addLog: (log: LogObject, options?: AddLogOptions) => void
   removeLog: (id: string) => void
   clearLogs: () => void
   setLevelFilter: (level: LogLevel, enabled: boolean) => void
