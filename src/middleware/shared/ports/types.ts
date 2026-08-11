@@ -1310,6 +1310,16 @@ export function isV3Logs(logs: PlcLogs): logs is string {
 // Console
 // ---------------------------------------------------------------------------
 
+/**
+ * A run of log text sharing one style, produced by the SGR colour a tool
+ * emitted (see `frontend/utils/terminal-output`). `className` is a Tailwind
+ * class string, absent when the run is unstyled.
+ */
+export interface LogSegment {
+  text: string
+  className?: string
+}
+
 export interface LogObject {
   id: string
   level?: 'debug' | 'info' | 'warning' | 'error'
@@ -1322,6 +1332,20 @@ export interface LogObject {
    * progress / informational logs leave this undefined.
    */
   compileError?: StructuredCompileError
+  /**
+   * Styled runs, set only when the source emitted SGR colour. `message`
+   * always holds the same text with the escapes stripped, so search,
+   * filtering and copy stay on clean text and only the renderer needs to
+   * know about colour.
+   */
+  segments?: LogSegment[]
+  /**
+   * True while this entry is an in-place line a terminal would still be
+   * overwriting — a progress redraw not yet terminated by a newline. The
+   * next redraw replaces it instead of appending; a newline clears the flag
+   * and the line becomes permanent.
+   */
+  transient?: boolean
 }
 
 // ---------------------------------------------------------------------------

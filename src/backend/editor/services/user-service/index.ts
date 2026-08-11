@@ -5,6 +5,7 @@ import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/pr
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
+import { reconcileArduinoCliConfig } from './data/arduino-cli-config'
 import { ARDUINO_DATA, HISTORY_DATA, SETTINGS_DATA } from './data/types'
 import type { ArduinoListOutput } from './types'
 
@@ -144,21 +145,24 @@ class UserService {
   }
 
   /**
-   * Ensure the Arduino CLI configuration file exists and carries every
-   * board-manager URL the editor ships with.
+   * Create the Arduino CLI configuration file, or bring an existing one up to
+   * date with what the editor ships.
    *
-   * This used to write with `{ flag: 'wx' }` and swallow `EEXIST`, which
-   * made the file effectively write-once: any URL added to `ARDUINO_DATA`
-   * after a user's first launch never reached them, and the only fix was
-   * deleting the file by hand.  Now missing URLs are merged into the
-   * existing config on every start.
+   * This used to write with `{ flag: 'wx' }` and swallow `EEXIST`, which made
+   * the file effectively write-once: an install that had launched an older
+   * build kept a stale config forever, and the only fix was deleting it by
+   * hand. Two things went stale that way — board-manager URLs added to
+   * `ARDUINO_DATA` never reached existing users, and `output.no_color` stayed
+   * on, which would keep the console monochrome even though it renders SGR
+   * colour itself now.
    *
    * Merge, never overwrite: users add their own indexes and change other
    * settings in this file, and clobbering it would silently discard them.
-   * Anything already present is left untouched, including ordering.
+   * See `reconcileArduinoCliConfig` for the (deliberately narrow) rules.
    */
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
+
     try {
       await writeFile(pathToArduinoCliConfig, UserService.ARDUINO_FILE_CONTENT, { flag: 'wx' })
       return
@@ -169,30 +173,22 @@ class UserService {
       }
     }
 
-    // File already exists — reconcile its `additional_urls` with ours.
+    // File already exists — reconcile it with what we ship.
     try {
       const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
-      const shipped = UserService.ARDUINO_FILE_CONTENT.match(/^\s*-\s*(https?:\/\/\S+)\s*$/gm) ?? []
-      const missing = shipped.map((line) => line.trim().replace(/^-\s*/, '')).filter((url) => !existing.includes(url))
+      const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)
+      if (!updated) return
 
-      if (missing.length === 0) return
-
-      // Splice the missing entries in under the existing `additional_urls:`
-      // key, matching its indentation so the YAML stays valid.
-      const anchor = existing.match(/^(\s*)additional_urls:\s*$/m)
-      if (!anchor) {
-        console.warn(
-          `Arduino CLI config at ${pathToArduinoCliConfig} has no 'additional_urls' key. ` +
-            `Leaving it alone; missing board indexes: ${missing.join(', ')}`,
-        )
-        return
-      }
-      const firstEntry = existing.match(/^(\s*)-\s*https?:\/\//m)
-      const indent = firstEntry ? firstEntry[1] : `${anchor[1]}    `
-      const updated = existing.replace(anchor[0], `${anchor[0]}\n${missing.map((u) => `${indent}- ${u}`).join('\n')}`)
-
-      await writeFile(pathToArduinoCliConfig, updated, 'utf-8')
-      console.warn(`Added ${missing.length} missing board manager URL(s) to ${pathToArduinoCliConfig}.`)
+      // Write via a sibling temp file and rename over the original. This runs
+      // on every start against a file the user owns and arduino-cli must be
+      // able to parse; a crash midway through a direct write would leave it
+      // truncated and break every build until the user deleted it by hand.
+      // `rename` within the same directory is atomic, so the config is either
+      // the old one or the new one, never half of each.
+      const tempPath = `${pathToArduinoCliConfig}.tmp`
+      await writeFile(tempPath, updated, 'utf-8')
+      await rename(tempPath, pathToArduinoCliConfig)
+      console.warn(`Updated Arduino CLI config at ${pathToArduinoCliConfig}.`)
     } catch (err) {
       console.error(`Error updating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)
     }
