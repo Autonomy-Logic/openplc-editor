@@ -5,6 +5,7 @@ import { renderHook } from '@testing-library/react'
 // rule Vitest's `vi.hoisted` was originally written against. Spelled out
 // long-hand (no Vitest API) so the suite runs under plain Jest.
 const mockSetPlcRuntimeStatus = jest.fn()
+const mockSetPlcSwitchPosition = jest.fn()
 const mockSetTimingStats = jest.fn()
 const mockSetEthercatStatus = jest.fn()
 const mockSetRuntimeJwtToken = jest.fn()
@@ -28,6 +29,7 @@ const mockState: Record<string, unknown> = {
   workspace: { plcLogs: '', plcLogsLastId: null },
   deviceActions: {
     setPlcRuntimeStatus: mockSetPlcRuntimeStatus,
+    setPlcSwitchPosition: mockSetPlcSwitchPosition,
     setTimingStats: mockSetTimingStats,
     setEthercatStatus: mockSetEthercatStatus,
     setRuntimeJwtToken: mockSetRuntimeJwtToken,

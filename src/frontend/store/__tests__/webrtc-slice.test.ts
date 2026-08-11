@@ -28,7 +28,7 @@ describe('createWebRTCSlice', () => {
       expect(session.status).toBe('disconnected')
       expect(session.error).toBeNull()
       expect(session.reconnectAttempt).toBe(0)
-      expect(session.debugTransport).toBe('http')
+      expect(session.debugChannelOpen).toBe(false)
     })
   })
 
@@ -128,16 +128,16 @@ describe('createWebRTCSlice', () => {
     })
   })
 
-  describe('setDebugTransport', () => {
+  describe('setDebugChannelOpen', () => {
     it('switches transport to webrtc', () => {
-      store.getState().webrtcActions.setDebugTransport('webrtc')
-      expect(store.getState().session.debugTransport).toBe('webrtc')
+      store.getState().webrtcActions.setDebugChannelOpen(true)
+      expect(store.getState().session.debugChannelOpen).toBe(true)
     })
 
     it('switches transport back to http', () => {
-      store.getState().webrtcActions.setDebugTransport('webrtc')
-      store.getState().webrtcActions.setDebugTransport('http')
-      expect(store.getState().session.debugTransport).toBe('http')
+      store.getState().webrtcActions.setDebugChannelOpen(true)
+      store.getState().webrtcActions.setDebugChannelOpen(false)
+      expect(store.getState().session.debugChannelOpen).toBe(false)
     })
   })
 
@@ -167,7 +167,7 @@ describe('createWebRTCSlice', () => {
     it('does not modify sessionId, reconnectAttempt, or debugTransport', () => {
       store.getState().webrtcActions.setSessionId('existing-session')
       store.getState().webrtcActions.setReconnectAttempt(2)
-      store.getState().webrtcActions.setDebugTransport('webrtc')
+      store.getState().webrtcActions.setDebugChannelOpen(true)
 
       store.getState().webrtcActions.startSession({
         deviceId: 'dev-1',
@@ -178,7 +178,7 @@ describe('createWebRTCSlice', () => {
       const { session } = store.getState()
       expect(session.sessionId).toBe('existing-session')
       expect(session.reconnectAttempt).toBe(2)
-      expect(session.debugTransport).toBe('webrtc')
+      expect(session.debugChannelOpen).toBe(true)
     })
   })
 
@@ -193,7 +193,7 @@ describe('createWebRTCSlice', () => {
       webrtcActions.setStatus('connected')
       webrtcActions.setError('some error')
       webrtcActions.setReconnectAttempt(3)
-      webrtcActions.setDebugTransport('webrtc')
+      webrtcActions.setDebugChannelOpen(true)
 
       webrtcActions.endSession()
 
@@ -203,7 +203,7 @@ describe('createWebRTCSlice', () => {
       expect(session.status).toBe('disconnected')
       expect(session.error).toBeNull()
       expect(session.reconnectAttempt).toBe(0)
-      expect(session.debugTransport).toBe('http')
+      expect(session.debugChannelOpen).toBe(false)
     })
 
     it('preserves deviceId and deviceName after ending session', () => {
@@ -230,7 +230,7 @@ describe('createWebRTCSlice', () => {
       webrtcActions.setStatus('connected')
       webrtcActions.setError('timeout')
       webrtcActions.setReconnectAttempt(5)
-      webrtcActions.setDebugTransport('webrtc')
+      webrtcActions.setDebugChannelOpen(true)
 
       webrtcActions.reset()
 
@@ -242,7 +242,7 @@ describe('createWebRTCSlice', () => {
       expect(session.status).toBe('disconnected')
       expect(session.error).toBeNull()
       expect(session.reconnectAttempt).toBe(0)
-      expect(session.debugTransport).toBe('http')
+      expect(session.debugChannelOpen).toBe(false)
     })
   })
 })

@@ -39,8 +39,49 @@ extern uint32_t scan_counter;
 void runtime_bind_located_vars();
 void runtime_discover_tasks();
 
+// Establish the initial run/stop state. Call once from setup() AFTER
+// hardwareInit(), so the HAL has already configured its switch pin. Reads
+// the mode switch: a board powered up with the switch in STOP never
+// executes a scan.
+void runtime_init_plc_state();
+
 // Per-cycle helpers (call once per scan cycle from scheduler()/loop()).
 void runtime_plc_cycle();
+
+// ---------------------------------------------------------------------------
+// Run/stop control surface.
+//
+// State is derived every cycle from the mode switch (hardwareStateSwitch(),
+// PLC_SWITCH_RUN when no HAL implements it) and a software-request latch set
+// through runtime_request_plc_state():
+//
+//   switch   software request   state
+//   ------   ----------------   -----
+//   RUN      run (default)      RUNNING     <- every board with no switch
+//   RUN      stop               STOPPED
+//   STOP     (ignored)          STOPPED     <- hardware is authoritative
+//
+// A STOP -> RUN edge on the switch resets the software request to `run`, so
+// a physical flip to RUN always puts the PLC in RUN -- otherwise a
+// software-stopped device would sit dead in the RUN position with no local
+// way to recover.
+//
+// runtime_get_plc_state() is declared in openplc.h because HALs call it to
+// drive a status LED.
+// ---------------------------------------------------------------------------
+
+// Result codes for runtime_request_plc_state().
+#define PLC_CTRL_OK                   0
+#define PLC_CTRL_REFUSED_SWITCH_STOP  1
+#define PLC_CTRL_INVALID              2
+
+// Last value read from hardwareStateSwitch() (PLC_SWITCH_*).
+uint8_t runtime_get_switch_position(void);
+
+// Ask for PLC_STATE_RUNNING or PLC_STATE_STOPPED. A request to run while the
+// mode switch reads STOP is REFUSED, not queued -- the caller reports that
+// to the user rather than retrying. Returns PLC_CTRL_*.
+uint8_t runtime_request_plc_state(uint8_t desired_state);
 
 // Re-impose forced located variables' values onto their raw storage. Call
 // after any code path that writes the image pointers directly (HAL input

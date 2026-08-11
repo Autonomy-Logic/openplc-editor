@@ -34,13 +34,14 @@ type GetWriteBackState = () => SharedRootState
 
 const pendingWriteBacks = new Map<string, { language: FlowLanguage; timer: ReturnType<typeof setTimeout> }>()
 
-function runWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): void {
+/** @returns `false` when the flow is invalid and `pou.body.value` is left stale. */
+function runWriteBack(getState: GetWriteBackState, pouName: string, language: FlowLanguage): boolean {
   const state = getState()
   const flow =
     language === 'ld'
       ? state.ladderFlows.find((f) => f.name === pouName)
       : state.fbdFlows.find((f) => f.name === pouName)
-  if (!flow?.updated) return
+  if (!flow?.updated) return true
 
   // Validate with zod but persist the raw object (minus the transient
   // `updated` flag). Using the parsed result would silently strip every
@@ -48,13 +49,20 @@ function runWriteBack(getState: GetWriteBackState, pouName: string, language: Fl
   // byte-drifting the serialized POU vs. the loaded disk copy — phantom
   // "Modified" entries in Source Control (see DOPE-477).
   const schema = language === 'ld' ? zodLadderFlowSchema : zodFBDFlowSchema
-  if (!schema.safeParse(flow).success) return
+  const validation = schema.safeParse(flow)
+  if (!validation.success) {
+    console.warn(`[flow-writeback] "${pouName}" (${language}) failed validation — body left stale`, {
+      issues: validation.error.issues,
+    })
+    return false
+  }
 
   const { updated: _updated, ...flowBody } = flow
   state.projectActions.updatePou({ name: pouName, content: { language, value: flowBody } })
 
   const flowActions = language === 'ld' ? state.ladderFlowActions : state.fbdFlowActions
   flowActions.setFlowUpdated({ editorName: pouName, updated: false })
+  return true
 }
 
 /**
@@ -78,14 +86,36 @@ export function scheduleFlowWriteBack(getState: GetWriteBackState, pouName: stri
   pendingWriteBacks.set(pouName, { language, timer })
 }
 
-/** Run pending write-backs immediately — all of them, or a single POU's. */
-export function flushFlowWriteBacks(getState: GetWriteBackState, pouName?: string): void {
-  for (const [name, pending] of [...pendingWriteBacks]) {
-    if (pouName !== undefined && name !== pouName) continue
-    clearTimeout(pending.timer)
-    pendingWriteBacks.delete(name)
-    runWriteBack(getState, name, pending.language)
+/**
+ * Run pending write-backs immediately — all of them, or a single POU's.
+ *
+ * Every `updated` flow is written back, not just the ones with a live timer:
+ * a timer that already fired and failed validation leaves no pending entry
+ * behind, so a pending-only sweep would report success for a POU whose body
+ * is still stale (DOPE-495).
+ *
+ * @returns names of POUs whose body could not be updated.
+ */
+export function flushFlowWriteBacks(getState: GetWriteBackState, pouName?: string): readonly string[] {
+  cancelFlowWriteBacks(pouName)
+
+  const state = getState()
+  // Deleting a POU leaves its flow behind, so an invalid one would be reported
+  // stale on every future save — blocking saves and builds for good. It has no
+  // body left to write back, so it isn't a write-back failure.
+  const livePous = new Set(state.project.data.pous.map((pou) => pou.name))
+  const failed: string[] = []
+  for (const flow of state.ladderFlows) {
+    if (pouName !== undefined && flow.name !== pouName) continue
+    if (!livePous.has(flow.name)) continue
+    if (flow.updated && !runWriteBack(getState, flow.name, 'ld')) failed.push(flow.name)
   }
+  for (const flow of state.fbdFlows) {
+    if (pouName !== undefined && flow.name !== pouName) continue
+    if (!livePous.has(flow.name)) continue
+    if (flow.updated && !runWriteBack(getState, flow.name, 'fbd')) failed.push(flow.name)
+  }
+  return failed
 }
 
 /** Drop pending write-backs without running them (project open). */

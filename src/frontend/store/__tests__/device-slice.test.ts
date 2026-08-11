@@ -155,6 +155,236 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceActions).toBeDefined()
       expect(typeof store.getState().deviceActions.setAvailableOptions).toBe('function')
     })
+
+    it('has a disconnected serial connection', () => {
+      const store = makeStore()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // serial connection (D72 persistent link)
+  // -----------------------------------------------------------------------
+  describe('serial connection', () => {
+    it('setDeviceConnectionStatus updates status and port', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connecting',
+        port: 'COM5',
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus leaves the port unchanged when omitted', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('connected')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connected',
+        port: 'COM5',
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus can explicitly clear the port with null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.setDeviceConnectionStatus('error', null)
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'error',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('setDeviceConnectionStatus records both media when the manager reports them', () => {
+      // What `useDeviceConnectionMonitor` actually forwards. `debugTransport` is a
+      // separate fact from `transport`: the debug poll sizes its batches to the
+      // debug medium, and a v4 session (control over REST, debug over a WebSocket)
+      // has no control transport at all.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '192.168.0.9', null, 'websocket')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connected',
+        port: '192.168.0.9',
+        transport: null,
+        debugTransport: 'websocket',
+      })
+    })
+
+    it('setDeviceConnectionStatus records a shared medium on both slots', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      expect(store.getState().deviceConnection).toMatchObject({ transport: 'rtu', debugTransport: 'rtu' })
+    })
+
+    it('setDeviceConnectionStatus leaves the media untouched when they are omitted', () => {
+      // A status-only update (the optimistic 'connecting') must not wipe what the
+      // manager last reported.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu', 'rtu')
+      store.getState().deviceActions.setDeviceConnectionStatus('connecting')
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'connecting',
+        port: '/dev/ttyACM0',
+        transport: 'rtu',
+        debugTransport: 'rtu',
+      })
+    })
+
+    it('clearDeviceConnection resets to disconnected/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceConnection()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
+    })
+
+    it('clearDeviceConnection leaves licensing alone — the link and the entitlement are separate facts', () => {
+      // A link that drops and comes back does not change what the device is
+      // entitled to run. Clearing the licence here would make the badge blank on
+      // every reconnect and force a needless round trip to learn nothing new.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'licensed', how: 'already-stored' },
+      })
+      store.getState().deviceActions.clearDeviceConnection()
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // VPP licensing
+  // -----------------------------------------------------------------------
+  describe('device licensing', () => {
+    const LICENSED = {
+      deviceId: '659a3520540f803625ddc34081e893d3',
+      outcome: { state: 'licensed' as const, how: 'already-stored' as const },
+    }
+
+    it('starts idle with nothing known', () => {
+      // The state every non-licensable board stays in: nothing runs, so nothing is
+      // known, and the UI shows no licensing affordance at all.
+      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('startDeviceLicenseCheck marks the call in flight', () => {
+      const store = makeStore()
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null })
+    })
+
+    it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
+      // Blanking would make the badge flicker Licensed -> nothing -> Licensed on
+      // every refresh, and a refresh that failed would leave the UI knowing LESS
+      // than before it asked. `phase` is what says "asking".
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED })
+    })
+
+    it('setDeviceLicenseReport lands the report and settles the phase', () => {
+      const store = makeStore()
+      store.getState().deviceActions.startDeviceLicenseCheck()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED })
+    })
+
+    it('preserves the outcome union verbatim, including the entitlement distinction', () => {
+      // The whole point of the union surviving to the store: the UI branches on
+      // `entitlementChecked` to decide between offering a purchase and offering a
+      // re-check. A store that flattened this to a boolean would lose it.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: false },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'unlicensed',
+        entitlementChecked: false,
+      })
+
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true, backendReason: 'no active subscription' },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'unlicensed',
+        entitlementChecked: true,
+        backendReason: 'no active subscription',
+      })
+    })
+
+    it('keeps a check-failed outcome distinct from unlicensed', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport({
+        outcome: { state: 'check-failed', error: 'Activation request failed: 429' },
+      })
+      expect(store.getState().deviceLicense.report?.outcome).toEqual({
+        state: 'check-failed',
+        error: 'Activation request failed: 429',
+      })
+      expect(store.getState().deviceLicense.report?.deviceId).toBeUndefined()
+    })
+
+    it('clearDeviceLicense resets to idle/null', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.clearDeviceLicense()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
+      // setDeviceBoard already wipes everything else that is board-specific
+      // (platform options, the pin-table row, vendor-screen data). A licence
+      // report is just as board-specific: it was verified against the previous
+      // board's deviceId and its VPP's productId. Kept across a switch, the badge
+      // asserts possession for hardware that is no longer selected, and the buy
+      // link is built from the NEW package id and the OLD device id.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
+
+    it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
+      // The device screen re-sets the board on several paths; only an actual
+      // change invalidates the licence.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+    })
+
+    it('clearDeviceDefinitions clears licensing — a new project may select another board', () => {
+      // A "Licensed" badge carried across a project close would be an assertion
+      // about hardware that is not even connected.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -173,7 +403,7 @@ describe('createDeviceSlice', () => {
 
     it('sets available communication ports', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM3', address: '/dev/ttyUSB0' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       expect(store.getState().deviceAvailableOptions.availableCommunicationPorts).toEqual(ports)
     })
@@ -185,14 +415,14 @@ describe('createDeviceSlice', () => {
       ])
       store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
       store.getState().deviceActions.setAvailableOptions({
-        availableCommunicationPorts: [{ name: 'COM1', address: '/dev/tty1' }],
+        availableCommunicationPorts: [{ address: '/dev/tty1' }],
       })
       expect(store.getState().deviceAvailableOptions.availableBoards.size).toBe(1)
     })
 
     it('does not overwrite ports when only boards given', () => {
       const store = makeStore()
-      const ports: CommunicationPort[] = [{ name: 'COM1', address: '/dev/tty1' }]
+      const ports: CommunicationPort[] = [{ address: '/dev/tty1' }]
       store.getState().deviceActions.setAvailableOptions({ availableCommunicationPorts: ports })
       store.getState().deviceActions.setAvailableOptions({
         availableBoards: new Map<string, BoardInfo>(),
@@ -303,6 +533,18 @@ describe('createDeviceSlice', () => {
       expect(rc.includeTimingStatsInPolling).toBe(false)
       expect(rc.ethercatStatus).toBeNull()
       expect(rc.includeEthercatStatsInPolling).toBe(false)
+    })
+
+    it('resets the serial connection', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceConnectionStatus('connected', 'COM5')
+      store.getState().deviceActions.clearDeviceDefinitions()
+      expect(store.getState().deviceConnection).toEqual({
+        status: 'disconnected',
+        port: null,
+        transport: null,
+        debugTransport: null,
+      })
     })
   })
 
@@ -1252,6 +1494,33 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setPlcRuntimeStatus('RUNNING')
       store.getState().deviceActions.setPlcRuntimeStatus(null)
       expect(store.getState().runtimeConnection.plcStatus).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setPlcSwitchPosition
+  // -----------------------------------------------------------------------
+  describe('setPlcSwitchPosition', () => {
+    it('defaults to null — unknown, not "no gating"', () => {
+      // The start pre-check must be able to tell "the switch says RUN" from "this
+      // target has no switch / firmware too old to report one". Only 'stop' blocks
+      // a start; null must not, or a board without a switch is un-startable.
+      expect(makeStore().getState().runtimeConnection.switchPosition).toBeNull()
+    })
+
+    it('records the switch reading', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('stop')
+      store.getState().deviceActions.setPlcSwitchPosition('run')
+      expect(store.getState().runtimeConnection.switchPosition).toBe('run')
+    })
+
+    it('clears back to null on disconnect', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setPlcSwitchPosition('stop')
+      store.getState().deviceActions.setPlcSwitchPosition(null)
+      expect(store.getState().runtimeConnection.switchPosition).toBeNull()
     })
   })
 

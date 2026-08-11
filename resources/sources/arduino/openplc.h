@@ -74,6 +74,20 @@ extern IEC_ULINT *lint_memory[MAX_MEMORY_LWORD];
 
 #endif
 
+/*********************/
+/*  Run/stop state   */
+/*********************/
+
+// Mode-switch positions reported by hardwareStateSwitch().
+#define PLC_SWITCH_STOP     0
+#define PLC_SWITCH_RUN      1
+
+// Externally visible runtime states, as reported by runtime_get_plc_state()
+// and over Modbus FC 0x49.
+#define PLC_STATE_STOPPED   0
+#define PLC_STATE_RUNNING   1
+#define PLC_STATE_ERROR     2
+
 //Hardware Layer (implemented in arduino.cpp HAL file, compiled as extern "C")
 #ifdef __cplusplus
 extern "C" {
@@ -81,6 +95,58 @@ extern "C" {
 void hardwareInit();
 void updateInputBuffers();
 void updateOutputBuffers();
+
+/* ---- Optional: physical mode switch ------------------------------------
+ * Weak default in arduino_runtime_glue.cpp returns PLC_SWITCH_RUN, so a HAL
+ * that does not define this behaves exactly as before this interface
+ * existed: the runtime boots into RUNNING and the editor has full software
+ * control.
+ *
+ * Override with a strong extern "C" definition in the HAL .cpp -- the same
+ * mechanism the P1AM HAL already uses for strucpp::iec_runtime_fault.
+ *
+ * Called once per scan cycle, in every state, from the scan path. MUST
+ * return quickly and MUST NOT block. HOW it does so is the HAL's decision:
+ * a GPIO is cheap enough to read synchronously, while a switch behind a
+ * slow bus (I2C expander, fieldbus backplane) should be sampled elsewhere
+ * and returned here from a cached value. The runtime never polls on the
+ * HAL's behalf and never imposes a sampling period.
+ * ---------------------------------------------------------------------- */
+uint8_t hardwareStateSwitch(void);
+
+/* ---- Optional: state indication ----------------------------------------
+ * There is no indication callback. The runtime holds the state; a HAL with
+ * a status LED reads it inside updateOutputBuffers() (which the runtime
+ * calls every cycle in every state, so the LED is correct from the first
+ * cycle even on a board that boots into STOP) and drives its own pin. A
+ * HAL with no LED reads nothing and the runtime never knows the difference.
+ * ---------------------------------------------------------------------- */
+uint8_t runtime_get_plc_state(void);
+
+/* ---- Raw I/O ops, for LICENSABLE VPP targets only ----------------------
+ * Two mutually exclusive shapes exist, and there is deliberately NO weak
+ * fallback for the gated wrappers above:
+ *
+ *   - Licensable VPP HAL: defines ONLY these raw ops. The gated
+ *     updateInputBuffers / updateOutputBuffers come from inside the closed
+ *     license-core .a, which asks license_gate_actuation_allowed() and then
+ *     calls hal_read_inputs / hal_write_outputs — or hal_disable_all_outputs
+ *     once the demo window has expired.
+ *
+ *   - Every other HAL (the bundled resources/sources/hal/*.cpp, and any
+ *     unlicensed VPP): defines updateInput/OutputBuffers itself and leaves
+ *     these raw ops undeclared-but-unused. No gate is involved.
+ *
+ * THE CONSEQUENCE IS THE POINT: dropping the license-core .a from a licensable
+ * VPP does not silently degrade to unenforced I/O — the firmware fails to LINK,
+ * with undefined updateInputBuffers / updateOutputBuffers. The only weak
+ * defaults shipped are license_gate_weak.cpp (gate query -> UNSUPPORTED,
+ * actuation allowed) and license_store_weak.cpp (blob store -> UNSUPPORTED),
+ * which keep NON-licensable boards linking; neither provides these wrappers.
+ * ---------------------------------------------------------------------- */
+void hal_read_inputs(void);
+void hal_write_outputs(void);
+void hal_disable_all_outputs(void);
 #ifdef __cplusplus
 }
 #endif

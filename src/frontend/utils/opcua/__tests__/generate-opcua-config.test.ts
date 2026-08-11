@@ -459,6 +459,85 @@ describe('generateOpcUaConfig', () => {
     expect(parsed[0].config.address_space.arrays.length).toBe(0)
   })
 
+  // Regression: openplc-editor#745 — an ARRAY OF <user-defined type> has
+  // no leaf of its own in the debug map, and the variable picker only
+  // pre-expands the elements into `fields` for small 1-D arrays. A bigger
+  // (or multi-dimensional) UDT array therefore arrived here as a bare
+  // `array` node and failed the whole build with "Cannot resolve OPC-UA
+  // array address" on compile+download.
+  it('publishes an array of a UDT as a structure even without stored fields', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [
+      makeNode({
+        nodeType: 'array',
+        variablePath: 'TANKS',
+        variableType: 'ARRAY[1..2] OF TANK',
+        elementType: 'TANK',
+        arrayLength: 2,
+        fields: [], // picker skipped expansion → no fields saved
+      }),
+    ]
+    const json = generateOpcUaConfig(
+      [makePLCServer(cfg)],
+      debugMapJson([
+        { path: 'INSTANCE0.TANKS[1].LEVEL', type: 'INT', arr: 0, elem: 20 },
+        { path: 'INSTANCE0.TANKS[1].FLOW', type: 'DINT', arr: 0, elem: 21, size: 4 },
+        { path: 'INSTANCE0.TANKS[2].LEVEL', type: 'INT', arr: 0, elem: 22 },
+        { path: 'INSTANCE0.TANKS[2].FLOW', type: 'DINT', arr: 0, elem: 23, size: 4 },
+      ]),
+      instances,
+    )!
+    const parsed = JSON.parse(json) as Array<{
+      config: {
+        address_space: {
+          arrays: unknown[]
+          structures: Array<{
+            node_id: string
+            fields: Array<{
+              name: string
+              fields?: Array<{ name: string; datatype: string; size: number; arr: number; elem: number }>
+            }>
+          }>
+        }
+      }
+    }>
+    const { arrays, structures } = parsed[0].config.address_space
+    expect(arrays.length).toBe(0)
+    expect(structures.length).toBe(1)
+    expect(structures[0].node_id).toBe('ns=1;s=MY_VAR')
+    expect(structures[0].fields.map((f) => f.name)).toEqual(['[1]', '[2]'])
+    expect(structures[0].fields[0].fields).toEqual([
+      {
+        name: 'LEVEL',
+        datatype: 'INT',
+        size: 2,
+        arr: 0,
+        elem: 20,
+        permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
+      },
+      {
+        name: 'FLOW',
+        datatype: 'DINT',
+        size: 4,
+        arr: 0,
+        elem: 21,
+        permissions: { viewer: 'r', operator: 'rw', engineer: 'rw' },
+      },
+    ])
+  })
+
+  it('still fails a bare array node whose elements are nowhere in the debug map', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'GHOST_ARR', arrayLength: 2 })]
+    expect(() =>
+      generateOpcUaConfig(
+        [makePLCServer(cfg)],
+        debugMapJson([{ path: 'INSTANCE0.SOMETHING_ELSE', type: 'INT', arr: 0, elem: 0 }]),
+        instances,
+      ),
+    ).toThrow('Cannot resolve OPC-UA array address')
+  })
+
   it('collects multiple OpcUaConfigErrors and throws combined', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [
@@ -562,6 +641,20 @@ describe('validateOpcUaConfig', () => {
     cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'GHOST_ARR', arrayLength: 3 })]
     const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
     expect(result.valid).toBe(false)
+  })
+
+  it('a bare array node whose elements are a UDT validates clean', () => {
+    const cfg = baseServerConfig()
+    cfg.addressSpace.nodes = [makeNode({ nodeType: 'array', variablePath: 'TANKS', arrayLength: 2 })]
+    const result = validateOpcUaConfig(
+      cfg,
+      debugMapJson([
+        { path: 'INSTANCE0.TANKS[1].LEVEL', type: 'INT', arr: 0, elem: 20 },
+        { path: 'INSTANCE0.TANKS[2].LEVEL', type: 'INT', arr: 0, elem: 21 },
+      ]),
+      instances,
+    )
+    expect(result).toEqual({ valid: true, errors: [] })
   })
 
   it('array-with-fields field-level miss is NOT a validation error', () => {

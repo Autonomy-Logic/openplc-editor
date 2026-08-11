@@ -1,6 +1,27 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
-import type { Md5ProbeResult } from '@root/backend/shared/debug/types'
+import {
+  buildGetBoardIdRequest,
+  buildGetStatusRequest,
+  buildPlcSetStateRequest,
+  buildReadLicenseRequest,
+  buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
+  parseGetStatusResponse,
+  parsePlcSetStateResponse,
+  parseReadLicenseResponse,
+  parseWriteLicenseResponse,
+} from '@root/backend/shared/debug/modbus-pdu'
+import type {
+  DebugBoardIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugStatusResult,
+  DeviceModbusTransport,
+  Md5ProbeResult,
+  PlcControlResult,
+} from '@root/backend/shared/debug/types'
+import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { detectTargetEndian } from '@root/frontend/utils/endian'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { SerialPort } from 'serialport'
@@ -16,13 +37,37 @@ interface ModbusRtuClientOptions {
   serialPort?: any // Pre-built serial port (e.g. VirtualSerialPort for simulator)
 }
 
+interface SendRequestOptions {
+  /**
+   * Optional size-aware end-of-frame predictor. Given the raw accumulated
+   * response buffer (the on-the-wire RTU frame, BEFORE the 6-byte TCP-compat
+   * padding `sendRequestImpl` prepends), returns the total number of bytes the
+   * complete frame is expected to have, or `null` when not enough bytes have
+   * arrived yet to make that call.
+   *
+   * WHY THIS EXISTS. The default framing declares the frame complete after
+   * `FRAME_COMPLETE_TIMEOUT_MS` of silence, which is only sound while a frame
+   * arrives faster than the gap it is measured against. A 98-byte license blob at
+   * 9600 baud takes ~102 ms to clock out, and the serial layer delivers it in
+   * several chunks whose inter-chunk gaps exceed 10 ms — so the idle timeout fires
+   * mid-frame and the response is TRUNCATED. The truncation is silent: the parser
+   * sees a short buffer and reports a malformed license, which points the blame at
+   * the board.
+   *
+   * With a predictor, the request completes as soon as the declared length has
+   * fully arrived, and a known-incomplete frame keeps waiting instead of being cut
+   * off. Callers that omit it fall back to the unchanged idle-timeout framing.
+   */
+  expectedTotalLength?: (raw: Buffer) => number | null
+}
+
 const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
 
 const FRAME_COMPLETE_TIMEOUT_MS = 10
 
-export class ModbusRtuClient {
+export class ModbusRtuClient implements DeviceModbusTransport {
   private port: string
   private baudRate: number
   private slaveId: number
@@ -162,16 +207,16 @@ export class ModbusRtuClient {
 
   private sendRequestMutex: Promise<void> = Promise.resolve()
 
-  private async sendRequest(request: Buffer): Promise<Buffer> {
+  private async sendRequest(request: Buffer, opts?: SendRequestOptions): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       this.sendRequestMutex = this.sendRequestMutex.then(
-        () => this.sendRequestImpl(request).then(resolve, reject),
-        () => this.sendRequestImpl(request).then(resolve, reject),
+        () => this.sendRequestImpl(request, opts).then(resolve, reject),
+        () => this.sendRequestImpl(request, opts).then(resolve, reject),
       )
     })
   }
 
-  private async sendRequestImpl(request: Buffer): Promise<Buffer> {
+  private async sendRequestImpl(request: Buffer, opts?: SendRequestOptions): Promise<Buffer> {
     if (!this.serialPort || !this.serialPort.isOpen) {
       throw new Error('Serial port is not open')
     }
@@ -196,35 +241,63 @@ export class ModbusRtuClient {
         reject(new Error('Request timeout'))
       }, this.timeout)
 
+      // Strip the 2-byte CRC trailer, prepend the 6-byte TCP-compat padding the
+      // rest of the client expects, and resolve. Shared by both the size-aware
+      // completion and the idle-timeout fallback so they frame identically.
+      const complete = () => {
+        clearTimeout(timeoutHandle)
+        cleanup()
+
+        if (responseBuffer.length < 5) {
+          reject(new Error('Response too short'))
+          return
+        }
+
+        const receivedCrc = responseBuffer.readUInt16BE(responseBuffer.length - 2)
+        const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
+
+        if (receivedCrc !== calculatedCrc) {
+          // OpenPLC debugger ignores CRC errors — mismatch is non-fatal
+        }
+
+        const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
+        const paddedResponse = Buffer.alloc(6 + responseWithoutCrc.length)
+        paddedResponse.fill(0, 0, 6)
+        responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
+
+        resolve(paddedResponse)
+      }
+
       const onData = (data: Buffer) => {
         responseBuffer = Buffer.concat([responseBuffer, data] as unknown as Uint8Array[])
 
+        // Size-aware framing (opt-in): once the caller can predict the full frame
+        // length, complete as soon as it has fully arrived, and while the frame is
+        // known-incomplete keep waiting for the remaining bytes rather than letting
+        // the idle timeout truncate a multi-chunk response.
+        if (opts?.expectedTotalLength) {
+          const expected = opts.expectedTotalLength(responseBuffer)
+          if (expected !== null) {
+            if (frameCompleteTimeout) {
+              clearTimeout(frameCompleteTimeout)
+              frameCompleteTimeout = null
+            }
+            if (responseBuffer.length >= expected) {
+              complete()
+            }
+            return
+          }
+        }
+
+        // Fallback: idle-timeout end-of-frame detection (unchanged default for
+        // callers that pass no predictor, or before the predictor has enough
+        // bytes to decide).
         if (frameCompleteTimeout) {
           clearTimeout(frameCompleteTimeout)
         }
 
         frameCompleteTimeout = setTimeout(() => {
-          clearTimeout(timeoutHandle)
-          cleanup()
-
-          if (responseBuffer.length < 5) {
-            reject(new Error('Response too short'))
-            return
-          }
-
-          const receivedCrc = responseBuffer.readUInt16BE(responseBuffer.length - 2)
-          const calculatedCrc = this.calculateCrc(responseBuffer.slice(0, responseBuffer.length - 2))
-
-          if (receivedCrc !== calculatedCrc) {
-            // OpenPLC debugger ignores CRC errors — mismatch is non-fatal
-          }
-
-          const responseWithoutCrc = responseBuffer.slice(0, responseBuffer.length - 2)
-          const paddedResponse = Buffer.alloc(6 + responseWithoutCrc.length)
-          paddedResponse.fill(0, 0, 6)
-          responseWithoutCrc.copy(paddedResponse as unknown as Uint8Array, 6)
-
-          resolve(paddedResponse)
+          complete()
         }, FRAME_COMPLETE_TIMEOUT_MS)
       }
 
@@ -333,7 +406,19 @@ export class ModbusRtuClient {
       }
 
       const request = this.assembleRequest(functionCode, data)
-      const response = await this.sendRequest(request)
+      const response = await this.sendRequest(request, {
+        // Raw RTU frame (SUCCESS): id@0, FC@1, STATUS@2, lastIndex u16 @3..4,
+        // tick u32 @5..8, responseSize u16BE @9..10, data @11.., crc 2 -> total =
+        // 11 + responseSize + 2 = 13 + responseSize. A non-SUCCESS response is
+        // [id][FC][STATUS][crc:2] = 5 bytes, so key off STATUS. (Mirrors the C
+        // runtime's debugGetTraceList: mb_frame_len = 11 + responseSize, else 3.)
+        expectedTotalLength: (raw) => {
+          if (raw.length < 3) return null
+          if (raw.readUInt8(2) !== (ModbusDebugResponse.SUCCESS as number)) return 5
+          if (raw.length < 11) return null
+          return 13 + raw.readUInt16BE(9)
+        },
+      })
 
       if (response.length < 9) {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
@@ -447,6 +532,147 @@ export class ModbusRtuClient {
       }
 
       return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // On-device license storage (FC 0x49/0x4A). Response offsets account for the
+  // 6-byte TCP-compat padding sendRequestImpl prepends: FC@7, status@8, payload@9+.
+  // The wire `len` is BIG-ENDIAN (matches the other FCs) while the blob content
+  // it frames is little-endian — do not confuse the two.
+  // -------------------------------------------------------------------------
+
+  /**
+   * FC 0x49 — store a license blob. Storing is NOT validation: no target checks
+   * magic, crc32, `deviceId` or `productId` here, so a `success: true` means only
+   * that the bytes were accepted. Callers that need to know what the board holds
+   * read it back with `readLicense()`.
+   */
+  async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
+    try {
+      // buildWriteLicenseRequest() returns [FC][len:u16BE][blob]; assembleRequest
+      // writes the FC + slaveId itself, so hand it only the trailing payload.
+      const pdu = buildWriteLicenseRequest(blob)
+      const payload = Buffer.from(pdu.subarray(1))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_WRITE_LICENSE, payload)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      // Strip the 6-byte TCP-compat padding; the pure PDU starts at offset 7.
+      return parseWriteLicenseResponse(Uint8Array.prototype.slice.call(response, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x4A — read the stored license blob back. Uses the size-aware framing: a
+   * 98-byte blob does not arrive inside one idle window at low baud rates, and the
+   * default framing would truncate it silently (see `SendRequestOptions`).
+   */
+  async readLicense(): Promise<DebugLicenseReadResult> {
+    try {
+      const pdu = buildReadLicenseRequest()
+      const payload = Buffer.from(pdu.subarray(1)) // bare [FC]; no trailing payload
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_READ_LICENSE, payload)
+      const response = await this.sendRequest(request, {
+        // Raw RTU frame: id@0, FC@1, STATUS@2, len u16BE @3..4, blob @5.., crc 2.
+        // SUCCESS -> total = 1+1+1+2+len+2 = 7+len. A non-SUCCESS response carries
+        // no len/blob ([id][FC][STATUS][crc:2] = 5 bytes), so key off STATUS.
+        expectedTotalLength: (raw) => {
+          if (raw.length < 3) return null
+          if (raw.readUInt8(2) !== (ModbusDebugResponse.SUCCESS as number)) return 5
+          if (raw.length < 5) return null
+          return 7 + raw.readUInt16BE(3)
+        },
+      })
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      // Strip the 6-byte TCP-compat padding; parse the pure PDU from offset 7.
+      return parseReadLicenseResponse(Uint8Array.prototype.slice.call(response, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). Response offsets
+   * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
+   * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
+   * to the shared parseGetBoardIdResponse rather than parsing inline.
+   */
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    try {
+      // buildGetBoardIdRequest() returns the [FC] PDU; assembleRequest writes
+      // the function code + slaveId itself and expects only the trailing payload
+      // (empty for board-id), so strip the leading FC byte.
+      const pdu = buildGetBoardIdRequest()
+      const payload = Buffer.from(pdu.subarray(1))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload)
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      const pduResponse = Uint8Array.prototype.slice.call(response, 7)
+      return parseGetBoardIdResponse(pduResponse)
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+  /**
+   * FC 0x46 -- runtime status. Reports the run/stop state, the scan counter and
+   * uptime in one bare-FC round trip.
+   *
+   * This is the single read path for run/stop state: the frame's `running` byte
+   * carries it, so no second function code is needed. It also doubles as the
+   * liveness probe for a held link (any successful reply proves the firmware is
+   * answering), which is why the device liveness poll uses it.
+   */
+  async getStatus(): Promise<DebugStatusResult> {
+    try {
+      // buildGetStatusRequest() returns the [FC] PDU; assembleRequest writes the
+      // function code + slaveId itself and expects only the trailing payload
+      // (empty here), so strip the leading FC byte.
+      const pdu = buildGetStatusRequest()
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_STATUS, Buffer.from(pdu.subarray(1)))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseGetStatusResponse(Uint8Array.prototype.slice.call(response, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x4b -- ask the runtime to run or stop.
+   *
+   * Command only; reads go through `getStatus()`. A RUN request is refused (not
+   * queued) while the mode switch reads STOP, and the result says so via
+   * `refusedBySwitch` so the caller can tell the user to flip the switch.
+   */
+  async setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult> {
+    try {
+      const pdu = buildPlcSetStateRequest(state)
+      const request = this.assembleRequest(ModbusFunctionCode.PLC_SET_STATE, Buffer.from(pdu.subarray(1)))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 8) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes)` }
+      }
+      return parsePlcSetStateResponse(Uint8Array.prototype.slice.call(response, 7))
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

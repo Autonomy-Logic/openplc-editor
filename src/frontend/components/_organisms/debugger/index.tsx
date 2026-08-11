@@ -17,6 +17,9 @@ type Point = { t: number; y: number }
 type SeriesEntry = { points: Point[]; isBool: boolean; compositeKey: string }
 
 const MAX_BUFFER_SECONDS = 600 // Keep 10 minutes of data regardless of displayed range
+const SAMPLE_INTERVAL_MS = 100
+// ApexCharts rebuilds the entire SVG per update, so repaint slower than we sample.
+const RENDER_INTERVAL_MS = 200
 
 const Debugger = ({ graphList }: DebuggerData) => {
   const [isPaused, setIsPaused] = useState(false)
@@ -31,6 +34,9 @@ const Debugger = ({ graphList }: DebuggerData) => {
   const debugDataStale = useOpenPLCStore(useCallback((s) => s.workspace.debugDataStale, []))
   const debugBoolValues = useDebugBoolValuesMap()
   const debugNonBoolValues = useDebugNonBoolValuesMap()
+
+  const valuesRef = useRef({ bool: debugBoolValues, nonBool: debugNonBoolValues })
+  valuesRef.current = { bool: debugBoolValues, nonBool: debugNonBoolValues }
 
   // Track elapsed time with a 1-second interval
   useEffect(() => {
@@ -62,45 +68,55 @@ const Debugger = ({ graphList }: DebuggerData) => {
     }
   }, [graphList])
 
+  // The poller only writes to the store when a value changes, so sample on a clock or steady values freeze the trend.
   useEffect(() => {
     if (isPaused || graphList.length === 0) return
-    const now = Date.now()
-    // Set start time on first data
-    if (startTimeRef.current === null) {
-      startTimeRef.current = now
-    }
-    const set = historiesRef.current
-    for (const [, entry] of set) {
-      const raw = entry.compositeKey
-        ? (debugBoolValues.get(entry.compositeKey) ?? debugNonBoolValues.get(entry.compositeKey))
-        : undefined
-      if (raw === undefined) continue
-      let y: number | null = null
-      const rawStr = String(raw).toUpperCase()
-      if (rawStr === 'TRUE') {
-        y = 1
-        entry.isBool = true
-      } else if (rawStr === 'FALSE') {
-        y = 0
-        entry.isBool = true
-      } else {
-        const n = Number(raw)
-        y = Number.isNaN(n) ? null : n
+    const sample = () => {
+      const now = Date.now()
+      // Set start time on first data
+      if (startTimeRef.current === null) {
+        startTimeRef.current = now
       }
-      if (y !== null) {
-        entry.points.push({ t: now, y })
-        // Trim based on max buffer, not displayed range
-        const bufferCutoff = now - MAX_BUFFER_SECONDS * 1000
-        const validStartIndex = entry.points.findIndex((p) => p.t >= bufferCutoff)
-        if (validStartIndex === -1) {
-          entry.points.length = 0
-        } else if (validStartIndex > 0) {
-          entry.points.splice(0, validStartIndex)
+      const set = historiesRef.current
+      for (const [, entry] of set) {
+        const raw = entry.compositeKey
+          ? (valuesRef.current.bool.get(entry.compositeKey) ?? valuesRef.current.nonBool.get(entry.compositeKey))
+          : undefined
+        if (raw === undefined) continue
+        let y: number | null = null
+        const rawStr = String(raw).toUpperCase()
+        if (rawStr === 'TRUE') {
+          y = 1
+          entry.isBool = true
+        } else if (rawStr === 'FALSE') {
+          y = 0
+          entry.isBool = true
+        } else {
+          const n = Number(raw)
+          y = Number.isNaN(n) ? null : n
+        }
+        if (y !== null) {
+          entry.points.push({ t: now, y })
+          // Trim based on max buffer, not displayed range
+          const bufferCutoff = now - MAX_BUFFER_SECONDS * 1000
+          const validStartIndex = entry.points.findIndex((p) => p.t >= bufferCutoff)
+          if (validStartIndex === -1) {
+            entry.points.length = 0
+          } else if (validStartIndex > 0) {
+            entry.points.splice(0, validStartIndex)
+          }
         }
       }
     }
+    sample()
     setRenderTrigger((prev) => prev + 1)
-  }, [debugBoolValues, debugNonBoolValues, isPaused, graphList])
+    const sampler = setInterval(sample, SAMPLE_INTERVAL_MS)
+    const painter = setInterval(() => setRenderTrigger((prev) => prev + 1), RENDER_INTERVAL_MS)
+    return () => {
+      clearInterval(sampler)
+      clearInterval(painter)
+    }
+  }, [isPaused, graphList])
 
   const renderSeries = useMemo(() => {
     const now = Date.now()

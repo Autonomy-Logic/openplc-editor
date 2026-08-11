@@ -197,6 +197,16 @@ export interface InstallArduinoCoreArgs {
    *  fails if it is unavailable — required for prebuilt arduino-hal boards
    *  whose precompiled `.a` is ABI-locked to that core version. */
   coreVersion?: string
+  /** Optional third-party board-manager index URL (e.g. a vendor's
+   *  `package_<vendor>_index.json`).  Sourced from the VPP manifest's
+   *  `target.boardManagerUrl` (or `board_manager_url` in hals.json) and
+   *  forwarded to arduino-cli as `--additional-urls`.
+   *
+   *  Cores outside arduino-cli's built-in index are invisible without it:
+   *  `core install industrialshields:esp32` fails with "Platform not found"
+   *  unless the vendor index is supplied AND `core update-index` has been
+   *  run against it.  The editor does both; web ignores this field. */
+  boardManagerUrl?: string
 }
 
 /** Arduino-CLI library install (editor-only.  Same no-op
@@ -236,6 +246,17 @@ export interface CheckRuntimeVersionResult {
    *  when the runtime is unreachable or doesn't expose the
    *  endpoint (very old v3 runtimes). */
   version: string | null
+  /**
+   * Oldest editor this runtime accepts programs from, declared at
+   * `GET /api/capabilities` (DOPE-448).  `null` means the runtime
+   * declares no floor — it predates the endpoint, or this platform
+   * has no transport for it.
+   *
+   * `null` is "no constraint", never "too old": every runtime
+   * currently deployed answers `null`, and the runtime only
+   * advertises this value — the editor is what compares and refuses.
+   */
+  minEditorVersion?: string | null
 }
 
 /** VPP (Vendor Plugin Package) runtime-v4 packaging.  Boards that
@@ -263,6 +284,23 @@ export interface PackageVppPluginResult {
    *  and return an empty record without errors. */
   files: Record<string, string>
   errors?: StructuredCompileError[]
+  /**
+   * `package.minRuntimeVersion` from the manifest of the VPP this
+   * board came from (DOPE-448) — the oldest runtime whose plugin API
+   * the package's HAL was built against.
+   *
+   * `null`/absent for non-VPP boards, for packages that declare no
+   * floor, and on platforms without VPP integration. The pipeline
+   * compares it against the connected runtime's reported version
+   * right after the version probe, which is the earliest point where
+   * both halves are known — a VPP plugin is built against a runtime
+   * API, so an older runtime loads it and fails at scan time, on a
+   * live PLC.
+   *
+   * This cannot be enforced at install time: the target device is
+   * unknown until the user connects to one.
+   */
+  minRuntimeVersion?: string | null
 }
 
 // ---------------------------------------------------------------------------

@@ -30,7 +30,13 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: true,
+  plcStateControl: false,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
@@ -46,7 +52,18 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  // v3 exposes the SAME run/stop REST API as v4 (`/api/start-plc`,
+  // `/api/stop-plc`, JWT-authenticated) — only the debug channel differs
+  // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
+  // command over REST for both, so the only thing that ever stopped v3
+  // was this flag.
+  plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
@@ -64,7 +81,13 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: true,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: false,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }
 
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
@@ -83,5 +106,11 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  plcStateControl: true,
   directUsbUpload: true,
+  // Licensing is never a property of a TARGET FAMILY: a VPP is what is
+  // sold, so only a VPP manifest can turn this on. Every preset leaves it
+  // off, and a board that does not declare it gets an ordinary connect
+  // with no licensing traffic at all.
+  isLicensable: false,
 }

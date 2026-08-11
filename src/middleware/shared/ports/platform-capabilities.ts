@@ -104,6 +104,17 @@ export interface PlatformCapabilities {
   /** True if the app supports EtherCAT device configuration and ESI repository. */
   hasEthercat: boolean
 
+  // --- Debugging ---
+
+  /**
+   * Polling interval (ms) for the debugger's HTTP fallback transport (used
+   * when WebRTC is unavailable). Each poll is a full proxied round-trip, so
+   * this is deployment-tunable rather than a fixed constant — e.g.
+   * autonomy-node runs no WebRTC signaling relay and wants this to match
+   * its general-purpose poll rate.
+   */
+  debugRelayPollIntervalMs: number
+
   // --- Environment ---
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
@@ -139,6 +150,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasDirectProgramUpload: false,
   hasPackageManager: true,
   hasEthercat: true,
+  debugRelayPollIntervalMs: 1000,
   isDevMode: false,
 }
 
@@ -182,5 +194,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasDirectProgramUpload: true,
   hasPackageManager: false,
   hasEthercat: false,
+  debugRelayPollIntervalMs: 1000,
   isDevMode: false,
 }

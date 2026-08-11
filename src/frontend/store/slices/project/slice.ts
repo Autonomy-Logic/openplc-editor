@@ -32,10 +32,13 @@ import {
 } from '../../../../middleware/shared/utils/iec-address/registry'
 import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
+import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
+import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -504,6 +507,48 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
   state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
 }
 
+// Same contract as the variables pair above, for the `.dt` code view.
+
+const findDatatypeEditorCode = (name: string, getState: ProjectGetState): string | undefined => {
+  const state = getState()
+  const editorModel = state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
+  if (editorModel?.type !== 'plc-datatype') return undefined
+  if (editorModel.structure.display !== 'code') return undefined
+  return editorModel.structure.code
+}
+
+const reconcileDatatypeText = (name: string, getState: ProjectGetState, setState: ProjectSetState): ProjectResponse => {
+  const code = findDatatypeEditorCode(name, getState)
+  if (typeof code !== 'string') return ok()
+
+  const current = getState().project.data.dataTypes.find((d) => d.name === name)
+  if (!current) return ok()
+  // Buffer is a verbatim serialisation of the current type — nothing to fold in.
+  if (code === serializeDataTypeToText(current)) return ok()
+
+  const { dataType, error } = parseDataTypeFromText(code, name)
+  if (!dataType) return fail(error ?? 'Unknown parse error.', 'Data type text is invalid')
+
+  setState(
+    produce((slice: ProjectSlice) => {
+      const idx = slice.project.data.dataTypes.findIndex((d) => d.name === name)
+      if (idx !== -1) slice.project.data.dataTypes[idx] = dataType
+    }),
+  )
+  return ok()
+}
+
+const regenerateDatatypeText = (name: string, getState: ProjectGetState): void => {
+  if (findDatatypeEditorCode(name, getState) === undefined) return
+  const state = getState()
+  const dataType = state.project.data.dataTypes.find((d) => d.name === name)
+  if (!dataType) return
+  state.editorActions.updateModelStructureForName(name, {
+    display: 'code',
+    code: serializeDataTypeToText(dataType),
+  })
+}
+
 const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: { name: '', type: 'plc-project', path: '' },
@@ -517,6 +562,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
   },
   pendingDeletions: [],
+  unparsedDataTypeFiles: [],
   iecAliasMemory: {},
 
   projectActions: {
@@ -552,6 +598,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             },
           }
           slice.pendingDeletions = []
+          slice.unparsedDataTypeFiles = []
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
@@ -1063,6 +1110,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     deleteDatatype: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
+          // Harmless while the file doesn't exist yet (flag off): the
+          // editor's deletion pass is existence-checked, the web's
+          // relies on delete-by-omission.
+          slice.pendingDeletions.push(`datatypes/${name}.dt`)
           slice.project.data.dataTypes = slice.project.data.dataTypes.filter((d) => d.name !== name)
         }),
       )
@@ -1075,6 +1126,37 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (data) {
             slice.project.data.dataTypes[idx] = data
           }
+        }),
+      )
+    },
+    updateDatatypeName: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const dt = slice.project.data.dataTypes.find((d) => d.name === oldName)
+          if (!dt) return
+          // Queue the OLD path — the next save serializes the type
+          // under its new name (model: updatePouName).
+          slice.pendingDeletions.push(`datatypes/${oldName}.dt`)
+          dt.name = newName
+        }),
+      )
+    },
+    propagateDatatypeRename: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          for (const pou of slice.project.data.pous) {
+            for (const variable of pou.interface?.variables ?? []) {
+              const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
+              if (nextType) variable.type = nextType
+            }
+          }
+          for (const variable of slice.project.data.configurations.resource.globalVariables) {
+            const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
+            if (nextType) variable.type = nextType
+          }
+          slice.project.data.dataTypes = slice.project.data.dataTypes.map(
+            (dataType) => renameDataTypeInDataType(dataType, oldName, newName) ?? dataType,
+          )
         }),
       )
     },
@@ -1104,6 +1186,23 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         produce((slice: ProjectSlice) => {
           const idx = slice.project.data.dataTypes.findIndex((d) => d.name === name)
           if (idx !== -1) slice.project.data.dataTypes[idx] = data
+        }),
+      )
+      regenerateDatatypeText(name, getState)
+    },
+    reconcileDatatypeText: (name) => reconcileDatatypeText(name, getState, setState),
+    regenerateDatatypeText: (name) => regenerateDatatypeText(name, getState),
+    setUnparsedDataTypeFiles: (files) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.unparsedDataTypeFiles = files
+        }),
+      )
+    },
+    removeUnparsedDataTypeFile: (relativePath) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.unparsedDataTypeFiles = slice.unparsedDataTypeFiles.filter((f) => f.relativePath !== relativePath)
         }),
       )
     },

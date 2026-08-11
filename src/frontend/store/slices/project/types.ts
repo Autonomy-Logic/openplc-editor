@@ -1,3 +1,4 @@
+import type { RawProjectFile } from '../../../../middleware/shared/ports/project-port'
 import type {
   EthercatConfig,
   ModbusBufferMapping,
@@ -216,9 +217,27 @@ export type ProjectActions = {
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void
   updateDatatype: (name: string, data?: PLCDataType) => void
+  /** Rename + queue the old `datatypes/<oldName>.dt` path for deletion
+   *  (model: `updatePouName`).  Reference propagation is
+   *  `propagateDatatypeRename`, driven by `datatypeActions.rename`. */
+  updateDatatypeName: (oldName: string, newName: string) => void
+  /** Rewrite every reference to data type `oldName` (POU variables, global
+   *  variables, other data types' fields / array base types) to `newName`.
+   *  Does not touch the type's own entry — `updateDatatypeName` owns that. */
+  propagateDatatypeRename: (oldName: string, newName: string) => void
   createArrayDimension: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => void
   rearrangeStructureVariables: (args: { associatedDataType?: string; rowId: number; newIndex: number }) => void
   applyDatatypeSnapshot: (name: string, data: PLCDataType) => void
+  /** Fold a diverged `.dt` code buffer back into the type before an
+   *  external mutation; refuses (`ok: false`) when the text is invalid. */
+  reconcileDatatypeText: (name: string) => ProjectResponse
+  /** Re-serialize the type into its code buffer after an external mutation. */
+  regenerateDatatypeText: (name: string) => void
+  /** Stash raw `.dt` files that failed to parse on load so saves echo
+   *  them back verbatim (no silent data loss). */
+  setUnparsedDataTypeFiles: (files: RawProjectFile[]) => void
+  /** Drop a preserved raw file once its text parses and becomes a real type. */
+  removeUnparsedDataTypeFile: (relativePath: string) => void
 
   // Tasks
   createTask: (dto: TaskDTO & { rowToInsert?: number }) => ProjectResponse
@@ -324,6 +343,10 @@ export type ProjectSlice = {
   project: ProjectState
   /** Relative file paths queued for deletion on next full project save. */
   pendingDeletions: string[]
+  /** Raw `datatypes/*.dt` files that failed to parse on load.  Echoed
+   *  back verbatim by the save flow until they parse — an unreadable
+   *  file must never be silently dropped from disk. */
+  unparsedDataTypeFiles: RawProjectFile[]
   /**
    * Session-scoped IEC alias memory: `memoryKey -> alias`, where `memoryKey`
    * is a channel's stable semantic identity (`vpp:moduleId:slot:channel`,

@@ -1,4 +1,4 @@
-import { deployRuntimeProgram } from '../deploy-runtime-program'
+import { deployReachedDevice, type DeployRuntimeProgramOutcome, deployRuntimeProgram } from '../deploy-runtime-program'
 import type { RuntimeCompilationStatus } from '../poll-runtime-compilation'
 
 function makeStatusFetcher(...responses: Array<RuntimeCompilationStatus | { error: string }>) {
@@ -132,5 +132,85 @@ describe('deployRuntimeProgram', () => {
       startTimeoutMs: 15,
     })
     expect(outcome).toBe('START_TIMEOUT')
+  })
+
+  it('returns UPLOADED_NOT_STARTED when the hardware mode switch declines the start', async () => {
+    const start = jest.fn(makeStartFetcher('START:ERROR_SWITCH_STOP'))
+    const logs: Array<{ level: string; message: string }> = []
+
+    const outcome = await deployRuntimeProgram({
+      uploadProgram: async () => ({ success: true }),
+      fetchCompilationStatus: makeStatusFetcher({ status: 'SUCCESS', logs: [], exit_code: 0 }),
+      fetchStartResponse: start,
+      onLog: (level, message) => logs.push({ level, message }),
+      pollIntervalMs: 1,
+      startIntervalMs: 1,
+    })
+
+    expect(outcome).toBe('UPLOADED_NOT_STARTED')
+    // Asked once and accepted the answer: nothing changes until someone moves
+    // the switch, so retrying until the deadline would only stall the deploy.
+    expect(start).toHaveBeenCalledTimes(1)
+    // Reported as a warning, never an error — the program is on the device.
+    expect(logs.some((l) => l.level === 'warning')).toBe(true)
+    expect(logs.some((l) => l.level === 'error')).toBe(false)
+  })
+})
+
+describe('deployReachedDevice', () => {
+  /**
+   * Exhaustive by construction: a new member of `DeployRuntimeProgramOutcome`
+   * fails to type-check here until someone decides which side of the
+   * "did the program reach the device?" line it falls on.
+   */
+  const reachedDeviceByOutcome: Record<DeployRuntimeProgramOutcome, boolean> = {
+    STARTED: true,
+    UPLOADED_NOT_STARTED: true,
+    UPLOAD_FAILED: false,
+    BUILD_FAILED: false,
+    BUILD_TIMEOUT: false,
+    BUILD_ERROR: false,
+    START_FAILED: false,
+    START_TIMEOUT: false,
+  }
+
+  /** Typed walk over the table above — the length check below keeps the two in step. */
+  const allOutcomes: DeployRuntimeProgramOutcome[] = [
+    'STARTED',
+    'UPLOADED_NOT_STARTED',
+    'UPLOAD_FAILED',
+    'BUILD_FAILED',
+    'BUILD_TIMEOUT',
+    'BUILD_ERROR',
+    'START_FAILED',
+    'START_TIMEOUT',
+  ]
+
+  it('classifies every outcome the deploy can produce', () => {
+    expect(allOutcomes).toHaveLength(Object.keys(reachedDeviceByOutcome).length)
+  })
+
+  it('is true when the runtime took the program and ran it', () => {
+    expect(deployReachedDevice('STARTED')).toBe(true)
+  })
+
+  it('is true when the runtime took the program but declined to run it', () => {
+    // The mode switch reads STOP. Reporting this as a failed upload sends the
+    // user looking for a problem that does not exist.
+    expect(deployReachedDevice('UPLOADED_NOT_STARTED')).toBe(true)
+  })
+
+  it('is false for every outcome where the program never landed', () => {
+    const failures = allOutcomes.filter((outcome) => !reachedDeviceByOutcome[outcome])
+    expect(failures).toHaveLength(6)
+    for (const outcome of failures) {
+      expect(deployReachedDevice(outcome)).toBe(false)
+    }
+  })
+
+  it('agrees with the full outcome table', () => {
+    for (const outcome of allOutcomes) {
+      expect(deployReachedDevice(outcome)).toBe(reachedDeviceByOutcome[outcome])
+    }
   })
 })

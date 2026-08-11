@@ -17,74 +17,69 @@
  * - Diagram/source scan results are cached per {pouName, language, fbContext}
  *   since the editor is read-only during debug
  *
- * Polling intervals:
- * - Modbus RTU / simulator: 50ms   (no network; keep the UI snappy)
- * - Web HTTP fallback:      1000ms  (WebRTC failed; each poll is a slow
- *                                    orchestrator round-trip, so back off)
- * - Everything else:        200ms   (general purpose — TCP / WebSocket /
- *                                    web WebRTC data channel)
+ * Batch size and poll interval both come from the session's medium — see
+ * `DEBUG_MEDIUM_PROFILE`.
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import type { DebugConnectionType, DebugTreeNode } from '../../middleware/shared/ports/types'
+import type { DebugMedium, DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useCapabilities, useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
 import { applySwapToVariableBytes } from '../utils/endian'
 import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
 
-/** Polling interval for transports with serial framing (RTU / simulator). */
-const RTU_POLL_INTERVAL_MS = 50
-/** Polling interval for higher-bandwidth transports (TCP / WebSocket). */
-const DEFAULT_POLL_INTERVAL_MS = 200
-/** Polling interval for the web HTTP fallback (WebRTC unavailable): each
- *  poll is a full orchestrator `run_command` round-trip, so we slow right
- *  down to avoid hammering the edge API / runtime. */
-const HTTP_FALLBACK_POLL_INTERVAL_MS = 1000
+/**
+ * How to pace and size the debug poll, per medium.
+ *
+ * These are two INDEPENDENT physical limits, which is why they live in one table
+ * rather than being derived from each other:
+ *
+ * `batchSize` — the frame budget at the far end. The request packs 3 bytes per
+ * variable (arr:u8 + elem:u16) and the response packs raw type-sized values after
+ * a small header. It is a property of the TARGET, never of the board the user
+ * picked, since the same board can be reached over RTU or TCP.
+ *   rtu / simulator : 19, so the request stays ≤63 bytes and fits one 64-byte
+ *                     USB-CDC packet (6 + 3·19 = 63). A 20-variable request is 66
+ *                     bytes, which a SAMD21 / P1AM-100 receives split across two
+ *                     packets — older firmware whose serial framer cannot
+ *                     reassemble then drops it. The simulator's virtual serial
+ *                     port mirrors the same framing.
+ *   tcp             : the Arduino sketch's MAX_MB_FRAME caps it; 60 has headroom.
+ *   websocket /     : the Linux runtime's MAX_DEBUG_FRAME=4096 — ~500 variables
+ *   webrtc /          with room for value bytes. All three reach the SAME debug
+ *   http-relay        socket on the runtime, so they share its budget; only the
+ *                     number of hops in front of it differs.
+ *
+ * `pollIntervalMs` — round-trip latency of the link.
+ *   rtu / simulator : 50ms, no network in the way; keep the UI responsive.
+ *   tcp / websocket : 200ms, one network hop.
+ *   webrtc          : 200ms, peer-to-peer to the agent — as direct as it gets.
+ *   http-relay      : 1000ms. Every poll is browser -> Edge -> agent websocket ->
+ *                     runtime and back. Polling this at the direct rate buries the
+ *                     relay in requests for data that cannot arrive any faster.
+ *                     Overridable per deployment via
+ *                     `capabilities.debugRelayPollIntervalMs`.
+ *
+ * A medium the caller has not published yet reads as `tcp` — the middle of the
+ * range, and what this defaulted to before the media were named.
+ */
+export const DEBUG_MEDIUM_PROFILE: Record<DebugMedium, { batchSize: number; pollIntervalMs: number }> = {
+  rtu: { batchSize: 19, pollIntervalMs: 50 },
+  simulator: { batchSize: 19, pollIntervalMs: 50 },
+  tcp: { batchSize: 60, pollIntervalMs: 200 },
+  websocket: { batchSize: 500, pollIntervalMs: 200 },
+  webrtc: { batchSize: 500, pollIntervalMs: 200 },
+  'http-relay': { batchSize: 500, pollIntervalMs: 1000 },
+}
 
-// Batch size is transport-dependent. The wire request packs 3 bytes per
-// variable (arr:u8 + elem:u16); the response packs raw type-sized values
-// after a small header. The right ceiling is set by the transport's
-// frame budget and the runtime's MAX_DEBUG_FRAME — never the target
-// board, since the same board can run over RTU or TCP depending on the
-// user's communication preferences.
-//
-// Modbus RTU             : capped at 19 so the REQUEST stays ≤63 bytes and
-//                          fits in a single 64-byte USB-CDC packet. A 20-var
-//                          request is 6 + 3·20 = 66 bytes, which a USB-CDC
-//                          target (e.g. SAMD21 / P1AM-100) receives split
-//                          across two USB packets; older firmware whose serial
-//                          framer can't reassemble a multi-packet request then
-//                          drops it. Newer firmware (length-aware handle_serial)
-//                          handles any size, but 19 keeps us compatible with
-//                          field devices on both. 19·3 + 6 = 63 ≤ 64.
-// Modbus TCP             : Arduino sketch's MAX_MB_FRAME caps it; 60 is
-//                          well within the headroom.
-// WebSocket (Runtime v4) : Linux runtime's MAX_DEBUG_FRAME=4096; ~500
-//                          vars fits comfortably with room for value
-//                          bytes. Anything bigger is unusual and the
-//                          ERROR_OUT_OF_MEMORY fallback halves us back
-//                          down to a safe size.
-// Simulator              : virtual serial port mirrors the RTU framing,
-//                          so it shares the RTU ceiling.
-const RTU_BATCH_SIZE = 19
-const TCP_BATCH_SIZE = 60
-const WEBSOCKET_BATCH_SIZE = 500
+const DEFAULT_MEDIUM: DebugMedium = 'tcp'
 const MIN_BATCH_SIZE = 2
 
-function batchSizeForTransport(transport: DebugConnectionType | null): number {
-  switch (transport) {
-    case 'websocket':
-      return WEBSOCKET_BATCH_SIZE
-    case 'rtu':
-    case 'simulator':
-      return RTU_BATCH_SIZE
-    case 'tcp':
-    case null:
-    default:
-      return TCP_BATCH_SIZE
-  }
+/** The profile for a medium, tolerating one not yet published. */
+export function debugProfileFor(medium: DebugMedium | null): { batchSize: number; pollIntervalMs: number } {
+  return DEBUG_MEDIUM_PROFILE[medium ?? DEFAULT_MEDIUM]
 }
 
 interface LeafMeta {
@@ -139,13 +134,6 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const capabilities = useCapabilities()
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const { workspaceActions, consoleActions } = useOpenPLCStore()
-  // Web-only: which transport the debug session is actually running over.
-  // 'http' means WebRTC is unavailable and every poll is a slow
-  // orchestrator round-trip — so we back the cadence off (see below).
-  // On the desktop editor this is the unused 'http' default; the
-  // `!isNativeApplication` guard keeps the editor's real TCP/WebSocket
-  // transports on the standard 200ms regardless.
-  const sessionDebugTransport = useOpenPLCStore((state) => state.session.debugTransport)
 
   // Targeted selectors for active-index cache invalidation.
   // These only change on user interaction (not every poll cycle).
@@ -162,10 +150,9 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const batchOffsetRef = useRef(0)
   const isPollingRef = useRef(false)
 
-  // Dynamic batch size — overwritten with the transport-specific
-  // ceiling on session start; halves on ERROR_OUT_OF_MEMORY and
-  // resets on the next session start.
-  const batchSizeRef = useRef(TCP_BATCH_SIZE)
+  // Dynamic batch size — overwritten with the medium's ceiling on session start;
+  // halves on ERROR_OUT_OF_MEMORY and resets on the next session start.
+  const batchSizeRef = useRef(DEBUG_MEDIUM_PROFILE[DEFAULT_MEDIUM].batchSize)
 
   // Full leaf index→metadata map — computed once when debugger starts.
   // One index → many leaves (a shared global appears under each POU's key).
@@ -406,36 +393,29 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
   const pollRef = useRef(pollVariables)
   pollRef.current = pollVariables
 
-  // The transport in use for the current debug session. This drives both
-  // the batch size and the poll interval — neither should be conditioned
-  // on board target since the same board can speak RTU, TCP, etc. The
-  // workspace activity bar sets this when the debug session connects.
-  const debugConnectionType = useOpenPLCStore((state) => state.workspace.debugConnectionType)
+  // The medium this session is actually riding, published by the connection
+  // manager — the one place that knows. Read LIVE rather than latched at session
+  // start, because on web it can change mid-session: a WebRTC data channel that
+  // drops falls back to the Edge relay, and the cadence has to follow it down.
+  const debugMedium = useOpenPLCStore((state) => state.deviceConnection.debugTransport)
 
   // Set up polling interval when debugger becomes visible.
   useEffect(() => {
     if (isDebuggerVisible) {
+      const profile = debugProfileFor(debugMedium)
+
       // Reset state on session start
-      batchSizeRef.current = batchSizeForTransport(debugConnectionType)
+      batchSizeRef.current = profile.batchSize
       batchOffsetRef.current = 0
       lastResponseTimestampRef.current = 0
       activeIndexesRef.current = null
       visibleVarsCacheRef.current = null
 
-      // RTU framing also covers the simulator's virtual serial port —
-      // both need the tighter cadence to keep up with toggling state.
-      const usesRtuFraming = debugConnectionType === 'rtu' || debugConnectionType === 'simulator'
-      // Web HTTP fallback: WebRTC unavailable, so reads go over the
-      // orchestrator proxy (high latency) — slow the cadence right down.
-      // Gated on `!isNativeApplication` so the desktop editor's real
-      // TCP/WebSocket transports never hit this branch (their
-      // `session.debugTransport` is an unused 'http' default).
-      const usesHttpFallback = !capabilities.isNativeApplication && sessionDebugTransport === 'http'
-      const pollIntervalMs = usesRtuFraming
-        ? RTU_POLL_INTERVAL_MS
-        : usesHttpFallback
-          ? HTTP_FALLBACK_POLL_INTERVAL_MS
-          : DEFAULT_POLL_INTERVAL_MS
+      // One lookup, both axes. The medium already distinguishes a peer-to-peer
+      // data channel from the Edge relay, so nothing here needs to ask which
+      // platform it is running on.
+      const pollIntervalMs =
+        debugMedium === 'http-relay' ? capabilities.debugRelayPollIntervalMs : profile.pollIntervalMs
 
       // Fire first poll immediately, then schedule at fixed rate
       // Skip tick if previous poll is still in progress (isPolling guard)
@@ -483,17 +463,10 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       visibleVarsCacheRef.current = null
       batchOffsetRef.current = 0
     }
-    // `sessionDebugTransport` + `capabilities.isNativeApplication` are
-    // in the deps so the cadence re-evaluates if WebRTC drops to the HTTP
-    // fallback (or recovers) mid-session — the effect tears down the old
-    // interval and restarts at the new rate.
-  }, [
-    isDebuggerVisible,
-    debugConnectionType,
-    sessionDebugTransport,
-    capabilities.isNativeApplication,
-    workspaceActions,
-  ])
+    // `debugMedium` is in the deps so the cadence re-evaluates when a WebRTC data
+    // channel drops to the Edge relay (or recovers) mid-session — the effect tears
+    // down the old interval and restarts at the new rate.
+  }, [isDebuggerVisible, debugMedium, capabilities.debugRelayPollIntervalMs, workspaceActions])
 
   // Clean up on unmount
   useEffect(() => {

@@ -21,13 +21,15 @@ const StructureDataType = () => {
     },
     editorActions: { updateModelStructure },
     projectActions: { updateDatatype, rearrangeStructureVariables },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const { captureAndPush } = usePouSnapshot()
 
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
-  const [editorStructure, setEditorStructure] = useState<StructureTableType>({
+  const [editorStructure, setEditorStructure] = useState<Extract<StructureTableType, { display: 'table' }>>({
+    display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
     description: '',
   })
@@ -46,9 +48,14 @@ const StructureDataType = () => {
 
   useEffect(() => {
     const foundDataType = dataTypes.find((dataType) => dataType?.derivation === 'structure')
-    if (editor.type === 'plc-datatype' && foundDataType && 'variable' in foundDataType) {
+    if (
+      editor.type === 'plc-datatype' &&
+      editor.structure.display === 'table' &&
+      foundDataType &&
+      'variable' in foundDataType
+    ) {
       const { description, selectedRow } = editor.structure
-      setEditorStructure({ description: description, selectedRow: selectedRow })
+      setEditorStructure({ display: 'table', description: description, selectedRow: selectedRow })
     }
   }, [editor])
 
@@ -65,6 +72,7 @@ const StructureDataType = () => {
     const current = dataTypes.find((dt) => dt.name === editor.meta.name)
     if (!current || current.derivation !== 'structure') return
     updateDatatype(editor.meta.name, { ...current, variable: newVariables })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
   const handleCreateStructureVariable = () => {
@@ -178,6 +186,7 @@ const StructureDataType = () => {
       rowId: row ?? parseInt(editorStructure.selectedRow),
       newIndex: (row ?? parseInt(editorStructure.selectedRow)) + index,
     })
+    handleFileAndWorkspaceSavedState(editor.meta.name)
     updateModelStructure({
       selectedRow: parseInt(editorStructure.selectedRow) + index,
     })

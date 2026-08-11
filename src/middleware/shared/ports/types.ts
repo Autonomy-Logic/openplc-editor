@@ -628,6 +628,18 @@ export interface BoardInfo {
    */
   platformOptions?: PlatformOption[]
   /**
+   * Hardware serial ports this board exposes (e.g. `['Serial', 'Serial1']`),
+   * mirrored from the VPP manifest device's `serialPorts`. Consumed by VPP
+   * screen `select` fields via `optionsRef: 'board.serialPorts'` (the Modbus
+   * RTU port picker) and by the always-on serial/debugger. Absent → the editor
+   * assumes a single `Serial`.
+   */
+  serialPorts?: string[]
+  /** Name of the default serial port (usually the USB CDC port) where the
+   *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
+   *  `Serial`. */
+  defaultSerial?: string
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
@@ -718,7 +730,19 @@ export interface PackageManifest {
     }
     description: string
     license?: string
+    /**
+     * Oldest editor that may install this package. The install gate refuses a
+     * package whose floor is above `APP_VERSION` — this is how a package
+     * requires an editor feature it cannot work without (DOPE-448).
+     */
     minEditorVersion?: string
+    /**
+     * Oldest runtime this package works with. Declared only by packages with a
+     * `runtime-v4` target, whose plugin code executes inside the runtime
+     * process. Checked at compile time, not install time: the target device is
+     * unknown until the user connects to one.
+     */
+    minRuntimeVersion?: string
   }
   devices: Array<{
     id: string
@@ -767,6 +791,29 @@ export interface PackageManifest {
        * integration layer (hal.source).
        */
       precompiledLibrary?: string
+      /**
+       * On-device license-storage backend: source file(s) injected into the
+       * Baremetal sketch and recompiled against the editor's `license_blob.h`.
+       *
+       * PRESENCE is the signal — it is what resolves
+       * `TargetCapabilities.licenseStore` and what drives the backend into the
+       * build, so one declaration serves both and they cannot disagree. Absence
+       * means the board answers `LIC_UNSUPPORTED` and the licensing flow reports
+       * that instead of writing.
+       */
+      licenseStore?: string | string[]
+      /**
+       * Per-VPP signing key id (e.g. `espressif-licensed-2026`). Names which key
+       * the backend/KMS signs this VPP's licenses with and which public key the
+       * closed artifact embeds.
+       *
+       * INFORMATIONAL in the editor: the activation request sends only
+       * `{ deviceId, packageId }` and the backend resolves its own signing key
+       * from the package id. The real trust root is the public key compiled into
+       * the VPP, not this string — it is carried for the build side and for
+       * diagnosing "the board stored the blob and still runs demo".
+       */
+      licenseKeyId?: string
       compilerFlags?: {
         c_flags?: string[]
         cxx_flags?: string[]
@@ -786,6 +833,13 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
+     *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
+     *  `select` fields via `optionsRef: 'board.serialPorts'`. */
+    serialPorts?: string[]
+    /** Name of the default serial port (usually the USB CDC port). Surfaced onto
+     *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
+    defaultSerial?: string
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
@@ -896,9 +950,25 @@ export interface VendorIoMapping {
   entries: IoMappingEntry[]
 }
 
+/**
+ * A serial port offered in the communication-port picker.
+ *
+ * Deliberately NOT a pre-composed display string. The producer reports facts
+ * and the renderer decides how they read (`serialPortDisplay`) — conflating the
+ * two is what let the board name get dropped: the label had to guess whether
+ * `name` held a bare manufacturer or an already-composed `"COM5 (Arduino Uno)"`.
+ */
 export interface CommunicationPort {
-  name: string
+  /** OS-canonical port identifier, and the value actually opened: `COM5` on
+   *  Windows, `/dev/ttyUSB0` on Linux, `/dev/cu.usbmodem*` on macOS. Always the
+   *  primary label — never replaced by a descriptor. */
   address: string
+  /** Board name identified by arduino-cli from the connected core's VID/PID
+   *  (e.g. `Arduino MKR`). Absent when no core matched the device. */
+  boardName?: string
+  /** Manufacturer / vendor string from `serialport` (e.g. `wch.cn` for a
+   *  CH340). The fallback descriptor when arduino-cli identified no board. */
+  manufacturer?: string
 }
 
 export interface SerialPort {
@@ -1018,7 +1088,39 @@ export interface RuntimeLogEntry {
 // Debugger
 // ---------------------------------------------------------------------------
 
+/**
+ * A channel kind a board's `debug` spec can declare. This is the SPEC's
+ * vocabulary — what a package author writes — not necessarily what a live
+ * session ends up riding. See `DebugMedium` for that.
+ */
 export type DebugConnectionType = 'tcp' | 'rtu' | 'websocket' | 'simulator'
+
+/**
+ * What a live debug session actually rides — the one fact the connection manager
+ * publishes and the debug poller consumes.
+ *
+ * Wider than `DebugConnectionType` because the browser reaches a runtime two ways
+ * that no spec distinguishes, and they behave differently enough that the poller
+ * must tell them apart:
+ *
+ *   `webrtc`      a data channel straight to the orchestrator agent, which relays
+ *                 to the runtime's debug socket.
+ *   `http-relay`  the same request, hop by hop: browser -> Autonomy Edge ->
+ *                 agent (over its always-on websocket) -> runtime. The fallback
+ *                 when a data channel cannot be opened.
+ *
+ * Both terminate at the SAME endpoint on the device, so they carry the same frame
+ * budget and differ only in latency — which is exactly the split
+ * `DEBUG_MEDIUM_PROFILE` encodes.
+ */
+export type DebugMedium = DebugConnectionType | 'webrtc' | 'http-relay'
+
+/**
+ * Media that can carry a CONTROL channel — one the connection manager physically
+ * holds open and polls. Narrower than `DebugMedium` on purpose: a REST-controlled
+ * runtime holds nothing, and the browser's media are debug-only.
+ */
+export type DeviceLinkTransport = 'rtu' | 'tcp' | 'simulator'
 
 export interface DebugConnectionConfig {
   connectionType: DebugConnectionType
@@ -1208,6 +1310,16 @@ export function isV3Logs(logs: PlcLogs): logs is string {
 // Console
 // ---------------------------------------------------------------------------
 
+/**
+ * A run of log text sharing one style, produced by the SGR colour a tool
+ * emitted (see `frontend/utils/terminal-output`). `className` is a Tailwind
+ * class string, absent when the run is unstyled.
+ */
+export interface LogSegment {
+  text: string
+  className?: string
+}
+
 export interface LogObject {
   id: string
   level?: 'debug' | 'info' | 'warning' | 'error'
@@ -1220,6 +1332,20 @@ export interface LogObject {
    * progress / informational logs leave this undefined.
    */
   compileError?: StructuredCompileError
+  /**
+   * Styled runs, set only when the source emitted SGR colour. `message`
+   * always holds the same text with the escapes stripped, so search,
+   * filtering and copy stay on clean text and only the renderer needs to
+   * know about colour.
+   */
+  segments?: LogSegment[]
+  /**
+   * True while this entry is an in-place line a terminal would still be
+   * overwriting — a progress redraw not yet terminated by a newline. The
+   * next redraw replaces it instead of appending; a newline clears the flag
+   * and the line becomes permanent.
+   */
+  transient?: boolean
 }
 
 // ---------------------------------------------------------------------------

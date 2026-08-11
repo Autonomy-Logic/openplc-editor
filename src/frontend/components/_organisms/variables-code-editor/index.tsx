@@ -42,6 +42,12 @@ interface VariablesCodeEditorProps {
    */
   pouName?: string
   /**
+   * Explicit Monaco model URI, for surfaces that route to the LSP but
+   * aren't POU variables (the data type `.dt` code view). Takes
+   * precedence over the URI derived from `pouName`.
+   */
+  modelUri?: string
+  /**
    * Programmatic cursor jump (e.g. compile-error click → vars-text
    * view, or Go to Definition redirect for a variable declaration).
    * Applied on mount and whenever the value changes; the caller is
@@ -54,7 +60,7 @@ interface VariablesCodeEditorProps {
    * (it's meant for the body editor).  Undefined or
    * `target === 'variables'` is honoured here.
    */
-  cursorPosition?: { lineNumber: number; column: number; target?: 'body' | 'variables' }
+  cursorPosition?: { lineNumber: number; column: number; target?: 'body' | 'variables' | 'data-type' }
 }
 
 const VariablesCodeEditor = ({
@@ -63,9 +69,11 @@ const VariablesCodeEditor = ({
   shouldUseDarkMode,
   cursorPosition,
   pouName,
+  modelUri,
   language = 'st',
   readOnly = false,
 }: VariablesCodeEditorProps) => {
+  const resolvedModelUri = modelUri ?? (pouName ? pouVarsUri(pouName) : undefined)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [editorMounted, setEditorMounted] = useState(false)
@@ -146,7 +154,7 @@ const VariablesCodeEditor = ({
         height='100%'
         width='100%'
         language={language}
-        {...(pouName ? { path: pouVarsUri(pouName) } : {})}
+        {...(resolvedModelUri ? { path: resolvedModelUri } : {})}
         defaultValue={''}
         value={code}
         onMount={handleEditorDidMount}

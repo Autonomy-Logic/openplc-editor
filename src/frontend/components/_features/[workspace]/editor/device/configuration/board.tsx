@@ -8,20 +8,25 @@ import { MagnifierIcon } from '../../../../../../assets/icons/interface/Magnifie
 import { MinusIcon } from '../../../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
+import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
+import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
+import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
@@ -50,12 +55,36 @@ const Board = memo(function () {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
+  // CONNECT flow (D72): open the device channel, classify it, and drive the
+  // flash follow-up when nothing answered the debug protocol.
+  const {
+    connect: connectDevice,
+    disconnect: disconnectDevice,
+    isConnected,
+    status: serialStatus,
+  } = useDeviceConnect(currentBoardInfo)
+
+  // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
+  // every built-in board — `isLicensable` gates the whole affordance.
+  const licensing = useDeviceLicense(currentBoardInfo)
+
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
   // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
+  // Read from the same place the connection resolver reads it, so the button and
+  // the resolution never disagree about whether a network path exists.
+  const modbusTcpConfigured = useOpenPLCStore(
+    (state) =>
+      (
+        (state.deviceDefinitions.configuration.vendorScreenData ?? {}) as Record<
+          string,
+          Record<string, unknown> | undefined
+        >
+      )['modbus_tcp']?.['enabled'] === true,
+  )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
@@ -349,6 +378,9 @@ const Board = memo(function () {
       setRuntimeJwtToken(null)
       setRuntimeConnectionStatus('disconnected')
       await runtime.clearCredentials()
+      // The session goes with it: control was this REST connection, and any debug
+      // channel opened off it has nothing left to belong to.
+      await device.closeRuntimeSession?.()
       return
     }
 
@@ -593,90 +625,107 @@ const Board = memo(function () {
                   Search
                 </button>
               </div>
-              <div id='runtime-connect-button-container' className='flex w-full items-center justify-start'>
-                <button
-                  type='button'
-                  onClick={handleConnectToRuntime}
-                  disabled={connectionStatus === 'connecting'}
-                  className='h-[30px] rounded-md bg-brand px-4 py-1 font-caption text-cp-sm font-medium text-white hover:bg-brand-medium-dark disabled:opacity-50'
-                >
-                  {connectionStatus === 'connecting'
-                    ? 'Connecting...'
-                    : connectionStatus === 'connected'
-                      ? 'Disconnect'
-                      : 'Connect'}
-                </button>
-                {connectionStatus === 'connected' && (
-                  <div className='ml-2 flex items-center gap-2'>
-                    <span className='text-xs text-green-600 dark:text-green-400'>● Connected</span>
-                    {plcStatus && (
-                      <span className='text-xs text-neutral-600 dark:text-neutral-400'>| PLC: {plcStatus}</span>
-                    )}
-                  </div>
+              <DeviceConnectButton
+                containerId='runtime-connect-button-container'
+                status={connectionStatus}
+                onConnect={handleConnectToRuntime}
+                onDisconnect={handleConnectToRuntime}
+              >
+                {connectionStatus === 'connected' && plcStatus && (
+                  <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
-                {connectionStatus === 'error' && (
-                  <span className='ml-2 text-xs text-red-600 dark:text-red-400'>● Connection failed</span>
-                )}
-              </div>
+              </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
-            <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
-              <Label
-                id='communication-ports-selector-label'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                Communication Port
-              </Label>
-              <Select
-                value={communicationPort}
-                onValueChange={setCommunicationPort}
-                onOpenChange={setCommunicationSelectIsOpen}
-              >
-                <SelectTrigger
-                  aria-label='Communication port selection'
-                  placeholder='Select a communication port'
-                  withIndicator
-                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                />
-                <SelectContent
-                  className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                  sideOffset={5}
-                  alignOffset={5}
-                  position='popper'
-                  align='center'
-                  side='bottom'
-                  viewportRef={communicationSelectRef}
+            <>
+              <div id='communication-ports-selector' className='flex w-full items-center justify-start gap-1'>
+                <Label
+                  id='communication-ports-selector-label'
+                  className='whitespace-pre text-xs text-neutral-950 dark:text-white'
                 >
-                  {availableCommunicationPorts.map((port) => {
-                    const displayName = port.name?.trim() || port.address
-                    return (
-                      <SelectItem
-                        key={port.address}
-                        className={cn(
-                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                          'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                        )}
-                        value={port.address}
-                      >
-                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {displayName}
-                        </span>
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-              <button
-                type='button'
-                onClick={refreshCommunicationPorts}
-                disabled={isRefreshingPorts}
-                className={cn('group', isRefreshingPorts && 'cursor-not-allowed opacity-50')}
-                aria-pressed={isPressed}
-                aria-label='Refresh communication ports'
+                  Communication Port
+                </Label>
+                <Select
+                  value={communicationPort}
+                  onValueChange={setCommunicationPort}
+                  onOpenChange={setCommunicationSelectIsOpen}
+                >
+                  <SelectTrigger
+                    aria-label='Communication port selection'
+                    placeholder='Select a communication port'
+                    withIndicator
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent
+                    className='h-fit max-h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                    sideOffset={5}
+                    alignOffset={5}
+                    position='popper'
+                    align='center'
+                    side='bottom'
+                    viewportRef={communicationSelectRef}
+                  >
+                    {availableCommunicationPorts.map((port) => {
+                      // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
+                      // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
+                      const { label, title } = serialPortDisplay(port)
+                      return (
+                        <SelectItem
+                          key={port.address}
+                          className={cn(
+                            'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                            'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                          )}
+                          value={port.address}
+                          title={title}
+                        >
+                          <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                            {label}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+                <button
+                  type='button'
+                  onClick={refreshCommunicationPorts}
+                  disabled={isRefreshingPorts}
+                  className={cn('group', isRefreshingPorts && 'cursor-not-allowed opacity-50')}
+                  aria-pressed={isPressed}
+                  aria-label='Refresh communication ports'
+                >
+                  <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
+                </button>
+              </div>
+              <DeviceConnectButton
+                containerId='device-connect-button-container'
+                status={serialStatus}
+                onConnect={connectDevice}
+                onDisconnect={disconnectDevice}
+                // A missing port only blocks Connect when serial is the ONLY way in.
+                // With Modbus TCP enabled the connection can still be made over the
+                // network, so the button stays live and resolution reports the real
+                // reason if that path is not usable either.
+                {...(!isConnected && !communicationPort && !modbusTcpConfigured
+                  ? { blockedReason: 'Select a communication port first' }
+                  : {})}
               >
-                <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
-              </button>
-            </div>
+                {/* Licensing sits in the connect row because it answers an adjacent
+                    question about the same device -- but it renders nothing at all
+                    unless this board's VPP is sold licensed AND a check has landed,
+                    so a free board's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                  />
+                ) : null}
+              </DeviceConnectButton>
+            </>
           ) : null}
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>

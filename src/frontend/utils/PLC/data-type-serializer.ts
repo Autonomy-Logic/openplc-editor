@@ -35,6 +35,12 @@
 import type { PLCDataType, PLCVariableType } from '../../../middleware/shared/ports/types'
 
 function renderVariableType(type: PLCVariableType): string {
+  // Rebuild array types from their structured shape — `value` is a
+  // display string that legacy records may hold in a lossy form.
+  if (type.definition === 'array' && type.data) {
+    const dims = type.data.dimensions.map((d) => d.dimension).join(', ')
+    return `ARRAY [${dims}] OF ${type.data.baseType.value}`
+  }
   return type.value
 }
 
@@ -47,15 +53,19 @@ function renderEnumeratedLines(dt: Extract<PLCDataType, { derivation: 'enumerate
 function renderStructureLines(dt: Extract<PLCDataType, { derivation: 'structure' }>): string[] {
   const fieldLines = dt.variable.map((v) => {
     const init = v.initialValue?.simpleValue?.value ? ` := ${v.initialValue.simpleValue.value}` : ''
-    return `    ${v.name} : ${renderVariableType(v.type)}${init};`
+    // Newlines collapsed: a multi-line comment would desync the
+    // line map (goto-definition) and be unreadable by the parser.
+    const doc = v.documentation ? ` (* ${v.documentation.replace(/\s*\r?\n\s*/g, ' ')} *)` : ''
+    return `    ${v.name} : ${renderVariableType(v.type)}${init};${doc}`
   })
   return [`  ${dt.name} : STRUCT`, ...fieldLines, `  END_STRUCT;`]
 }
 
 function renderArrayLines(dt: Extract<PLCDataType, { derivation: 'array' }>): string[] {
-  const dims = dt.dimensions.map((d) => `[${d.dimension}]`).join('')
+  // IEC 61131-3 multi-dimension syntax: one bracket, comma-separated.
+  const dims = dt.dimensions.map((d) => d.dimension).join(', ')
   const initial = dt.initialValue ? ` := ${dt.initialValue}` : ''
-  return [`  ${dt.name} : ARRAY ${dims} OF ${renderVariableType(dt.baseType)}${initial};`]
+  return [`  ${dt.name} : ARRAY [${dims}] OF ${renderVariableType(dt.baseType)}${initial};`]
 }
 
 function renderDataTypeLines(dt: PLCDataType): string[] {
@@ -101,6 +111,33 @@ export function serializeDataTypesToLines(dataTypes: PLCDataType[]): SerializedD
   return out
 }
 
+/** Where one data type's lines sit inside the aggregate `TYPE…END_TYPE` block. */
+export interface DataTypeLineSpan {
+  /** 0-indexed first line of the entry in the aggregate document. */
+  start: number
+  /** Line count of the entry. */
+  length: number
+}
+
+/**
+ * Line spans of every entry in the aggregate document, keyed by name.
+ * Line 0 is the `TYPE` frame, so entries start at 1.
+ *
+ * The per-type `.dt` code view renders the same lines under its own
+ * `TYPE…END_TYPE` frame, so `start - 1` is the shift between the two
+ * frames — that is what the LSP layer needs to talk to the aggregate
+ * document on a per-type buffer's behalf.
+ */
+export function dataTypeLineSpans(dataTypes: PLCDataType[]): Map<string, DataTypeLineSpan> {
+  const spans = new Map<string, DataTypeLineSpan>()
+  let start = 1
+  for (const entry of serializeDataTypesToLines(dataTypes)) {
+    spans.set(entry.name, { start, length: entry.lines.length })
+    start += entry.lines.length
+  }
+  return spans
+}
+
 /**
  * Serialise every entry in `dataTypes` to a single ST `TYPE` block.
  * Returns `''` when there's nothing to emit — the LSP sync layer
@@ -114,4 +151,18 @@ export function serializeDataTypesToST(dataTypes: PLCDataType[]): string {
   if (entries.length === 0) return ''
   const body = entries.flatMap((e) => e.lines).join('\n')
   return `TYPE\n${body}\nEND_TYPE\n`
+}
+
+/**
+ * Serialise ONE data type to its on-disk `.dt` file content — a
+ * `TYPE…END_TYPE` block holding a single declaration.  This is the
+ * canonical persistence format (`datatypes/<Name>.dt`); its inverse
+ * is `parseDataTypeFromText` in `data-type-text-parser.ts`, and the
+ * pair must round-trip.  Returns `''` for a derivation that renders
+ * to no lines (unknown shape).
+ */
+export function serializeDataTypeToText(dt: PLCDataType): string {
+  const lines = renderDataTypeLines(dt)
+  if (lines.length === 0) return ''
+  return `TYPE\n${lines.join('\n')}\nEND_TYPE\n`
 }

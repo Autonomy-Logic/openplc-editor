@@ -1,8 +1,11 @@
+import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
   BoardInfo,
   CommunicationPort,
+  DebugMedium,
   DeviceConfiguration,
+  DeviceLinkTransport,
   DevicePin,
   PlcStatus,
   TimingStats,
@@ -63,6 +66,13 @@ export type RuntimeConnection = {
   jwtToken: string | null
   connectionStatus: ConnectionStatus
   plcStatus: PlcStatus | null
+  /** Run/stop mode-switch position of the connected target, or null when
+   *  unknown. Lives next to `plcStatus` so the Start/Stop button, its tooltip
+   *  and the start pre-check all read one value, whatever the target type:
+   *  Runtime v4 fills it from `/api/status`, baremetal from the device status
+   *  poll. `'run'` on any device without a physical switch, so a null-safe
+   *  caller treats absence as "no gating". */
+  switchPosition: 'run' | 'stop' | null
   ipAddress: string | null
   /** Version string reported by the connected runtime (from
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
@@ -74,6 +84,67 @@ export type RuntimeConnection = {
   includeTimingStatsInPolling: boolean
   ethercatStatus: EtherCATRuntimeStatusResponse | null
   includeEthercatStatsInPolling: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Persistent serial connection (D72) — baremetal "stay connected"
+// ---------------------------------------------------------------------------
+
+export type DeviceConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+
+/**
+ * Live state of the connection the main process holds to a baremetal target,
+ * mirroring the connection manager — which remains the source of truth. Purely
+ * whether the connection is up, and over what.
+ */
+export type DeviceConnection = {
+  status: DeviceConnectionStatus
+  /** Endpoint the connection is on (or was last attempted on): a serial path or an IP. */
+  port: string | null
+  /**
+   * Medium the CONTROL channel uses. Read-only mirror — nothing in the renderer
+   * picks a transport. Null for a REST-controlled runtime session, which holds no
+   * connection.
+   */
+  transport: DeviceLinkTransport | null
+  /**
+   * Medium the DEBUG channel uses — the ONE fact the debug poller reads, for both
+   * its batch size and its cadence (see `DEBUG_MEDIUM_PROFILE`). Published by the
+   * connection manager, which is the only component that knows: the main process on
+   * the editor, the WebRTC lifecycle manager in the browser.
+   *
+   * Can change mid-session on web, when a WebRTC data channel drops to the Edge
+   * relay — the poller follows it, so this is read live rather than latched.
+   */
+  debugTransport: DebugMedium | null
+}
+
+// ---------------------------------------------------------------------------
+// VPP licensing
+// ---------------------------------------------------------------------------
+
+/**
+ * What the UI knows about the connected device's VPP license.
+ *
+ * Separate from `deviceConnection` on purpose: that is about whether the LINK is
+ * up, this is about what the device is entitled to run. They change for unrelated
+ * reasons — a link can drop and come back without the license changing, and a
+ * license can be recovered without the link ever moving — and merging them made
+ * every reader of one depend on the other.
+ *
+ * `report` is null until a licensing call has landed, which is also the state for
+ * every non-licensable board: nothing runs, so nothing is known, and the UI shows
+ * no licensing affordance at all.
+ */
+export type DeviceLicenseInfo = {
+  /** In flight, so the UI can show progress and refuse to start a second one. */
+  phase: 'idle' | 'checking' | 'done'
+  /**
+   * The last landed report from `readLicense` / `refreshLicense`. Carries the
+   * outcome union and the derived `deviceId` (which the renderer cannot compute —
+   * it needs `node:crypto` — and which feeds the copy button and the buy link).
+   */
+  report: DeviceLicenseReport | null
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +162,8 @@ export type DeviceState = {
     updated: boolean
   }
   runtimeConnection: RuntimeConnection
+  deviceConnection: DeviceConnection
+  deviceLicense: DeviceLicenseInfo
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +223,8 @@ export type DeviceActions = {
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
+  /** Set the mode-switch position (null clears it, e.g. on disconnect). */
+  setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
@@ -158,6 +233,29 @@ export type DeviceActions = {
   setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
   clearRuntimeConnection: () => void
+  /** Set the persistent serial link state (optionally the port it's on). */
+  setDeviceConnectionStatus: (
+    status: DeviceConnectionStatus,
+    port?: string | null,
+    transport?: DeviceConnection['transport'],
+    debugTransport?: DeviceConnection['debugTransport'],
+  ) => void
+  /** Reset the serial link to disconnected/null. */
+  clearDeviceConnection: () => void
+  /**
+   * Mark a licensing call as in flight.
+   *
+   * Deliberately KEEPS the last report rather than clearing it. Blanking it would
+   * make the badge flicker from "Licensed" to nothing and back on every refresh —
+   * and worse, a refresh that fails would leave the UI with less information than
+   * it had before asking. The `phase` is what says "asking"; the report stays as
+   * the last thing actually known.
+   */
+  startDeviceLicenseCheck: () => void
+  /** Land a finished licensing call: `phase='done'`, store the report. */
+  setDeviceLicenseReport: (report: DeviceLicenseReport) => void
+  /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
+  clearDeviceLicense: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

@@ -23,6 +23,21 @@
  *   getList request:   [FC=0x44] [numIndexes: U16BE] [arr0:U8 elem0:U16BE] [arr1:U8 elem1:U16BE] ...
  *   getList response:  [FC=0x44] [status] [lastIndex: U16BE] [tick: U32BE] [size: U16BE] [data...]
  *
+ *   plcSetState request:  [FC=0x4b] [state: U8]   (0 = STOP, 1 = RUN)
+ *   plcSetState response: [FC=0x4b] [status] [plcState: U8] [switchPosition: U8]
+ *
+ *   writeLicense request:  [FC=0x49] [len: U16BE] [blob...]
+ *   writeLicense response: [FC=0x49] [status]
+ *
+ *   readLicense request:   [FC=0x4a]
+ *   readLicense response:  [FC=0x4a] [status] [len: U16BE] [blob...]   (SUCCESS)
+ *                          [FC=0x4a] [status]                          (otherwise)
+ *
+ * The license `len` is BIG-ENDIAN like every other length on this wire, while
+ * the blob it frames is little-endian content (see license-blob.ts). The two
+ * conventions coexist by design: the framing is Modbus, the payload is a C
+ * struct.
+ *
  *   set request:   [FC=0x42] [arr: U8] [elem: U16BE] [force: U8] [dataLen: U16BE] [value...]
  *   set response:  [FC=0x42] [status]
  *
@@ -41,8 +56,18 @@
  */
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
-import { ModbusDebugResponse, ModbusFunctionCode } from '../simulator/types'
-import type { DebugSetResult, DebugTransportResult, Md5ProbeResult } from './types'
+import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from '../simulator/types'
+import type {
+  DebugBoardIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DebugSetResult,
+  DebugStatusResult,
+  DebugTransportResult,
+  DebugVersionResult,
+  Md5ProbeResult,
+  PlcControlResult,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // Uint8Array helpers — host-endian-agnostic, no typed-array views on wire data.
@@ -132,6 +157,50 @@ export function buildSetVariableRequest(index: number, force: boolean, valueBuff
   } else {
     writeU8(buf, 7, 0)
   }
+  return buf
+}
+
+// Always-on debugger extras. Each is a bare [FC] PDU — no payload — mirroring
+// the firmware's `mb_rtu_frame_len` entry of 4 (id + FC + 2 CRC bytes).
+
+export function buildGetStatusRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_STATUS)
+  return buf
+}
+
+export function buildGetVersionRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_VERSION)
+  return buf
+}
+
+export function buildGetBoardIdRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+  return buf
+}
+
+/**
+ * Build a write-license request (FC 0x49).
+ * PDU: `[FC][len:U16BE][blob...]`.
+ *
+ * The `len` on the wire is BIG-ENDIAN (matches every other debug FC), even
+ * though the blob *content* is little-endian (see license-blob.ts). Do not
+ * confuse the two: `writeU16BE` is deliberate here.
+ */
+export function buildWriteLicenseRequest(blob: Uint8Array): Uint8Array {
+  const buf = alloc(3 + blob.length)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_WRITE_LICENSE)
+  writeU16BE(buf, 1, blob.length)
+  buf.set(blob, 3)
+  return buf
+}
+
+/** Build a read-license request (FC 0x4A). Bare `[FC]` PDU — no payload. */
+export function buildReadLicenseRequest(): Uint8Array {
+  const buf = alloc(1)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_READ_LICENSE)
   return buf
 }
 
@@ -249,9 +318,258 @@ export function parseSetVariableResponse(data: Uint8Array): DebugSetResult {
 }
 
 /**
+ * Parse a status response (FC 0x46).
+ * Layout: `[FC][status][running:u8][tick:u32BE][uptime:u32BE][switch:u8]`
+ * (12 PDU bytes; 11 on firmware predating the run/stop state machine).
+ *
+ * This is the ONE read path for run/stop state — `running` was always this
+ * frame's first payload byte, so reporting the real state there rather than a
+ * hardcoded 1 costs no extra round trip and needs no second function code. The
+ * switch position is appended, which older parsers ignore and older firmware
+ * simply omits.
+ */
+export function parseGetStatusResponse(data: Uint8Array): DebugStatusResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_STATUS) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  if (data.length < 11) {
+    return { success: false, error: `Incomplete status response (${data.length} bytes, expected 11)` }
+  }
+
+  const running = readU8(data, 2)
+  return {
+    success: true,
+    running: running !== 0,
+    // Same byte as `running`, as the tri-state the run/stop machine actually
+    // has (STOPPED / RUNNING / ERROR).
+    plcState: running,
+    tick: readU32BE(data, 3),
+    uptimeMs: readU32BE(data, 7),
+    // Appended by firmware carrying the run/stop state machine; absent on older
+    // firmware, which callers read as "no switch gating".
+    ...(data.length >= 12 ? { switchPosition: readU8(data, 11) } : {}),
+  }
+}
+
+/**
+ * Parse a version response (FC 0x47).
+ * Layout: `[FC][status][version ASCII...]` (no NUL terminator on the wire).
+ */
+export function parseGetVersionResponse(data: Uint8Array): DebugVersionResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_VERSION) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  const version = new TextDecoder('utf-8').decode(data.subarray(2)).replace(/\0+$/, '').trim()
+  return { success: true, version }
+}
+
+/**
+ * Parse a board-id response (FC 0x48).
+ * Layout: `[FC][status][id_len:u8][id_bytes...]`. `id_len === 0` means the
+ * target has no unique-id support — success with an empty id.
+ */
+export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_GET_BOARD_ID) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  if (data.length < 3) {
+    return { success: false, error: `Incomplete board-id response (${data.length} bytes, expected at least 3)` }
+  }
+
+  const idLen = readU8(data, 2)
+  if (data.length < 3 + idLen) {
+    return {
+      success: false,
+      error: `Incomplete board-id data (expected ${idLen} bytes, got ${data.length - 3})`,
+    }
+  }
+
+  const boardId = data.slice(3, 3 + idLen)
+  const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
+  return { success: true, boardId, boardIdHex }
+}
+
+/**
+ * Parse a write-license response (FC 0x49).
+ * Layout: `[FC][status]`. SUCCESS → `{ success: true, status }`. LIC_UNSUPPORTED
+ * (the board has no backend) is a valid device state → `{ success: true,
+ * unsupported: true }`, not a transport error. Any other non-SUCCESS status is a
+ * device-side failure surfaced as `{ success: false, error }`.
+ */
+export function parseWriteLicenseResponse(data: Uint8Array): DebugLicenseWriteResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_WRITE_LICENSE) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
+    return { success: true, status, unsupported: true }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, status, error: statusError(status) }
+  }
+
+  return { success: true, status }
+}
+
+/**
+ * Parse a read-license response (FC 0x4A).
+ * Layout (OK):    `[FC][status=SUCCESS][len:U16BE][blob...]`.
+ * Layout (other): `[FC][status]` — no len, no blob.
+ *
+ * `len` is BIG-ENDIAN (readU16BE) — the wire convention — while the blob it
+ * frames is little-endian content. LIC_EMPTY / LIC_CORRUPT / LIC_UNSUPPORTED are
+ * valid device states (`success: true` with the corresponding flag), not
+ * transport errors.
+ */
+export function parseReadLicenseResponse(data: Uint8Array): DebugLicenseReadResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.DEBUG_READ_LICENSE) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+
+  if (status === ModbusDebugResponse.LIC_EMPTY) {
+    return { success: true, status, empty: true }
+  }
+
+  if (status === ModbusDebugResponse.LIC_CORRUPT) {
+    return { success: true, status, corrupt: true }
+  }
+
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
+    return { success: true, status, unsupported: true }
+  }
+
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, status, error: statusError(status) }
+  }
+
+  if (data.length < 4) {
+    return { success: false, status, error: `Incomplete license response (${data.length} bytes, expected at least 4)` }
+  }
+
+  const len = readU16BE(data, 2)
+  if (data.length < 4 + len) {
+    return {
+      success: false,
+      status,
+      error: `Incomplete license blob (expected ${len} bytes, got ${data.length - 4})`,
+    }
+  }
+
+  return { success: true, status, blob: data.slice(4, 4 + len) }
+}
+
+/**
  * Extract the function code from a Modbus PDU response.
  * Returns `undefined` if the buffer is empty.
  */
 export function responseFunctionCode(data: Uint8Array): number | undefined {
   return data.length > 0 ? readU8(data, 0) : undefined
+}
+
+// ---------------------------------------------------------------------------
+// FC 0x4b — run/stop command
+//
+// Command only. Reading the state is `buildGetStatusRequest` /
+// `parseGetStatusResponse` (FC 0x46) above, which already reports it.
+// ---------------------------------------------------------------------------
+
+export function buildPlcSetStateRequest(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Uint8Array {
+  const pdu = alloc(2)
+  writeU8(pdu, 0, ModbusFunctionCode.PLC_SET_STATE)
+  writeU8(pdu, 1, state === PlcRuntimeState.RUNNING ? 1 : 0)
+  return pdu
+}
+
+/**
+ * Parse a run/stop command acknowledgement.
+ *
+ * Three outcomes the caller must tell apart:
+ *   - success: the request was accepted; `state` is as of the last scan.
+ *   - `refusedBySwitch`: a RUN was rejected because the hardware switch reads
+ *     STOP. The editor turns this into the "flip the switch" warning, not an
+ *     error.
+ *   - `unsupported`: the target answered the Modbus exception form (FC | 0x80),
+ *     i.e. firmware built before the run/stop state machine. The editor degrades
+ *     to "rebuild and upload" so field devices never look broken.
+ */
+export function parsePlcSetStateResponse(data: Uint8Array): PlcControlResult {
+  if (data.length < 1) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const fc = readU8(data, 0)
+  if (fc === (ModbusFunctionCode.PLC_SET_STATE as number) + 0x80) {
+    return { success: false, unsupported: true, error: 'Firmware does not implement run/stop control' }
+  }
+  if (fc !== (ModbusFunctionCode.PLC_SET_STATE as number)) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+  if (data.length < 4) {
+    return { success: false, error: 'Response too short' }
+  }
+
+  const status = readU8(data, 1)
+  const result: PlcControlResult = {
+    success: status === (ModbusDebugResponse.SUCCESS as number),
+    state: readU8(data, 2),
+    switchPosition: readU8(data, 3),
+  }
+  if (status === (ModbusDebugResponse.REFUSED_BY_SWITCH as number)) {
+    result.refusedBySwitch = true
+    result.error = 'Refused: the hardware mode switch is in STOP'
+  } else if (!result.success) {
+    result.error = statusError(status)
+  }
+  return result
 }

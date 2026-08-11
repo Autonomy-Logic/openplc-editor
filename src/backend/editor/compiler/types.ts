@@ -1,16 +1,5 @@
 import { z } from 'zod/v4'
 
-const ArduinoCliConfigSchema = z.object({
-  board_manager: z.object({
-    additional_urls: z.array(z.string()),
-  }),
-  output: z.object({
-    no_color: z.boolean(),
-  }),
-})
-
-type ArduinoCliConfig = z.infer<typeof ArduinoCliConfigSchema>
-
 const ArduinoCoreControlSchema = z.array(z.record(z.string(), z.string()))
 
 type ArduinoCoreControl = z.infer<typeof ArduinoCoreControlSchema>
@@ -38,6 +27,6 @@ type ToolchainProperties = {
 export type { BoardInfo, HalsFile } from '../hardware/types'
 export { BoardInfoSchema, HalsFileSchema } from '../hardware/types'
 
-export { ArduinoCliConfigSchema, ArduinoCoreControlSchema }
+export { ArduinoCoreControlSchema }
 
-export type { ArduinoCliConfig, ArduinoCoreControl, ToolchainProperties }
+export type { ArduinoCoreControl, ToolchainProperties }

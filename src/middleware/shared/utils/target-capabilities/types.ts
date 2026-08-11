@@ -93,9 +93,48 @@ export interface TargetCapabilities {
    *  whether the host *can* run a simulator. */
   isInProcessSimulator: boolean
 
+  /** Target implements the runtime run/stop state machine, so the
+   *  Start/Stop control is meaningful.  Runtime v3 AND v4 drive it over
+   *  the same REST API (`/api/start-plc`, `/api/stop-plc`, both
+   *  JWT-authenticated); arduino-cli targets drive it over the device
+   *  connection (Modbus FC 0x4b).  Only the Simulator is excluded, and
+   *  only because it keeps its dedicated start/stop path.
+   *
+   *  Runtime v3 having its own web UI is NOT a reason to exclude it: the
+   *  editor's REST access is unaffected by that, the editor has shipped
+   *  this button working against v3, and gating it off here made Start /
+   *  Stop a silent no-op on a target where it had always worked. */
+  plcStateControl: boolean
+
   /** Upload happens over a local connection (USB / loopback) and
    *  doesn't require a separate "Connect" step. Arduino-CLI + the
    *  in-process Simulator. Runtime v3 / v4 require an established
    *  network connection. */
   directUsbUpload: boolean
+
+  /** The selected board's VPP is sold as a licensed product, so the
+   *  licensing flow runs for it.  Flows verbatim from the VPP manifest's
+   *  `device.capabilities.isLicensable`, exactly like `vppIo`.
+   *
+   *  This is THE gate on the whole flow, and the reason it is a
+   *  capability rather than an inference: when it is `false` a connect is
+   *  an ordinary connect — no anchor read beyond the usual
+   *  classification, no license FCs, no backend call. Every board that
+   *  does not declare it is `false`, which is every built-in hals.json
+   *  board, plain Runtime v3/v4, Linux, Arduino, and the Simulator.
+   *
+   *  There is deliberately NO companion "can this board store a licence"
+   *  capability. Every licensable VPP targets hardware that persists a
+   *  licence across a reboot — that is a product rule, not something a
+   *  manifest gets to vary — so the answer would be `true` wherever
+   *  `isLicensable` is true and irrelevant everywhere else. What the
+   *  build actually needs is the storage SOURCE, which travels as
+   *  `BoardBuildInfo.licenseStoreFiles`; a second derived boolean on top
+   *  of it bought one diagnostic sentence and one more way for two
+   *  representations of one fact to disagree.
+   *
+   *  A licensable board that answers `LIC_UNSUPPORTED` on the wire is
+   *  therefore a FIRMWARE fault (built without the backend), never a
+   *  hardware limitation — and the flow says exactly that. */
+  isLicensable: boolean
 }

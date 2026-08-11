@@ -7,7 +7,7 @@
  */
 
 import { ModbusRtuClient, type SerialPortLike } from '../modbus-rtu-client'
-import { ModbusDebugResponse, ModbusFunctionCode } from '../types'
+import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState, PlcSwitchPosition } from '../types'
 
 // jsdom polyfill
 if (typeof globalThis.TextEncoder === 'undefined') {
@@ -552,6 +552,219 @@ describe('ModbusRtuClient', () => {
   })
 
   // -----------------------------------------------------------------------
+  // getStatus (FC 0x46)
+  // -----------------------------------------------------------------------
+  describe('getStatus', () => {
+    function statusPayload(running: number, tick: number, uptime: number): Uint8Array {
+      const payload = new Uint8Array(10)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload[1] = running
+      payload[2] = (tick >>> 24) & 0xff
+      payload[3] = (tick >>> 16) & 0xff
+      payload[4] = (tick >>> 8) & 0xff
+      payload[5] = tick & 0xff
+      payload[6] = (uptime >>> 24) & 0xff
+      payload[7] = (uptime >>> 16) & 0xff
+      payload[8] = (uptime >>> 8) & 0xff
+      payload[9] = uptime & 0xff
+      return payload
+    }
+
+    it('returns running / tick / uptime on success', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, statusPayload(1, 42, 256)))
+      const result = await client.getStatus()
+      // `plcState` mirrors `running` as the run/stop machine's tri-state; the
+      // fixture frame carries no switch byte, so that field stays absent.
+      expect(result).toEqual({ success: true, running: true, plcState: 1, tick: 42, uptimeMs: 256 })
+    })
+
+    it('reports running=false when the flag byte is zero', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, statusPayload(0, 1, 1)))
+      const result = await client.getStatus()
+      expect(result.running).toBe(false)
+    })
+
+    it('returns error on function code mismatch', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Function code mismatch')
+    })
+
+    it('returns error on unknown status code', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, new Uint8Array([0x99])))
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unknown error code')
+    })
+
+    it('returns error on incomplete success payload', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_STATUS, new Uint8Array([ModbusDebugResponse.SUCCESS, 1])),
+      )
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete status response')
+    })
+
+    it('returns error on too-short response', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_GET_STATUS])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // getVersion (FC 0x47)
+  // -----------------------------------------------------------------------
+  describe('getVersion', () => {
+    it('returns the ASCII version string on success', async () => {
+      await connectClient()
+      const ver = new TextEncoder().encode('4.2.7')
+      const payload = new Uint8Array(1 + ver.length)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload.set(ver, 1)
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_VERSION, payload))
+      const result = await client.getVersion()
+      expect(result).toEqual({ success: true, version: '4.2.7' })
+    })
+
+    it('returns error on function code mismatch', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS])))
+      const result = await client.getVersion()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Function code mismatch')
+    })
+
+    it('returns error on unknown status code', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_VERSION, new Uint8Array([0x99])))
+      const result = await client.getVersion()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unknown error code')
+    })
+
+    it('returns error on too-short response', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_GET_VERSION])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+      const result = await client.getVersion()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.getVersion()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // getBoardId (FC 0x48)
+  // -----------------------------------------------------------------------
+  describe('getBoardId', () => {
+    it('returns id bytes and hex on success', async () => {
+      await connectClient()
+      const payload = new Uint8Array([ModbusDebugResponse.SUCCESS, 0x03, 0x0a, 0xbc, 0x01])
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload))
+      const result = await client.getBoardId()
+      expect(result.success).toBe(true)
+      expect(Array.from(result.boardId!)).toEqual([0x0a, 0xbc, 0x01])
+      expect(result.boardIdHex).toBe('0abc01')
+    })
+
+    it('handles id_len = 0 (unsupported core) as success with empty id', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
+      )
+      const result = await client.getBoardId()
+      expect(result.success).toBe(true)
+      expect(result.boardIdHex).toBe('')
+      expect(Array.from(result.boardId!)).toEqual([])
+    })
+
+    it('returns error on function code mismatch', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])))
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Function code mismatch')
+    })
+
+    it('returns error on unknown status code', async () => {
+      await connectClient()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([0x99, 0x00])))
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unknown error code')
+    })
+
+    it('returns error on incomplete id data', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(
+          1,
+          ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b]),
+        ),
+      )
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete board-id data')
+    })
+
+    it('returns error on too-short response', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(frame.length + 2)
+      full.set(frame, 0)
+      full[frame.length] = (crc >>> 8) & 0xff
+      full[frame.length + 1] = crc & 0xff
+      autoRespond(full)
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // sendRequestImpl edge cases
   // -----------------------------------------------------------------------
   describe('sendRequestImpl edge cases', () => {
@@ -684,6 +897,71 @@ describe('ModbusRtuClient', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBe('non-error string')
     })
+
+    it('getStatus handles response too short (<9 bytes)', async () => {
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.getStatus()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('getStatus handles non-Error exception', async () => {
+      await connectClient()
+      mockSendRequest(client, 'non-error string')
+      const result = await client.getStatus()
+      expect(result.error).toBe('non-error string')
+    })
+
+    it('getVersion handles response too short (<9 bytes)', async () => {
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.getVersion()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('getVersion handles non-Error exception', async () => {
+      await connectClient()
+      mockSendRequest(client, 'non-error string')
+      const result = await client.getVersion()
+      expect(result.error).toBe('non-error string')
+    })
+
+    it('getBoardId handles response too short (<10 bytes)', async () => {
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.getBoardId()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('setPlcState handles response too short (<8 bytes)', async () => {
+      // Belongs here rather than with the wire-framing tests: `sendRequest` prepends
+      // 6 bytes of TCP-compat padding, so no real reply can be short enough to reach
+      // this guard — a 4-byte frame lands on the PARSER's own "too short" instead.
+      // Both messages read alike, which is how a fixture can appear to cover this
+      // branch while never entering it.
+      await connectClient()
+      mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0]))
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid response: too short')
+    })
+
+    it('setPlcState reports a non-Error rejection', async () => {
+      await connectClient()
+      mockSendRequest(client, 'serial port vanished')
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+      expect(result).toEqual({ success: false, error: 'serial port vanished' })
+    })
+
+    it('getBoardId handles non-Error exception', async () => {
+      await connectClient()
+      mockSendRequest(client, 'non-error string')
+      const result = await client.getBoardId()
+      expect(result.error).toBe('non-error string')
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -773,6 +1051,241 @@ describe('ModbusRtuClient', () => {
 
       const result = await client.setVariable(0, false)
       expect(result.success).toBe(true)
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // setPlcState (FC 0x4b)
+  //
+  // The end-to-end coverage for run/stop lives in plc-control-e2e.test.ts, which
+  // only runs when it is pointed at built firmware — so without these the wire
+  // framing here is unexercised on any ordinary test run.
+  // -----------------------------------------------------------------------
+  describe('setPlcState', () => {
+    /** `[status][plcState][switchPosition]` — the FC 0x4b acknowledgement payload. */
+    function ackPayload(status: number, state: number, switchPosition: number): Uint8Array {
+      return new Uint8Array([status, state, switchPosition])
+    }
+
+    it('sends the run request and returns the acknowledged state', async () => {
+      await connectClient()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(
+                1,
+                ModbusFunctionCode.PLC_SET_STATE,
+                ackPayload(ModbusDebugResponse.SUCCESS, PlcRuntimeState.RUNNING, PlcSwitchPosition.RUN),
+              ),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      // Request is [slaveId][FC][state] + CRC — the state byte is what distinguishes
+      // run from stop, and getting it backwards would stop a PLC on a start click.
+      expect(written[0][1]).toBe(ModbusFunctionCode.PLC_SET_STATE)
+      expect(written[0][2]).toBe(1)
+      expect(result).toMatchObject({ success: true, state: PlcRuntimeState.RUNNING })
+    })
+
+    it('encodes a stop request as state 0', async () => {
+      await connectClient()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(
+                1,
+                ModbusFunctionCode.PLC_SET_STATE,
+                ackPayload(ModbusDebugResponse.SUCCESS, PlcRuntimeState.STOPPED, PlcSwitchPosition.RUN),
+              ),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+
+      expect(written[0][2]).toBe(0)
+      expect(result).toMatchObject({ success: true, state: PlcRuntimeState.STOPPED })
+    })
+
+    it('surfaces a RUN refused by the hardware mode switch', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(
+          1,
+          ModbusFunctionCode.PLC_SET_STATE,
+          ackPayload(ModbusDebugResponse.REFUSED_BY_SWITCH, PlcRuntimeState.STOPPED, PlcSwitchPosition.STOP),
+        ),
+      )
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      // Drives the "flip the switch to RUN" warning rather than a generic failure.
+      expect(result).toMatchObject({ success: false, refusedBySwitch: true })
+    })
+
+    it('rejects a well-framed reply whose PDU is truncated', async () => {
+      await connectClient()
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.PLC_SET_STATE])
+      const crc = calculateCrc(frame)
+      const full = new Uint8Array(4)
+      full.set(frame, 0)
+      full[2] = (crc >>> 8) & 0xff
+      full[3] = crc & 0xff
+      autoRespond(full)
+
+      const result = await client.setPlcState(PlcRuntimeState.RUNNING)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('too short')
+    })
+
+    it('returns error on timeout', async () => {
+      await connectClient()
+      const result = await client.setPlcState(PlcRuntimeState.STOPPED)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // On-device license storage (FC 0x49 write / 0x4A read)
+  //
+  // The end-to-end coverage against a real license store needs firmware built
+  // with the store backend compiled in, so without these the wire framing here
+  // is unexercised on an ordinary test run.
+  // -----------------------------------------------------------------------
+  describe('writeLicense / readLicense', () => {
+    /** A recognisable 98-byte blob whose first byte is the 'O' of the LE magic. */
+    function sampleBlob(): Uint8Array {
+      const blob = new Uint8Array(98)
+      for (let i = 0; i < blob.length; i++) blob[i] = i & 0xff
+      blob[0] = 0x4f
+      return blob
+    }
+
+    it('frames a write as [FC][len:u16BE][blob] and reports SUCCESS', async () => {
+      await connectClient()
+      const blob = sampleBlob()
+      const written: number[][] = []
+      port._interceptWrite = (data: Uint8Array) => {
+        written.push(Array.from(data))
+        setTimeout(
+          () =>
+            port._emit(
+              'data',
+              buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.SUCCESS])),
+            ),
+          0,
+        )
+      }
+
+      const result = await client.writeLicense(blob)
+
+      // [slaveId][FC][len hi][len lo][blob...] + CRC. The length is BIG-endian
+      // even though the blob content it frames is little-endian.
+      expect(written[0][1]).toBe(ModbusFunctionCode.DEBUG_WRITE_LICENSE)
+      expect(written[0][2]).toBe(0x00)
+      expect(written[0][3]).toBe(98)
+      expect(written[0][4]).toBe(0x4f)
+      expect(result).toMatchObject({ success: true, status: ModbusDebugResponse.SUCCESS })
+    })
+
+    it('reports LIC_UNSUPPORTED on a write as a valid device state, not a failure', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_WRITE_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_UNSUPPORTED])),
+      )
+
+      const result = await client.writeLicense(sampleBlob())
+
+      expect(result).toMatchObject({ success: true, unsupported: true })
+    })
+
+    it('reads the stored blob back byte-for-byte', async () => {
+      await connectClient()
+      const blob = sampleBlob()
+      const payload = new Uint8Array(3 + blob.length)
+      payload[0] = ModbusDebugResponse.SUCCESS
+      payload[1] = 0x00 // len hi
+      payload[2] = blob.length // len lo
+      payload.set(blob, 3)
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, payload))
+
+      const result = await client.readLicense()
+
+      expect(result.success).toBe(true)
+      expect(Array.from(result.blob ?? [])).toEqual(Array.from(blob))
+      // The LE uint32 magic 0x434C504F serializes to 4F 50 4C 43, so a leading
+      // 0x4F proves the byte order survived the write -> store -> read path.
+      expect(result.blob?.[0]).toBe(0x4f)
+    })
+
+    it('classifies LIC_EMPTY as virgin storage rather than an error', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_EMPTY])),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result).toMatchObject({ success: true, empty: true })
+      expect(result.blob).toBeUndefined()
+    })
+
+    it('classifies LIC_CORRUPT as a valid device state rather than an error', async () => {
+      await connectClient()
+      autoRespond(
+        buildResponse(1, ModbusFunctionCode.DEBUG_READ_LICENSE, new Uint8Array([ModbusDebugResponse.LIC_CORRUPT])),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result).toMatchObject({ success: true, corrupt: true })
+    })
+
+    it('rejects a read whose declared length exceeds the bytes received', async () => {
+      await connectClient()
+      // len says 98, only 2 blob bytes follow — the truncation must be reported,
+      // not silently handed on as a short "license".
+      autoRespond(
+        buildResponse(
+          1,
+          ModbusFunctionCode.DEBUG_READ_LICENSE,
+          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00, 98, 0x4f, 0x50]),
+        ),
+      )
+
+      const result = await client.readLicense()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Incomplete license blob')
+    })
+
+    it('returns an error on a read timeout', async () => {
+      await connectClient()
+      const result = await client.readLicense()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
+    })
+
+    it('returns an error on a write timeout', async () => {
+      await connectClient()
+      const result = await client.writeLicense(sampleBlob())
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('timeout')
     })
   })
 })

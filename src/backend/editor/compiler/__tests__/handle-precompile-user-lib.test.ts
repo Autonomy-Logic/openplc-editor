@@ -129,6 +129,34 @@ describe('handlePrecompileUserLib include-path injection', () => {
     expect(compileCmd).toContain('-I/fake/renesas/variants/UNOWIFIR4')
   })
 
+  // esp8266 decides flash-vs-IRAM by matching the OBJECT NAME in its linker
+  // script (`*.cpp.o(.literal* .text*)` -> flash). Named `foo.o`, every TU of
+  // libOpenPLCUserLib.a missed that match and fell into `.text1`, a catch-all
+  // mapped into the 32 KB `iram1_0_seg` shared with the WiFi/SDK core —
+  // measured at 7387 bytes for a small project, which overflowed the segment
+  // and failed the link with "section `.text1' will not fit in region
+  // `iram1_0_seg'", naming neither this archive nor the cause.
+  it('names objects `<source>.cpp.o` so esp8266 links them into flash, not IRAM', async () => {
+    fs.writeFileSync(join(srcDir, 'arduino_runtime_glue.cpp'), 'void glue() {}\n', 'utf-8')
+
+    const execCalls: string[] = []
+    execImpl.current = async (cmd) => {
+      execCalls.push(cmd)
+      return { stdout: '', stderr: '' }
+    }
+
+    await compilerModule.handlePrecompileUserLib({
+      compilationPath: buildDir,
+      fqbn: 'arduino:renesas_uno:unor4wifi',
+      handleOutputData: noopLog,
+    })
+
+    const compileCmd = execCalls.find((c) => c.includes('arduino_runtime_glue.cpp')) ?? ''
+    expect(compileCmd).toContain('arduino_runtime_glue.cpp.o')
+    // The bare `.o` form is what the esp8266 flash matcher misses.
+    expect(compileCmd).not.toMatch(/[/\\]arduino_runtime_glue\.o\b/)
+  })
+
   it('omits the variant -I when build.variant.path is unset (runtime-only / minimalist cores)', async () => {
     extractSpy.mockResolvedValue({
       ...baseProps,

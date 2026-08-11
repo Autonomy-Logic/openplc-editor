@@ -24,7 +24,7 @@
  * `middleware/adapters/web/`.
  */
 
-import { deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
+import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
   fromSchemaShape,
@@ -117,6 +117,22 @@ export interface EditorCompilerPlatformPortContext {
    *  in the `archiver`-dependent compressSourceFolder method (which
    *  has its own private state on CompilerModule). */
   compressSourceFolder: (folderPath: string) => Promise<Buffer>
+  /**
+   * `package.minRuntimeVersion` of the VPP providing a given board, or
+   * null when the board isn't from a VPP / declares no floor
+   * (DOPE-448). The pipeline compares it against the connected
+   * runtime after the version probe.
+   *
+   * Injected rather than resolved here for the same reason as
+   * `compressSourceFolder`: importing `PackageManagerModule` directly
+   * pulls in the Electron-dependent logger at module load, which
+   * breaks anything importing this adapter outside a real Electron
+   * process (its own unit test included).
+   *
+   * Optional so callers predating this stay valid; absent means "no
+   * floor known", which the pipeline treats as no constraint.
+   */
+  getVppRuntimeFloor?: (boardTarget: string) => string | null
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -193,6 +209,12 @@ export function createEditorCompilerPlatformPort(
      * `handleCoreInstallation` already takes a core id and a log
      * callback — direct passthrough modulo the log-shape
      * translation.
+     *
+     * `args.boardManagerUrl` (the VPP's `target.boardManagerUrl`) is
+     * forwarded so vendor cores outside arduino-cli's built-in index
+     * install automatically rather than failing with "Platform not
+     * found".  `handleCoreInstallation` refreshes the index against
+     * that URL before installing.
      */
     async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
       try {
@@ -203,6 +225,7 @@ export function createEditorCompilerPlatformPort(
             log(message, level ?? 'info')
           },
           args.coreVersion,
+          args.boardManagerUrl,
         )
         return { ok: true }
       } catch (error) {
@@ -387,7 +410,11 @@ export function createEditorCompilerPlatformPort(
           startIntervalMs: context.startIntervalMs,
         })
 
-        return { ok: deployOutcome === 'STARTED' }
+        // 'STARTED' is not the only success: a runtime that refused to start
+        // because its hardware mode switch reads STOP has still taken the
+        // program. deployReachedDevice keeps that judgement in one place, shared
+        // with the web adapter.
+        return { ok: deployReachedDevice(deployOutcome) }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log(`Runtime v4 upload failed: ${message}`, 'error')
@@ -486,7 +513,11 @@ export function createEditorCompilerPlatformPort(
           startTimeoutMs: context.startTimeoutMs,
           startIntervalMs: context.startIntervalMs,
         })
-        return { ok: deployOutcome === 'STARTED' }
+        // 'STARTED' is not the only success: a runtime that refused to start
+        // because its hardware mode switch reads STOP has still taken the
+        // program. deployReachedDevice keeps that judgement in one place, shared
+        // with the web adapter.
+        return { ok: deployReachedDevice(deployOutcome) }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         log(`Runtime v3 upload failed: ${message}`, 'error')
@@ -495,8 +526,14 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Probe the device's `/api/version` (unauthenticated) so the
-     * pipeline can short-circuit uploads to pre-4.1.0 runtimes.
+     * Probe the device (unauthenticated) so the pipeline can
+     * short-circuit uploads in both directions: to a runtime too old
+     * for this editor, and from an editor too old for this runtime.
+     *
+     * Tries `/api/capabilities` first — it carries the runtime version
+     * AND the runtime's `minEditorVersion` in one round-trip — and
+     * falls back to `/api/version` for runtimes that predate it
+     * (DOPE-448).
      *
      * Transport: Electron's HTTPS bridge → device IP.
      * Response parsing + null-fallback live in the shared
@@ -505,19 +542,21 @@ export function createEditorCompilerPlatformPort(
      */
     async checkRuntimeVersion(args: CheckRuntimeVersionArgs, log: PlatformLog): Promise<CheckRuntimeVersionResult> {
       const deviceContext = assertEditorHttpsContext(args.context)
-      const { version } = await probeRuntimeVersion({
-        fetchVersion: async () => {
-          const result = await context.mainProcessBridge.makeRuntimeApiRequest<{ version: string }>(
-            deviceContext.ip,
-            '/api/version',
-            (data: string) => JSON.parse(data) as { version: string },
-          )
-          if (!result.success) return { success: false, error: result.error }
-          return { success: true, body: result.data }
-        },
+      const getJson = async (endpoint: string) => {
+        const result = await context.mainProcessBridge.makeRuntimeApiRequest<unknown>(
+          deviceContext.ip,
+          endpoint,
+          (data: string) => JSON.parse(data) as unknown,
+        )
+        if (!result.success) return { success: false as const, error: result.error }
+        return { success: true as const, body: result.data }
+      }
+      const { version, minEditorVersion } = await probeRuntimeVersion({
+        fetchCapabilities: () => getJson('/api/capabilities'),
+        fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version }
+      return { ok: true, version, minEditorVersion }
     },
 
     /**
@@ -560,7 +599,12 @@ export function createEditorCompilerPlatformPort(
             log(message, logLevel ?? 'info')
           },
         )
-        return { files: {} }
+        // Surface the package's runtime floor so the pipeline can compare
+        // it against the connected runtime after the version probe
+        // (DOPE-448). Read here rather than inside the handler because
+        // the handler returns void and writes straight to disk; the
+        // registry lookup is cheap next to the packaging work that ran.
+        return { files: {}, minRuntimeVersion: readVppRuntimeFloor(context, args.boardTarget) }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
@@ -588,6 +632,24 @@ export function assertEditorHttpsContext(
     throw new Error(`Editor compiler platform port received non-editor context: ${context.kind}`)
   }
   return context
+}
+
+/**
+ * `package.minRuntimeVersion` of the VPP providing `boardTarget`, or
+ * null when no resolver was injected, the board is not from a VPP, is
+ * not a `runtime-v4` target, or the package declares no floor.
+ *
+ * Never throws: a missing or unreadable registry means "no declared
+ * floor", which the pipeline treats as no constraint. A version gate
+ * that failed the build because it could not read its own metadata
+ * would be worse than the mismatch it exists to catch.
+ */
+function readVppRuntimeFloor(context: EditorCompilerPlatformPortContext, boardTarget: string): string | null {
+  try {
+    return context.getVppRuntimeFloor?.(boardTarget) ?? null
+  } catch {
+    return null
+  }
 }
 
 /**

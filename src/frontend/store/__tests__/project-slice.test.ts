@@ -21,6 +21,7 @@ import type {
   S7CommDataBlock,
 } from '../../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from '../../utils/generate-iec-variables-to-string'
+import { serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice } from '../slices/device'
 import { createEditorSlice } from '../slices/editor'
@@ -46,6 +47,19 @@ function makeStore() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function openDatatypeInCodeMode(store: ReturnType<typeof makeStore>, name: string, code: string) {
+  store.getState().editorActions.addModel({
+    type: 'plc-datatype',
+    meta: { name, derivation: 'enumerated' },
+    structure: { display: 'code', code },
+  })
+}
+
+function codeOf(store: ReturnType<typeof makeStore>, name: string): string | undefined {
+  const model = store.getState().editors.find((e) => e.meta.name === name)
+  return model?.type === 'plc-datatype' && model.structure.display === 'code' ? model.structure.code : undefined
+}
 
 function makeVariable(name: string, cls: PLCVariable['class'] = 'local'): PLCVariable {
   return {
@@ -1129,11 +1143,175 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.dataTypes).toHaveLength(0)
     })
 
+    it('queues the datatypes/<name>.dt path for deletion', () => {
+      const dt: PLCDataType = { name: 'MyStruct', derivation: 'structure', variable: [] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.deleteDatatype('MyStruct')
+      expect(store.getState().pendingDeletions).toContain('datatypes/MyStruct.dt')
+    })
+
     it('does nothing when data type not found', () => {
       const dt: PLCDataType = { name: 'A', derivation: 'structure', variable: [] }
       store.getState().projectActions.createDatatype({ data: dt })
       store.getState().projectActions.deleteDatatype('NonExistent')
       expect(store.getState().project.data.dataTypes).toHaveLength(1)
+    })
+  })
+
+  describe('updateDatatypeName', () => {
+    it('renames the data type and queues the old .dt path for deletion', () => {
+      const dt: PLCDataType = { name: 'OldName', derivation: 'structure', variable: [] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.updateDatatypeName('OldName', 'NewName')
+      expect(store.getState().project.data.dataTypes[0].name).toBe('NewName')
+      expect(store.getState().pendingDeletions).toContain('datatypes/OldName.dt')
+    })
+
+    it('does nothing when the data type is not found', () => {
+      store.getState().projectActions.updateDatatypeName('Ghost', 'NewName')
+      expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      expect(store.getState().pendingDeletions).toHaveLength(0)
+    })
+  })
+
+  describe('propagateDatatypeRename', () => {
+    const directRef = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+    })
+    const arrayRef = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: {
+        definition: 'array',
+        value: `ARRAY [0..4] OF ${typeName}`,
+        data: {
+          baseType: { definition: 'user-data-type', value: typeName },
+          dimensions: [{ dimension: '0..4' }],
+        },
+      },
+      location: '',
+      documentation: '',
+    })
+
+    beforeEach(() => {
+      store.getState().projectActions.createPou({
+        type: 'program',
+        data: {
+          language: 'st',
+          name: 'Main',
+          variables: [directRef('motor', 'MotorDef'), arrayRef('motors', 'motordef'), makeVariable('plain')],
+          body: makeBody(),
+          documentation: '',
+        },
+      })
+      store.getState().projectActions.setGlobalVariables({
+        variables: [{ ...directRef('gMotor', 'MotorDef'), class: 'global' }, makeVariable('gPlain', 'global')],
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'MotorDef',
+          derivation: 'structure',
+          variable: [{ name: 'speed', type: { definition: 'base-type', value: 'INT' } }],
+        },
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [
+            { name: 'front', type: { definition: 'user-data-type', value: 'MotorDef' } },
+            { name: 'id', type: { definition: 'base-type', value: 'INT' } },
+          ],
+        },
+      })
+      store.getState().projectActions.createDatatype({
+        data: {
+          name: 'MotorBank',
+          derivation: 'array',
+          baseType: { definition: 'user-data-type', value: 'MotorDef' },
+          initialValue: '',
+          dimensions: [{ dimension: '1..8' }],
+        },
+      })
+    })
+
+    it('rewrites direct and array POU variable references (case-insensitive)', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const variables = store.getState().project.data.pous[0].interface?.variables ?? []
+      expect(variables[0].type).toEqual({ definition: 'user-data-type', value: 'DriveDef' })
+      expect(variables[1].type).toEqual({
+        definition: 'array',
+        value: 'ARRAY [0..4] OF DriveDef',
+        data: {
+          baseType: { definition: 'user-data-type', value: 'DriveDef' },
+          dimensions: [{ dimension: '0..4' }],
+        },
+      })
+      expect(variables[2].type).toEqual({ definition: 'base-type', value: 'INT' })
+    })
+
+    it('rewrites global variable references', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const globals = store.getState().project.data.configurations.resource.globalVariables
+      expect(globals[0].type).toEqual({ definition: 'user-data-type', value: 'DriveDef' })
+      expect(globals[1].type).toEqual({ definition: 'base-type', value: 'INT' })
+    })
+
+    it('rewrites other data types and leaves the renamed type entry itself alone', () => {
+      store.getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+
+      const dataTypes = store.getState().project.data.dataTypes
+      // The type's own entry is updateDatatypeName's job.
+      expect(dataTypes[0].name).toBe('MotorDef')
+      expect(dataTypes[1]).toEqual({
+        name: 'Chassis',
+        derivation: 'structure',
+        variable: [
+          { name: 'front', type: { definition: 'user-data-type', value: 'DriveDef' } },
+          { name: 'id', type: { definition: 'base-type', value: 'INT' } },
+        ],
+      })
+      expect(dataTypes[2]).toEqual({
+        name: 'MotorBank',
+        derivation: 'array',
+        baseType: { definition: 'user-data-type', value: 'DriveDef' },
+        initialValue: '',
+        dimensions: [{ dimension: '1..8' }],
+      })
+    })
+
+    it('is a no-op when nothing references the type', () => {
+      const before = store.getState().project
+      store.getState().projectActions.propagateDatatypeRename('Ghost', 'Phantom')
+      const after = store.getState().project
+
+      expect(after.data.pous).toEqual(before.data.pous)
+      expect(after.data.configurations.resource.globalVariables).toEqual(
+        before.data.configurations.resource.globalVariables,
+      )
+      expect(after.data.dataTypes).toEqual(before.data.dataTypes)
+    })
+  })
+
+  describe('setUnparsedDataTypeFiles', () => {
+    it('replaces the stashed raw .dt files', () => {
+      const raw = [{ relativePath: 'datatypes/Broken.dt', content: 'TYPE garbage' }]
+      store.getState().projectActions.setUnparsedDataTypeFiles(raw)
+      expect(store.getState().unparsedDataTypeFiles).toEqual(raw)
+      store.getState().projectActions.setUnparsedDataTypeFiles([])
+      expect(store.getState().unparsedDataTypeFiles).toEqual([])
+    })
+
+    it('is reset by clearProjects', () => {
+      store.getState().projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/X.dt', content: 'x' }])
+      store.getState().projectActions.clearProjects()
+      expect(store.getState().unparsedDataTypeFiles).toEqual([])
     })
   })
 
@@ -1268,6 +1446,104 @@ describe('createProjectSlice', () => {
       const replacement: PLCDataType = { name: 'Z', derivation: 'structure', variable: [] }
       store.getState().projectActions.applyDatatypeSnapshot('NonExistent', replacement)
       expect(store.getState().project.data.dataTypes[0].name).toBe('A')
+    })
+
+    it('regenerates the code buffer of a type shown in code mode', () => {
+      const dt: PLCDataType = { name: 'A', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      openDatatypeInCodeMode(store, 'A', 'stale text')
+
+      store.getState().projectActions.applyDatatypeSnapshot('A', {
+        name: 'A',
+        derivation: 'enumerated',
+        values: [{ description: 'BLUE' }],
+      })
+
+      expect(codeOf(store, 'A')).toContain('BLUE')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Data-type code view
+  // -------------------------------------------------------------------------
+  describe('reconcileDatatypeText', () => {
+    const enumType: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+
+    it('is a no-op when the type is not shown in code mode', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+
+    it('is a no-op when the buffer still matches the serialized type', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', serializeDataTypeToText(enumType))
+
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+
+    it('is a no-op when the type no longer exists', () => {
+      openDatatypeInCodeMode(store, 'Ghost', 'TYPE\nGhost : (RED);\nEND_TYPE\n')
+      expect(store.getState().projectActions.reconcileDatatypeText('Ghost').ok).toBe(true)
+      expect(store.getState().project.data.dataTypes).toHaveLength(0)
+    })
+
+    it('folds a diverged buffer back into the type', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', 'TYPE\nColors : (RED, GREEN);\nEND_TYPE\n')
+
+      expect(store.getState().projectActions.reconcileDatatypeText('Colors').ok).toBe(true)
+      const updated = store.getState().project.data.dataTypes[0]
+      expect(updated.derivation === 'enumerated' && updated.values).toEqual([
+        { description: 'RED' },
+        { description: 'GREEN' },
+      ])
+    })
+
+    it('refuses when the buffer does not parse', () => {
+      store.getState().projectActions.createDatatype({ data: enumType })
+      openDatatypeInCodeMode(store, 'Colors', 'TYPE\nnot a declaration\nEND_TYPE\n')
+
+      const response = store.getState().projectActions.reconcileDatatypeText('Colors')
+      expect(response.ok).toBe(false)
+      expect(response.title).toBe('Data type text is invalid')
+      expect(store.getState().project.data.dataTypes[0]).toEqual(enumType)
+    })
+  })
+
+  describe('regenerateDatatypeText', () => {
+    it('re-serializes the type into its buffer', () => {
+      const dt: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      openDatatypeInCodeMode(store, 'Colors', 'stale text')
+
+      store.getState().projectActions.regenerateDatatypeText('Colors')
+      expect(codeOf(store, 'Colors')).toBe(serializeDataTypeToText(dt))
+    })
+
+    it('does nothing when the type is not shown in code mode', () => {
+      const dt: PLCDataType = { name: 'Colors', derivation: 'enumerated', values: [{ description: 'RED' }] }
+      store.getState().projectActions.createDatatype({ data: dt })
+      store.getState().projectActions.regenerateDatatypeText('Colors')
+      expect(store.getState().editors).toHaveLength(0)
+    })
+
+    it('does nothing when the type no longer exists', () => {
+      openDatatypeInCodeMode(store, 'Ghost', 'raw')
+      store.getState().projectActions.regenerateDatatypeText('Ghost')
+      expect(codeOf(store, 'Ghost')).toBe('raw')
+    })
+  })
+
+  describe('removeUnparsedDataTypeFile', () => {
+    it('drops only the matching path', () => {
+      store.getState().projectActions.setUnparsedDataTypeFiles([
+        { relativePath: 'datatypes/A.dt', content: 'a' },
+        { relativePath: 'datatypes/B.dt', content: 'b' },
+      ])
+      store.getState().projectActions.removeUnparsedDataTypeFile('datatypes/A.dt')
+      expect(store.getState().unparsedDataTypeFiles).toEqual([{ relativePath: 'datatypes/B.dt', content: 'b' }])
     })
   })
 
