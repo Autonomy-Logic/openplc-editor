@@ -166,13 +166,10 @@ describe('logCompilerEvent', () => {
     /** Collector that also records the per-write `redraw` directive. */
     function createRedrawCollector() {
       const writes: { message: string; transient?: boolean; redraw?: boolean }[] = []
-      const log = (
-        entry: { id: string; level: string; message: string; transient?: boolean },
-        options?: { redraw?: boolean },
-      ) => {
+      const log: Parameters<typeof logCompilerEvent>[1] = (entry, options) => {
         writes.push({ message: entry.message, transient: entry.transient, redraw: options?.redraw })
       }
-      return { writes, log: log as Parameters<typeof logCompilerEvent>[1] }
+      return { writes, log }
     }
 
     it('collapses a multi-frame chunk to the frame left on screen', () => {
@@ -199,6 +196,40 @@ describe('logCompilerEvent', () => {
       // longer open, so the next download starts a fresh line.
       expect(writes[0].redraw).toBe(true)
       expect(writes[0].transient).toBe(false)
+    })
+
+    // A `\r` at the end of a line is a CRLF terminator, not a redraw. Counting
+    // it as one loses log lines on Windows: the ordinary line either overwrites
+    // the live progress line above it, or is itself overwritten by the next
+    // redraw. Both were reproduced before this was fixed.
+    it('does not let a Windows CRLF line overwrite the live progress line', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\rDownloading 50%' }, log)
+      logCompilerEvent({ message: 'Compiling sketch...\r\n' }, log)
+
+      expect(writes).toHaveLength(2)
+      expect(writes[1].message).toBe('Compiling sketch...')
+      expect(writes[1].redraw).toBe(false)
+    })
+
+    it('survives a CRLF split across two chunks', () => {
+      // The `\r` and the `\n` arrive in separate stdout events.
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: 'Windows line\r' }, log)
+      logCompilerEvent({ message: '\n' }, log)
+      logCompilerEvent({ message: '\rDownloading 5%' }, log)
+
+      expect(writes.map((w) => w.message)).toEqual(['Windows line', 'Downloading 5%'])
+      // The ordinary line must be closed, or the redraw replaces it.
+      expect(writes[0].redraw).toBe(false)
+      expect(writes[0].transient).toBe(false)
+    })
+
+    it('still treats a leading carriage return as a redraw', () => {
+      const { writes, log } = createRedrawCollector()
+      logCompilerEvent({ message: '\rDownloading 60%' }, log)
+      expect(writes[0].redraw).toBe(true)
+      expect(writes[0].transient).toBe(true)
     })
 
     it('leaves ordinary output untouched — no redraw, never transient', () => {

@@ -23,15 +23,20 @@
 import { isMap, isSeq, parse, parseDocument } from 'yaml'
 
 const BOARD_MANAGER_URLS_PATH = ['board_manager', 'additional_urls']
-const NO_COLOR_PATH = ['output', 'no_color']
 
-type ArduinoCliConfigShape = {
-  board_manager?: { additional_urls?: unknown }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** Board-manager URLs declared by the shipped template (which we author). */
 function shippedBoardManagerUrls(shipped: string): string[] {
-  const urls = (parse(shipped) as ArduinoCliConfigShape | null)?.board_manager?.additional_urls
+  const parsed: unknown = parse(shipped)
+  if (!isRecord(parsed)) return []
+
+  const boardManager = parsed.board_manager
+  if (!isRecord(boardManager)) return []
+
+  const urls = boardManager.additional_urls
   return Array.isArray(urls) ? urls.filter((url): url is string => typeof url === 'string') : []
 }
 
@@ -47,10 +52,18 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
 
   let changed = false
 
+  // Nested `*In()` calls walk the tree and throw ("Expected YAML collection
+  // at board_manager") if a parent turns out to be a scalar. A hand-edited
+  // config can absolutely be parseable-but-odd, and throwing here would abort
+  // the whole reconciliation — leaving the user with no migration and only a
+  // console error to explain it. So fetch each parent and check it first.
+  const boardManager = doc.get('board_manager')
+  const output = doc.get('output')
+
   // 1. Board-manager URLs — union, never subtract.
   const shippedUrls = shippedBoardManagerUrls(shipped)
-  if (shippedUrls.length > 0) {
-    const current = doc.getIn(BOARD_MANAGER_URLS_PATH)
+  if (shippedUrls.length > 0 && (boardManager === undefined || boardManager === null || isMap(boardManager))) {
+    const current = isMap(boardManager) ? boardManager.get('additional_urls') : undefined
     const present = new Set<string>(isSeq(current) ? current.toJSON().map(String) : [])
     const missing = shippedUrls.filter((url) => !present.has(url))
 
@@ -67,13 +80,12 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
   }
 
   // 2. Retire the obsolete colour suppression.
-  if (doc.hasIn(NO_COLOR_PATH)) {
-    doc.deleteIn(NO_COLOR_PATH)
+  if (isMap(output) && output.has('no_color')) {
+    output.delete('no_color')
     changed = true
 
     // Don't leave an empty `output:` behind once its only key is gone.
-    const output = doc.get('output')
-    if (isMap(output) && output.items.length === 0) doc.delete('output')
+    if (output.items.length === 0) doc.delete('output')
   }
 
   return changed ? String(doc) : null

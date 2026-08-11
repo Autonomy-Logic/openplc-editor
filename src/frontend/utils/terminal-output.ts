@@ -24,16 +24,26 @@ import type { LogSegment } from '../../middleware/shared/ports/types'
 const ESC = '\u001B'
 
 /**
- * CSI sequences: `ESC [ <params> <final byte>`.
+ * Every escape sequence we recognise, in precedence order:
  *
- * Group 1 is the parameter list, group 2 the final byte (`m` for SGR).
+ * 1. **CSI** - `ESC [ <params> <final byte>`. Group 1 is the parameter list,
+ *    group 2 the final byte (`m` for SGR, the only one that changes styling).
+ * 2. **OSC** - `ESC ] ... BEL` or `ESC ] ... ESC \\`. Terminal hyperlinks use
+ *    this, and the payload is a URL that must never reach the rendered text.
+ * 3. Any other **two-byte escape** (`ESC @` through `ESC _`).
+ * 4. A **stray ESC** with nothing recognisable after it.
+ *
+ * The last two alternatives are what make the promise in this file's header
+ * true. Matching only CSI left OSC payloads and bare ESC bytes in the stored
+ * message, where they reached search, copy and the DOM.
+ *
  * Shared by {@link parseAnsi} and {@link stripAnsi} so both agree exactly on
- * what counts as an escape sequence. Consumers use `String.matchAll` /
- * `String.replace`, both of which operate on an internal clone, so the `g`
- * flag carries no `lastIndex` state between calls.
+ * what counts as an escape. Consumers use `String.matchAll` / `String.replace`,
+ * both of which operate on an internal clone, so the `g` flag carries no
+ * `lastIndex` state between calls.
  */
 // eslint-disable-next-line no-control-regex -- matching the ESC control byte is the entire point
-const CSI_PATTERN = /\u001B\[([0-9;?]*)([@-~])/g
+const ANSI_PATTERN = /\u001B(?:\[([0-9;?]*)([@-~])|\][\s\S]*?(?:\u0007|\u001B\\)|[@-_])?/g
 
 /**
  * SGR foreground colours, standard (30-37) and bright (90-97).
@@ -75,7 +85,7 @@ export function hasAnsi(text: string): boolean {
  * colour exists at all.
  */
 export function stripAnsi(text: string): string {
-  return hasAnsi(text) ? text.replace(CSI_PATTERN, '') : text
+  return hasAnsi(text) ? text.replace(ANSI_PATTERN, '') : text
 }
 
 /**
@@ -109,7 +119,7 @@ export function parseAnsi(text: string): LogSegment[] {
     segments.push(className ? { text: value, className } : { text: value })
   }
 
-  for (const match of text.matchAll(CSI_PATTERN)) {
+  for (const match of text.matchAll(ANSI_PATTERN)) {
     push(text.slice(cursor, match.index))
     cursor = match.index + match[0].length
 

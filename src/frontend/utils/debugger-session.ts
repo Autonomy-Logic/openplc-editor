@@ -86,8 +86,19 @@ export function logCompilerEvent(
   const lines = event.message.replace(/^[ \t\n]+|[ \t\n]+$/g, '').split('\n')
 
   lines.forEach((rawLine, index) => {
-    const redraw = rawLine.includes('\r')
-    const message = collapseCarriageReturns(rawLine)
+    // A `\r` at the END of a line is the CR half of a CRLF terminator, not a
+    // redraw — every line of Windows output carries one, and a chunk can also
+    // break between the `\r` and the `\n`. arduino-cli always writes a progress
+    // CR at the START of a frame, so position is what separates the two.
+    //
+    // Getting this wrong loses log lines rather than merely misformatting
+    // them: an ordinary Windows line counted as a redraw overwrites the live
+    // progress line above it, and one left open is itself overwritten by the
+    // next redraw.
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+
+    const redraw = line.includes('\r')
+    const message = collapseCarriageReturns(line)
     if (!message.trim()) return
 
     const isFinalLine = index === lines.length - 1

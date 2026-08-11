@@ -179,7 +179,15 @@ class UserService {
       const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)
       if (!updated) return
 
-      await writeFile(pathToArduinoCliConfig, updated, 'utf-8')
+      // Write via a sibling temp file and rename over the original. This runs
+      // on every start against a file the user owns and arduino-cli must be
+      // able to parse; a crash midway through a direct write would leave it
+      // truncated and break every build until the user deleted it by hand.
+      // `rename` within the same directory is atomic, so the config is either
+      // the old one or the new one, never half of each.
+      const tempPath = `${pathToArduinoCliConfig}.tmp`
+      await writeFile(tempPath, updated, 'utf-8')
+      await rename(tempPath, pathToArduinoCliConfig)
       console.warn(`Updated Arduino CLI config at ${pathToArduinoCliConfig}.`)
     } catch (err) {
       console.error(`Error updating Arduino CLI config at ${pathToArduinoCliConfig}: ${getErrorMessage(err)}`)

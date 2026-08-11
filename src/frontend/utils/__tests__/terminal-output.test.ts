@@ -1,6 +1,7 @@
 import { collapseCarriageReturns, hasAnsi, parseAnsi, stripAnsi } from '../terminal-output'
 
 const ESC = '\u001B'
+const BEL = '\u0007'
 
 // The literal bytes arduino-cli 1.4.1 writes for its compile summary table.
 // Captured from `arduino-cli compile` with colour enabled — this is the exact
@@ -31,6 +32,33 @@ describe('stripAnsi', () => {
 
   it('removes non-SGR CSI sequences too, so they cannot leak into the text', () => {
     expect(stripAnsi(`before${ESC}[2Kafter`)).toBe('beforeafter')
+  })
+})
+
+describe('stripAnsi — non-CSI escapes', () => {
+  // The module promises stored messages carry no escapes. Matching only CSI
+  // left OSC payloads and bare ESC bytes in the text, where they reached
+  // search, copy and the DOM.
+  it('removes an OSC hyperlink, payload and all', () => {
+    const link = `${ESC}]8;;https://example.com${BEL}click here${ESC}]8;;${BEL}`
+    expect(stripAnsi(link)).toBe('click here')
+  })
+
+  it('accepts the ST terminator as well as BEL', () => {
+    expect(stripAnsi(`${ESC}]0;window title${ESC}\\text`)).toBe('text')
+  })
+
+  it('removes a two-byte escape', () => {
+    expect(stripAnsi(`before${ESC}Mafter`)).toBe('beforeafter')
+  })
+
+  it('removes a stray ESC with nothing after it', () => {
+    expect(stripAnsi(`trailing${ESC}`)).toBe('trailing')
+  })
+
+  it('leaves no escape byte behind in mixed output', () => {
+    const mixed = `${ESC}[92mok${ESC}[0m ${ESC}]8;;https://x${BEL}link${ESC}]8;;${BEL} ${ESC}`
+    expect(stripAnsi(mixed)).not.toContain(ESC)
   })
 })
 
