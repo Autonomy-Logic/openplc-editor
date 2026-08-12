@@ -124,6 +124,14 @@ export type DeviceConnection = {
 // ---------------------------------------------------------------------------
 
 /**
+ * How long the purchase watch stays open after `buy()` opens the external
+ * purchase page: 10 minutes, generous for a checkout without leaving a
+ * forgotten watch polling a public rate-limited route forever. Stamped into
+ * `DeviceLicenseInfo.awaitingPurchaseUntil` by `setAwaitingPurchase(true)`.
+ */
+export const PURCHASE_WATCH_WINDOW_MS = 10 * 60_000
+
+/**
  * What the UI knows about the connected device's VPP license.
  *
  * Separate from `deviceConnection` on purpose: that is about whether the LINK is
@@ -145,6 +153,20 @@ export type DeviceLicenseInfo = {
    * it needs `node:crypto` — and which feeds the copy button and the buy link).
    */
   report: DeviceLicenseReport | null
+  /**
+   * Wall-clock deadline (epoch ms) of the purchase watch, or null when no watch
+   * is running. Non-null from `buy()` opening the purchase page until the poll
+   * that watches for the completed purchase lands a licensed report, the
+   * deadline passes, or the user cancels. Drives the "Waiting for purchase…"
+   * affordance and the poll effect in `useDeviceLicense` — the purchase happens
+   * in an external browser, so polling is the only feedback channel there is.
+   *
+   * An absolute deadline rather than a tick counter on purpose: the poll effect
+   * can be torn down and remounted without renewing the window, a tick skipped
+   * to avoid overlapping an in-flight call costs none of the budget, and the
+   * state stays inspectable ("waiting until T", not an opaque count).
+   */
+  awaitingPurchaseUntil: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +276,14 @@ export type DeviceActions = {
   startDeviceLicenseCheck: () => void
   /** Land a finished licensing call: `phase='done'`, store the report. */
   setDeviceLicenseReport: (report: DeviceLicenseReport) => void
+  /**
+   * Open (true) or close (false) the purchase-watch window (see
+   * `DeviceLicenseInfo.awaitingPurchaseUntil`). Opening stamps the absolute
+   * deadline `now + PURCHASE_WATCH_WINDOW_MS`; closing nulls it. Otherwise
+   * deliberately dumb: the poll effect in `useDeviceLicense` owns WHEN it ends
+   * (licensed report, deadline, cancel) — the store only records the window.
+   */
+  setAwaitingPurchase: (awaiting: boolean) => void
   /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
   clearDeviceLicense: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
