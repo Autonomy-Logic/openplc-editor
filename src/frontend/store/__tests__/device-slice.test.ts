@@ -5,6 +5,7 @@ import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../..
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
+import { PURCHASE_WATCH_WINDOW_MS } from '../slices/device/types'
 import * as pinsValidation from '../slices/device/validation/pins'
 import { createEditorSlice } from '../slices/editor'
 import { createLibrarySlice } from '../slices/library'
@@ -279,13 +280,21 @@ describe('createDeviceSlice', () => {
     it('starts idle with nothing known', () => {
       // The state every non-licensable board stays in: nothing runs, so nothing is
       // known, and the UI shows no licensing affordance at all.
-      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(makeStore().getState().deviceLicense).toEqual({
+        phase: 'idle',
+        report: null,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('startDeviceLicenseCheck marks the call in flight', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'checking',
+        report: null,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
@@ -295,14 +304,22 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'checking',
+        report: LICENSED,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('setDeviceLicenseReport lands the report and settles the phase', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
-      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'done',
+        report: LICENSED,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('preserves the outcome union verbatim, including the entitlement distinction', () => {
@@ -346,44 +363,103 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.clearDeviceLicense()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
-    it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
+    it('setAwaitingPurchase stamps the absolute deadline and clears it', () => {
+      // The window is a wall-clock deadline recorded in the store — not a tick
+      // counter in the poll effect — so a remounted effect resumes the SAME
+      // window, a skipped tick costs nothing, and the state is inspectable.
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(1_755_000_000_000)
+        const store = makeStore()
+        store.getState().deviceActions.setAwaitingPurchase(true)
+        expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBe(1_755_000_000_000 + PURCHASE_WATCH_WINDOW_MS)
+        store.getState().deviceActions.setAwaitingPurchase(false)
+        expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('setAwaitingPurchase leaves the report and phase alone', () => {
+      // The watch is ORTHOGONAL to what is known: opening it must not blank the
+      // last report (the badge would flicker) nor fake an in-flight phase.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'done',
+        report: LICENSED,
+        awaitingPurchaseUntil: expect.any(Number),
+      })
+    })
+
+    it('landing a report does NOT end the watch by itself — the poll effect owns that', () => {
+      // An unlicensed report mid-wait is the EXPECTED state (webhook not done
+      // yet); if the store ended the watch on every landing, the first poll tick
+      // would kill the watch it serves.
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true },
+      })
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
+    })
+
+    it('clearDeviceLicense ends the watch — a new board/disconnect makes it moot', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.clearDeviceLicense()
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
+    })
+
+    it('a board change drops the licence AND the purchase watch — both were bound to the OLD board', () => {
       // setDeviceBoard already wipes everything else that is board-specific
       // (platform options, the pin-table row, vendor-screen data). A licence
       // report is just as board-specific: it was verified against the previous
       // board's deviceId and its VPP's productId. Kept across a switch, the badge
       // asserts possession for hardware that is no longer selected, and the buy
-      // link is built from the NEW package id and the OLD device id.
+      // link is built from the NEW package id and the OLD device id. The watch is
+      // OPENED before the switch so the null below asserts the reset, not the
+      // initial state — a live watch surviving the switch would keep polling (and
+      // could write a licence) against the new board's package id.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
 
       store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
 
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
     it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
-      // change invalidates the licence.
+      // change invalidates the licence — or ends a running purchase watch.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
 
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
 
       expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
     })
 
-    it('clearDeviceDefinitions clears licensing — a new project may select another board', () => {
+    it('clearDeviceDefinitions clears licensing and the watch — a new project may select another board', () => {
       // A "Licensed" badge carried across a project close would be an assertion
-      // about hardware that is not even connected.
+      // about hardware that is not even connected — and a purchase watch carried
+      // across it would keep polling for a purchase nobody is making. The watch
+      // is opened first so the null below asserts the reset, not the default.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
       store.getState().deviceActions.clearDeviceDefinitions()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
   })
 
