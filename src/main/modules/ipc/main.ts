@@ -1487,7 +1487,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppQuit = () => {
-    this.simulatorModule.stop()
+    this.stopSimulator()
     if (this.mainWindow) {
       this.mainWindow.destroy()
     }
@@ -1579,7 +1579,10 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleWindowReload = () => {
-    this.simulatorModule.stop()
+    // The reload wipes the renderer's store back to 'disconnected', so the
+    // session has to go with the emulator — otherwise main keeps holding an open
+    // simulator session that the reloaded UI has no idea about.
+    this.stopSimulator()
     this.mainWindow?.webContents.reload()
   }
   handleWindowRebuildMenu = () => {
@@ -2573,8 +2576,7 @@ class MainProcessBridge implements MainIpcModule {
   /** Stops the simulator and notifies the renderer so it can update UI state. */
   private stopSimulatorAndNotify(): void {
     if (this.simulatorModule.isRunning()) {
-      this.closeSimulatorSession()
-      this.simulatorModule.stop()
+      this.stopSimulator()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
   }
@@ -2825,26 +2827,45 @@ class MainProcessBridge implements MainIpcModule {
         this.toDeviceLinkCandidates([{ connectionType: 'simulator', connectionParams: {} }]),
       )
       if (!opened.ok) {
-        this.simulatorModule.stop()
+        this.stopSimulator()
         const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
         return { success: false, error: reason || 'The simulator did not answer its debug protocol' }
       }
       this.debuggerConnectionType = 'simulator'
       return { success: true }
     } catch (error) {
+      // A start that threw part-way still leaves state behind: `loadAndRun`
+      // marks the emulator running before it finishes wiring, so a throw after
+      // that point leaked a running emulator with no session — and no button to
+      // reach it, because the renderer never learned it had started. Web ends up
+      // in the right place through its worker, which cleans up and reports
+      // 'stopped' when `loadAndRun` throws; this is the editor's counterpart.
+      this.stopSimulator()
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
   /**
    * Stop the emulator entirely — the simulator's Stop button means "stop the
-   * simulator", not "stop the program it is running". The session closes first so
-   * the client is dropped before the thing it talks to disappears.
+   * simulator", not "stop the program it is running".
    */
   handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.stopSimulator()
+    return Promise.resolve({ success: true })
+  }
+
+  /**
+   * The one way the emulator stops: session first, then the emulator, so the
+   * debug client is dropped before the thing it talks to disappears.
+   *
+   * Every stop path routes through here on purpose. The session is a consumer of
+   * the emulator, so an emulator that goes away while its session stays open
+   * leaves the renderer gated on a session whose target no longer exists — which
+   * a window reload and a failed start both used to do.
+   */
+  private stopSimulator(): void {
     this.closeSimulatorSession()
     this.simulatorModule.stop()
-    return Promise.resolve({ success: true })
   }
 
   /** Close the session if it is the simulator's. No-op for any other target. */

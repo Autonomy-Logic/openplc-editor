@@ -636,7 +636,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleSimulatorControl = useCallback(async (): Promise<void> => {
     try {
       if (simulatorRunning) {
+        // Two things end here, in this order.
+        //
+        // The debug session goes first: it is a CONSUMER of the emulator, so it
+        // has to let go of the transport before the thing on the other end
+        // disappears.
         await debugSession.stopSession()
+
+        // Then the emulator itself — which is this button's job and nothing
+        // else's. `stopSession()` deliberately does not do it (see its
+        // docstring: a debug session is not the owner of the thing it talks
+        // to), so with this call missing "Stop" ended the debug session, logged
+        // "Simulator stopped." and left the avr8js loop running: it kept
+        // re-scheduling itself and burning a core for the rest of the session,
+        // with no way to reach it from the UI because the button had already
+        // flipped back to "Start".
+        await simulator.stop()
+
         setSimulatorRunning(false)
         addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
       } else {
@@ -649,7 +665,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       pendingSimulatorDebugRef.current = false
       addLog({ id: crypto.randomUUID(), level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
     }
-  }, [debugSession, simulatorRunning, addLog])
+  }, [debugSession, simulator, simulatorRunning, addLog])
 
   // ---------------------------------------------------------------------------
   // MD5 verification — runs after debug compilation for non-simulator
