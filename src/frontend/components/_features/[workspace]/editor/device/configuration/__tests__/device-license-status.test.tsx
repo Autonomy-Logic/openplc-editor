@@ -249,6 +249,28 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByText('Checking licence…')).toBeNull()
     })
 
+    it('does NOT outrank a failed check — a dead link must not hide behind a calm wait', () => {
+      // If the link goes bad mid-wait, every tick lands a check-failed report;
+      // reading "Waiting for purchase…" over that would mask a real failure for
+      // the remaining minutes of the window. The failure label wins, and the
+      // watch keeps running underneath.
+      setup({ outcome: { state: 'check-failed', error: 'Request timeout' } }, { awaitingPurchase: true })
+      expect(screen.getByText('Licence check failed')).toBeTruthy()
+      expect(screen.queryByText('Waiting for purchase…')).toBeNull()
+    })
+
+    it('holds the failure label steady across poll ticks while waiting', () => {
+      // Mid-wait ticks still flip isChecking; with a check-failed report on
+      // record the badge must not flap to "Checking…" nor back to "Waiting…".
+      setup(
+        { outcome: { state: 'check-failed', error: 'Request timeout' } },
+        { awaitingPurchase: true, isChecking: true },
+      )
+      expect(screen.getByText('Licence check failed')).toBeTruthy()
+      expect(screen.queryByText('Checking licence…')).toBeNull()
+      expect(screen.queryByText('Waiting for purchase…')).toBeNull()
+    })
+
     it('withdraws the purchase button while waiting — offering it again invites a double buy', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
@@ -268,9 +290,12 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByRole('button', { name: 'Stop waiting' })).toBeNull()
     })
 
-    it('explains that the editor will write the licence by itself', () => {
+    it('explains that OpenPLC will write the licence by itself', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
+      // The subject is deliberately product-neutral ("OpenPLC", not "the
+      // editor"): the same bytes render in the desktop editor and the web IDE.
+      expect(screen.getByText(/OpenPLC checks periodically/)).toBeTruthy()
       expect(screen.getByText(/write the licence to this device by itself/)).toBeTruthy()
     })
   })

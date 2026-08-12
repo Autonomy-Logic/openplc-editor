@@ -77,8 +77,9 @@ export interface DeviceLicenseStatusProps {
   buyUrl: string | null
   /**
    * True while the purchase watch runs — `buy` opened the external purchase
-   * page and the editor is polling so it can write the licence on its own.
-   * The badge then reads "Waiting for purchase…" and the panel can stop it.
+   * page and OpenPLC is polling so it can write the licence on its own. The
+   * badge then reads "Waiting for purchase…" (unless the last report is a
+   * check-failed, which outranks the wait) and the panel can stop it.
    */
   awaitingPurchase: boolean
   onBuy: () => void
@@ -163,10 +164,21 @@ export function DeviceLicenseStatus({
   const { label, Icon, negative, detail } = describeOutcome(report)
   const deviceId = report.deviceId
 
-  // The watch outranks the tick: while it runs, every periodic refresh flips
-  // `isChecking` on and off, and a badge alternating "Waiting…"/"Checking…"
-  // reads as flapping when it is one continuous wait.
-  const badgeLabel = awaitingPurchase ? 'Waiting for purchase…' : isChecking ? 'Checking licence…' : label
+  // The watch outranks the tick, but never a FAILURE. While the watch runs,
+  // every periodic refresh flips `isChecking` on and off, and a badge
+  // alternating "Waiting…"/"Checking…" reads as flapping when it is one
+  // continuous wait — so the waiting label absorbs the ticks. A check-failed
+  // report is different: it means the ticks currently cannot see the device,
+  // and a calm "Waiting for purchase…" over that would hide a dead link for
+  // up to ten minutes. The failure label (and its normal styling) wins, held
+  // steady across ticks; the watch keeps running underneath.
+  const checkFailed = report.outcome.state === 'check-failed'
+  const showWaiting = awaitingPurchase && !checkFailed
+  const badgeLabel = showWaiting
+    ? 'Waiting for purchase…'
+    : isChecking && !awaitingPurchase
+      ? 'Checking licence…'
+      : label
 
   // The purchase button appears ONLY where buying is the honest next step: the
   // backend was asked and reported no entitlement. On `check-failed` or an
@@ -194,10 +206,10 @@ export function DeviceLicenseStatus({
               : 'text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white',
           )}
         >
-          {awaitingPurchase || isChecking ? <ShieldUnknownIcon size={10} /> : <Icon size={10} />}
+          {showWaiting || isChecking ? <ShieldUnknownIcon size={10} /> : <Icon size={10} />}
           <span
             className={cn(
-              negative && !awaitingPurchase && 'border-b border-dashed border-neutral-400 dark:border-neutral-700',
+              negative && !showWaiting && 'border-b border-dashed border-neutral-400 dark:border-neutral-700',
             )}
           >
             {badgeLabel}
@@ -255,7 +267,7 @@ export function DeviceLicenseStatus({
 
           {awaitingPurchase ? (
             <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-              Waiting for the purchase to complete. The editor checks periodically and will write the licence to this
+              Waiting for the purchase to complete. OpenPLC checks periodically and will write the licence to this
               device by itself — you can keep working meanwhile.
             </p>
           ) : null}

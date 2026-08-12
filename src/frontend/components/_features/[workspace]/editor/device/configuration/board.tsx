@@ -65,8 +65,10 @@ const Board = memo(function () {
   } = useDeviceConnect(currentBoardInfo)
 
   // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
-  // every built-in board — `isLicensable` gates the whole affordance.
-  const licensing = useDeviceLicense(currentBoardInfo)
+  // every built-in board — `isLicensable` gates the whole affordance. This mount
+  // OWNS the purchase watch: `useDeviceConnect` above holds a second instance of
+  // the hook, and without a single owner both would poll on every watch tick.
+  const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
 
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry

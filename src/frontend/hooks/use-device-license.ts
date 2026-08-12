@@ -10,7 +10,8 @@
  *     purchase watch;
  *   - the purchase watch itself: while `awaitingPurchase`, `refresh()` runs on an
  *     interval so the licence bought in the external browser is activated and
- *     WRITTEN to the device without the user having to click anything.
+ *     WRITTEN to the device without the user having to click anything. The
+ *     interval runs in exactly ONE hook instance — see `UseDeviceLicenseOptions`.
  *
  * Deliberately NOT folded into `useDeviceConnect`: that hook is about resolving
  * and holding a link, this one about what the device is entitled to run. The only
@@ -28,12 +29,27 @@ import { buildLicenseBuyUrl } from '../utils/license-buy-url'
 /**
  * Purchase-watch cadence. Each tick is one Modbus read frame plus, while the
  * backend still answers "no purchase", one cheap HTTP round-trip — light enough
- * to repeat, heavy enough not to hammer a public rate-limited route. 30 ticks
- * of 20s = a 10-minute window, generous for a checkout without leaving a
- * forgotten tab polling forever.
+ * to repeat, heavy enough not to hammer a public rate-limited route. How LONG
+ * the watch runs is not counted in ticks: the window is the absolute deadline
+ * stamped into `deviceLicense.awaitingPurchaseUntil` by `setAwaitingPurchase`
+ * (see `PURCHASE_WATCH_WINDOW_MS` in the device slice types), so a remount
+ * cannot renew it and a skipped tick spends none of it.
  */
 const PURCHASE_POLL_INTERVAL_MS = 20_000
-const PURCHASE_POLL_MAX_TICKS = 30
+
+export interface UseDeviceLicenseOptions {
+  /**
+   * Whether THIS instance runs the purchase-watch interval. The hook is mounted
+   * more than once over the same store state — the board screen mounts one for
+   * the badge and `useDeviceConnect` mounts another for the connect flow — and
+   * if every instance ran the poll effect, each tick would fire once per
+   * instance against the same device link. Exactly one mount per screen owns
+   * the watch (the board screen passes true); every other instance keeps the
+   * default `false` and can still start, observe and cancel the watch, since
+   * those only touch store state.
+   */
+  ownsWatch?: boolean
+}
 
 export interface UseDeviceLicenseResult {
   /** Whether the selected board's VPP participates in licensing at all. When
@@ -75,13 +91,18 @@ export interface UseDeviceLicenseResult {
   /**
    * True while the purchase watch is running — from `buy()` until a licensed
    * report lands, the 10-minute window closes, or `cancelPurchaseWatch`.
+   * Derived from the deadline in the store, so every instance agrees.
    */
   awaitingPurchase: boolean
   /** Stop the purchase watch without waiting for it to conclude. */
   cancelPurchaseWatch: () => void
 }
 
-export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLicenseResult {
+export function useDeviceLicense(
+  boardInfo: BoardInfo | undefined,
+  opts?: UseDeviceLicenseOptions,
+): UseDeviceLicenseResult {
+  const ownsWatch = opts?.ownsWatch ?? false
   const device = useDevice()
   const system = useSystem()
   const startCheck = useOpenPLCStore((s) => s.deviceActions.startDeviceLicenseCheck)
@@ -89,7 +110,8 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
   const setAwaitingPurchase = useOpenPLCStore((s) => s.deviceActions.setAwaitingPurchase)
   const phase = useOpenPLCStore((s) => s.deviceLicense.phase)
   const report = useOpenPLCStore((s) => s.deviceLicense.report)
-  const awaitingPurchase = useOpenPLCStore((s) => s.deviceLicense.awaitingPurchase)
+  const awaitingPurchaseUntil = useOpenPLCStore((s) => s.deviceLicense.awaitingPurchaseUntil)
+  const awaitingPurchase = awaitingPurchaseUntil !== null
 
   const target = useMemo(() => resolveLicensingTarget(boardInfo), [boardInfo])
 
@@ -149,33 +171,42 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
     }
   }, [awaitingPurchase, report, setAwaitingPurchase])
 
-  // The purchase watch. One `refresh()` per tick: read the device, ask the
-  // backend and — on the first tick after the completion webhook lands — write
-  // the blob to the device and read it back. `refresh` reports its own
-  // failures as `check-failed` reports, so a flaky tick shows in the badge
-  // instead of silently killing the watch.
+  // The purchase watch — mounted only by the instance that owns it. One
+  // `refresh()` per tick: read the device, ask the backend and — on the first
+  // tick after the completion webhook lands — write the blob to the device and
+  // read it back. `refresh` reports its own failures as `check-failed` reports,
+  // and the badge lets a check-failed report outrank the waiting label, so a
+  // flaky tick shows in the badge instead of silently killing the watch.
   //
   // Called through a ref: `refresh`'s identity follows the device port and the
   // board target, and an interval keyed on it would be torn down and rebuilt
-  // on every such change, resetting the tick budget each time.
+  // on every such change. The 10-minute window is immune to such churn either
+  // way — it is the absolute deadline in the store, read back at every tick.
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
   useEffect(() => {
-    if (!awaitingPurchase) return
-    let ticks = 0
-    const timer = setInterval(() => {
-      ticks += 1
-      if (ticks > PURCHASE_POLL_MAX_TICKS) {
+    if (!ownsWatch || !awaitingPurchase) return
+    const tick = () => {
+      const { phase, awaitingPurchaseUntil: until } = useOpenPLCStore.getState().deviceLicense
+      if (until === null || Date.now() >= until) {
+        // The window closed (or the watch was cancelled between ticks): stop
+        // instead of polling a forgotten checkout forever.
         setAwaitingPurchase(false)
         return
       }
       // A tick that would overlap an in-flight call (slow device, 30s HTTP
-      // timeout) skips instead of stacking a second one on the same link.
-      if (useOpenPLCStore.getState().deviceLicense.phase === 'checking') return
+      // timeout) skips instead of stacking a second one on the same link —
+      // at no cost to the window, since the deadline above is wall-clock.
+      if (phase === 'checking') return
       void refreshRef.current()
-    }, PURCHASE_POLL_INTERVAL_MS)
+    }
+    // First check right away rather than at t+20s: in the common case the
+    // webhook already landed while the user finished checkout, and the licence
+    // should be on the device the moment they switch back from the browser.
+    tick()
+    const timer = setInterval(tick, PURCHASE_POLL_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [awaitingPurchase, setAwaitingPurchase])
+  }, [ownsWatch, awaitingPurchase, setAwaitingPurchase])
 
   /**
    * Build the purchase link for a given device id.
@@ -203,7 +234,11 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
       // this hook's closure still sees the previous one.
       const url = urlFor(deviceId ?? report?.deviceId)
       if (!url) return
-      await system.openExternalLink(url)
+      const { success } = await system.openExternalLink(url)
+      // No browser opened means no purchase to watch for. Leave the state
+      // untouched so the Buy button stays offered, instead of trading it for
+      // a ten-minute wait on a page nobody is looking at.
+      if (!success) return
       // The purchase now lives in an external browser tab; start watching for
       // its completion so the licence is activated and written to the device
       // without the user having to come back and click anything.
