@@ -720,8 +720,10 @@ const Board = memo(function () {
                     report={licensing.report}
                     isChecking={licensing.isChecking}
                     buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
                   />
                 ) : null}
               </DeviceConnectButton>

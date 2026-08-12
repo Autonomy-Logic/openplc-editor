@@ -70,6 +70,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
   deviceLicense: {
     phase: 'idle',
     report: null,
+    awaitingPurchase: false,
   },
 
   deviceActions: {
@@ -602,11 +603,22 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setAwaitingPurchase: (awaiting): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          deviceLicense.awaitingPurchase = awaiting
+        }),
+      )
+    },
     clearDeviceLicense: (): void => {
       setState(
         produce(({ deviceLicense }: DeviceSlice) => {
           deviceLicense.phase = 'idle'
           deviceLicense.report = null
+          // A new board / disconnect ends any purchase watch: the poll effect
+          // keys off this flag, and a watch for a device that is no longer
+          // there would keep hitting it over a dead link.
+          deviceLicense.awaitingPurchase = false
         }),
       )
     },

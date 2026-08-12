@@ -1,12 +1,16 @@
 /**
  * useDeviceLicense — the renderer side of the VPP licensing flow.
  *
- * Owns the four things the UI needs and nothing else:
+ * Owns the five things the UI needs and nothing else:
  *   - whether licensing applies to this board at all (`isLicensable`);
  *   - the last landed report, from the store;
  *   - `check()` (read + verify, local) and `refresh()` (full flow, may reach the
  *     network and write);
- *   - `buy()`, which opens the device-bound purchase page.
+ *   - `buy()`, which opens the device-bound purchase page and starts the
+ *     purchase watch;
+ *   - the purchase watch itself: while `awaitingPurchase`, `refresh()` runs on an
+ *     interval so the licence bought in the external browser is activated and
+ *     WRITTEN to the device without the user having to click anything.
  *
  * Deliberately NOT folded into `useDeviceConnect`: that hook is about resolving
  * and holding a link, this one about what the device is entitled to run. The only
@@ -16,10 +20,20 @@ import type { DeviceLicenseReport } from '@root/middleware/shared/ports/device-p
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { useDevice, useSystem } from '@root/middleware/shared/providers/platform-context'
 import { resolveLicensingTarget } from '@root/middleware/shared/utils/licensing'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { useOpenPLCStore } from '../store'
 import { buildLicenseBuyUrl } from '../utils/license-buy-url'
+
+/**
+ * Purchase-watch cadence. Each tick is one Modbus read frame plus, while the
+ * backend still answers "no purchase", one cheap HTTP round-trip — light enough
+ * to repeat, heavy enough not to hammer a public rate-limited route. 30 ticks
+ * of 20s = a 10-minute window, generous for a checkout without leaving a
+ * forgotten tab polling forever.
+ */
+const PURCHASE_POLL_INTERVAL_MS = 20_000
+const PURCHASE_POLL_MAX_TICKS = 30
 
 export interface UseDeviceLicenseResult {
   /** Whether the selected board's VPP participates in licensing at all. When
@@ -58,6 +72,13 @@ export interface UseDeviceLicenseResult {
    * doing nothing on the one path where it matters most.
    */
   buy: (deviceId?: string) => Promise<void>
+  /**
+   * True while the purchase watch is running — from `buy()` until a licensed
+   * report lands, the 10-minute window closes, or `cancelPurchaseWatch`.
+   */
+  awaitingPurchase: boolean
+  /** Stop the purchase watch without waiting for it to conclude. */
+  cancelPurchaseWatch: () => void
 }
 
 export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLicenseResult {
@@ -65,8 +86,10 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
   const system = useSystem()
   const startCheck = useOpenPLCStore((s) => s.deviceActions.startDeviceLicenseCheck)
   const setReport = useOpenPLCStore((s) => s.deviceActions.setDeviceLicenseReport)
+  const setAwaitingPurchase = useOpenPLCStore((s) => s.deviceActions.setAwaitingPurchase)
   const phase = useOpenPLCStore((s) => s.deviceLicense.phase)
   const report = useOpenPLCStore((s) => s.deviceLicense.report)
+  const awaitingPurchase = useOpenPLCStore((s) => s.deviceLicense.awaitingPurchase)
 
   const target = useMemo(() => resolveLicensingTarget(boardInfo), [boardInfo])
 
@@ -114,6 +137,46 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
   const check = useCallback(() => run('check'), [run])
   const refresh = useCallback(() => run('refresh'), [run])
 
+  const cancelPurchaseWatch = useCallback(() => setAwaitingPurchase(false), [setAwaitingPurchase])
+
+  // End the watch the moment a licensed report lands, whoever produced it —
+  // the poll below, a manual "Check again", the connect flow. Watching the
+  // REPORT rather than the poll's own return value is what lets all of those
+  // paths conclude the purchase.
+  useEffect(() => {
+    if (awaitingPurchase && report?.outcome.state === 'licensed') {
+      setAwaitingPurchase(false)
+    }
+  }, [awaitingPurchase, report, setAwaitingPurchase])
+
+  // The purchase watch. One `refresh()` per tick: read the device, ask the
+  // backend and — on the first tick after the completion webhook lands — write
+  // the blob to the device and read it back. `refresh` reports its own
+  // failures as `check-failed` reports, so a flaky tick shows in the badge
+  // instead of silently killing the watch.
+  //
+  // Called through a ref: `refresh`'s identity follows the device port and the
+  // board target, and an interval keyed on it would be torn down and rebuilt
+  // on every such change, resetting the tick budget each time.
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  useEffect(() => {
+    if (!awaitingPurchase) return
+    let ticks = 0
+    const timer = setInterval(() => {
+      ticks += 1
+      if (ticks > PURCHASE_POLL_MAX_TICKS) {
+        setAwaitingPurchase(false)
+        return
+      }
+      // A tick that would overlap an in-flight call (slow device, 30s HTTP
+      // timeout) skips instead of stacking a second one on the same link.
+      if (useOpenPLCStore.getState().deviceLicense.phase === 'checking') return
+      void refreshRef.current()
+    }, PURCHASE_POLL_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [awaitingPurchase, setAwaitingPurchase])
+
   /**
    * Build the purchase link for a given device id.
    *
@@ -141,8 +204,12 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
       const url = urlFor(deviceId ?? report?.deviceId)
       if (!url) return
       await system.openExternalLink(url)
+      // The purchase now lives in an external browser tab; start watching for
+      // its completion so the licence is activated and written to the device
+      // without the user having to come back and click anything.
+      setAwaitingPurchase(true)
     },
-    [report?.deviceId, system, urlFor],
+    [report?.deviceId, setAwaitingPurchase, system, urlFor],
   )
 
   return {
@@ -157,5 +224,7 @@ export function useDeviceLicense(boardInfo: BoardInfo | undefined): UseDeviceLic
     refresh,
     buyUrl,
     buy,
+    awaitingPurchase,
+    cancelPurchaseWatch,
   }
 }

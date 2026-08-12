@@ -279,13 +279,13 @@ describe('createDeviceSlice', () => {
     it('starts idle with nothing known', () => {
       // The state every non-licensable board stays in: nothing runs, so nothing is
       // known, and the UI shows no licensing affordance at all.
-      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchase: false })
     })
 
     it('startDeviceLicenseCheck marks the call in flight', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null, awaitingPurchase: false })
     })
 
     it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
@@ -295,14 +295,14 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED, awaitingPurchase: false })
     })
 
     it('setDeviceLicenseReport lands the report and settles the phase', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
-      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED, awaitingPurchase: false })
     })
 
     it('preserves the outcome union verbatim, including the entitlement distinction', () => {
@@ -346,7 +346,44 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.clearDeviceLicense()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchase: false })
+    })
+
+    it('setAwaitingPurchase opens and closes the purchase-watch window', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      expect(store.getState().deviceLicense.awaitingPurchase).toBe(true)
+      store.getState().deviceActions.setAwaitingPurchase(false)
+      expect(store.getState().deviceLicense.awaitingPurchase).toBe(false)
+    })
+
+    it('setAwaitingPurchase leaves the report and phase alone', () => {
+      // The watch is ORTHOGONAL to what is known: opening it must not blank the
+      // last report (the badge would flicker) nor fake an in-flight phase.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED, awaitingPurchase: true })
+    })
+
+    it('landing a report does NOT end the watch by itself — the poll effect owns that', () => {
+      // An unlicensed report mid-wait is the EXPECTED state (webhook not done
+      // yet); if the store ended the watch on every landing, the first poll tick
+      // would kill the watch it serves.
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true },
+      })
+      expect(store.getState().deviceLicense.awaitingPurchase).toBe(true)
+    })
+
+    it('clearDeviceLicense ends the watch — a new board/disconnect makes it moot', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.clearDeviceLicense()
+      expect(store.getState().deviceLicense.awaitingPurchase).toBe(false)
     })
 
     it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
@@ -362,7 +399,7 @@ describe('createDeviceSlice', () => {
 
       store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
 
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchase: false })
     })
 
     it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
@@ -383,7 +420,7 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.clearDeviceDefinitions()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchase: false })
     })
   })
 

@@ -6,20 +6,26 @@ import { DeviceLicenseStatus } from '../components/device-license-status'
 const DEVICE_ID = '659a3520540f803625ddc34081e893d3'
 const BUY_URL = `https://edge.example.com/buy?vppId=com.openplc.espressif-licensed&deviceId=${DEVICE_ID}`
 
-function setup(report: DeviceLicenseReport | null, overrides: { isChecking?: boolean; buyUrl?: string | null } = {}) {
+function setup(
+  report: DeviceLicenseReport | null,
+  overrides: { isChecking?: boolean; buyUrl?: string | null; awaitingPurchase?: boolean } = {},
+) {
   const onBuy = jest.fn()
   const onRecheck = jest.fn()
+  const onCancelPurchaseWatch = jest.fn()
   render(
     <DeviceLicenseStatus
       report={report}
       isChecking={overrides.isChecking ?? false}
       // `??` would be wrong here: an explicit `buyUrl: null` is a case under test.
       buyUrl={'buyUrl' in overrides ? (overrides.buyUrl ?? null) : BUY_URL}
+      awaitingPurchase={overrides.awaitingPurchase ?? false}
       onBuy={onBuy}
       onRecheck={onRecheck}
+      onCancelPurchaseWatch={onCancelPurchaseWatch}
     />,
   )
-  return { onBuy, onRecheck }
+  return { onBuy, onRecheck, onCancelPurchaseWatch }
 }
 
 function expand() {
@@ -32,7 +38,15 @@ describe('DeviceLicenseStatus', () => {
     // Connect. A placeholder badge would invite the user to read meaning into a
     // check that never happened.
     const { container } = render(
-      <DeviceLicenseStatus report={null} isChecking={false} buyUrl={null} onBuy={jest.fn()} onRecheck={jest.fn()} />,
+      <DeviceLicenseStatus
+        report={null}
+        isChecking={false}
+        buyUrl={null}
+        awaitingPurchase={false}
+        onBuy={jest.fn()}
+        onRecheck={jest.fn()}
+        onCancelPurchaseWatch={jest.fn()}
+      />,
     )
     expect(container.firstChild).toBeNull()
   })
@@ -85,8 +99,10 @@ describe('DeviceLicenseStatus', () => {
           report={{ deviceId: DEVICE_ID, outcome }}
           isChecking={false}
           buyUrl={BUY_URL}
+          awaitingPurchase={false}
           onBuy={jest.fn()}
           onRecheck={jest.fn()}
+          onCancelPurchaseWatch={jest.fn()}
         />,
       )
       expect(container.textContent ?? '').not.toMatch(/full mode|unlocked|demo mode/i)
@@ -104,8 +120,10 @@ describe('DeviceLicenseStatus', () => {
         report={{ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } }}
         isChecking={false}
         buyUrl={BUY_URL}
+        awaitingPurchase={false}
         onBuy={jest.fn()}
         onRecheck={jest.fn()}
+        onCancelPurchaseWatch={jest.fn()}
       />,
     )
 
@@ -209,6 +227,51 @@ describe('DeviceLicenseStatus', () => {
       setup({ outcome: { state: 'check-failed', error: 'Request timeout' } })
       expand()
       expect(screen.getByText(/not the same as having no licence/)).toBeTruthy()
+    })
+  })
+
+  describe('purchase watch', () => {
+    const UNLICENSED: DeviceLicenseReport = {
+      deviceId: DEVICE_ID,
+      outcome: { state: 'unlicensed', entitlementChecked: true },
+    }
+
+    it('reads "Waiting for purchase…" while the watch runs', () => {
+      setup(UNLICENSED, { awaitingPurchase: true })
+      expect(screen.getByText('Waiting for purchase…')).toBeTruthy()
+    })
+
+    it('outranks the periodic check tick — the badge must not flap between two labels', () => {
+      // Every poll tick flips isChecking on and off; alternating
+      // "Waiting…"/"Checking…" reads as flapping when it is one continuous wait.
+      setup(UNLICENSED, { awaitingPurchase: true, isChecking: true })
+      expect(screen.getByText('Waiting for purchase…')).toBeTruthy()
+      expect(screen.queryByText('Checking licence…')).toBeNull()
+    })
+
+    it('withdraws the purchase button while waiting — offering it again invites a double buy', () => {
+      setup(UNLICENSED, { awaitingPurchase: true })
+      expand()
+      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+    })
+
+    it('offers to stop waiting, and only then', () => {
+      const { onCancelPurchaseWatch } = setup(UNLICENSED, { awaitingPurchase: true })
+      expand()
+      fireEvent.click(screen.getByRole('button', { name: 'Stop waiting' }))
+      expect(onCancelPurchaseWatch).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows no stop button when no watch is running', () => {
+      setup(UNLICENSED)
+      expand()
+      expect(screen.queryByRole('button', { name: 'Stop waiting' })).toBeNull()
+    })
+
+    it('explains that the editor will write the licence by itself', () => {
+      setup(UNLICENSED, { awaitingPurchase: true })
+      expand()
+      expect(screen.getByText(/write the licence to this device by itself/)).toBeTruthy()
     })
   })
 })

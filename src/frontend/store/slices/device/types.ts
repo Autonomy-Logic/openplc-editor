@@ -145,6 +145,14 @@ export type DeviceLicenseInfo = {
    * it needs `node:crypto` — and which feeds the copy button and the buy link).
    */
   report: DeviceLicenseReport | null
+  /**
+   * True from `buy()` opening the purchase page until the poll that watches for
+   * the completed purchase lands a licensed report, times out, or the user
+   * cancels. Drives the "Waiting for purchase…" affordance and the poll effect
+   * in `useDeviceLicense` — the purchase happens in an external browser, so
+   * polling is the only feedback channel the editor has.
+   */
+  awaitingPurchase: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +262,12 @@ export type DeviceActions = {
   startDeviceLicenseCheck: () => void
   /** Land a finished licensing call: `phase='done'`, store the report. */
   setDeviceLicenseReport: (report: DeviceLicenseReport) => void
+  /**
+   * Toggle the awaiting-purchase window (see `DeviceLicenseInfo.awaitingPurchase`).
+   * Deliberately dumb: the poll effect in `useDeviceLicense` owns WHEN it ends
+   * (licensed report, timeout, cancel) — the store only records that it is open.
+   */
+  setAwaitingPurchase: (awaiting: boolean) => void
   /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
   clearDeviceLicense: () => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
