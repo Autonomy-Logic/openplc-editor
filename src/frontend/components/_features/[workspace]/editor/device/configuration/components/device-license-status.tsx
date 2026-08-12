@@ -174,10 +174,7 @@ export function DeviceLicenseStatus({
   // watch runs the step was already taken — offering it again mid-wait invites
   // a double purchase.
   const offerPurchase =
-    !!buyUrl &&
-    !awaitingPurchase &&
-    report.outcome.state === 'unlicensed' &&
-    report.outcome.entitlementChecked === true
+    !!buyUrl && !awaitingPurchase && report.outcome.state === 'unlicensed' && report.outcome.entitlementChecked === true
 
   return (
     // Radix Popover, PORTALLED. The details used to be a conditional <div> in the
