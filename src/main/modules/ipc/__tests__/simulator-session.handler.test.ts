@@ -42,6 +42,13 @@ jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
   SimulatorModule: jest.fn(() => simulatorModule),
 }))
 
+// The handler reads the hex off disk before it starts anything. Stubbing the read
+// to SUCCEED is what lets a test put the throw where the leak actually was —
+// after `loadAndRun` has marked the emulator running. A failing read throws
+// before that and proves nothing about it.
+const readFile = jest.fn<Promise<string>, [string, string?]>()
+jest.mock('fs/promises', () => ({ readFile: (...args: [string, string?]) => readFile(...args) }))
+
 type Bridge = MainProcessBridge
 
 function createBridge(): Bridge {
@@ -75,6 +82,7 @@ beforeEach(() => {
   simulatorModule.loadAndRun.mockReset()
   simulatorModule.stop.mockReset()
   simulatorModule.isRunning.mockReset().mockReturnValue(true)
+  readFile.mockReset().mockResolvedValue(':00000001FF')
 })
 
 afterEach(() => {
@@ -136,15 +144,38 @@ describe('window:reload', () => {
 })
 
 describe('simulator:load-firmware', () => {
-  it('stops the emulator and closes the session when the start throws', async () => {
+  it('stops the emulator and closes the session when the start throws AFTER it is running', async () => {
     const bridge = createBridge()
     const close = holdLink(bridge, 'simulator')
 
-    // An unreadable hex path fails inside the handler's try, standing in for any
-    // throw during start — `loadAndRun` marks the emulator running before it
-    // finishes wiring, so a throw after that point used to leak one.
+    // The leak this covers: `loadAndRun` marks the emulator running before it
+    // finishes wiring, so a throw from that point on left one running with no
+    // session behind it. The read must succeed for the throw to land there —
+    // throwing on the read instead would exercise a path where the emulator was
+    // never started, and would stay green even if this leak came back.
+    simulatorModule.loadAndRun.mockImplementation(() => {
+      throw new Error('avr8js refused the hex')
+    })
+
+    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/tmp/simulator.hex')
+
+    expect(readFile).toHaveBeenCalledTimes(1)
+    expect(simulatorModule.loadAndRun).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ success: false, error: 'avr8js refused the hex' })
+    expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops the emulator and closes the session when the read fails before it starts', async () => {
+    const bridge = createBridge()
+    const close = holdLink(bridge, 'simulator')
+    readFile.mockRejectedValue(new Error('ENOENT'))
+
     const result = await bridge.handleSimulatorLoadFirmware({} as never, '/nonexistent/simulator.hex')
 
+    // Nothing was started, so there is nothing to leak — but the cleanup still
+    // has to be harmless, because the catch cannot tell the two apart.
+    expect(simulatorModule.loadAndRun).not.toHaveBeenCalled()
     expect(result.success).toBe(false)
     expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
