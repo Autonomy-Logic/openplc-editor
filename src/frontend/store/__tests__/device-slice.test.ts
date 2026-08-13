@@ -1789,13 +1789,20 @@ describe('createDeviceSlice', () => {
       })
     }
 
-    const modbusAddresses = (store: ReturnType<typeof makeStore>) =>
-      store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints!.map((p) => p.iecLocation)
+    /** The seeded group's IEC addresses. Throws rather than asserting non-null
+     *  so a broken fixture names itself instead of failing as an unrelated
+     *  expectation. */
+    function modbusAddresses(store: ReturnType<typeof makeStore>): string[] {
+      const points = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups[0]?.ioPoints
+      if (!points) throw new Error('fixture: expected a remote device with one IO group holding points')
+      return points.map((point) => point.iecLocation)
+    }
 
     /** Count store writes from here on. The actions are frozen by Immer so
-     *  `recalculateIecAddresses` can't be spied on directly — but it always
-     *  issues its own `setState`, so a pin edit that recalculates writes twice
-     *  and one that skips it writes once. */
+     *  `recalculateIecAddresses` can't be spied on directly, and a skipped
+     *  recalculation has no other observable — it changes no address. Only the
+     *  negative cases assert on this; where addresses move, they are the
+     *  stronger assertion. */
     function countWrites(store: ReturnType<typeof makeStore>) {
       let writes = 0
       store.subscribe(() => {
@@ -1837,10 +1844,8 @@ describe('createDeviceSlice', () => {
       seedPinsAndGroup(store)
       store.getState().deviceActions.selectPinTableRow(0)
 
-      const writes = countWrites(store)
       store.getState().deviceActions.updatePin({ pinType: 'digitalOutput' })
 
-      expect(writes()).toBe(2)
       // %IX0.0 moved to the output space and the remaining inputs slid down,
       // so the group follows into the freed slot.
       expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])

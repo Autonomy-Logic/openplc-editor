@@ -265,7 +265,7 @@ type VppMappingEntry = {
 function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
   return (
     (
-      live.deviceDefinitions?.configuration?.vendorScreenData?.['io-mapping'] as
+      live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
         | { entries?: VppMappingEntry[] }
         | undefined
     )?.entries ?? []
@@ -290,7 +290,7 @@ function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
  *  resolve — a VPP board whose package isn't installed, a project authored on
  *  another machine, or the catalogue not having loaded yet. */
 function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
-  return live.deviceAvailableOptions?.availableBoards?.get(live.deviceDefinitions?.configuration?.deviceBoard ?? '')
+  return live.deviceAvailableOptions.availableBoards.get(live.deviceDefinitions.configuration.deviceBoard ?? '')
 }
 
 /**
@@ -306,6 +306,40 @@ function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
 function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabilities {
   const boardInfo = resolveBoardInfo(live)
   return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
+}
+
+/** Board most recently reported as unresolved, so a project that never
+ *  resolves warns once instead of on every edit. */
+let lastUnresolvedBoardWarned: string | null = null
+
+/**
+ * Allocating against an unresolved target is a legitimate fallback but an
+ * invisible one, and this class of bug survived months precisely because it
+ * was silent.
+ *
+ * Only reported once the catalogue has actually loaded: an EMPTY
+ * `availableBoards` means board discovery hasn't finished, which is an
+ * ordinary startup state where permissive allocation is simply correct. A
+ * board missing from a POPULATED catalogue is the actionable case — the VPP
+ * package isn't installed, or the project came from another machine. Warn once
+ * per board so a project that never resolves doesn't drown the console.
+ *
+ * Called from `recalculateIecAddresses` only, never from the memoized
+ * alias-index path, which is hot.
+ */
+function warnOnceIfTargetUnresolved(live: ProjectSliceRoot): void {
+  const board = live.deviceDefinitions.configuration.deviceBoard
+  if (resolveBoardInfo(live)) {
+    lastUnresolvedBoardWarned = null
+    return
+  }
+  if (live.deviceAvailableOptions.availableBoards.size === 0) return
+  if (lastUnresolvedBoardWarned === board) return
+  lastUnresolvedBoardWarned = board
+  console.warn(
+    `[iec-address] Target "${board}" did not resolve — allocating with every producer active. ` +
+      'Addresses may recompact once the target resolves (e.g. after installing its VPP package).',
+  )
 }
 
 /**
@@ -328,14 +362,11 @@ function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefin
  * resized group must not land on. The final addresses come from
  * `recalculateIecAddresses`; this only seeds the point structure.
  *
- * `modbus-tcp-remote` is forced active regardless of the target. Every other
- * producer's editor is itself capability-gated (pin mapping, the VPP layouts
- * and EtherCAT only render when their flag is on), so "capability off" and
- * "screen unreachable" coincide there. Remote devices are the outlier: the
- * explorer branch is gated on the project TYPE, not on the target, so the user
- * can edit IO groups against a Runtime v3 or unresolved board — and with the
- * kind filtered out of the pool, `nextFreeAddress` cannot see the sibling
- * groups and restarts every one of them at `%IW0`, persisting duplicates.
+ * Capability scoping stays the single authority on which producers are active
+ * — no kind is forced on here. `allocationCapabilities` already turns Modbus
+ * on for an unresolved target, and on a target that resolved and declared no
+ * remote I/O the creation paths are gated in the UI, so a group can't be
+ * seeded against a target the allocator won't manage afterwards.
  *
  * `clearGroup` drops one group's own points from the pool so a resize can
  * reuse the addresses it is about to give up.
@@ -344,7 +375,7 @@ function buildModbusProducerPool(
   live: ProjectSliceRoot,
   clearGroup?: { deviceName: string; groupId: string },
 ): AddressPool {
-  const board = live.deviceDefinitions?.configuration?.deviceBoard ?? ''
+  const board = live.deviceDefinitions.configuration.deviceBoard
   const remoteDevices = clearGroup
     ? live.project.data.remoteDevices?.map((d) =>
         d.name !== clearGroup.deviceName || !d.modbusTcpConfig
@@ -363,11 +394,11 @@ function buildModbusProducerPool(
 
   return buildAddressPool(
     {
-      pinMapping: { pins: live.deviceDefinitions?.pinMapping?.pinsByBoard[board] ?? [] },
+      pinMapping: { pins: live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
       vendorIoMapping: { entries: readVppEntries(live) },
       remoteDevices,
     },
-    { ...allocationCapabilities(live), modbusTcpRemote: true },
+    allocationCapabilities(live),
   )
 }
 
@@ -1815,6 +1846,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // compile time. Only a producer *rename* touches variables — via
       // `renameAlias`, called by the alias editors.
       const live = getState()
+      warnOnceIfTargetUnresolved(live)
       const registry = buildIecRegistry(live)
       const index = indexRegistry(registry)
 

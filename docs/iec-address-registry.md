@@ -137,13 +137,26 @@ every producer active (`ALL_ADDRESS_PRODUCERS_ACTIVE`). Permissive is the safe
 direction — the worst case is compaction for a producer the eventual target
 turns out not to support, and selecting that target recalculates anyway.
 
-One producer is additionally forced active in its own **provisional** pool:
-`buildModbusProducerPool` always counts `modbus-tcp-remote`. Every other
-producer's editor is itself capability-gated, so "capability off" and "screen
-unreachable" coincide there; the Remote Devices branch is gated on the project
-TYPE instead, so a user can edit IO groups against a target that declares no
-remote I/O. Without the override, `nextFreeAddress` can't see the sibling
-groups and restarts each one at `%IW0`, persisting duplicates.
+**The consequence to be aware of:** a project authored while the target is
+unresolved allocates with every producer active, so once the package is
+installed and the target resolves, capabilities can shrink and the addresses
+**recompact on that first open**. For alias-bound variables that is
+transparent — it is the whole reason the registry exists. For a variable bound
+to a literal `%addr` the binding does not follow, and the amber
+orphan/collision glyph on the location cell is what surfaces it. That is
+acceptable, and strictly better than the previous symptom (stale addresses,
+reported as success), but it is not derivable from the invariant alone.
+
+Capability scoping is the **single authority** on which producers are active:
+no kind is ever forced on in a provisional pool. That holds because every
+producer's creation path is capability-gated in the UI, so "capability off"
+and "cannot author this producer" coincide. Remote devices reach that state
+through two predicates rather than one — the project type
+(`projectCaps.hasRemoteDevices`, false for libraries) and the target
+(`modbusTcpRemote || ethercat`, the same predicate the variable-location
+dropdown uses). Devices already configured stay **visible** on a target that
+can't host them, because the board-switch warning promises they are "disabled
+during compilation", not removed; only creating a new one is refused.
 
 ## 6. Aliases and variable binding
 

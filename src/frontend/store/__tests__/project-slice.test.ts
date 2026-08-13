@@ -2976,10 +2976,16 @@ describe('createProjectSlice', () => {
       })
     }
 
-    /** Every IEC address the first remote device's groups currently hold. */
+    /** Every IEC address the first remote device's groups currently hold.
+     *  Throws rather than asserting non-null so a broken fixture names itself
+     *  instead of failing as an unrelated expectation. */
     function addressesOf(): string[] {
-      const groups = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
-      return groups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+      const groups = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups
+      if (!groups) throw new Error('fixture: expected a remote device with a modbusTcpConfig')
+      return groups.flatMap((group) => {
+        if (!group.ioPoints) throw new Error(`fixture: group "${group.id}" has no ioPoints`)
+        return group.ioPoints.map((point) => point.iecLocation)
+      })
     }
 
     it('recompacts after a delete even when the board id does not resolve', () => {
@@ -3008,19 +3014,6 @@ describe('createProjectSlice', () => {
       expect(addressesOf()).toEqual(['%IW0', '%IW1', '%IW2', '%IW3'])
     })
 
-    it('does not mint duplicate addresses on a target that declares no remote I/O', () => {
-      // Runtime v3 RESOLVED and said `modbusTcpRemote: false`, so the central
-      // recalculation rightly leaves these addresses alone. That makes the
-      // provisional pool the only thing standing between the two groups.
-      seedRuntimeV3Board(store)
-      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
-      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
-      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
-
-      const addresses = addressesOf()
-      expect(new Set(addresses).size).toBe(addresses.length)
-    })
-
     it('still honours a resolved target that declares no remote I/O', () => {
       // The other half of the invariant, and the guard against "simplifying"
       // the fix into dropping capability scoping altogether: a board that
@@ -3040,6 +3033,34 @@ describe('createProjectSlice', () => {
       store.getState().projectActions.recalculateIecAddresses()
 
       expect(addressesOf()).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('warns once when the board is missing from a populated catalogue', () => {
+      // Resolving first clears the once-per-board dedupe, so this test does not
+      // depend on what ran before it.
+      seedRuntimeV4Board(store)
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        selectUnresolvedBoard(store) // setDeviceBoard recalculates
+        store.getState().projectActions.recalculateIecAddresses() // deduped
+
+        expect(warn).toHaveBeenCalledTimes(1)
+        expect(warn.mock.calls[0][0]).toContain('Uninstalled VPP Board')
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('stays quiet while the board catalogue is still loading', () => {
+      // An empty catalogue is an ordinary startup state, not a missing package.
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        store.getState().projectActions.recalculateIecAddresses()
+
+        expect(warn).not.toHaveBeenCalled()
+      } finally {
+        warn.mockRestore()
+      }
     })
 
     it('keeps the alias-uniqueness gate working when the board id does not resolve', () => {
