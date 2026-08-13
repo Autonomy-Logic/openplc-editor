@@ -29,8 +29,9 @@ const ConfirmInstallLibrariesModal = () => {
   const data = (modals['confirm-install-libraries']?.data ?? null) as ModalData
   const selection = data?.libraries ?? []
 
-  const [phase, setPhase] = useState<'ready' | 'installing' | 'done'>('ready')
+  const [phase, setPhase] = useState<'ready' | 'installing' | 'done' | 'error'>('ready')
   const [results, setResults] = useState<CatalogInstallItem[]>([])
+  const [error, setError] = useState<string | null>(null)
 
   const handleCancel = () => {
     // Close only this modal — return the user to the catalog browser
@@ -38,15 +39,21 @@ const ConfirmInstallLibrariesModal = () => {
     modalActions.onOpenChange('confirm-install-libraries', false)
     setPhase('ready')
     setResults([])
+    setError(null)
   }
 
   const handleConfirm = async () => {
     if (selection.length === 0) return
     if (!library?.installFromCatalog) return
     setPhase('installing')
-    const batch = await library.installFromCatalog(selection)
-    setResults(batch.results)
-    setPhase('done')
+    try {
+      const batch = await library.installFromCatalog(selection)
+      setResults(batch.results)
+      setPhase('done')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setPhase('error')
+    }
   }
 
   const handleClose = () => {
@@ -54,6 +61,7 @@ const ConfirmInstallLibrariesModal = () => {
     modalActions.closeModal()
     setPhase('ready')
     setResults([])
+    setError(null)
   }
 
   const successCount = results.filter((r) => r.success).length
@@ -121,6 +129,29 @@ const ConfirmInstallLibrariesModal = () => {
               Installing {selection.length} {selection.length === 1 ? 'library' : 'libraries'}...
             </span>
           </div>
+        )}
+
+        {phase === 'error' && (
+          <>
+            <ModalTitle className='mb-2 text-xl font-semibold'>Install failed</ModalTitle>
+            <p className='mb-4 text-sm text-red-600 dark:text-red-400'>{error}</p>
+            <div className='flex justify-end gap-3'>
+              <button
+                type='button'
+                onClick={handleCancel}
+                className='cursor-pointer rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+              >
+                Close
+              </button>
+              <button
+                type='button'
+                onClick={() => void handleConfirm()}
+                className='cursor-pointer rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark'
+              >
+                Retry
+              </button>
+            </div>
+          </>
         )}
 
         {phase === 'done' && (
