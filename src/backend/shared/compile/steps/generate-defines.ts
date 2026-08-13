@@ -55,11 +55,10 @@ export interface GenerateDefinesInput {
    *  the canonical list — every change MUST match what the
    *  firmware's HAL headers `#ifdef`-gate on. */
   stProgramFileContent: string
-  /** MD5 hash of `program.st` bytes — embedded as `PROGRAM_MD5` so
-   *  the runtime can detect a stale upload (a v4 runtime reports
-   *  this back on `FC 0x45` and the debugger uses it to confirm
-   *  the layout it's reading matches the program it last
-   *  uploaded). */
+  /** MD5 hash of all compiled program sources — embedded as `PROGRAM_MD5`
+   *  so the runtime can detect a stale upload (a v4 runtime reports this
+   *  back on `FC 0x45` and the debugger uses it to confirm the layout it's
+   *  reading matches the program it last uploaded). */
   buildMD5Hash: string
   /** Runtime identifier from `hals.json` (`'simulator'` /
    *  `'arduino-cli'` / `'openplc-compiler'`).  Only `'simulator'`

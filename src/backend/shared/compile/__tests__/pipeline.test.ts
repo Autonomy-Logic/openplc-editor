@@ -12,6 +12,7 @@
  * emit-event payloads.
  */
 
+import { createHash } from 'node:crypto'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type {
@@ -1079,6 +1080,46 @@ describe('runCompilePipeline — failure propagation', () => {
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — side effects', () => {
+  it('keeps program.st as the MD5 input when the project has no C/C++ POUs', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(makeArgs(), port, emit)
+
+    expect(port.computeMd5).toHaveBeenCalledWith('PROGRAM main\nEND_PROGRAM')
+  })
+
+  it('changes the MD5 input when only a C/C++ POU body changes', async () => {
+    const port = makePort({
+      computeMd5: jest.fn((input: string) => Promise.resolve(createHash('md5').update(input).digest('hex'))),
+    })
+    const { emit } = captureEvents()
+    const projectWithCppCode = (code: string) =>
+      ({
+        ...projectDataFixture,
+        originalCppPous: [{ name: 'CppBlock', code, variables: [] }],
+      }) as unknown as PLCProjectData
+
+    const firstResult = await runCompilePipeline(
+      makeArgs({ projectData: projectWithCppCode('void setup() {}\nvoid loop() { int value = 1; }') }),
+      port,
+      emit,
+    )
+    const secondResult = await runCompilePipeline(
+      makeArgs({ projectData: projectWithCppCode('void setup() {}\nvoid loop() { int value = 2; }') }),
+      port,
+      emit,
+    )
+
+    const firstMd5Input = port.computeMd5.mock.calls[0][0]
+    const secondMd5Input = port.computeMd5.mock.calls[1][0]
+    expect(firstMd5Input).toContain('c_blocks_code.cpp:')
+    expect(firstMd5Input).toContain('int value = 1;')
+    expect(secondMd5Input).toContain('int value = 2;')
+    expect(secondMd5Input).not.toBe(firstMd5Input)
+    expect(secondResult.md5).not.toBe(firstResult.md5)
+  })
+
   it('calls cacheDebugData with the strucpp MD5 + debug-map.json content', async () => {
     const cacheDebugData = jest.fn()
     const port = makePort()

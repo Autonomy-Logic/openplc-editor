@@ -271,9 +271,9 @@ export interface RunCompilePipelineResult {
    *  before compile.  Caller decides what to do with these bytes
    *  (editor: write to `Baremetal.ino.hex`; web: feed avr8js). */
   binary?: Uint8Array
-  /** MD5 of the strucpp-compiled `program.st`.  Echoed back so
-   *  callers can use it as a cache key (defines.h PROGRAM_MD5
-   *  refers to it). */
+  /** MD5 of the compiled program sources (`program.st` plus generated
+   *  C/C++ sidecars when present). Echoed back so callers can use it as
+   *  a cache key (`defines.h` `PROGRAM_MD5` refers to it). */
   md5?: string
   /** `true` when an upload step ran successfully (runtime v4 upload,
    *  arduino direct upload, or runtime v3 upload).  `false` when
@@ -466,16 +466,27 @@ async function runCompilePipelineInner(
   // ---------------------------------------------------------------------
   emit({ stage: 'strucpp', message: 'Compiling Structured Text to C++ with STruC++...', level: 'info' })
   const hasCBlocks = originalCppPous.length > 0
+  const cBlocks = buildCBlocksFromPous(originalCppPous as never)
   // `buildKnownPous` is typed against the port-shape `PLCPou`; cast
   // through `never` for the same reason described in Step 0.
   const knownPous = buildKnownPous(processedData.pous as never)
-  // MD5 of program.st — the runtime embeds this into defines.h via
-  // `generateDefinesContent` for stale-program detection.  Each
-  // platform's adapter implements `computeMd5` (editor: Node crypto;
-  // web: spark-md5) so the shared module doesn't carry a
-  // heavyweight hash dependency.  Both implementations produce
-  // byte-identical hex.
-  const md5 = await port.computeMd5(programSt)
+  // Hash every user-program source that reaches the compiler.  C/C++ POUs
+  // are extracted from the project before ST transpilation, so hashing only
+  // program.st would leave the digest unchanged when their bodies changed.
+  // Keep the historical input for projects without C/C++ POUs; for projects
+  // with sidecars, length-prefixed sections make the composite unambiguous.
+  const md5Input =
+    cBlocks.code === null
+      ? programSt
+      : [
+          `program.st:${programSt.length}\n${programSt}`,
+          `c_blocks.h:${cBlocks.header.length}\n${cBlocks.header}`,
+          `c_blocks_code.cpp:${cBlocks.code.length}\n${cBlocks.code}`,
+        ].join('\n')
+  // The runtime embeds this MD5 into defines.h for stale-program detection.
+  // Each platform's adapter implements `computeMd5` (editor: Node crypto;
+  // web: spark-md5), and both implementations produce byte-identical hex.
+  const md5 = await port.computeMd5(md5Input)
   const strucppResult = runProgramBuildPipeline({
     source: programSt,
     md5,
@@ -541,7 +552,6 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
-    const cBlocks = buildCBlocksFromPous(originalCppPous as never)
     const bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
@@ -791,7 +801,6 @@ async function runCompilePipelineInner(
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
-  const cBlocks = buildCBlocksFromPous(originalCppPous as never)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     cBlocks,
