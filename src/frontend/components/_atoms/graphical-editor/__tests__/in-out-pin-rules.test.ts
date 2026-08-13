@@ -79,7 +79,10 @@ describe('an in-out pin accepts exactly one variable', () => {
   it('does not restrict ordinary input pins', () => {
     const busy = {
       ...graph,
-      edges: [...graph.edges, { source: 'v2', sourceHandle: 'output-variable', target: 'imc', targetHandle: 'Moisture' }],
+      edges: [
+        ...graph.edges,
+        { source: 'v2', sourceHandle: 'output-variable', target: 'imc', targetHandle: 'Moisture' },
+      ],
     }
     expect(findOccupiedInOutPin({ target: 'imc', targetHandle: 'Moisture' }, busy)).toBeUndefined()
   })
@@ -143,9 +146,7 @@ describe('migrating projects saved with a two-sided in-out pin', () => {
     const healed = stripInOutOutputHandles(node, { connectorY: 48, connectorOffsetY: 48 })
 
     // `Q` was second; with the in-out gone it moves up into the first slot.
-    expect(healed.data.outputHandles).toEqual([
-      { ...handle('Q', 'source', 48), glbPosition: { x: 0, y: 0 } },
-    ])
+    expect(healed.data.outputHandles).toEqual([{ ...handle('Q', 'source', 48), glbPosition: { x: 0, y: 0 } }])
     expect(healed.data.outputConnector?.id).toBe('Q')
   })
 

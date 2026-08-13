@@ -48,9 +48,5 @@ export const validateVariableType = (
   return _validateVariableType(selectedType, expectedType.type.value)
 }
 
-export {
-  blockInputVariables,
-  blockOutputVariables,
-  inOutVariableNames,
-} from '../in-out-pin-rules'
+export { blockInputVariables, blockOutputVariables, inOutVariableNames } from '../in-out-pin-rules'
 export { getVariableRestrictionType }

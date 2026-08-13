@@ -5,7 +5,7 @@ import type { PLCVariable } from '../../../../../../middleware/shared/ports/type
 import type { FBDFlowType } from '../../../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
-import { blockInputVariables, blockOutputVariables,IN_OUT_MARKER_WIDTH } from '../../in-out-pin-rules'
+import { blockInputVariables, blockOutputVariables, IN_OUT_MARKER_WIDTH } from '../../in-out-pin-rules'
 import { BlockVariant } from '../../types/block'
 import { customNodeTypes } from '..'
 import { buildHandle } from '../handle'
