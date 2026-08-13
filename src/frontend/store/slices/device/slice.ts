@@ -3,7 +3,8 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/types'
-import type { DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
+import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
+import { PURCHASE_WATCH_WINDOW_MS } from './types'
 import {
   checkIfPinAliasIsValid,
   checkIfPinIsValid,
@@ -29,6 +30,24 @@ function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
     draft.deviceDefinitions.pinMapping.pinsByBoard[board] = []
   }
   return draft.deviceDefinitions.pinMapping.pinsByBoard[board]
+}
+
+/**
+ * Reset licensing to its initial state on an Immer draft — THE one way to drop
+ * a licence. Three paths must do it (`clearDeviceLicense`, an actual board
+ * change in `setDeviceBoard`, `clearDeviceDefinitions`), and when each inlined
+ * its own reset they drifted: two of them forgot the purchase watch, whose poll
+ * then outlived the board it was started for and kept running `refresh()` —
+ * including its licence WRITE — against whatever board came next. Route any
+ * future reset path through here so it cannot drift the same way.
+ */
+function resetDeviceLicense(deviceLicense: DeviceLicenseInfo): void {
+  deviceLicense.phase = 'idle'
+  deviceLicense.report = null
+  // Ends any purchase watch too: the poll effect keys off this deadline, and a
+  // watch without its board would poll (and could write a licence to) hardware
+  // the user never asked about.
+  deviceLicense.awaitingPurchaseUntil = null
 }
 
 const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
@@ -70,6 +89,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
   deviceLicense: {
     phase: 'idle',
     report: null,
+    awaitingPurchaseUntil: null,
   },
 
   deviceActions: {
@@ -148,8 +168,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           // select a different board entirely, and a "Licensed" badge carried over
           // from the previous one would be an assertion about hardware that is not
           // even connected.
-          deviceLicense.phase = 'idle'
-          deviceLicense.report = null
+          resetDeviceLicense(deviceLicense)
         }),
       )
     },
@@ -413,8 +432,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             // asserts possession for hardware that is no longer selected, and
             // the buy link gets built from the NEW package id paired with the
             // OLD device id — binding a purchase to the wrong board.
-            deviceLicense.phase = 'idle'
-            deviceLicense.report = null
+            resetDeviceLicense(deviceLicense)
           }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
@@ -602,11 +620,20 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setAwaitingPurchase: (awaiting): void => {
+      setState(
+        produce(({ deviceLicense }: DeviceSlice) => {
+          // The window is an absolute wall-clock deadline stamped here, not a
+          // counter kept by the poll effect — so a remounted effect resumes
+          // the SAME window and a skipped overlap tick spends none of it.
+          deviceLicense.awaitingPurchaseUntil = awaiting ? Date.now() + PURCHASE_WATCH_WINDOW_MS : null
+        }),
+      )
+    },
     clearDeviceLicense: (): void => {
       setState(
         produce(({ deviceLicense }: DeviceSlice) => {
-          deviceLicense.phase = 'idle'
-          deviceLicense.report = null
+          resetDeviceLicense(deviceLicense)
         }),
       )
     },
