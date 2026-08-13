@@ -5,6 +5,7 @@ import type { PLCVariable } from '../../../../../../middleware/shared/ports/type
 import type { FBDFlowType } from '../../../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
+import { blockInputVariables, blockOutputVariables } from '../../in-out-pin-rules'
 import { BlockVariant } from '../../types/block'
 import { customNodeTypes } from '..'
 import { buildHandle } from '../handle'
@@ -176,12 +177,8 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputConnectors = variant.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = variant.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(variant.variables).map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
 
   const blockHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +

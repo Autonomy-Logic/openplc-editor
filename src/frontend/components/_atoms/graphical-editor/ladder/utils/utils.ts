@@ -8,6 +8,7 @@ import {
   getVariableRestrictionType as _getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../../utils/PLC/validate-variable-type'
+import { blockInputVariables, blockOutputVariables } from '../../in-out-pin-rules'
 import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
@@ -121,12 +122,8 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputConnectors = variant.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = variant.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(variant.variables).map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
 
   const blockHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +
@@ -196,18 +193,14 @@ export const getBlockSize = (
 }
 
 export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
-  const inputConnectors = variantLib.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
-  const outputConnectors = variantLib.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
+  const inputConnectors = blockInputVariables(variantLib.variables).map((variable) => ({
+    name: variable.name,
+    type: variable.type,
+  }))
+  const outputConnectors = blockOutputVariables(variantLib.variables).map((variable) => ({
+    name: variable.name,
+    type: variable.type,
+  }))
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||

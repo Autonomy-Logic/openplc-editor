@@ -17,8 +17,15 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockOutputDebugBadges } from '../block-output-debug-badges'
+import { InOutPinMarker } from '../in-out-pin-marker'
 import { BlockVariant as newBlockVariant } from '../types/block'
-import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  getBlockDocumentation,
+  getVariableRestrictionType,
+  inOutVariableNames,
+} from '../utils'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
@@ -71,12 +78,9 @@ export const BlockNodeElement = <T extends object>({
     type: blockType,
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const inputConnectors = blockVariables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = blockVariables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(blockVariables).map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(blockVariables).map((variable) => variable.name)
+  const inOutConnectors = inOutVariableNames(blockVariables)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
   const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
@@ -380,6 +384,7 @@ export const BlockNodeElement = <T extends object>({
         return (
           <div key={index} className='absolute text-xs' style={{ top, left: 6 }}>
             {connector}
+            {inOutConnectors.has(connector) && <InOutPinMarker />}
           </div>
         )
       })}

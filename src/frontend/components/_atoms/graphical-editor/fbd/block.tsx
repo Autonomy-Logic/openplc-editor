@@ -13,8 +13,15 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockOutputDebugBadges } from '../block-output-debug-badges'
+import { InOutPinMarker } from '../in-out-pin-marker'
 import { BlockVariant } from '../types/block'
-import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  getBlockDocumentation,
+  getVariableRestrictionType,
+  inOutVariableNames,
+} from '../utils'
 import { buildBlockNode } from './buildNodes'
 import { CustomHandle } from './handle'
 import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
@@ -61,12 +68,9 @@ export const BlockNodeElement = <T extends object>({
     type: blockType,
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const inputConnectors = blockVariables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = blockVariables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(blockVariables).map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(blockVariables).map((variable) => variable.name)
+  const inOutConnectors = inOutVariableNames(blockVariables)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
   const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
@@ -313,6 +317,7 @@ export const BlockNodeElement = <T extends object>({
           style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
         >
           {connector}
+          {inOutConnectors.has(connector) && <InOutPinMarker />}
         </div>
       ))}
       {outputConnectors.map((connector, index) => (
@@ -643,19 +648,11 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
     const newNode = { ...updatedNewNode }
 
-    const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'input' || variable.class === 'inOut',
-    )
-    const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output' || variable.class === 'inOut',
-    )
+    const originalNodeInputs = blockInputVariables((node.data.variant as BlockVariant).variables)
+    const originalNodeSources = blockOutputVariables((node.data.variant as BlockVariant).variables)
 
-    const updatedInputVariables = newNode.data.variant.variables.filter(
-      (variable) => variable.class === 'input' || variable.class === 'inOut',
-    )
-    const updatedOutputVariables = newNode.data.variant.variables.filter(
-      (variable) => variable.class === 'output' || variable.class === 'inOut',
-    )
+    const updatedInputVariables = blockInputVariables(newNode.data.variant.variables)
+    const updatedOutputVariables = blockOutputVariables(newNode.data.variant.variables)
 
     let newNodes = [...rung.nodes]
     newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))

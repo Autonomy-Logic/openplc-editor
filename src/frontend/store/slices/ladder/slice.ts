@@ -4,14 +4,27 @@ import { StateCreator } from 'zustand'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
+  migrateInOutSourceEdges,
+  stripInOutOutputHandles,
+} from '../../../components/_atoms/graphical-editor/in-out-pin-rules'
+import {
   defaultCustomNodesStyles,
   nodesBuilder,
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
+import {
+  DEFAULT_BLOCK_CONNECTOR_Y,
+  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+} from '../../../components/_atoms/graphical-editor/ladder/utils/constants'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
+
+const LADDER_PIN_GEOMETRY = {
+  connectorY: DEFAULT_BLOCK_CONNECTOR_Y,
+  connectorOffsetY: DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+}
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -24,6 +37,21 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
       setState(
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
+
+          // A VAR_IN_OUT pin no longer has an output side. Heal projects saved before that:
+          // drop the stale right-hand pin (handle geometry is persisted, not recomputed) and
+          // re-point any wire that left it at whatever feeds the pin.
+          flow = {
+            ...flow,
+            rungs: flow.rungs.map((rung) => {
+              const migrated = migrateInOutSourceEdges(rung.nodes, rung.edges)
+              return {
+                ...rung,
+                nodes: rung.nodes.map((node) => stripInOutOutputHandles(node, LADDER_PIN_GEOMETRY)),
+                edges: migrated.edges,
+              }
+            }),
+          }
 
           // Check if any block node has legacy connectedVariables (object instead of array).
           // Only scan + migrate if legacy data is detected — modern projects skip this entirely.
