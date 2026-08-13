@@ -17,7 +17,7 @@
  */
 
 import type { InstalledLibrary, LibraryInstallResult } from './library-types'
-import type { ListPublicLibrariesArgs, ListPublicLibrariesResponse } from './public-catalog-types'
+import type { ListPublicLibrariesArgs, ListPublicLibrariesResponse, PublicLibrary } from './public-catalog-types'
 import type { Result, Unsubscribe } from './types'
 
 /**
@@ -153,6 +153,9 @@ export interface LibraryPort {
 
   /**
    * Install a batch of libraries selected from the public catalog.
+   * Takes the full catalog rows (not just ids) because the platform
+   * needs `authorHandle`/`displayName`/`description` — metadata the
+   * downloaded `.stlib` archive's own manifest doesn't reliably carry.
    * The platform fetches each `.stlib` and routes it through the
    * same persistence path the file-picker install uses, returning a
    * per-item pass/fail summary so the UI can render a "5 succeeded,
@@ -160,5 +163,5 @@ export interface LibraryPort {
    *
    * Optional alongside `queryPublicCatalog` — present iff that one is.
    */
-  installFromCatalog?(publishedLibraryIds: string[]): Promise<CatalogInstallBatch>
+  installFromCatalog?(libraries: PublicLibrary[]): Promise<CatalogInstallBatch>
 }

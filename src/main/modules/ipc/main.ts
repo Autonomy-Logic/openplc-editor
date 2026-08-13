@@ -8,7 +8,7 @@ import type {
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
-import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
+import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -28,6 +28,7 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
@@ -1429,11 +1430,15 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, publishedLibraryIds: string[]) => {
-    if (!Array.isArray(publishedLibraryIds) || publishedLibraryIds.length === 0) {
+  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, libraries: PublicLibrary[]) => {
+    if (!Array.isArray(libraries) || libraries.length === 0) {
       return { results: [] }
     }
-    const batch = await this.libraryManagerModule.installFromCatalog(publishedLibraryIds)
+    const validLibraries = libraries.filter((row): row is PublicLibrary => PublicLibrarySchema.safeParse(row).success)
+    if (validLibraries.length === 0) {
+      return { results: [] }
+    }
+    const batch = await this.libraryManagerModule.installFromCatalog(validLibraries)
     // Fire one change event for the whole batch — saves N renderer
     // refreshes for an N-library install.
     if (batch.results.some((r) => r.success)) {

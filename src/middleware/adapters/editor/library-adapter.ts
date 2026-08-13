@@ -24,7 +24,7 @@ import type {
   StlibArchiveDTO,
 } from '../../shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../shared/ports/library-types'
-import type { ListPublicLibrariesArgs } from '../../shared/ports/public-catalog-types'
+import type { ListPublicLibrariesArgs, PublicLibrary } from '../../shared/ports/public-catalog-types'
 import type { Result, Unsubscribe } from '../../shared/ports/types'
 
 export function createEditorLibraryAdapter(): LibraryPort {
@@ -62,8 +62,11 @@ export function createEditorLibraryAdapter(): LibraryPort {
       return window.bridge.queryPublicCatalog(args)
     },
 
-    installFromCatalog(publishedLibraryIds: string[]): Promise<CatalogInstallBatch> {
-      return window.bridge.installLibrariesFromCatalog(publishedLibraryIds)
+    installFromCatalog(libraries: PublicLibrary[]): Promise<CatalogInstallBatch> {
+      // Forward the full rows, not just ids — the main process needs
+      // authorHandle/displayName/description to finalize each install
+      // the same way the web adapter does. See library-port.ts.
+      return window.bridge.installLibrariesFromCatalog(libraries)
     },
   }
 }

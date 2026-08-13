@@ -36,7 +36,7 @@ const ManifestPousSchema = z.object({
   types: z.array(z.string()),
 })
 
-const PublicLibrarySchema = z.object({
+export const PublicLibrarySchema = z.object({
   id: z.string(),
   projectId: z.string(),
   name: z.string(),
