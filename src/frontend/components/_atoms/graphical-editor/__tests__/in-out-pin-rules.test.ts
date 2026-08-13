@@ -1,8 +1,7 @@
-import { describe, expect, it } from 'vitest'
-
 import {
   blockInputVariables,
   blockOutputVariables,
+  IN_OUT_MARKER_WIDTH,
   findOccupiedInOutPin,
   inOutVariableNames,
   migrateInOutSourceEdges,
@@ -156,5 +155,35 @@ describe('migrating projects saved with a two-sided in-out pin', () => {
     node.data.handles = node.data.inputHandles
     const healed = stripInOutOutputHandles(node, { connectorY: 48, connectorOffsetY: 48 })
     expect(healed).toBe(node)
+  })
+})
+
+describe('block width reserves room for the ⟷ marker', () => {
+  // The marker only moves the width when the in-out pin is the WIDEST label and the block is
+  // not already at the maximum width — otherwise the marker is free.
+  const wideInOut = [
+    { name: 'StateRef', class: 'inOut', type: { definition: 'base-type', value: 'INT' } },
+    { name: 'B', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
+  ]
+  const asPlainInput = wideInOut.map((v) => (v.class === 'inOut' ? { ...v, class: 'input' } : v))
+  const variant = (vars: typeof wideInOut) =>
+    ({ name: 'FB', type: 'function-block', variables: vars, documentation: '', extensible: false }) as never
+
+  it('adds the marker width only for in-out pins', async () => {
+    const { getBlockSize } = await import('../fbd/utils/utils')
+    const at = { x: 0, y: 0 }
+    expect(getBlockSize(variant(wideInOut), at).width).toBe(
+      getBlockSize(variant(asPlainInput), at).width + IN_OUT_MARKER_WIDTH,
+    )
+  })
+
+  it('leaves a block whose widest pin is not the in-out unchanged', async () => {
+    const { getBlockSize } = await import('../fbd/utils/utils')
+    const at = { x: 0, y: 0 }
+    // `Moisture` is wider than `State ⟷`, so it still sets the width.
+    expect(getBlockSize(variant(variables as never), at).width).toBe(
+      getBlockSize(variant(variables.map((v) => (v.class === 'inOut' ? { ...v, class: 'input' } : v)) as never), at)
+        .width,
+    )
   })
 })

@@ -8,7 +8,7 @@ import {
   getVariableRestrictionType as _getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../../utils/PLC/validate-variable-type'
-import { blockInputVariables, blockOutputVariables } from '../../in-out-pin-rules'
+import { blockInputVariables, blockOutputVariables,IN_OUT_MARKER_WIDTH } from '../../in-out-pin-rules'
 import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
@@ -122,7 +122,8 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputConnectors = blockInputVariables(variant.variables).map((variable) => variable.name)
+  const inputVariables = blockInputVariables(variant.variables)
+  const inputConnectors = inputVariables.map((variable) => variable.name)
   const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
 
   const blockHeight =
@@ -133,8 +134,10 @@ export const getBlockSize = (
   let variableInputWidth = 0
   let variableOutputWidth = 0
   const blockNameWidth = variant.name.length * 12
-  inputConnectors.forEach((input) => {
-    const inputWidth = input.length * 12
+  inputVariables.forEach((input) => {
+    // An in-out pin also renders the ⟷ marker after its name; pay for it here so a long
+    // name plus the arrow cannot overflow the block.
+    const inputWidth = input.name.length * 12 + (input.class === 'inOut' ? IN_OUT_MARKER_WIDTH : 0)
     if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
   })
   outputConnectors.forEach((output) => {

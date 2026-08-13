@@ -35,6 +35,14 @@ export const blockInputVariables = <T extends BlockParameter>(variables: T[]): T
 export const blockOutputVariables = <T extends BlockParameter>(variables: T[]): T[] =>
   variables.filter((variable) => variable.class === 'output')
 
+/**
+ * Horizontal space the ⟷ marker adds to an in-out pin's label, in pixels.
+ *
+ * Block width is measured from the pin labels, so the marker has to be paid for there or a
+ * long in-out name plus the arrow overflows the block. Keep in step with InOutPinMarker.
+ */
+export const IN_OUT_MARKER_WIDTH = 16
+
 /** Names of a block's `VAR_IN_OUT` parameters, for the pin marker and the connection checks. */
 export const inOutVariableNames = <T extends BlockParameter>(variables: T[]): Set<string> =>
   new Set(variables.filter((variable) => variable.class === 'inOut').map((variable) => variable.name))
