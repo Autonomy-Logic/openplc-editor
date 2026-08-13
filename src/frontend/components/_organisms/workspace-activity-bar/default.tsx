@@ -636,7 +636,42 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const handleSimulatorControl = useCallback(async (): Promise<void> => {
     try {
       if (simulatorRunning) {
-        await debugSession.stopSession()
+        // Two things end here, in this order, and the emulator's end is not
+        // conditional on the debug session's.
+        //
+        // The debug session goes first: it is a CONSUMER of the emulator, so it
+        // has to let go of the transport before the thing on the other end
+        // disappears.
+        //
+        // The emulator goes second, from a `finally`, because stopping it is
+        // this button's job and nothing else's. `stopSession()` deliberately
+        // does not do it (see its docstring: a debug session is not the owner of
+        // the thing it talks to), so with this call missing "Stop" ended the
+        // debug session, logged "Simulator stopped." and left the avr8js loop
+        // running — re-scheduling itself and burning a core for the rest of the
+        // session, unreachable because the button had flipped back to "Start".
+        //
+        // Sequencing it after a plain `await` reintroduced the same leak on the
+        // error path: anything that rejects inside the teardown (today only a
+        // throwing `onDisconnected` subscriber, which is why nothing hits it
+        // yet) skipped straight to the catch below, which only logs. The
+        // emulator kept running, `simulatorRunning` stayed true, and every
+        // retry failed identically — worse than the original bug, because
+        // nothing settled at all. `finally` keeps the order and drops the
+        // condition.
+        try {
+          await debugSession.stopSession()
+        } finally {
+          await simulator.stop()
+        }
+
+        // The session this debug session was riding is gone, so the claim that it
+        // rides one goes with it. The drop handler cannot clear it on this path:
+        // `stopSession()` has already hidden the debugger, so the handler's
+        // `isDebuggerVisible` gate returns before it reaches the reset — leaving
+        // the ref stale-`true` for a session that no longer exists.
+        debugSessionRidesDeviceRef.current = false
+
         setSimulatorRunning(false)
         addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
       } else {
@@ -649,7 +684,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       pendingSimulatorDebugRef.current = false
       addLog({ id: crypto.randomUUID(), level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
     }
-  }, [debugSession, simulatorRunning, addLog])
+  }, [debugSession, simulator, simulatorRunning, addLog])
 
   // ---------------------------------------------------------------------------
   // MD5 verification — runs after debug compilation for non-simulator
