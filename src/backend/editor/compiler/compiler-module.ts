@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
@@ -2082,6 +2083,57 @@ class CompilerModule {
       throw new Error(message)
     }
 
+    // Trusted-keys table for a licensable runtime-v4 VPP. The licensable
+    // prebuilt link set (`license_core.o` and friends) references
+    // `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as EXTERN symbols — the
+    // table itself travels as `trusted_keys.json` at the package root
+    // (injected per environment when the package is published) and the editor
+    // defines the symbols at project build time, the same per-project movement
+    // as `defines.h`. The generated unit joins the `vpp_plugin/` link set the
+    // device builds the plugin `.so` from.
+    //
+    // Resolved HERE, outside the degrade-and-continue catch below, for the
+    // same reason the integrity gate is: a licensable package whose key table
+    // is unusable must STOP the build (the plugin cannot link without the
+    // symbols), and `packageVppPlugin` in the platform port turns a throw into
+    // the `errors[]` the pipeline bails on, whereas a logged error would let
+    // the build upload a bundle whose licensed driver dies at link time on the
+    // PLC. `resolveTrustedKeysArtifact` owns the gate, the validation and the
+    // fault wording; this block only does the file I/O the shared step
+    // deliberately avoids.
+    let trustedKeysC: string | null = null
+    {
+      const licensableMatch = new PackageManagerModule().findDeviceByBoardName(boardTarget)
+      if (
+        licensableMatch &&
+        licensableMatch.device.target.type === 'runtime-v4' &&
+        licensableMatch.device.capabilities?.isLicensable === true
+      ) {
+        let trustedKeysJson: string | null = null
+        try {
+          trustedKeysJson = await readFile(join(licensableMatch.pkg.path, 'trusted_keys.json'), 'utf-8')
+        } catch {
+          trustedKeysJson = null
+        }
+        const artifact = resolveTrustedKeysArtifact({
+          isLicensable: true,
+          packageLabel: licensableMatch.pkg.packageId,
+          trustedKeysJson,
+        })
+        if (artifact.kind === 'packaging-fault') {
+          handleOutputData(artifact.message, 'error')
+          throw new Error(artifact.message)
+        }
+        if (artifact.kind === 'generated') {
+          trustedKeysC = artifact.content
+          handleOutputData(
+            `Trusted-keys table generated for the plugin link set: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+            'info',
+          )
+        }
+      }
+    }
+
     try {
       const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
@@ -2303,6 +2355,15 @@ class CompilerModule {
       if (copiedFiles.length === 0) {
         handleOutputData('VPP plugin source directory contained no files to copy', 'info')
         return
+      }
+
+      // The generated trusted-keys unit joins the link set AND the checksum:
+      // a key rotation with unchanged plugin source must still change the
+      // checksum, or the runtime's compile.sh would skip the rebuild and the
+      // device would keep validating blobs against the previous table.
+      if (trustedKeysC !== null) {
+        await writeFile(join(destPluginDir, 'trusted_keys.c'), trustedKeysC, 'utf-8')
+        copiedFiles.push('trusted_keys.c')
       }
 
       // Compute SHA-256 over all copied files (sorted for determinism)
@@ -2681,6 +2742,58 @@ class CompilerModule {
               '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
               'firmware will link the weak default and report that its licence storage is missing.',
           })
+        }
+
+        // Trusted-keys table for a licensable VPP. The licensable prebuilt
+        // archive references `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as
+        // EXTERN symbols — the table itself travels as `trusted_keys.json` at
+        // the package root (injected per environment when the package is
+        // published) and the editor defines the symbols here at project build
+        // time, the same per-project movement as `defines.h`. The generated
+        // unit lands in the SKETCH directory so its object is always linked
+        // (sketch objects are never archive-pruned the way library members
+        // can be).
+        //
+        // Unlike the license-store warning above, an unusable table is a HARD
+        // STOP, not a degraded build: without these symbols the link either
+        // dies in an undefined-reference wall (naming a symbol, not the
+        // package) or — if a stale definition is ever lying around — succeeds
+        // while trusting the wrong keys. `resolveTrustedKeysArtifact` owns the
+        // gate, the validation and the fault wording; this block only does the
+        // file I/O the shared step deliberately avoids.
+        if (boardInfo.capabilities?.isLicensable === true) {
+          let trustedKeysJson: string | null = null
+          if (boardInfo.vppPackagePath) {
+            try {
+              trustedKeysJson = await readFile(join(boardInfo.vppPackagePath, 'trusted_keys.json'), 'utf-8')
+            } catch {
+              trustedKeysJson = null
+            }
+          }
+          const artifact = resolveTrustedKeysArtifact({
+            isLicensable: true,
+            packageLabel: boardInfo.vppPackageId ?? boardTarget,
+            trustedKeysJson,
+          })
+          if (artifact.kind === 'packaging-fault') {
+            _mainProcessPort.postMessage({
+              logLevel: 'error',
+              message: `${artifact.message}\nStopping compilation process.`,
+            })
+            _mainProcessPort.close()
+            return
+          }
+          if (artifact.kind === 'generated') {
+            firmwareSkeleton['examples/Baremetal/trusted_keys.c'] = artifact.content
+            // Logged on SUCCESS for the same reason the license-store include
+            // is: without this line, a build with and without the table looks
+            // identical until the linker (or worse, the licence check) says
+            // otherwise, far from the cause.
+            _mainProcessPort.postMessage({
+              logLevel: 'info',
+              message: `Trusted-keys table generated: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+            })
+          }
         }
       }
       try {

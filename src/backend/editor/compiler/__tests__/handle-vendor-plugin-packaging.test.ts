@@ -70,13 +70,14 @@ const BOARD = 'Raspberry Pi (prebuilt test)'
 
 const handler = CompilerModule.prototype.handleVendorPluginPackaging
 
-function makeManifest(hal: Record<string, unknown>) {
+function makeManifest(hal: Record<string, unknown>, capabilities?: Record<string, unknown>) {
   return {
     devices: [
       {
         name: BOARD,
         target: { type: 'runtime-v4' },
         hal,
+        capabilities,
         moduleSystem: undefined,
       },
     ],
@@ -100,9 +101,9 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
   let targetDir: string
   let logs: LogEntry[]
 
-  const runFor = (hal: Record<string, unknown>) => {
+  const runFor = (hal: Record<string, unknown>, capabilities?: Record<string, unknown>) => {
     listInstalled.mockReturnValue([{ packageId: 'com.openplc.rpi', path: pkgDir }])
-    getInstalledPackageManifest.mockReturnValue(makeManifest(hal))
+    getInstalledPackageManifest.mockReturnValue(makeManifest(hal, capabilities))
     return handler.call(
       {} as CompilerModule,
       BOARD,
@@ -205,5 +206,74 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
     const copied = readFileSync(join(targetDir, 'vpp_plugin', 'rpi_plugin.o'), 'utf-8')
     expect(copied).toBe('OBJECT-BYTES')
+  })
+
+  // ---------------------------------------------------------------------
+  // Trusted-keys branch — licensable VPPs get a generated trusted_keys.c
+  // in the plugin link set; a licensable package without a usable
+  // trusted_keys.json is a packaging fault that stops the build.
+  // ---------------------------------------------------------------------
+
+  const PREBUILT_HAL = {
+    type: 'runtime-v4-plugin',
+    pluginType: 'native',
+    provisioning: 'prebuilt',
+    pluginEntry: 'hal/runtime-v4/plugin',
+    configTemplate: 'hal/runtime-v4/plugin/config_template.json',
+  }
+  /** 128 hex chars — 64 bytes of 0xab. */
+  const HEX_KEY = 'ab'.repeat(64)
+
+  it('generates trusted_keys.c into the link set for a licensable device', async () => {
+    writeFileSync(join(pkgDir, 'trusted_keys.json'), JSON.stringify({ keys: [{ keyId: 0, pubKeyRawHex: HEX_KEY }] }))
+
+    await runFor(PREBUILT_HAL, { isLicensable: true })
+
+    const generated = readFileSync(join(targetDir, 'vpp_plugin', 'trusted_keys.c'), 'utf-8')
+    expect(generated).toContain('const uint8_t LIC_TRUSTED_KEYS[][64] = {')
+    expect(generated).toContain('const uint8_t LIC_TRUSTED_KEY_COUNT = 1;')
+    expect(logs.some((l) => l.level === 'info' && /Trusted-keys table generated/.test(l.message))).toBe(true)
+  })
+
+  it('folds the generated table into the plugin checksum (key rotation forces a device rebuild)', async () => {
+    writeFileSync(join(pkgDir, 'trusted_keys.json'), JSON.stringify({ keys: [{ keyId: 0, pubKeyRawHex: HEX_KEY }] }))
+    await runFor(PREBUILT_HAL, { isLicensable: true })
+    const checksumBefore = readFileSync(join(targetDir, 'vpp_plugin', 'checksum.sha256'), 'utf-8')
+
+    // Same plugin payload, different key table — the checksum MUST move,
+    // or the runtime's compile.sh would skip the rebuild and the device
+    // would keep validating blobs against the previous table.
+    writeFileSync(
+      join(pkgDir, 'trusted_keys.json'),
+      JSON.stringify({ keys: [{ keyId: 0, pubKeyRawHex: 'cd'.repeat(64) }] }),
+    )
+    await runFor(PREBUILT_HAL, { isLicensable: true })
+    const checksumAfter = readFileSync(join(targetDir, 'vpp_plugin', 'checksum.sha256'), 'utf-8')
+
+    expect(checksumAfter).not.toBe(checksumBefore)
+  })
+
+  it('stops the build when a licensable package has no trusted_keys.json', async () => {
+    await expect(runFor(PREBUILT_HAL, { isLicensable: true })).rejects.toThrow(/com\.openplc\.rpi/)
+
+    // Fails BEFORE anything lands in the bundle — no partial plugin upload.
+    expect(existsSync(join(targetDir, 'vpp_plugin'))).toBe(false)
+    expect(logs.some((l) => l.level === 'error' && /packaging fault/.test(l.message))).toBe(true)
+  })
+
+  it('stops the build when the trusted_keys.json is malformed', async () => {
+    writeFileSync(join(pkgDir, 'trusted_keys.json'), JSON.stringify({ keys: [] }))
+
+    await expect(runFor(PREBUILT_HAL, { isLicensable: true })).rejects.toThrow(/at least one signing key/)
+    expect(existsSync(join(targetDir, 'vpp_plugin'))).toBe(false)
+  })
+
+  it('generates no trusted_keys.c for a non-licensable device, even when the json exists', async () => {
+    writeFileSync(join(pkgDir, 'trusted_keys.json'), JSON.stringify({ keys: [{ keyId: 0, pubKeyRawHex: HEX_KEY }] }))
+
+    await runFor(PREBUILT_HAL)
+
+    expect(existsSync(join(targetDir, 'vpp_plugin', 'rpi_plugin.o'))).toBe(true)
+    expect(existsSync(join(targetDir, 'vpp_plugin', 'trusted_keys.c'))).toBe(false)
   })
 })
