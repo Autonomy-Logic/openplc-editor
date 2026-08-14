@@ -88,6 +88,27 @@ export interface PLCStructureVariable {
   documentation?: string
 }
 
+/**
+ * A Global Variable List — the same object CODESYS calls a GVL: a named
+ * `VAR_GLOBAL … END_VAR` block whose members are reached as `<name>.<variable>`.
+ *
+ * That is what the user sees. Underneath, a GVL compiles to a STRUCT type plus one
+ * global instance of it, because that is the shape STruC++ resolves qualified member
+ * access through — see `serializeGlobalVariableListsToST`.
+ *
+ * `variables[].location` is carried even though it is deliberately NOT emitted. A
+ * CODESYS GVL often binds members to I/O (`AT %QX0.0`), and a struct member cannot hold
+ * an address today: the compiler accepts one and then silently discards it. So the
+ * address is parked here on import, left out of the generated ST, and written back on
+ * export — dropping it outright would quietly unwire the user's I/O the first time a
+ * project made a round trip.
+ */
+export interface PLCGlobalVariableList {
+  name: string
+  variables: PLCVariable[]
+  documentation?: string
+}
+
 export type PLCDataType =
   | { name: string; derivation: 'structure'; variable: PLCStructureVariable[] }
   | {
@@ -434,6 +455,9 @@ export interface PLCProjectLibraryRef {
 
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
+  /** CODESYS-style Global Variable Lists. Optional on the wire so projects saved
+   *  before GVLs existed still parse; absent reads as `[]`. */
+  globalVariableLists?: PLCGlobalVariableList[]
   pous: PLCPou[]
   configurations: {
     resource: {
