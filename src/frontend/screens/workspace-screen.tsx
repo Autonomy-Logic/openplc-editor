@@ -16,6 +16,7 @@ import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
+import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
@@ -629,6 +630,31 @@ const WorkspaceScreen = () => {
                                 return (
                                   <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
                                     <DataTypeEditor dataTypeName={model.meta.name} />
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        )}
+
+                        {/* Global Variable List editors — multi-instance, same
+                            pattern: each reads its own list by name, so every open
+                            list can stay mounted without one writing over another. */}
+                        {editors.some((m) => m.type === 'plc-global-variable-list') && (
+                          <div
+                            aria-label='Global variable lists editor container'
+                            className={cn(
+                              'flex h-full w-full flex-1 gap-2',
+                              editor.type !== 'plc-global-variable-list' && 'hidden',
+                            )}
+                          >
+                            {editors
+                              .filter((m) => m.type === 'plc-global-variable-list')
+                              .map((model) => {
+                                const isActive =
+                                  editor.type === 'plc-global-variable-list' && editor.meta.name === model.meta.name
+                                return (
+                                  <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
+                                    <GlobalVariableListEditor listName={model.meta.name} />
                                   </div>
                                 )
                               })}

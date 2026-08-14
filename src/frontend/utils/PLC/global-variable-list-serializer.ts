@@ -64,12 +64,14 @@ function declarationLine(variable: PLCVariable): string {
  */
 export function serializeGlobalVariableListToText(list: PLCGlobalVariableList): string {
   const lines = list.variables.map((variable) => {
+    // `name AT %QX0.0 : TYPE` — the address binds the NAME, so it precedes the colon.
+    // Writing it after the type reads as valid until something else has to parse it.
     const location = variable.location ? ` AT ${variable.location}` : ''
     const initialValue =
       variable.initialValue !== undefined && variable.initialValue !== null && variable.initialValue !== ''
         ? ` := ${variable.initialValue}`
         : ''
-    return `${DECL_INDENT}${variable.name} : ${variable.type.value}${location}${initialValue};`
+    return `${DECL_INDENT}${variable.name}${location} : ${variable.type.value}${initialValue};`
   })
   return `VAR_GLOBAL\n${lines.join('\n')}\nEND_VAR\n`
 }

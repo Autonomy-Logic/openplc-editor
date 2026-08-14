@@ -101,6 +101,22 @@ describe('global variable list — POU externals', () => {
 })
 
 describe('global variable list — text form', () => {
+  it('writes the address BEFORE the colon, as IEC and the CODESYS importer do', () => {
+    // A round-trip test alone cannot catch this: a serializer and parser that agree with
+    // each other on the wrong order both pass, and the mismatch only surfaces against a
+    // `.gvl` file the CODESYS converter wrote. Pin the exact text.
+    expect(serializeGlobalVariableListToText(gvl([variable('Output1', 'BOOL', { location: '%QX0.0' })]))).toBe(
+      'VAR_GLOBAL\n  Output1 AT %QX0.0 : BOOL;\nEND_VAR\n',
+    )
+  })
+
+  it('reads the declaration form the CODESYS importer writes', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n\tOutput1 AT %QX0.0: BOOL;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0]).toMatchObject({ name: 'Output1', location: '%QX0.0' })
+  })
+
   it('round-trips through its own text, addresses included', () => {
     // This text is the list's persistence, so it must carry everything the model holds —
     // including the address the compiler cannot yet act on.

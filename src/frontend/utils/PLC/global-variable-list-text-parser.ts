@@ -25,9 +25,12 @@ export interface ParseGlobalVariableListResult {
 
 const identifierRegex = /^[A-Za-z_]\w*$/
 
-// Name : TYPE AT %QX0.0 := Initial ; (* documentation *)
+// Name AT %QX0.0 : TYPE := Initial ; (* documentation *)
+// The address binds the NAME and so precedes the colon, which is also the order the
+// CODESYS converter writes `globals/<name>.gvl` in — expecting it after the type made
+// this parser reject the very files the importer produces.
 const declarationRegex =
-  /^(?<name>\w+)\s*:\s*(?<type>[\w\s[\],.]+?)\s*(?:AT\s+(?<location>%[\w.]+)\s*)?(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/i
+  /^(?<name>\w+)\s*(?:AT\s+(?<location>%[\w.]+)\s*)?:\s*(?<type>[\w\s[\],.]+?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/i
 
 function buildVariableType(typeStr: string): PLCVariableType | null {
   const arrayType = parseArrayType(typeStr)
