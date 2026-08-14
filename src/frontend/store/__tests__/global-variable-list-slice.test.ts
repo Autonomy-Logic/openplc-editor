@@ -30,3 +30,40 @@ describe('global variable list store actions', () => {
     expect(useOpenPLCStore.getState().pendingDeletions).toContain('globals/GVL.gvl')
   })
 })
+
+describe('global variable list shared actions', () => {
+  it('opens the list right after creating it, like every other + button element', () => {
+    const state = useOpenPLCStore.getState()
+    const created = state.globalVariableListActions.create('GVL2')
+
+    expect(created.ok).toBe(true)
+    const after = useOpenPLCStore.getState()
+    // The tab is open, selected, and the editor is pointed at it — creating a list the
+    // user then has to hunt for in the tree would be the odd one out.
+    expect(after.tabs.some((t) => t.name === 'GVL2')).toBe(true)
+    expect(after.editor.meta.name).toBe('GVL2')
+    expect(after.editor.type).toBe('plc-global-variable-list')
+  })
+
+  it('deletes a list, closing its tab and model', () => {
+    const state = useOpenPLCStore.getState()
+    state.globalVariableListActions.create('GVL3')
+    expect(useOpenPLCStore.getState().tabs.some((t) => t.name === 'GVL3')).toBe(true)
+
+    useOpenPLCStore.getState().globalVariableListActions.delete('GVL3')
+
+    const after = useOpenPLCStore.getState()
+    expect(after.project.data.globalVariableLists?.some((l) => l.name === 'GVL3')).toBe(false)
+    expect(after.tabs.some((t) => t.name === 'GVL3')).toBe(false)
+    expect(after.pendingDeletions).toContain('globals/GVL3.gvl')
+  })
+
+  it('refuses a rename onto a name already taken', () => {
+    const state = useOpenPLCStore.getState()
+    state.globalVariableListActions.create('GVL_A')
+    state.globalVariableListActions.create('GVL_B')
+
+    const res = useOpenPLCStore.getState().globalVariableListActions.rename('GVL_A', 'gvl_b')
+    expect(res.ok).toBe(false)
+  })
+})

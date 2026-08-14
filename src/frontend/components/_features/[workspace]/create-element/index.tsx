@@ -66,7 +66,9 @@ const CreatePLCElement = () => {
           alignOffset={-7}
           sideOffset={10}
           align='end'
-          className='box flex h-fit w-[188px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
+          /* Wide enough for the longest entry — "Global Variable List" — to sit on one
+             line beside its icon and arrow. */
+          className='box flex h-fit w-[222px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
         >
           {CreatePLCElementTypes.map((target) => (
             <ElementCard key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />

@@ -143,7 +143,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
-    projectActions: { createGlobalVariableList },
+    globalVariableListActions: { create: createGlobalVariableList },
     serverActions: { create: createServer },
     remoteDeviceActions: { create: createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
@@ -272,7 +272,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
           className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 group-aria-[expanded=true]:bg-neutral-100 group-data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:group-aria-[expanded=true]:bg-neutral-900 dark:group-data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
-          <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+          <p className='my-[2px] flex-1 whitespace-nowrap text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
             {startCase(target)}
           </p>
           <ArrowIcon size='md' direction='right' />

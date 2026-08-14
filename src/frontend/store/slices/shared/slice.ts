@@ -16,6 +16,7 @@ import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
 import {
   CreateEditorObjectFromTab,
+  CreateGlobalVariableListEditor,
   CreateRemoteDeviceEditor,
   CreateServerEditor,
   LIBRARY_MANIFEST_TAB_NAME,
@@ -315,6 +316,56 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
 
       return { ok: true }
+    },
+  },
+
+  globalVariableListActions: {
+    /**
+     * Create a list and open it, which is what every other element on the + button does —
+     * the user's next action is always to fill it in.
+     */
+    create: (name) => {
+      const state = getState()
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
+
+      const result = state.projectActions.createGlobalVariableList(name)
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateGlobalVariableListEditor(name)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'global-variable-list', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'global-variable-list' } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+
+      return { ok: true }
+    },
+
+    deleteRequest: (name) => {
+      getState().modalActions.openModal('confirm-delete-element', {
+        name,
+        elementType: 'global-variable-list',
+      })
+    },
+
+    delete: (name) =>
+      deleteElement(getState(), name, (n) => getState().projectActions.deleteGlobalVariableList(n)),
+
+    rename: (oldName, newName) => {
+      const state = getState()
+      const lists = state.project.data.globalVariableLists ?? []
+      const collides =
+        newName !== oldName && lists.some((list) => nameMatches(list.name, newName))
+      if (collides) return { ok: false, message: 'Global variable list name already exists' }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      return renameElement(state, oldName, newName, (o, n) => {
+        state.projectActions.updateGlobalVariableListName(o, n)
+      })
     },
   },
 

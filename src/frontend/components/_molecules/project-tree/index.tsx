@@ -529,6 +529,10 @@ const ProjectTreeLeaf = ({
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
+    globalVariableListActions: {
+      deleteRequest: deleteGlobalVariableListRequest,
+      rename: renameGlobalVariableList,
+    },
     serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
@@ -543,6 +547,7 @@ const ProjectTreeLeaf = ({
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+  const isGlobalVariableList = useMemo(() => leafLang === 'gvl', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
   const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
   // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
@@ -612,6 +617,12 @@ const ProjectTreeLeaf = ({
       return
     }
 
+    if (isGlobalVariableList) {
+      const res = renameGlobalVariableList(label, newLabel)
+      if (!res.ok) setNewLabel(label || '')
+      return
+    }
+
     if (isServer) {
       const res = renameServer(label, newLabel)
       if (!res.ok) setNewLabel(label || '')
@@ -676,10 +687,10 @@ const ProjectTreeLeaf = ({
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, server, or remote device files can be deleted.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be deleted.',
         variant: 'fail',
       })
       return
@@ -701,6 +712,11 @@ const ProjectTreeLeaf = ({
 
     if (isDatatype) {
       deleteDatatypeRequest(label)
+      return
+    }
+
+    if (isGlobalVariableList) {
+      deleteGlobalVariableListRequest(label)
       return
     }
 

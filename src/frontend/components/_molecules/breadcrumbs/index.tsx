@@ -12,6 +12,7 @@ import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
+import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
 import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
@@ -34,7 +35,7 @@ const Breadcrumbs = () => {
     editor,
     project: {
       meta: { name },
-      data: { dataTypes },
+      data: { dataTypes, globalVariableLists },
     },
     workspace: { isDebuggerVisible, fbDebugInstances, fbSelectedInstance },
     workspaceActions: { setFbSelectedInstance },
@@ -50,13 +51,26 @@ const Breadcrumbs = () => {
   }
 
   const getPouTypeOrDataTypeOrResource = ():
-    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'device']
+    | [
+        | 'program'
+        | 'function'
+        | 'function-block'
+        | 'resource'
+        | 'data-type'
+        | 'global-variable-list'
+        | 'device',
+      ]
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']
     }
     if (dataTypes.find((datatype) => datatype.name === meta.name)) {
       return ['data-type']
+    }
+    // Before the `resource` fallback below: without this a global variable list is
+    // labelled "Resource", since that branch catches everything it does not recognise.
+    if (globalVariableLists?.find((list) => list.name === meta.name)) {
+      return ['global-variable-list']
     }
     if (meta.name === 'Configuration') {
       return ['device']
@@ -68,6 +82,11 @@ const Breadcrumbs = () => {
     const dataTypeDerivation = dataTypes.find((datatype) => datatype.name === meta.name)?.derivation
     if (dataTypeDerivation) {
       return [derivationIcons[dataTypeDerivation], dataTypeDerivation]
+    }
+    // Same trap as the type fallback below: without this the list's own crumb falls
+    // through to the ST icon, which is silent rather than obviously wrong.
+    if (globalVariableLists?.find((list) => list.name === meta.name)) {
+      return [GlobalVariableListIcon, 'global-variable-list']
     }
     const deviceTypeDerivation = meta.name === 'Configuration' ? 'configuration' : null
     if (deviceTypeDerivation) {
@@ -224,7 +243,11 @@ export const NavigationPanelBreadcrumbs = ({
         <BreadcrumbItem Icon={PLCIcon} text={project_name} isLast={false} />
       </li>
       <li>
-        <BreadcrumbItem Icon={PouIcon[type[0]]} text={startCase(type[0])} isLast={isResource} />
+        <BreadcrumbItem
+          Icon={PouIcon[type[0]]}
+          text={type[0] === 'global-variable-list' ? 'Global Variables' : startCase(type[0])}
+          isLast={isResource}
+        />
       </li>
       {!isResource && (
         <li>

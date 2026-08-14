@@ -30,21 +30,26 @@ const compareVariableTypes = (type1: PLCVariable['type'], type2: PLCVariable['ty
  */
 function resolveDeleteTarget(
   data: unknown,
-): { name: string; elementType: 'pou' | 'datatype' | 'server' | 'remote-device' } | null {
+): { name: string; elementType: 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device' } | null {
   if (!data || typeof data !== 'object') return null
 
   // New format from shared slice deleteRequest actions
   if ('name' in data && 'elementType' in data) {
     const d = data as { name: string; elementType: string }
-    if (['pou', 'datatype', 'server', 'remote-device'].includes(d.elementType)) {
-      return { name: d.name, elementType: d.elementType as 'pou' | 'datatype' | 'server' | 'remote-device' }
+    if (['pou', 'datatype', 'global-variable-list', 'server', 'remote-device'].includes(d.elementType)) {
+      return {
+        name: d.name,
+        elementType: d.elementType as 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device',
+      }
     }
   }
 
   // Legacy format from web repo: { leafLang, label }
   if ('leafLang' in data && 'label' in data) {
     const d = data as { leafLang: string; label: string }
-    const mapping: Record<string, 'pou' | 'datatype' | 'server' | 'remote-device'> = {
+    const mapping: Record<string, 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device'> = {
+      gvl: 'global-variable-list',
+      'global-variable-list': 'global-variable-list',
       server: 'server',
       remoteDevice: 'remote-device',
       'remote-device': 'remote-device',
@@ -81,6 +86,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
   const deleteDatatypeAction = store.datatypeActions.delete
   const deleteServerAction = store.serverActions.delete
   const deleteRemoteDeviceAction = store.remoteDeviceActions.delete
+  const deleteGlobalVariableListAction = store.globalVariableListActions.delete
 
   const modalData = modals['confirm-delete-element']?.data
 
@@ -180,6 +186,14 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
           })
           // Datatypes live inside project.json — they ride along the next
           // regular save (no separate file to remove from S3).
+          break
+        case 'global-variable-list':
+          deleteGlobalVariableListAction(name)
+          toast({
+            title: 'Global variable list deleted!',
+            description: `"${name}" was successfully deleted.`,
+            variant: 'default',
+          })
           break
         case 'server':
           deleteServerAction(name)
