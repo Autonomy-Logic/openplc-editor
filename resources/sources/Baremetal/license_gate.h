@@ -34,7 +34,7 @@ typedef enum {
  *   now_ms          - injected clock, so the core stays host-testable.
  *
  * The device anchor is NOT a parameter: license_core reads it from the silicon
- * inside the closed artifact. It used to be passed in from the sketch,
+ * inside the closed artifact (ADR-0003). It used to be passed in from the sketch,
  * which made the identity a claim the open firmware could rewrite.
  */
 void license_gate_init(const uint8_t *blob, size_t blob_len, uint32_t now_ms);
@@ -59,13 +59,15 @@ int license_gate_actuation_allowed(uint32_t now_ms);
  */
 int license_gate_outputs_permitted(void);
 
-#ifndef ARDUINO
+#ifdef LIC_HOST_TEST
 /*
- * HOST-TEST SEAM, absent from every device build by construction -- `ARDUINO` is
- * defined for the prebuilt `.a`, so this symbol is not in the artifact a VPP
- * ships. It has to be absent: `license_gate_init` refuses a second call
- * specifically so open code cannot re-arm the demo window, and an exported
- * "forget you were initialised" would hand that back with a nicer name.
+ * HOST-TEST SEAM, absent from every device build by construction -- only a build
+ * that defines `LIC_HOST_TEST` (the license-core/test Makefile, nothing else)
+ * gets this symbol, so it is not in any artifact a VPP ships: neither the
+ * Arduino `.a` nor the runtime-v4 Linux objects. It has to be absent:
+ * `license_gate_init` refuses a second call specifically so open code cannot
+ * re-arm the demo window, and an exported "forget you were initialised" would
+ * hand that back with a nicer name.
  *
  * The host tests need it because they exercise FULL, expiry and millis-wrap as
  * separate scenarios against one set of file-scope statics.
