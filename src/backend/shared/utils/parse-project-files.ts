@@ -21,6 +21,7 @@ import type {
   DeviceConfiguration,
   DevicePin,
   PLCDataType,
+  PLCGlobalVariableList,
   PLCInstance,
   PLCPou,
   PLCRemoteDevice,
@@ -46,6 +47,7 @@ export interface ParsedProjectData {
   }
   projectData: {
     dataTypes: PLCDataType[]
+    globalVariableLists: PLCGlobalVariableList[]
     pous: (PLCPou & { variablesText?: string })[]
     configurations: {
       resource: {
@@ -586,6 +588,11 @@ export function parseProjectFiles(
       // source of truth; the legacy JSON field is only the fallback
       // for projects that predate the format.
       dataTypes: dataTypeFiles.length > 0 ? dataTypesFromFiles : ((data.dataTypes as PLCDataType[]) ?? []),
+      // Global Variable Lists ride along from project.json. Assembling `projectData`
+      // field by field means anything not named here is dropped on load, however well
+      // the schema validates it — which is how a list survived every unit test and then
+      // vanished the moment a real converted project was opened.
+      globalVariableLists: (data.globalVariableLists as PLCGlobalVariableList[]) ?? [],
       pous,
       configurations: configuration,
       servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
