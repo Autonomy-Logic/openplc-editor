@@ -7,8 +7,8 @@ import { ILIcon } from '../../assets/icons/project/IL'
 import { LDIcon } from '../../assets/icons/project/LD'
 import { ProgramIcon } from '../../assets/icons/project/Program'
 import { PythonIcon } from '../../assets/icons/project/Python'
+import { GlobalVariableListIcon } from '../../assets/icons/project/GlobalVariableList'
 import { RemoteDeviceIcon } from '../../assets/icons/project/RemoteDevice'
-import { ResourceIcon } from '../../assets/icons/project/Resource'
 import { ServerIcon } from '../../assets/icons/project/Server'
 import { SFCIcon } from '../../assets/icons/project/SFC'
 import { STIcon } from '../../assets/icons/project/ST'
@@ -49,7 +49,7 @@ const CreatePouSources = {
   'function-block': <FunctionBlockIcon size='sm' />,
   program: <ProgramIcon size='sm' />,
   'data-type': <DataTypeIcon size='sm' />,
-  'global-variable-list': <ResourceIcon size='sm' />,
+  'global-variable-list': <GlobalVariableListIcon size='sm' />,
   server: <ServerIcon size='sm' />,
   'remote-device': <RemoteDeviceIcon size='sm' />,
 }

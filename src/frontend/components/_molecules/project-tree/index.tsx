@@ -17,6 +17,7 @@ import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
+import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
@@ -104,7 +105,7 @@ const BranchSources = {
   // CODESYS groups Global Variable Lists under their own tree node; the lists inside are
   // named by the user (`GVL` by default), which is also the name their members are
   // qualified with in code.
-  'global-variable-list': { BranchIcon: ResourceIcon, label: 'Global Variables' },
+  'global-variable-list': { BranchIcon: GlobalVariableListIcon, label: 'Global Variables' },
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
@@ -491,9 +492,7 @@ const LeafSources = {
   arr: { LeafIcon: ArrayIcon },
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },
-  // A global variable list is a struct once compiled, and the icon says so — while
-  // staying distinct from the Global Variables branch above it.
-  gvl: { LeafIcon: StructureIcon },
+  gvl: { LeafIcon: GlobalVariableListIcon },
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
