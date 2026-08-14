@@ -7,7 +7,14 @@ import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
 
-type CreatePLCElementType = 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
+type CreatePLCElementType =
+  | 'function'
+  | 'function-block'
+  | 'program'
+  | 'data-type'
+  | 'global-variable-list'
+  | 'server'
+  | 'remote-device'
 
 const CreatePLCElement = () => {
   const {
@@ -26,7 +33,7 @@ const CreatePLCElement = () => {
   // wired up in two places.
   const projectCaps = projectCapabilities({ type: projectType })
   const CreatePLCElementTypes: CreatePLCElementType[] = (
-    ['function', 'function-block', 'program', 'data-type', 'server', 'remote-device'] as const
+    ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
   ).filter((target) => {
     switch (target) {
       case 'program':
@@ -36,7 +43,7 @@ const CreatePLCElement = () => {
       case 'remote-device':
         return projectCaps.hasRemoteDevices
       default:
-        // function / function-block / data-type — always available.
+        // function / function-block / data-type / global-variable-list — always available.
         return true
     }
   })

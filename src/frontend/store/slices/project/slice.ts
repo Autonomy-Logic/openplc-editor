@@ -1093,6 +1093,52 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     // -----------------------------------------------------------------------
     // Data types
     // -----------------------------------------------------------------------
+    createGlobalVariableList: (name) => {
+      const lists = getState().project.data.globalVariableLists ?? []
+      // Case-insensitive, because the name becomes an IEC identifier the moment the list
+      // is compiled — `GVL` and `gvl` are one symbol there, and two lists sharing it
+      // would collide at the struct instance rather than here, where it can be explained.
+      if (lists.some((list) => list.name.toLowerCase() === name.toLowerCase())) {
+        return fail('Global variable list already exists')
+      }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.globalVariableLists = [...(slice.project.data.globalVariableLists ?? []), { name, variables: [] }]
+        }),
+      )
+      return ok()
+    },
+    deleteGlobalVariableList: (name) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.pendingDeletions.push(`globals/${name}.gvl`)
+          slice.project.data.globalVariableLists = (slice.project.data.globalVariableLists ?? []).filter(
+            (list) => list.name !== name,
+          )
+        }),
+      )
+    },
+    updateGlobalVariableList: (name, variables) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const list = (slice.project.data.globalVariableLists ?? []).find((l) => l.name === name)
+          if (!list) return
+          list.variables = variables
+        }),
+      )
+    },
+    updateGlobalVariableListName: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const list = (slice.project.data.globalVariableLists ?? []).find((l) => l.name === oldName)
+          if (!list) return
+          // Queue the OLD path — the next save writes the list under its new name.
+          slice.pendingDeletions.push(`globals/${oldName}.gvl`)
+          list.name = newName
+        }),
+      )
+    },
     createDatatype: (dto) => {
       const existing = getState().project.data.dataTypes.find((d) => d.name === dto.data.name)
       if (existing) return fail('Data type already exists')

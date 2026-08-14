@@ -213,6 +213,16 @@ export type ProjectActions = {
    */
   renameAlias: (oldAlias: string, newAlias: string) => { renamed: number }
 
+  // Global variable lists — the object CODESYS calls a GVL.
+  /** Create an empty list. Fails when one already carries that name. */
+  createGlobalVariableList: (name: string) => ProjectResponse
+  /** Remove the list and queue its `globals/<name>.gvl` file for deletion. */
+  deleteGlobalVariableList: (name: string) => void
+  /** Replace a list's variables wholesale — how the table and the code view both commit. */
+  updateGlobalVariableList: (name: string, variables: PLCVariable[]) => void
+  /** Rename + queue the old file path, exactly as `updateDatatypeName` does. */
+  updateGlobalVariableListName: (oldName: string, newName: string) => void
+
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse
   deleteDatatype: (name: string) => void

@@ -88,6 +88,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   branchTarget:
     | 'data-type'
+    | 'global-variable-list'
     | 'function'
     | 'function-block'
     | 'program'
@@ -100,6 +101,10 @@ type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
 
 const BranchSources = {
   'data-type': { BranchIcon: DataTypeIcon, label: 'Data Types' },
+  // CODESYS groups Global Variable Lists under their own tree node; the lists inside are
+  // named by the user (`GVL` by default), which is also the name their members are
+  // qualified with in code.
+  'global-variable-list': { BranchIcon: ResourceIcon, label: 'Global Variables' },
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
@@ -111,7 +116,7 @@ const BranchSources = {
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes, servers, remoteDevices },
+      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -122,6 +127,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     pous.some((pou) => pou.pouType === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
+    (branchTarget === 'global-variable-list' && (globalVariableLists?.length ?? 0) > 0) ||
     (branchTarget === 'server' && servers !== undefined && servers.length > 0) ||
     (branchTarget === 'remote-device' && remoteDevices !== undefined && remoteDevices.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
@@ -450,6 +456,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'arr'
     | 'enum'
     | 'str'
+    | 'gvl'
     | 'res'
     | 'devConfig'
     | 'devPin'
@@ -484,6 +491,9 @@ const LeafSources = {
   arr: { LeafIcon: ArrayIcon },
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },
+  // A global variable list is a struct once compiled, and the icon says so — while
+  // staying distinct from the Global Variables branch above it.
+  gvl: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },

@@ -153,6 +153,13 @@ const CreateDiffViewerEditor = (name: string, filePath: string): EditorModel => 
   meta: { name, filePath },
 })
 
+/** A Global Variable List opens on its table, like a structure. */
+const CreateGlobalVariableListEditor = (name: string): EditorModel => ({
+  type: 'plc-global-variable-list',
+  meta: { name },
+  structure: { display: 'table', description: '', selectedRow: '-1' },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -164,6 +171,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEditorModelObject(name, elementType.language, 'function-block')
     case 'data-type':
       return CreateEditorModelObject(name, null, null, elementType.derivation)
+    case 'global-variable-list':
+      return CreateGlobalVariableListEditor(name)
     case 'resource':
       return CreateResourceEditor(name)
     case 'device':
@@ -195,6 +204,7 @@ export {
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
+  CreateGlobalVariableListEditor,
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
   CreatePackageManagerEditor,
