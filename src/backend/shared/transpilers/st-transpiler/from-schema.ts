@@ -99,7 +99,10 @@ function globalListInstance(list: SchemaGlobalVariableList): TranspileVariable {
  * name merely prefixes another from being dragged in.
  */
 function withGlobalListExternals(pou: TranspilePou, lists: SchemaGlobalVariableList[]): TranspilePou {
-  const body = JSON.stringify(pou.body ?? '')
+  // Match against the WHOLE projected POU, not just its body: a ladder or FBD body is a
+  // node graph, and the reference lives in a node's variable name rather than in any text
+  // the body exposes. Serialising the POU catches it wherever the language keeps it.
+  const body = JSON.stringify(pou)
   const referenced = lists.filter((list) =>
     new RegExp(`(^|[^\\w.])${list.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\.`, 'i').test(body),
   )
