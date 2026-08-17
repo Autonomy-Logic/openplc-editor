@@ -27,14 +27,7 @@ import { useToast } from '../../../[app]/toast/use-toast'
 import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
 type ElementCardProps = {
-  target:
-    | 'function'
-    | 'function-block'
-    | 'program'
-    | 'data-type'
-    | 'global-variable-list'
-    | 'server'
-    | 'remote-device'
+  target: 'function' | 'function-block' | 'program' | 'data-type' | 'global-variable-list' | 'server' | 'remote-device'
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
@@ -117,6 +110,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
+  // Pre-filled `GVL` because that is what CODESYS's Add Object offers, and a project
+  // converted from one arrives with a list of exactly that name.
+  //
+  // The string is also a sentinel elsewhere: `utils/opcua/resolve-indices.ts` treats
+  // `pouName === 'GVL'` as "the resource's global scope". The two do not meet — the
+  // OPC-UA variable tree is built from `configurations.resource.globalVariables`, which
+  // a list's members are not part of, and a list reaches the compiler as a struct
+  // instance rather than as a scope. Considered and left alone; renaming the sentinel
+  // would break saved OPC-UA node indices for no gain.
   const {
     register: globalVariableListRegister,
     handleSubmit: handleSubmitGlobalVariableList,
@@ -173,7 +175,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const handleCreateGlobalVariableList: SubmitHandler<CreateGlobalVariableListFormProps> = (data) => {
     const created = createGlobalVariableList(data.name)
     if (!created.ok) {
-      globalVariableListSetError('name', { type: 'already-exists' })
+      // Carry the reason through. A list occupies two symbols in one namespace —
+      // its own name and `<name>_TYPE` — so the refusal is often about a POU or a
+      // data type, and the generic "already exists" would send the user looking
+      // for a list that isn't there.
+      globalVariableListSetError('name', { type: 'already-exists', message: created.message })
       toast({
         title: 'Invalid global variable list',
         description: created.message ?? "You can't create a global variable list with this name.",
@@ -441,7 +447,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {globalVariableListErrors.name?.type === 'already-exists' ? (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * a global variable list with this name already exists
+                          {/* The store's reason when it gave one — it names the POU or data type
+                              actually in the way, which the generic wording cannot. */}
+                          *{' '}
+                          {globalVariableListErrors.name.message ??
+                            'a global variable list with this name already exists'}
                         </span>
                       ) : (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>

@@ -529,10 +529,7 @@ const ProjectTreeLeaf = ({
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
-    globalVariableListActions: {
-      deleteRequest: deleteGlobalVariableListRequest,
-      rename: renameGlobalVariableList,
-    },
+    globalVariableListActions: { deleteRequest: deleteGlobalVariableListRequest, rename: renameGlobalVariableList },
     serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
     remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
@@ -577,10 +574,13 @@ const ProjectTreeLeaf = ({
   const handleRenameFile = (newLabel: string) => {
     setIsEditing(false)
 
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    // Keep this list in step with the dispatch below — a type handled there but
+    // missing here bails out at the guard, which makes its branch dead code and
+    // the tree's own Rename entry a no-op.
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, server, or remote device files can be renamed.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be renamed.',
         variant: 'fail',
       })
       return

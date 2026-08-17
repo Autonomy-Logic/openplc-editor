@@ -39,13 +39,7 @@ export const GlobalVariableListIcon = (props: GlobalVariableListIconProps) => {
         d='M15.1661 6.99977V2.3331L24.4995 11.6664H19.8328C17.2555 11.6664 15.1661 9.5771 15.1661 6.99977Z'
         fill='#023C97'
       />
-      <g
-        stroke='#B4D0FE'
-        strokeWidth='0.9'
-        strokeLinecap='round'
-        strokeLinejoin='round'
-        fill='none'
-      >
+      <g stroke='#B4D0FE' strokeWidth='0.9' strokeLinecap='round' strokeLinejoin='round' fill='none'>
         <circle cx='12.75' cy='17.25' r='4.4' />
         <path d='M8.35 17.25H17.15' />
         <path d='M12.75 12.85C14.05 14.2 14.6 15.75 14.6 17.25C14.6 18.75 14.05 20.3 12.75 21.65C11.45 20.3 10.9 18.75 10.9 17.25C10.9 15.75 11.45 14.2 12.75 12.85Z' />

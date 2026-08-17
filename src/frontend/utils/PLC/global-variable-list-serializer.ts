@@ -39,11 +39,75 @@ const TYPE_SUFFIX = '_TYPE'
 const DECL_INDENT = '  '
 
 /**
- * Name of the struct type backing a list. Exported because the POU-level
- * `VAR_EXTERNAL` has to name the same type.
+ * Name of the struct type backing a list.
+ *
+ * This module is the ONE home of the suffix rule. Every path that emits a list —
+ * the ST text here, the schema→IR projection in
+ * `backend/shared/transpilers/st-transpiler/from-schema.ts`, and the port→IR
+ * projection in `middleware/adapters/web/transpile-from-port.ts` — imports it
+ * from here. A second copy would let the struct type stop matching its instance
+ * and its `VAR_EXTERNAL` silently, which is the exact failure the module note
+ * above warns about.
  */
 export function globalVariableListTypeName(listName: string): string {
   return `${listName}${TYPE_SUFFIX}`
+}
+
+/**
+ * True when `text` qualifies against the list — i.e. contains `<listName>.`.
+ *
+ * The other rule with no compiler diagnostic behind it, and so the other one
+ * that lives here alone. Matching on `<name>.` keeps an unrelated POU from being
+ * handed a name it never uses, and stops a list whose name merely prefixes
+ * another (`GVL` vs `GVL_OTHER`) from being dragged in. The leading `[^\w.]`
+ * guard is what excludes the prefix case *and* member access on something else
+ * (`other.GVL.x`); IEC identifiers are case-insensitive, hence the `i` flag.
+ *
+ * Pass `referenceSearchText(pou)`, NOT `JSON.stringify(pou)` — see the note there.
+ */
+export function globalVariableListIsReferencedIn(listName: string, text: string): boolean {
+  return new RegExp(`(^|[^\\w.])${escapeForRegExp(listName)}\\s*\\.`, 'i').test(text)
+}
+
+/**
+ * Every string a POU holds, joined for the reference scan above.
+ *
+ * A ladder or FBD body is a node graph and the reference lives in a node's
+ * variable name, not in any text the body exposes — so the scan has to see the
+ * whole POU, not just `body.value`. The obvious way to get that is
+ * `JSON.stringify(pou)`, and it is WRONG: JSON escapes a newline to the two
+ * characters `\` and `n`, so a body of
+ *
+ *     x := 1;
+ *     GVL.A := 2;
+ *
+ * serialises with `n` immediately before `GVL`. `n` is a word character, the
+ * `[^\w.]` guard rejects the match, and the POU is judged not to reference the
+ * list — no `VAR_EXTERNAL` is emitted and the build fails with "Undeclared
+ * variable 'GVL'", which is precisely the error the external exists to prevent.
+ * Every reference starting a line after the first is invisible that way.
+ *
+ * Walking to the string VALUES sidesteps the escaping entirely. They are joined
+ * with a real newline: a non-word, non-dot separator, so no match can be
+ * manufactured across two unrelated strings.
+ */
+export function referenceSearchText(value: unknown): string {
+  const parts: string[] = []
+  const walk = (node: unknown): void => {
+    if (typeof node === 'string') {
+      parts.push(node)
+      return
+    }
+    if (Array.isArray(node)) {
+      node.forEach(walk)
+      return
+    }
+    if (node !== null && typeof node === 'object') {
+      Object.values(node).forEach(walk)
+    }
+  }
+  walk(value)
+  return parts.join('\n')
 }
 
 /** One `name : TYPE := init;` line. Addresses are deliberately omitted — see the module note. */
@@ -73,7 +137,11 @@ export function serializeGlobalVariableListToText(list: PLCGlobalVariableList): 
         : ''
     return `${DECL_INDENT}${variable.name}${location} : ${variable.type.value}${initialValue};`
   })
-  return `VAR_GLOBAL\n${lines.join('\n')}\nEND_VAR\n`
+  // The qualifier goes back on the header it was read from. It is never compiled — a
+  // struct type cannot express CONSTANT or RETAIN — so this text is the only place it
+  // survives, and omitting it would quietly rewrite the user's declaration.
+  const qualifier = list.qualifier ? ` ${list.qualifier}` : ''
+  return `VAR_GLOBAL${qualifier}\n${lines.join('\n')}\nEND_VAR\n`
 }
 
 /**
@@ -120,11 +188,9 @@ export function serializeGlobalVariableListInstances(lists: PLCGlobalVariableLis
  * itself has no value.
  */
 export function globalVariableListExternals(lists: PLCGlobalVariableList[], body: string): string {
-  const referenced = lists.filter((list) => {
-    if (list.variables.length === 0) return false
-    const pattern = new RegExp(`(^|[^\\w.])${escapeForRegExp(list.name)}\\s*\\.`, 'i')
-    return pattern.test(body)
-  })
+  const referenced = lists.filter(
+    (list) => list.variables.length > 0 && globalVariableListIsReferencedIn(list.name, body),
+  )
   if (referenced.length === 0) return ''
   const lines = referenced.map((list) => `${DECL_INDENT}${list.name} : ${globalVariableListTypeName(list.name)};`)
   return `VAR_EXTERNAL\n${lines.join('\n')}\nEND_VAR\n`

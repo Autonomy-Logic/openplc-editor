@@ -811,11 +811,15 @@ type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
  * Optional on the wire so projects written before lists existed still validate; absent
  * reads as no lists. Members keep their `location`, which is deliberately not compiled
  * (a struct member cannot be bound to I/O yet) but has to survive so the CODESYS export
- * can put it back.
+ * can put it back. `qualifier` is carried for the same reason — see
+ * `PLCGlobalVariableList` in `middleware/shared/ports/types.ts`.
  */
 const PLCGlobalVariableListSchema = z.object({
   name: z.string(),
   variables: z.array(PLCVariableSchema).default([]),
+  qualifier: z.string().optional(),
+  /** Raw declaration kept while it does not parse — see `PLCGlobalVariableList.text`. */
+  text: z.string().optional(),
   documentation: z.string().optional(),
 })
 
@@ -894,7 +898,6 @@ export {
   EthercatConfigSchema,
   EtherCATMasterConfigSchema,
   ModbusErrorHandlingSchema,
-  PLCGlobalVariableListSchema,
   ModbusFunctionCodeSchema,
   ModbusIOGroupSchema,
   ModbusIOPointSchema,
@@ -924,6 +927,7 @@ export {
   PLCEnumeratedDatatypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCGlobalVariableListSchema,
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
   PLCPouSchema,

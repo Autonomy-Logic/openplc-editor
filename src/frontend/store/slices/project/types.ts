@@ -214,14 +214,23 @@ export type ProjectActions = {
   renameAlias: (oldAlias: string, newAlias: string) => { renamed: number }
 
   // Global variable lists — the object CODESYS calls a GVL.
+  // Every lookup here folds case: the name is an IEC identifier once compiled.
   /** Create an empty list. Fails when one already carries that name. */
   createGlobalVariableList: (name: string) => ProjectResponse
-  /** Remove the list and queue its `globals/<name>.gvl` file for deletion. */
+  /** Remove the list. It lives in `project.json`, so there is no file to queue. */
   deleteGlobalVariableList: (name: string) => void
-  /** Replace a list's variables wholesale — how the table and the code view both commit. */
+  /** Replace a list's variables wholesale — how the code view commits. */
   updateGlobalVariableList: (name: string, variables: PLCVariable[]) => void
-  /** Rename + queue the old file path, exactly as `updateDatatypeName` does. */
+  /** Set or clear the `VAR_GLOBAL` qualifier carried for the round trip, never compiled. */
+  updateGlobalVariableListQualifier: (name: string, qualifier: string | undefined) => void
+  /** Rename the list itself; references are `propagateGlobalVariableListRename`'s job. */
   updateGlobalVariableListName: (oldName: string, newName: string) => void
+  /** Rewrite every `<oldName>.member` in every POU body, textual or graphical. */
+  propagateGlobalVariableListRename: (oldName: string, newName: string) => void
+  /** Fold the code view's pending buffer into the list. Fails when it does not parse. */
+  reconcileGlobalVariableListText: (name: string) => ProjectResponse
+  /** Rewrite the code view's buffer from the list. No-op when that view isn't open. */
+  regenerateGlobalVariableListText: (name: string) => void
 
   // Data types
   createDatatype: (dto: DataTypeDTO & { rowToInsert?: number }) => ProjectResponse

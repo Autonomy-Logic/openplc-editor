@@ -8,6 +8,8 @@ import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
+import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
 import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
@@ -109,16 +111,20 @@ function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string):
  *      so a stale buffer would resurrect the old type name on save.
  *   3. Regenerate the `.dt` code buffers of affected data types — committing
  *      a stale buffer (commitCode → updateDatatype) would do the same.
+ *   4. Regenerate the code buffer of any affected Global Variable List, which
+ *      is only ever edited as text and so is nothing but a buffer.
  */
 function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeReferenceImpactAnalysis): void {
   const dirtyFiles = new Set<string>()
   const affectedPous = new Set<string>()
   const affectedDatatypes = new Set<string>()
+  const affectedLists = new Set<string>()
   for (const ref of impact.references) {
     // Global variables persist through the Resource entry in the file slice.
     dirtyFiles.add(ref.kind === 'global-variable' ? 'Resource' : ref.container)
     if (ref.kind === 'pou-variable') affectedPous.add(ref.container)
     if (ref.kind === 'data-type-field' || ref.kind === 'data-type-base-type') affectedDatatypes.add(ref.container)
+    if (ref.kind === 'global-variable-list-member') affectedLists.add(ref.container)
   }
   for (const name of dirtyFiles) {
     state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
@@ -127,6 +133,10 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   // No-op for types whose code view isn't active.
   for (const datatypeName of affectedDatatypes) {
     state.projectActions.regenerateDatatypeText(datatypeName)
+  }
+
+  for (const listName of affectedLists) {
+    state.projectActions.regenerateGlobalVariableListText(listName)
   }
 
   for (const pouName of affectedPous) {
@@ -141,6 +151,50 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
       code: generateIecVariablesToString(pou.interface?.variables ?? []),
     })
   }
+}
+
+/**
+ * Why a Global Variable List may not be called `name`, or `null` when it may.
+ *
+ * A list occupies TWO symbols, not one: the instance keeps the user's name, and the
+ * struct backing it takes `<name>_TYPE`. Both land in the same global namespace as
+ * every POU and data type — IEC gives types and variables one namespace — so a list
+ * called after a POU, or one whose derived type name is already a data type, is a
+ * duplicate symbol the compiler reports against a name the user never typed. Checking
+ * only against other lists covered one half of a rule with two.
+ *
+ * `ignoring` is the list being renamed: a rename onto its own name, or a case-only
+ * change, must not collide with itself.
+ */
+function globalVariableListNameCollision(state: SharedRootState, name: string, ignoring?: string): string | null {
+  if (ignoring !== undefined && nameMatches(name, ignoring)) return null
+
+  const derived = globalVariableListTypeName(name)
+  const lists = state.project.data.globalVariableLists ?? []
+
+  if (lists.some((list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(list.name, name))) {
+    return 'Global variable list name already exists'
+  }
+  if (state.project.data.pous.some((pou) => nameMatches(pou.name, name))) {
+    return `"${name}" is already the name of a POU`
+  }
+  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
+    return `"${name}" is already the name of a data type`
+  }
+  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a data type already uses`
+  }
+  if (state.project.data.pous.some((pou) => nameMatches(pou.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a POU already uses`
+  }
+  if (
+    lists.some(
+      (list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(globalVariableListTypeName(list.name), derived),
+    )
+  ) {
+    return `"${name}" needs the type name "${derived}", which another global variable list already uses`
+  }
+  return null
 }
 
 function renameElement(
@@ -326,10 +380,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
      */
     create: (name) => {
       const state = getState()
+      // Collision before validation, matching `datatypeActions` above: the more
+      // specific message is the more useful one when a name fails both.
+      const collision = globalVariableListNameCollision(state, name)
+      if (collision) return { ok: false, message: collision }
+
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
 
       const result = state.projectActions.createGlobalVariableList(name)
+      /* istanbul ignore next -- defensive: the collision gate above already ran */
       if (!result.ok) return { ok: false, message: result.message }
 
       const editorModel = CreateGlobalVariableListEditor(name)
@@ -350,22 +410,50 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
     },
 
-    delete: (name) =>
-      deleteElement(getState(), name, (n) => getState().projectActions.deleteGlobalVariableList(n)),
+    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteGlobalVariableList(n)),
 
+    /**
+     * Rename the list AND every `<oldName>.member` that qualifies against it.
+     *
+     * Renaming the list alone used to leave each reference pointing at a name that no
+     * longer existed, with nothing said at rename time: the `VAR_EXTERNAL` is only
+     * emitted for lists a POU actually mentions, so the reference just stopped
+     * resolving and the failure landed much later, in the compiler.
+     */
     rename: (oldName, newName) => {
       const state = getState()
-      const lists = state.project.data.globalVariableLists ?? []
-      const collides =
-        newName !== oldName && lists.some((list) => nameMatches(list.name, newName))
-      if (collides) return { ok: false, message: 'Global variable list name already exists' }
+      const collision = globalVariableListNameCollision(state, newName, oldName)
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
 
-      return renameElement(state, oldName, newName, (o, n) => {
+      // Fold the code view's pending buffer in first, exactly as the data type rename
+      // does — otherwise the regenerate at the end writes the pre-edit declaration
+      // back over whatever the user had just typed.
+      const reconcile = state.projectActions.reconcileGlobalVariableListText(oldName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      if (newName !== oldName) {
+        const fresh = getState()
+        const impact = findGlobalVariableListReferences(oldName, fresh.project.data.pous)
+        if (impact.totalReferences > 0) {
+          fresh.projectActions.propagateGlobalVariableListRename(oldName, newName)
+          // Every rewritten POU has to be flagged dirty or the propagated body is
+          // dropped on disk, and the graphical flows have to be re-read from the
+          // rewritten body or the next write-back restores the old name.
+          for (const pouName of impact.byPou.keys()) {
+            getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
+          }
+        }
+      }
+
+      const result = renameElement(state, oldName, newName, (o, n) => {
         state.projectActions.updateGlobalVariableListName(o, n)
       })
+      // Only now are the list and its model both keyed by newName.
+      if (result.ok) getState().projectActions.regenerateGlobalVariableListText(newName)
+      return result
     },
   },
 
@@ -440,6 +528,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           freshState.project.data.pous,
           freshState.project.data.configurations.resource.globalVariables,
           freshState.project.data.dataTypes,
+          freshState.project.data.globalVariableLists ?? [],
         )
         if (impact.totalReferences > 0) {
           // Overwriting a pending request would drop its resolver and strand
@@ -1034,6 +1123,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       unparsedDataTypes.forEach(({ name }) => {
         files[name] = { type: 'data-type', filePath: name, saved: true }
       })
+      // A loaded list needs its entry like anything else in the tree: dirty
+      // tracking, the close-project check and the single-file save all read this
+      // registry, so a list missing from it can be edited and never look unsaved.
+      ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
+        files[list.name] = { type: 'global-variable-list', filePath: list.name, saved: true }
+      })
       const servers = data.projectData.servers
       if (servers) {
         servers.forEach((s) => {
@@ -1133,6 +1228,21 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             code: pouWithText.variablesText,
           })
         }
+      })
+
+      // Same for a Global Variable List whose declaration did not parse when it was
+      // last saved: open its tab on the preserved text, so the user lands on the thing
+      // that needs fixing rather than on a re-serialisation of the members that
+      // happened to parse before they broke it.
+      ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
+        if (list.text === undefined) return
+        getState().tabsActions.updateTabs({
+          name: list.name,
+          path: `/data/global-variables/${list.name}`,
+          elementType: { type: 'global-variable-list' },
+        })
+        getState().editorActions.addModel(CreateGlobalVariableListEditor(list.name))
+        getState().editorActions.updateModelStructureForName(list.name, { display: 'code', code: list.text })
       })
 
       // Tab included, and focus stays on the auto-opened POU above.

@@ -9,10 +9,10 @@ import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
+import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
-import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
 import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
@@ -51,15 +51,7 @@ const Breadcrumbs = () => {
   }
 
   const getPouTypeOrDataTypeOrResource = ():
-    | [
-        | 'program'
-        | 'function'
-        | 'function-block'
-        | 'resource'
-        | 'data-type'
-        | 'global-variable-list'
-        | 'device',
-      ]
+    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'global-variable-list' | 'device']
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']

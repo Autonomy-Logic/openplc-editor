@@ -59,6 +59,7 @@ interface IpcProjectResponse {
         meta: { name: string; type: 'plc-project' | 'plc-library' }
         data: {
           dataTypes: PLCDataType[]
+          globalVariableLists?: PLCProjectData['globalVariableLists']
           pous: IpcPou[]
           configuration: { resource: { tasks: PLCTask[]; instances: PLCInstance[]; globalVariables: PLCVariable[] } }
           servers?: unknown[]
@@ -142,6 +143,10 @@ function mapIpcResponse(
       },
       projectData: {
         dataTypes: content.project.data.dataTypes,
+        // `parseProjectFiles` reads the lists correctly in the main process;
+        // this object then reassembles the shape field by field, so a list not
+        // named here is dropped on open however well the schema validated it.
+        globalVariableLists: content.project.data.globalVariableLists ?? [],
         pous: content.pous.map(mapIpcPouToPortPou),
         configurations: configuration,
         servers: content.project.data.servers as PLCProjectData['servers'],
