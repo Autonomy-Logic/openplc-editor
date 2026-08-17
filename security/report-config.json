@@ -1,0 +1,47 @@
+{
+  "product": "openplc-editor",
+  "title": "OpenPLC Editor Desktop",
+  "subtitle": "Electron desktop application — IEC 61131-3 PLC editor",
+  "version": "4.2.9",
+  "sbomBasename": "open-plc-editor",
+  "ecosystem": "npm",
+  "securityContact": "Thiago Alves — thiago.alves@autonomylogic.com",
+  "advisorySource": "GitHub Advisory Database via osv-scanner (OSV) (equivalent to Dependabot)",
+  "advisories": { "total": 143, "critical": 3, "high": 54, "moderate": 69, "low": 17 },
+  "counts": {
+    "affected": { "n": 3, "sev": "0 critical · 2 high · 1 moderate" },
+    "mitigated": { "n": 37, "sev": "0 critical · 4 high · 25 moderate · 8 low" },
+    "notAffected": { "n": 103, "pct": "72%" }
+  },
+  "headline": "Of 143 raw advisories reported against the dependency tree, <b>3 warrant remediation</b> — all lower-risk denial-of-service items exposed only through an optional live-debug feature — and <b>none are critical or exploitable in normal use</b>. 37 are reachable but constrained by existing controls (a hardened Electron configuration and default-configured DOMPurify); the remaining 103 are not applicable. All three critical-severity advisories are in build/test tooling that is never shipped in the packaged application.",
+  "scope": "The OpenPLC Editor desktop application is an Electron app: a Chromium renderer process running the React UI and a Node.js main process handling files, packaging, updates, and a language server. It is packaged with electron-builder (asar), and the Electron runtime (Chromium + Node) is bundled into the shipped application. The threat model includes a user opening a malicious project file and an optional live-debug connection to a user-configured PLC runtime.",
+  "scopeNote": "This SBOM covers the Node.js/npm dependency graph. The build additionally downloads a pinned native <code>strucpp</code> transpiler binary (see <code>binary-versions.json</code>); that binary is tracked separately and is outside the npm SBOM. The bundled Electron runtime (Chromium) is assessed under Mitigated Findings.",
+  "methodologyNote": "Advisory data was obtained from the GitHub Advisory Database via <code>osv-scanner</code> (OSV) (equivalent to GitHub Dependabot alerts). The application is packaged with electron-builder, which prunes development dependencies; only code imported by <code>src</code> (webpack-bundled into <code>dist</code>) plus a minimal runtime module set is shipped in the asar. The bundled Electron runtime is in scope. Reachability was analyzed across both the Electron main (Node) and renderer (Chromium) processes.",
+  "licenseNote": "No strong copyleft (GPL/AGPL) license is present on the product runtime path. A couple of components declare a custom \"SEE LICENSE IN LICENSE\" field and were reviewed as permissive/first-party. Dual-licensed components (e.g. MPL-2.0 dual with Apache-2.0) are consumed under their permissive option.",
+  "affected": [
+    { "priority": "P2", "component": "ws, socket.io-parser (via socket.io-client)", "installed": "via socket.io-client", "fixedIn": "ws ≥ 8.21.0 · socket.io-parser ≥ 4.2.6", "severity": "2× High, 1× Moderate", "rationale": "Parsed in the main process only when the user opens a live-debug WebSocket connection to a user-configured PLC runtime (with rejectUnauthorized:false). A malicious/MITM runtime could send forged frames causing memory-exhaustion DoS. Not reachable in normal editing; impact is DoS, not code execution." }
+  ],
+  "mitigated": [
+    { "component": "electron", "advisories": "18 (4 high) — use-after-free, renderer switch injection", "control": "The application ships a hardened Electron configuration: <code>sandbox: true</code> on all windows, with <code>contextIsolation</code>, <code>nodeIntegration:false</code>, and <code>webSecurity</code> at their secure Electron-35 defaults; the preload uses <code>contextBridge</code>; and in production the app loads only local <code>file://</code> content. These conditions neutralize the high-severity CVE class, which requires rendering hostile web content. Recommendation: update Electron, tighten the CSP (default-src 'none', drop 'unsafe-inline'), add a will-navigate guard." },
+    { "component": "dompurify", "advisories": "19 (moderate/low) — XSS bypass class", "control": "Called with the default configuration (no RETURN_DOM/ADD_TAGS/SAFE_FOR_TEMPLATES), over app-generated markup (search highlights) — the exact intended mitigation. Recommendation: keep dompurify ≥ 3.4.12." }
+  ],
+  "notAffected": [
+    { "justification": "component_not_present", "count": "~60", "components": "tar (11, incl. 1 Critical), node-forge (7), webpack-dev-server (4), shell-quote (1 Critical), websocket-driver (1 Critical), immutable (3), svgo, playwright, @babel/*", "basis": "Build, packaging, lint, and test tooling (webpack/electron-builder/sass/babel/playwright). electron-builder prunes development dependencies; these are not in the shipped asar. All three critical advisories fall here." },
+    { "justification": "vulnerable_code_not_in_execute_path", "count": "~35", "components": "axios (28; a dead dependency — not imported anywhere), fast-xml-parser/fast-xml-builder (only the parser is used, the advisory is in the builder), lodash (only safe helpers), js-yaml/yaml (no YAML parsing), uuid (v4 only), qs, serialize-javascript, glob", "basis": "The package (or the specific vulnerable function) is present but never executed with attacker-controlled input." },
+    { "justification": "vulnerable_code_cannot_be_controlled_by_adversary", "count": "~8", "components": "form-data, follow-redirects (via unused axios / build publish), minimatch/picomatch, elliptic, path-to-regexp", "basis": "Node/build-only code paths not exercised with adversary input in the running application." }
+  ],
+  "criticalNote": "All three critical advisories (shell-quote, tar, websocket-driver) are in development/build/packaging tooling and are pruned from the shipped application. None is present in the delivered product.",
+  "remediation": [
+    "<b>P2:</b> bump <code>socket.io-client</code> so ws ≥ 8.21.0 and socket.io-parser ≥ 4.2.6 (removes the debug-WebSocket DoS surface).",
+    "<b>Defense-in-depth:</b> update Electron to a current release; keep dompurify ≥ 3.4.12; tighten the renderer CSP and add a navigation guard; validate schemes before shell.openExternal.",
+    "<b>Hygiene:</b> remove the unused <code>axios</code> dependency; configure electron-updater with a fixed signed feed before enabling auto-update; track the downloaded <code>strucpp</code> binary under a dedicated (non-npm) supply-chain inventory."
+  ],
+  "practices": [
+    { "practice": "Deterministic builds from a committed lockfile (npm ci)", "status": "In place" },
+    { "practice": "Hardened Electron config (sandbox, context isolation, local-only content)", "status": "In place" },
+    { "practice": "devDependencies pruned from the packaged application (electron-builder)", "status": "In place" },
+    { "practice": "Automated dependency updates (Dependabot / GitHub Advisory Database)", "status": "In place" },
+    { "practice": "SBOM generated per release in CycloneDX and SPDX", "status": "In place" },
+    { "practice": "Keep bundled Electron/Chromium current; tighten CSP; signed auto-update feed", "status": "Recommended" }
+  ]
+}

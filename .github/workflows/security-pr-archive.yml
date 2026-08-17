@@ -1,0 +1,88 @@
+name: Security — archive SBOM on merge
+
+# Runs when a commit lands on the default branch (a PR merged, or a direct push).
+# It regenerates the SBOM + raw scan for that exact state and stores them on a
+# dedicated ORPHAN branch `security-archive` under <id>-<date>/, giving a
+# permanent per-merge supply-chain trail WITHOUT bloating the code branch's
+# history or slowing clones.
+#
+# Why `push` (not pull_request): the push event's GITHUB_TOKEN is always writable
+# — so this also works for merged fork PRs — and it only fires for the default
+# branch. We archive the SBOM + raw scan output only (no rendered "report"), so
+# there is never a stale/false attestation committed anywhere.
+
+on:
+  push:
+    branches: [development]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: security-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (post-merge state)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2          # enough to read the merge/commit subject
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Enable pnpm
+        run: corepack enable
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install osv-scanner
+        run: |
+          OSV_VER=v2.4.0   # pinned; verified against the release SHA256SUMS
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_linux_amd64" -o /tmp/osv-scanner_linux_amd64
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/${OSV_VER}/osv-scanner_SHA256SUMS" -o /tmp/osv_SHA256SUMS
+          ( cd /tmp && grep " osv-scanner_linux_amd64$" osv_SHA256SUMS | sha256sum -c - )
+          install -m 0755 /tmp/osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
+
+      - name: Generate SBOM + scan (SBOM & raw scan only — no rendered report)
+        run: |
+          bash scripts/generate-sbom.sh
+          NAME=$(basename "$(ls sbom/*.cdx.json | head -1)" .cdx.json)
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+          CFG=""; [ -f osv-scanner.toml ] && CFG="--config=osv-scanner.toml"
+          set +e
+          osv-scanner scan $CFG --recursive --format=json --output=/tmp/osv.json .
+          rc=$?
+          set -e
+          if [ "$rc" != "0" ] && [ "$rc" != "1" ]; then echo "::error::osv-scanner failed (exit $rc)"; exit 1; fi
+          [ -s /tmp/osv.json ] || echo '{"results":[]}' > /tmp/osv.json
+          node scripts/scan-vulns.mjs /tmp/osv.json sbom/vulnerabilities.csv
+
+      - name: Publish snapshot to the security-archive orphan branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MSG=$(git log -1 --format=%s)
+          PR=$(printf '%s' "$MSG" | grep -oE '#[0-9]+' | head -1 | tr -d '#')
+          if [ -n "$PR" ]; then ID="pr-$PR"; else ID="commit-$(git rev-parse --short HEAD)"; fi
+          DIR="${ID}-$(date -u +%Y-%m-%d)"
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone --depth 1 --branch security-archive "$URL" /tmp/arch 2>/dev/null; then
+            :
+          else
+            git clone --depth 1 "$URL" /tmp/arch
+            git -C /tmp/arch checkout --orphan security-archive
+            git -C /tmp/arch rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p "/tmp/arch/$DIR"
+          cp "sbom/$NAME.cdx.json" "sbom/$NAME.spdx.json" "sbom/$NAME.components.csv" sbom/vulnerabilities.csv "/tmp/arch/$DIR/"
+          git -C /tmp/arch -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" add "$DIR"
+          if git -C /tmp/arch diff --cached --quiet; then
+            echo "No SBOM changes to archive for $DIR."
+          else
+            git -C /tmp/arch -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "chore(security): SBOM snapshot ${DIR}"
+            git -C /tmp/arch push "$URL" HEAD:security-archive
+          fi
