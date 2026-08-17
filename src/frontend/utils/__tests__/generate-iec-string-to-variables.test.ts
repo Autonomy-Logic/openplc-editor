@@ -160,6 +160,148 @@ describe('parseIecStringToVariables', () => {
     expect(result[0].documentation).toBe('buffer')
   })
 
+  // ---- multi-dimensional arrays declared inline ----
+  //
+  // The type group used to exclude the comma, so a 2D/3D array could only be
+  // declared by naming an ARRAY data type first; written inline it failed the
+  // whole POU with "invalid or unsupported characters".
+
+  it('parses a 2D ARRAY declared inline', () => {
+    const input = 'VAR\n  m : ARRAY[0..1, 0..2] OF INT;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result).toHaveLength(1)
+    expect(result[0].type.definition).toBe('array')
+    expect(result[0].type.value).toBe('ARRAY[0..1, 0..2] OF INT')
+    expect(result[0].type.data).toEqual({
+      baseType: { definition: 'base-type', value: 'INT' },
+      dimensions: [{ dimension: '0..1' }, { dimension: '0..2' }],
+    })
+  })
+
+  it('parses a 3D ARRAY declared inline', () => {
+    const input = 'VAR\n  c : ARRAY[0..1, 0..1, 0..1] OF INT;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.data).toEqual({
+      baseType: { definition: 'base-type', value: 'INT' },
+      dimensions: [{ dimension: '0..1' }, { dimension: '0..1' }, { dimension: '0..1' }],
+    })
+  })
+
+  it('parses a multi-dimensional ARRAY with no space after the comma', () => {
+    const input = 'VAR\n  m : ARRAY[0..1,0..1] OF INT;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.data?.dimensions).toEqual([{ dimension: '0..1' }, { dimension: '0..1' }])
+  })
+
+  it('parses a multi-dimensional ARRAY of a user-defined type', () => {
+    const input = 'VAR\n  grid : ARRAY[0..1, 0..1] OF Point;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.data).toEqual({
+      baseType: { definition: 'user-data-type', value: 'Point' },
+      dimensions: [{ dimension: '0..1' }, { dimension: '0..1' }],
+    })
+  })
+
+  it('keeps the initial value when a multi-dimensional ARRAY has one', () => {
+    const input = 'VAR\n  m : ARRAY[0..1, 0..2] OF INT := [[1,2,3],[4,5,6]];\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.value).toBe('ARRAY[0..1, 0..2] OF INT')
+    expect(result[0].initialValue).toBe('[[1,2,3],[4,5,6]]')
+  })
+
+  it('parses a multi-dimensional ARRAY in the alternate located format', () => {
+    const input = 'VAR_GLOBAL\n  m AT %MW0 : ARRAY[0..1, 0..1] OF INT;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].location).toBe('%MW0')
+    expect(result[0].type.data?.dimensions).toHaveLength(2)
+  })
+
+  it('still rejects a multi-name declaration', () => {
+    // Allowing the comma in the type must not make `a, b : INT;` parse — the
+    // name group is a single identifier followed by the colon.
+    const input = 'VAR\n  a, b : INT;\nEND_VAR'
+    expect(() => parseIecStringToVariables(input)).toThrow(/Syntax error on line 2/)
+  })
+
+  it('no longer blames a comma for an unrelated syntax error', () => {
+    // A comma is legal now, so the guessed reason must fall through instead of
+    // reporting "invalid or unsupported characters".
+    const input = 'VAR\n  m ARRAY[0..1, 0..1] OF INT;\nEND_VAR'
+    expect(() => parseIecStringToVariables(input)).toThrow(/missing colon/)
+  })
+
+  it('parses a multi-dimensional ARRAY whose bounds are symbolic', () => {
+    // Bounds are only checked for blankness, not for an `a..b` shape — IEC
+    // allows a constant expression, and rejecting one here would be a
+    // regression.
+    const input = 'VAR\n  m : ARRAY[1..MAX, 0..1] OF INT;\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.data?.dimensions).toEqual([{ dimension: '1..MAX' }, { dimension: '0..1' }])
+  })
+
+  // ---- the comma is confined to well-formed ARRAY bounds ----
+  //
+  // Widening the type group must not let a comma through anywhere else: an
+  // empty bound or a comma in a non-array type used to throw, and silently
+  // accepting either persists a broken type into the project (see
+  // `getTypeAsText` / `getArrayTotalElements` / the array modal, none of which
+  // validate).
+
+  it.each([
+    ['a trailing comma in the bounds', 'm : ARRAY[0..1,] OF INT;'],
+    ['a trailing comma and a space in the bounds', 'm : ARRAY[0..1, ] OF INT;'],
+    ['only commas in the bounds', 'm : ARRAY[,] OF INT;'],
+    ['a doubled comma in the bounds', 'm : ARRAY[0..1,,0..2] OF INT;'],
+    ['a leading comma in the bounds', 'm : ARRAY[,0..2] OF INT;'],
+  ])('rejects an ARRAY with %s', (_label, declaration) => {
+    const input = `VAR\n  ${declaration}\nEND_VAR`
+    expect(() => parseIecStringToVariables(input)).toThrow(
+      /Syntax error on line 2.*A comma is only allowed between inline ARRAY bounds/s,
+    )
+  })
+
+  it.each([
+    ['two type names', 'x : INT, DINT;'],
+    ['a trailing comma', 'x : INT,;'],
+    ['a comma in a user-defined type', 'x : MyStruct, Point;'],
+  ])('rejects a non-array type with %s', (_label, declaration) => {
+    const input = `VAR\n  ${declaration}\nEND_VAR`
+    expect(() => parseIecStringToVariables(input)).toThrow(
+      /Syntax error on line 2.*A comma is only allowed between inline ARRAY bounds/s,
+    )
+  })
+
+  it('rejects a malformed ARRAY in the alternate located format too', () => {
+    const input = 'VAR_GLOBAL\n  m AT %MW0 : ARRAY[0..1,] OF INT;\nEND_VAR'
+    expect(() => parseIecStringToVariables(input)).toThrow(/A comma is only allowed between inline ARRAY bounds/)
+  })
+
+  it('still accepts a comma-free non-array type the guard must not touch', () => {
+    // The guard keys on the comma alone, so bracketed non-array types such as a
+    // sized STRING keep parsing exactly as before.
+    const input = 'VAR\n  s : STRING[10];\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type).toEqual({ definition: 'user-data-type', value: 'STRING[10]' })
+  })
+
+  it('still accepts a comma inside an initial value', () => {
+    // The comma guard inspects the type only — initial-value lists have always
+    // been allowed to contain commas.
+    const input = 'VAR\n  arr : ARRAY[0..2] OF INT := [1,2,3];\nEND_VAR'
+    const result = parseIecStringToVariables(input)
+
+    expect(result[0].type.definition).toBe('array')
+    expect(result[0].initialValue).toBe('[1,2,3]')
+  })
+
   // ---- alternate format (line 115) ----
 
   it('parses the alternate format: name AT location : type', () => {
