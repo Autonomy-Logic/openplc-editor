@@ -24,45 +24,63 @@ const compareVariableTypes = (type1: PLCVariable['type'], type2: PLCVariable['ty
   return type1.value.toLowerCase() === type2.value.toLowerCase()
 }
 
+type DeleteElementType = 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device'
+
+const DELETE_ELEMENT_TYPES: readonly DeleteElementType[] = [
+  'pou',
+  'datatype',
+  'global-variable-list',
+  'server',
+  'remote-device',
+]
+
+/** Legacy `leafLang` values, mapped onto the element types the modal deletes. */
+const LEGACY_LEAF_LANG: Record<string, DeleteElementType> = {
+  gvl: 'global-variable-list',
+  'global-variable-list': 'global-variable-list',
+  server: 'server',
+  remoteDevice: 'remote-device',
+  'remote-device': 'remote-device',
+  'data-type': 'datatype',
+  datatype: 'datatype',
+  function: 'pou',
+  'function-block': 'pou',
+  program: 'pou',
+}
+
+/** Read a string property off an unknown payload, or `undefined` when it isn't one. */
+function stringField(data: object, key: string): string | undefined {
+  const value = (data as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+const isDeleteElementType = (value: string): value is DeleteElementType =>
+  DELETE_ELEMENT_TYPES.some((candidate) => candidate === value)
+
 /**
  * Resolve the element name and type from modal data.
  * Handles both the new format `{ name, elementType }` and the legacy format `{ leafLang, label }`.
+ *
+ * Narrowed rather than asserted: `'name' in data` proves the key is there, not that it
+ * holds a string, so an assertion here could hand a non-string straight to a delete
+ * action. Every field is checked before it is used.
  */
-function resolveDeleteTarget(
-  data: unknown,
-): { name: string; elementType: 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device' } | null {
+function resolveDeleteTarget(data: unknown): { name: string; elementType: DeleteElementType } | null {
   if (!data || typeof data !== 'object') return null
 
   // New format from shared slice deleteRequest actions
-  if ('name' in data && 'elementType' in data) {
-    const d = data as { name: string; elementType: string }
-    if (['pou', 'datatype', 'global-variable-list', 'server', 'remote-device'].includes(d.elementType)) {
-      return {
-        name: d.name,
-        elementType: d.elementType as 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device',
-      }
-    }
+  const name = stringField(data, 'name')
+  const elementType = stringField(data, 'elementType')
+  if (name !== undefined && elementType !== undefined && isDeleteElementType(elementType)) {
+    return { name, elementType }
   }
 
   // Legacy format from web repo: { leafLang, label }
-  if ('leafLang' in data && 'label' in data) {
-    const d = data as { leafLang: string; label: string }
-    const mapping: Record<string, 'pou' | 'datatype' | 'global-variable-list' | 'server' | 'remote-device'> = {
-      gvl: 'global-variable-list',
-      'global-variable-list': 'global-variable-list',
-      server: 'server',
-      remoteDevice: 'remote-device',
-      'remote-device': 'remote-device',
-      'data-type': 'datatype',
-      datatype: 'datatype',
-      function: 'pou',
-      'function-block': 'pou',
-      program: 'pou',
-    }
-    const elementType = mapping[d.leafLang]
-    if (elementType) {
-      return { name: d.label, elementType }
-    }
+  const leafLang = stringField(data, 'leafLang')
+  const label = stringField(data, 'label')
+  if (leafLang !== undefined && label !== undefined) {
+    const mapped = LEGACY_LEAF_LANG[leafLang]
+    if (mapped) return { name: label, elementType: mapped }
   }
 
   return null
