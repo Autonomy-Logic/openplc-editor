@@ -6,7 +6,11 @@ import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../store'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
-import { legacyInOutSourcePinIds, rewireInOutReads } from '../../../../utils/graphical/in-out-pin-rules'
+import {
+  ambiguousInOutFeeds,
+  legacyInOutSourcePinIds,
+  rewireInOutReads,
+} from '../../../../utils/graphical/in-out-pin-rules'
 import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
@@ -681,6 +685,22 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
     let newNodes = [...rung.nodes]
     newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))
+
+    // An in-out pin fed by more than one wire has no single source to re-point its readers at,
+    // and the old two-sided pin accepted any number. Refuse rather than pick one by array
+    // position: nothing has been written to the store yet, so the diagram is left exactly as it
+    // is for the user to resolve the extra connections first.
+    const ambiguous = ambiguousInOutFeeds(node, rung.edges)
+    if (ambiguous.length > 0) {
+      toast({
+        title: 'Cannot update this block yet',
+        description:
+          `${ambiguous.join(', ')} ${ambiguous.length === 1 ? 'is' : 'are'} connected to more than one ` +
+          `variable. A VAR_IN_OUT parameter takes exactly one — remove the extra connection(s), then update.`,
+        variant: 'fail',
+      })
+      return
+    }
 
     // A wire that READ one of this block's in-out pins has to be re-pointed at whatever feeds
     // the pin before the remap below: the block wrote through the reference, so reading the pin

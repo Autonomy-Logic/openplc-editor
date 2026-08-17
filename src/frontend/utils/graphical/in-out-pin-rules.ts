@@ -180,10 +180,14 @@ export const rewireInOutReads = <E extends EdgeLike>(
 
   if (!edges.some(leavesInOutPin)) return { edges, rewired: 0, dropped: 0 }
 
-  // What feeds each in-out pin: pin name -> the wire's source.
+  // What feeds each in-out pin: pin name -> the wire's source. FIRST wire wins, and the caller is
+  // expected to have refused the conversion when a pin has more than one (see
+  // `ambiguousInOutFeeds`) — picking by array position would make the result depend on the order
+  // the edges happen to be stored in, which is not defined behaviour.
   const feed = new Map<string, { source: string; sourceHandle?: string | null }>()
   for (const edge of edges) {
     if (edge.target !== node.id || !edge.targetHandle || !inOutPins.has(edge.targetHandle)) continue
+    if (feed.has(edge.targetHandle)) continue
     feed.set(edge.targetHandle, { source: edge.source, sourceHandle: edge.sourceHandle })
   }
 
@@ -204,7 +208,31 @@ export const rewireInOutReads = <E extends EdgeLike>(
       continue
     }
     rewired++
+    // The edge keeps its id, which still names the old endpoints. That matches what the FBD and
+    // Ladder update handlers already do when they re-point an edge onto a rebuilt block, and
+    // nothing in either path looks a rewired edge up by id.
     out.push({ ...edge, source: source.source, sourceHandle: source.sourceHandle })
   }
   return { edges: out, rewired, dropped }
+}
+
+/**
+ * In-out pins of `node` that more than one wire feeds, which makes the conversion undecidable.
+ *
+ * The old two-sided pin accepted any number of connections, so a saved diagram can hold several
+ * wires into one in-out parameter — the very thing `findOccupiedInOutPin` now refuses, and which
+ * CODESYS rejects outright because the aliasing has no defined order. Re-pointing that pin's
+ * readers would mean choosing one of those wires arbitrarily, so the caller must refuse the
+ * conversion and let the user resolve the extra connections first.
+ */
+export const ambiguousInOutFeeds = (node: BlockLikeNode, edges: EdgeLike[]): string[] => {
+  const inOutPins = inOutPinsOf(node)
+  if (inOutPins.size === 0) return []
+
+  const feedCount = new Map<string, number>()
+  for (const edge of edges) {
+    if (edge.target !== node.id || !edge.targetHandle || !inOutPins.has(edge.targetHandle)) continue
+    feedCount.set(edge.targetHandle, (feedCount.get(edge.targetHandle) ?? 0) + 1)
+  }
+  return [...feedCount.entries()].filter(([, count]) => count > 1).map(([pin]) => pin)
 }

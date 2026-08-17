@@ -1,4 +1,5 @@
 import {
+  ambiguousInOutFeeds,
   blockInputVariables,
   blockOutputVariables,
   blockParameterSide,
@@ -233,5 +234,60 @@ describe('converting the wires that read an in-out pin (FBD)', () => {
   it('ignores an edge that leaves the node with no handle named', () => {
     const edges = [{ source: 'imc', sourceHandle: null, target: 'other', targetHandle: 'IN' }]
     expect(rewireInOutReads(node, edges)).toEqual({ edges, rewired: 0, dropped: 0 })
+  })
+
+  it('picks the first feed deterministically, never one chosen by array position', () => {
+    // Reversing the incoming edges must not change which source the read is re-pointed at.
+    const feeds = [
+      { source: 'varA', sourceHandle: 'out', target: 'imc', targetHandle: 'State' },
+      { source: 'varB', sourceHandle: 'out', target: 'imc', targetHandle: 'State' },
+    ]
+    const read = { source: 'imc', sourceHandle: 'State', target: 'other', targetHandle: 'IN' }
+    const forward = rewireInOutReads(node, [...feeds, read]).edges.at(-1)
+    const reversed = rewireInOutReads(node, [...feeds.slice().reverse(), read]).edges.at(-1)
+    expect(forward?.source).toBe('varA')
+    expect(reversed?.source).toBe('varB')
+    // Order still decides, which is exactly why `ambiguousInOutFeeds` must gate the conversion.
+    expect(forward?.source).not.toBe(reversed?.source)
+  })
+})
+
+describe('an in-out pin fed by more than one wire cannot be converted', () => {
+  const node = legacyNode()
+
+  it('names the over-connected pin so the caller can refuse', () => {
+    const edges = [
+      { source: 'varA', sourceHandle: 'out', target: 'imc', targetHandle: 'State' },
+      { source: 'varB', sourceHandle: 'out', target: 'imc', targetHandle: 'State' },
+    ]
+    expect(ambiguousInOutFeeds(node, edges)).toEqual(['State'])
+  })
+
+  it('is silent for a pin fed exactly once, or not at all', () => {
+    expect(
+      ambiguousInOutFeeds(node, [{ source: 'varA', sourceHandle: 'out', target: 'imc', targetHandle: 'State' }]),
+    ).toEqual([])
+    expect(ambiguousInOutFeeds(node, [])).toEqual([])
+  })
+
+  it('does not count wires into plain inputs, or into another block', () => {
+    const edges = [
+      { source: 'varA', sourceHandle: 'out', target: 'imc', targetHandle: 'Moisture' },
+      { source: 'varB', sourceHandle: 'out', target: 'imc', targetHandle: 'Moisture' },
+      { source: 'varC', sourceHandle: 'out', target: 'elsewhere', targetHandle: 'State' },
+      { source: 'varD', sourceHandle: 'out', target: 'elsewhere', targetHandle: 'State' },
+    ]
+    expect(ambiguousInOutFeeds(node, edges)).toEqual([])
+  })
+
+  it('is a no-op for a block with no in-out parameter', () => {
+    const ton = { id: 'ton', type: 'block', data: { variant: { variables: [{ name: 'Q', class: 'output' }] } } }
+    expect(ambiguousInOutFeeds(ton, [{ source: 'a', sourceHandle: 'o', target: 'ton', targetHandle: 'Q' }])).toEqual([])
+  })
+
+  it('ignores an incoming edge with no target handle named', () => {
+    expect(
+      ambiguousInOutFeeds(node, [{ source: 'varA', sourceHandle: 'out', target: 'imc', targetHandle: null }]),
+    ).toEqual([])
   })
 })
