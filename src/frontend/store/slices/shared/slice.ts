@@ -746,7 +746,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {
         for (const message of data.warnings) {
-          getState().consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message })
+          getState().consoleActions.addLog({ level: 'warning', message })
         }
       }
 
@@ -815,7 +815,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (restampedCount > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
         })

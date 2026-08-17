@@ -237,7 +237,6 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       currentBatchSize = Math.max(MIN_BATCH_SIZE, Math.floor(currentBatchSize / 2))
       batchSizeRef.current = currentBatchSize
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'warning',
         message: `Reduced debug batch size to ${currentBatchSize} due to runtime memory error.`,
       })

@@ -180,7 +180,6 @@ async function handleInteractiveOutcome(outcome: InteractiveOutcome, boardTarget
  */
 function trace(message: string): void {
   useOpenPLCStore.getState().consoleActions.addLog({
-    id: crypto.randomUUID(),
     level: 'info',
     message: `[connection] ${message}`,
   })

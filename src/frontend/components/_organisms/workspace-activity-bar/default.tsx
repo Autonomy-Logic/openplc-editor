@@ -159,7 +159,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
 
     addLog({
-      id: crypto.randomUUID(),
       level: 'warning',
       message: 'Device disconnected — stopping the debug session (serial debugging runs over the device connection).',
     })
@@ -175,7 +174,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     if (wasSimulator && !isSimulatorBoard && simulator.isRunning()) {
       addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: 'Board changed from simulator. Stopping simulator.',
       })
@@ -270,7 +268,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
           if (!stopResult.success) {
             addLog({
-              id: crypto.randomUUID(),
               level: 'error',
               message: `Failed to stop PLC: ${stopResult.error ?? 'Unknown error'}`,
             })
@@ -278,11 +275,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return
           }
           useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
-          addLog({ id: crypto.randomUUID(), level: 'info', message: 'PLC stopped before build.' })
+          addLog({ level: 'info', message: 'PLC stopped before build.' })
         }
       }
 
-      addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
+      addLog({ level: 'info', message: 'Build process started' })
 
       // Compile-time alias resolution: snapshot the project with every
       // variable's `location` resolved to a concrete IEC address (alias name
@@ -356,7 +353,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
                 if (loadResult.success) {
                   setSimulatorRunning(true)
-                  addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
+                  addLog({ level: 'info', message: 'Simulator is running.' })
                   if (pendingSimulatorDebugRef.current) {
                     pendingSimulatorDebugRef.current = false
                     // Rides the emulator's session, so it ends when the emulator
@@ -369,7 +366,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
                 } else {
                   pendingSimulatorDebugRef.current = false
                   addLog({
-                    id: crypto.randomUUID(),
                     level: 'error',
                     message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
                   })
@@ -380,7 +376,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         )
 
         if (!result.success && !streamedError) {
-          addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+          addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
         // Serial handoff (D72): if we released a held device connection for this
@@ -409,7 +405,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
         }
       } catch (err: unknown) {
-        addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
       } finally {
         setIsCompiling(false)
       }
@@ -470,7 +466,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (!compiler.compileLibrary) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: 'Current platform does not implement library builds.',
         })
@@ -479,7 +474,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       setIsCompiling(true)
       addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
       })
@@ -490,7 +484,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           (event) => {
             if (!event.message) return
             addLog({
-              id: crypto.randomUUID(),
               level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
               message: event.message,
             })
@@ -498,20 +491,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         )
         if (!result.success) {
           addLog({
-            id: crypto.randomUUID(),
             level: 'error',
             message: result.error ?? 'Library build failed.',
           })
         } else if (result.verification && !result.verification.success) {
           addLog({
-            id: crypto.randomUUID(),
             level: 'warning',
             message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
           })
         }
       } catch (err) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Library build error: ${getErrorMessage(err)}`,
         })
@@ -586,7 +576,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (result.unsupported) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: 'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
         })
@@ -600,7 +589,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
       if (!result.success) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Failed to ${wantRun ? 'start' : 'stop'} PLC: ${result.error ?? 'Unknown error'}`,
         })
@@ -621,7 +609,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           )
       }
     } catch (error: unknown) {
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
+      addLog({ level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
     }
   }, [
     deviceDefinitions.configuration.deviceBoard,
@@ -673,7 +661,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         debugSessionRidesDeviceRef.current = false
 
         setSimulatorRunning(false)
-        addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
+        addLog({ level: 'info', message: 'Simulator stopped.' })
       } else {
         pendingSimulatorDebugRef.current = true
         handleBuildRef.current().catch(() => {
@@ -682,7 +670,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
     } catch (error: unknown) {
       pendingSimulatorDebugRef.current = false
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
+      addLog({ level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
     }
   }, [debugSession, simulator, simulatorRunning, addLog])
 
@@ -703,12 +691,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           ['Yes', 'No'],
         )
         if (response === 1) {
-          consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Debugger session cancelled.' })
+          consoleActions.addLog({ level: 'info', message: 'Debugger session cancelled.' })
           setIsDebuggerProcessing(false)
           return
         }
 
-        consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting PLC...' })
+        consoleActions.addLog({ level: 'info', message: 'Starting PLC...' })
         const startResult = (await debuggerPort.setPlcState?.('RUNNING')) ?? {
           success: false,
           error: 'This target does not support run/stop control',
@@ -728,7 +716,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       // Read local MD5
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Verifying program MD5...' })
+      consoleActions.addLog({ level: 'info', message: 'Verifying program MD5...' })
       const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
       if (!md5Result.success || !md5Result.md5) {
         await showDeviceDialog('error', 'MD5 Extraction Failed', md5Result.error ?? 'Could not extract MD5', ['OK'])
@@ -765,7 +753,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       if (verifyResult.match) {
-        consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
+        consoleActions.addLog({ level: 'info', message: 'MD5 verified. Starting debugger...' })
         // Persist the target's byte order — detected from the MD5
         // response trailer in the runtime — so the swap layer at the
         // read / write boundaries flips on BE targets.  Default to
@@ -779,7 +767,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         await debuggerPort.disconnect()
 
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
@@ -808,7 +795,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           )
           if (compileResult.success) {
             consoleActions.addLog({
-              id: crypto.randomUUID(),
               level: 'info',
               message: 'Upload completed. Re-verifying...',
             })
@@ -816,7 +802,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             void handleMd5Verification(projectPath, boardTarget, isRuntimeTarget)
           } else {
             consoleActions.addLog({
-              id: crypto.randomUUID(),
               level: 'error',
               message: `Upload failed: ${compileResult.error ?? 'Unknown error'}`,
             })
@@ -829,7 +814,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } catch (error: unknown) {
       await debuggerPort.disconnect()
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'error',
         message: `MD5 verification error: ${getErrorMessage(error)}`,
       })
@@ -896,7 +880,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // login — all three publish the same status.
       const sessionStatus = useOpenPLCStore.getState().deviceConnection.status
       addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
       })
@@ -920,14 +903,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // addresses first (same pre-compile snapshot the build/upload paths
       // use) — the compiler only understands `%…` literals, not alias names.
       const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting debug compilation...' })
+      consoleActions.addLog({ level: 'info', message: 'Starting debug compilation...' })
       const debugCompileResult = await compiler.compileForDebug(
         { projectData: freshProjectData, boardTarget, projectPath },
         (event) => logCompilerEvent(event, consoleActions.addLog),
       )
       if (!debugCompileResult.success) {
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Debug compilation failed: ${debugCompileResult.error ?? 'Unknown error'}`,
         })
@@ -941,7 +923,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       void handleMd5Verification(projectPath, boardTarget, isRuntime)
     } catch (error: unknown) {
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'error',
         message: `Debugger init error: ${getErrorMessage(error)}`,
       })
