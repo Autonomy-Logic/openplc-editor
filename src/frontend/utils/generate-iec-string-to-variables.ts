@@ -35,10 +35,16 @@ export const DISALLOWED_LOCATION_CLASSES: ReadonlyArray<PLCVariable['class']> = 
 // and writing it inline failed the whole POU with "invalid or unsupported
 // characters".
 //
-// The group stays lazy and is bounded by the following `AT` / `:=` / `;`, and a
-// comma is never valid between a declaration's name and its type, so this can't
-// swallow anything it didn't before.  Note this does NOT enable multi-name
-// declarations (`a, b : INT;`) — `name` is a single `\w+` followed by `:`.
+// The group stays lazy and is bounded by the following `AT` / `:=` / `;`.  Note
+// this does NOT enable multi-name declarations (`a, b : INT;`) — `name` is a
+// single `\w+` followed by `:`.
+//
+// Widening the character class is not by itself a guarantee of well-formedness:
+// the regex will happily match a comma inside a NON-array type, so
+// `parseIecStringToVariables` rejects any type that still contains a comma after
+// `parseArrayType` has declined it, and `parseArrayType` declines blank bounds.
+// Both guards are below; between them, a comma reaches the store only as part of
+// a well-formed multi-dimensional ARRAY.
 
 // Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
@@ -83,6 +89,20 @@ export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
 
   // Parse dimensions (can be comma-separated for multi-dimensional arrays)
   const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
+
+  // A blank bound (`ARRAY[0..1,] OF INT`, `ARRAY[,] OF INT`,
+  // `ARRAY[0..1,,0..2] OF INT`) is not an array — reject it rather than
+  // recording an empty dimension.  An empty dimension survives every
+  // downstream consumer silently: `getTypeAsText` re-emits the trailing comma
+  // into the generated ST, `getArrayTotalElements` collapses to 0 elements, and
+  // the array modal drops the blank entry on save, quietly turning a 2D array
+  // into a 1D one.  The GUI already refuses a blank bound (`arrayValidation`);
+  // this brings the text path in line.
+  //
+  // Only *blank* is rejected: bounds may legitimately be symbolic
+  // (`ARRAY[1..MAX] OF INT`), so this is deliberately not a `a..b` range check.
+  if (dimensionParts.some((dimensionRange) => dimensionRange === '')) return null
+
   const dimensions = dimensionParts.map((dimensionRange) => ({ dimension: dimensionRange }))
 
   // Determine the base type definition
@@ -178,6 +198,19 @@ export const parseIecStringToVariables = (
         debug: false,
       })
       return
+    }
+
+    // The type group admits a comma only so that inline multi-dimensional
+    // ARRAY bounds parse.  Anything else that reached here with a comma is
+    // malformed — `x : INT, DINT;`, `x : INT,;`, or an ARRAY with a blank bound
+    // — and must be rejected instead of becoming a user data type named
+    // "INT, DINT", which is persisted, shown in the type cell, and emitted
+    // verbatim into the generated ST.  Mirrors the guard `buildFieldType` in
+    // `PLC/data-type-text-parser.ts` applies to structure fields.
+    if (parsedType.includes(',')) {
+      throw new Error(
+        `Syntax error on line ${lineNumber}: "${line}". A comma is only allowed between inline ARRAY bounds (e.g. "ARRAY[0..1, 0..2] OF INT"), and no bound may be empty.`,
+      )
     }
 
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
