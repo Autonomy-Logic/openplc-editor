@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { blockInputVariables, blockOutputVariables } from '../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType,
@@ -15,13 +16,8 @@ export const getVariableByName = (variables: PLCVariable[], name: string): PLCVa
 }
 
 export const getBlockDocumentation = (blockVariant: newBlockVariant): string => {
-  const inputVariables = blockVariant.variables.filter(
-    (variable) => variable.class === 'input' || variable.class === 'inOut',
-  )
-
-  const outputVariables = blockVariant.variables.filter(
-    (variable) => variable.class === 'output' || variable.class === 'inOut',
-  )
+  const inputVariables = blockInputVariables(blockVariant.variables)
+  const outputVariables = blockOutputVariables(blockVariant.variables)
 
   const documentationString = `${blockVariant.documentation ? `${blockVariant.documentation}\n\n` : ''}INPUT:
       ${inputVariables
@@ -52,4 +48,9 @@ export const validateVariableType = (
   return _validateVariableType(selectedType, expectedType.type.value)
 }
 
+export {
+  blockInputVariables,
+  blockOutputVariables,
+  inOutVariableNames,
+} from '../../../../utils/graphical/in-out-pin-rules'
 export { getVariableRestrictionType }
