@@ -18,6 +18,7 @@ import type {
 import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { generateNumericUUID } from '../../../../utils/generate-uuid'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
+import { newUuid } from '../../../../utils/new-uuid'
 import { RungLadderState } from '../types'
 
 export const duplicateLadderRung = (editorName: string, rung: RungLadderState): RungLadderState => {
@@ -204,7 +205,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
   }))
 
   const newRung = {
-    id: `rung_${editorName}_${crypto.randomUUID()}`,
+    id: `rung_${editorName}_${newUuid()}`,
     comment: rung.comment,
     defaultBounds: rung.defaultBounds,
     reactFlowViewport: rung.reactFlowViewport,

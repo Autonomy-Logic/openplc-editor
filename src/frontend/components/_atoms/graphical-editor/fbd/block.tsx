@@ -1,5 +1,4 @@
 import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
@@ -7,6 +6,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
 import { isLegalIdentifier } from '../../../../utils/keywords'
+import { newUuid } from '../../../../utils/new-uuid'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -206,7 +206,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: `BLOCK_${newUuid()}`,
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -520,7 +520,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: uuidv4(),
+            id: newUuid(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: blockType },
             class: 'local',
@@ -626,7 +626,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const updatedNewNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: `BLOCK_${newUuid()}`,
       position: {
         x: node.position.x,
         y: node.position.y,
