@@ -50,6 +50,40 @@ function resetDeviceLicense(deviceLicense: DeviceLicenseInfo): void {
   deviceLicense.awaitingPurchaseUntil = null
 }
 
+/**
+ * The only pin state the central IEC recalculation depends on: which addresses
+ * the pin block occupies, in order.
+ *
+ * Pins are the one producer the registry keeps PINNED — they're fixed hardware,
+ * so VPP / Modbus / EtherCAT allocate around them. Every pin add / remove /
+ * retype therefore moves the constraints the other producers were packed
+ * against, and nothing recompacted them: `removePin` decrements the trailing
+ * pins of its own type, so the freed slot slides to the END of the pin block
+ * and whatever allocated after it never moves up; `createNewPin` mints
+ * `highest + 1`, which on a board with pin mapping AND VPP/Modbus can land on
+ * top of a channel already sitting there — a two-producer collision with no
+ * conflict report, because nothing recalculated.
+ */
+function pinAddressSignature(state: DeviceSliceRoot): string {
+  const board = state.deviceDefinitions.configuration.deviceBoard
+  return (state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []).map((pin) => pin.address).join(',')
+}
+
+/**
+ * Recompact the other producers around the new pin layout, but only when the
+ * pin addresses actually moved since `before`. Mirrors `setDeviceBoard`, the
+ * other place where a constraint change drives the central recalculation.
+ *
+ * Comparing rather than recalculating unconditionally keeps alias-only and
+ * pin-number-only edits free, and covers `updatePin`'s pinType branch (which
+ * rewrites addresses) without special-casing it.
+ */
+function recalcIfPinAddressesMoved(getState: () => DeviceSliceRoot, before: string): void {
+  if (pinAddressSignature(getState()) !== before) {
+    getState().projectActions.recalculateIecAddresses()
+  }
+}
+
 const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (setState, getState) => ({
   deviceAvailableOptions: {
     availableBoards: new Map(),
@@ -188,6 +222,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
 
     createNewPin: (): void => {
+      const pinsBefore = pinAddressSignature(getState())
       setState(
         produce((draft: DeviceSlice) => {
           draft.deviceUpdated.updated = true
@@ -236,8 +271,10 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
         }),
       )
+      recalcIfPinAddressesMoved(getState, pinsBefore)
     },
     removePin: (): void => {
+      const pinsBefore = pinAddressSignature(getState())
       setState(
         produce((draft: DeviceSlice) => {
           draft.deviceUpdated.updated = true
@@ -270,6 +307,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           pinMapping.currentSelectedPinTableRow = selectedRow
         }),
       )
+      recalcIfPinAddressesMoved(getState, pinsBefore)
     },
     updatePin: (updatedData): PinUpdateResponse => {
       const returnMessage: PinUpdateResponse = {
@@ -278,6 +316,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         message: '',
         data: { pin: '', pinType: '', address: '', alias: '' },
       }
+      const pinsBefore = pinAddressSignature(getState())
       setState(
         produce((draft: DeviceSlice) => {
           draft.deviceUpdated.updated = true
@@ -395,6 +434,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           }
         }),
       )
+      recalcIfPinAddressesMoved(getState, pinsBefore)
       return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {
