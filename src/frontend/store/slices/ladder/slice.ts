@@ -4,27 +4,14 @@ import { StateCreator } from 'zustand'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
-  migrateInOutSourceEdges,
-  stripInOutOutputHandles,
-} from '../../../components/_atoms/graphical-editor/in-out-pin-rules'
-import {
   defaultCustomNodesStyles,
   nodesBuilder,
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
-import {
-  DEFAULT_BLOCK_CONNECTOR_Y,
-  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-} from '../../../components/_atoms/graphical-editor/ladder/utils/constants'
 import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
-
-const LADDER_PIN_GEOMETRY = {
-  connectorY: DEFAULT_BLOCK_CONNECTOR_Y,
-  connectorOffsetY: DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-}
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -38,20 +25,11 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
 
-          // A VAR_IN_OUT pin no longer has an output side. Heal projects saved before that:
-          // drop the stale right-hand pin (handle geometry is persisted, not recomputed) and
-          // re-point any wire that left it at whatever feeds the pin.
-          flow = {
-            ...flow,
-            rungs: flow.rungs.map((rung) => {
-              const migrated = migrateInOutSourceEdges(rung.nodes, rung.edges)
-              return {
-                ...rung,
-                nodes: rung.nodes.map((node) => stripInOutOutputHandles(node, LADDER_PIN_GEOMETRY)),
-                edges: migrated.edges,
-              }
-            }),
-          }
+          // A VAR_IN_OUT pin no longer has an output side, but loading NEVER converts a rung
+          // that still carries the old two-sided pin. In Ladder an edge leaving a block IS the
+          // rung chain, so re-pointing it automatically would route the rail around the block
+          // or drop it outright, with no signal and no way back. The block's update badge does
+          // it on demand instead: see `hasLegacyInOutOutputHandle` for the detection.
 
           // Check if any block node has legacy connectedVariables (object instead of array).
           // Only scan + migrate if legacy data is detected — modern projects skip this entirely.

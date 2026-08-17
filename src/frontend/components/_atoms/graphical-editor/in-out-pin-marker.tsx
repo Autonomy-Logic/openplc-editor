@@ -14,6 +14,10 @@
  */
 const InOutPinMarker = () => (
   <span
+    // `role='img'` is what makes the `aria-label` an accessible name: on a bare span the label
+    // is ignored, so the marker would be invisible to a screen reader while the SVG inside it is
+    // deliberately `aria-hidden`.
+    role='img'
     aria-label='in-out parameter'
     title='VAR_IN_OUT — passed by reference: the block writes back to this variable'
     className='pointer-events-none ml-1 inline-flex w-3 shrink-0 select-none items-center align-middle'

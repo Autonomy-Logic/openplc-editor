@@ -274,12 +274,6 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
-  // FBD slice — the same case as the ladder slice above. Handle geometry is persisted
-  // inside each node rather than recomputed on render, so the slice owns it on load: it
-  // needs the pin-spacing constants to re-flow a block's pins after healing a project
-  // saved with the old two-sided VAR_IN_OUT pin. The constants describe how components
-  // lay pins out, so they live with the components that draw them.
-  'frontend/store/slices/fbd/slice.ts': ['components'],
   // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.

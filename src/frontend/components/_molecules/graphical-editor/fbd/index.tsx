@@ -33,7 +33,7 @@ import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
 import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
-import { findOccupiedInOutPin } from '../../../_atoms/graphical-editor/in-out-pin-rules'
+import { findOccupiedInOutPin } from '../../../../utils/graphical/in-out-pin-rules'
 import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'

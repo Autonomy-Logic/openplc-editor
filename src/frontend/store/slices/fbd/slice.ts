@@ -2,20 +2,7 @@ import { addEdge } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import {
-  DEFAULT_BLOCK_CONNECTOR_Y,
-  DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-} from '../../../components/_atoms/graphical-editor/fbd/utils/constants'
-import {
-  migrateInOutSourceEdges,
-  stripInOutOutputHandles,
-} from '../../../components/_atoms/graphical-editor/in-out-pin-rules'
 import { FBDFlowSlice, FBDFlowState } from './types'
-
-const FBD_PIN_GEOMETRY = {
-  connectorY: DEFAULT_BLOCK_CONNECTOR_Y,
-  connectorOffsetY: DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-}
 
 export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice> = (setState) => ({
   fbdFlows: [],
@@ -28,14 +15,13 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
           const flowIndex = fbdFlows.findIndex((f) => f.name === flow.name)
-          // A VAR_IN_OUT pin no longer has an output side. Projects saved before that carry
-          // both the stale right-hand pin (handle geometry lives in the node, it is not
-          // recomputed on load) and any wires leaving it, so heal both here.
-          const migrated = migrateInOutSourceEdges(flow.rung.nodes, flow.rung.edges)
+          // Loading NEVER rewrites the diagram. A project saved before a VAR_IN_OUT pin became
+          // input-only still carries the pin's stale output side, and converting it here would
+          // mutate the user's graph behind their back — dropping wires with no signal and no
+          // way back. The block's update badge does it instead, on demand: see
+          // `hasLegacyInOutOutputHandle` for how such a block is detected.
           const rung = {
             ...flow.rung,
-            nodes: flow.rung.nodes.map((node) => stripInOutOutputHandles(node, FBD_PIN_GEOMETRY)),
-            edges: migrated.edges,
             selectedNodes: [],
           }
           // Reset updated to false on load — the flow is being loaded from a saved project.

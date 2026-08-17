@@ -6,6 +6,7 @@ import { findAllReferencesToDataType } from '../../../utils/data-type-references
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
+import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
@@ -797,6 +798,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const systemLibraries = getState().libraries.system
       const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
       let restampedCount = 0
+      // POUs holding a block still drawn with the old two-sided VAR_IN_OUT pin. Counted, never
+      // converted: the fix rewires the diagram, so it belongs to the block's update badge and
+      // not to project load. Reporting it here is the only signal the user would otherwise get,
+      // since the badge itself needs a hover to appear.
+      const legacyInOutPous = new Set<string>()
 
       pous.forEach((pou) => {
         if (pou.body.language === 'ld') {
@@ -804,11 +810,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           // (which mutates variant types in place) and hand the store the copy.
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
           restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          if (bodyValue.rungs?.some((rung) => rung.nodes?.some(hasLegacyInOutOutputHandle)))
+            legacyInOutPous.add(pou.name)
           getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
           restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          if (bodyValue.rung?.nodes?.some(hasLegacyInOutOutputHandle)) legacyInOutPous.add(pou.name)
           getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
         }
       })
@@ -818,6 +827,19 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           id: crypto.randomUUID(),
           level: 'info',
           message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
+        })
+      }
+
+      if (legacyInOutPous.size > 0) {
+        getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'warning',
+          message:
+            `A VAR_IN_OUT parameter is now drawn as a single input-side pin. ` +
+            `${legacyInOutPous.size === 1 ? 'POU' : 'POUs'} ${[...legacyInOutPous].join(', ')} ` +
+            `still ${legacyInOutPous.size === 1 ? 'contains' : 'contain'} blocks drawn the old way, ` +
+            `with a pin on both sides. Hover such a block and click its update badge to convert it — ` +
+            `nothing is changed until you do.`,
         })
       }
 

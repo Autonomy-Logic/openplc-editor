@@ -8,6 +8,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
+import { legacyInOutSourcePinIds } from '../../../../utils/graphical/in-out-pin-rules'
 import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
@@ -377,8 +378,14 @@ export const BlockNodeElement = <T extends object>({
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
+      {/*
+       * Labels are placed from the pin they name, looked up BY ID rather than by position in the
+       * list. The two can disagree: a rung saved before VAR_IN_OUT became input-only still holds
+       * the in-out's output-side pin, so indexing the persisted array by the derived list's index
+       * would draw every real output label one slot too high until the block is updated.
+       */}
       {inputConnectors.map((connector, index) => {
-        const handle = (data as BasicNodeData).inputHandles?.[index]
+        const handle = (data as BasicNodeData).inputHandles?.find((h) => h.id === connector)
         const top =
           (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
         return (
@@ -389,7 +396,7 @@ export const BlockNodeElement = <T extends object>({
         )
       })}
       {outputConnectors.map((connector, index) => {
-        const handle = (data as BasicNodeData).outputHandles?.[index]
+        const handle = (data as BasicNodeData).outputHandles?.find((h) => h.id === connector)
         const top =
           (handle?.relPosition?.y ?? DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
         return (
@@ -421,6 +428,10 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
   const [hoveringBlock, setHoveringBlock] = useState(false)
+
+  // Output-side pins this block still carries for an in-out parameter — empty for every rung
+  // saved since in-outs became input-only.
+  const staleInOutSourcePins = useMemo(() => legacyInOutSourcePinIds(data), [data])
 
   const connectedOutputNames = useMemo(() => {
     const names = new Set<string>()
@@ -786,6 +797,14 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
     const reconciledHandleBranches = reconciled2?.handleBranches
 
+    // Every outgoing edge moves to the rebuilt block's primary output pin. This is also what
+    // converts a rung whose rail used to leave a VAR_IN_OUT pin — `rightHandles` included
+    // in-outs before they became input-only, so a BOOL in-out could end up as `outputConnector`
+    // and carry the rail. The rail follows the block; it is deliberately NOT re-pointed at
+    // whatever fed the pin. Ladder edges are the rung chain, not data reads, so FBD's
+    // `rewireInOutReads` would route the rail around the block here. There is always a pin to
+    // move to: `getBlockVariantAndExecutionControl` forces EN/ENO when a block has no BOOL
+    // output, so the rebuilt `outputConnector` is always present.
     edges.source?.forEach((edge) => {
       const newEdge = {
         ...edge,
@@ -941,7 +960,19 @@ const Block = <T extends object>(block: BlockProps<T>) => {
         )}
       </div>
       {data.handles.map((handle, index) => (
-        <CustomHandle key={index} {...handle} />
+        <CustomHandle
+          key={index}
+          {...handle}
+          // A rung saved before VAR_IN_OUT became input-only still carries the pin's output
+          // side, and this list is what actually renders. Keep drawing it so the existing rung
+          // wiring stays visible, but refuse NEW connections from a pin that no longer exists.
+          // The block's update badge is what removes it.
+          isConnectable={
+            handle.type === 'source' && handle.id !== undefined && staleInOutSourcePins.has(handle.id)
+              ? false
+              : handle.isConnectable
+          }
+        />
       ))}
       <BlockOutputDebugBadges
         blockType={(data.variant as BlockVariant).type}
