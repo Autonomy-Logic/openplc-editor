@@ -292,7 +292,11 @@ function locVar(name: string, location: string, cls: PLCVariable['class'] = 'loc
  *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
  *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
  *  allocating addresses. */
-function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+/** Land the board catalogue WITHOUT selecting a board — the project-load moment
+ *  where discovery finishes and target capabilities become resolvable. Split out
+ *  of `seedRuntimeV4Board` so a test can land the catalogue while the project's
+ *  own board stays unresolved. */
+function landBoardCatalogue(store: ReturnType<typeof makeStore>) {
   store.getState().deviceActions.setAvailableOptions({
     availableBoards: new Map<string, BoardInfo>([
       [
@@ -321,6 +325,10 @@ function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
       ],
     ]),
   })
+}
+
+function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+  landBoardCatalogue(store)
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 }
 
@@ -3080,14 +3088,33 @@ describe('createProjectSlice', () => {
       expect(addressesOf()).toEqual(['%IW0', '%IW1'])
     })
 
-    it('warns once when the board is missing from a populated catalogue', () => {
-      // Resolving first clears the once-per-board dedupe, so this test does not
-      // depend on what ran before it.
-      seedRuntimeV4Board(store)
+    it('stays quiet when the target resolves', () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
       try {
-        selectUnresolvedBoard(store) // setDeviceBoard recalculates
-        store.getState().projectActions.recalculateIecAddresses() // deduped
+        seedRuntimeV4Board(store)
+        store.getState().projectActions.recalculateIecAddresses()
+
+        expect(warn).not.toHaveBeenCalled()
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('stays quiet while the board catalogue is still loading, then reports once it lands', () => {
+      // The two halves are ONE behaviour and have to be asserted together. An
+      // empty catalogue is an ordinary startup state, not a missing package —
+      // but discovery finishing is precisely when the situation becomes
+      // actionable, so whatever suppresses the load-time warning must not also
+      // suppress the one after it. Asserting only the quiet half lets that
+      // through: it is how a module-scoped "warn once" latch, armed during
+      // load, silently swallowed the report forever.
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        selectUnresolvedBoard(store) // recalculates against an empty catalogue
+        expect(warn).not.toHaveBeenCalled()
+
+        landBoardCatalogue(store) // discovery finishes; this board isn't in it
+        store.getState().projectActions.recalculateIecAddresses()
 
         expect(warn).toHaveBeenCalledTimes(1)
         expect(warn.mock.calls[0][0]).toContain('Uninstalled VPP Board')
@@ -3096,13 +3123,17 @@ describe('createProjectSlice', () => {
       }
     })
 
-    it('stays quiet while the board catalogue is still loading', () => {
-      // An empty catalogue is an ordinary startup state, not a missing package.
+    it('reports every recalculation against an unresolved target', () => {
+      // Not deduplicated by design — see `warnIfTargetUnresolved`. Each
+      // recalculation is a user-initiated mutation, and a latch that outlives
+      // the store silences the next project on the same board.
+      seedRuntimeV4Board(store)
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
       try {
+        selectUnresolvedBoard(store) // setDeviceBoard recalculates
         store.getState().projectActions.recalculateIecAddresses()
 
-        expect(warn).not.toHaveBeenCalled()
+        expect(warn).toHaveBeenCalledTimes(2)
       } finally {
         warn.mockRestore()
       }

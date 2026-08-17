@@ -309,34 +309,33 @@ function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabili
   return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
 }
 
-/** Board most recently reported as unresolved, so a project that never
- *  resolves warns once instead of on every edit. */
-let lastUnresolvedBoardWarned: string | null = null
-
 /**
  * Allocating against an unresolved target is a legitimate fallback but an
  * invisible one, and this class of bug survived months precisely because it
  * was silent.
  *
- * Only reported once the catalogue has actually loaded: an EMPTY
- * `availableBoards` means board discovery hasn't finished, which is an
- * ordinary startup state where permissive allocation is simply correct. A
- * board missing from a POPULATED catalogue is the actionable case — the VPP
- * package isn't installed, or the project came from another machine. Warn once
- * per board so a project that never resolves doesn't drown the console.
+ * Reported only once the catalogue has actually loaded. An EMPTY
+ * `availableBoards` means board discovery hasn't finished — an ordinary
+ * startup state where permissive allocation is simply correct, and where the
+ * board may yet resolve. A board missing from a POPULATED catalogue is the
+ * actionable case: the VPP package isn't installed, or the project came from
+ * another machine.
+ *
+ * Deliberately NOT deduplicated. An earlier version latched the last reported
+ * board in module scope to keep a never-resolving project from repeating
+ * itself. That bought almost nothing — the empty-catalogue guard is what
+ * removes the noise — and cost real correctness: module state outlives the
+ * store, so a second project on the same unresolved board went silent, and
+ * test outcomes depended on execution order. One line per recalculation, all
+ * of them user-initiated mutations, is the honest signal.
  *
  * Called from `recalculateIecAddresses` only, never from the memoized
  * alias-index path, which is hot.
  */
-function warnOnceIfTargetUnresolved(live: ProjectSliceRoot): void {
+function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
   const board = live.deviceDefinitions.configuration.deviceBoard
-  if (resolveBoardInfo(live)) {
-    lastUnresolvedBoardWarned = null
-    return
-  }
+  if (resolveBoardInfo(live)) return
   if (live.deviceAvailableOptions.availableBoards.size === 0) return
-  if (lastUnresolvedBoardWarned === board) return
-  lastUnresolvedBoardWarned = board
   console.warn(
     `[iec-address] Target "${board}" did not resolve — allocating with every producer active. ` +
       'Addresses may recompact once the target resolves (e.g. after installing its VPP package).',
@@ -1847,7 +1846,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // compile time. Only a producer *rename* touches variables — via
       // `renameAlias`, called by the alias editors.
       const live = getState()
-      warnOnceIfTargetUnresolved(live)
+      warnIfTargetUnresolved(live)
       const registry = buildIecRegistry(live)
       const index = indexRegistry(registry)
 
