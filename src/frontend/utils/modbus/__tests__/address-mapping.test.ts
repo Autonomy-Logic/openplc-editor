@@ -30,6 +30,8 @@ describe('calculateModbusAddressMapping — defaults', () => {
     expect(rowFor(holdingRegisters, '%QW')).toMatchObject({ modbusStart: 0, modbusEnd: 1023, modbusCount: 1024 })
     expect(rowFor(holdingRegisters, '%MW')).toMatchObject({ modbusStart: 1024, modbusEnd: 2047, modbusCount: 1024 })
     expect(rowFor(holdingRegisters, '%MD')).toMatchObject({
+      plcAddressStart: '%MD0',
+      plcAddressEnd: '%MD1023',
       modbusStart: 2048,
       modbusEnd: 4095,
       count: 1024,
@@ -37,6 +39,8 @@ describe('calculateModbusAddressMapping — defaults', () => {
       regsPerValue: 2,
     })
     expect(rowFor(holdingRegisters, '%ML')).toMatchObject({
+      plcAddressStart: '%ML0',
+      plcAddressEnd: '%ML1023',
       modbusStart: 4096,
       modbusEnd: 8191,
       count: 1024,
@@ -44,7 +48,6 @@ describe('calculateModbusAddressMapping — defaults', () => {
       regsPerValue: 4,
     })
     expect(holdingRegisters.totalAddresses).toBe(8192)
-    expect(holdingRegisters.functionCodes).toBe('FC 3/6/16')
   })
 
   it('exposes %QX on coils and leaves %MX disabled', () => {
@@ -59,7 +62,6 @@ describe('calculateModbusAddressMapping — defaults', () => {
     })
     expect(rowFor(coils, '%MX')).toMatchObject({ count: 0, modbusCount: 0, disabled: true })
     expect(coils.totalAddresses).toBe(8192)
-    expect(coils.functionCodes).toBe('FC 1/5/15')
   })
 
   it('maps discrete inputs to %IX and input registers to %IW', () => {
@@ -71,14 +73,12 @@ describe('calculateModbusAddressMapping — defaults', () => {
       modbusEnd: 8191,
       disabled: false,
     })
-    expect(discreteInputs.functionCodes).toBe('FC 2')
     expect(rowFor(inputRegisters, '%IW')).toMatchObject({
       plcAddressEnd: '%IW1023',
       modbusStart: 0,
       modbusEnd: 1023,
       disabled: false,
     })
-    expect(inputRegisters.functionCodes).toBe('FC 4')
     expect(inputRegisters.totalAddresses).toBe(1024)
   })
 
@@ -127,9 +127,19 @@ describe('calculateModbusAddressMapping — resized segments', () => {
     expect(rowFor(holdingRegisters, '%QW')).toMatchObject({ modbusStart: 0, modbusEnd: 3, plcAddressEnd: '%QW3' })
     expect(rowFor(holdingRegisters, '%MW')).toMatchObject({ modbusStart: 4, modbusEnd: 11, plcAddressEnd: '%MW7' })
     // 2 registers per %MD value: 2 values occupy 12…15.
-    expect(rowFor(holdingRegisters, '%MD')).toMatchObject({ modbusStart: 12, modbusEnd: 15, modbusCount: 4 })
+    expect(rowFor(holdingRegisters, '%MD')).toMatchObject({
+      modbusStart: 12,
+      modbusEnd: 15,
+      modbusCount: 4,
+      plcAddressEnd: '%MD1',
+    })
     // 4 registers per %ML value: 1 value occupies 16…19.
-    expect(rowFor(holdingRegisters, '%ML')).toMatchObject({ modbusStart: 16, modbusEnd: 19, modbusCount: 4 })
+    expect(rowFor(holdingRegisters, '%ML')).toMatchObject({
+      modbusStart: 16,
+      modbusEnd: 19,
+      modbusCount: 4,
+      plcAddressEnd: '%ML0',
+    })
     expect(holdingRegisters.totalAddresses).toBe(20)
   })
 

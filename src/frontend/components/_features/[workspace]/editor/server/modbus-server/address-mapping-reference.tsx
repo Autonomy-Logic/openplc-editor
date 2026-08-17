@@ -18,24 +18,28 @@ const MappingTable = ({ section, isRegisterType }: MappingTableProps) => {
   return (
     <div className='flex flex-col gap-2'>
       <div className='flex items-center justify-between'>
-        <h4 className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-          {section.title}{' '}
-          <span className='font-normal text-neutral-500 dark:text-neutral-400'>({section.functionCodes})</span>
-        </h4>
+        <h4 className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>{section.title}</h4>
         <span className='text-xs text-neutral-500 dark:text-neutral-400'>
           Total: {section.totalAddresses.toLocaleString()}{' '}
-          {section.totalAddresses === 1 ? countLabel.slice(0, -1) : countLabel.toLowerCase()}
+          {section.totalAddresses === 1 ? countLabel.slice(0, -1).toLowerCase() : countLabel.toLowerCase()}
         </span>
       </div>
 
       <div className='overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
-        <table className='w-full text-xs'>
+        {/* Fixed widths, not auto: the four sections render as four sibling
+         *  tables, and auto layout sizes each one to its own longest cell, so
+         *  the columns drift out of line from one section to the next. */}
+        <table className='w-full table-fixed text-xs'>
           <thead>
             <tr className='bg-neutral-100 text-left dark:bg-neutral-800'>
-              <th className='px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>Segment</th>
-              <th className='px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>PLC Address Range</th>
-              <th className='px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>Modbus Addresses</th>
-              <th className='px-3 py-1.5 text-right font-medium text-neutral-600 dark:text-neutral-400'>
+              <th className='w-[16%] px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>Segment</th>
+              <th className='w-[30%] px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>
+                PLC Address Range
+              </th>
+              <th className='w-[34%] px-3 py-1.5 font-medium text-neutral-600 dark:text-neutral-400'>
+                Modbus Addresses (0-based)
+              </th>
+              <th className='w-[20%] px-3 py-1.5 text-right font-medium text-neutral-600 dark:text-neutral-400'>
                 {countLabel}
               </th>
             </tr>
@@ -62,7 +66,7 @@ const MappingTable = ({ section, isRegisterType }: MappingTableProps) => {
                     <span className='italic'>-</span>
                   ) : (
                     <>
-                      {row.modbusStart.toLocaleString()} - {row.modbusEnd.toLocaleString()}
+                      {row.modbusStart} - {row.modbusEnd}
                       {row.regsPerValue && (
                         <span className='ml-1 text-neutral-500 dark:text-neutral-400'>(x{row.regsPerValue})</span>
                       )}

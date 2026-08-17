@@ -42,7 +42,6 @@ interface AddressMappingRow {
 
 interface AddressMappingSection {
   title: string
-  functionCodes: string
   totalAddresses: number
   rows: AddressMappingRow[]
 }
@@ -135,7 +134,6 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
   return {
     holdingRegisters: {
       title: 'Holding Registers',
-      functionCodes: 'FC 3/6/16',
       totalAddresses: totalHoldingRegisters,
       rows: [
         {
@@ -184,7 +182,6 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     },
     coils: {
       title: 'Coils',
-      functionCodes: 'FC 1/5/15',
       totalAddresses: totalCoils,
       rows: [
         {
@@ -211,7 +208,6 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     },
     discreteInputs: {
       title: 'Discrete Inputs',
-      functionCodes: 'FC 2',
       totalAddresses: discreteInputs.ixBits,
       rows: [
         {
@@ -228,7 +224,6 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     },
     inputRegisters: {
       title: 'Input Registers',
-      functionCodes: 'FC 4',
       totalAddresses: inputRegisters.iwCount,
       rows: [
         {
