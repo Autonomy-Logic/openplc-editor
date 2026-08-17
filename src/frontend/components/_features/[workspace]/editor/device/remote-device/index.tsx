@@ -9,6 +9,12 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
+import {
+  formatIOGroupAddressRange,
+  isSingleElementFunctionCode,
+  MAX_IO_GROUP_LENGTH_BY_FC,
+  validateIOGroupLength,
+} from '../../../../../../utils/modbus/io-group'
 import { GenericComboboxCell } from '../../../../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
@@ -171,7 +177,8 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
   const [errorHandling, setErrorHandling] = useState<'keep-last-value' | 'set-to-zero'>('keep-last-value')
 
   // FC 5 (Write Single Coil) and FC 6 (Write Single Register) are single-element operations
-  const isSingleElementOperation = functionCode === '5' || functionCode === '6'
+  const isSingleElementOperation = isSingleElementFunctionCode(functionCode)
+  const lengthValidation = validateIOGroupLength(functionCode, length)
 
   useEffect(() => {
     if (editingGroup) {
@@ -180,8 +187,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
       setCycleTime(editingGroup.cycleTime.toString())
       setOffset(editingGroup.offset)
       // For single-element operations, length is always 1
-      const isSingleElement = editingGroup.functionCode === '5' || editingGroup.functionCode === '6'
-      setLength(isSingleElement ? '1' : editingGroup.length.toString())
+      setLength(isSingleElementFunctionCode(editingGroup.functionCode) ? '1' : editingGroup.length.toString())
       setErrorHandling(editingGroup.errorHandling)
     } else {
       setName('')
@@ -201,13 +207,13 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
   }, [functionCode, isSingleElementOperation])
 
   const handleSubmit = () => {
-    if (!name.trim()) return
+    if (!name.trim() || !lengthValidation.ok) return
     onSubmit({
       name: name.trim(),
       functionCode,
       cycleTime: parseInt(cycleTime, 10) || 100,
       offset,
-      length: parseInt(length, 10) || 1,
+      length: lengthValidation.length,
       errorHandling,
     })
     setName('')
@@ -283,19 +289,44 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
               className={inputStyles}
             />
           </div>
-          <div className='flex items-center gap-2'>
-            <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Length</Label>
-            <InputWithRef
-              type='number'
-              value={length}
-              onChange={(e) => {
-                if (!isSingleElementOperation) setLength(e.target.value)
-              }}
-              placeholder='1'
-              min='1'
-              readOnly={isSingleElementOperation}
-              className={isSingleElementOperation ? `${inputStyles} cursor-not-allowed opacity-50` : inputStyles}
-            />
+          <div className='flex flex-col gap-1'>
+            <div className='flex items-center gap-2'>
+              <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Length</Label>
+              <InputWithRef
+                type='number'
+                value={length}
+                onChange={(e) => {
+                  if (!isSingleElementOperation) setLength(e.target.value)
+                }}
+                placeholder='1'
+                min='1'
+                max={MAX_IO_GROUP_LENGTH_BY_FC[functionCode]}
+                readOnly={isSingleElementOperation}
+                aria-describedby='io-group-length-hint'
+                aria-invalid={!lengthValidation.ok}
+                className={cn(
+                  inputStyles,
+                  isSingleElementOperation && 'cursor-not-allowed opacity-50',
+                  !lengthValidation.ok && 'border-red-500 focus:border-red-500 dark:border-red-500',
+                )}
+              />
+            </div>
+            {/* A permanently locked control deserves an always-visible reason,
+                so this is inline text rather than a hover tooltip (which would
+                also mean a Radix portal nested inside the modal's portal). */}
+            {(isSingleElementOperation || !lengthValidation.ok) && (
+              <p
+                id='io-group-length-hint'
+                className={cn(
+                  'pl-[7.5rem] font-caption text-xs',
+                  lengthValidation.ok ? 'text-neutral-500 dark:text-neutral-400' : 'text-red-500',
+                )}
+              >
+                {lengthValidation.ok
+                  ? 'FC 5 (Write Single Coil) and FC 6 (Write Single Register) address exactly one element, so length is fixed at 1. Use FC 15 or FC 16 to write multiple.'
+                  : lengthValidation.message}
+              </p>
+            )}
           </div>
           <div className='flex items-center gap-2'>
             <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Error Handling</Label>
@@ -333,7 +364,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || !lengthValidation.ok}
             className='rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
           >
             {editingGroup ? 'Save' : 'Create'}
@@ -356,7 +387,10 @@ type IOGroupRowProps = {
 const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onUpdateAlias }: IOGroupRowProps) => {
   const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
-  const groupAddress = firstIOPoint?.iecLocation || '-'
+  // The full span, not just the first point: this is what makes a size change
+  // — and the project-wide address recompaction it triggers — readable without
+  // expanding the group.
+  const groupAddress = formatIOGroupAddressRange(ioGroup.ioPoints ?? [])
   const groupOffset = ioGroup.offset
 
   return (
@@ -374,6 +408,7 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupType}</td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupAddress}</td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupOffset}</td>
+        <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{ioGroup.length}</td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>
           {getFunctionCodeLabel(ioGroup.functionCode)}
         </td>
@@ -436,6 +471,8 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{ioPoint.type}</td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{ioPoint.iecLocation}</td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{offset}</td>
+      {/* A single point has no length of its own — keeps the columns aligned. */}
+      <td className='px-2 py-1'></td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>-</td>
       <td className='px-2 py-1'>
         <InputWithRef
@@ -964,19 +1001,22 @@ const RemoteDeviceEditor = () => {
             <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
               <tr>
                 <th className='w-8 px-2 py-2'></th>
-                <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Name
                 </th>
-                <th className='w-[20%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Type
                 </th>
-                <th className='w-[10%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Address
                 </th>
-                <th className='w-[8%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Offset
                 </th>
-                <th className='w-[20%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                  Length
+                </th>
+                <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                   Function Code
                 </th>
                 <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
@@ -990,7 +1030,7 @@ const RemoteDeviceEditor = () => {
             <tbody>
               {ioGroups.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                  <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
                     No IO groups configured. Click the + button to add one.
                   </td>
                 </tr>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
+import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
@@ -69,6 +70,14 @@ const Project = () => {
   // Servers / Remote-Devices / VPP screens are program-level
   // affordances that don't apply to a `.stlib` build.
   const projectCaps = projectCapabilities({ type: projectType })
+
+  // Remote devices are also gated on the TARGET, not just the project type:
+  // a board that hosts neither Modbus remote I/O nor EtherCAT cannot drive
+  // them at all (the v3 build ships a single `program.st` and no remote-I/O
+  // config), and the variable-location dropdown already hides their points
+  // behind this exact predicate.
+  const targetCaps = useTargetCapabilities()
+  const canHostRemoteIo = targetCaps.modbusTcpRemote || targetCaps.ethercat
 
   // Get VPP vendor screens from the currently selected board
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
@@ -451,8 +460,13 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Project Remote Devices tree branch — hidden for libraries. */}
-          {projectCaps.hasRemoteDevices && (
+          {/* Project Remote Devices tree branch — hidden for libraries, and on
+              a target that can host neither Modbus remote I/O nor EtherCAT.
+              Devices already configured stay visible on such a target: the
+              board-switch warning promises they are "disabled during
+              compilation", not removed, so hiding saved data would contradict
+              what the user just accepted. */}
+          {projectCaps.hasRemoteDevices && (canHostRemoteIo || (remoteDevices?.length ?? 0) > 0) && (
             <ProjectTreeBranch branchTarget='remote-device'>
               {[...(remoteDevices || [])]
                 .sort((a, b) => a.name.localeCompare(b.name))

@@ -5,6 +5,7 @@ import type { BoardInfo, CommunicationPort, DevicePin, TimingStats } from '../..
 import { createConsoleSlice } from '../slices/console'
 import { createDeviceSlice, DeviceSlice } from '../slices/device'
 import { defaultDeviceConfiguration } from '../slices/device/data/types'
+import { PURCHASE_WATCH_WINDOW_MS } from '../slices/device/types'
 import * as pinsValidation from '../slices/device/validation/pins'
 import { createEditorSlice } from '../slices/editor'
 import { createLibrarySlice } from '../slices/library'
@@ -279,13 +280,21 @@ describe('createDeviceSlice', () => {
     it('starts idle with nothing known', () => {
       // The state every non-licensable board stays in: nothing runs, so nothing is
       // known, and the UI shows no licensing affordance at all.
-      expect(makeStore().getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(makeStore().getState().deviceLicense).toEqual({
+        phase: 'idle',
+        report: null,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('startDeviceLicenseCheck marks the call in flight', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: null })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'checking',
+        report: null,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('startDeviceLicenseCheck KEEPS the last report instead of blanking it', () => {
@@ -295,14 +304,22 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.startDeviceLicenseCheck()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'checking', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'checking',
+        report: LICENSED,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('setDeviceLicenseReport lands the report and settles the phase', () => {
       const store = makeStore()
       store.getState().deviceActions.startDeviceLicenseCheck()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
-      expect(store.getState().deviceLicense).toEqual({ phase: 'done', report: LICENSED })
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'done',
+        report: LICENSED,
+        awaitingPurchaseUntil: null,
+      })
     })
 
     it('preserves the outcome union verbatim, including the entitlement distinction', () => {
@@ -346,44 +363,103 @@ describe('createDeviceSlice', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
       store.getState().deviceActions.clearDeviceLicense()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
-    it('clearDeviceBoard change drops the licence — it was verified against the OLD board', () => {
+    it('setAwaitingPurchase stamps the absolute deadline and clears it', () => {
+      // The window is a wall-clock deadline recorded in the store — not a tick
+      // counter in the poll effect — so a remounted effect resumes the SAME
+      // window, a skipped tick costs nothing, and the state is inspectable.
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(1_755_000_000_000)
+        const store = makeStore()
+        store.getState().deviceActions.setAwaitingPurchase(true)
+        expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBe(1_755_000_000_000 + PURCHASE_WATCH_WINDOW_MS)
+        store.getState().deviceActions.setAwaitingPurchase(false)
+        expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('setAwaitingPurchase leaves the report and phase alone', () => {
+      // The watch is ORTHOGONAL to what is known: opening it must not blank the
+      // last report (the badge would flicker) nor fake an in-flight phase.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      expect(store.getState().deviceLicense).toEqual({
+        phase: 'done',
+        report: LICENSED,
+        awaitingPurchaseUntil: expect.any(Number),
+      })
+    })
+
+    it('landing a report does NOT end the watch by itself — the poll effect owns that', () => {
+      // An unlicensed report mid-wait is the EXPECTED state (webhook not done
+      // yet); if the store ended the watch on every landing, the first poll tick
+      // would kill the watch it serves.
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.setDeviceLicenseReport({
+        deviceId: '659a3520540f803625ddc34081e893d3',
+        outcome: { state: 'unlicensed', entitlementChecked: true },
+      })
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
+    })
+
+    it('clearDeviceLicense ends the watch — a new board/disconnect makes it moot', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setAwaitingPurchase(true)
+      store.getState().deviceActions.clearDeviceLicense()
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
+    })
+
+    it('a board change drops the licence AND the purchase watch — both were bound to the OLD board', () => {
       // setDeviceBoard already wipes everything else that is board-specific
       // (platform options, the pin-table row, vendor-screen data). A licence
       // report is just as board-specific: it was verified against the previous
       // board's deviceId and its VPP's productId. Kept across a switch, the badge
       // asserts possession for hardware that is no longer selected, and the buy
-      // link is built from the NEW package id and the OLD device id.
+      // link is built from the NEW package id and the OLD device id. The watch is
+      // OPENED before the switch so the null below asserts the reset, not the
+      // initial state — a live watch surviving the switch would keep polling (and
+      // could write a licence) against the new board's package id.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
 
       store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
 
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
     it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
-      // change invalidates the licence.
+      // change invalidates the licence — or ends a running purchase watch.
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
 
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
 
       expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+      expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
     })
 
-    it('clearDeviceDefinitions clears licensing — a new project may select another board', () => {
+    it('clearDeviceDefinitions clears licensing and the watch — a new project may select another board', () => {
       // A "Licensed" badge carried across a project close would be an assertion
-      // about hardware that is not even connected.
+      // about hardware that is not even connected — and a purchase watch carried
+      // across it would keep polling for a purchase nobody is making. The watch
+      // is opened first so the null below asserts the reset, not the default.
       const store = makeStore()
       store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+      store.getState().deviceActions.setAwaitingPurchase(true)
       store.getState().deviceActions.clearDeviceDefinitions()
-      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null })
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
   })
 
@@ -1710,6 +1786,167 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setDeviceBoard('Custom')
       store.getState().deviceActions.clearRuntimeConnection()
       expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('Custom')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Pin edits drive the central IEC recalculation (DOPE-440)
+  // -------------------------------------------------------------------------
+
+  describe('pin edits recompact the other address producers (DOPE-440)', () => {
+    /** A board that hosts BOTH fixed pins and Modbus remote I/O — the only
+     *  configuration where the two producers share an address space. */
+    function seedPinAndModbusBoard(store: ReturnType<typeof makeStore>) {
+      store.getState().deviceActions.setAvailableOptions({
+        availableBoards: new Map<string, BoardInfo>([
+          [
+            'GPIO Runtime v4',
+            {
+              compiler: 'openplc-compiler',
+              core: 'rt-v4',
+              preview: '',
+              specs: {},
+              capabilities: {
+                pinMapping: true,
+                vppIo: false,
+                modbusTcpRemote: true,
+                ethercat: false,
+                modbusTcpServer: true,
+                opcuaServer: true,
+                s7Server: true,
+                debuggerTransports: ['websocket'],
+                pythonFunctionBlocks: true,
+                arduinoApiCompletions: false,
+                hasRuntimeStats: true,
+                isInProcessSimulator: false,
+                directUsbUpload: false,
+              },
+            },
+          ],
+        ]),
+      })
+      store.getState().deviceActions.setDeviceBoard('GPIO Runtime v4')
+    }
+
+    /** Three digital-input pins occupying %IX0.0–%IX0.2, plus a two-point
+     *  Modbus FC1 group that allocates immediately after them. */
+    function seedPinsAndGroup(store: ReturnType<typeof makeStore>) {
+      seedPinAndModbusBoard(store)
+      store.getState().deviceActions.setDeviceDefinitions({
+        pinMapping: [
+          makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' }),
+          makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
+          makePin({ pin: 'D2', pinType: 'digitalInput', address: '%IX0.2' }),
+        ],
+      })
+      const project = store.getState().project
+      store.getState().projectActions.setProject({
+        ...project,
+        data: {
+          ...project.data,
+          remoteDevices: [
+            {
+              name: 'Dev1',
+              protocol: 'modbus-tcp',
+              modbusTcpConfig: { host: '127.0.0.1', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] },
+            },
+          ],
+        },
+      })
+      store.getState().projectActions.addIOGroup('Dev1', {
+        id: 'g1',
+        name: 'group-g1',
+        functionCode: '1',
+        cycleTime: 100,
+        offset: '0',
+        length: 2,
+        errorHandling: 'keep-last-value',
+        ioPoints: [],
+      })
+    }
+
+    /** The seeded group's IEC addresses. Throws rather than asserting non-null
+     *  so a broken fixture names itself instead of failing as an unrelated
+     *  expectation. */
+    function modbusAddresses(store: ReturnType<typeof makeStore>): string[] {
+      const points = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups[0]?.ioPoints
+      if (!points) throw new Error('fixture: expected a remote device with one IO group holding points')
+      return points.map((point) => point.iecLocation)
+    }
+
+    /** Count store writes from here on. The actions are frozen by Immer so
+     *  `recalculateIecAddresses` can't be spied on directly, and a skipped
+     *  recalculation has no other observable — it changes no address. Only the
+     *  negative cases assert on this; where addresses move, they are the
+     *  stronger assertion. */
+    function countWrites(store: ReturnType<typeof makeStore>) {
+      let writes = 0
+      store.subscribe(() => {
+        writes += 1
+      })
+      return () => writes
+    }
+
+    it('removePin lets the Modbus group reclaim the freed pin slot', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      expect(modbusAddresses(store)).toEqual(['%IX0.3', '%IX0.4'])
+
+      store.getState().deviceActions.selectPinTableRow(1)
+      store.getState().deviceActions.removePin()
+
+      // The pin block shrank to %IX0.0–%IX0.1; the group used to stay put at
+      // %IX0.3/.4, leaving %IX0.2 stranded.
+      expect(activePins(store.getState()).map((p) => p.address)).toEqual(['%IX0.0', '%IX0.1'])
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('createNewPin pushes the Modbus group off the slot it just claimed', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+
+      // `createNewPin` mints highest+1 = %IX0.3, checking only OTHER PINS for a
+      // collision — so it lands squarely on the group's first point.
+      store.getState().deviceActions.selectPinTableRow(2)
+      store.getState().deviceActions.createNewPin()
+
+      expect(activePins(store.getState()).map((p) => p.address)).toContain('%IX0.3')
+      // Pins are fixed hardware and stay pinned, so the group moves instead.
+      expect(modbusAddresses(store)).toEqual(['%IX0.4', '%IX0.5'])
+    })
+
+    it('updatePin recalculates when a pin type change rewrites addresses', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      store.getState().deviceActions.updatePin({ pinType: 'digitalOutput' })
+
+      // %IX0.0 moved to the output space and the remaining inputs slid down,
+      // so the group follows into the freed slot.
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('updatePin does not recalculate for an alias-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ alias: 'Start' })
+
+      expect(writes()).toBe(1)
+    })
+
+    it('updatePin does not recalculate for a pin-number-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ pin: 'D9' })
+
+      expect(writes()).toBe(1)
     })
   })
 })

@@ -239,4 +239,59 @@ describe('resolveBoardSelection', () => {
       expect(result.boardEntry.extra_libraries).toEqual(['P1AM'])
     }
   })
+
+  it('carries target.boardManagerUrl through to boardEntry', () => {
+    // A VPP whose core is not in arduino-cli's built-in index must surface
+    // its vendor index here, or the pipeline has nothing to hand to
+    // `installArduinoCore` and the install fails with "Platform not found".
+    const boardManagerUrl =
+      'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
+    const pkg: InstalledPackage = {
+      packageId: 'com.openplc.industrialshields',
+      version: '1.0.1',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      path: '/fake/packages/industrialshields',
+      devices: ['esp32-plc-14-0-10v'],
+    }
+    const manifest: PackageManifest = {
+      formatVersion: '1.0',
+      package: {
+        id: 'com.openplc.industrialshields',
+        name: 'IndustrialShields PLCs',
+        version: '1.0.1',
+        vendor: { name: 'Industrial Shields', logo: 'l.png' },
+        description: 'd',
+      },
+      devices: [
+        {
+          id: 'esp32-plc-14-0-10v',
+          name: 'ESP32 PLC 14 0-10V',
+          preview: 'p.png',
+          target: {
+            type: 'arduino-cli',
+            core: 'industrialshields:esp32',
+            platform: 'industrialshields:esp32:plc14ios:cpu=plc14ios',
+            boardManagerUrl,
+          },
+          hal: {
+            type: 'arduino-hal',
+            source: 'hal/arduino/esp32plc.cpp',
+            define: 'ISPLC_ESP32_PLC_14_0_10V',
+          },
+        },
+      ],
+    }
+    const packageManager: PackageManagerPort = {
+      listInstalled: () => [pkg],
+      getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
+    }
+    const resolver = makeResolver({}, { packageManager })
+
+    const result = resolveBoardSelection(resolver, 'ESP32 PLC 14 0-10V')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.core).toBe('industrialshields:esp32')
+      expect(result.boardEntry.boardManagerUrl).toBe(boardManagerUrl)
+    }
+  })
 })

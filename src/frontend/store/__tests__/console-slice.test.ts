@@ -266,4 +266,81 @@ describe('createConsoleSlice', () => {
     expect(store.getState().logs).toHaveLength(1)
     expect(store.getState().filters.searchTerm).toBe('term')
   })
+
+  // -------------------------------------------------------------------------
+  // Carriage-return redraws — a progress bar must stay on one line.
+  // -------------------------------------------------------------------------
+  describe('addLog with a carriage-return redraw', () => {
+    const frame = (id: string, message: string, transient = true) =>
+      [{ id, level: 'info' as const, message, transient }, { redraw: true }] as const
+
+    it('overwrites the open line instead of appending', () => {
+      const { addLog } = store.getState().consoleActions
+      addLog(...frame('1', 'Downloading 10%'))
+      addLog(...frame('2', 'Downloading 60%'))
+      addLog(...frame('3', 'Downloading 100%'))
+
+      expect(store.getState().logs).toHaveLength(1)
+      expect(store.getState().logs[0].message).toBe('Downloading 100%')
+    })
+
+    it('starts a new line once a newline has committed the previous one', () => {
+      const { addLog } = store.getState().consoleActions
+      addLog(...frame('1', 'Downloading A 50%'))
+      // The frame that arrived with a trailing newline: it still overwrites,
+      // but closes the line behind it.
+      addLog(...frame('2', 'Downloading A done', false))
+      addLog(...frame('3', 'Downloading B 50%'))
+
+      const { logs } = store.getState()
+      expect(logs).toHaveLength(2)
+      expect(logs[0].message).toBe('Downloading A done')
+      expect(logs[1].message).toBe('Downloading B 50%')
+    })
+
+    it('never overwrites an ordinary log line', () => {
+      const { addLog } = store.getState().consoleActions
+      addLog({ id: '1', level: 'info', message: 'Compiling...' })
+      addLog(...frame('2', 'Downloading 10%'))
+
+      expect(store.getState().logs).toHaveLength(2)
+      expect(store.getState().logs[0].message).toBe('Compiling...')
+    })
+
+    it('appends when the write is not a redraw, even above an open line', () => {
+      const { addLog } = store.getState().consoleActions
+      addLog(...frame('1', 'Downloading 10%'))
+      addLog({ id: '2', level: 'info', message: 'Unrelated output' })
+
+      expect(store.getState().logs).toHaveLength(2)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // SGR colour is split off at ingestion so the rest of the app sees clean text.
+  // -------------------------------------------------------------------------
+  describe('addLog with SGR colour', () => {
+    const ESC = '\u001B'
+
+    it('stores clean text and keeps the styling in segments', () => {
+      store.getState().consoleActions.addLog({
+        id: '1',
+        level: 'info',
+        message: `${ESC}[93marduino:avr${ESC}[0m   1.8.8`,
+      })
+
+      const [log] = store.getState().logs
+      expect(log.message).toBe('arduino:avr   1.8.8')
+      expect(log.segments?.map((s) => s.text).join('')).toBe('arduino:avr   1.8.8')
+      expect(log.segments?.[0].className).toContain('text-yellow-600')
+    })
+
+    it('leaves uncoloured logs exactly as they were — no segments allocated', () => {
+      store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'plain' })
+
+      const [log] = store.getState().logs
+      expect(log.message).toBe('plain')
+      expect(log.segments).toBeUndefined()
+    })
+  })
 })
