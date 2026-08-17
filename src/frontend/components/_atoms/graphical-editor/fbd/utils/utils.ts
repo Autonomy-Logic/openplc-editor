@@ -4,8 +4,12 @@ import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import type { FBDFlowType } from '../../../../../store/slices/fbd'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  IN_OUT_MARKER_WIDTH,
+} from '../../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
-import { blockInputVariables, blockOutputVariables, IN_OUT_MARKER_WIDTH } from '../../../../../utils/graphical/in-out-pin-rules'
 import { BlockVariant } from '../../types/block'
 import { customNodeTypes } from '..'
 import { buildHandle } from '../handle'

@@ -1,10 +1,10 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { blockInputVariables, blockOutputVariables } from '../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../utils/PLC/validate-variable-type'
-import { blockInputVariables, blockOutputVariables } from '../../../../utils/graphical/in-out-pin-rules'
 import { BlockVariant } from '../ladder/utils/types'
 import { BlockVariant as newBlockVariant } from '../types/block'
 
@@ -48,5 +48,9 @@ export const validateVariableType = (
   return _validateVariableType(selectedType, expectedType.type.value)
 }
 
-export { blockInputVariables, blockOutputVariables, inOutVariableNames } from '../../../../utils/graphical/in-out-pin-rules'
+export {
+  blockInputVariables,
+  blockOutputVariables,
+  inOutVariableNames,
+} from '../../../../utils/graphical/in-out-pin-rules'
 export { getVariableRestrictionType }

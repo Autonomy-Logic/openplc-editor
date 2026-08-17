@@ -1,8 +1,8 @@
 import { useDebugCompositeKey } from '../../../hooks/use-debug-composite-key'
 import { useIsDebuggerVisible } from '../../../hooks/use-debug-value'
+import { blockOutputVariables } from '../../../utils/graphical/in-out-pin-rules'
 import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { DebugValueBadge } from './debug-value-badge'
-import { blockOutputVariables } from '../../../utils/graphical/in-out-pin-rules'
 
 type BlockOutputDebugBadgesProps = {
   blockType: string

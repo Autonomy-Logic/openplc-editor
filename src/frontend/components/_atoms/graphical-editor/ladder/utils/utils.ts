@@ -3,12 +3,16 @@ import { Position } from '@xyflow/react'
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  IN_OUT_MARKER_WIDTH,
+} from '../../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType as _getVariableRestrictionType,
   validateVariableType as _validateVariableType,
 } from '../../../../../utils/PLC/validate-variable-type'
-import { blockInputVariables, blockOutputVariables, IN_OUT_MARKER_WIDTH } from '../../../../../utils/graphical/in-out-pin-rules'
 import { buildHandle } from '../handle'
 import { DEFAULT_BLOCK_CONNECTOR_Y, DEFAULT_BLOCK_CONNECTOR_Y_OFFSET, DEFAULT_BLOCK_WIDTH } from './constants'
 import type { BasicNodeData, BlockVariant } from './types'
