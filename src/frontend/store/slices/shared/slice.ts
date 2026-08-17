@@ -802,7 +802,23 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // converted: the fix rewires the diagram, so it belongs to the block's update badge and
       // not to project load. Reporting it here is the only signal the user would otherwise get,
       // since the badge itself needs a hover to appear.
-      const legacyInOutPous = new Set<string>()
+      //
+      // Split by whether the block is backed by a POU in this project, because only those can
+      // actually be converted: the update badge resolves a block's interface through
+      // `libraries.user`, so a block provided by a library (oscat-basic's LIST_*, softmotion's
+      // MC_* Axis pins) has no badge and stays as it is. Promising a badge that will not appear
+      // would be worse than saying nothing.
+      const convertibleInOutPous = new Set<string>()
+      const libraryInOutBlocks = new Set<string>()
+
+      const scanLegacyInOut = (nodes: unknown[] | undefined, pouName: string): void => {
+        for (const node of nodes ?? []) {
+          if (!hasLegacyInOutOutputHandle(node as Parameters<typeof hasLegacyInOutOutputHandle>[0])) continue
+          const name = (node as { data?: { variant?: { name?: string } } }).data?.variant?.name
+          if (name !== undefined && userPouNames.includes(name)) convertibleInOutPous.add(pouName)
+          else if (name !== undefined) libraryInOutBlocks.add(name)
+        }
+      }
 
       pous.forEach((pou) => {
         if (pou.body.language === 'ld') {
@@ -810,14 +826,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           // (which mutates variant types in place) and hand the store the copy.
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
           restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
-          if (bodyValue.rungs?.some((rung) => rung.nodes?.some(hasLegacyInOutOutputHandle)))
-            legacyInOutPous.add(pou.name)
+          for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
           getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
           restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
-          if (bodyValue.rung?.nodes?.some(hasLegacyInOutOutputHandle)) legacyInOutPous.add(pou.name)
+          scanLegacyInOut(bodyValue.rung?.nodes, pou.name)
           getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
         }
       })
@@ -830,16 +845,28 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         })
       }
 
-      if (legacyInOutPous.size > 0) {
+      if (convertibleInOutPous.size > 0) {
         getState().consoleActions.addLog({
           id: crypto.randomUUID(),
           level: 'warning',
           message:
             `A VAR_IN_OUT parameter is now drawn as a single input-side pin. ` +
-            `${legacyInOutPous.size === 1 ? 'POU' : 'POUs'} ${[...legacyInOutPous].join(', ')} ` +
-            `still ${legacyInOutPous.size === 1 ? 'contains' : 'contain'} blocks drawn the old way, ` +
+            `${convertibleInOutPous.size === 1 ? 'POU' : 'POUs'} ${[...convertibleInOutPous].join(', ')} ` +
+            `still ${convertibleInOutPous.size === 1 ? 'contains' : 'contain'} blocks drawn the old way, ` +
             `with a pin on both sides. Hover such a block and click its update badge to convert it — ` +
             `nothing is changed until you do.`,
+        })
+      }
+
+      if (libraryInOutBlocks.size > 0) {
+        getState().consoleActions.addLog({
+          id: crypto.randomUUID(),
+          level: 'info',
+          message:
+            `${[...libraryInOutBlocks].sort().join(', ')}: this project places library blocks with a ` +
+            `VAR_IN_OUT parameter that were drawn with a pin on both sides. They keep the extra pin, ` +
+            `which no longer accepts new connections; existing connections and the generated code are ` +
+            `unaffected.`,
         })
       }
 
