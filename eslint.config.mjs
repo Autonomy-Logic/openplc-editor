@@ -74,6 +74,21 @@ export default tseslint.config(
       '@typescript-eslint/unbound-method': 'warn',
       'simple-import-sort/imports': 'error',
       'simple-import-sort/exports': 'error',
+      // `crypto.randomUUID` is secure-context-only. This renderer always has
+      // one, so the rule guards nothing here directly — but `frontend/` and
+      // `middleware/shared/` are byte-identical with openplc-web, which
+      // autonomy-node serves over plain HTTP where the global is absent and
+      // the call throws. Without the rule on both sides, a call added here
+      // ships a silent failure there.
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'crypto',
+          property: 'randomUUID',
+          message:
+            'crypto.randomUUID does not exist outside a secure context (autonomy-node serves over plain HTTP). Use newUuid() from frontend/utils/new-uuid.ts, or let the owning store mint the id.',
+        },
+      ],
     },
   },
   eslintConfigPrettier,
