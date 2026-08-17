@@ -39,6 +39,16 @@ typedef enum {
  */
 void license_gate_init(const uint8_t *blob, size_t blob_len, uint32_t now_ms);
 lic_gate_state_t license_gate_state(uint32_t now_ms);
+
+/*
+ * Enforcement before init is NOT a free pass (EDGE-595): the first enforcement
+ * call (this or license_gate_outputs_permitted) arms the same demo window an
+ * unlicensed init would, counting LIC_GATE_DEMO_MS from that call. A firmware
+ * that never calls license_gate_init() therefore degrades to demo instead of
+ * actuating forever. A later init with a VALID blob still reaches FULL; an
+ * invalid one keeps the already-running window (no restart). Reporting via
+ * license_gate_state() never arms the window.
+ */
 int license_gate_actuation_allowed(uint32_t now_ms);
 
 /*
@@ -54,8 +64,9 @@ int license_gate_actuation_allowed(uint32_t now_ms);
  * monotonic clock inside the closed artifact instead.
  *
  * Returns 1 when actuation is allowed (FULL, or a demo window still running) and
- * 0 once the demo has expired. Fail-open before init, like
- * license_gate_actuation_allowed: the firmware always inits in setup.
+ * 0 once the demo has expired. Before init it arms the lazy demo window on the
+ * platform clock, like license_gate_actuation_allowed (EDGE-595): a missing
+ * init is a missing licence, not a licence.
  */
 int license_gate_outputs_permitted(void);
 
