@@ -1,212 +1,11 @@
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
+import type { ModbusBufferMapping } from '@root/middleware/shared/ports/types'
 import { useMemo, useState } from 'react'
 
 import { cn } from '../../../../../../utils/cn'
-
-// ---------------------------------------------------------------------------
-// Types (self-contained — modbus utils not yet migrated)
-// ---------------------------------------------------------------------------
-
-interface ModbusSlaveBufferMapping {
-  holdingRegisters: {
-    qwCount: number
-    mwCount: number
-    mdCount: number
-    mlCount: number
-  }
-  coils: {
-    qxBits: number
-    mxBits: number
-  }
-  discreteInputs: {
-    ixBits: number
-  }
-  inputRegisters: {
-    iwCount: number
-  }
-}
-
-interface AddressMappingRow {
-  segment: string
-  plcAddressStart: string
-  plcAddressEnd: string
-  modbusStart: number
-  modbusEnd: number
-  count: number
-  modbusCount: number
-  regsPerValue?: number
-  disabled: boolean
-}
-
-interface AddressMappingSection {
-  title: string
-  functionCodes: string
-  totalAddresses: number
-  rows: AddressMappingRow[]
-}
-
-interface ModbusAddressMapping {
-  holdingRegisters: AddressMappingSection
-  coils: AddressMappingSection
-  discreteInputs: AddressMappingSection
-  inputRegisters: AddressMappingSection
-}
-
-// ---------------------------------------------------------------------------
-// Address mapping calculation
-// ---------------------------------------------------------------------------
-
-function formatBitAddress(prefix: string, bitIndex: number): string {
-  const byteIndex = Math.floor(bitIndex / 8)
-  const bit = bitIndex % 8
-  return `${prefix}${byteIndex}.${bit}`
-}
-
-function calculateModbusAddressMapping(bufferMapping: ModbusSlaveBufferMapping): ModbusAddressMapping {
-  const { holdingRegisters, coils, discreteInputs, inputRegisters } = bufferMapping
-
-  const qwStart = 0
-  const qwEnd = holdingRegisters.qwCount > 0 ? holdingRegisters.qwCount - 1 : -1
-
-  const mwStart = holdingRegisters.qwCount
-  const mwEnd = holdingRegisters.mwCount > 0 ? mwStart + holdingRegisters.mwCount - 1 : mwStart - 1
-
-  const mdStart = mwStart + holdingRegisters.mwCount
-  const mdModbusCount = holdingRegisters.mdCount * 2
-  const mdEnd = holdingRegisters.mdCount > 0 ? mdStart + mdModbusCount - 1 : mdStart - 1
-
-  const mlStart = mdStart + mdModbusCount
-  const mlModbusCount = holdingRegisters.mlCount * 4
-  const mlEnd = holdingRegisters.mlCount > 0 ? mlStart + mlModbusCount - 1 : mlStart - 1
-
-  const totalHoldingRegisters = holdingRegisters.qwCount + holdingRegisters.mwCount + mdModbusCount + mlModbusCount
-
-  const qxStart = 0
-  const qxEnd = coils.qxBits > 0 ? coils.qxBits - 1 : -1
-
-  const mxStart = coils.qxBits
-  const mxEnd = coils.mxBits > 0 ? mxStart + coils.mxBits - 1 : mxStart - 1
-
-  const totalCoils = coils.qxBits + coils.mxBits
-
-  return {
-    holdingRegisters: {
-      title: 'Holding Registers',
-      functionCodes: 'FC 3/6/16',
-      totalAddresses: totalHoldingRegisters,
-      rows: [
-        {
-          segment: '%QW',
-          plcAddressStart: '%QW0',
-          plcAddressEnd: `%QW${Math.max(0, holdingRegisters.qwCount - 1)}`,
-          modbusStart: qwStart,
-          modbusEnd: Math.max(0, qwEnd),
-          count: holdingRegisters.qwCount,
-          modbusCount: holdingRegisters.qwCount,
-          disabled: holdingRegisters.qwCount === 0,
-        },
-        {
-          segment: '%MW',
-          plcAddressStart: '%MW0',
-          plcAddressEnd: `%MW${Math.max(0, holdingRegisters.mwCount - 1)}`,
-          modbusStart: mwStart,
-          modbusEnd: Math.max(mwStart, mwEnd),
-          count: holdingRegisters.mwCount,
-          modbusCount: holdingRegisters.mwCount,
-          disabled: holdingRegisters.mwCount === 0,
-        },
-        {
-          segment: '%MD',
-          plcAddressStart: '%MD0',
-          plcAddressEnd: `%MD${Math.max(0, holdingRegisters.mdCount - 1)}`,
-          modbusStart: mdStart,
-          modbusEnd: Math.max(mdStart, mdEnd),
-          count: holdingRegisters.mdCount,
-          modbusCount: mdModbusCount,
-          regsPerValue: 2,
-          disabled: holdingRegisters.mdCount === 0,
-        },
-        {
-          segment: '%ML',
-          plcAddressStart: '%ML0',
-          plcAddressEnd: `%ML${Math.max(0, holdingRegisters.mlCount - 1)}`,
-          modbusStart: mlStart,
-          modbusEnd: Math.max(mlStart, mlEnd),
-          count: holdingRegisters.mlCount,
-          modbusCount: mlModbusCount,
-          regsPerValue: 4,
-          disabled: holdingRegisters.mlCount === 0,
-        },
-      ],
-    },
-    coils: {
-      title: 'Coils',
-      functionCodes: 'FC 1/5/15',
-      totalAddresses: totalCoils,
-      rows: [
-        {
-          segment: '%QX',
-          plcAddressStart: '%QX0.0',
-          plcAddressEnd: formatBitAddress('%QX', Math.max(0, coils.qxBits - 1)),
-          modbusStart: qxStart,
-          modbusEnd: Math.max(0, qxEnd),
-          count: coils.qxBits,
-          modbusCount: coils.qxBits,
-          disabled: coils.qxBits === 0,
-        },
-        {
-          segment: '%MX',
-          plcAddressStart: '%MX0.0',
-          plcAddressEnd: formatBitAddress('%MX', Math.max(0, coils.mxBits - 1)),
-          modbusStart: mxStart,
-          modbusEnd: Math.max(mxStart, mxEnd),
-          count: coils.mxBits,
-          modbusCount: coils.mxBits,
-          disabled: coils.mxBits === 0,
-        },
-      ],
-    },
-    discreteInputs: {
-      title: 'Discrete Inputs',
-      functionCodes: 'FC 2',
-      totalAddresses: discreteInputs.ixBits,
-      rows: [
-        {
-          segment: '%IX',
-          plcAddressStart: '%IX0.0',
-          plcAddressEnd: formatBitAddress('%IX', Math.max(0, discreteInputs.ixBits - 1)),
-          modbusStart: 0,
-          modbusEnd: Math.max(0, discreteInputs.ixBits - 1),
-          count: discreteInputs.ixBits,
-          modbusCount: discreteInputs.ixBits,
-          disabled: discreteInputs.ixBits === 0,
-        },
-      ],
-    },
-    inputRegisters: {
-      title: 'Input Registers',
-      functionCodes: 'FC 4',
-      totalAddresses: inputRegisters.iwCount,
-      rows: [
-        {
-          segment: '%IW',
-          plcAddressStart: '%IW0',
-          plcAddressEnd: `%IW${Math.max(0, inputRegisters.iwCount - 1)}`,
-          modbusStart: 0,
-          modbusEnd: Math.max(0, inputRegisters.iwCount - 1),
-          count: inputRegisters.iwCount,
-          modbusCount: inputRegisters.iwCount,
-          disabled: inputRegisters.iwCount === 0,
-        },
-      ],
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Components
-// ---------------------------------------------------------------------------
+import type { AddressMappingRow, AddressMappingSection } from '../../../../../../utils/modbus/address-mapping'
+import { calculateModbusAddressMapping } from '../../../../../../utils/modbus/address-mapping'
 
 interface MappingTableProps {
   section: AddressMappingSection
@@ -283,7 +82,7 @@ const MappingTable = ({ section, isRegisterType }: MappingTableProps) => {
 }
 
 interface AddressMappingReferenceProps {
-  bufferMapping: ModbusSlaveBufferMapping
+  bufferMapping?: ModbusBufferMapping
   defaultExpanded?: boolean
 }
 
@@ -326,4 +125,3 @@ const AddressMappingReference = ({ bufferMapping, defaultExpanded = false }: Add
 }
 
 export { AddressMappingReference }
-export type { AddressMappingRow, AddressMappingSection, ModbusSlaveBufferMapping }

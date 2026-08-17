@@ -9,6 +9,7 @@ import { DEFAULT_BUFFER_MAPPING } from '../../../../../../utils/modbus/generate-
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { AddressMappingReference } from './address-mapping-reference'
 
 const DEFAULT_NETWORK_INTERFACE_OPTIONS = [
   { value: '0.0.0.0', label: 'All Interfaces (0.0.0.0)' },
@@ -498,6 +499,11 @@ const ModbusServerEditor = () => {
             </AccordionItem>
           </AccordionPrimitive.Root>
         </div>
+
+        {/* Which Modbus address each IEC segment answers on, recomputed from
+         *  the buffer sizes above. The counts commit on blur, so this follows
+         *  the saved configuration — the one the runtime will actually get. */}
+        <AddressMappingReference bufferMapping={bufferMapping} />
       </div>
     </div>
   )
