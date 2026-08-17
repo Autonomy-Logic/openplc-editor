@@ -45,6 +45,7 @@ import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
+import { clampIOGroupLength } from '../../../utils/modbus/io-group'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
@@ -1913,8 +1914,12 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (!device?.modbusTcpConfig) return
 
           const pending = new Set<string>()
-          const ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending)
-          device.modbusTcpConfig.ioGroups.push({ ...group, ioPoints })
+          // The UI validates and blocks; the store GUARANTEES the invariant,
+          // because a zero-point group emits a malformed runtime config
+          // (`len` is shipped verbatim by generate-modbus-master-config).
+          const length = clampIOGroupLength(group.functionCode, group.length)
+          const ioPoints = generateIOPoints(group.functionCode, length, group.name, pool, pending)
+          device.modbusTcpConfig.ioGroups.push({ ...group, length, ioPoints })
         }),
       )
       // Central recalculation is the authority for final addresses: it
@@ -1945,6 +1950,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (!group) return
           const existingPoints = group.ioPoints ?? []
           Object.assign(group, updates)
+          // Normalize the PERSISTED field, not just the point count: `length`
+          // is what reaches the runtime as `len`. Two wins fall out — switching
+          // a group to FC 5/6 forces 1 even if the caller forgets, and a bad
+          // length loaded from an old project file self-heals on first edit.
+          group.length = clampIOGroupLength(group.functionCode, group.length)
           const pending = new Set<string>()
           group.ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending, existingPoints)
         }),
