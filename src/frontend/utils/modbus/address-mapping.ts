@@ -28,8 +28,34 @@
 import type { ModbusBufferMapping } from '../../../middleware/shared/ports/types'
 import { DEFAULT_BUFFER_MAPPING } from './generate-modbus-slave-config'
 
+/** One IEC value inside a segment: where it answers and how wide it is. */
+interface AddressMappingEntry {
+  plcAddress: string
+  offset: number
+  bits: number
+}
+
+interface ModiconRange {
+  start: string
+  end: string
+}
+
+/** What `listSegmentEntries` left out, or `null` when it listed everything. */
+interface OmittedEntries {
+  count: number
+  fromOffset: number
+  toOffset: number
+}
+
+interface SegmentEntries {
+  entries: AddressMappingEntry[]
+  omitted: OmittedEntries | null
+}
+
 interface AddressMappingRow {
   segment: string
+  /** Addressable unit of the block this row lives in — drives entry width. */
+  unit: 'bit' | 'register'
   plcAddressStart: string
   plcAddressEnd: string
   modbusStart: number
@@ -43,6 +69,8 @@ interface AddressMappingRow {
 interface AddressMappingSection {
   title: string
   totalAddresses: number
+  /** `null` when the block holds nothing — there is no range to name. */
+  modiconRange: ModiconRange | null
   rows: AddressMappingRow[]
 }
 
@@ -61,6 +89,71 @@ function formatBitAddress(prefix: string, bitIndex: number): string {
   const byteIndex = Math.floor(bitIndex / 8)
   const bit = bitIndex % 8
   return `${prefix}${byteIndex}.${bit}`
+}
+
+/**
+ * The 5-digit Modicon convention datasheets and SCADA tools print: a block
+ * digit followed by the **1-based** address, so holding register offset 0 is
+ * `400001`. It names the same register the `offset` column does, one base
+ * apart — which is the single most common source of off-by-one in Modbus
+ * integration, and the reason both are on screen at once.
+ */
+function formatModiconAddress(blockDigit: string, offset: number): string {
+  return `${blockDigit}${String(offset + 1).padStart(5, '0')}`
+}
+
+function buildModiconRange(blockDigit: string, totalAddresses: number): ModiconRange | null {
+  if (totalAddresses === 0) return null
+  return {
+    start: formatModiconAddress(blockDigit, 0),
+    end: formatModiconAddress(blockDigit, totalAddresses - 1),
+  }
+}
+
+/**
+ * How many entries `listSegmentEntries` will list before it stops counting.
+ *
+ * A default configuration is far larger than anyone reads: `%QX` alone is 8192
+ * bits, and putting one row per bit in the DOM costs more than it informs.
+ */
+const MAX_LISTED_ENTRIES = 256
+
+/**
+ * Expand one segment into its individual IEC values — the address, the Modbus
+ * offset it answers on, and its width.
+ *
+ * A `%MD` value spans two registers and a `%ML` four, so consecutive values do
+ * not sit on consecutive offsets; that stride is the whole reason this list is
+ * worth showing rather than leaving the reader to compute it.
+ *
+ * Truncated at `limit`, and what was dropped comes back in `omitted` so the
+ * caller can say so instead of quietly showing a partial list.
+ */
+function listSegmentEntries(row: AddressMappingRow, limit: number = MAX_LISTED_ENTRIES): SegmentEntries {
+  if (row.disabled) return { entries: [], omitted: null }
+
+  const isBit = row.unit === 'bit'
+  const stride = isBit ? 1 : (row.regsPerValue ?? 1)
+  const bits = isBit ? 1 : stride * 16
+
+  const listed = Math.min(row.count, limit)
+  const entries: AddressMappingEntry[] = []
+  for (let index = 0; index < listed; index++) {
+    entries.push({
+      plcAddress: isBit ? formatBitAddress(row.segment, index) : `${row.segment}${index}`,
+      offset: row.modbusStart + index * stride,
+      bits,
+    })
+  }
+
+  const omittedCount = row.count - listed
+  return {
+    entries,
+    omitted:
+      omittedCount > 0
+        ? { count: omittedCount, fromOffset: row.modbusStart + listed * stride, toOffset: row.modbusEnd }
+        : null,
+  }
 }
 
 /**
@@ -135,9 +228,11 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     holdingRegisters: {
       title: 'Holding Registers',
       totalAddresses: totalHoldingRegisters,
+      modiconRange: buildModiconRange('4', totalHoldingRegisters),
       rows: [
         {
           segment: '%QW',
+          unit: 'register',
           plcAddressStart: '%QW0',
           plcAddressEnd: `%QW${Math.max(0, holdingRegisters.qwCount - 1)}`,
           modbusStart: qwStart,
@@ -148,6 +243,7 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
         },
         {
           segment: '%MW',
+          unit: 'register',
           plcAddressStart: '%MW0',
           plcAddressEnd: `%MW${Math.max(0, holdingRegisters.mwCount - 1)}`,
           modbusStart: mwStart,
@@ -158,6 +254,7 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
         },
         {
           segment: '%MD',
+          unit: 'register',
           plcAddressStart: '%MD0',
           plcAddressEnd: `%MD${Math.max(0, holdingRegisters.mdCount - 1)}`,
           modbusStart: mdStart,
@@ -169,6 +266,7 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
         },
         {
           segment: '%ML',
+          unit: 'register',
           plcAddressStart: '%ML0',
           plcAddressEnd: `%ML${Math.max(0, holdingRegisters.mlCount - 1)}`,
           modbusStart: mlStart,
@@ -183,9 +281,11 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     coils: {
       title: 'Coils',
       totalAddresses: totalCoils,
+      modiconRange: buildModiconRange('0', totalCoils),
       rows: [
         {
           segment: '%QX',
+          unit: 'bit',
           plcAddressStart: '%QX0.0',
           plcAddressEnd: formatBitAddress('%QX', Math.max(0, coils.qxBits - 1)),
           modbusStart: qxStart,
@@ -196,6 +296,7 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
         },
         {
           segment: '%MX',
+          unit: 'bit',
           plcAddressStart: '%MX0.0',
           plcAddressEnd: formatBitAddress('%MX', Math.max(0, coils.mxBits - 1)),
           modbusStart: mxStart,
@@ -209,9 +310,11 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     discreteInputs: {
       title: 'Discrete Inputs',
       totalAddresses: discreteInputs.ixBits,
+      modiconRange: buildModiconRange('1', discreteInputs.ixBits),
       rows: [
         {
           segment: '%IX',
+          unit: 'bit',
           plcAddressStart: '%IX0.0',
           plcAddressEnd: formatBitAddress('%IX', Math.max(0, discreteInputs.ixBits - 1)),
           modbusStart: 0,
@@ -225,9 +328,11 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
     inputRegisters: {
       title: 'Input Registers',
       totalAddresses: inputRegisters.iwCount,
+      modiconRange: buildModiconRange('3', inputRegisters.iwCount),
       rows: [
         {
           segment: '%IW',
+          unit: 'register',
           plcAddressStart: '%IW0',
           plcAddressEnd: `%IW${Math.max(0, inputRegisters.iwCount - 1)}`,
           modbusStart: 0,
@@ -241,5 +346,12 @@ function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): Mod
   }
 }
 
-export { calculateModbusAddressMapping, formatBitAddress }
-export type { AddressMappingRow, AddressMappingSection, ModbusAddressMapping }
+export { calculateModbusAddressMapping, formatBitAddress, formatModiconAddress, listSegmentEntries, MAX_LISTED_ENTRIES }
+export type {
+  AddressMappingEntry,
+  AddressMappingRow,
+  AddressMappingSection,
+  ModbusAddressMapping,
+  ModiconRange,
+  SegmentEntries,
+}
