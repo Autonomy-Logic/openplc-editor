@@ -10,6 +10,7 @@ export type TabsProps = {
     | { type: 'function'; language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp' }
     | { type: 'function-block'; language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp' }
     | { type: 'data-type'; derivation: 'enumerated' | 'structure' | 'array' }
+    | { type: 'global-variable-list' }
     | { type: 'resource' }
     | { type: 'device'; derivation: 'configuration' | 'pin-mapping' | 'orchestrators' }
     | { type: 'server'; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }

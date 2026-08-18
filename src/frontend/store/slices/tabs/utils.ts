@@ -153,6 +153,20 @@ const CreateDiffViewerEditor = (name: string, filePath: string): EditorModel => 
   meta: { name, filePath },
 })
 
+/**
+ * A Global Variable List opens on its declaration, the only view it has — which is
+ * also how CODESYS presents one.
+ *
+ * `display: 'code'` is what makes `structure.code` the list's draft buffer, so a save
+ * landing mid-edit can fold it in (`reconcileGlobalVariableListText`). Opening on
+ * `'table'` would leave that buffer permanently undefined and the reconcile a no-op.
+ */
+const CreateGlobalVariableListEditor = (name: string): EditorModel => ({
+  type: 'plc-global-variable-list',
+  meta: { name },
+  structure: { display: 'code' },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -164,6 +178,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEditorModelObject(name, elementType.language, 'function-block')
     case 'data-type':
       return CreateEditorModelObject(name, null, null, elementType.derivation)
+    case 'global-variable-list':
+      return CreateGlobalVariableListEditor(name)
     case 'resource':
       return CreateResourceEditor(name)
     case 'device':
@@ -195,6 +211,7 @@ export {
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
+  CreateGlobalVariableListEditor,
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
   CreatePackageManagerEditor,

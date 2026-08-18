@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
@@ -9,14 +10,17 @@ import { generateIecVariablesToString } from '../../../utils/generate-iec-variab
 import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
+import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
-import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
 import type { TabsProps } from '../tabs'
 import {
   CreateEditorObjectFromTab,
+  CreateGlobalVariableListEditor,
   CreateRemoteDeviceEditor,
   CreateServerEditor,
   LIBRARY_MANIFEST_TAB_NAME,
@@ -109,16 +113,20 @@ function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string):
  *      so a stale buffer would resurrect the old type name on save.
  *   3. Regenerate the `.dt` code buffers of affected data types — committing
  *      a stale buffer (commitCode → updateDatatype) would do the same.
+ *   4. Regenerate the code buffer of any affected Global Variable List, which
+ *      is only ever edited as text and so is nothing but a buffer.
  */
 function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeReferenceImpactAnalysis): void {
   const dirtyFiles = new Set<string>()
   const affectedPous = new Set<string>()
   const affectedDatatypes = new Set<string>()
+  const affectedLists = new Set<string>()
   for (const ref of impact.references) {
     // Global variables persist through the Resource entry in the file slice.
     dirtyFiles.add(ref.kind === 'global-variable' ? 'Resource' : ref.container)
     if (ref.kind === 'pou-variable') affectedPous.add(ref.container)
     if (ref.kind === 'data-type-field' || ref.kind === 'data-type-base-type') affectedDatatypes.add(ref.container)
+    if (ref.kind === 'global-variable-list-member') affectedLists.add(ref.container)
   }
   for (const name of dirtyFiles) {
     state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
@@ -127,6 +135,10 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   // No-op for types whose code view isn't active.
   for (const datatypeName of affectedDatatypes) {
     state.projectActions.regenerateDatatypeText(datatypeName)
+  }
+
+  for (const listName of affectedLists) {
+    state.projectActions.regenerateGlobalVariableListText(listName)
   }
 
   for (const pouName of affectedPous) {
@@ -141,6 +153,123 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
       code: generateIecVariablesToString(pou.interface?.variables ?? []),
     })
   }
+}
+
+/**
+ * Why a Global Variable List may not be called `name`, or `null` when it may.
+ *
+ * A list occupies TWO symbols, not one: the instance keeps the user's name, and the
+ * struct backing it takes `<name>_TYPE`. Both land in the same global namespace as
+ * every POU and data type — IEC gives types and variables one namespace — so a list
+ * called after a POU, or one whose derived type name is already a data type, is a
+ * duplicate symbol the compiler reports against a name the user never typed. Checking
+ * only against other lists covered one half of a rule with two.
+ *
+ * `ignoring` is the list being renamed: a rename onto its own name, or a case-only
+ * change, must not collide with itself.
+ */
+function globalVariableListNameCollision(state: SharedRootState, name: string, ignoring?: string): string | null {
+  if (ignoring !== undefined && nameMatches(name, ignoring)) return null
+
+  const derived = globalVariableListTypeName(name)
+  const lists = state.project.data.globalVariableLists ?? []
+
+  if (lists.some((list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(list.name, name))) {
+    return 'Global variable list name already exists'
+  }
+  if (state.project.data.pous.some((pou) => nameMatches(pou.name, name))) {
+    return `"${name}" is already the name of a POU`
+  }
+  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
+    return `"${name}" is already the name of a data type`
+  }
+  // A `.dt` that failed to parse still owns its `files[name]` entry — the registry is
+  // keyed by raw name across every kind — so a list taking the same name would share
+  // that entry and misroute its save. `datatypeActions` gates on this for the same
+  // reason; the check belongs here too.
+  const unparsedCollision = collidesWithUnparsedDataTypeFile(state, name)
+  if (!unparsedCollision.ok) return unparsedCollision.message ?? `"${name}" is already taken by a data type file`
+  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a data type already uses`
+  }
+  if (state.project.data.pous.some((pou) => nameMatches(pou.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a POU already uses`
+  }
+  if (
+    lists.some(
+      (list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(globalVariableListTypeName(list.name), derived),
+    )
+  ) {
+    return `"${name}" needs the type name "${derived}", which another global variable list already uses`
+  }
+  return null
+}
+
+/**
+ * Give a duplicated remote device its own identity.
+ *
+ * A remote device is an IEC address producer, so a plain copy is not a duplicate — it is
+ * a second claim on everything the original already owns:
+ *
+ *   - `id` on every Modbus IO group / point and every EtherCAT slave is what the editors,
+ *     the file registry and `ethercatDeviceActions` key on. Two devices sharing one would
+ *     have edits to the copy land on the original.
+ *   - `alias` is intended to be unique system-wide, and the registry reports a repeat as
+ *     a duplicate (first wins). The copy starts unaliased, so the user names what they
+ *     actually intend to bind.
+ *   - `iecLocation` is editor-allocated from the address pool. Clearing it lets the next
+ *     recalculation hand the copy its own addresses instead of double-booking the
+ *     original's.
+ *
+ * Everything else — host, port, cycle times, PDO layouts, SDO startup parameters, CiA 402
+ * axis config — is what the user duplicated the device for, and is copied verbatim.
+ */
+function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames: Set<string>): PLCRemoteDevice {
+  const next: PLCRemoteDevice = { ...device }
+
+  if (next.modbusTcpConfig) {
+    next.modbusTcpConfig = {
+      ...next.modbusTcpConfig,
+      ioGroups: (next.modbusTcpConfig.ioGroups ?? []).map((group) => ({
+        ...group,
+        id: crypto.randomUUID(),
+        ioPoints: (group.ioPoints ?? []).map((point) => ({
+          ...point,
+          id: crypto.randomUUID(),
+          iecLocation: '',
+          alias: undefined,
+        })),
+      })),
+    }
+  }
+
+  if (next.ethercatConfig) {
+    // A slave's NAME is its key in tabs, editor models and the file registry — not its
+    // id — so two slaves sharing one means the second silently takes over the first's
+    // entries. `generateUniqueSlaveName` is the same `_01`, `_02`… strategy the add
+    // path uses; `taken` grows as we go so the copies do not collide with each other
+    // either.
+    const taken = new Set(takenSlaveNames)
+    next.ethercatConfig = {
+      ...next.ethercatConfig,
+      devices: (next.ethercatConfig.devices ?? []).map((slave) => {
+        const name = generateUniqueSlaveName(slave.name, taken)
+        taken.add(name)
+        return {
+          ...slave,
+          id: crypto.randomUUID(),
+          name,
+          channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
+            ...mapping,
+            iecLocation: '',
+            alias: undefined,
+          })),
+        }
+      }),
+    }
+  }
+
+  return next
 }
 
 function renameElement(
@@ -319,6 +448,153 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
   },
 
+  globalVariableListActions: {
+    /**
+     * Create a list and open it, which is what every other element on the + button does —
+     * the user's next action is always to fill it in.
+     */
+    create: (name) => {
+      const state = getState()
+      // Collision before validation, matching `datatypeActions` above: the more
+      // specific message is the more useful one when a name fails both.
+      const collision = globalVariableListNameCollision(state, name)
+      if (collision) return { ok: false, message: collision }
+
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
+
+      const result = state.projectActions.createGlobalVariableList(name)
+      /* istanbul ignore next -- defensive: the collision gate above already ran */
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateGlobalVariableListEditor(name)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name, type: 'global-variable-list', filePath: name, isNew: true })
+      state.tabsActions.updateTabs({ name, elementType: { type: 'global-variable-list' } })
+      state.tabsActions.setSelectedTab(name)
+      state.editorActions.setEditor(editorModel)
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+
+      return { ok: true }
+    },
+
+    deleteRequest: (name) => {
+      getState().modalActions.openModal('confirm-delete-element', {
+        name,
+        elementType: 'global-variable-list',
+      })
+    },
+
+    delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteGlobalVariableList(n)),
+
+    /**
+     * Rename the list AND every `<oldName>.member` that qualifies against it.
+     *
+     * Renaming the list alone used to leave each reference pointing at a name that no
+     * longer existed, with nothing said at rename time: the `VAR_EXTERNAL` is only
+     * emitted for lists a POU actually mentions, so the reference just stopped
+     * resolving and the failure landed much later, in the compiler.
+     */
+    rename: (oldName, newName) => {
+      const state = getState()
+      const collision = globalVariableListNameCollision(state, newName, oldName)
+      if (collision) return { ok: false, message: collision }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      // Fold the code view's pending buffer in first, exactly as the data type rename
+      // does — otherwise the regenerate at the end writes the pre-edit declaration
+      // back over whatever the user had just typed.
+      const reconcile = state.projectActions.reconcileGlobalVariableListText(oldName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      if (newName !== oldName) {
+        // Land any debounced graphical write-back BEFORE the scan. A pending one
+        // means `pou.body.value` is momentarily stale, so the rewrite would miss
+        // references the user has already drawn — and the timer would then fire
+        // over the rewritten body with the pre-rename flow.
+        //
+        // A write-back that FAILS validation leaves the body stale for good, so the
+        // scan and the re-seed would both run on pre-edit content and the re-seed
+        // would overwrite the newer flow. Refuse, as undo and redo already do,
+        // rather than rename against a body that is known to be wrong.
+        const staleFlows = flushFlowWriteBacks(getState)
+        if (staleFlows.length > 0) {
+          return {
+            ok: false,
+            message: `The graphical body of ${staleFlows.join(', ')} is invalid, so references to "${oldName}" could not be rewritten. Fix it and rename again.`,
+          }
+        }
+
+        const fresh = getState()
+        const impact = findGlobalVariableListReferences(oldName, fresh.project.data.pous)
+        if (impact.totalReferences > 0) {
+          fresh.projectActions.propagateGlobalVariableListRename(oldName, newName)
+
+          for (const pouName of impact.byPou.keys()) {
+            // Dirty, or the propagated body never reaches disk.
+            getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
+
+            // Re-seed the live flow from the rewritten body. The graphical editors
+            // read the flow slice, not `pou.body.value`, so without this the old
+            // name stays on screen and the next write-back copies it back over the
+            // rename — undoing it silently.
+            const pou = getState().project.data.pous.find((p) => p.name === pouName)
+            if (pou?.body.language === 'ld') {
+              const flow = structuredClone(pou.body.value) as LadderFlowType
+              getState().ladderFlowActions.addLadderFlow({ ...flow, name: pouName })
+            }
+            if (pou?.body.language === 'fbd') {
+              const flow = structuredClone(pou.body.value) as FBDFlowType
+              getState().fbdFlowActions.addFBDFlow({ ...flow, name: pouName })
+            }
+          }
+        }
+      }
+
+      const result = renameElement(state, oldName, newName, (o, n) => {
+        state.projectActions.updateGlobalVariableListName(o, n)
+      })
+      // Only now are the list and its model both keyed by newName.
+      if (result.ok) getState().projectActions.regenerateGlobalVariableListText(newName)
+      return result
+    },
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, sourceName))
+      if (!source) return { ok: false, message: 'Global variable list not found' }
+
+      const collision = globalVariableListNameCollision(state, newName)
+      if (collision) return { ok: false, message: collision }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      // Fold any pending code-view buffer in first, or the copy is taken from the
+      // declaration as it stood before the user's last edits.
+      const reconcile = state.projectActions.reconcileGlobalVariableListText(sourceName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      // One action that clones the whole record, rather than create-then-patch each
+      // field. Copying field by field is how `documentation` and a preserved,
+      // unparsed `text` got dropped — the same omission this PR already fixed once
+      // in `reconcileGlobalVariableListText`. A list carries no ids or addresses, so
+      // a clone under a new name is the entire duplicate.
+      const created = getState().projectActions.duplicateGlobalVariableList(sourceName, newName)
+      /* istanbul ignore next -- defensive: the collision gate above already ran */
+      if (!created.ok) return { ok: false, message: created.message }
+
+      const editorModel = CreateGlobalVariableListEditor(newName)
+      getState().editorActions.addModel(editorModel)
+      getState().fileActions.addFile({ name: newName, type: 'global-variable-list', filePath: newName, isNew: true })
+      getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
+  },
+
   datatypeActions: {
     create: ({ name, derivation }) => {
       const state = getState()
@@ -390,6 +666,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           freshState.project.data.pous,
           freshState.project.data.configurations.resource.globalVariables,
           freshState.project.data.dataTypes,
+          freshState.project.data.globalVariableLists ?? [],
         )
         if (impact.totalReferences > 0) {
           // Overwriting a pending request would drop its resolver and strand
@@ -489,6 +766,35 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateServerName(o, n)),
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.servers ?? []).find((s) => s.name === sourceName)
+      if (!source) return { ok: false, message: 'Server not found' }
+
+      if ((state.project.data.servers ?? []).some((s) => nameMatches(s.name, newName))) {
+        return { ok: false, message: 'Server name already exists' }
+      }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      // Deep-cloned: the protocol config is nested, and a shallow copy would leave the
+      // two servers sharing it, so editing one would silently edit the other.
+      const copy = { ...structuredClone(source), name: newName }
+      const result = state.projectActions.createServer({ data: copy })
+      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateServerEditor(newName, source.protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name: newName, type: 'server', filePath: newName, isNew: true })
+
+      // Persist only on save, exactly as the data type duplicate does.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
   },
 
   remoteDeviceActions: {
@@ -541,6 +847,39 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.remoteDevices ?? []).find((d) => d.name === sourceName)
+      if (!source) return { ok: false, message: 'Remote device not found' }
+
+      if ((state.project.data.remoteDevices ?? []).some((d) => nameMatches(d.name, newName))) {
+        return { ok: false, message: 'Remote device name already exists' }
+      }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      const copy = {
+        ...duplicateRemoteDeviceIdentity(
+          structuredClone(source),
+          collectAllSlaveNames(state.project.data.remoteDevices),
+        ),
+        name: newName,
+      }
+      const result = state.projectActions.createRemoteDevice({ data: copy })
+      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateRemoteDeviceEditor(newName, source.protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name: newName, type: 'remote-device', filePath: newName, isNew: true })
+
+      // Persist only on save, exactly as the data type duplicate does.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
   },
 
   ethercatDeviceActions: {
@@ -764,11 +1103,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
         const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
         if (!name) return []
-        // The file registry is keyed by raw name across both kinds: a
-        // colliding file would retype the real element and misroute its save.
-        const taken = [...data.projectData.pous, ...data.projectData.dataTypes].some(
-          (element) => element.name.toLowerCase() === name.toLowerCase(),
-        )
+        // The file registry is keyed by raw name across every kind: a colliding
+        // file would retype the real element and misroute its save. Global
+        // variable lists are registered there too, so they exclude a name as
+        // much as a POU or a data type does.
+        const taken = [
+          ...data.projectData.pous,
+          ...data.projectData.dataTypes,
+          ...(data.projectData.globalVariableLists ?? []),
+        ].some((element) => element.name.toLowerCase() === name.toLowerCase())
         if (taken) return []
         return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
       })
@@ -1032,6 +1375,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       unparsedDataTypes.forEach(({ name }) => {
         files[name] = { type: 'data-type', filePath: name, saved: true }
       })
+      // A loaded list needs its entry like anything else in the tree: dirty
+      // tracking, the close-project check and the single-file save all read this
+      // registry, so a list missing from it can be edited and never look unsaved.
+      ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
+        files[list.name] = { type: 'global-variable-list', filePath: list.name, saved: true }
+      })
       const servers = data.projectData.servers
       if (servers) {
         servers.forEach((s) => {
@@ -1131,6 +1480,21 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             code: pouWithText.variablesText,
           })
         }
+      })
+
+      // Same for a Global Variable List whose declaration did not parse when it was
+      // last saved: open its tab on the preserved text, so the user lands on the thing
+      // that needs fixing rather than on a re-serialisation of the members that
+      // happened to parse before they broke it.
+      ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
+        if (list.text === undefined) return
+        getState().tabsActions.updateTabs({
+          name: list.name,
+          path: `/data/global-variables/${list.name}`,
+          elementType: { type: 'global-variable-list' },
+        })
+        getState().editorActions.addModel(CreateGlobalVariableListEditor(list.name))
+        getState().editorActions.updateModelStructureForName(list.name, { display: 'code', code: list.text })
       })
 
       // Tab included, and focus stays on the auto-opened POU above.

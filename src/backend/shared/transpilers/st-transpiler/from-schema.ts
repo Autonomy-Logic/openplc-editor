@@ -11,6 +11,11 @@
 
 import type { PLCProjectData as SchemaPLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 
+import {
+  globalVariableListIsReferencedIn,
+  globalVariableListTypeName,
+  referenceSearchText,
+} from '../../../../frontend/utils/PLC/global-variable-list-serializer'
 import type {
   TranspileBody,
   TranspileDataType,
@@ -27,17 +32,94 @@ import type { RFBody, RFEdge, RFNode, RFRung } from './walker/types'
 export type SchemaProjectData = SchemaPLCProjectData
 
 export function fromSchemaShape(data: SchemaPLCProjectData): TranspileProject {
+  // Read straight off the inferred schema type — `globalVariableLists` is a
+  // declared field of `PLCProjectDataSchema`, so a cast here would only hide a
+  // future rename of it. Empty lists are dropped: an empty STRUCT is not a legal
+  // type, so there would be nothing to instantiate.
+  const usableLists = (data.globalVariableLists ?? []).filter((list) => list.variables.length > 0)
+
   return {
-    pous: data.pous.map(projectPou),
-    dataTypes: (data.dataTypes ?? []).map(projectDataType),
+    pous: data.pous.map((pou) => withGlobalListExternals(projectPou(pou), usableLists)),
+    dataTypes: [...(data.dataTypes ?? []).map(projectDataType), ...usableLists.map(globalListStruct)],
     configuration: {
       tasks: (data.configuration?.resource?.tasks ?? []).map(projectTask),
       instances: (data.configuration?.resource?.instances ?? []).map(projectInstance),
-      globalVariables: (data.configuration?.resource?.globalVariables ?? []).map((v) =>
-        projectVariable(v as SchemaVariable),
-      ),
+      globalVariables: [
+        ...(data.configuration?.resource?.globalVariables ?? []).map((v) => projectVariable(v as SchemaVariable)),
+        ...usableLists.map(globalListInstance),
+      ],
     },
   }
+}
+
+/* ───────────────────── global variable lists (GVLs) ─────────────────────── */
+
+/**
+ * A Global Variable List has no IEC equivalent, so it is compiled as the shape STruC++
+ * resolves qualified member access through: a STRUCT type, one global instance of it named
+ * after the list, and a `VAR_EXTERNAL` in each POU that mentions the list. `GVL.Output1`
+ * then type-checks exactly as it did in CODESYS.
+ *
+ * Doing it here — at the schema → IR boundary — means the emitters need no knowledge of
+ * lists at all: they already know how to write a struct, a configuration global and an
+ * external.
+ *
+ * The two rules with no compiler diagnostic behind them — the `_TYPE` suffix and what
+ * counts as a reference — are imported, not restated. They also govern the ST text
+ * serialiser and the web port→IR adapter, and a private copy here would let this
+ * projection drift out of agreement with them silently.
+ */
+type SchemaGlobalVariableList = NonNullable<SchemaPLCProjectData['globalVariableLists']>[number]
+
+/** The struct backing a list. Member ADDRESSES are dropped on purpose: a struct member
+ *  cannot be bound to I/O today — the compiler accepts an `AT` there and silently
+ *  discards it — so emitting one would imply a binding that does not exist. The address
+ *  stays on the project model for the round trip back to CODESYS. */
+function globalListStruct(list: SchemaGlobalVariableList): TranspileDataType {
+  return {
+    name: globalVariableListTypeName(list.name),
+    derivation: 'structure',
+    variable: list.variables.map((variable) => {
+      const projected = projectVariable(variable)
+      // Location deliberately omitted — see the note above.
+      return { name: projected.name, type: projected.type, initialValue: projected.initialValue }
+    }),
+  }
+}
+
+/** The single global instance the user's code qualifies against. */
+function globalListInstance(list: SchemaGlobalVariableList): TranspileVariable {
+  return {
+    name: list.name,
+    type: { definition: 'derived', value: globalVariableListTypeName(list.name) },
+    location: '',
+  }
+}
+
+/**
+ * Declare, in this POU, the lists its body actually references.
+ *
+ * STruC++ reaches a configuration-level global only through a matching `VAR_EXTERNAL`;
+ * without one `GVL.Output1` fails with "Undeclared variable 'GVL'".
+ */
+function withGlobalListExternals(pou: TranspilePou, lists: SchemaGlobalVariableList[]): TranspilePou {
+  // Scan the WHOLE projected POU, not just its body: a ladder or FBD body is a node
+  // graph, and the reference lives in a node's variable name rather than in any text the
+  // body exposes. `referenceSearchText` — not `JSON.stringify` — because JSON escaping
+  // hides every reference that starts a line; see the note on that function.
+  const searchText = referenceSearchText(pou)
+  const referenced = lists.filter((list) => globalVariableListIsReferencedIn(list.name, searchText))
+  if (referenced.length === 0) return pou
+
+  const externals = referenced.map((list): TranspileVariable => {
+    return {
+      name: list.name,
+      class: 'external',
+      type: { definition: 'derived', value: globalVariableListTypeName(list.name) },
+      location: '',
+    }
+  })
+  return { ...pou, interface: { ...pou.interface, variables: [...pou.interface.variables, ...externals] } }
 }
 
 type SchemaPou = SchemaPLCProjectData['pous'][number]

@@ -177,11 +177,15 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
+    // Both writers below accept a Global Variable List as well as a data type: the two
+    // models carry the same `StructureTableType`, and a list's code buffer is the draft
+    // the save path folds in (`reconcileGlobalVariableListText`). Guarding on
+    // `plc-datatype` alone dropped every GVL keystroke on the floor without a word.
     updateModelStructure: (data) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
-          if (editor.type === 'plc-datatype') {
+          if (editor.type === 'plc-datatype' || editor.type === 'plc-global-variable-list') {
             editor.structure = applyStructureView(editor.structure, data)
           }
         }),
@@ -192,7 +196,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         produce((state: EditorState) => {
           const targetEditor =
             state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
-          if (targetEditor?.type !== 'plc-datatype') return
+          if (targetEditor?.type !== 'plc-datatype' && targetEditor?.type !== 'plc-global-variable-list') return
           targetEditor.structure = applyStructureView(targetEditor.structure, data)
         }),
       ),

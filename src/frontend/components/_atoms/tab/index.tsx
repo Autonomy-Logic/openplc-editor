@@ -9,6 +9,7 @@ import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { CppIcon } from '../../../assets/icons/project/Cpp'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../assets/icons/project/FBD'
+import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryIcon } from '../../../assets/icons/project/Library'
@@ -45,6 +46,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   cpp: <CppIcon className='h-4 w-4 flex-shrink-0' />,
   enumerated: <EnumIcon className='h-4 w-4 flex-shrink-0' />,
   structure: <StructureIcon className='h-4 w-4 flex-shrink-0' />,
+  'global-variable-list': <GlobalVariableListIcon className='h-4 w-4 flex-shrink-0' />,
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
   resource: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
   configuration: <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
@@ -79,6 +81,7 @@ const Tab = (props: ITabProps) => {
     | 'array'
     | 'enumerated'
     | 'structure'
+    | 'global-variable-list'
     | 'configuration'
     | 'pin-mapping'
     | 'orchestrators'
@@ -101,6 +104,9 @@ const Tab = (props: ITabProps) => {
     fileDerivation?.type === 'function-block'
   ) {
     languageOrDerivation = fileDerivation?.language
+  }
+  if (fileDerivation?.type === 'global-variable-list') {
+    languageOrDerivation = 'global-variable-list'
   }
   if (fileDerivation?.type === 'resource') {
     languageOrDerivation = 'resource'

@@ -78,6 +78,12 @@ function buildProjectJsonContent(state: StoreState): string {
         // With .dt persistence on, types live in their own files and
         // project.json stops carrying them (same shape as `pous`).
         dataTypes: isDataTypeFilesEnabled() ? [] : project.data.dataTypes,
+        // Global Variable Lists have no file of their own — project.json IS
+        // their persistence, so anything omitted from this object is dropped
+        // from the saved project however well it lives in the store. There is
+        // a regression test pinning a list into this payload; keep it, because
+        // the next field added here will be forgotten the same way.
+        globalVariableLists: project.data.globalVariableLists ?? [],
         pous: [],
         configuration: project.data.configurations,
         libraries,
@@ -291,6 +297,27 @@ function serializeProjectFile(
   return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
 }
 
+/**
+ * Fold every Global Variable List's pending code-view buffer into the project.
+ *
+ * The counterpart of `flushFlowWriteBacks` for the one element whose editor is
+ * nothing but a text buffer. A GVL commits on blur, and Ctrl+S with the caret
+ * still in Monaco fires no blur — so without this the save serializes the
+ * declarations from before the user started typing, silently.
+ *
+ * Never blocks a save. A buffer that does not parse is preserved verbatim on the
+ * list's `text`, exactly as a POU's unparseable variables block is preserved on
+ * `variablesText` and an unreadable `.dt` is echoed back byte-for-byte: the file
+ * still gets written, and the text returns in the code view to be corrected.
+ * Refusing the save is what would lose the user's work.
+ */
+function flushGlobalVariableListDrafts(): void {
+  const state = openPLCStoreBase.getState()
+  for (const list of state.project.data.globalVariableLists ?? []) {
+    state.projectActions.reconcileGlobalVariableListText(list.name)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public file-content builders
 // ---------------------------------------------------------------------------
@@ -304,8 +331,17 @@ function serializeProjectFile(
  * Also used by the version-control changes panel to render the diff preview,
  * so what the user sees there is byte-identical to what the next commit
  * would upload.
+ *
+ * "Pure" here means pure-serialize — no raw fallback — not side-effect-free:
+ * it folds pending Global Variable List buffers in first, for the same reason
+ * the save paths do. Without that the diff preview would disagree with what a
+ * save actually writes, which is the one thing this builder exists to prevent.
  */
 export function buildAllProjectFileContentsPure(): Record<string, string> {
+  // Same reason the save path flushes: this feeds `versionControl.loadedSerialized`
+  // and the diff preview, and a list still sitting in its buffer would show up as
+  // an unexplained difference between what the user sees and what gets committed.
+  flushGlobalVariableListDrafts()
   const state = openPLCStoreBase.getState()
   const result: Record<string, string> = {}
   for (const spec of iterateProjectFiles(state)) {
@@ -360,6 +396,11 @@ export async function executeSaveProject(
   // POU bodies, not the pre-edit ones.  Flows that fail validation keep a
   // stale body, so they must not be reported as saved (DOPE-495).
   const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
+  // Same requirement for the one editor that is only a text buffer: a GVL commits
+  // on blur, and Ctrl+S with the caret still in Monaco never fires one. Unlike a
+  // stale flow this never fails the save — an unparseable declaration is written
+  // out as text and read back into the code view (see the flush).
+  flushGlobalVariableListDrafts()
   const state = openPLCStoreBase.getState()
   // Persist gate.  Every save path — Ctrl+S, File → Save, auto-save after
   // a rename/delete, the AI panel — funnels through here.  When the viewer
@@ -557,6 +598,9 @@ export async function executeSaveFile(
   // See executeSaveProject — same pending write-back flush requirement, scoped
   // to the target so a single-file save doesn't touch unrelated POUs.
   const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
+  // A GVL rides inside project.json, which this path rewrites, so its buffer has
+  // to be folded in here too. Unscoped on purpose: the whole file is rewritten.
+  flushGlobalVariableListDrafts()
   const state = openPLCStoreBase.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {
