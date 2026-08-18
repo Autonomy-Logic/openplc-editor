@@ -48,6 +48,9 @@ import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-sl
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
+import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variable-list-references'
+import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
+import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -55,6 +58,9 @@ import { createVariableValidation, updateVariableValidation } from './validation
 
 const ok = (data?: unknown): ProjectResponse => ({ ok: true, data })
 const fail = (message: string, title?: string): ProjectResponse => ({ ok: false, message, title })
+
+/** IEC identifiers are case-insensitive — the rule every element-name lookup folds by. */
+const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 // Default S7Comm configurations
 const DEFAULT_S7COMM_SERVER_SETTINGS: S7CommServerSettings = {
@@ -673,6 +679,87 @@ const regenerateDatatypeText = (name: string, getState: ProjectGetState): void =
   })
 }
 
+// Same contract again, for the Global Variable List code view.
+//
+// A GVL is only ever edited as text, so its editor model IS the draft: the component
+// mirrors every keystroke into `structure.code` and this pair folds that buffer into the
+// project. Without it a save landing while the caret is still in the editor serialises
+// the variables from before the user started typing — the buffer had no way in, because
+// nothing but a blur committed it.
+
+const findGlobalVariableListEditorCode = (name: string, getState: ProjectGetState): string | undefined => {
+  const state = getState()
+  const editorModel = state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
+  if (editorModel?.type !== 'plc-global-variable-list') return undefined
+  if (editorModel.structure.display !== 'code') return undefined
+  return editorModel.structure.code
+}
+
+/**
+ * Fold the code view's buffer into the list.
+ *
+ * A buffer that does NOT parse is preserved verbatim on `text` rather than refused —
+ * the same contract a POU's `variablesText` and an unparsed `.dt` file already follow.
+ * Refusing would block the save on a half-finished declaration and lose it on reload,
+ * which is the one outcome none of these editors is allowed to produce. The text comes
+ * back in the code view on load, where it can be corrected.
+ *
+ * `variables` is left at its last good parse so the project still compiles; `text` is
+ * what the editor shows while it is set, so the two can never disagree in front of the
+ * user. Parsing again clears `text` and makes `variables` authoritative once more.
+ */
+const reconcileGlobalVariableListText = (
+  name: string,
+  getState: ProjectGetState,
+  setState: ProjectSetState,
+): ProjectResponse => {
+  const code = findGlobalVariableListEditorCode(name, getState)
+  if (typeof code !== 'string') return ok()
+
+  const current = (getState().project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, name))
+  if (!current) return ok()
+  // Buffer is a verbatim serialisation of the current list — nothing to fold in.
+  if (current.text === undefined && code === serializeGlobalVariableListToText(current)) return ok()
+  if (code === current.text) return ok()
+
+  const { globalVariableList } = parseGlobalVariableListFromText(code, current.name)
+
+  setState(
+    produce((slice: ProjectSlice) => {
+      const lists = slice.project.data.globalVariableLists
+      const idx = (lists ?? []).findIndex((l) => nameMatches(l.name, name))
+      if (idx === -1 || !lists) return
+      if (globalVariableList) {
+        // Merged, not replaced: the parser only knows what the declaration text
+        // carries, so a wholesale swap would drop `documentation` — and every
+        // list-level field added later — on the first successful edit.
+        //
+        // `text` and `qualifier` are dropped first rather than merged over. Both
+        // are absent from a successful parse when the text no longer has them, so
+        // spreading onto them would keep a `CONSTANT` the user just deleted.
+        const { text: _staleText, qualifier: _staleQualifier, ...kept } = lists[idx]
+        lists[idx] = { ...kept, ...globalVariableList }
+        return
+      }
+      lists[idx] = { ...lists[idx], text: code }
+    }),
+  )
+  return ok()
+}
+
+const regenerateGlobalVariableListText = (name: string, getState: ProjectGetState): void => {
+  if (findGlobalVariableListEditorCode(name, getState) === undefined) return
+  const state = getState()
+  const list = (state.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, name))
+  if (!list) return
+  state.editorActions.updateModelStructureForName(name, {
+    display: 'code',
+    // A list still carrying unparsed text shows that text — regenerating from
+    // `variables` here would overwrite what the user has yet to fix.
+    code: list.text ?? serializeGlobalVariableListToText(list),
+  })
+}
+
 const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: { name: '', type: 'plc-project', path: '' },
@@ -1214,8 +1301,109 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
 
     // -----------------------------------------------------------------------
-    // Data types
+    // Global variable lists
     // -----------------------------------------------------------------------
+    // A list's name becomes an IEC identifier the moment it is compiled, and IEC
+    // identifiers are case-insensitive — `GVL` and `gvl` are one symbol there. So
+    // every lookup below folds case, not just the uniqueness check: a lookup that
+    // did not would miss the list it was handed and return silently, throwing the
+    // user's edit away with no error anywhere.
+    createGlobalVariableList: (name) => {
+      const lists = getState().project.data.globalVariableLists ?? []
+      // Caught here rather than at the struct instance, where the collision would
+      // surface as a compiler message about a symbol the user never wrote.
+      if (lists.some((list) => nameMatches(list.name, name))) {
+        return fail('Global variable list already exists')
+      }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.globalVariableLists = [
+            ...(slice.project.data.globalVariableLists ?? []),
+            { name, variables: [] },
+          ]
+        }),
+      )
+      return ok()
+    },
+    deleteGlobalVariableList: (name) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          // No `pendingDeletions` entry: a list has no file of its own. It is
+          // persisted inside `project.json`, so dropping it from the model is the
+          // whole deletion — queuing a `globals/<name>.gvl` path would name a file
+          // no writer in this codebase ever creates.
+          slice.project.data.globalVariableLists = (slice.project.data.globalVariableLists ?? []).filter(
+            (list) => !nameMatches(list.name, name),
+          )
+        }),
+      )
+    },
+    updateGlobalVariableList: (name, variables) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const list = (slice.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, name))
+          if (!list) return
+          list.variables = variables
+          // Members arriving means the declaration reads again, so the preserved
+          // text is stale — leaving it would keep showing the broken version the
+          // user just fixed.
+          delete list.text
+        }),
+      )
+    },
+    updateGlobalVariableListQualifier: (name, qualifier) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const list = (slice.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, name))
+          if (!list) return
+          if (qualifier) list.qualifier = qualifier
+          else delete list.qualifier
+        }),
+      )
+    },
+    updateGlobalVariableListName: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const list = (slice.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, oldName))
+          if (!list) return
+          list.name = newName
+        }),
+      )
+    },
+    duplicateGlobalVariableList: (sourceName, newName) => {
+      const lists = getState().project.data.globalVariableLists ?? []
+      const source = lists.find((l) => nameMatches(l.name, sourceName))
+      if (!source) return fail('Global variable list not found')
+      if (lists.some((l) => nameMatches(l.name, newName))) return fail('Global variable list already exists')
+
+      // Cloned whole and renamed, so nothing on the record can be forgotten: members,
+      // the header qualifier, the documentation and a preserved unparsed `text` all
+      // come along. Spelling the fields out is what dropped `documentation` and `text`
+      // from the duplicate before.
+      //
+      // Cloned from LIVE state, never from inside `produce` — a draft is a proxy and
+      // `structuredClone` throws `DataCloneError` on one.
+      const clone = { ...structuredClone(source), name: newName }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.globalVariableLists = [...(slice.project.data.globalVariableLists ?? []), clone]
+        }),
+      )
+      return ok()
+    },
+    propagateGlobalVariableListRename: (oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.pous = slice.project.data.pous.map(
+            (pou) => renameGlobalVariableListInPou(pou, oldName, newName) ?? pou,
+          )
+        }),
+      )
+    },
+    reconcileGlobalVariableListText: (name) => reconcileGlobalVariableListText(name, getState, setState),
+    regenerateGlobalVariableListText: (name) => regenerateGlobalVariableListText(name, getState),
     createDatatype: (dto) => {
       const existing = getState().project.data.dataTypes.find((d) => d.name === dto.data.name)
       if (existing) return fail('Data type already exists')
@@ -1277,6 +1465,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           for (const variable of slice.project.data.configurations.resource.globalVariables) {
             const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
             if (nextType) variable.type = nextType
+          }
+          // A Global Variable List member is typed exactly like any other variable, so
+          // it can name a user data type and go stale on that type's rename like the
+          // rest. Its members are not in `globalVariables` — the list holds its own.
+          for (const list of slice.project.data.globalVariableLists ?? []) {
+            for (const variable of list.variables) {
+              const nextType = renameDataTypeInVariableType(variable.type, oldName, newName)
+              if (nextType) variable.type = nextType
+            }
           }
           slice.project.data.dataTypes = slice.project.data.dataTypes.map(
             (dataType) => renameDataTypeInDataType(dataType, oldName, newName) ?? dataType,

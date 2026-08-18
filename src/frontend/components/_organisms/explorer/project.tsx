@@ -43,7 +43,7 @@ const Project = () => {
   const { toast } = useToast()
   const {
     project: {
-      data: { pous, dataTypes, configurations, servers, remoteDevices },
+      data: { pous, dataTypes, globalVariableLists, configurations, servers, remoteDevices },
       meta: { name, type: projectType, path: projectPath },
     },
     projectActions: { updateMetaName },
@@ -339,6 +339,29 @@ const Project = () => {
                       name,
                       path: `/data/data-types/structure/${name}`,
                       elementType: { type: 'data-type', derivation: 'structure' },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+
+          {/* Global Variable Lists — CODESYS's own grouping, one node per list. */}
+          <ProjectTreeBranch branchTarget='global-variable-list'>
+            {globalVariableLists
+              ?.slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(({ name }) => (
+                <ProjectTreeLeaf
+                  key={name}
+                  leafLang='gvl'
+                  leafType='global-variable-list'
+                  label={name}
+                  highlightQuery={searchQuery}
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/global-variables/${name}`,
+                      elementType: { type: 'global-variable-list' },
                     })
                   }
                 />
