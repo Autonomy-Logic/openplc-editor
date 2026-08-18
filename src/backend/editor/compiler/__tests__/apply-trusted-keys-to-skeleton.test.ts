@@ -29,8 +29,11 @@ jest.mock('electron', () => ({
 
 jest.mock('electron/main', () => ({}), { virtual: true })
 
-// CompilerModule reads process.resourcesPath outside dev mode.
-;(process as unknown as { resourcesPath: string }).resourcesPath ??= process.cwd()
+// CompilerModule reads process.resourcesPath outside dev mode. Reflect
+// avoids the forbidden `as unknown as` cast on the Electron-augmented type.
+if (Reflect.get(process, 'resourcesPath') === undefined) {
+  Reflect.set(process, 'resourcesPath', process.cwd())
+}
 
 describe('applyTrustedKeysToSkeleton (arduino-path trusted-keys injection, ADR-0004)', () => {
   const validJson = JSON.stringify({

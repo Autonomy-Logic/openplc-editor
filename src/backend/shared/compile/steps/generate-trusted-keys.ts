@@ -88,11 +88,25 @@ const MAX_KEY_ID = 255
  *  place the two meet; keep both meanings in mind when touching it. */
 const MAX_TABLE_SIZE = 255
 
+/** Boundary type guard (trusted_keys.json is external package data — the
+ *  repo rule forbids `as` casts at boundaries, and narrowing keeps the
+ *  parser honest about what it actually checked). */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /** The table is indexed by keyId, so its length is highest keyId + 1.
  *  Single definition shared by the resolver (which logs it) and the
  *  generator (which emits it), so the logged value and the emitted
  *  `LIC_TRUSTED_KEY_COUNT` can never disagree. */
 export function trustedKeysTableSize(keys: TrustedKeyEntry[]): number {
+  if (keys.length === 0) {
+    // Direct callers can bypass parseTrustedKeysJson (which rejects an empty
+    // "keys" array with words). Without this, Math.max() of nothing returns
+    // -Infinity and the generator would emit `LIC_TRUSTED_KEY_COUNT =
+    // -Infinity;` — invalid C, discovered only at firmware compile time.
+    throw new Error('trusted-keys table cannot be empty — validate input with parseTrustedKeysJson first')
+  }
   return Math.max(...keys.map((k) => k.keyId)) + 1
 }
 
@@ -140,13 +154,14 @@ export function parseTrustedKeysJson(raw: string): TrustedKeysParseResult {
   try {
     parsed = JSON.parse(raw)
   } catch (error) {
-    return { ok: false, reason: `trusted_keys.json is not valid JSON (${(error as Error).message})` }
+    const detail = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason: `trusted_keys.json is not valid JSON (${detail})` }
   }
 
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return { ok: false, reason: 'trusted_keys.json must be an object with a "keys" array' }
   }
-  const keysField = (parsed as Record<string, unknown>)['keys']
+  const keysField = parsed['keys']
   if (!Array.isArray(keysField)) {
     return { ok: false, reason: 'trusted_keys.json must carry a "keys" array' }
   }
@@ -161,11 +176,10 @@ export function parseTrustedKeysJson(raw: string): TrustedKeysParseResult {
   const seenKeyIds = new Set<number>()
   for (let i = 0; i < keysField.length; i++) {
     const entry: unknown = keysField[i]
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isRecord(entry)) {
       return { ok: false, reason: `keys[${i}] must be an object with keyId and pubKeyRawHex` }
     }
-    const record = entry as Record<string, unknown>
-    const keyId = record['keyId']
+    const keyId = entry['keyId']
     if (typeof keyId !== 'number' || !Number.isInteger(keyId) || keyId < 0 || keyId > MAX_KEY_ID) {
       return {
         ok: false,
@@ -176,7 +190,7 @@ export function parseTrustedKeysJson(raw: string): TrustedKeysParseResult {
       return { ok: false, reason: `keyId ${keyId} appears more than once` }
     }
     seenKeyIds.add(keyId)
-    const pubKeyRawHex = record['pubKeyRawHex']
+    const pubKeyRawHex = entry['pubKeyRawHex']
     if (typeof pubKeyRawHex !== 'string' || !/^[0-9a-fA-F]{128}$/.test(pubKeyRawHex)) {
       return {
         ok: false,

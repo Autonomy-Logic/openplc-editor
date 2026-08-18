@@ -79,6 +79,18 @@ const BOARD = 'Raspberry Pi (prebuilt test)'
 
 const handler = CompilerModule.prototype.handleVendorPluginPackaging
 
+/**
+ * A receiver with the real CompilerModule prototype but no constructor run —
+ * the method under test never touches instance state (see the file banner),
+ * and the constructor would drag electron path resolution into every case.
+ * `Object.create` is typed `any`, so the annotation narrows it without the
+ * forbidden `{} as CompilerModule` assertion.
+ */
+function makeReceiver(): CompilerModule {
+  const receiver: CompilerModule = Object.create(CompilerModule.prototype)
+  return receiver
+}
+
 function makeManifest(hal: Record<string, unknown>, capabilities?: Record<string, unknown>) {
   return {
     devices: [
@@ -113,15 +125,9 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
   const runFor = (hal: Record<string, unknown>, capabilities?: Record<string, unknown>) => {
     listInstalled.mockReturnValue([{ packageId: 'com.openplc.rpi', path: pkgDir }])
     getInstalledPackageManifest.mockReturnValue(makeManifest(hal, capabilities))
-    return handler.call(
-      {} as CompilerModule,
-      BOARD,
-      projectDir,
-      targetDir,
-      (message: string | Buffer, level?: string) => {
-        logs.push({ message: String(message), level: level ?? '' })
-      },
-    )
+    return handler.call(makeReceiver(), BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
+      logs.push({ message: String(message), level: level ?? '' })
+    })
   }
 
   beforeEach(() => {
@@ -288,15 +294,9 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
   const runWithEmptyStore = () => {
     listInstalled.mockReturnValue([])
-    return handler.call(
-      {} as CompilerModule,
-      BOARD,
-      projectDir,
-      targetDir,
-      (message: string | Buffer, level?: string) => {
-        logs.push({ message: String(message), level: level ?? '' })
-      },
-    )
+    return handler.call(makeReceiver(), BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
+      logs.push({ message: String(message), level: level ?? '' })
+    })
   }
 
   it('stays silent about licensing for a built-in (hals.json) target with no VPP package', async () => {

@@ -182,6 +182,14 @@ describe('generateTrustedKeysContent', () => {
     const content = generateTrustedKeysContent([{ keyId: 254, pubKeyRawHex: HEX_A }])
     expect(content).toContain('const uint8_t LIC_TRUSTED_KEY_COUNT = 255;')
   })
+
+  it('throws on an empty key array — direct callers must not emit LIC_TRUSTED_KEY_COUNT = -Infinity', () => {
+    // parseTrustedKeysJson rejects an empty "keys" array with words, but the
+    // exported helpers are callable directly; Math.max() of nothing is
+    // -Infinity, which would emit invalid C discovered only at firmware
+    // compile time.
+    expect(() => generateTrustedKeysContent([])).toThrow('cannot be empty')
+  })
 })
 
 describe('resolveTrustedKeysArtifact', () => {
