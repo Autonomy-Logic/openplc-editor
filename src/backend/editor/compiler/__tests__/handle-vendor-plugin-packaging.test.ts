@@ -288,9 +288,15 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
   const runWithEmptyStore = () => {
     listInstalled.mockReturnValue([])
-    return handler.call({} as CompilerModule, BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
-      logs.push({ message: String(message), level: level ?? '' })
-    })
+    return handler.call(
+      {} as CompilerModule,
+      BOARD,
+      projectDir,
+      targetDir,
+      (message: string | Buffer, level?: string) => {
+        logs.push({ message: String(message), level: level ?? '' })
+      },
+    )
   }
 
   it('stays silent about licensing for a built-in (hals.json) target with no VPP package', async () => {
@@ -310,8 +316,8 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
     await runWithEmptyStore()
 
-    expect(
-      logs.some((l) => l.level === 'warning' && l.message.includes('licensing gate could not be evaluated')),
-    ).toBe(true)
+    expect(logs.some((l) => l.level === 'warning' && l.message.includes('licensing gate could not be evaluated'))).toBe(
+      true,
+    )
   })
 })
