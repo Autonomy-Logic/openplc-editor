@@ -7,10 +7,10 @@
  * com.industrialshields.esp32plc devices are arduino-cli. The runtime-v4
  * counterpart is covered by handle-vendor-plugin-packaging.test.ts.
  *
- * NOTE deliberately placed under __tests__/ and named *.test.ts: the repo's
- * jest testMatch does not collect `*.spec.ts` files (verified with
- * --listTests — compiler-module.spec.ts is dormant), so a suite added there
- * would never run.
+ * Placed under __tests__/ with the *.test.ts suffix to match the newer
+ * convention of this directory. (An earlier revision of this header claimed
+ * jest does not collect *.spec.ts files — that was wrong: the .spec suites
+ * run. Retracted after Thiago's review of #1014 verified it empirically.)
  */
 
 import { CompilerModule } from '../compiler-module'

@@ -2104,19 +2104,32 @@ class CompilerModule {
     let trustedKeysC: string | null = null
     {
       const licensableMatch = new PackageManagerModule().findDeviceByBoardName(boardTarget)
-      // A failed lookup here cannot tell a plain non-VPP board from a
-      // licensable one whose manifest broke or whose board name drifted — and
-      // for the latter, silence relocates the diagnosis to the PLC's linker
-      // (undefined LIC_TRUSTED_KEYS), the least diagnosable place it can land.
-      // Say it now, in the voice of the license-store warning: conditional,
-      // because for a genuinely non-VPP board this is a no-op message.
+      // A failed lookup cannot tell a plain non-VPP board from a licensable
+      // one whose manifest broke or whose board name drifted — and for the
+      // latter, silence relocates the diagnosis to the PLC's linker
+      // (undefined LIC_TRUSTED_KEYS), the least diagnosable place it can
+      // land. But warning on EVERY null lookup put a yellow "reinstall the
+      // package" line in every plain v4 build of the built-in runtime target
+      // (Thiago's review of #1014), so the built-ins are excluded first:
+      // a board that hals.json knows legitimately has no VPP package. What
+      // remains — known to neither store — is precisely the drifted/broken
+      // case the warning exists for.
       if (!licensableMatch) {
-        handleOutputData(
-          `No installed VPP package matches board "${boardTarget}", so the licensing gate could not be ` +
-            'evaluated. If this board belongs to a licensed VPP, its trusted-keys table was NOT generated ' +
-            'and the plugin will fail to link on the device — reinstall the package.',
-          'warning',
-        )
+        let isBuiltinTarget = false
+        try {
+          const hals = await readHalsFile<HalsFile>()
+          isBuiltinTarget = Boolean(hals[boardTarget])
+        } catch {
+          isBuiltinTarget = false
+        }
+        if (!isBuiltinTarget) {
+          handleOutputData(
+            `No installed VPP package matches board "${boardTarget}", so the licensing gate could not be ` +
+              'evaluated. If this board belongs to a licensed VPP, its trusted-keys table was NOT generated ' +
+              'and the plugin will fail to link on the device — reinstall the package.',
+            'warning',
+          )
+        }
       }
       if (
         licensableMatch &&

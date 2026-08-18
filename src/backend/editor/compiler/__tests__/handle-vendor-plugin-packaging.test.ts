@@ -38,6 +38,15 @@ const getInstalledPackageManifest = jest.fn()
 const verifyBoardPackageIntegrity = jest.fn<{ ok: boolean; packageId?: string; reason?: string }, [string]>(() => ({
   ok: true,
 }))
+
+// hals.json stand-in for the built-in-target check in the licensing-gate
+// warning (Thiago's review of #1014): the warning must stay silent for a
+// board hals.json knows (the plain "OpenPLC Runtime" build) and fire only
+// for a board known to neither store. Tests flip `current` per case.
+const halsFileContent: { current: Record<string, unknown> } = { current: {} }
+jest.mock('@root/backend/shared/firmware/hals-loader', () => ({
+  readHalsFile: jest.fn(async () => halsFileContent.current),
+}))
 jest.mock('../../package-manager', () => ({
   formatPackageIntegrityError: (boardName: string, failure: { packageId: string; reason: string }) =>
     `Board "${boardName}" is provided by the VPP package "${failure.packageId}", which no longer matches its signature: ${failure.reason}.`,
@@ -275,5 +284,34 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
     expect(existsSync(join(targetDir, 'vpp_plugin', 'rpi_plugin.o'))).toBe(true)
     expect(existsSync(join(targetDir, 'vpp_plugin', 'trusted_keys.c'))).toBe(false)
+  })
+
+  const runWithEmptyStore = () => {
+    listInstalled.mockReturnValue([])
+    return handler.call({} as CompilerModule, BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
+      logs.push({ message: String(message), level: level ?? '' })
+    })
+  }
+
+  it('stays silent about licensing for a built-in (hals.json) target with no VPP package', async () => {
+    // The common case Thiago's review caught: every plain runtime-v4 build
+    // goes through this function, and the built-in target must not produce
+    // a "reinstall the package" warning about a package that never existed.
+    halsFileContent.current = { [BOARD]: { runtime: 'runtime-v4' } }
+
+    await runWithEmptyStore()
+
+    expect(logs.some((l) => l.level === 'warning')).toBe(false)
+    expect(logs.some((l) => l.message.includes('not from a VPP package'))).toBe(true)
+  })
+
+  it('warns when the board is known to neither the package store nor hals.json (drifted VPP)', async () => {
+    halsFileContent.current = {}
+
+    await runWithEmptyStore()
+
+    expect(
+      logs.some((l) => l.level === 'warning' && l.message.includes('licensing gate could not be evaluated')),
+    ).toBe(true)
   })
 })
