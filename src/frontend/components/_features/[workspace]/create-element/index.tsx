@@ -8,7 +8,14 @@ import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
 
-type CreatePLCElementType = 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
+type CreatePLCElementType =
+  | 'function'
+  | 'function-block'
+  | 'program'
+  | 'data-type'
+  | 'global-variable-list'
+  | 'server'
+  | 'remote-device'
 
 const CreatePLCElement = () => {
   const {
@@ -33,7 +40,7 @@ const CreatePLCElement = () => {
   // keeps already-configured devices visible, creation is refused outright.
   const targetCaps = useTargetCapabilities()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
-    ['function', 'function-block', 'program', 'data-type', 'server', 'remote-device'] as const
+    ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
   ).filter((target) => {
     switch (target) {
       case 'program':
@@ -43,7 +50,7 @@ const CreatePLCElement = () => {
       case 'remote-device':
         return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
       default:
-        // function / function-block / data-type — always available.
+        // function / function-block / data-type / global-variable-list — always available.
         return true
     }
   })
@@ -66,7 +73,9 @@ const CreatePLCElement = () => {
           alignOffset={-7}
           sideOffset={10}
           align='end'
-          className='box flex h-fit w-[188px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
+          /* Wide enough for the longest entry — "Global Variable List" — to sit on one
+             line beside its icon and arrow. */
+          className='box flex h-fit w-[222px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
         >
           {CreatePLCElementTypes.map((target) => (
             <ElementCard key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />

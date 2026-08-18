@@ -27,7 +27,7 @@ import { useToast } from '../../../[app]/toast/use-toast'
 import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
 type ElementCardProps = {
-  target: 'function' | 'function-block' | 'program' | 'data-type' | 'server' | 'remote-device'
+  target: 'function' | 'function-block' | 'program' | 'data-type' | 'global-variable-list' | 'server' | 'remote-device'
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
@@ -40,6 +40,10 @@ type CreatePouFormProps = {
 type CreateDataTypeFormProps = {
   name: string
   derivation: 'array' | 'enumerated' | 'structure'
+}
+
+type CreateGlobalVariableListFormProps = {
+  name: string
 }
 
 type CreateServerFormProps = {
@@ -106,6 +110,22 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
+  // Pre-filled `GVL` because that is what CODESYS's Add Object offers, and a project
+  // converted from one arrives with a list of exactly that name.
+  //
+  // The string is also a sentinel elsewhere: `utils/opcua/resolve-indices.ts` treats
+  // `pouName === 'GVL'` as "the resource's global scope". The two do not meet — the
+  // OPC-UA variable tree is built from `configurations.resource.globalVariables`, which
+  // a list's members are not part of, and a list reaches the compiler as a struct
+  // instance rather than as a scope. Considered and left alone; renaming the sentinel
+  // would break saved OPC-UA node indices for no gain.
+  const {
+    register: globalVariableListRegister,
+    handleSubmit: handleSubmitGlobalVariableList,
+    setError: globalVariableListSetError,
+    formState: { errors: globalVariableListErrors },
+  } = useForm<CreateGlobalVariableListFormProps>({ defaultValues: { name: 'GVL' } })
+
   const {
     control: serverControl,
     register: serverRegister,
@@ -125,6 +145,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const {
     pouActions: { create },
     datatypeActions: { create: createDatatype },
+    globalVariableListActions: { create: createGlobalVariableList },
     serverActions: { create: createServer },
     remoteDeviceActions: { create: createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
@@ -147,6 +168,30 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       return
     }
     toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
+  }
+
+  const handleCreateGlobalVariableList: SubmitHandler<CreateGlobalVariableListFormProps> = (data) => {
+    const created = createGlobalVariableList(data.name)
+    if (!created.ok) {
+      // Carry the reason through. A list occupies two symbols in one namespace —
+      // its own name and `<name>_TYPE` — so the refusal is often about a POU or a
+      // data type, and the generic "already exists" would send the user looking
+      // for a list that isn't there.
+      globalVariableListSetError('name', { type: 'already-exists', message: created.message })
+      toast({
+        title: 'Invalid global variable list',
+        description: created.message ?? "You can't create a global variable list with this name.",
+        variant: 'fail',
+      })
+      return
+    }
+    toast({
+      title: 'Global variable list created',
+      description: `${data.name} has been created`,
+      variant: 'default',
+    })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
@@ -233,7 +278,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
           className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 group-aria-[expanded=true]:bg-neutral-100 group-data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:group-aria-[expanded=true]:bg-neutral-900 dark:group-data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
-          <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+          <p className='my-[2px] flex-1 whitespace-nowrap text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
             {startCase(target)}
           </p>
           <ArrowIcon size='md' direction='right' />
@@ -342,6 +387,77 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           )
                         }}
                       />
+                    </div>
+                    <div id='form-button-container' className='flex w-full justify-between'>
+                      <Popover.Close asChild>
+                        <button
+                          type='button'
+                          className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
+                          onClick={handleCancelCreateElement}
+                        >
+                          Cancel
+                        </button>
+                      </Popover.Close>
+                      <button
+                        type='submit'
+                        className={cn(
+                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                        )}
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </>
+            ) : target === 'global-variable-list' ? (
+              <>
+                <div
+                  id='global-variable-list-card-label-container'
+                  className='flex h-8 w-full flex-col items-center justify-between'
+                >
+                  <div className='flex w-full select-none items-center gap-2'>
+                    {CreatePouSources[target]}
+                    <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+                      Global Variable List
+                    </p>
+                  </div>
+                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
+                </div>
+                <div id='global-variable-list-card-form'>
+                  <form
+                    onSubmit={handleSubmitGlobalVariableList(handleCreateGlobalVariableList)}
+                    className='flex h-fit w-full select-none flex-col gap-3'
+                  >
+                    <div id='global-variable-list-name-form-container' className='flex w-full flex-col'>
+                      <label
+                        id='global-variable-list-name-label'
+                        htmlFor='global-variable-list-name'
+                        className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
+                      >
+                        Name:
+                        {globalVariableListErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
+                      </label>
+                      <InputWithRef
+                        {...globalVariableListRegister('name', { required: true })}
+                        id='global-variable-list-name'
+                        type='text'
+                        placeholder='GVL'
+                        className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                      />
+                      {globalVariableListErrors.name?.type === 'already-exists' ? (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          {/* The store's reason when it gave one — it names the POU or data type
+                              actually in the way, which the generic wording cannot. */}
+                          *{' '}
+                          {globalVariableListErrors.name.message ??
+                            'a global variable list with this name already exists'}
+                        </span>
+                      ) : (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                          ** Variables in it are read as {'<name>'}.variable
+                        </span>
+                      )}
                     </div>
                     <div id='form-button-container' className='flex w-full justify-between'>
                       <Popover.Close asChild>
