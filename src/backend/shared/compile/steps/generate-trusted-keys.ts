@@ -248,7 +248,9 @@ export function generateTrustedKeysContent(keys: TrustedKeyEntry[]): string {
   lines.push(' */')
   lines.push('')
   lines.push('#ifdef __cplusplus')
-  lines.push('#error "trusted_keys.c must be compiled as C: C++ gives namespace-scope const objects internal linkage, leaving LIC_TRUSTED_KEYS/LIC_TRUSTED_KEY_COUNT undefined at link time."')
+  lines.push(
+    '#error "trusted_keys.c must be compiled as C: C++ gives namespace-scope const objects internal linkage, leaving LIC_TRUSTED_KEYS/LIC_TRUSTED_KEY_COUNT undefined at link time."',
+  )
   lines.push('#endif')
   lines.push('')
   lines.push('#include <stdint.h>')
