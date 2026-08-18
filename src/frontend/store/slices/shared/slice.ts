@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
@@ -201,6 +202,62 @@ function globalVariableListNameCollision(state: SharedRootState, name: string, i
     return `"${name}" needs the type name "${derived}", which another global variable list already uses`
   }
   return null
+}
+
+/**
+ * Give a duplicated remote device its own identity.
+ *
+ * A remote device is an IEC address producer, so a plain copy is not a duplicate — it is
+ * a second claim on everything the original already owns:
+ *
+ *   - `id` on every Modbus IO group / point and every EtherCAT slave is what the editors,
+ *     the file registry and `ethercatDeviceActions` key on. Two devices sharing one would
+ *     have edits to the copy land on the original.
+ *   - `alias` is intended to be unique system-wide, and the registry reports a repeat as
+ *     a duplicate (first wins). The copy starts unaliased, so the user names what they
+ *     actually intend to bind.
+ *   - `iecLocation` is editor-allocated from the address pool. Clearing it lets the next
+ *     recalculation hand the copy its own addresses instead of double-booking the
+ *     original's.
+ *
+ * Everything else — host, port, cycle times, PDO layouts, SDO startup parameters, CiA 402
+ * axis config — is what the user duplicated the device for, and is copied verbatim.
+ */
+function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice): PLCRemoteDevice {
+  const next: PLCRemoteDevice = { ...device }
+
+  if (next.modbusTcpConfig) {
+    next.modbusTcpConfig = {
+      ...next.modbusTcpConfig,
+      ioGroups: (next.modbusTcpConfig.ioGroups ?? []).map((group) => ({
+        ...group,
+        id: crypto.randomUUID(),
+        ioPoints: (group.ioPoints ?? []).map((point) => ({
+          ...point,
+          id: crypto.randomUUID(),
+          iecLocation: '',
+          alias: undefined,
+        })),
+      })),
+    }
+  }
+
+  if (next.ethercatConfig) {
+    next.ethercatConfig = {
+      ...next.ethercatConfig,
+      devices: (next.ethercatConfig.devices ?? []).map((slave) => ({
+        ...slave,
+        id: crypto.randomUUID(),
+        channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
+          ...mapping,
+          iecLocation: '',
+          alias: undefined,
+        })),
+      })),
+    }
+  }
+
+  return next
 }
 
 function renameElement(
@@ -480,6 +537,43 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (result.ok) getState().projectActions.regenerateGlobalVariableListText(newName)
       return result
     },
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, sourceName))
+      if (!source) return { ok: false, message: 'Global variable list not found' }
+
+      const collision = globalVariableListNameCollision(state, newName)
+      if (collision) return { ok: false, message: collision }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      // Fold any pending code-view buffer in first, or the copy is taken from the
+      // declaration as it stood before the user's last edits.
+      const reconcile = state.projectActions.reconcileGlobalVariableListText(sourceName)
+      if (!reconcile.ok) return { ok: false, message: reconcile.message }
+
+      const fresh = getState()
+      const current =
+        (fresh.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, sourceName)) ?? source
+
+      const created = fresh.projectActions.createGlobalVariableList(newName)
+      /* istanbul ignore next -- defensive: the collision gate above already ran */
+      if (!created.ok) return { ok: false, message: created.message }
+
+      // Members and the header qualifier both ride along; a list carries no ids or
+      // addresses of its own, so a plain copy is the whole duplicate.
+      getState().projectActions.updateGlobalVariableList(newName, structuredClone(current.variables))
+      getState().projectActions.updateGlobalVariableListQualifier(newName, current.qualifier)
+
+      const editorModel = CreateGlobalVariableListEditor(newName)
+      getState().editorActions.addModel(editorModel)
+      getState().fileActions.addFile({ name: newName, type: 'global-variable-list', filePath: newName, isNew: true })
+      getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
   },
 
   datatypeActions: {
@@ -653,6 +747,35 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateServerName(o, n)),
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.servers ?? []).find((s) => s.name === sourceName)
+      if (!source) return { ok: false, message: 'Server not found' }
+
+      if ((state.project.data.servers ?? []).some((s) => nameMatches(s.name, newName))) {
+        return { ok: false, message: 'Server name already exists' }
+      }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      // Deep-cloned: the protocol config is nested, and a shallow copy would leave the
+      // two servers sharing it, so editing one would silently edit the other.
+      const copy = { ...structuredClone(source), name: newName }
+      const result = state.projectActions.createServer({ data: copy })
+      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateServerEditor(newName, source.protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name: newName, type: 'server', filePath: newName, isNew: true })
+
+      // Persist only on save, exactly as the data type duplicate does.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
   },
 
   remoteDeviceActions: {
@@ -705,6 +828,33 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) =>
       renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
+
+    duplicate: (sourceName, newName) => {
+      const state = getState()
+      const source = (state.project.data.remoteDevices ?? []).find((d) => d.name === sourceName)
+      if (!source) return { ok: false, message: 'Remote device not found' }
+
+      if ((state.project.data.remoteDevices ?? []).some((d) => nameMatches(d.name, newName))) {
+        return { ok: false, message: 'Remote device name already exists' }
+      }
+
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      const copy = { ...duplicateRemoteDeviceIdentity(structuredClone(source)), name: newName }
+      const result = state.projectActions.createRemoteDevice({ data: copy })
+      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
+      if (!result.ok) return { ok: false, message: result.message }
+
+      const editorModel = CreateRemoteDeviceEditor(newName, source.protocol)
+      state.editorActions.addModel(editorModel)
+      state.fileActions.addFile({ name: newName, type: 'remote-device', filePath: newName, isNew: true })
+
+      // Persist only on save, exactly as the data type duplicate does.
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+
+      return { ok: true }
+    },
   },
 
   ethercatDeviceActions: {

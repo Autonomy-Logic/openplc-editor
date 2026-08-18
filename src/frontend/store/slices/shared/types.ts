@@ -117,6 +117,7 @@ export type GlobalVariableListActions = {
   deleteRequest: (name: string) => void
   delete: (name: string) => void
   rename: (oldName: string, newName: string) => SharedResponse
+  duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
 export type DatatypeActions = {
@@ -136,6 +137,7 @@ export type ServerActions = {
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
+  duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
 export type RemoteDeviceActions = {
@@ -143,6 +145,8 @@ export type RemoteDeviceActions = {
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
+  /** The copy gets fresh ids and no alias/address bindings — see the implementation. */
+  duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
 export type EtherCATDeviceActions = {

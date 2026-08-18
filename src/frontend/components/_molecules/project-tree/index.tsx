@@ -529,11 +529,22 @@ const ProjectTreeLeaf = ({
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
-    globalVariableListActions: { deleteRequest: deleteGlobalVariableListRequest, rename: renameGlobalVariableList },
-    serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
-    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
+    globalVariableListActions: {
+      deleteRequest: deleteGlobalVariableListRequest,
+      rename: renameGlobalVariableList,
+      duplicate: duplicateGlobalVariableList,
+    },
+    serverActions: { deleteRequest: deleteServerRequest, rename: renameServer, duplicate: duplicateServer },
+    remoteDeviceActions: {
+      deleteRequest: deleteRemoteDeviceRequest,
+      rename: renameRemoteDevice,
+      duplicate: duplicateRemoteDevice,
+    },
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
+    project: {
+      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
+    },
   } = useOpenPLCStore()
 
   const [isEditing, setIsEditing] = useState(false)
@@ -648,11 +659,29 @@ const ProjectTreeLeaf = ({
     }
   }
 
+  /**
+   * `<label>_copy`, then `_copy_2`, `_copy_3`… against the names already in use.
+   *
+   * Duplicating twice used to call the action with the same `_copy` name both times;
+   * the second call failed on the collision and the result was discarded, so the menu
+   * item simply did nothing. Picking a free name up front is what makes the second
+   * duplicate behave like the first.
+   */
+  const nextCopyName = (base: string, taken: string[]): string => {
+    const used = new Set(taken.map((n) => n.toLowerCase()))
+    const first = `${base}_copy`
+    if (!used.has(first.toLowerCase())) return first
+    for (let n = 2; ; n++) {
+      const candidate = `${first}_${n}`
+      if (!used.has(candidate.toLowerCase())) return candidate
+    }
+  }
+
   const handleDuplicateFile = () => {
-    if (!isAPou && !isDatatype) {
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be duplicated.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be duplicated.',
         variant: 'fail',
       })
       return
@@ -661,7 +690,7 @@ const ProjectTreeLeaf = ({
     if (!label) {
       toast({
         title: 'Error',
-        description: 'Pou or datatype label is required to select.',
+        description: 'Label is required to duplicate.',
         variant: 'fail',
       })
       return
@@ -669,21 +698,59 @@ const ProjectTreeLeaf = ({
 
     // Duplicating is a soft, unsaved change: the shared duplicate actions flag
     // the new element dirty; it persists on the next save, like create.
-    if (isAPou) {
-      duplicatePou(label, `${label}_copy`)
-      return
-    }
+    //
+    // Every branch reports its failure. Discarding the result is how a duplicate
+    // that could not be made looks identical to one that was.
+    const duplicated = ((): { ok: boolean; message?: string } => {
+      if (isAPou)
+        return duplicatePou(
+          label,
+          nextCopyName(
+            label,
+            pous.map((p) => p.name),
+          ),
+        )
+      if (isDatatype)
+        return duplicateDatatype(
+          label,
+          nextCopyName(
+            label,
+            dataTypes.map((d) => d.name),
+          ),
+        )
+      if (isGlobalVariableList) {
+        return duplicateGlobalVariableList(
+          label,
+          nextCopyName(
+            label,
+            (globalVariableLists ?? []).map((l) => l.name),
+          ),
+        )
+      }
+      if (isServer)
+        return duplicateServer(
+          label,
+          nextCopyName(
+            label,
+            (servers ?? []).map((s) => s.name),
+          ),
+        )
+      return duplicateRemoteDevice(
+        label,
+        nextCopyName(
+          label,
+          (remoteDevices ?? []).map((d) => d.name),
+        ),
+      )
+    })()
 
-    if (isDatatype) {
-      duplicateDatatype(label, `${label}_copy`)
-      return
+    if (!duplicated.ok) {
+      toast({
+        title: 'Duplicate failed',
+        description: duplicated.message ?? `"${label}" could not be duplicated.`,
+        variant: 'fail',
+      })
     }
-
-    toast({
-      title: 'Error',
-      description: 'Only POU or datatype files can be duplicated.',
-      variant: 'fail',
-    })
   }
 
   const handleDeleteFile = () => {
