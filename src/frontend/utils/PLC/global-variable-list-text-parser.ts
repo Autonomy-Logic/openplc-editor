@@ -74,19 +74,49 @@ const guessErrorReason = (line: string): string => {
 }
 
 /**
+ * Drop a trailing `//` comment from one line.
+ *
+ * Scanned rather than matched on `//`, because an initial value may legitimately
+ * contain one inside a string — `Url : STRING := 'http://example.com';` — and cutting
+ * at the first pair would corrupt the declaration it is meant to preserve. IEC quotes
+ * strings with `'` and wide strings with `"`; neither spans a line, so tracking the
+ * open quote across the line is enough.
+ */
+function stripTrailingLineComment(line: string): string {
+  let quote: string | null = null
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (quote) {
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (char === '/' && line[i + 1] === '/') return line.slice(0, i).trimEnd()
+  }
+  return line
+}
+
+/**
  * Strip pragmas and comments, then split into trimmed, non-empty lines.
  *
  * A `(* … *)` spanning lines is removed before the split: CODESYS wraps one freely, and
  * half a comment reaching the declaration matcher reads as a syntax error in text that
  * is perfectly valid. A same-line `(* … *)` is left in place — it is the member's
  * documentation, and the declaration matcher captures it.
+ *
+ * A `//` comment is removed wherever it sits, not only when it opens the line: CODESYS
+ * writes `A : BOOL; // lamp` and `VAR_GLOBAL // note` freely, and both used to reach the
+ * matchers with the comment still attached and fail as malformed.
  */
 function toSignificantLines(content: string): string[] {
   const withoutSpannedComments = content.replace(/\(\*[\s\S]*?\*\)/g, (match) => (match.includes('\n') ? ' ' : match))
   return withoutSpannedComments
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('//') && !line.startsWith('{') && !commentOnlyRegex.test(line))
+    .map((line) => stripTrailingLineComment(line.trim()))
+    .filter((line) => line !== '' && !line.startsWith('{') && !commentOnlyRegex.test(line))
 }
 
 /**

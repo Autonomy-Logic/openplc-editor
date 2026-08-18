@@ -181,6 +181,12 @@ function globalVariableListNameCollision(state: SharedRootState, name: string, i
   if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
     return `"${name}" is already the name of a data type`
   }
+  // A `.dt` that failed to parse still owns its `files[name]` entry — the registry is
+  // keyed by raw name across every kind — so a list taking the same name would share
+  // that entry and misroute its save. `datatypeActions` gates on this for the same
+  // reason; the check belongs here too.
+  const unparsedCollision = collidesWithUnparsedDataTypeFile(state, name)
+  if (!unparsedCollision.ok) return unparsedCollision.message ?? `"${name}" is already taken by a data type file`
   if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
     return `"${name}" needs the type name "${derived}", which a data type already uses`
   }
@@ -435,15 +441,34 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
       if (newName !== oldName) {
+        // Land any debounced graphical write-back BEFORE the scan. A pending one
+        // means `pou.body.value` is momentarily stale, so the rewrite would miss
+        // references the user has already drawn — and the timer would then fire
+        // over the rewritten body with the pre-rename flow.
+        flushFlowWriteBacks(getState)
+
         const fresh = getState()
         const impact = findGlobalVariableListReferences(oldName, fresh.project.data.pous)
         if (impact.totalReferences > 0) {
           fresh.projectActions.propagateGlobalVariableListRename(oldName, newName)
-          // Every rewritten POU has to be flagged dirty or the propagated body is
-          // dropped on disk, and the graphical flows have to be re-read from the
-          // rewritten body or the next write-back restores the old name.
+
           for (const pouName of impact.byPou.keys()) {
+            // Dirty, or the propagated body never reaches disk.
             getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
+
+            // Re-seed the live flow from the rewritten body. The graphical editors
+            // read the flow slice, not `pou.body.value`, so without this the old
+            // name stays on screen and the next write-back copies it back over the
+            // rename — undoing it silently.
+            const pou = getState().project.data.pous.find((p) => p.name === pouName)
+            if (pou?.body.language === 'ld') {
+              const flow = structuredClone(pou.body.value) as LadderFlowType
+              getState().ladderFlowActions.addLadderFlow({ ...flow, name: pouName })
+            }
+            if (pou?.body.language === 'fbd') {
+              const flow = structuredClone(pou.body.value) as FBDFlowType
+              getState().fbdFlowActions.addFBDFlow({ ...flow, name: pouName })
+            }
           }
         }
       }
@@ -903,11 +928,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
         const name = file.relativePath.split('/').pop()?.replace(/\.dt$/i, '')
         if (!name) return []
-        // The file registry is keyed by raw name across both kinds: a
-        // colliding file would retype the real element and misroute its save.
-        const taken = [...data.projectData.pous, ...data.projectData.dataTypes].some(
-          (element) => element.name.toLowerCase() === name.toLowerCase(),
-        )
+        // The file registry is keyed by raw name across every kind: a colliding
+        // file would retype the real element and misroute its save. Global
+        // variable lists are registered there too, so they exclude a name as
+        // much as a POU or a data type does.
+        const taken = [
+          ...data.projectData.pous,
+          ...data.projectData.dataTypes,
+          ...(data.projectData.globalVariableLists ?? []),
+        ].some((element) => element.name.toLowerCase() === name.toLowerCase())
         if (taken) return []
         return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
       })

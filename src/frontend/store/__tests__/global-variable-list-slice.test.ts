@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { PLCPou } from '../../../middleware/shared/ports/types'
+import type { LadderFlowType } from '../slices/ladder'
 import { useOpenPLCStore } from '../index'
 
 /**
@@ -41,6 +42,41 @@ const stPou = (name: string, body: string): PLCPou => ({
   interface: { variables: [] },
   body: { language: 'st', value: body },
 })
+
+const ladderPou = (name: string, variableName: string): PLCPou => ({
+  name,
+  pouType: 'program',
+  interface: { variables: [] },
+  body: {
+    language: 'ld',
+    value: {
+      name,
+      rungs: [
+        {
+          id: 'rung-1',
+          comment: '',
+          defaultBounds: [300, 100],
+          reactFlowViewport: [300, 100],
+          nodes: [{ id: 'c1', type: 'contact', position: { x: 0, y: 0 }, data: { variable: { name: variableName } } }],
+          edges: [],
+        },
+      ],
+    },
+  },
+})
+
+const setListDocumentation = (name: string, documentation: string) => {
+  const { project } = useOpenPLCStore.getState()
+  useOpenPLCStore.getState().projectActions.setProject({
+    ...project,
+    data: {
+      ...project.data,
+      globalVariableLists: (project.data.globalVariableLists ?? []).map((l) =>
+        l.name === name ? { ...l, documentation } : l,
+      ),
+    },
+  })
+}
 
 const setPous = (pous: PLCPou[]) => {
   const { project } = useOpenPLCStore.getState()
@@ -221,6 +257,44 @@ describe('global variable list — shared actions', () => {
     useOpenPLCStore.getState().globalVariableListActions.rename('GVL', 'Globals')
 
     expect(useOpenPLCStore.getState().project.data.pous[0].body.value).toBe('x := y + 1;')
+  })
+
+  it('keeps list metadata when a successful parse folds in', () => {
+    // The parser only knows what the declaration carries, so replacing the list
+    // wholesale would drop `documentation` on the first successful edit.
+    const store = useOpenPLCStore.getState()
+    store.globalVariableListActions.create('MetaList')
+    store.projectActions.updateGlobalVariableListQualifier('MetaList', 'CONSTANT')
+    setListDocumentation('MetaList', 'kept across edits')
+
+    useOpenPLCStore.getState().editorActions.updateModelStructureForName('MetaList', {
+      display: 'code',
+      code: 'VAR_GLOBAL\n  A : BOOL;\nEND_VAR\n',
+    })
+    useOpenPLCStore.getState().projectActions.reconcileGlobalVariableListText('MetaList')
+
+    const list = useOpenPLCStore.getState().project.data.globalVariableLists?.[0]
+    expect(list?.documentation).toBe('kept across edits')
+    expect(list?.variables.map((v) => v.name)).toEqual(['A'])
+    // ...but a qualifier the user deleted from the text must not survive the merge.
+    expect(list?.qualifier).toBeUndefined()
+  })
+
+  it('re-seeds a graphical flow after propagating a rename', () => {
+    // The editors read the flow slice, not `pou.body.value`. Without re-seeding, the
+    // next debounced write-back copies the stale flow back over the rename.
+    useOpenPLCStore.getState().globalVariableListActions.create('GVL')
+    setPous([ladderPou('Rungs', 'GVL.Output1')])
+    useOpenPLCStore.getState().ladderFlowActions.addLadderFlow({
+      ...(useOpenPLCStore.getState().project.data.pous[0].body.value as LadderFlowType),
+      name: 'Rungs',
+    })
+
+    useOpenPLCStore.getState().globalVariableListActions.rename('GVL', 'Globals')
+
+    const flow = useOpenPLCStore.getState().ladderFlows.find((f) => f.name === 'Rungs')
+    expect(JSON.stringify(flow)).toContain('Globals.Output1')
+    expect(JSON.stringify(flow)).not.toContain('GVL.Output1')
   })
 
   it('refuses a rename to an invalid identifier', () => {

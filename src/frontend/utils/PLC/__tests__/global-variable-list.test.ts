@@ -221,7 +221,11 @@ describe('global variable list — CODESYS declaration forms', () => {
     // is the only place it survives. Dropping it would rewrite the user's declaration.
     const parsed = parseGlobalVariableListFromText('VAR_GLOBAL CONSTANT\n  MaxCount : INT := 10;\nEND_VAR', 'GVL')
 
-    expect(serializeGlobalVariableListToText(parsed.globalVariableList!)).toBe(
+    // Narrowed rather than asserted, so a parser regression fails here with its own
+    // message instead of a null dereference inside the serializer.
+    expect(parsed.globalVariableList).toBeDefined()
+    if (!parsed.globalVariableList) return
+    expect(serializeGlobalVariableListToText(parsed.globalVariableList)).toBe(
       'VAR_GLOBAL CONSTANT\n  MaxCount : INT := 10;\nEND_VAR\n',
     )
   })
@@ -261,6 +265,32 @@ describe('global variable list — CODESYS declaration forms', () => {
 
     expect(parsed.error).toBeUndefined()
     expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A'])
+  })
+
+  it('reads a trailing // comment on a declaration', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; // the lamp\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A'])
+  })
+
+  it('reads a trailing // comment on the header', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL CONSTANT // shared limits\n  A : BOOL;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.qualifier).toBe('CONSTANT')
+  })
+
+  it('leaves a // inside a string initial value alone', () => {
+    // Cutting at the first `//` would corrupt the very declaration the strip exists
+    // to preserve.
+    const parsed = parseGlobalVariableListFromText(
+      "VAR_GLOBAL\n  Url : STRING := 'http://example.com';\nEND_VAR",
+      'GVL',
+    )
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].initialValue).toBe("'http://example.com'")
   })
 
   it('drops an attribute pragma', () => {

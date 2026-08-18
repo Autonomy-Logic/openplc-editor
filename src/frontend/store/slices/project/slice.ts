@@ -607,7 +607,15 @@ const reconcileGlobalVariableListText = (
       const idx = (lists ?? []).findIndex((l) => nameMatches(l.name, name))
       if (idx === -1 || !lists) return
       if (globalVariableList) {
-        lists[idx] = globalVariableList
+        // Merged, not replaced: the parser only knows what the declaration text
+        // carries, so a wholesale swap would drop `documentation` — and every
+        // list-level field added later — on the first successful edit.
+        //
+        // `text` and `qualifier` are dropped first rather than merged over. Both
+        // are absent from a successful parse when the text no longer has them, so
+        // spreading onto them would keep a `CONSTANT` the user just deleted.
+        const { text: _staleText, qualifier: _staleQualifier, ...kept } = lists[idx]
+        lists[idx] = { ...kept, ...globalVariableList }
         return
       }
       lists[idx] = { ...lists[idx], text: code }
