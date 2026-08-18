@@ -100,6 +100,24 @@ describe('parseTrustedKeysJson', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toContain('LIC_TRUSTED_KEY_COUNT')
   })
+
+  it('accepts keyId 254 — the highest usable id, pinning the boundary from the accept side', () => {
+    // `maxKeyId + 1 > MAX_TABLE_SIZE` is exactly the comparison an
+    // off-by-one would break, and breaking it TOWARD rejection would
+    // refuse a legitimate table after 254 rotations. 255 → rejected is
+    // pinned above; this pins 254 → accepted.
+    const result = parseTrustedKeysJson(json({ keys: [{ keyId: 254, pubKeyRawHex: HEX_A }] }))
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects an all-zero pubKeyRawHex — the reserved-slot marker, not a key', () => {
+    // license-core would reject it at run time anyway, but silently: the
+    // build would log "1 key(s)" and the device would refuse every
+    // licence with nothing pointing at the table.
+    const result = parseTrustedKeysJson(json({ keys: [{ keyId: 0, pubKeyRawHex: '0'.repeat(128) }] }))
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toContain('all zeros')
+  })
 })
 
 describe('generateTrustedKeysContent', () => {
@@ -150,6 +168,19 @@ describe('generateTrustedKeysContent', () => {
     const content = generateTrustedKeysContent([{ keyId: 0, pubKeyRawHex: HEX_B.toUpperCase() }])
     expect(content).toContain('0xab,')
     expect(content).not.toContain('0xAB')
+  })
+
+  it('guards against C++ compilation — internal linkage would undefine the extern references', () => {
+    const content = generateTrustedKeysContent([{ keyId: 0, pubKeyRawHex: HEX_A }])
+    expect(content).toContain('#ifdef __cplusplus')
+    expect(content).toContain('#error')
+    // The guard must precede the definitions it protects.
+    expect(content.indexOf('#ifdef __cplusplus')).toBeLessThan(content.indexOf('LIC_TRUSTED_KEYS[][64]'))
+  })
+
+  it('emits count 255 for keyId 254 — the accept-side boundary survives emission', () => {
+    const content = generateTrustedKeysContent([{ keyId: 254, pubKeyRawHex: HEX_A }])
+    expect(content).toContain('const uint8_t LIC_TRUSTED_KEY_COUNT = 255;')
   })
 })
 

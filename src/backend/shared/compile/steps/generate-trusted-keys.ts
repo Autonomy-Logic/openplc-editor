@@ -77,11 +77,24 @@ export interface ResolveTrustedKeysArtifactInput {
   trustedKeysJson: string | null
 }
 
-/** Highest keyId the json may carry per the packaging contract. */
+/** Highest keyId VALUE a single entry may carry (the blob's key_id field is
+ *  one byte, so 0–255). Numerically equal to MAX_TABLE_SIZE below by the
+ *  coincidence of both deriving from uint8_t, but they bound different
+ *  things: this bounds one entry's id, that bounds the table's LENGTH. */
 const MAX_KEY_ID = 255
-/** `LIC_TRUSTED_KEY_COUNT` is a `uint8_t`: the table length
- *  (highest keyId + 1) must fit in it. */
+/** Highest table LENGTH (highest keyId + 1) that fits the uint8_t
+ *  `LIC_TRUSTED_KEY_COUNT` symbol — which caps the highest USABLE keyId
+ *  at 254, one below MAX_KEY_ID. The overflow check below is the only
+ *  place the two meet; keep both meanings in mind when touching it. */
 const MAX_TABLE_SIZE = 255
+
+/** The table is indexed by keyId, so its length is highest keyId + 1.
+ *  Single definition shared by the resolver (which logs it) and the
+ *  generator (which emits it), so the logged value and the emitted
+ *  `LIC_TRUSTED_KEY_COUNT` can never disagree. */
+export function trustedKeysTableSize(keys: TrustedKeyEntry[]): number {
+  return Math.max(...keys.map((k) => k.keyId)) + 1
+}
 
 /**
  * Resolve what the build should do about trusted keys for one target.
@@ -106,12 +119,11 @@ export function resolveTrustedKeysArtifact(input: ResolveTrustedKeysArtifactInpu
     return { kind: 'packaging-fault', message: describeTrustedKeysPackagingFault(packageLabel, parsed.reason) }
   }
 
-  const tableSize = Math.max(...parsed.keys.map((k) => k.keyId)) + 1
   return {
     kind: 'generated',
     content: generateTrustedKeysContent(parsed.keys),
     keyCount: parsed.keys.length,
-    tableSize,
+    tableSize: trustedKeysTableSize(parsed.keys),
   }
 }
 
@@ -171,6 +183,16 @@ export function parseTrustedKeysJson(raw: string): TrustedKeysParseResult {
         reason: `keys[${i}].pubKeyRawHex must be exactly 128 hex characters (raw P-256 x||y public key)`,
       }
     }
+    // license-core rejects the all-zero key at run time (it is the
+    // reserved-slot marker), so a table row full of zeros is "safe" but
+    // silent: the build logs "1 key(s)" and the device rejects every
+    // licence with nothing pointing at the table. Refuse it with words.
+    if (/^0+$/.test(pubKeyRawHex)) {
+      return {
+        ok: false,
+        reason: `keys[${i}].pubKeyRawHex is all zeros — that is the reserved-slot marker, not a key`,
+      }
+    }
     keys.push({ keyId, pubKeyRawHex })
   }
 
@@ -202,7 +224,7 @@ export function parseTrustedKeysJson(raw: string): TrustedKeysParseResult {
 export function generateTrustedKeysContent(keys: TrustedKeyEntry[]): string {
   const byKeyId = new Map<number, TrustedKeyEntry>()
   for (const key of keys) byKeyId.set(key.keyId, key)
-  const tableSize = Math.max(...keys.map((k) => k.keyId)) + 1
+  const tableSize = trustedKeysTableSize(keys)
 
   const lines: string[] = []
   lines.push('/*')
@@ -216,7 +238,18 @@ export function generateTrustedKeysContent(keys: TrustedKeyEntry[]): string {
   lines.push(' * the single definition the firmware links. Reserved rows (keyIds')
   lines.push(' * absent from the json) are zero-filled - license-core rejects the')
   lines.push(' * all-zero public key, so a reserved slot can never validate a blob.')
+  lines.push(' *')
+  lines.push(' * MUST be compiled as C. In C++ a const object at namespace scope')
+  lines.push(' * has INTERNAL linkage, so these definitions would go static, the')
+  lines.push(" * prebuilt's extern references would stay undefined, and the link")
+  lines.push(' * would die with the same error that means "the generator did not')
+  lines.push(' * run" - two causes, one message. The guard below turns that into')
+  lines.push(' * a compile error with words.')
   lines.push(' */')
+  lines.push('')
+  lines.push('#ifdef __cplusplus')
+  lines.push('#error "trusted_keys.c must be compiled as C: C++ gives namespace-scope const objects internal linkage, leaving LIC_TRUSTED_KEYS/LIC_TRUSTED_KEY_COUNT undefined at link time."')
+  lines.push('#endif')
   lines.push('')
   lines.push('#include <stdint.h>')
   lines.push('')

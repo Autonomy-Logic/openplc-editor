@@ -2104,6 +2104,20 @@ class CompilerModule {
     let trustedKeysC: string | null = null
     {
       const licensableMatch = new PackageManagerModule().findDeviceByBoardName(boardTarget)
+      // A failed lookup here cannot tell a plain non-VPP board from a
+      // licensable one whose manifest broke or whose board name drifted — and
+      // for the latter, silence relocates the diagnosis to the PLC's linker
+      // (undefined LIC_TRUSTED_KEYS), the least diagnosable place it can land.
+      // Say it now, in the voice of the license-store warning: conditional,
+      // because for a genuinely non-VPP board this is a no-op message.
+      if (!licensableMatch) {
+        handleOutputData(
+          `No installed VPP package matches board "${boardTarget}", so the licensing gate could not be ` +
+            'evaluated. If this board belongs to a licensed VPP, its trusted-keys table was NOT generated ' +
+            'and the plugin will fail to link on the device — reinstall the package.',
+          'warning',
+        )
+      }
       if (
         licensableMatch &&
         licensableMatch.device.target.type === 'runtime-v4' &&
@@ -2442,6 +2456,53 @@ class CompilerModule {
   }
 
   /**
+   * Arduino-path trusted-keys injection (the sketch-tree half of ADR-0004;
+   * the runtime-v4 half lives in `handleVendorPluginPackaging`). Extracted
+   * from `compileProgram` so the path the FIRST licensable package actually
+   * uses is unit-testable — review #1014 finding A.
+   *
+   * Gate rules: runtime-v3 never links Arduino firmware, so the gate must
+   * not fire for it; a non-licensable board generates nothing. For a
+   * licensable board, an unusable table is a HARD STOP (return `false` after
+   * posting the packaging fault): without the symbols the link either dies
+   * in an undefined-reference wall (naming a symbol, not the package) or —
+   * if a stale definition is ever lying around — succeeds while trusting
+   * the wrong keys. `resolveTrustedKeysArtifact` owns the gate semantics,
+   * validation and fault wording; the caller does the file I/O.
+   *
+   * Returns `true` to proceed, `false` when the caller must stop the build
+   * (the fault message has already been posted).
+   */
+  applyTrustedKeysToSkeleton(input: {
+    isRuntimeV3: boolean
+    isLicensable: boolean
+    packageLabel: string
+    trustedKeysJson: string | null
+    firmwareSkeleton: Record<string, string>
+    postMessage: (msg: { logLevel: 'info' | 'warning' | 'error'; message: string }) => void
+  }): boolean {
+    const { isRuntimeV3, isLicensable, packageLabel, trustedKeysJson, firmwareSkeleton, postMessage } = input
+    if (isRuntimeV3 || !isLicensable) return true
+
+    const artifact = resolveTrustedKeysArtifact({ isLicensable: true, packageLabel, trustedKeysJson })
+    if (artifact.kind === 'packaging-fault') {
+      postMessage({ logLevel: 'error', message: `${artifact.message}\nStopping compilation process.` })
+      return false
+    }
+    if (artifact.kind === 'generated') {
+      firmwareSkeleton['examples/Baremetal/trusted_keys.c'] = artifact.content
+      // Logged on SUCCESS for the same reason the license-store include is:
+      // without this line, a build with and without the table looks identical
+      // until the linker (or worse, the licence check) says otherwise.
+      postMessage({
+        logLevel: 'info',
+        message: `Trusted-keys table generated: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+      })
+    }
+    return true
+  }
+
+  /**
    * Main compile entry point.  Drives the full Step 0-13 flow
    * through the shared `runCompilePipeline` orchestrator
    * (`backend/shared/compile/pipeline.ts`); platform-specific bits
@@ -2755,44 +2816,30 @@ class CompilerModule {
         // can be).
         //
         // Unlike the license-store warning above, an unusable table is a HARD
-        // STOP, not a degraded build: without these symbols the link either
-        // dies in an undefined-reference wall (naming a symbol, not the
-        // package) or — if a stale definition is ever lying around — succeeds
-        // while trusting the wrong keys. `resolveTrustedKeysArtifact` owns the
-        // gate, the validation and the fault wording; this block only does the
-        // file I/O the shared step deliberately avoids.
-        if (boardInfo.capabilities?.isLicensable === true) {
+        // STOP, not a degraded build — see `applyTrustedKeysToSkeleton` for
+        // the gate, the skeleton write and the message voice. This site only
+        // does the file I/O the shared step deliberately avoids, and turns a
+        // `false` into the port close + return the fault demands.
+        {
           let trustedKeysJson: string | null = null
-          if (boardInfo.vppPackagePath) {
+          if (!isRuntimeV3 && boardInfo.capabilities?.isLicensable === true && boardInfo.vppPackagePath) {
             try {
               trustedKeysJson = await readFile(join(boardInfo.vppPackagePath, 'trusted_keys.json'), 'utf-8')
             } catch {
               trustedKeysJson = null
             }
           }
-          const artifact = resolveTrustedKeysArtifact({
-            isLicensable: true,
+          const proceed = this.applyTrustedKeysToSkeleton({
+            isRuntimeV3,
+            isLicensable: boardInfo.capabilities?.isLicensable === true,
             packageLabel: boardInfo.vppPackageId ?? boardTarget,
             trustedKeysJson,
+            firmwareSkeleton,
+            postMessage: (msg) => _mainProcessPort.postMessage(msg),
           })
-          if (artifact.kind === 'packaging-fault') {
-            _mainProcessPort.postMessage({
-              logLevel: 'error',
-              message: `${artifact.message}\nStopping compilation process.`,
-            })
+          if (!proceed) {
             _mainProcessPort.close()
             return
-          }
-          if (artifact.kind === 'generated') {
-            firmwareSkeleton['examples/Baremetal/trusted_keys.c'] = artifact.content
-            // Logged on SUCCESS for the same reason the license-store include
-            // is: without this line, a build with and without the table looks
-            // identical until the linker (or worse, the licence check) says
-            // otherwise, far from the cause.
-            _mainProcessPort.postMessage({
-              logLevel: 'info',
-              message: `Trusted-keys table generated: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
-            })
           }
         }
       }
