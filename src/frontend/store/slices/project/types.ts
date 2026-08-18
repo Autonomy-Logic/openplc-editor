@@ -225,6 +225,8 @@ export type ProjectActions = {
   updateGlobalVariableListQualifier: (name: string, qualifier: string | undefined) => void
   /** Rename the list itself; references are `propagateGlobalVariableListRename`'s job. */
   updateGlobalVariableListName: (oldName: string, newName: string) => void
+  /** Clone the whole record under a new name — no field is copied by hand. */
+  duplicateGlobalVariableList: (sourceName: string, newName: string) => ProjectResponse
   /** Rewrite every `<oldName>.member` in every POU body, textual or graphical. */
   propagateGlobalVariableListRename: (oldName: string, newName: string) => void
   /** Fold the code view's pending buffer into the list. Fails when it does not parse. */

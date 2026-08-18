@@ -1371,6 +1371,28 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }),
       )
     },
+    duplicateGlobalVariableList: (sourceName, newName) => {
+      const lists = getState().project.data.globalVariableLists ?? []
+      const source = lists.find((l) => nameMatches(l.name, sourceName))
+      if (!source) return fail('Global variable list not found')
+      if (lists.some((l) => nameMatches(l.name, newName))) return fail('Global variable list already exists')
+
+      // Cloned whole and renamed, so nothing on the record can be forgotten: members,
+      // the header qualifier, the documentation and a preserved unparsed `text` all
+      // come along. Spelling the fields out is what dropped `documentation` and `text`
+      // from the duplicate before.
+      //
+      // Cloned from LIVE state, never from inside `produce` — a draft is a proxy and
+      // `structuredClone` throws `DataCloneError` on one.
+      const clone = { ...structuredClone(source), name: newName }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.globalVariableLists = [...(slice.project.data.globalVariableLists ?? []), clone]
+        }),
+      )
+      return ok()
+    },
     propagateGlobalVariableListRename: (oldName, newName) => {
       setState(
         produce((slice: ProjectSlice) => {

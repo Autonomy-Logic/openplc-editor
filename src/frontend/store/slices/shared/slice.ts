@@ -13,7 +13,7 @@ import { isLegalIdentifier } from '../../../utils/keywords'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
-import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
+import { collectAllSlaveNames, generateUniqueSlaveName } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -224,7 +224,7 @@ function globalVariableListNameCollision(state: SharedRootState, name: string, i
  * Everything else — host, port, cycle times, PDO layouts, SDO startup parameters, CiA 402
  * axis config — is what the user duplicated the device for, and is copied verbatim.
  */
-function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice): PLCRemoteDevice {
+function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames: Set<string>): PLCRemoteDevice {
   const next: PLCRemoteDevice = { ...device }
 
   if (next.modbusTcpConfig) {
@@ -244,17 +244,28 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice): PLCRemoteDevice
   }
 
   if (next.ethercatConfig) {
+    // A slave's NAME is its key in tabs, editor models and the file registry — not its
+    // id — so two slaves sharing one means the second silently takes over the first's
+    // entries. `generateUniqueSlaveName` is the same `_01`, `_02`… strategy the add
+    // path uses; `taken` grows as we go so the copies do not collide with each other
+    // either.
+    const taken = new Set(takenSlaveNames)
     next.ethercatConfig = {
       ...next.ethercatConfig,
-      devices: (next.ethercatConfig.devices ?? []).map((slave) => ({
-        ...slave,
-        id: crypto.randomUUID(),
-        channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
-          ...mapping,
-          iecLocation: '',
-          alias: undefined,
-        })),
-      })),
+      devices: (next.ethercatConfig.devices ?? []).map((slave) => {
+        const name = generateUniqueSlaveName(slave.name, taken)
+        taken.add(name)
+        return {
+          ...slave,
+          id: crypto.randomUUID(),
+          name,
+          channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
+            ...mapping,
+            iecLocation: '',
+            alias: undefined,
+          })),
+        }
+      }),
     }
   }
 
@@ -503,7 +514,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         // means `pou.body.value` is momentarily stale, so the rewrite would miss
         // references the user has already drawn — and the timer would then fire
         // over the rewritten body with the pre-rename flow.
-        flushFlowWriteBacks(getState)
+        //
+        // A write-back that FAILS validation leaves the body stale for good, so the
+        // scan and the re-seed would both run on pre-edit content and the re-seed
+        // would overwrite the newer flow. Refuse, as undo and redo already do,
+        // rather than rename against a body that is known to be wrong.
+        const staleFlows = flushFlowWriteBacks(getState)
+        if (staleFlows.length > 0) {
+          return {
+            ok: false,
+            message: `The graphical body of ${staleFlows.join(', ')} is invalid, so references to "${oldName}" could not be rewritten. Fix it and rename again.`,
+          }
+        }
 
         const fresh = getState()
         const impact = findGlobalVariableListReferences(oldName, fresh.project.data.pous)
@@ -555,18 +577,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const reconcile = state.projectActions.reconcileGlobalVariableListText(sourceName)
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
-      const fresh = getState()
-      const current =
-        (fresh.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, sourceName)) ?? source
-
-      const created = fresh.projectActions.createGlobalVariableList(newName)
+      // One action that clones the whole record, rather than create-then-patch each
+      // field. Copying field by field is how `documentation` and a preserved,
+      // unparsed `text` got dropped — the same omission this PR already fixed once
+      // in `reconcileGlobalVariableListText`. A list carries no ids or addresses, so
+      // a clone under a new name is the entire duplicate.
+      const created = getState().projectActions.duplicateGlobalVariableList(sourceName, newName)
       /* istanbul ignore next -- defensive: the collision gate above already ran */
       if (!created.ok) return { ok: false, message: created.message }
-
-      // Members and the header qualifier both ride along; a list carries no ids or
-      // addresses of its own, so a plain copy is the whole duplicate.
-      getState().projectActions.updateGlobalVariableList(newName, structuredClone(current.variables))
-      getState().projectActions.updateGlobalVariableListQualifier(newName, current.qualifier)
 
       const editorModel = CreateGlobalVariableListEditor(newName)
       getState().editorActions.addModel(editorModel)
@@ -842,7 +860,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
 
-      const copy = { ...duplicateRemoteDeviceIdentity(structuredClone(source)), name: newName }
+      const copy = {
+        ...duplicateRemoteDeviceIdentity(
+          structuredClone(source),
+          collectAllSlaveNames(state.project.data.remoteDevices),
+        ),
+        name: newName,
+      }
       const result = state.projectActions.createRemoteDevice({ data: copy })
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }

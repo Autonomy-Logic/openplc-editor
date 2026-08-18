@@ -297,6 +297,29 @@ describe('global variable list — shared actions', () => {
     expect(JSON.stringify(flow)).not.toContain('GVL.Output1')
   })
 
+  it('refuses the rename when a graphical write-back failed', () => {
+    // A failed write-back leaves `pou.body.value` stale for good, so the scan and the
+    // re-seed would both run on pre-edit content and the re-seed would overwrite the
+    // newer flow. Undo and redo already refuse on the same signal.
+    useOpenPLCStore.getState().globalVariableListActions.create('GVL')
+    setPous([ladderPou('Rungs', 'GVL.Output1')])
+    // A flow missing `defaultBounds` / `reactFlowViewport` fails the zod guard.
+    useOpenPLCStore.getState().ladderFlowActions.addLadderFlow({
+      name: 'Rungs',
+      updated: true,
+      rungs: [{ id: 'rung-1', comment: '', nodes: [], edges: [] }],
+    } as unknown as LadderFlowType)
+    useOpenPLCStore.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Rungs', updated: true })
+
+    const result = useOpenPLCStore.getState().globalVariableListActions.rename('GVL', 'Globals')
+
+    expect(result.ok).toBe(false)
+    expect(String(result.message)).toContain('Rungs')
+    // Nothing moved, so a corrected flow can retry the whole rename.
+    expect(useOpenPLCStore.getState().project.data.globalVariableLists?.[0].name).toBe('GVL')
+    expect(useOpenPLCStore.getState().project.data.pous[0].body.value).toBeDefined()
+  })
+
   it('refuses a rename to an invalid identifier', () => {
     useOpenPLCStore.getState().globalVariableListActions.create('GVL')
 

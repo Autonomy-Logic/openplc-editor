@@ -35,6 +35,7 @@ import { UsersIcon } from '../../../assets/icons/project/Users'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
+import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -660,15 +661,35 @@ const ProjectTreeLeaf = ({
   }
 
   /**
-   * `<label>_copy`, then `_copy_2`, `_copy_3`… against the names already in use.
+   * Every element name the project has, in one list.
+   *
+   * File state, tabs and editor models are all keyed by raw element name, across kinds,
+   * so a candidate has to be free of ALL of them and not only of its own collection.
+   * Checking same-kind names alone let a duplicated POU called `Pump_copy` take over the
+   * `files['Pump_copy']` entry of a data type that already had that name.
+   */
+  const allElementNames = useMemo(
+    () => [
+      ...pous.map((pou) => pou.name),
+      ...dataTypes.map((dataType) => dataType.name),
+      ...(globalVariableLists ?? []).map((list) => list.name),
+      ...(servers ?? []).map((server) => server.name),
+      ...(remoteDevices ?? []).map((device) => device.name),
+      ...collectAllSlaveNames(remoteDevices),
+    ],
+    [pous, dataTypes, globalVariableLists, servers, remoteDevices],
+  )
+
+  /**
+   * `<label>_copy`, then `_copy_2`, `_copy_3`… against every name in use.
    *
    * Duplicating twice used to call the action with the same `_copy` name both times;
    * the second call failed on the collision and the result was discarded, so the menu
    * item simply did nothing. Picking a free name up front is what makes the second
    * duplicate behave like the first.
    */
-  const nextCopyName = (base: string, taken: string[]): string => {
-    const used = new Set(taken.map((n) => n.toLowerCase()))
+  const nextCopyName = (base: string): string => {
+    const used = new Set(allElementNames.map((n) => n.toLowerCase()))
     const first = `${base}_copy`
     if (!used.has(first.toLowerCase())) return first
     for (let n = 2; ; n++) {
@@ -701,47 +722,13 @@ const ProjectTreeLeaf = ({
     //
     // Every branch reports its failure. Discarding the result is how a duplicate
     // that could not be made looks identical to one that was.
+    const copyName = nextCopyName(label)
     const duplicated = ((): { ok: boolean; message?: string } => {
-      if (isAPou)
-        return duplicatePou(
-          label,
-          nextCopyName(
-            label,
-            pous.map((p) => p.name),
-          ),
-        )
-      if (isDatatype)
-        return duplicateDatatype(
-          label,
-          nextCopyName(
-            label,
-            dataTypes.map((d) => d.name),
-          ),
-        )
-      if (isGlobalVariableList) {
-        return duplicateGlobalVariableList(
-          label,
-          nextCopyName(
-            label,
-            (globalVariableLists ?? []).map((l) => l.name),
-          ),
-        )
-      }
-      if (isServer)
-        return duplicateServer(
-          label,
-          nextCopyName(
-            label,
-            (servers ?? []).map((s) => s.name),
-          ),
-        )
-      return duplicateRemoteDevice(
-        label,
-        nextCopyName(
-          label,
-          (remoteDevices ?? []).map((d) => d.name),
-        ),
-      )
+      if (isAPou) return duplicatePou(label, copyName)
+      if (isDatatype) return duplicateDatatype(label, copyName)
+      if (isGlobalVariableList) return duplicateGlobalVariableList(label, copyName)
+      if (isServer) return duplicateServer(label, copyName)
+      return duplicateRemoteDevice(label, copyName)
     })()
 
     if (!duplicated.ok) {
