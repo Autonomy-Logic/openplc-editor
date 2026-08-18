@@ -30,6 +30,7 @@ import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
+import { findOccupiedInOutPin } from '../../../../utils/graphical/in-out-pin-rules'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
 import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
@@ -555,6 +556,22 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
+    // A VAR_IN_OUT pin takes exactly one variable. It is passed by reference, so a second
+    // wire would mean two variables aliasing the same parameter with no defined order —
+    // CODESYS refuses it too ("The 'X' pin internally contains more than one associated
+    // connection. This is not allowed.").
+    const occupiedInOutPin = findOccupiedInOutPin(connection, rungLocal)
+    if (occupiedInOutPin) {
+      toast({
+        title: 'Can not connect',
+        description:
+          `The '${occupiedInOutPin}' pin already has a connection. An in-out pin takes exactly ` +
+          'one variable — remove the existing connection first.',
+        variant: 'fail',
+      })
+      return
+    }
+
     captureAndPush(pouName)
 
     setRungLocal((rung) => ({

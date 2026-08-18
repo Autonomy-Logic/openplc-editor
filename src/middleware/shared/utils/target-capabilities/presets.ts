@@ -10,7 +10,30 @@
  * updated yet.
  */
 
-import type { TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, TargetCapabilities } from './types'
+
+/**
+ * Every address producer active. NOT a target preset — no board reports this,
+ * and it must never reach a UI / feature gate.
+ *
+ * This is the allocation-time answer to a board id that did not resolve: a VPP
+ * board whose package isn't installed, a project authored on another machine,
+ * or the catalogue not having loaded yet. `resolveTargetCapabilities`
+ * answers `EMPTY_CAPABILITIES` there, which is right for gating (never offer
+ * an affordance the target can't back) and wrong for allocation, where it
+ * reads as "this target supports no producers" and freezes every address in
+ * place — the recompaction after a delete silently keeps the stale addresses.
+ *
+ * Permissive is the safe direction here: the worst case is that addresses get
+ * compacted for a producer the eventual target turns out not to support, and
+ * selecting that target recalculates anyway (`setDeviceBoard`).
+ */
+export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
+  pinMapping: true,
+  vppIo: true,
+  modbusTcpRemote: true,
+  ethercat: true,
+}
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,

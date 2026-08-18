@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { projectCapabilities } from '../../../../../middleware/shared/ports/types'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { useTargetCapabilities } from '../../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { ElementCard } from './element-card'
@@ -32,6 +33,12 @@ const CreatePLCElement = () => {
   // gating happens here so a future new POU type doesn't have to be
   // wired up in two places.
   const projectCaps = projectCapabilities({ type: projectType })
+  // Remote devices are additionally gated on the TARGET: a board that hosts
+  // neither Modbus remote I/O nor EtherCAT cannot drive one, and creating it
+  // anyway yields I/O points no variable can reference (the location dropdown
+  // hides them behind this same predicate). Unlike the tree branch, which
+  // keeps already-configured devices visible, creation is refused outright.
+  const targetCaps = useTargetCapabilities()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
     ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
   ).filter((target) => {
@@ -41,7 +48,7 @@ const CreatePLCElement = () => {
       case 'server':
         return projectCaps.hasServers
       case 'remote-device':
-        return projectCaps.hasRemoteDevices
+        return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
       default:
         // function / function-block / data-type / global-variable-list — always available.
         return true
