@@ -6,6 +6,11 @@ import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
 import { useOpenPLCStore } from '../../../../store'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
+import {
+  ambiguousInOutFeeds,
+  legacyInOutSourcePinIds,
+  rewireInOutReads,
+} from '../../../../utils/graphical/in-out-pin-rules'
 import { isLegalIdentifier } from '../../../../utils/keywords'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
@@ -13,10 +18,17 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockOutputDebugBadges } from '../block-output-debug-badges'
+import { InOutPinMarker } from '../in-out-pin-marker'
 import { BlockVariant } from '../types/block'
-import { getBlockDocumentation, getVariableRestrictionType } from '../utils'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  getBlockDocumentation,
+  getVariableRestrictionType,
+  inOutVariableNames,
+} from '../utils'
 import { buildBlockNode } from './buildNodes'
-import { CustomHandle } from './handle'
+import { CustomHandle, type CustomHandleProps } from './handle'
 import { BasicNodeData, BlockNodeData, BlockProps } from './utils'
 import {
   DEFAULT_BLOCK_CONNECTOR_Y,
@@ -28,6 +40,19 @@ import {
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 export type { BlockNode, BlockNodeData } from './utils/types'
+
+/**
+ * Where a pin's label sits, taken from the pin itself so the label and the dot cannot separate.
+ *
+ * Handles are persisted inside the node; the connector list a block renders from is derived on
+ * every render. The two agree for anything drawn by the current rules, but a diagram saved
+ * before VAR_IN_OUT became input-only carries an extra output-side pin, and the index alone
+ * would then place labels where no pin exists. Falls back to the index when the node has no
+ * geometry for that name at all.
+ */
+const connectorLabelTop = (handles: CustomHandleProps[] | undefined, connector: string, index: number): number =>
+  (handles?.find((handle) => handle.id === connector)?.relPosition?.y ??
+    DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET) - 10
 
 export const BlockNodeElement = <T extends object>({
   nodeId,
@@ -61,12 +86,9 @@ export const BlockNodeElement = <T extends object>({
     type: blockType,
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const inputConnectors = blockVariables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = blockVariables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputConnectors = blockInputVariables(blockVariables).map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(blockVariables).map((variable) => variable.name)
+  const inOutConnectors = inOutVariableNames(blockVariables)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
   const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
@@ -306,20 +328,27 @@ export const BlockNodeElement = <T extends object>({
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
+      {/*
+       * Labels are placed from the pin they name, looked up BY ID, falling back to the index when
+       * the node carries no geometry for it. The derived list and the persisted pins can
+       * disagree: a diagram saved before VAR_IN_OUT became input-only still holds the in-out's
+       * output-side pin, so the index alone would put a label where no pin is drawn.
+       */}
       {inputConnectors.map((connector, index) => (
         <div
           key={index}
           className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
+          style={{ top: connectorLabelTop(data.inputHandles, connector, index), left: 6 }}
         >
           {connector}
+          {inOutConnectors.has(connector) && <InOutPinMarker />}
         </div>
       ))}
       {outputConnectors.map((connector, index) => (
         <div
           key={index}
           className='absolute text-xs'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
+          style={{ top: connectorLabelTop(data.outputHandles, connector, index), right: 6 }}
         >
           {connector}
         </div>
@@ -335,10 +364,11 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
   const pushToHistory = useOpenPLCStore((state) => state.snapshotActions.pushToHistory)
   const { updateNode, setNodes, setEdges } = useOpenPLCStore((state) => state.fbdFlowActions)
+  const addLog = useOpenPLCStore((state) => state.consoleActions.addLog)
   // Pou-scoped subscription: immer's structural sharing keeps this flow's
   // identity stable when other POUs' flows (or unrelated slices) change.
   const flow = useOpenPLCStore((state) => state.fbdFlows.find((f) => f.name === pouName))
-  const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const { type: blockType, name: blockVariantName } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as BlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
@@ -348,6 +378,10 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, flow ? [flow] : [], {
     nodeId: id ?? '',
   })
+
+  // Output-side pins this block still carries for an in-out parameter — empty for every diagram
+  // saved since in-outs became input-only.
+  const staleInOutSourcePins = useMemo(() => legacyInOutSourcePinIds(data), [data])
 
   // Outputs connected to variable nodes already show their own badge — skip those
   const connectedOutputNames = useMemo(() => {
@@ -643,26 +677,41 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
     const newNode = { ...updatedNewNode }
 
-    const originalNodeInputs = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'input' || variable.class === 'inOut',
-    )
-    const originalNodeSources = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output' || variable.class === 'inOut',
-    )
+    const originalNodeInputs = blockInputVariables((node.data.variant as BlockVariant).variables)
+    const originalNodeSources = blockOutputVariables((node.data.variant as BlockVariant).variables)
 
-    const updatedInputVariables = newNode.data.variant.variables.filter(
-      (variable) => variable.class === 'input' || variable.class === 'inOut',
-    )
-    const updatedOutputVariables = newNode.data.variant.variables.filter(
-      (variable) => variable.class === 'output' || variable.class === 'inOut',
-    )
+    const updatedInputVariables = blockInputVariables(newNode.data.variant.variables)
+    const updatedOutputVariables = blockOutputVariables(newNode.data.variant.variables)
 
     let newNodes = [...rung.nodes]
     newNodes = newNodes.map((nodeItem) => (nodeItem.id === node.id ? newNode : nodeItem))
 
+    // An in-out pin fed by more than one wire has no single source to re-point its readers at,
+    // and the old two-sided pin accepted any number. Refuse rather than pick one by array
+    // position: nothing has been written to the store yet, so the diagram is left exactly as it
+    // is for the user to resolve the extra connections first.
+    const ambiguous = ambiguousInOutFeeds(node, rung.edges)
+    if (ambiguous.length > 0) {
+      toast({
+        title: 'Cannot update this block yet',
+        description:
+          `${ambiguous.join(', ')} ${ambiguous.length === 1 ? 'is' : 'are'} connected to more than one ` +
+          `variable. A VAR_IN_OUT parameter takes exactly one — remove the extra connection(s), then update.`,
+        variant: 'fail',
+      })
+      return
+    }
+
+    // A wire that READ one of this block's in-out pins has to be re-pointed at whatever feeds
+    // the pin before the remap below: the block wrote through the reference, so reading the pin
+    // and reading its source are the same value. Do it first — a rewired edge no longer has
+    // `source === node.id`, so it falls through the remap as an unchanged edge instead of being
+    // dropped for having no matching output handle.
+    const reads = rewireInOutReads(node, rung.edges)
+
     // Update edges to match new node and variable positions
     // Only reconnect edges that were previously connected to the node and have a matching handle in the updated node
-    const newEdges = rung.edges
+    const newEdges = reads.edges
       .map((edge) => {
         const isSource = edge.source === node.id
         const isTarget = edge.target === node.id
@@ -737,6 +786,20 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       editorName: pouName,
       edges: newEdges,
     })
+
+    // Say what the conversion did to the wires. An in-out read that could be re-pointed keeps
+    // working; one whose pin had nothing feeding it cannot be salvaged and is gone, and the user
+    // has to be told rather than left to notice a missing connection later.
+    if (reads.rewired > 0 || reads.dropped > 0) {
+      addLog({
+        id: crypto.randomUUID(),
+        level: reads.dropped > 0 ? 'warning' : 'info',
+        message:
+          `${blockVariantName}: VAR_IN_OUT pins no longer have an output side. ` +
+          `${reads.rewired} connection(s) re-pointed at the pin's source` +
+          (reads.dropped > 0 ? `, ${reads.dropped} removed (nothing was feeding the pin).` : '.'),
+      })
+    }
   }
 
   return (
@@ -808,7 +871,20 @@ const Block = <T extends object>(block: BlockProps<T>) => {
         )}
       </div>
       {data.handles.map((handle, index) => (
-        <CustomHandle key={index} {...handle} />
+        <CustomHandle
+          key={index}
+          {...handle}
+          // A diagram saved before VAR_IN_OUT became input-only still carries the pin's output
+          // side, and this list is what actually renders. Keep drawing it so the existing wire
+          // stays visible — dropping it here would make a connection that is still in the file
+          // vanish from the canvas — but refuse NEW wires from a pin that no longer exists.
+          // The block's update badge is what removes it.
+          isConnectable={
+            handle.type === 'source' && handle.id !== undefined && staleInOutSourcePins.has(handle.id)
+              ? false
+              : handle.isConnectable
+          }
+        />
       ))}
       <BlockOutputDebugBadges
         blockType={(data.variant as BlockVariant).type}

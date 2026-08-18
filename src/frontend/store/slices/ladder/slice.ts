@@ -25,6 +25,12 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
 
+          // A VAR_IN_OUT pin no longer has an output side, but loading NEVER converts a rung
+          // that still carries the old two-sided pin. In Ladder an edge leaving a block IS the
+          // rung chain, so re-pointing it automatically would route the rail around the block
+          // or drop it outright, with no signal and no way back. The block's update badge does
+          // it on demand instead: see `hasLegacyInOutOutputHandle` for the detection.
+
           // Check if any block node has legacy connectedVariables (object instead of array).
           // Only scan + migrate if legacy data is detected — modern projects skip this entirely.
           const needsMigration = flow.rungs.some((rung) =>

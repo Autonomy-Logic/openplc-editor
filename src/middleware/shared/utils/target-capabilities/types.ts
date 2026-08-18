@@ -138,3 +138,16 @@ export interface TargetCapabilities {
    *  hardware limitation — and the flow says exactly that. */
   isLicensable: boolean
 }
+
+/**
+ * The four flags that decide which producers claim IEC addresses.
+ *
+ * Address-space code reads nothing else, so it takes this narrower type and a
+ * full `TargetCapabilities` is assignable to it. The point of the narrowing is
+ * that "which producers are active" can also be answered by something that is
+ * NOT a target — see `ALL_ADDRESS_PRODUCERS_ACTIVE`.
+ */
+export type AddressProducerCapabilities = Pick<
+  TargetCapabilities,
+  'pinMapping' | 'vppIo' | 'modbusTcpRemote' | 'ethercat'
+>

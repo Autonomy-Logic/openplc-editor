@@ -39,7 +39,7 @@
  * re-run the address-sync flow (Phase 4) to reassign the losers.
  */
 
-import type { TargetCapabilities } from '../target-capabilities'
+import type { AddressProducerCapabilities } from '../target-capabilities'
 
 /** Which kind of source attached this claim. */
 export type SourceKind = 'pin-mapping' | 'vpp-io' | 'modbus-tcp-remote' | 'ethercat'
@@ -184,7 +184,11 @@ function compareClaimedAddress(a: ClaimedAddress, b: ClaimedAddress): number {
 
 export function buildAddressPool(
   inputs: PoolInputs,
-  caps: TargetCapabilities,
+  /* Only the four producer flags are read. Narrower than
+   * `TargetCapabilities` on purpose: "which producers are active" can also be
+   * answered by something that is not a target — see
+   * `ALL_ADDRESS_PRODUCERS_ACTIVE`, the answer for an unresolved board. */
+  caps: AddressProducerCapabilities,
   options: BuildPoolOptions = {},
 ): AddressPool {
   const byAddress = new Map<string, ClaimedAddress>()
