@@ -1,7 +1,7 @@
 /*
 license_gate.h - License enforcement gate (verify + demo window).
 The closed license-core (prebuilt) provides the STRONG implementation (verify +
-15-minute demo timer). The open firmware ships a weak default that reports
+2-hour demo timer). The open firmware ships a weak default that reports
 UNSUPPORTED and allows actuation, so boards without a license-core behave as
 before. The clock is injected (now_ms) so the core stays host-testable.
 */
@@ -22,10 +22,11 @@ typedef enum {
     LIC_GATE_UNSUPPORTED = 3,   /* no license-core linked (weak default) -> unenforced */
 } lic_gate_state_t;
 
-/* 15 minutes. Overridable at build (-DLIC_GATE_DEMO_MS=...) for bench tests
- * that must watch the demo expire in seconds; production keeps the default. */
+/* 2 hours (product decision 2026-08-18; was 15 minutes). Overridable at build
+ * (-DLIC_GATE_DEMO_MS=...) for bench tests that must watch the demo expire in
+ * seconds; production keeps the default. */
 #ifndef LIC_GATE_DEMO_MS
-#define LIC_GATE_DEMO_MS 900000u
+#define LIC_GATE_DEMO_MS 7200000u
 #endif
 
 /*

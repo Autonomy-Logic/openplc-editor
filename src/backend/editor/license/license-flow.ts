@@ -61,7 +61,7 @@ export interface DeviceLicenseInput {
  * half-written, answers `0x7E`. A caller that believed it would report
  * `already-licensed` and NEVER ASK THE BACKEND — skipping the one automatic
  * repair path there is. The closed license-core then refuses the blob and the
- * board runs demo, stopping actuation 15 minutes in, while the badge says
+ * board runs demo, stopping actuation two hours in, while the badge says
  * "Licensed".
  *
  * WHAT IT PROVES AND WHAT IT DOES NOT. It proves the bytes are a well-formed
