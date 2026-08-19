@@ -53,6 +53,13 @@ resources/st-compiler/**.spec
 # arduino-cli stays committed since we don't own its releases
 resources/strucpp/
 resources/bin/**
+# Git will not re-include a file whose ancestor directory is excluded, and `bin/**` excludes
+# the platform/arch directories too — so the two exceptions below only bite once these are
+# re-included. Without them a NEWLY downloaded arduino-cli is invisible to git, and the six
+# committed ones survive only because they were already tracked when the rule landed.
+!resources/bin/
+!resources/bin/*/
+!resources/bin/*/*/
 !resources/bin/*/*/arduino-cli
 !resources/bin/*/*/arduino-cli.exe
 # A local build leaves xml2st, iec2c/iec2iec and .binary-metadata.json here, plus
