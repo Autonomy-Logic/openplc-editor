@@ -24,11 +24,13 @@ import { io, type Socket } from 'socket.io-client'
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
+  buildGetBoardIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
   parseReadLicenseResponse,
@@ -36,6 +38,7 @@ import {
   parseWriteLicenseResponse,
 } from './modbus-pdu'
 import type {
+  DebugBoardIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -157,15 +160,25 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     )
   }
 
-  // License function codes (0x49/0x4A), byte-identical to the serial/TCP
+  // License function codes (0x48/0x49/0x4A), byte-identical to the serial/TCP
   // clients: the runtime answers them at the webserver level, but the editor sees
   // ONE transport-agnostic contract, so the licensing flow has a single shape on
   // every target instead of a network-specific branch.
   //
-  // `getBoardId` (0x48) stays absent on purpose: a runtime-v4 target's identity
-  // comes from the REST login, so it never answers that FC. That is why
-  // `DeviceChannelTransport` declares the license methods optional — this class
-  // implements the pair it can serve without claiming the one it cannot.
+  // `getBoardId` (0x48) is the licensing ANCHOR read here, not the readiness
+  // probe it doubles as on baremetal — readiness on a runtime target is a REST
+  // question. The runtime answers 0x48 with the hardware anchor the licensed
+  // plugin derives its device id from (`/proc/device-tree/serial-number`,
+  // normalized exactly as the plugin's C does), so the editor derives the SAME
+  // identity a license must be signed for. A runtime that predates the license
+  // FCs answers with an error, which resolves to `success: false`: the licensing
+  // flow reports check-failed rather than inventing an identity.
+
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    return this.sendCommand(buildGetBoardIdRequest(), (bytes) => parseGetBoardIdResponse(bytes), 'resolve')
+  }
 
   async readLicense(): Promise<DebugLicenseReadResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
@@ -192,7 +205,12 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
    * timeout / event registration logic lives in exactly one place.
    */
   private sendCommand<
-    T extends DebugTransportResult | DebugSetResult | DebugLicenseReadResult | DebugLicenseWriteResult,
+    T extends
+      | DebugTransportResult
+      | DebugSetResult
+      | DebugBoardIdResult
+      | DebugLicenseReadResult
+      | DebugLicenseWriteResult,
   >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve'): Promise<T>
   private sendCommand<T extends Md5ProbeResult>(
     pdu: Uint8Array,

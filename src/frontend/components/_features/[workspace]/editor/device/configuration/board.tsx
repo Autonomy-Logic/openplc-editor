@@ -15,6 +15,7 @@ import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
 import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
@@ -56,12 +57,15 @@ const Board = memo(function () {
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
   // CONNECT flow (D72): open the device channel, classify it, and drive the
-  // flash follow-up when nothing answered the debug protocol.
+  // flash follow-up when nothing answered the debug protocol. `deviceLinkStatus`
+  // mirrors the MAIN process's session — it flips to 'connected' for a held
+  // serial/TCP link and for a runtime (REST) session alike, so it is the one
+  // signal that a session actually exists, whatever the medium.
   const {
     connect: connectDevice,
     disconnect: disconnectDevice,
     isConnected,
-    status: serialStatus,
+    status: deviceLinkStatus,
   } = useDeviceConnect(currentBoardInfo)
 
   // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
@@ -91,6 +95,7 @@ const Board = memo(function () {
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
+  const clearDeviceLicense = useOpenPLCStore((state) => state.deviceActions.clearDeviceLicense)
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
@@ -383,6 +388,10 @@ const Board = memo(function () {
       // The session goes with it: control was this REST connection, and any debug
       // channel opened off it has nothing left to belong to.
       await device.closeRuntimeSession?.()
+      // A DELIBERATE disconnect drops the licence report too, exactly as the
+      // serial flow does: leaving a badge behind would assert possession for
+      // hardware nothing is talking to.
+      clearDeviceLicense()
       return
     }
 
@@ -464,6 +473,7 @@ const Board = memo(function () {
     connectionStatus,
     setRuntimeConnectionStatus,
     setRuntimeJwtToken,
+    clearDeviceLicense,
     openModal,
     deviceBoard,
   ])
@@ -487,6 +497,44 @@ const Board = memo(function () {
       setIncludeEthercatStatsInPolling(false)
     }
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+
+  // Settle the licence for a RUNTIME target once its session is up — once per
+  // session.
+  //
+  // The serial flow settles it INSIDE `connect()`: one held link, awaited, so
+  // the user cannot race the sequence. A runtime target has no such moment in
+  // the renderer — login opens the session MAIN-side (useDeviceConnectionMonitor
+  // reacts to the REST login and calls `openRuntimeSession`), and the device
+  // link status flipping to 'connected' is the announcement that it exists.
+  // Keying on the REST login alone would race that IPC call; keying on BOTH
+  // means the licence FCs only ever run against an established session, over
+  // the debug WebSocket the main process acquires per call.
+  //
+  // The ref, not state: this must fire exactly once per session, and a
+  // re-render caused by the report landing must not re-run the flow.
+  const runtimeLicenseSettledRef = useRef(false)
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensing.isLicensable) return
+    if (connectionStatus !== 'connected' || deviceLinkStatus !== 'connected') {
+      runtimeLicenseSettledRef.current = false
+      return
+    }
+    if (runtimeLicenseSettledRef.current) return
+    runtimeLicenseSettledRef.current = true
+    void licensing.refresh().then((report) => {
+      if (!report) return
+      explainLicenseOutcome(report, {
+        openModal,
+        buy: licensing.buy,
+        // A retry re-runs the flow and explains the NEW outcome, so a transient
+        // failure or a purchase completed in the browser resolves in place.
+        retry: async () => {
+          const next = await licensing.refresh()
+          if (next) explainLicenseOutcome(next, { openModal, buy: licensing.buy })
+        },
+      })
+    })
+  }, [connectionStatus, deviceLinkStatus, currentBoardInfo, licensing, openModal])
 
   return (
     <DeviceEditorSlot>
@@ -636,6 +684,20 @@ const Board = memo(function () {
                 {connectionStatus === 'connected' && plcStatus && (
                   <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
+                {/* Same affordance as the serial connect row below: renders
+                    nothing at all unless this board's VPP is sold licensed AND a
+                    check has landed, so a plain runtime's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
               </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
@@ -702,7 +764,7 @@ const Board = memo(function () {
               </div>
               <DeviceConnectButton
                 containerId='device-connect-button-container'
-                status={serialStatus}
+                status={deviceLinkStatus}
                 onConnect={connectDevice}
                 onDisconnect={disconnectDevice}
                 // A missing port only blocks Connect when serial is the ONLY way in.

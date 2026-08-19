@@ -1,7 +1,8 @@
 /**
- * License function codes (0x49 write / 0x4A read) over the runtime-v4 debug
- * WebSocket. Mocks socket.io-client so the test exercises the REAL PDU framing:
- * builder -> spaced-hex envelope -> canned runtime response -> parser.
+ * License function codes (0x48 anchor / 0x49 write / 0x4A read) over the
+ * runtime-v4 debug WebSocket. Mocks socket.io-client so the test exercises the
+ * REAL PDU framing: builder -> spaced-hex envelope -> canned runtime response ->
+ * parser.
  *
  * This is the editor side of the transport-agnostic activation: the same PDUs the
  * serial and TCP clients send, so a network target licenses through one code path
@@ -76,6 +77,33 @@ function toSpacedHex(bytes: number[]): string {
 }
 
 describe('WebSocketDebugTransport license function codes', () => {
+  it('getBoardId (0x48) hands back the anchor bytes the runtime answers with', async () => {
+    // The runtime answers 0x48 with the RAW hardware anchor (its device-tree
+    // serial, trailing NUL/CR/LF/space already stripped runtime-side) — the
+    // pre-image the licensing identity derives from, not a hex string to decode.
+    const anchor = Array.from('100000003d1a2b4c', (c) => c.charCodeAt(0))
+    currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, anchor.length, ...anchor]) })
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(true)
+    expect(Array.from(result.boardId ?? [])).toEqual(anchor)
+  })
+
+  it('getBoardId (0x48) resolves a refusal as failure, never as an identity', async () => {
+    // A runtime that predates the license FCs hands 0x48 to its realtime core,
+    // which refuses it. That must resolve to success: false — the licensing flow
+    // then reports check-failed instead of deriving a device id from nothing.
+    currentResponder = () => ({ success: false, error: 'Unknown function code' })
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(false)
+    expect(result.boardId).toBeUndefined()
+  })
+
   it('readLicense (0x4A) parses a full 98-byte blob on SUCCESS', async () => {
     const blob = new Uint8Array(98)
     for (let i = 0; i < blob.length; i++) blob[i] = i & 0xff
@@ -138,9 +166,10 @@ describe('WebSocketDebugTransport license function codes', () => {
     expect(result.error).toContain('no license backend wired')
   })
 
-  it('refuses both calls when the socket is not connected', async () => {
+  it('refuses all three calls when the socket is not connected', async () => {
     const transport = new WebSocketDebugTransport({ host: '127.0.0.1', port: 8443, token: 'jwt' })
 
+    await expect(transport.getBoardId()).resolves.toEqual({ success: false, error: 'Not connected to target' })
     await expect(transport.readLicense()).resolves.toEqual({ success: false, error: 'Not connected to target' })
     await expect(transport.writeLicense(new Uint8Array(98))).resolves.toEqual({
       success: false,

@@ -2,6 +2,7 @@ import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type {
+  DebugBoardIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
   DeviceModbusTransport,
@@ -68,7 +69,11 @@ import {
   modbusTransportKind,
 } from '../../../backend/editor/hardware/device-transport-factory'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { inspectDeviceLicense, resolveDeviceLicense } from '../../../backend/editor/license/license-flow'
+import {
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  resolveDeviceLicense,
+} from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -86,6 +91,29 @@ import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-en
 interface ChannelUnavailable {
   error: string
   needsReconnect: true
+}
+
+/**
+ * What the licensing flow needs from whichever channel carries it: the two
+ * license FCs plus the anchor read. `DeviceModbusTransport` satisfies it
+ * structurally (all three are required there); a debug channel is narrowed into
+ * it by `isLicenseChannel`.
+ */
+type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardIdResult> }
+
+/**
+ * Whether a debug channel can carry the licensing flow. The three methods are
+ * optional on `DeviceDebugChannel` because not every medium implements them; the
+ * runtime-v4 WebSocket implements all three. Narrows the client ITSELF rather
+ * than wrapping it, so the flow talks to the same object every other caller
+ * holds — and the frame mutex inside it keeps serialising everyone's traffic.
+ */
+function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
+  return (
+    typeof client.getBoardId === 'function' &&
+    typeof client.readLicense === 'function' &&
+    typeof client.writeLicense === 'function'
+  )
 }
 
 /** Program-identity comparison, case-insensitively — targets report either case. */
@@ -2435,9 +2463,14 @@ class MainProcessBridge implements MainIpcModule {
   // or reflash. Exposing the step means the buy dialog can simply call it again on
   // the link that is already open.
   //
-  // Both ride the CONTROL channel (`requireControl`): the license FCs are ordinary
-  // frames on the same held Modbus link as run/stop and the status poll, so they
-  // queue behind the same mutex and need no connection of their own.
+  // CHANNEL CHOICE (`withLicenseChannel`). On baremetal the license FCs are
+  // ordinary frames on the same held Modbus link as run/stop and the status poll,
+  // so they ride the CONTROL channel and queue behind the same mutex. A
+  // REST-controlled runtime (v4) holds no control channel at all — there the SAME
+  // PDUs ride the debug WebSocket, which the runtime answers at the webserver
+  // level, ahead of its is_connected gate, so a device can be activated while the
+  // PLC is stopped. That channel is acquired per call and released in a
+  // `finally`, exactly like every other per-command debug caller.
 
   /**
    * True while a COMPOUND licensing sequence is running over the held client.
@@ -2460,11 +2493,49 @@ class MainProcessBridge implements MainIpcModule {
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(client: DeviceModbusTransport): Promise<{ anchor: Uint8Array } | { error: string }> {
+  private async readLicenseAnchor(client: LicenseChannel): Promise<{ anchor: Uint8Array } | { error: string }> {
     const board = await client.getBoardId()
     if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
     this.deviceSession.noteTraffic()
     return { anchor: board.boardId ?? new Uint8Array(0) }
+  }
+
+  /**
+   * Run one licensing call over the channel that carries licensing for THIS
+   * session: the held CONTROL link on baremetal, the debug WebSocket on a
+   * REST-controlled runtime. See the CHANNEL CHOICE comment above.
+   *
+   * Every unavailable-channel answer is `check-failed` — never "not licensed":
+   * nothing was asked of the device, so nothing can be asserted about it.
+   */
+  private async withLicenseChannel(
+    what: string,
+    run: (client: LicenseChannel) => Promise<DeviceLicenseReport>,
+  ): Promise<DeviceLicenseReport> {
+    const checkFailed = (error: string): DeviceLicenseReport => ({ outcome: { state: 'check-failed', error } })
+
+    const control = this.deviceClient()
+    if (control) {
+      this.traceChannelUse(what, 'control')
+      return run(control)
+    }
+
+    // No control channel and no REST session: nothing is connected (or the link
+    // is mid-recovery) — explain which, in the same words every handler uses.
+    if (this.deviceSession.getRestAddress() === null) {
+      return checkFailed(this.explainMissingChannel(what).error)
+    }
+
+    return this.withDebugChannel(
+      what,
+      async (client) => {
+        if (!isLicenseChannel(client)) {
+          return checkFailed('this connection cannot carry the license protocol')
+        }
+        return run(client)
+      },
+      (reason) => checkFailed(reason.error),
+    )
   }
 
   /**
@@ -2478,17 +2549,16 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('read license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('read license', async (client) => {
+      try {
+        const anchor = await this.readLicenseAnchor(client)
+        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      return await inspectDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    }
+        return await inspectDeviceLicense(client, { ...request, anchor: anchor.anchor })
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      }
+    })
   }
 
   /**
@@ -2501,31 +2571,32 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('refresh license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('refresh license', async (client) => {
+      // Checked INSIDE the channel scope, so a caller with no channel at all does
+      // not consume the guard — see the "no link to run on" test.
+      if (this.deviceLicenseSequenceInFlight) {
+        // Reported rather than queued: the caller is a button or a connect, and a
+        // second answer arriving later for a question already being answered is
+        // noise at best and a contradictory badge at worst.
+        return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
+      }
+      this.deviceLicenseSequenceInFlight = true
 
-    if (this.deviceLicenseSequenceInFlight) {
-      // Reported rather than queued: the caller is a button or a connect, and a
-      // second answer arriving later for a question already being answered is
-      // noise at best and a contradictory badge at worst.
-      return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
-    }
-    this.deviceLicenseSequenceInFlight = true
+      try {
+        const anchor = await this.readLicenseAnchor(client)
+        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      const report = await resolveDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-      // The license FCs are device traffic like any other: without noting them the
-      // liveness poll can fall due mid-sequence and declare a healthy link lost.
-      this.deviceSession.noteTraffic()
-      return report
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    } finally {
-      this.deviceLicenseSequenceInFlight = false
-    }
+        const report = await resolveDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        // The license FCs are device traffic like any other: without noting them the
+        // liveness poll can fall due mid-sequence and declare a healthy link lost.
+        this.deviceSession.noteTraffic()
+        return report
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      } finally {
+        this.deviceLicenseSequenceInFlight = false
+      }
+    })
   }
 
   handleDebuggerSetVariable = async (

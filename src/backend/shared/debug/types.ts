@@ -152,10 +152,13 @@ export interface DebugTransport {
 export interface DeviceChannelTransport {
   connect(): Promise<void>
   disconnect(): void
-  /** Board-id read (FC 0x48) — the readiness probe that says whether an OpenPLC
-   *  firmware is answering at all. Optional for the same reason as `getStatus`:
-   *  it is a BAREMETAL question. The runtime-v4 WebSocket talks to a target whose
-   *  identity came from the REST login, so it never answers this. */
+  /** Board-id read (FC 0x48). On baremetal it is the readiness probe that says
+   *  whether an OpenPLC firmware is answering at all — and it doubles as the
+   *  LICENSING ANCHOR read. The runtime-v4 WebSocket implements it for the
+   *  anchor alone: the runtime answers 0x48 at the webserver level with the
+   *  hardware anchor the licensed plugin binds its device id to, while readiness
+   *  on a runtime target stays a REST question. Still optional: a medium that
+   *  carries neither role may omit it. */
   getBoardId?(): Promise<DebugBoardIdResult>
   /** Runtime status (FC 0x46): run/stop state, mode-switch position, scan
    *  counter, uptime. Doubles as the liveness probe for a held link — any
