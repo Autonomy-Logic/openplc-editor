@@ -104,6 +104,36 @@ describe('WebSocketDebugTransport license function codes', () => {
     expect(result.boardId).toBeUndefined()
   })
 
+  it('getBoardId (0x48) re-strips a raw anchor tail — the set license_platform.c strips', async () => {
+    // Defensive re-normalization: the runtime already strips on the wire, but
+    // the closed core's __linux__ branch strips this exact set before deciding
+    // the identity — so a runtime build that ever answered raw must not make
+    // the editor derive a deviceId the device cannot reproduce.
+    const serial = Array.from('10000000abcdef01', (c) => c.charCodeAt(0))
+    const rawTail = [...serial, 0x00, 0x0d, 0x0a, 0x20] // NUL, CR, LF, SPACE
+    currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, rawTail.length, ...rawTail]) })
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(true)
+    expect(Array.from(result.boardId ?? [])).toEqual(serial)
+    expect(result.boardIdHex).toBe(serial.map((b) => b.toString(16).padStart(2, '0')).join(''))
+  })
+
+  it('getBoardId (0x48) strips an all-padding anchor to EMPTY, never to an identity', async () => {
+    // All-padding is what the core would strip to zero bytes as well: the
+    // licensing flow refuses a zero-length anchor ("no unique hardware id")
+    // instead of hashing padding into a fleet-wide shared deviceId.
+    currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, 3, 0x00, 0x0a, 0x20]) })
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(true)
+    expect(result.boardId?.length).toBe(0)
+  })
+
   it('readLicense (0x4A) parses a full 98-byte blob on SUCCESS', async () => {
     const blob = new Uint8Array(98)
     for (let i = 0; i < blob.length; i++) blob[i] = i & 0xff

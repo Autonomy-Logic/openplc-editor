@@ -72,6 +72,21 @@ function bytesToHexSpaced(buf: Uint8Array): string {
   return out.join(' ')
 }
 
+/**
+ * Trailing bytes stripped from a runtime-v4 anchor: NUL, LF, CR, SPACE — the
+ * EXACT set `license_platform.c` (`__linux__` branch) strips before deciding
+ * the device identity, no more and no fewer. Every byte added to or removed
+ * from this set changes the derived deviceId of some board in the field.
+ */
+const ANCHOR_TRAILING_STRIP = new Set([0x00, 0x0a, 0x0d, 0x20])
+
+/** Strip the anchor's trailing normalization bytes (see the set above). */
+function stripAnchorTail(anchor: Uint8Array): Uint8Array {
+  let end = anchor.length
+  while (end > 0 && ANCHOR_TRAILING_STRIP.has(anchor[end - 1])) end--
+  return end === anchor.length ? anchor : anchor.subarray(0, end)
+}
+
 /** "AA BB CC" hex string → Uint8Array.  Tolerates extra whitespace. */
 function hexSpacedToBytes(hex: string): Uint8Array {
   const parts = hex.split(/\s+/).filter(Boolean)
@@ -173,11 +188,34 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   // identity a license must be signed for. A runtime that predates the license
   // FCs answers with an error, which resolves to `success: false`: the licensing
   // flow reports check-failed rather than inventing an identity.
+  //
+  // The trailing strip below is DEFENSIVE re-normalization, not the primary
+  // one: the runtime already strips on the wire, so on a current runtime it is
+  // a no-op. It exists because the closed core's __linux__ branch strips the
+  // same set before deciding the identity — so if a runtime build ever answers
+  // raw, an unstripped anchor here would derive a deviceId the device never
+  // reproduces, and a license bought for it would never verify. Stripping is
+  // always identity-correct on THIS medium and only this medium: the serial
+  // clients must never do it (a baremetal unique-id is raw binary, and a MAC
+  // genuinely ending in one of these bytes keeps it in its identity).
 
   async getBoardId(): Promise<DebugBoardIdResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildGetBoardIdRequest(), (bytes) => parseGetBoardIdResponse(bytes), 'resolve')
+    const result = await this.sendCommand(
+      buildGetBoardIdRequest(),
+      (bytes) => parseGetBoardIdResponse(bytes),
+      'resolve',
+    )
+    if (!result.success || !result.boardId) return result
+
+    const anchor = stripAnchorTail(result.boardId)
+    if (anchor.length === result.boardId.length) return result
+    return {
+      ...result,
+      boardId: anchor,
+      boardIdHex: Array.from(anchor, (b) => b.toString(16).padStart(2, '0')).join(''),
+    }
   }
 
   async readLicense(): Promise<DebugLicenseReadResult> {
