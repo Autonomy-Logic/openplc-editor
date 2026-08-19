@@ -64,6 +64,20 @@ export const SOFTMOTION_GLOBALS_URI = 'inmemory://softmotion/__axes__.st'
  */
 export const RESOURCE_GLOBALS_URI = 'inmemory://globals/__resource__.st'
 
+/**
+ * URI for the synthesized Global-Variable-List document — one STRUCT type per list plus a
+ * global instance of each, which is exactly what the compiler generates for them.
+ *
+ * Emitted as a **bare top-level `VAR_GLOBAL` block**, the same way the SoftMotion axes are:
+ * strucpp puts top-level globals in the ambient scope, so `GVL.Output1` resolves from any POU
+ * without a `VAR_EXTERNAL` — and the user's own documents stay byte-for-byte what they wrote.
+ * (The compiler needs those externals because it puts the instances inside a CONFIGURATION;
+ * here they are ambient, so it does not.)
+ *
+ * Single fixed URI per session; the lists are project-global.
+ */
+export const GLOBAL_VARIABLE_LISTS_URI = 'inmemory://globals/__lists__.st'
+
 /** Public service the rest of the renderer talks to. */
 export interface StLspService {
   /**

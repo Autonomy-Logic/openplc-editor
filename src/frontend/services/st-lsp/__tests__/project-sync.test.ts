@@ -145,6 +145,145 @@ function setProjectPous(pous: PLCPou[]) {
 beforeEach(() => {
   // Clear any leftover POUs from prior tests.
   setProjectPous([])
+  // And any leftover lists: one left in the store adds its synthesized document to every
+  // later test's didOpen/didChange/didClose counts.
+  openPLCStoreBase.setState((state) => ({
+    ...state,
+    project: { ...state.project, data: { ...state.project.data, globalVariableLists: [] } },
+  }))
+})
+
+describe('attachProjectSync — global variable lists', () => {
+  const seedList = () => {
+    openPLCStoreBase.setState((state) => ({
+      ...state,
+      project: {
+        ...state.project,
+        data: {
+          ...state.project.data,
+          pous: [],
+          globalVariableLists: [
+            {
+              name: 'GVL',
+              variables: [
+                {
+                  name: 'Output1',
+                  class: 'global' as const,
+                  type: { definition: 'base-type' as const, value: 'BOOL' },
+                  location: '',
+                  documentation: '',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }))
+  }
+
+  const listDocCalls = (mock: jest.Mock) =>
+    mock.mock.calls.filter(([uri]: [string]) => uri === 'inmemory://globals/__lists__.st')
+
+  it('opens the synthesized document with the lists already in the store', () => {
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+
+    const [, text] = listDocCalls(service.openDocument)[0]
+    expect(text).toContain('GVL_TYPE : STRUCT')
+    expect(text).toContain('Output1 : BOOL;')
+    expect(text).toContain('GVL : GVL_TYPE;')
+    handle.dispose()
+  })
+
+  it('refreshes the document when a member is edited through the table', () => {
+    // The table writes one cell at a time through the shared variable action; the LSP has to
+    // hear about it, or the editor keeps completing `GVL.` against the members as they were.
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { name: 'MotorEnable' },
+    })
+
+    const calls = listDocCalls(service.changeDocument)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[calls.length - 1][1]).toContain('MotorEnable : BOOL;')
+    handle.dispose()
+  })
+
+  it('re-publishes a POU that references the list, so it is analysed against the new members', () => {
+    // The POU's own text does not change when a member is renamed — it only ever names the
+    // list — so without this the worker answers `GVL.` from the analysis it already had.
+    seedList()
+    setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;'), makeStPou('Ignores', 'x := 1;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { name: 'MotorEnable' },
+    })
+
+    const uris = service.changeDocument.mock.calls.map(([uri]: [string]) => uri)
+    expect(uris).toContain('inmemory://pou/Uses.st')
+    // And only that one: re-publishing every document per edited cell is analysis work
+    // nothing asked for.
+    expect(uris).not.toContain('inmemory://pou/Ignores.st')
+    handle.dispose()
+  })
+
+  it('does not re-publish consumers when the edit leaves the declaration identical', () => {
+    // Member documentation is not part of the declaration, so an edit to it moves the store
+    // without giving the worker anything to re-analyse.
+    seedList()
+    setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { documentation: 'now documented' },
+    })
+
+    expect(service.changeDocument).not.toHaveBeenCalled()
+    handle.dispose()
+  })
+
+  it('refreshes the document when a member is added through the table', () => {
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.createVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      data: {
+        name: 'Extra',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+
+    const calls = listDocCalls(service.changeDocument)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[calls.length - 1][1]).toContain('Extra : INT;')
+    handle.dispose()
+  })
 })
 
 describe('attachProjectSync', () => {
