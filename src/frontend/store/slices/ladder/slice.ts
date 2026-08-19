@@ -65,22 +65,39 @@ import { deriveHandleBranches } from '../../../components/_molecules/graphical-e
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
 
+/**
+ * Whether a value carries everything `getBlockSize` reads off a variant.
+ *
+ * A block node is not required to carry a complete variant — a placeholder dropped on the
+ * canvas, or a fixture, may have neither name nor pins. Sizing is an improvement on such a
+ * node, never a precondition for loading it, so anything incomplete is left exactly as it is.
+ * The entries are checked and not just the array, because `getBlockSize` reads every one's
+ * `name` and `class`.
+ *
+ * A guard rather than an assertion: this runs against project-file data, which is whatever
+ * the file said, and `as` would only silence the compiler about that.
+ */
+const isSizableVariant = (value: unknown): value is BlockVariant => {
+  if (typeof value !== 'object' || value === null) return false
+  const { name, variables } = value as { name?: unknown; variables?: unknown }
+  return (
+    typeof name === 'string' &&
+    Array.isArray(variables) &&
+    variables.every(
+      (entry): boolean =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as { name?: unknown }).name === 'string' &&
+        typeof (entry as { class?: unknown }).class === 'string',
+    )
+  )
+}
+
 /** Give a block node the size the editor computes for its variant; leave anything else be. */
 const sizeBlockNode = (node: Node): Node => {
   if (node.type !== 'block') return node
-  const variant = (node.data as { variant?: BlockVariant }).variant
-  // A block node is not required to carry a complete variant — a placeholder dropped on the
-  // canvas, or a fixture, may have neither name nor pins. Sizing is an improvement on such a
-  // node, never a precondition for loading it, so anything incomplete is left exactly as it
-  // is. `getBlockSize` reads every entry's `name` and `class`, so the entries are checked too
-  // and not just the array: this runs against project-file data, which no type assertion
-  // validates.
-  if (
-    typeof variant?.name !== 'string' ||
-    !Array.isArray(variant.variables) ||
-    !variant.variables.every((v) => typeof v?.name === 'string' && typeof v?.class === 'string')
-  )
-    return node
+  const variant: unknown = node.data?.variant
+  if (!isSizableVariant(variant)) return node
   const { width, height } = getBlockSize(variant, { x: 0, y: 0 })
   return {
     ...node,
@@ -97,7 +114,9 @@ const sizeBlockNode = (node: Node): Node => {
  * negative extent, which is not a shape it is written against.
  */
 const rungBounds = (rung: RungLadderState): [number, number] => {
-  const [width, height] = rung.defaultBounds ?? []
+  // `?? []` would only cover null/undefined; an object in the file makes the destructuring
+  // throw, which costs the rung its recovery.
+  const [width, height] = Array.isArray(rung.defaultBounds) ? rung.defaultBounds : []
   return [
     Number.isFinite(width) && width > 0 ? width : DEFAULT_RUNG_BOUNDS[0],
     Number.isFinite(height) && height > 0 ? height : DEFAULT_RUNG_BOUNDS[1],
@@ -111,11 +130,12 @@ const rungBounds = (rung: RungLadderState): [number, number] => {
  * `connectedVariables`, and `updateVariableBlockPosition` rebuilds them with fresh ids rather
  * than moving them — a rung that arrives with one can legitimately come back with two, or with
  * none. Counting nodes therefore says nothing, while every contact, coil, block and parallel
- * marker must survive by id.
+ * marker must survive as itself: same id AND same type, so a contact that came back as some
+ * other kind of node counts as lost rather than as moved.
  */
-const elementsSurvived = (before: Node[], after: Node[]): boolean => {
-  const present = new Set(after.map((node) => node.id))
-  return before.every((node) => node.type === 'variable' || present.has(node.id))
+export const elementsSurvived = (before: Node[], after: Node[]): boolean => {
+  const present = new Set(after.map((node) => `${node.type}\u0000${node.id}`))
+  return before.every((node) => node.type === 'variable' || present.has(`${node.type}\u0000${node.id}`))
 }
 
 /** Whether the layout actually moved anything, comparing node for node by id. */

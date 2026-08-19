@@ -2,7 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { produce } from 'immer'
 import { createStore } from 'zustand/vanilla'
 
-import { createLadderFlowSlice, needsPositionRecovery } from '../slices/ladder/slice'
+import { createLadderFlowSlice, elementsSurvived, needsPositionRecovery } from '../slices/ladder/slice'
 import type { LadderFlowSlice, LadderFlowType, RungLadderState } from '../slices/ladder/types'
 
 function makeStore() {
@@ -243,6 +243,25 @@ describe('createLadderFlowSlice', () => {
       ).not.toThrow()
     })
 
+    it('falls back to default bounds when the file carries a non-array in their place', () => {
+      // `?? []` covers null and undefined only; an object here made the destructuring throw,
+      // and the rung then kept the geometry recovery was meant to replace.
+      const rung = {
+        ...makeRung({
+          nodes: [
+            makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+            makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
+          ],
+        }),
+        defaultBounds: {} as unknown as number[],
+      }
+
+      expect(() =>
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
+      ).not.toThrow()
+      expect(store.getState().ladderFlows[0].rungs[0].nodes.map((n) => n.id)).toContain('c1')
+    })
+
     it('falls back to default bounds when the rung carries none it can use', () => {
       const rung = {
         ...makeRung({
@@ -257,6 +276,41 @@ describe('createLadderFlowSlice', () => {
       expect(() =>
         store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
       ).not.toThrow()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // elementsSurvived
+  // -------------------------------------------------------------------------
+  describe('elementsSurvived', () => {
+    const node = (id: string, type: string): Node => makeNode({ id, type })
+
+    it('accepts a layout that moved every element', () => {
+      const before = [node('c1', 'contact'), node('b1', 'block')]
+      expect(elementsSurvived(before, [node('b1', 'block'), node('c1', 'contact')])).toBe(true)
+    })
+
+    it('accepts variable boxes rebuilt under new ids, which the layout does on every block', () => {
+      // `updateVariableBlockPosition` discards the incoming boxes and builds its own, so one
+      // can legitimately become two — or none.
+      const before = [node('b1', 'block'), node('variable_nwl_0_3', 'variable')]
+      const after = [node('b1', 'block'), node('VARIABLE_1', 'variable'), node('VARIABLE_2', 'variable')]
+      expect(elementsSurvived(before, after)).toBe(true)
+    })
+
+    it('rejects an empty result, which would delete the rung', () => {
+      expect(elementsSurvived([node('c1', 'contact')], [])).toBe(false)
+    })
+
+    it('rejects a missing element even when the count is unchanged', () => {
+      const before = [node('c1', 'contact'), node('c2', 'contact')]
+      expect(elementsSurvived(before, [node('c1', 'contact'), node('c3', 'contact')])).toBe(false)
+    })
+
+    it('rejects an element that came back as a different type under its own id', () => {
+      // Same id is not the same element: a contact returned as anything else has been
+      // replaced, not moved, and the rung's incoming geometry is the safer answer.
+      expect(elementsSurvived([node('c1', 'contact')], [node('c1', 'coil')])).toBe(false)
     })
   })
 
