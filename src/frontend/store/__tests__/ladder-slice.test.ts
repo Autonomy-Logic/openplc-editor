@@ -214,6 +214,50 @@ describe('createLadderFlowSlice', () => {
       expect(store.getState().ladderFlows[0].updated).toBe(false)
     })
 
+    it('recovers a wired rung: sizes its block, moves its elements, and marks the flow dirty', () => {
+      // The happy path, which the cases around it only approach: a rung whose elements are all
+      // at the origin but which the layout CAN walk — rails, a block between them, edges
+      // linking the three. Everything recovery is for happens here and nowhere else in this
+      // file: the block is sized from its variant, the layout moves what it was given, and the
+      // flow is marked dirty so the rebuilt coordinates reach disk on the next save.
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail', position: { x: 0, y: 0 } }),
+          makeNode({
+            id: 'b1',
+            type: 'block',
+            position: { x: 0, y: 0 },
+            data: {
+              variant: {
+                name: 'AND',
+                variables: [
+                  { name: 'IN1', class: 'input' },
+                  { name: 'IN2', class: 'input' },
+                  { name: 'OUT', class: 'output' },
+                ],
+              },
+            },
+          }),
+          makeNode({ id: 'right-rail-rung-1', type: 'powerRail', position: { x: 0, y: 0 } }),
+        ],
+        edges: [
+          makeEdge({ id: 'e1', source: 'left-rail-rung-1', target: 'b1' }),
+          makeEdge({ id: 'e2', source: 'b1', target: 'right-rail-rung-1' }),
+        ],
+      })
+
+      store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] })
+
+      const flow = store.getState().ladderFlows[0]
+      const block = flow.rungs[0].nodes.find((node) => node.id === 'b1')
+      expect(block).toBeTruthy()
+      expect(block?.position).not.toEqual({ x: 0, y: 0 })
+      // Width comes from the variant, not from the layout — a rung recovered without this step
+      // is laid out around a block of zero width.
+      expect(block?.width).toBeGreaterThan(0)
+      expect(flow.updated).toBe(true)
+    })
+
     it('never loses an element to a layout that returns fewer nodes', () => {
       // The layout can come back short — empty, for an unwired rung — and accepting that would
       // delete part of the diagram on open. Moving an element is recovery; losing one is not.
@@ -315,6 +359,37 @@ describe('createLadderFlowSlice', () => {
       // Same id is not the same element: a contact returned as anything else has been
       // replaced, not moved, and the rung's incoming geometry is the safer answer.
       expect(elementsSurvived([node('c1', 'contact')], [node('c1', 'coil')])).toBe(false)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // setHandleBranches
+  // -------------------------------------------------------------------------
+  describe('setHandleBranches', () => {
+    const branch = { blockId: 'b1', handleId: 'R', direction: 'input' as const, nodeIds: ['c1', 'c2'] }
+
+    it('stores the rung branches and marks the flow dirty', () => {
+      seedFlowWithRung(store, 'editor-1')
+      store.getState().ladderFlowActions.setHandleBranches({
+        handleBranches: [branch],
+        editorName: 'editor-1',
+        rungId: 'rung-1',
+      })
+
+      const flow = store.getState().ladderFlows[0]
+      expect(flow.rungs[0].handleBranches).toEqual([branch])
+      expect(flow.updated).toBe(true)
+    })
+
+    it('is a no-op for an unknown flow or rung', () => {
+      seedFlowWithRung(store, 'editor-1')
+      const actions = store.getState().ladderFlowActions
+      actions.setHandleBranches({ handleBranches: [branch], editorName: 'nope', rungId: 'rung-1' })
+      actions.setHandleBranches({ handleBranches: [branch], editorName: 'editor-1', rungId: 'nope' })
+
+      // `addLadderFlow` derives the branches on load, so an untouched rung carries an empty
+      // list rather than nothing at all.
+      expect(store.getState().ladderFlows[0].rungs[0].handleBranches).toEqual([])
     })
   })
 
