@@ -104,6 +104,20 @@ const rungBounds = (rung: RungLadderState): [number, number] => {
   ]
 }
 
+/**
+ * Whether every element the rung came in with is still there.
+ *
+ * Variable boxes are exempt, and not as a convenience: they are DERIVED from a block's
+ * `connectedVariables`, and `updateVariableBlockPosition` rebuilds them with fresh ids rather
+ * than moving them — a rung that arrives with one can legitimately come back with two, or with
+ * none. Counting nodes therefore says nothing, while every contact, coil, block and parallel
+ * marker must survive by id.
+ */
+const elementsSurvived = (before: Node[], after: Node[]): boolean => {
+  const present = new Set(after.map((node) => node.id))
+  return before.every((node) => node.type === 'variable' || present.has(node.id))
+}
+
 /** Whether the layout actually moved anything, comparing node for node by id. */
 const positionsChanged = (before: Node[], after: Node[]): boolean => {
   const priorById = new Map(before.map((node) => [node.id, node.position]))
@@ -207,10 +221,10 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
               const { nodes, edges } = updateDiagramElementsPosition(sized, rungBounds(sized))
 
               // Recovery may MOVE an element; it may never lose one. The layout can return a
-              // shorter node set for a rung it did not understand — on a skeletal or unwired
-              // rung it can come back empty — and accepting that deletes part of the user's
-              // diagram on open, silently. Anything but a node-for-node result is a failure.
-              if (nodes.length !== sized.nodes.length) return rung
+              // set that has dropped elements for a rung it did not understand — on a skeletal
+              // or unwired rung it comes back empty — and accepting that deletes part of the
+              // user's diagram on open, silently.
+              if (!elementsSurvived(sized.nodes, nodes)) return rung
 
               // The layout hands the ORIGINAL geometry straight back when it cannot walk the
               // rung (`diagram/index.ts`, the `previousLinkedNodes` early return) — no throw,
