@@ -1,17 +1,155 @@
+/**
+ * Whether a rung's coordinates are unusable and have to be rebuilt.
+ *
+ * Ladder is a rigid matrix — every element sits on the rung's power line at a step the layout
+ * computes — so a rung is either laid out or it is broken; there is no "arranged differently
+ * but fine". That makes the damage detectable rather than guessed at. Three signals, none of
+ * them things this editor writes:
+ *
+ *   - a `position` that IS there but holds non-finite numbers, which cannot be drawn;
+ *   - an element at the ORIGIN. The rails live at x=0 and the layout never puts an element
+ *     there, so one element at `{0,0}` is already conclusive — a rung holding a single coil
+ *     would otherwise go undetected and draw on top of the left rail; and
+ *   - two elements sharing one point, which is what a writer that computes no geometry emits
+ *     for a rung of several elements, and what a partial parse leaves behind.
+ *
+ * A node with NO `position` at all is deliberately not a signal. That is not a damaged
+ * diagram, it is one assembled programmatically — a fixture, a test, a caller building a rung
+ * by hand — and re-laying those out would rewrite nodes their author is still holding.
+ *
+ * Anything else is left exactly as the file has it. A diagram someone arranged by hand is not
+ * this editor's to rearrange on open.
+ */
+// Exported for its own tests: the predicate decides whether a project's geometry is thrown
+// away and rebuilt, and every branch of it is a judgement about data this editor did not write.
+export const needsPositionRecovery = (rung: RungLadderState): boolean => {
+  // Rails are placed by the rung itself, not by the element layout, so they never make a rung
+  // look broken and never rescue one that is.
+  const elements = rung.nodes.filter((node) => node.type !== 'powerRail')
+  if (elements.length === 0) return false
+
+  const seen = new Set<string>()
+  for (const node of elements) {
+    if (!node.position) continue
+    const { x, y } = node.position
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return true
+    if (x === 0 && y === 0) return true
+    // `+ 0` normalises negative zero: `-0` and `0` are the same point but stringify
+    // differently, so without it two elements on top of each other slip through whenever one
+    // axis arrives as `-0` — which `JSON.parse` preserves.
+    const point = `${x + 0},${y + 0}`
+    if (seen.has(point)) return true
+    seen.add(point)
+  }
+  return false
+}
+
+import type { Node } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCVariable, RungLadderState } from '../../../../middleware/shared/ports/types'
 import {
   defaultCustomNodesStyles,
   nodesBuilder,
 } from '../../../components/_atoms/graphical-editor/ladder/node-builders'
-import type { LadderBlockConnectedVariables } from '../../../components/_atoms/graphical-editor/ladder/utils/types'
+import type {
+  BlockVariant,
+  LadderBlockConnectedVariables,
+} from '../../../components/_atoms/graphical-editor/ladder/utils/types'
+import { getBlockSize } from '../../../components/_atoms/graphical-editor/ladder/utils/utils'
 import { removeElements } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
+import { updateDiagramElementsPosition } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { deriveHandleBranches } from '../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/handle-branch'
 import { LadderFlowSlice, LadderFlowState } from './types'
 import { duplicateLadderRung } from './utils'
+
+/**
+ * Whether a value carries everything `getBlockSize` reads off a variant.
+ *
+ * A block node is not required to carry a complete variant — a placeholder dropped on the
+ * canvas, or a fixture, may have neither name nor pins. Sizing is an improvement on such a
+ * node, never a precondition for loading it, so anything incomplete is left exactly as it is.
+ * The entries are checked and not just the array, because `getBlockSize` reads every one's
+ * `name` and `class`.
+ *
+ * A guard rather than an assertion: this runs against project-file data, which is whatever
+ * the file said, and `as` would only silence the compiler about that.
+ */
+const isSizableVariant = (value: unknown): value is BlockVariant => {
+  if (typeof value !== 'object' || value === null) return false
+  const { name, variables } = value as { name?: unknown; variables?: unknown }
+  return (
+    typeof name === 'string' &&
+    Array.isArray(variables) &&
+    variables.every(
+      (entry): boolean =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as { name?: unknown }).name === 'string' &&
+        typeof (entry as { class?: unknown }).class === 'string',
+    )
+  )
+}
+
+/** Give a block node the size the editor computes for its variant; leave anything else be. */
+const sizeBlockNode = (node: Node): Node => {
+  if (node.type !== 'block') return node
+  const variant: unknown = node.data?.variant
+  if (!isSizableVariant(variant)) return node
+  const { width, height } = getBlockSize(variant, { x: 0, y: 0 })
+  return {
+    ...node,
+    width,
+    height,
+    measured: { width, height },
+  }
+}
+
+/**
+ * The rung's bounds, or the default when the file's are unusable.
+ *
+ * A short or malformed `defaultBounds` would otherwise reach the layout as `undefined` or a
+ * negative extent, which is not a shape it is written against.
+ */
+const rungBounds = (rung: RungLadderState): [number, number] => {
+  // `?? []` would only cover null/undefined; an object in the file makes the destructuring
+  // throw, which costs the rung its recovery.
+  const [width, height] = Array.isArray(rung.defaultBounds) ? rung.defaultBounds : []
+  return [
+    Number.isFinite(width) && width > 0 ? width : DEFAULT_RUNG_BOUNDS[0],
+    Number.isFinite(height) && height > 0 ? height : DEFAULT_RUNG_BOUNDS[1],
+  ]
+}
+
+/**
+ * Whether every element the rung came in with is still there.
+ *
+ * Variable boxes are exempt, and not as a convenience: they are DERIVED from a block's
+ * `connectedVariables`, and `updateVariableBlockPosition` rebuilds them with fresh ids rather
+ * than moving them — a rung that arrives with one can legitimately come back with two, or with
+ * none. Counting nodes therefore says nothing, while every contact, coil, block and parallel
+ * marker must survive as itself: same id AND same type, so a contact that came back as some
+ * other kind of node counts as lost rather than as moved.
+ */
+export const elementsSurvived = (before: Node[], after: Node[]): boolean => {
+  const present = new Set(after.map((node) => `${node.type}\u0000${node.id}`))
+  return before.every((node) => node.type === 'variable' || present.has(`${node.type}\u0000${node.id}`))
+}
+
+/** Whether the layout actually moved anything, comparing node for node by id. */
+const positionsChanged = (before: Node[], after: Node[]): boolean => {
+  const priorById = new Map(before.map((node) => [node.id, node.position]))
+  return after.some((node) => {
+    const prior = priorById.get(node.id)
+    if (!prior) return true
+    return prior.x !== node.position.x || prior.y !== node.position.y
+  })
+}
+
+/** Bounds a rung falls back to when the file does not carry usable ones. */
+const DEFAULT_RUNG_BOUNDS: [number, number] = [300, 100]
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -74,9 +212,66 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
             handleBranches: deriveHandleBranches(rung),
           }))
 
-          // Reset updated to false on load — the flow is being loaded from a saved project.
-          // Only mark as updated if legacy data was migrated so the next save writes the new format.
-          const newFlow = { ...flow, rungs: rungsWithBranches, updated: needsMigration }
+          // Rebuild the geometry of any rung whose coordinates cannot be used, and ONLY
+          // those.
+          //
+          // Where a ladder element sits is derived from the graph — element order, which pins
+          // carry branches, how tall a block must be to fit them — by
+          // `updateDiagramElementsPosition` and the passes it runs. Those rules live here and
+          // change as the editor grows, so anything writing a .ld from outside (the CODESYS
+          // converter, a PLCopen import) can emit the graph and leave geometry alone: this
+          // recovers it.
+          //
+          // Running it on every load instead would re-lay-out projects that are already
+          // correct, moving elements on open for no reason the user asked for. So it is a
+          // recovery path, gated on `needsPositionRecovery`, not a load step.
+          let recovered = false
+          const laidOutRungs = rungsWithBranches.map((rung) => {
+            if (!needsPositionRecovery(rung)) return rung
+            try {
+              // Sizing is INSIDE the try. A block whose variant is incomplete would otherwise
+              // throw here and take the project load with it — and this path exists precisely
+              // to cope with a rung whose contents cannot be trusted.
+              //
+              // `updateDiagramElementsPosition` spaces a block's pin rows and grows it to fit
+              // its branches, but block WIDTH comes from the variant and is otherwise only
+              // computed when one is created or edited, so a rung recovered without this lays
+              // out around blocks of zero width.
+              const sized = { ...rung, nodes: rung.nodes.map(sizeBlockNode) }
+              const { nodes, edges } = updateDiagramElementsPosition(sized, rungBounds(sized))
+
+              // Recovery may MOVE an element; it may never lose one. The layout can return a
+              // set that has dropped elements for a rung it did not understand — on a skeletal
+              // or unwired rung it comes back empty — and accepting that deletes part of the
+              // user's diagram on open, silently.
+              if (!elementsSurvived(sized.nodes, nodes)) return rung
+
+              // The layout hands the ORIGINAL geometry straight back when it cannot walk the
+              // rung (`diagram/index.ts`, the `previousLinkedNodes` early return) — no throw,
+              // nothing rebuilt. Treating that as a recovery marks the flow dirty on its
+              // behalf: the user is prompted to save a project they never edited, the save
+              // writes the same unusable coordinates back, and the next open recovers again.
+              if (!positionsChanged(rung.nodes, nodes)) return rung
+
+              recovered = true
+              return { ...sized, nodes, edges }
+            } catch {
+              // Best-effort by definition: a rung the layout cannot walk keeps the geometry it
+              // arrived with, and `recovered` is left alone — one rung failing must not erase
+              // another rung's success, which is what marks the flow dirty so the rebuilt
+              // coordinates reach disk.
+              return rung
+            }
+          })
+
+          // A recovered rung marks the flow dirty for the same reason a migrated one does: the
+          // file still holds the unusable coordinates until the next save writes the rebuilt
+          // ones, and recovering again on every open is work nobody needs.
+          const newFlow = {
+            ...flow,
+            rungs: laidOutRungs,
+            updated: needsMigration || recovered,
+          }
 
           if (flowIndex === -1) {
             ladderFlows.push(newFlow)

@@ -53,7 +53,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
-import type { ProjectResponse, ProjectSlice, ProjectSliceRoot } from './types'
+import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
 
@@ -688,6 +688,41 @@ const regenerateDatatypeText = (name: string, getState: ProjectGetState): void =
 // the variables from before the user started typing — the buffer had no way in, because
 // nothing but a blur committed it.
 
+/**
+ * The variables array a scoped action works on.
+ *
+ * Every variable action resolved this the same way inline, which is how the three scopes
+ * drifted: a Global Variable List's members are variables like a POU's locals and the
+ * resource globals are, so they belong on the same actions rather than on a parallel set.
+ *
+ * `local` without a POU falls through to the resource globals, which is what the inline
+ * ternaries did and what their callers rely on.
+ */
+const scopedVariables = (
+  data: ProjectSlice['project']['data'],
+  scope: VariableScope,
+  associatedPou?: string,
+  associatedList?: string,
+): PLCVariable[] | undefined => {
+  if (scope === 'local' && associatedPou) return data.pous.find((p) => p.name === associatedPou)?.interface?.variables
+  if (scope === 'global-variable-list')
+    return (data.globalVariableLists ?? []).find((l) => nameMatches(l.name, associatedList ?? ''))?.variables
+  return data.configurations.resource.globalVariables
+}
+
+/**
+ * Drop a list's preserved declaration text after its members change.
+ *
+ * `text` is the verbatim declaration kept when it could not be parsed, and it is what the
+ * editor SHOWS while it is set. Editing a member through the table means the declaration
+ * reads again, so leaving the old text would keep showing the broken version the user just
+ * fixed — the same reason `updateGlobalVariableList` drops it.
+ */
+const clearGlobalVariableListText = (data: ProjectSlice['project']['data'], listName?: string): void => {
+  const list = (data.globalVariableLists ?? []).find((l) => nameMatches(l.name, listName ?? ''))
+  if (list) delete list.text
+}
+
 const findGlobalVariableListEditorCode = (name: string, getState: ProjectGetState): string | undefined => {
   const state = getState()
   const editorModel = state.editor.meta.name === name ? state.editor : state.editors.find((e) => e.meta.name === name)
@@ -999,10 +1034,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // variable as a template, so the validator walks the location forward
       // to the next free slot to avoid duplicate-address compile errors
       // (forum thread "openplc-420-teething-bugs", v4.2.0).
-      const sourceVariables =
-        scope === 'local' && associatedPou
-          ? (getState().project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables ?? [])
-          : getState().project.data.configurations.resource.globalVariables
+      const sourceVariables = scopedVariables(getState().project.data, scope, associatedPou, dto.associatedList) ?? []
       const validated = createVariableValidation(sourceVariables, data)
       // Single-field location model: `location` is the binding itself — an
       // alias name OR a literal `%addr`. It is stored verbatim (no
@@ -1013,17 +1045,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
-          // Resolve the target variables array (local POU or global)
-          let variables: PLCVariable[] | undefined
-          if (scope === 'local' && associatedPou) {
-            const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
-            if (!pou?.interface) {
-              response = fail('POU not found')
-              return
-            }
-            variables = pou.interface.variables
-          } else {
-            variables = slice.project.data.configurations.resource.globalVariables
+          const variables = scopedVariables(slice.project.data, scope, associatedPou, dto.associatedList)
+          if (!variables) {
+            response = fail(scope === 'global-variable-list' ? 'Global variable list not found' : 'POU not found')
+            return
           }
 
           // Insert or append
@@ -1037,6 +1062,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           } else {
             variables.push(data)
           }
+          if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, dto.associatedList)
           response.data = data
         }),
       )
@@ -1060,7 +1086,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
-    updateVariable: ({ scope, associatedPou, rowId, variableId, data: updates }) => {
+    updateVariable: ({ scope, associatedPou, associatedList, rowId, variableId, data: updates }) => {
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
@@ -1074,17 +1100,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // address; alias→address resolution happens at compile time.
       setState(
         produce((slice: ProjectSlice) => {
-          // Resolve the target variables array (local POU or global)
-          let variables: PLCVariable[] | undefined
-          if (scope === 'local' && associatedPou) {
-            const pou = slice.project.data.pous.find((p) => p.name === associatedPou)
-            if (!pou?.interface) {
-              response = fail('POU not found')
-              return
-            }
-            variables = pou.interface.variables
-          } else {
-            variables = slice.project.data.configurations.resource.globalVariables
+          const variables = scopedVariables(slice.project.data, scope, associatedPou, associatedList)
+          if (!variables) {
+            response = fail(scope === 'global-variable-list' ? 'Global variable list not found' : 'POU not found')
+            return
           }
 
           const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
@@ -1106,10 +1125,14 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
           response.data = variables[found.index]
 
+          if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, associatedList)
+
           // A shared global's watch flag belongs to the global, not to any one
           // reference — keep the global's definition and every VAR_EXTERNAL to it
-          // in sync so the debug icon toggles everywhere at once.
-          if (updates.debug !== undefined) {
+          // in sync so the debug icon toggles everywhere at once. A list member is
+          // reached as `<list>.<member>` and never through a VAR_EXTERNAL of its own,
+          // so there is nothing to keep in sync for one.
+          if (updates.debug !== undefined && scope !== 'global-variable-list') {
             const target = variables[found.index]
             if (scope === 'global' || target.class === 'external') {
               syncGlobalDebugFlag(slice, target.name, updates.debug)
@@ -1120,17 +1143,14 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       if (scope === 'local' && response.ok) regenerateVariablesText(associatedPou, getState)
       return response
     },
-    getVariable: ({ scope, associatedPou, rowId, variableId }) => {
-      const variables =
-        scope === 'local' && associatedPou
-          ? getState().project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
-          : getState().project.data.configurations.resource.globalVariables
+    getVariable: ({ scope, associatedPou, associatedList, rowId, variableId }) => {
+      const variables = scopedVariables(getState().project.data, scope, associatedPou, associatedList)
       if (!variables) return undefined
 
       const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
       return found?.variable
     },
-    deleteVariable: ({ scope, associatedPou, rowId, variableId, variableName, force }) => {
+    deleteVariable: ({ scope, associatedPou, associatedList, rowId, variableId, variableName, force }) => {
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
@@ -1174,10 +1194,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
-          const variables =
-            scope === 'local' && associatedPou
-              ? slice.project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
-              : slice.project.data.configurations.resource.globalVariables
+          const variables = scopedVariables(slice.project.data, scope, associatedPou, associatedList)
           if (!variables) {
             response = fail('Variable container not found')
             return
@@ -1198,6 +1215,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             }
             variables.splice(found.index, 1)
           }
+
+          if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, associatedList)
 
           // Cascade: remove the matching VAR_EXTERNAL from every referencing POU.
           if (cascade) {
@@ -1220,19 +1239,17 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       }
       return response
     },
-    rearrangeVariables: ({ scope, associatedPou, rowId, variableId, newIndex }) => {
+    rearrangeVariables: ({ scope, associatedPou, associatedList, rowId, variableId, newIndex }) => {
       setState(
         produce((slice: ProjectSlice) => {
-          const variables =
-            scope === 'local' && associatedPou
-              ? slice.project.data.pous.find((p) => p.name === associatedPou)?.interface?.variables
-              : slice.project.data.configurations.resource.globalVariables
+          const variables = scopedVariables(slice.project.data, scope, associatedPou, associatedList)
           if (!variables) return
 
           const found = getVariableBasedOnRowIdOrVariableId(variables, rowId, variableId)
           if (!found) return
           const [item] = variables.splice(found.index, 1)
           variables.splice(newIndex, 0, item)
+          if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, associatedList)
         }),
       )
     },

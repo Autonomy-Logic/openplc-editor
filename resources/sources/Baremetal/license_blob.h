@@ -1,17 +1,14 @@
 /*
-license_blob.h - On-device license blob binary layout + storage CRC
+license_blob.h - On-device license blob binary layout + storage CRC (OLS-01, OLS-03)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 
-The C side of the license blob contract. Cross-pinned to the TypeScript
-serializer (src/backend/shared/debug/license-blob.ts) by the golden vector in
-its __tests__/fixtures/license-golden.json -- a layout change on either side
-must fail a test rather than produce a blob the other end silently rejects.
+Materialization of lic_payload_t / lic_blob_t (see hardware-licensing design).
 Shared by every storage backend (AVR EEPROM, ESP32 NVS) and by the Modbus
 license handlers. Layout is PACKED and LITTLE-ENDIAN for every multi-byte field
 of the struct (magic, crc32). This is INDEPENDENT of the Modbus wire, which
 carries the transfer `len` in BIG-ENDIAN (see modbus_pdu.cpp / modbus_debug.cpp).
 
-    ENDIANNESS DUALITY: blob CONTENT is LITTLE-ENDIAN; the Modbus wire
+    ENDIANNESS DUALITY (risk #1): blob CONTENT is LITTLE-ENDIAN; the Modbus wire
     `len` field is BIG-ENDIAN. Do not confuse the two.
 */
 

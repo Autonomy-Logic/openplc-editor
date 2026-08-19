@@ -20,6 +20,23 @@ describe('deriveDeviceId', () => {
     // A different anchor -> different id.
     expect(deriveDeviceId(anchor)).not.toBe(deriveDeviceId(Uint8Array.from([0, 177, 140, 238])))
   })
+
+  it('hashes the anchor bytes RAW — trailing NUL/LF/CR/space are part of the identity', () => {
+    // The normalization contract (see deriveDeviceId's docstring): bare metal
+    // answers 0x48 with the raw ArduinoUniqueID bytes and the closed core reads
+    // the SAME bytes raw, so a MAC that genuinely ends in one of these bytes
+    // keeps it in its identity. A trim here would derive a deviceId the device
+    // can never reproduce — the purchased license would never verify. If this
+    // test starts failing because someone added a trim, that trim is the bug.
+    const anchor = Uint8Array.from([0, 177, 140, 237])
+    for (const trailing of [0x00, 0x0a, 0x0d, 0x20]) {
+      const padded = Uint8Array.from([...anchor, trailing])
+      expect(deriveDeviceId(padded)).not.toBe(deriveDeviceId(anchor))
+    }
+    // Runtime-v4 needs no trim HERE either: its anchor arrives already
+    // normalized (the runtime webserver strips on the wire, the closed core's
+    // __linux__ branch strips on read — same set, where identity is decided).
+  })
 })
 
 describe('deriveVppId', () => {
