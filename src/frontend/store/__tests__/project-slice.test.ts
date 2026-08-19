@@ -1949,6 +1949,55 @@ describe('createProjectSlice', () => {
       const result = store.getState().projectActions.updateServerConfig('ENet', { enabled: true })
       expect(result.ok).toBe(true)
     })
+
+    it('completes the serial slave block from one edited leaf', () => {
+      // The screen sends a single field at a time, and a server created before
+      // DOPE-442 has no `rtu` at all, so the first edit has to land a whole
+      // block rather than a one-key object the emitter cannot read.
+      seedServer(store, makeModbusTcpServer('Srv'))
+      store.getState().projectActions.updateServerConfig('Srv', { rtu: { enabled: true } })
+
+      const config = store.getState().project.data.servers![0].modbusSlaveConfig!
+      expect(config.rtu).toEqual({
+        enabled: true,
+        serialPort: 'Serial',
+        baudRate: '115200',
+        slaveId: 1,
+        useRs485EnPin: false,
+        rs485EnPin: '',
+      })
+    })
+
+    it('keeps the sibling serial fields when a later leaf is edited', () => {
+      seedServer(store, makeModbusTcpServer('Srv'))
+      store.getState().projectActions.updateServerConfig('Srv', { rtu: { baudRate: '9600' } })
+      store.getState().projectActions.updateServerConfig('Srv', { rtu: { slaveId: 7 } })
+
+      const rtu = store.getState().project.data.servers![0].modbusSlaveConfig!.rtu!
+      expect(rtu.baudRate).toBe('9600')
+      expect(rtu.slaveId).toBe(7)
+    })
+
+    it('completes and merges the network link block the same way', () => {
+      seedServer(store, makeModbusTcpServer('Srv'))
+      store.getState().projectActions.updateServerConfig('Srv', { tcpLink: { medium: 'wifi' } })
+      store.getState().projectActions.updateServerConfig('Srv', { tcpLink: { wifiSsid: 'plant-floor' } })
+
+      const tcpLink = store.getState().project.data.servers![0].modbusSlaveConfig!.tcpLink!
+      expect(tcpLink.medium).toBe('wifi')
+      expect(tcpLink.wifiSsid).toBe('plant-floor')
+      // DHCP defaults on, and a later edit must not quietly drop it.
+      expect(tcpLink.useDhcp).toBe(true)
+    })
+
+    it('leaves the bare-metal blocks alone when neither is sent', () => {
+      seedServer(store, makeModbusTcpServer('Srv'))
+      store.getState().projectActions.updateServerConfig('Srv', { port: 503 })
+
+      const config = store.getState().project.data.servers![0].modbusSlaveConfig!
+      expect(config.rtu).toBeUndefined()
+      expect(config.tcpLink).toBeUndefined()
+    })
   })
 
   // =========================================================================

@@ -66,6 +66,16 @@ export interface TargetCapabilities {
   opcuaServer: boolean
   s7Server: boolean
 
+  /** Target serves Modbus over a hardware UART, and configures its own
+   *  network link (medium, MAC, DHCP / static host) rather than inheriting
+   *  one from a host OS. True for the bare-metal families; false for every
+   *  runtime, which gets its network from the OS and speaks TCP only.
+   *
+   *  Gates the RTU and link sections of the Modbus server screen. Those
+   *  sections stay on screen when it is false — they render disabled — so
+   *  that switching target never reflows the form. */
+  modbusSerialSlave: boolean
+
   /* ---------------------------------------------------------------
    * Build / runtime behavior
    * --------------------------------------------------------------- */

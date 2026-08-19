@@ -3,12 +3,15 @@ import { ChevronDownIcon } from '@radix-ui/react-icons'
 import type { ModbusBufferMapping } from '@root/middleware/shared/ports/types'
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
 
+import { useTargetCapabilities } from '../../../../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { DEFAULT_BUFFER_MAPPING } from '../../../../../../utils/modbus/generate-modbus-slave-config'
+import { resolveModbusRtu, resolveModbusTcpLink } from '../../../../../../utils/modbus/serial-link-config'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { BareMetalModbusSections } from './bare-metal-sections'
 
 const DEFAULT_NETWORK_INTERFACE_OPTIONS = [
   { value: '0.0.0.0', label: 'All Interfaces (0.0.0.0)' },
@@ -279,6 +282,16 @@ const ModbusServerEditor = () => {
     MAX_REGISTER_COUNT,
   )
 
+  // Bare-metal blocks. Resolved rather than read raw so the sections always
+  // have a complete configuration to render, including on a server that
+  // predates them.
+  const targetCaps = useTargetCapabilities()
+  const rtu = useMemo(() => resolveModbusRtu(server?.modbusSlaveConfig?.rtu), [server?.modbusSlaveConfig?.rtu])
+  const tcpLink = useMemo(
+    () => resolveModbusTcpLink(server?.modbusSlaveConfig?.tcpLink),
+    [server?.modbusSlaveConfig?.tcpLink],
+  )
+
   const inputStyles =
     'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
@@ -374,6 +387,13 @@ const ModbusServerEditor = () => {
             <span className='text-xs text-neutral-500 dark:text-neutral-400'>Default: 502</span>
           </div>
         </div>
+
+        <BareMetalModbusSections
+          serverName={serverName}
+          rtu={rtu}
+          tcpLink={tcpLink}
+          editable={targetCaps.modbusSerialSlave}
+        />
 
         {/* Buffer Mapping Section */}
         <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>

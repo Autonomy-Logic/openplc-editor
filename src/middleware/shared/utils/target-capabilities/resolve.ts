@@ -44,6 +44,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   modbusTcpServer: false,
   opcuaServer: false,
   s7Server: false,
+  modbusSerialSlave: false,
   debuggerTransports: [],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: false,

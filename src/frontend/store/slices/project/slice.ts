@@ -45,6 +45,7 @@ import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
+import { resolveModbusRtu, resolveModbusTcpLink } from '../../../utils/modbus/serial-link-config'
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
@@ -1701,6 +1702,18 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
               discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
               inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
             }
+          }
+          // Merged through the resolver rather than spread straight on: the
+          // screen sends one leaf at a time, and a server that never had these
+          // blocks has to come out complete rather than half-populated.
+          if (config.rtu) {
+            server.modbusSlaveConfig.rtu = resolveModbusRtu({ ...server.modbusSlaveConfig.rtu, ...config.rtu })
+          }
+          if (config.tcpLink) {
+            server.modbusSlaveConfig.tcpLink = resolveModbusTcpLink({
+              ...server.modbusSlaveConfig.tcpLink,
+              ...config.tcpLink,
+            })
           }
         }),
       )
