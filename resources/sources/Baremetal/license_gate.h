@@ -39,6 +39,14 @@ typedef enum {
  * which made the identity a claim the open firmware could rewrite.
  */
 void license_gate_init(const uint8_t *blob, size_t blob_len, uint32_t now_ms);
+
+/*
+ * Status QUERY — reporting, never enforcement. It writes no state at all: it
+ * cannot arm the demo window (EDGE-595) and it cannot latch its expiry
+ * (review 2026-08-19) — it only reflects what init or enforcement decided.
+ * So a diagnostic caller handing in a garbage timestamp can misread the
+ * state, but cannot end (or extend) the demo window for the rest of the boot.
+ */
 lic_gate_state_t license_gate_state(uint32_t now_ms);
 
 /*
@@ -47,8 +55,18 @@ lic_gate_state_t license_gate_state(uint32_t now_ms);
  * unlicensed init would, counting LIC_GATE_DEMO_MS from that call. A firmware
  * that never calls license_gate_init() therefore degrades to demo instead of
  * actuating forever. A later init with a VALID blob still reaches FULL; an
- * invalid one keeps the already-running window (no restart). Reporting via
- * license_gate_state() never arms the window.
+ * invalid one keeps the already-running window (no restart).
+ *
+ * ENFORCEMENT LATCHES EXPIRY (E2E review 2026-08-18, scoped to enforcement
+ * 2026-08-19): the first enforcement verdict of DEMO_EXPIRED is permanent for
+ * the rest of the boot, so the 32-bit millis() wraparound (~49.7 days) cannot
+ * reopen a closed window, and neither can feeding enforcement an older
+ * timestamp afterwards. Consequence, and it fails CLOSED: one absurd
+ * timestamp fed to THIS entry point past the window ends the demo for the
+ * boot. The last-mile check (license_gate_outputs_permitted) takes no caller
+ * clock at all. A VALID licence is never latched out: FULL wins before the
+ * latch is consulted, and an activation done while expired recovers at the
+ * next boot's init.
  */
 int license_gate_actuation_allowed(uint32_t now_ms);
 
