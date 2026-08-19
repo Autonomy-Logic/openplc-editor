@@ -110,6 +110,17 @@ describe('createLadderFlowSlice', () => {
   // Geometry recovery on load
   // -------------------------------------------------------------------------
   describe('needsPositionRecovery', () => {
+    /**
+     * A node with no position at all — planted through `Reflect.set` rather than cast in.
+     * The editor never writes one; a converter or an imported file can, which is what these
+     * fixtures are for, so the value the type forbids is set deliberately instead of the type
+     * being talked out of it.
+     */
+    const withoutPosition = (node: Node): Node => {
+      Reflect.set(node, 'position', undefined)
+      return node
+    }
+
     const rungOf = (...positions: (Node['position'] | undefined)[]) =>
       makeRung({
         nodes: [
@@ -117,7 +128,7 @@ describe('createLadderFlowSlice', () => {
           ...positions.map((position, i) =>
             position
               ? makeNode({ id: `c${i}`, type: 'contact', position })
-              : ({ ...makeNode({ id: `c${i}`, type: 'contact' }), position: undefined } as unknown as Node),
+              : withoutPosition(makeNode({ id: `c${i}`, type: 'contact' })),
           ),
           makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
         ],
@@ -185,12 +196,8 @@ describe('createLadderFlowSlice', () => {
     it('loads a rung the layout cannot walk, keeping what it arrived with', () => {
       // A contact with no handle data is a shape the layout throws on. Opening a project must
       // not fail because one rung could not be rebuilt.
-      const bare = {
-        id: 'c1',
-        type: 'contact',
-        position: { x: 0, y: 0 },
-        data: { variant: 'default' },
-      } as unknown as Node
+      const bare = makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } })
+      Reflect.set(bare, 'data', { variant: 'default' })
       const rung = makeRung({
         nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), bare],
         edges: [makeEdge({ id: 'e1', source: 'left-rail-rung-1', target: 'c1' })],
@@ -223,19 +230,18 @@ describe('createLadderFlowSlice', () => {
       expect(ids).toEqual(['left-rail-rung-1', 'c1', 'c2'])
     })
 
+    /** A block whose variant carries a pin entry that is not a pin — file data, not editor data. */
+    const incompleteBlock = (): Node => {
+      const node = makeNode({ id: 'b1', type: 'block', position: { x: 0, y: 0 } })
+      Reflect.set(node, 'data', { variant: { name: 'AND', variables: [null] } })
+      return node
+    }
+
     it('loads a rung whose block variant is incomplete', () => {
       // `getBlockSize` reads every pin's name and class; project-file data is not validated by
       // any assertion, and sizing must not be a precondition for opening the project.
       const rung = makeRung({
-        nodes: [
-          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
-          makeNode({
-            id: 'b1',
-            type: 'block',
-            position: { x: 0, y: 0 },
-            data: { variant: { name: 'AND', variables: [null] } } as unknown as Record<string, unknown>,
-          }),
-        ],
+        nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), incompleteBlock()],
       })
 
       expect(() =>
@@ -246,15 +252,15 @@ describe('createLadderFlowSlice', () => {
     it('falls back to default bounds when the file carries a non-array in their place', () => {
       // `?? []` covers null and undefined only; an object here made the destructuring throw,
       // and the rung then kept the geometry recovery was meant to replace.
-      const rung = {
-        ...makeRung({
-          nodes: [
-            makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
-            makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
-          ],
-        }),
-        defaultBounds: {} as unknown as number[],
-      }
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
+        ],
+      })
+      // Planted through `Reflect.set` rather than cast in: the value is one the type forbids
+      // and a project file can still carry, which is the whole point of the fixture.
+      Reflect.set(rung, 'defaultBounds', {})
 
       expect(() =>
         store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
@@ -263,15 +269,13 @@ describe('createLadderFlowSlice', () => {
     })
 
     it('falls back to default bounds when the rung carries none it can use', () => {
-      const rung = {
-        ...makeRung({
-          nodes: [
-            makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
-            makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
-          ],
-        }),
-        defaultBounds: [] as unknown as number[],
-      }
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
+        ],
+      })
+      Reflect.set(rung, 'defaultBounds', [])
 
       expect(() =>
         store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
