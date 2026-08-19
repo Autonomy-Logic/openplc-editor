@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import type { PLCDataType, PLCPou } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCGlobalVariableList, PLCPou } from '../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../store'
 import * as featureFlags from '../../../utils/feature-flags'
 import { setBodyLineOffset } from '../../lsp-shared/body-offsets'
@@ -348,5 +348,105 @@ describe('redirectDefinitionToStore', () => {
         range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } },
       }),
     ).toBe(false)
+  })
+})
+
+describe('redirectDefinitionToStore — global variable lists', () => {
+  const lists: PLCGlobalVariableList[] = [
+    {
+      name: 'GVL',
+      variables: [
+        {
+          name: 'Output1',
+          class: 'global',
+          type: { definition: 'base-type', value: 'BOOL' },
+          location: '',
+          documentation: '',
+        },
+        {
+          name: 'Output2',
+          class: 'global',
+          type: { definition: 'base-type', value: 'BOOL' },
+          location: '',
+          documentation: '',
+        },
+      ],
+    },
+    {
+      name: 'MyGlobalList',
+      variables: [
+        {
+          name: 'MotorSpeed',
+          class: 'global',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+        },
+      ],
+    },
+  ]
+
+  const setLists = (globalVariableLists: PLCGlobalVariableList[]) => {
+    openPLCStoreBase.setState((s) => ({
+      ...s,
+      project: {
+        ...s.project,
+        data: { ...s.project.data, pous: [], dataTypes: [], remoteDevices: [], globalVariableLists },
+      },
+      editor: { type: 'available', meta: { name: 'available' } },
+      editors: [],
+      tabs: [],
+      selectedTab: null,
+    }))
+  }
+
+  const at = (line: number) => ({
+    uri: 'inmemory://globals/__lists__.st',
+    range: { start: { line, character: 2 }, end: { line, character: 8 } },
+  })
+
+  beforeEach(() => setLists(lists))
+
+  /**
+   * The synthesized document, for reference — the lines the LSP points at:
+   *
+   *   0  TYPE
+   *   1  GVL_TYPE : STRUCT
+   *   2    Output1 : BOOL;
+   *   3    Output2 : BOOL;
+   *   4  END_STRUCT;
+   *   5  MyGlobalList_TYPE : STRUCT
+   *   6    MotorSpeed : INT;
+   *   7  END_STRUCT;
+   *   8  END_TYPE
+   *   9  VAR_GLOBAL
+   *  10    GVL : GVL_TYPE;
+   *  11    MyGlobalList : MyGlobalList_TYPE;
+   *  12  END_VAR
+   */
+  it('opens the owning list from a member line', () => {
+    // A member line carries no list name: the mapping walks back to its STRUCT header.
+    expect(redirectDefinitionToStore(at(2))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('GVL')
+  })
+
+  it('opens the second list from ITS member line, not the first', () => {
+    expect(redirectDefinitionToStore(at(6))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('MyGlobalList')
+  })
+
+  it('opens the list from its instance line', () => {
+    expect(redirectDefinitionToStore(at(11))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('MyGlobalList')
+  })
+
+  it('returns false when the project has no lists, so Monaco can fall back', () => {
+    setLists([])
+    expect(redirectDefinitionToStore(at(2))).toBe(false)
+  })
+
+  it('returns false for a line above any list, rather than guessing', () => {
+    // Line 0 is `TYPE` — no struct header above it to attribute the position to.
+    expect(redirectDefinitionToStore(at(0))).toBe(false)
   })
 })

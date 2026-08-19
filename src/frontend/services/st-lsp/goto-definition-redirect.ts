@@ -41,11 +41,17 @@ import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
+import {
+  globalVariableListTypeName,
+  serializeGlobalVariableListInstances,
+  serializeGlobalVariableListsToTypes,
+} from '../../utils/PLC/global-variable-list-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
 import {
   DATA_TYPES_URI,
   DT_VIEW_FRAME_LINE_COUNT,
+  GLOBAL_VARIABLE_LISTS_URI,
   parsePouUri,
   RESOURCE_GLOBALS_URI,
   SOFTMOTION_GLOBALS_URI,
@@ -212,6 +218,82 @@ function openResourceEditor(): boolean {
   return true
 }
 
+/**
+ * Open a Global Variable List's editor, mirroring the project-tree click path.
+ */
+function openGlobalVariableListEditor(name: string): boolean {
+  const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
+    name,
+    path: `/data/global-variables/${name}`,
+    elementType: { type: 'global-variable-list' },
+  }
+  const {
+    editorActions: { setEditor, addModel, getEditorFromEditors },
+    tabsActions: { updateTabs, setSelectedTab },
+  } = openPLCStoreBase.getState()
+  updateTabs(tabProps)
+  const existing = getEditorFromEditors(name)
+  if (existing) {
+    addModel(existing)
+    setEditor(existing)
+  } else {
+    const model = CreateEditorObjectFromTab(tabProps)
+    addModel(model)
+    setEditor(model)
+  }
+  setSelectedTab(name)
+  return true
+}
+
+/**
+ * Which list a line of the synthesized Global-Variable-Lists document belongs to.
+ *
+ * The document is rebuilt here with the SAME serializers that produced it, rather than by
+ * counting lines against an assumed layout: the two cannot drift, and adding a list or a
+ * member cannot silently shift the mapping.
+ *
+ * A member line (`Output1 : BOOL;`) carries no list name, so the search walks BACKWARDS to the
+ * nearest `<name>_TYPE : STRUCT` header, which is the struct the member sits in. An instance
+ * line (`GVL : GVL_TYPE;`) names its list directly — it is only accepted when the name really
+ * is a list's, since a member line has the same shape.
+ */
+function globalVariableListAtLine(lineLsp: number): string | undefined {
+  const lists = openPLCStoreBase.getState().project.data.globalVariableLists ?? []
+  if (lists.length === 0) return undefined
+
+  const doc = `${serializeGlobalVariableListsToTypes(lists)}${serializeGlobalVariableListInstances(lists)}`.split('\n')
+
+  for (let line = Math.min(lineLsp, doc.length - 1); line >= 0; line--) {
+    const text = doc[line] ?? ''
+
+    const struct = /^\s*(\w+)\s*:\s*STRUCT\s*$/i.exec(text)
+    if (struct) {
+      const typeName = struct[1]
+      return lists.find((list) => globalVariableListTypeName(list.name) === typeName)?.name
+    }
+
+    const declaration = /^\s*(\w+)\s*:\s*\w+;\s*$/.exec(text)
+    const named = declaration
+      ? lists.find((list) => list.name.toLowerCase() === declaration[1].toLowerCase())
+      : undefined
+    if (named) return named.name
+  }
+  return undefined
+}
+
+/**
+ * Global-Variable-Lists doc → open the list's own editor rather than the synthesised
+ * (non-editable) STRUCT and instance declarations.
+ *
+ * Monaco has no editor host for that URI, so without this the redirect dead-ends silently —
+ * the same trap the data-types branch documents.
+ */
+function redirectGlobalVariableList(lineLsp: number): boolean {
+  const name = globalVariableListAtLine(lineLsp)
+  if (!name) return false
+  return openGlobalVariableListEditor(name)
+}
+
 export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
   const target = normaliseLocation(loc)
 
@@ -225,6 +307,11 @@ export function redirectDefinitionToStore(loc: Location | LocationLink): boolean
   // than the synthesised (non-editable) global declaration.
   if (target.uri === SOFTMOTION_GLOBALS_URI) {
     return redirectSoftMotionAxis(target.lineLsp)
+  }
+
+  // Global-Variable-Lists doc → open the list's editor.
+  if (target.uri === GLOBAL_VARIABLE_LISTS_URI) {
+    return redirectGlobalVariableList(target.lineLsp)
   }
 
   // Datatypes URI → open the matching data-type editor tab.  The LSP
