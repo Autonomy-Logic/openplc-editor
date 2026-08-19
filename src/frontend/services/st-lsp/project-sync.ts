@@ -25,15 +25,28 @@
  * `refreshStlibs()` on the service.
  */
 
-import type { PLCDataType, PLCPou, PLCRemoteDevice, PLCVariable } from '../../../middleware/shared/ports/types'
+import type {
+  PLCDataType,
+  PLCGlobalVariableList,
+  PLCPou,
+  PLCRemoteDevice,
+  PLCVariable,
+} from '../../../middleware/shared/ports/types'
 import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
+import {
+  globalVariableListIsReferencedIn,
+  referenceSearchText,
+  serializeGlobalVariableListInstances,
+  serializeGlobalVariableListsToTypes,
+} from '../../utils/PLC/global-variable-list-serializer'
 import { serializePouSignatureToSTWithBodyOffset } from '../../utils/PLC/pou-signature-serializer'
 import { serializeResourceGlobalsToST } from '../../utils/PLC/resource-globals-serializer'
 import { deleteBodyLineOffset, setBodyLineOffset } from '../lsp-shared/body-offsets'
 import {
   DATA_TYPES_URI,
+  GLOBAL_VARIABLE_LISTS_URI,
   pouUri,
   RESOURCE_GLOBALS_URI,
   SOFTMOTION_GLOBALS_URI,
@@ -100,23 +113,25 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // globals, softmotion axes …) against the worker: open on first non-empty
   // text, didChange on a text change, didClose when it becomes empty. Centralised
   // so every synthesized doc shares one diff engine instead of copy-pasting it.
-  function reconcileSyntheticDoc(uri: string, nextText: string): void {
-    if (disposed) return
+  function reconcileSyntheticDoc(uri: string, nextText: string): boolean {
+    if (disposed) return false
     const previousText = snapshot.contentByUri.get(uri)
     if (nextText.length === 0) {
-      if (previousText !== undefined) {
-        service.closeDocument(uri)
-        snapshot.contentByUri.delete(uri)
-      }
-      return
+      if (previousText === undefined) return false
+      service.closeDocument(uri)
+      snapshot.contentByUri.delete(uri)
+      return true
     }
     if (previousText === undefined) {
       service.openDocument(uri, nextText)
     } else if (previousText !== nextText) {
       snapshot.version += 1
       service.changeDocument(uri, nextText, snapshot.version)
+    } else {
+      return false
     }
     snapshot.contentByUri.set(uri, nextText)
+    return true
   }
 
   // The whole `TYPE … END_TYPE` block, so any POU that references a user data
@@ -134,6 +149,58 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // A `VAR_GLOBAL <axis> : AXIS_REF_SM3` per recognized CiA 402 drive, so editor
   // code that names an axis resolves it (AXIS_REF_SM3 comes from the bundled
   // stlib the LSP already ingests).
+  /**
+   * Global Variable Lists, as the compiler sees them: a STRUCT type per list and one global
+   * instance of each, built by the SAME serializers the transpiler uses. Sharing those is the
+   * point — the language server's picture of a GVL cannot drift from the one that compiles,
+   * so `GVL.Output1` completing in the editor means it will also compile.
+   *
+   * This is what puts a GVL in scope AT ALL. A POU never declares one — historically an
+   * OpenPLC global reached a POU through a `VAR_EXTERNAL` the user wrote, and a list has no
+   * such declaration anywhere — so without this document strucpp has never heard the name and
+   * every consumer fails identically: no completion in ST, none in the graphical editors, and
+   * a typed-in `GVL.Output2` resolves to nothing and is drawn as an unknown symbol.
+   */
+  function reconcileGlobalVariableLists(lists: PLCGlobalVariableList[] | undefined): boolean {
+    const all = lists ?? []
+    // Both serializers already return '' for a list with no members, and each ends in a
+    // newline, so `END_TYPE` and `VAR_GLOBAL` never run together.
+    return reconcileSyntheticDoc(
+      GLOBAL_VARIABLE_LISTS_URI,
+      `${serializeGlobalVariableListsToTypes(all)}${serializeGlobalVariableListInstances(all)}`,
+    )
+  }
+
+  /**
+   * Re-publish the POU documents that reach into a list.
+   *
+   * Changing the synthesized document does not change one character of any POU: a POU only
+   * ever names the list (`GVL : GVL_TYPE;`), never its members. The worker analyses per
+   * document and answers from that analysis, so with the declaration alone re-sent, a POU
+   * keeps the scope it was last analysed against — `GVL.` then completes against the members
+   * as they were one edit ago, whichever view made the edit. Re-sending the POU with a bumped
+   * version is the trigger; the text is deliberately unchanged.
+   *
+   * Only the POUs that reference a list are re-sent. Re-publishing every document on every
+   * edited cell is analysis work nothing asked for, and `referenceSearchText` is the same
+   * scan the `VAR_EXTERNAL` projection already runs per POU.
+   */
+  function republishGlobalVariableListConsumers(lists: PLCGlobalVariableList[] | undefined): void {
+    if (disposed) return
+    const declared = (lists ?? []).filter((list) => list.variables.length > 0)
+    if (declared.length === 0) return
+
+    for (const pou of openPLCStoreBase.getState().project.data.pous) {
+      const searchText = referenceSearchText(pou)
+      if (!declared.some((list) => globalVariableListIsReferencedIn(list.name, searchText))) continue
+      const uri = snapshot.uriByName.get(pou.name)
+      const text = uri === undefined ? undefined : snapshot.contentByUri.get(uri)
+      if (uri === undefined || text === undefined) continue
+      snapshot.version += 1
+      service.changeDocument(uri, text, snapshot.version)
+    }
+  }
+
   function reconcileSoftMotionGlobals(remoteDevices: PLCRemoteDevice[] | undefined): void {
     reconcileSyntheticDoc(SOFTMOTION_GLOBALS_URI, serializeSoftMotionAxisGlobalsToST({ remoteDevices } as never))
   }
@@ -151,6 +218,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     seenUris.add(DATA_TYPES_URI)
     seenUris.add(RESOURCE_GLOBALS_URI)
     seenUris.add(SOFTMOTION_GLOBALS_URI)
+    seenUris.add(GLOBAL_VARIABLE_LISTS_URI)
 
     for (const pou of pous) {
       seenNames.add(pou.name)
@@ -233,6 +301,17 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     (state) => state.project.data.remoteDevices,
     (remoteDevices) => reconcileSoftMotionGlobals(remoteDevices),
   )
+  // Global Variable Lists change on their own too — creating one, renaming it, or editing a
+  // member has to refresh the synthesized document, or the editor keeps completing against
+  // the list as it was.
+  const unsubscribeGlobalVariableLists = openPLCStoreBase.subscribe(
+    (state) => state.project.data.globalVariableLists,
+    (lists) => {
+      // A documentation-only edit moves the store without moving the document — nothing to
+      // re-analyse then.
+      if (reconcileGlobalVariableLists(lists)) republishGlobalVariableListConsumers(lists)
+    },
+  )
   // Every document that declares variables is serialized against the alias →
   // address index, so a producer-only change must re-emit them.  Renaming an
   // alias already cascades into `project.data.pous` (via `renameAlias`) and
@@ -257,6 +336,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
   reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
   reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
+  reconcileGlobalVariableLists(openPLCStoreBase.getState().project.data.globalVariableLists)
   reconcile(openPLCStoreBase.getState().project.data.pous)
 
   return {
@@ -265,6 +345,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
       reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
       reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
+      reconcileGlobalVariableLists(openPLCStoreBase.getState().project.data.globalVariableLists)
       reconcile(openPLCStoreBase.getState().project.data.pous)
     },
     forceResync() {
@@ -285,6 +366,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       unsubscribeDataTypes()
       unsubscribeResourceGlobals()
       unsubscribeRemoteDevices()
+      unsubscribeGlobalVariableLists()
       unsubscribeAliasIndex()
       // Close every doc we'd opened so the worker stays consistent
       // if the service is restarted in the same session.
