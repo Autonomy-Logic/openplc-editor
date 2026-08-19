@@ -2,7 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { produce } from 'immer'
 import { createStore } from 'zustand/vanilla'
 
-import { createLadderFlowSlice } from '../slices/ladder/slice'
+import { createLadderFlowSlice, needsPositionRecovery } from '../slices/ladder/slice'
 import type { LadderFlowSlice, LadderFlowType, RungLadderState } from '../slices/ladder/types'
 
 function makeStore() {
@@ -26,13 +26,23 @@ const defaultRailData = {
   outputConnector: { id: 'rail-out', glbPosition: { x: 0, y: 50 } },
 }
 
+/**
+ * Distinct default positions, one step apart along the rung.
+ *
+ * The origin is not a neutral default: an element at `{0,0}`, or two sharing any point, is how
+ * this editor recognises geometry it cannot use, and loading such a rung rebuilds it
+ * (`needsPositionRecovery`). A fixture that means nothing by its coordinates should not be
+ * saying that.
+ */
+let nextNodeX = 68
+
 function makeNode(overrides?: Partial<Node>): Node {
   const type = overrides?.type ?? 'block'
   const baseData = type === 'powerRail' ? defaultRailData : defaultBlockData
   return {
     id: overrides?.id ?? 'node-1',
     type,
-    position: overrides?.position ?? { x: 0, y: 0 },
+    position: overrides?.position ?? { x: (nextNodeX += 114), y: 38 },
     data: overrides?.data ? { ...baseData, ...overrides.data } : baseData,
     draggable: overrides?.draggable ?? true,
     selectable: overrides?.selectable ?? true,
@@ -94,6 +104,160 @@ describe('createLadderFlowSlice', () => {
   // -------------------------------------------------------------------------
   it('should have correct initial state', () => {
     expect(store.getState().ladderFlows).toEqual([])
+  })
+
+  // -------------------------------------------------------------------------
+  // Geometry recovery on load
+  // -------------------------------------------------------------------------
+  describe('needsPositionRecovery', () => {
+    const rungOf = (...positions: (Node['position'] | undefined)[]) =>
+      makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          ...positions.map((position, i) =>
+            position
+              ? makeNode({ id: `c${i}`, type: 'contact', position })
+              : ({ ...makeNode({ id: `c${i}`, type: 'contact' }), position: undefined } as unknown as Node),
+          ),
+          makeNode({ id: 'right-rail-rung-1', type: 'powerRail' }),
+        ],
+      })
+
+    it('leaves a rung whose elements are laid out', () => {
+      expect(needsPositionRecovery(rungOf({ x: 68, y: 38 }, { x: 182, y: 38 }))).toBe(false)
+    })
+
+    it('leaves a rung of rails only', () => {
+      expect(needsPositionRecovery(makeRung())).toBe(false)
+    })
+
+    it('leaves a rung whose nodes carry no position at all', () => {
+      // Not a damaged diagram — one assembled programmatically. Re-laying it out would rewrite
+      // nodes whose author is still holding them.
+      expect(needsPositionRecovery(rungOf(undefined, undefined))).toBe(false)
+    })
+
+    it('rebuilds a rung whose single element sits at the origin', () => {
+      // Conclusive on its own: the rails live at x=0 and the layout never puts an element
+      // there, so a lone coil at {0,0} would otherwise draw on top of the left rail — and a
+      // one-element rung has no duplicate point to give it away.
+      expect(needsPositionRecovery(rungOf({ x: 0, y: 0 }))).toBe(true)
+    })
+
+    it('rebuilds a rung whose elements share a point', () => {
+      expect(needsPositionRecovery(rungOf({ x: 120, y: 38 }, { x: 120, y: 38 }))).toBe(true)
+    })
+
+    it('treats negative zero as the same point', () => {
+      // `-0` and `0` are one point but stringify differently, and `JSON.parse` preserves `-0`.
+      expect(needsPositionRecovery(rungOf({ x: 120, y: -0 }, { x: 120, y: 0 }))).toBe(true)
+    })
+
+    it('rebuilds a rung whose coordinates are not finite', () => {
+      expect(needsPositionRecovery(rungOf({ x: Number.NaN, y: 38 }, { x: 182, y: 38 }))).toBe(true)
+    })
+
+    it('ignores the rails when judging a rung', () => {
+      // Both rails sit at the same point in `makeNode`'s defaults; only elements count.
+      expect(needsPositionRecovery(rungOf({ x: 68, y: 38 }))).toBe(false)
+    })
+  })
+
+  describe('addLadderFlow geometry recovery', () => {
+    it('leaves a laid-out rung untouched, and does not dirty the flow', () => {
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          makeNode({ id: 'c1', type: 'contact', position: { x: 68, y: 38 } }),
+          makeNode({ id: 'c2', type: 'contact', position: { x: 182, y: 38 } }),
+        ],
+      })
+      store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] })
+
+      const nodes = store.getState().ladderFlows[0].rungs[0].nodes
+      expect(nodes.find((n) => n.id === 'c1')?.position).toEqual({ x: 68, y: 38 })
+      expect(nodes.find((n) => n.id === 'c2')?.position).toEqual({ x: 182, y: 38 })
+      // Nothing was rebuilt, so there is nothing to persist: a load the user did not edit must
+      // not come back dirty.
+      expect(store.getState().ladderFlows[0].updated).toBe(false)
+    })
+
+    it('loads a rung the layout cannot walk, keeping what it arrived with', () => {
+      // A contact with no handle data is a shape the layout throws on. Opening a project must
+      // not fail because one rung could not be rebuilt.
+      const bare = {
+        id: 'c1',
+        type: 'contact',
+        position: { x: 0, y: 0 },
+        data: { variant: 'default' },
+      } as unknown as Node
+      const rung = makeRung({
+        nodes: [makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }), bare],
+        edges: [makeEdge({ id: 'e1', source: 'left-rail-rung-1', target: 'c1' })],
+      })
+
+      expect(() =>
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
+      ).not.toThrow()
+      expect(store.getState().ladderFlows[0].rungs[0].nodes.find((n) => n.id === 'c1')?.position).toEqual({
+        x: 0,
+        y: 0,
+      })
+      // Nothing was rebuilt, so the flow stays clean.
+      expect(store.getState().ladderFlows[0].updated).toBe(false)
+    })
+
+    it('never loses an element to a layout that returns fewer nodes', () => {
+      // The layout can come back short — empty, for an unwired rung — and accepting that would
+      // delete part of the diagram on open. Moving an element is recovery; losing one is not.
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
+          makeNode({ id: 'c2', type: 'contact', position: { x: 0, y: 0 } }),
+        ],
+      })
+      store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] })
+
+      const ids = store.getState().ladderFlows[0].rungs[0].nodes.map((n) => n.id)
+      expect(ids).toEqual(['left-rail-rung-1', 'c1', 'c2'])
+    })
+
+    it('loads a rung whose block variant is incomplete', () => {
+      // `getBlockSize` reads every pin's name and class; project-file data is not validated by
+      // any assertion, and sizing must not be a precondition for opening the project.
+      const rung = makeRung({
+        nodes: [
+          makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+          makeNode({
+            id: 'b1',
+            type: 'block',
+            position: { x: 0, y: 0 },
+            data: { variant: { name: 'AND', variables: [null] } } as unknown as Record<string, unknown>,
+          }),
+        ],
+      })
+
+      expect(() =>
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
+      ).not.toThrow()
+    })
+
+    it('falls back to default bounds when the rung carries none it can use', () => {
+      const rung = {
+        ...makeRung({
+          nodes: [
+            makeNode({ id: 'left-rail-rung-1', type: 'powerRail' }),
+            makeNode({ id: 'c1', type: 'contact', position: { x: 0, y: 0 } }),
+          ],
+        }),
+        defaultBounds: [] as unknown as number[],
+      }
+
+      expect(() =>
+        store.getState().ladderFlowActions.addLadderFlow({ name: 'e', updated: false, rungs: [rung] }),
+      ).not.toThrow()
+    })
   })
 
   // -------------------------------------------------------------------------

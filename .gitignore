@@ -52,9 +52,19 @@ resources/st-compiler/**.spec
 # External tool binaries (downloaded by scripts/download-binaries.ts)
 # arduino-cli stays committed since we don't own its releases
 resources/strucpp/
+resources/bin/**
+!resources/bin/*/*/arduino-cli
+!resources/bin/*/*/arduino-cli.exe
+# A local build leaves xml2st, iec2c/iec2iec and .binary-metadata.json here, plus
+# timestamped .xml2st-backup-* copies. They are downloaded artefacts, not sources —
+# 123 MB of them were swept into a PR by a `git add -A` before this rule existed.
+resources/sources/MatIEC/
 
 # Playwright
 /test-results/
 playwright-report
 /blob-report/
 /playwright/.cache/
+
+# Claude Code session state (a running session's id and pid — never a project artefact)
+.claude/scheduled_tasks.lock
