@@ -31,9 +31,21 @@ import type {
 // DTOs
 // ---------------------------------------------------------------------------
 
+/**
+ * Which set of variables an action works on.
+ *
+ * A Global Variable List's members are variables in the same sense a POU's locals and the
+ * resource globals are: same fields, same validation, same table in the UI. They are a third
+ * scope on the existing actions rather than a parallel set of list-specific ones, so the
+ * declaration editor and the table view cannot drift apart.
+ */
+export type VariableScope = 'global' | 'local' | 'global-variable-list'
+
 export type VariableDTO = {
-  scope: 'global' | 'local'
+  scope: VariableScope
   associatedPou?: string
+  /** Required for `global-variable-list` scope: which list's members to work on. */
+  associatedList?: string
   data: PLCVariable
 }
 
@@ -120,21 +132,24 @@ export type ProjectActions = {
   setPouVariables: (args: { pouName: string; variables: PLCVariable[] }) => ProjectResponse
   setGlobalVariables: (args: { variables: PLCVariable[] }) => ProjectResponse
   updateVariable: (args: {
-    scope: 'global' | 'local'
+    scope: VariableScope
     associatedPou?: string
+    associatedList?: string
     rowId?: number
     variableId?: string
     data: Partial<PLCVariable>
   }) => ProjectResponse
   getVariable: (args: {
-    scope: 'global' | 'local'
+    scope: VariableScope
     associatedPou?: string
+    associatedList?: string
     rowId?: number
     variableId?: string
   }) => PLCVariable | undefined
   deleteVariable: (args: {
-    scope: 'global' | 'local'
+    scope: VariableScope
     associatedPou?: string
+    associatedList?: string
     rowId?: number
     variableId?: string
     variableName?: string
@@ -148,8 +163,9 @@ export type ProjectActions = {
     force?: boolean
   }) => ProjectResponse
   rearrangeVariables: (args: {
-    scope: 'global' | 'local'
+    scope: VariableScope
     associatedPou?: string
+    associatedList?: string
     rowId?: number
     variableId?: string
     newIndex: number
