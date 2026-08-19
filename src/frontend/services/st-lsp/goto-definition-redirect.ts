@@ -35,17 +35,13 @@
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
-import type { PLCDataType } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCGlobalVariableList } from '../../../middleware/shared/ports/types'
 import { sanitizeAxisName, softMotionAxisNames } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
-import {
-  globalVariableListTypeName,
-  serializeGlobalVariableListInstances,
-  serializeGlobalVariableListsToTypes,
-} from '../../utils/PLC/global-variable-list-serializer'
+import { serializeGlobalVariableListsToTypes } from '../../utils/PLC/global-variable-list-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
 import {
@@ -246,39 +242,37 @@ function openGlobalVariableListEditor(name: string): boolean {
 }
 
 /**
- * Which list a line of the synthesized Global-Variable-Lists document belongs to.
+ * Which list owns each line of the synthesized Global-Variable-Lists document.
  *
- * The document is rebuilt here with the SAME serializers that produced it, rather than by
- * counting lines against an assumed layout: the two cannot drift, and adding a list or a
- * member cannot silently shift the mapping.
+ * Ownership is POSITIONAL, and derived from the same serializers that produce the document —
+ * each list's own block is re-serialized to learn how many lines it takes — so the map cannot
+ * drift from the text, and adding a list or a member cannot silently shift it.
  *
- * A member line (`Output1 : BOOL;`) carries no list name, so the search walks BACKWARDS to the
- * nearest `<name>_TYPE : STRUCT` header, which is the struct the member sits in. An instance
- * line (`GVL : GVL_TYPE;`) names its list directly — it is only accepted when the name really
- * is a list's, since a member line has the same shape.
+ * Positional is also the only correct reading. A member line (`Output1 : BOOL;`) and an
+ * instance line (`GVL : GVL_TYPE;`) are the same shape, so resolving by name would send a
+ * definition on a member that happens to be called `MyGlobalList` to the list of that name
+ * instead of to the list the member is declared in. The frame lines — `TYPE`, `END_STRUCT;`,
+ * `END_TYPE`, `VAR_GLOBAL`, `END_VAR` — belong to no list and map to `undefined`, so a
+ * position on one is reported as unresolved rather than as the nearest list.
  */
-function globalVariableListAtLine(lineLsp: number): string | undefined {
-  const lists = openPLCStoreBase.getState().project.data.globalVariableLists ?? []
-  if (lists.length === 0) return undefined
+function globalVariableListLineOwners(lists: PLCGlobalVariableList[]): (string | undefined)[] {
+  const withMembers = lists.filter((list) => list.variables.length > 0)
+  if (withMembers.length === 0) return []
 
-  const doc = `${serializeGlobalVariableListsToTypes(lists)}${serializeGlobalVariableListInstances(lists)}`.split('\n')
-
-  for (let line = Math.min(lineLsp, doc.length - 1); line >= 0; line--) {
-    const text = doc[line] ?? ''
-
-    const struct = /^\s*(\w+)\s*:\s*STRUCT\s*$/i.exec(text)
-    if (struct) {
-      const typeName = struct[1]
-      return lists.find((list) => globalVariableListTypeName(list.name) === typeName)?.name
-    }
-
-    const declaration = /^\s*(\w+)\s*:\s*\w+;\s*$/.exec(text)
-    const named = declaration
-      ? lists.find((list) => list.name.toLowerCase() === declaration[1].toLowerCase())
-      : undefined
-    if (named) return named.name
+  const owners: (string | undefined)[] = [undefined] // TYPE
+  for (const list of withMembers) {
+    // `TYPE`, the block, `END_STRUCT;`, `END_TYPE`, `''` — keep the block and its END_STRUCT.
+    const block = serializeGlobalVariableListsToTypes([list]).split('\n').slice(1, -2)
+    block.forEach((_line, index) => owners.push(index === block.length - 1 ? undefined : list.name))
   }
-  return undefined
+  owners.push(undefined) // END_TYPE
+
+  owners.push(undefined) // VAR_GLOBAL
+  // One instance line per list, in this order — the serializer filters the same way.
+  for (const list of withMembers) owners.push(list.name)
+  owners.push(undefined) // END_VAR
+
+  return owners
 }
 
 /**
@@ -289,7 +283,8 @@ function globalVariableListAtLine(lineLsp: number): string | undefined {
  * the same trap the data-types branch documents.
  */
 function redirectGlobalVariableList(lineLsp: number): boolean {
-  const name = globalVariableListAtLine(lineLsp)
+  const lists = openPLCStoreBase.getState().project.data.globalVariableLists ?? []
+  const name = globalVariableListLineOwners(lists)[lineLsp]
   if (!name) return false
   return openGlobalVariableListEditor(name)
 }

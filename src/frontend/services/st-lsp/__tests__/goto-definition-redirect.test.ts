@@ -425,7 +425,7 @@ describe('redirectDefinitionToStore — global variable lists', () => {
    *  12  END_VAR
    */
   it('opens the owning list from a member line', () => {
-    // A member line carries no list name: the mapping walks back to its STRUCT header.
+    // A member line carries no list name; ownership comes from where the line sits.
     expect(redirectDefinitionToStore(at(2))).toBe(true)
     expect(openPLCStoreBase.getState().selectedTab).toBe('GVL')
   })
@@ -446,7 +446,79 @@ describe('redirectDefinitionToStore — global variable lists', () => {
   })
 
   it('returns false for a line above any list, rather than guessing', () => {
-    // Line 0 is `TYPE` — no struct header above it to attribute the position to.
+    // Line 0 is `TYPE` — a frame line, owned by no list.
     expect(redirectDefinitionToStore(at(0))).toBe(false)
+  })
+
+  it('opens the list from its STRUCT header', () => {
+    expect(redirectDefinitionToStore(at(5))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('MyGlobalList')
+  })
+
+  it.each([
+    ['END_STRUCT; of the first list', 4],
+    ['END_TYPE', 8],
+    ['VAR_GLOBAL', 9],
+    ['END_VAR', 12],
+    ['a line past the end of the document', 99],
+  ])('returns false on %s rather than the nearest list', (_label, line) => {
+    expect(redirectDefinitionToStore(at(line))).toBe(false)
+  })
+
+  it('opens the list a member is declared IN, even when the member is named after another list', () => {
+    // Same shape as an instance line, and the name of a real list: resolving by name would
+    // open `MyGlobalList` instead of the list this member actually belongs to.
+    setLists([
+      {
+        name: 'GVL',
+        variables: [
+          {
+            name: 'MyGlobalList',
+            class: 'global',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
+        ],
+      },
+      {
+        name: 'MyGlobalList',
+        variables: [
+          {
+            name: 'MotorSpeed',
+            class: 'global',
+            type: { definition: 'base-type', value: 'INT' },
+            location: '',
+            documentation: '',
+          },
+        ],
+      },
+    ])
+    // 0 TYPE / 1 GVL_TYPE : STRUCT / 2   MyGlobalList : BOOL;
+    expect(redirectDefinitionToStore(at(2))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('GVL')
+  })
+
+  it('skips a memberless list, which contributes no lines to the document', () => {
+    // An empty STRUCT is not a legal type, so the serializers omit such a list entirely —
+    // the line map has to omit it too or every line after it is attributed to the wrong list.
+    setLists([
+      { name: 'Empty', variables: [] },
+      {
+        name: 'Real',
+        variables: [
+          {
+            name: 'Flag',
+            class: 'global',
+            type: { definition: 'base-type', value: 'BOOL' },
+            location: '',
+            documentation: '',
+          },
+        ],
+      },
+    ])
+    // 0 TYPE / 1 Real_TYPE : STRUCT / 2   Flag : BOOL;
+    expect(redirectDefinitionToStore(at(2))).toBe(true)
+    expect(openPLCStoreBase.getState().selectedTab).toBe('Real')
   })
 })
