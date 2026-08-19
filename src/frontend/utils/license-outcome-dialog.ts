@@ -55,8 +55,12 @@ export interface LicenseDialogHandlers {
   retry?: () => Promise<void>
 }
 
+// "About two hours" mirrors LIC_GATE_DEMO_MS (7200000 ms) in the closed gate.
+// If the product decision changes the window, this sentence changes with it —
+// a dialog promising minutes while the device enforces hours (or the reverse)
+// is the kind of copy drift a customer notices before we do.
 const DEMO_EXPLANATION =
-  'The device will run in DEMO mode: the VPP stops driving outputs a few minutes after each start. ' +
+  'The device will run in DEMO mode: the VPP stops driving outputs about two hours after each start. ' +
   'You can still build and upload — the licence is enforced on the device, not by the editor.'
 
 /**

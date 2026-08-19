@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
@@ -2082,6 +2083,84 @@ class CompilerModule {
       throw new Error(message)
     }
 
+    // Trusted-keys table for a licensable runtime-v4 VPP. The licensable
+    // prebuilt link set (`license_core.o` and friends) references
+    // `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as EXTERN symbols — the
+    // table itself travels as `trusted_keys.json` at the package root
+    // (injected per environment when the package is published) and the editor
+    // defines the symbols at project build time, the same per-project movement
+    // as `defines.h`. The generated unit joins the `vpp_plugin/` link set the
+    // device builds the plugin `.so` from.
+    //
+    // Resolved HERE, outside the degrade-and-continue catch below, for the
+    // same reason the integrity gate is: a licensable package whose key table
+    // is unusable must STOP the build (the plugin cannot link without the
+    // symbols), and `packageVppPlugin` in the platform port turns a throw into
+    // the `errors[]` the pipeline bails on, whereas a logged error would let
+    // the build upload a bundle whose licensed driver dies at link time on the
+    // PLC. `resolveTrustedKeysArtifact` owns the gate, the validation and the
+    // fault wording; this block only does the file I/O the shared step
+    // deliberately avoids.
+    let trustedKeysC: string | null = null
+    {
+      const licensableMatch = new PackageManagerModule().findDeviceByBoardName(boardTarget)
+      // A failed lookup cannot tell a plain non-VPP board from a licensable
+      // one whose manifest broke or whose board name drifted — and for the
+      // latter, silence relocates the diagnosis to the PLC's linker
+      // (undefined LIC_TRUSTED_KEYS), the least diagnosable place it can
+      // land. But warning on EVERY null lookup put a yellow "reinstall the
+      // package" line in every plain v4 build of the built-in runtime target
+      // (Thiago's review of #1014), so the built-ins are excluded first:
+      // a board that hals.json knows legitimately has no VPP package. What
+      // remains — known to neither store — is precisely the drifted/broken
+      // case the warning exists for.
+      if (!licensableMatch) {
+        let isBuiltinTarget = false
+        try {
+          const hals = await readHalsFile<HalsFile>()
+          isBuiltinTarget = Boolean(hals[boardTarget])
+        } catch {
+          isBuiltinTarget = false
+        }
+        if (!isBuiltinTarget) {
+          handleOutputData(
+            `No installed VPP package matches board "${boardTarget}", so the licensing gate could not be ` +
+              'evaluated. If this board belongs to a licensed VPP, its trusted-keys table was NOT generated ' +
+              'and the plugin will fail to link on the device — reinstall the package.',
+            'warning',
+          )
+        }
+      }
+      if (
+        licensableMatch &&
+        licensableMatch.device.target.type === 'runtime-v4' &&
+        licensableMatch.device.capabilities?.isLicensable === true
+      ) {
+        let trustedKeysJson: string | null = null
+        try {
+          trustedKeysJson = await readFile(join(licensableMatch.pkg.path, 'trusted_keys.json'), 'utf-8')
+        } catch {
+          trustedKeysJson = null
+        }
+        const artifact = resolveTrustedKeysArtifact({
+          isLicensable: true,
+          packageLabel: licensableMatch.pkg.packageId,
+          trustedKeysJson,
+        })
+        if (artifact.kind === 'packaging-fault') {
+          handleOutputData(artifact.message, 'error')
+          throw new Error(artifact.message)
+        }
+        if (artifact.kind === 'generated') {
+          trustedKeysC = artifact.content
+          handleOutputData(
+            `Trusted-keys table generated for the plugin link set: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+            'info',
+          )
+        }
+      }
+    }
+
     try {
       const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
@@ -2305,6 +2384,15 @@ class CompilerModule {
         return
       }
 
+      // The generated trusted-keys unit joins the link set AND the checksum:
+      // a key rotation with unchanged plugin source must still change the
+      // checksum, or the runtime's compile.sh would skip the rebuild and the
+      // device would keep validating blobs against the previous table.
+      if (trustedKeysC !== null) {
+        await writeFile(join(destPluginDir, 'trusted_keys.c'), trustedKeysC, 'utf-8')
+        copiedFiles.push('trusted_keys.c')
+      }
+
       // Compute SHA-256 over all copied files (sorted for determinism)
       // Format: "<sha256> <relative-path>\n" per file, then a final SHA-256 of that list
       copiedFiles.sort()
@@ -2378,6 +2466,53 @@ class CompilerModule {
     } catch {
       return []
     }
+  }
+
+  /**
+   * Arduino-path trusted-keys injection (the sketch-tree half of ADR-0004;
+   * the runtime-v4 half lives in `handleVendorPluginPackaging`). Extracted
+   * from `compileProgram` so the path the FIRST licensable package actually
+   * uses is unit-testable — review #1014 finding A.
+   *
+   * Gate rules: runtime-v3 never links Arduino firmware, so the gate must
+   * not fire for it; a non-licensable board generates nothing. For a
+   * licensable board, an unusable table is a HARD STOP (return `false` after
+   * posting the packaging fault): without the symbols the link either dies
+   * in an undefined-reference wall (naming a symbol, not the package) or —
+   * if a stale definition is ever lying around — succeeds while trusting
+   * the wrong keys. `resolveTrustedKeysArtifact` owns the gate semantics,
+   * validation and fault wording; the caller does the file I/O.
+   *
+   * Returns `true` to proceed, `false` when the caller must stop the build
+   * (the fault message has already been posted).
+   */
+  applyTrustedKeysToSkeleton(input: {
+    isRuntimeV3: boolean
+    isLicensable: boolean
+    packageLabel: string
+    trustedKeysJson: string | null
+    firmwareSkeleton: Record<string, string>
+    postMessage: (msg: { logLevel: 'info' | 'warning' | 'error'; message: string }) => void
+  }): boolean {
+    const { isRuntimeV3, isLicensable, packageLabel, trustedKeysJson, firmwareSkeleton, postMessage } = input
+    if (isRuntimeV3 || !isLicensable) return true
+
+    const artifact = resolveTrustedKeysArtifact({ isLicensable: true, packageLabel, trustedKeysJson })
+    if (artifact.kind === 'packaging-fault') {
+      postMessage({ logLevel: 'error', message: `${artifact.message}\nStopping compilation process.` })
+      return false
+    }
+    if (artifact.kind === 'generated') {
+      firmwareSkeleton['examples/Baremetal/trusted_keys.c'] = artifact.content
+      // Logged on SUCCESS for the same reason the license-store include is:
+      // without this line, a build with and without the table looks identical
+      // until the linker (or worse, the licence check) says otherwise.
+      postMessage({
+        logLevel: 'info',
+        message: `Trusted-keys table generated: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+      })
+    }
+    return true
   }
 
   /**
@@ -2681,6 +2816,44 @@ class CompilerModule {
               '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
               'firmware will link the weak default and report that its licence storage is missing.',
           })
+        }
+
+        // Trusted-keys table for a licensable VPP. The licensable prebuilt
+        // archive references `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as
+        // EXTERN symbols — the table itself travels as `trusted_keys.json` at
+        // the package root (injected per environment when the package is
+        // published) and the editor defines the symbols here at project build
+        // time, the same per-project movement as `defines.h`. The generated
+        // unit lands in the SKETCH directory so its object is always linked
+        // (sketch objects are never archive-pruned the way library members
+        // can be).
+        //
+        // Unlike the license-store warning above, an unusable table is a HARD
+        // STOP, not a degraded build — see `applyTrustedKeysToSkeleton` for
+        // the gate, the skeleton write and the message voice. This site only
+        // does the file I/O the shared step deliberately avoids, and turns a
+        // `false` into the port close + return the fault demands.
+        {
+          let trustedKeysJson: string | null = null
+          if (!isRuntimeV3 && boardInfo.capabilities?.isLicensable === true && boardInfo.vppPackagePath) {
+            try {
+              trustedKeysJson = await readFile(join(boardInfo.vppPackagePath, 'trusted_keys.json'), 'utf-8')
+            } catch {
+              trustedKeysJson = null
+            }
+          }
+          const proceed = this.applyTrustedKeysToSkeleton({
+            isRuntimeV3,
+            isLicensable: boardInfo.capabilities?.isLicensable === true,
+            packageLabel: boardInfo.vppPackageId ?? boardTarget,
+            trustedKeysJson,
+            firmwareSkeleton,
+            postMessage: (msg) => _mainProcessPort.postMessage(msg),
+          })
+          if (!proceed) {
+            _mainProcessPort.close()
+            return
+          }
         }
       }
       try {

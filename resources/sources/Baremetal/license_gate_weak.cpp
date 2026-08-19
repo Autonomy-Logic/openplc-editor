@@ -4,7 +4,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Guarantees the firmware always links even when no platform VPP provides a real
 license-core. The VPP's prebuilt license-core (.a) defines the STRONG symbols
-(ECDSA verify + 15-minute demo timer), which override these weak defaults at
+(ECDSA verify + 2-hour demo timer), which override these weak defaults at
 link time. When absent, these run: the gate reports LIC_GATE_UNSUPPORTED and
 actuation stays unconditionally allowed, so a board without a license-core
 behaves exactly as it did before licensing existed (no enforcement).
