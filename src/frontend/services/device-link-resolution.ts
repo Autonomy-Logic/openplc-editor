@@ -27,6 +27,7 @@ import type { BoardInfo, DebugConnectionConfig } from '../../middleware/shared/p
 import { describeDebugEndpoint } from '../../middleware/shared/utils/debug-endpoint'
 import { resolveTargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
 import { useOpenPLCStore } from '../store'
+import { vppStateFromModbusSlaveConfig } from '../utils/modbus/serial-link-config'
 
 /**
  * Answers the user has already given, keyed by board then by the spec's
@@ -95,7 +96,21 @@ export function buildDeviceResolverContext(
   const runtimeConnection = store.runtimeConnection
   // `vendorScreenData` is already keyed by section id (`modbus_rtu`), which is
   // the resolver's `screens` shape 1:1.
-  const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
+  //
+  // Since DOPE-442 that configuration can instead live on the project's Modbus
+  // server, and when it does it has to win here as well as at build time: the
+  // serial channel reads `modbus_rtu.rtu_baud_rate` and `rtu_slave_id` to know
+  // what to dial and what id to frame on, and dialling the stale ones opens the
+  // port to silence — which Connect reports as "No Firmware Detected" on a
+  // perfectly healthy board.
+  const unifiedModbus = store.project.data.servers?.find(
+    (server) =>
+      server.protocol === 'modbus-tcp' && (server.modbusSlaveConfig?.rtu || server.modbusSlaveConfig?.tcpLink),
+  )?.modbusSlaveConfig
+  const screens = {
+    ...((cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>),
+    ...(unifiedModbus ? (vppStateFromModbusSlaveConfig(unifiedModbus) as Record<string, Record<string, unknown>>) : {}),
+  }
 
   return {
     state: {

@@ -192,6 +192,29 @@ describe('migrateVendorScreenModbus', () => {
     expect(migrated?.tcpLink).toEqual(DEFAULT_MODBUS_TCP_LINK)
   })
 
+  it('keeps a static host that never stated the DHCP flag', () => {
+    // The emitter reads a missing `enable_dhcp` as "not DHCP" and emits the
+    // address; defaulting to DHCP here would drop it from the firmware.
+    const migrated = migrateVendorScreenModbus({
+      modbus_tcp: { enabled: true, ip_address: '10.0.0.7', gateway: '10.0.0.1' },
+    })
+
+    expect(migrated?.tcpLink.useDhcp).toBe(false)
+    expect(migrated?.tcpLink.ipAddress).toBe('10.0.0.7')
+  })
+
+  it('still defaults to DHCP when no host is named either', () => {
+    expect(migrateVendorScreenModbus({ modbus_tcp: { enabled: true } })?.tcpLink.useDhcp).toBe(true)
+  })
+
+  it('honours an explicit DHCP flag over the inference', () => {
+    const migrated = migrateVendorScreenModbus({
+      modbus_tcp: { enabled: true, enable_dhcp: true, ip_address: '10.0.0.7' },
+    })
+
+    expect(migrated?.tcpLink.useDhcp).toBe(true)
+  })
+
   it('maps the medium label the screen stored onto the model value', () => {
     expect(migrateVendorScreenModbus({ modbus_tcp: { tcp_interface: 'Ethernet' } })?.tcpLink.medium).toBe('ethernet')
     expect(migrateVendorScreenModbus({ modbus_tcp: { tcp_interface: 'Wi-Fi' } })?.tcpLink.medium).toBe('wifi')

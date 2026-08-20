@@ -22,59 +22,9 @@
  * for fishing `modbus_rtu` and `modbus_tcp` out of `vendorScreenData`.
  */
 
-/**
- * Subset of the persisted screen state this emitter reads. Mirrors the
- * field IDs declared in `screens/modbus.json` — keep in sync if the
- * VPP screen field set evolves.
- */
-export interface VppModbusScreenState {
-  /** Phase 2 Serial section — always-on serial baud (debugger + RTU on the
-   *  default port). */
-  serial?: {
-    baud_rate?: string
-  }
-  /** Phase 2 Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp. */
-  network?: {
-    enabled?: boolean
-    interface?: 'Ethernet' | 'Wi-Fi'
-    mac_address?: string
-    wifi_ssid?: string
-    wifi_password?: string
-    enable_dhcp?: boolean
-    ip_address?: string
-    gateway?: string
-    subnet?: string
-    dns?: string
-  }
-  modbus_rtu?: {
-    enabled?: boolean
-    /** Phase 2: chosen serial port. Legacy projects use `rtu_interface`. */
-    serial_port?: string
-    rtu_interface?: string
-    /** Phase 2: baud for RTU on a secondary port. On the default port the
-     *  Serial section's baud is used. Legacy projects use `rtu_baud_rate`. */
-    baud_rate?: string
-    rtu_baud_rate?: string
-    rtu_slave_id?: number
-    enable_rs485_en_pin?: boolean
-    rtu_rs485_en_pin?: string
-  }
-  modbus_tcp?: {
-    enabled?: boolean
-    unit_id?: number
-    // Legacy network fields (pre-Phase-2 projects still on the old screen).
-    // Read as a fallback when the `network` section is absent.
-    tcp_interface?: 'Ethernet' | 'Wi-Fi'
-    tcp_mac_address?: string
-    tcp_wifi_ssid?: string
-    tcp_wifi_password?: string
-    enable_dhcp?: boolean
-    ip_address?: string
-    gateway?: string
-    subnet?: string
-    dns?: string
-  }
-}
+import type { VppModbusScreenState } from '../../../../frontend/utils/modbus/serial-link-config'
+
+export type { VppModbusScreenState }
 
 /** Baud the always-on debugger falls back to when nothing else says otherwise. */
 export const DEFAULT_DEBUG_BAUD = '115200'

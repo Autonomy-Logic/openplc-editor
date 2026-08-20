@@ -20,9 +20,64 @@ import type {
   ModbusBaudRate,
   ModbusRtuConfig,
   ModbusSerialPort,
+  ModbusSlaveConfig,
   ModbusTcpLinkConfig,
   ModbusTcpMedium,
 } from '../../../middleware/shared/ports/types'
+
+/**
+ * Subset of the persisted screen state this emitter reads. Mirrors the
+ * field IDs declared in `screens/modbus.json` — keep in sync if the
+ * VPP screen field set evolves.
+ */
+interface VppModbusScreenState {
+  /** Phase 2 Serial section — always-on serial baud (debugger + RTU on the
+   *  default port). */
+  serial?: {
+    baud_rate?: string
+  }
+  /** Phase 2 Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp. */
+  network?: {
+    enabled?: boolean
+    interface?: 'Ethernet' | 'Wi-Fi'
+    mac_address?: string
+    wifi_ssid?: string
+    wifi_password?: string
+    enable_dhcp?: boolean
+    ip_address?: string
+    gateway?: string
+    subnet?: string
+    dns?: string
+  }
+  modbus_rtu?: {
+    enabled?: boolean
+    /** Phase 2: chosen serial port. Legacy projects use `rtu_interface`. */
+    serial_port?: string
+    rtu_interface?: string
+    /** Phase 2: baud for RTU on a secondary port. On the default port the
+     *  Serial section's baud is used. Legacy projects use `rtu_baud_rate`. */
+    baud_rate?: string
+    rtu_baud_rate?: string
+    rtu_slave_id?: number
+    enable_rs485_en_pin?: boolean
+    rtu_rs485_en_pin?: string
+  }
+  modbus_tcp?: {
+    enabled?: boolean
+    unit_id?: number
+    // Legacy network fields (pre-Phase-2 projects still on the old screen).
+    // Read as a fallback when the `network` section is absent.
+    tcp_interface?: 'Ethernet' | 'Wi-Fi'
+    tcp_mac_address?: string
+    tcp_wifi_ssid?: string
+    tcp_wifi_password?: string
+    enable_dhcp?: boolean
+    ip_address?: string
+    gateway?: string
+    subnet?: string
+    dns?: string
+  }
+}
 
 const SERIAL_PORTS: readonly ModbusSerialPort[] = ['Serial', 'Serial1', 'Serial2', 'Serial3']
 const BAUD_RATES: readonly ModbusBaudRate[] = ['9600', '14400', '19200', '38400', '57600', '115200']
@@ -171,13 +226,28 @@ function migrateVendorScreenModbus(
       macAddress: readString(tcpState, 'tcp_mac_address'),
       wifiSsid: readString(tcpState, 'tcp_wifi_ssid'),
       wifiPassword: readString(tcpState, 'tcp_wifi_password'),
-      useDhcp: readBoolean(tcpState, 'enable_dhcp'),
+      useDhcp: readBoolean(tcpState, 'enable_dhcp') ?? (statesStaticHost(tcpState) ? false : undefined),
       ipAddress: readString(tcpState, 'ip_address'),
       gateway: readString(tcpState, 'gateway'),
       subnet: readString(tcpState, 'subnet'),
       dns: readString(tcpState, 'dns'),
     }),
   }
+}
+
+const STATIC_HOST_FIELDS = ['ip_address', 'gateway', 'subnet', 'dns'] as const
+
+/**
+ * Whether the state names a static host at all.
+ *
+ * `enable_dhcp` defaults to `true` on the screen and the form only persisted
+ * fields the user touched, so a hand-edited project can carry an address with
+ * no flag selecting it. `generateModbusDefines` reads a missing flag as "not
+ * DHCP" and emits the address; defaulting to DHCP here instead would drop it
+ * from the firmware without saying anything.
+ */
+function statesStaticHost(tcpState: Record<string, unknown>): boolean {
+  return STATIC_HOST_FIELDS.some((field) => (readString(tcpState, field) ?? '') !== '')
 }
 
 /** The screen persisted the medium as its own label (`Ethernet` / `Wi-Fi`). */
@@ -187,6 +257,8 @@ function readMedium(tcpState: Record<string, unknown>): ModbusTcpMedium | undefi
   if (label === 'Wi-Fi') return 'wifi'
   return undefined
 }
+
+export type { VppModbusScreenState }
 
 export {
   BAUD_RATES,
@@ -199,4 +271,58 @@ export {
   resolveModbusRtu,
   resolveModbusTcpLink,
   SERIAL_PORTS,
+  vppStateFromModbusSlaveConfig,
+}
+
+/**
+ * Read a unified Modbus server configuration as the VPP screen state this
+ * module already consumes.
+ *
+ * DOPE-442 moved the serial slave and the network link out of the packages'
+ * `screens/modbus.json` and into the editor's Modbus server screen, where they
+ * live on `ModbusSlaveConfig`. Rather than teach three emitters a second input
+ * shape, the new model is expressed in the old one — so `defines.h`, the debug
+ * baud and the debug slave id keep coming out of exactly the same code paths,
+ * and "did the move change the firmware?" is answerable by comparing outputs
+ * instead of by reading two implementations.
+ *
+ * Deliberately writes the ORIGINAL field spellings (`rtu_interface`,
+ * `rtu_baud_rate`, and the `modbus_tcp` network fields) rather than the later
+ * `serial_port` / `baud_rate` / `network` ones: every reader here falls back to
+ * them, and they are what the shipped packages persisted. That makes this the
+ * inverse of `migrateVendorScreenModbus`, so a project round-tripping through
+ * both emits byte-identical macros.
+ */
+function vppStateFromModbusSlaveConfig(config: ModbusSlaveConfig | undefined): VppModbusScreenState {
+  const state: VppModbusScreenState = {}
+  const rtu = config?.rtu
+  const link = config?.tcpLink
+
+  if (rtu) {
+    state.modbus_rtu = {
+      enabled: rtu.enabled,
+      rtu_interface: rtu.serialPort,
+      rtu_baud_rate: rtu.baudRate,
+      rtu_slave_id: rtu.slaveId,
+      enable_rs485_en_pin: rtu.useRs485EnPin,
+      rtu_rs485_en_pin: rtu.rs485EnPin,
+    }
+  }
+
+  if (link) {
+    state.modbus_tcp = {
+      enabled: link.enabled,
+      tcp_interface: link.medium === 'wifi' ? 'Wi-Fi' : 'Ethernet',
+      tcp_mac_address: link.macAddress,
+      tcp_wifi_ssid: link.wifiSsid,
+      tcp_wifi_password: link.wifiPassword,
+      enable_dhcp: link.useDhcp,
+      ip_address: link.ipAddress,
+      gateway: link.gateway,
+      subnet: link.subnet,
+      dns: link.dns,
+    }
+  }
+
+  return state
 }

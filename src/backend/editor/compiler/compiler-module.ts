@@ -10,6 +10,7 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
+import { vppStateFromModbusSlaveConfig } from '@root/frontend/utils/modbus/serial-link-config'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
 import { execRecipeArgv, substitutePlaceholders, tokenizeRecipe } from './recipe-exec'
@@ -2953,21 +2954,34 @@ class CompilerModule {
     let vppModbusState: VppModbusScreenState | undefined
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
-      try {
-        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
-        const vendorScreenData = deviceConfig.vendorScreenData ?? {}
-        vppModbusState = {
-          serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
-          network: vendorScreenData['network'] as VppModbusScreenState['network'],
-          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
-          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+      // DOPE-442 moved this configuration onto the project's Modbus server. A
+      // server that carries it wins; a project that has not been edited since
+      // the move still has only the VPP screen state, and compiles from it
+      // exactly as before. Nothing is rewritten either way — the old keys stay
+      // on disk, so rolling the editor back keeps working.
+      const unifiedModbus = projectData.servers?.find(
+        (server) =>
+          server.protocol === 'modbus-tcp' && (server.modbusSlaveConfig?.rtu || server.modbusSlaveConfig?.tcpLink),
+      )?.modbusSlaveConfig
+
+      if (unifiedModbus) {
+        vppModbusState = vppStateFromModbusSlaveConfig(unifiedModbus)
+      } else
+        try {
+          const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+          const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+          vppModbusState = {
+            serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
+            network: vendorScreenData['network'] as VppModbusScreenState['network'],
+            modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
+            modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+          }
+        } catch {
+          // No configuration.json — leave undefined so the shared
+          // pipeline skips the Modbus block entirely (matches the
+          // pre-VPP behaviour for boards that never had a comms
+          // config persisted).
         }
-      } catch {
-        // No configuration.json — leave undefined so the shared
-        // pipeline skips the Modbus block entirely (matches the
-        // pre-VPP behaviour for boards that never had a comms
-        // config persisted).
-      }
     }
 
     // For Arduino VPP targets with a modular backplane, bake the
