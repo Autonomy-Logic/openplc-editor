@@ -592,12 +592,14 @@ async function runCompilePipelineInner(
     // only ever reached disk as a side effect of the upload, and a compile-only
     // v4 build left a build folder holding nothing but the VPP files.
     if (port.materializeRuntimeV4Bundle) {
-      const materialized = await port.materializeRuntimeV4Bundle(
-        { bundle },
-        makePlatformLog(emit, 'runtime-v4-bundle'),
-      )
+      const materialized = await port.materializeRuntimeV4Bundle({ bundle }, makePlatformLog(emit, 'runtime-v4-bundle'))
       if (materialized.errors && materialized.errors.length > 0) {
-        return bailError(emit, 'runtime-v4-bundle', 'Could not write the Runtime v4 build artifacts.', materialized.errors)
+        return bailError(
+          emit,
+          'runtime-v4-bundle',
+          'Could not write the Runtime v4 build artifacts.',
+          materialized.errors,
+        )
       }
       emit({
         stage: 'runtime-v4-bundle',
