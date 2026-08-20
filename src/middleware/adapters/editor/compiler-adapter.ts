@@ -30,6 +30,7 @@ import type {
   PLCVariable,
   Result,
 } from '../../shared/ports/types'
+import { compileProgramFlow } from './compile-program-flow'
 
 /**
  * Shape of the project data expected by the editor's IPC bridge.
@@ -181,124 +182,28 @@ function inferStage(message: string): CompileProgressEvent['stage'] {
 
 export function createEditorCompilerAdapter(): CompilerPort {
   return {
-    async compileProgram(
+    /**
+     * The Build / Build & Upload flow.
+     *
+     * The orchestration lives in `compileProgramFlow` so the headless CLI enters
+     * the same sequence through its own transport — board resolution, the C++
+     * block graft, POU preprocessing and the pipeline call are shared, not
+     * restated per front end.
+     */
+    compileProgram(
       args: CompileProgramArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<CompileResult> {
-      const boards = await window.bridge.getAvailableBoards()
-      const boardInfo = boards.get(args.boardTarget)
-      const boardCore = boardInfo?.core ?? null
-      const isSimulator = args.isSimulator ?? boardInfo?.compiler === 'simulator'
-
-      // Graft library-supplied C++ blocks into the project's POU
-      // list before preprocessing.  They behave like user-defined
-      // C++ POUs from this point on — same `preprocessPous` branch,
-      // same `c_blocks.h` / `c_blocks_code.cpp` generation
-      // downstream.  See `injectLibraryCppBlocks` for the renaming
-      // contract.
-      const archives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
-      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
-
-      // Preprocess POUs (comment wrapping, Python->ST stubs, C++ validation/ST generation)
-      const { projectData: processedData, validationFailed } = preprocessPous(
-        dataWithLibCpp,
-        isSimulator,
-        (level, message) => {
-          onProgress({ stage: 'st', message, level })
+      return compileProgramFlow(
+        args,
+        {
+          getAvailableBoards: () => window.bridge.getAvailableBoards(),
+          loadAllLibraries: async () => (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[],
+          runCompileProgram: (compileArgs, onMessage) =>
+            window.bridge.runCompileProgram(compileArgs as never, onMessage),
         },
+        onProgress,
       )
-
-      if (validationFailed) {
-        return {
-          success: false,
-          error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
-        }
-      }
-
-      const ipcData = toIpcProjectData(processedData)
-
-      return new Promise<CompileResult>((resolve) => {
-        let hasError = false
-        let lastError = ''
-        let hexPath: string | undefined
-        let settled = false
-
-        window.bridge.runCompileProgram(
-          [
-            args.projectPath,
-            args.boardTarget,
-            boardCore,
-            args.compileOnly ?? false,
-            ipcData as never,
-            args.runtimeIpAddress ?? null,
-            args.runtimeJwtToken ?? null,
-            args.cleanBuild ?? false,
-            args.communicationPort ?? null,
-            // User-authored configuration-screen data — threaded
-            // through to the shared compile pipeline so it can emit
-            // `vpp_config.h` for arduino-cli VPP boards (Arduino
-            // Opta, P1AM).  The pipeline gates emission on the
-            // board's resolved `vppIo` capability; non-VPP boards
-            // ignore this argument and the field is a no-op.
-            args.vendorScreenData ?? null,
-          ],
-          (data: Record<string, unknown>) => {
-            // Extract simulator firmware path BEFORE the closePort early return,
-            // because the backend sends both fields in the same message.
-            if (data.simulatorFirmwarePath) {
-              hexPath = data.simulatorFirmwarePath as string
-              onProgress({ stage: 'done', message: 'Simulator firmware ready', firmwarePath: hexPath })
-            }
-
-            if (data.closePort) {
-              if (settled) return
-              settled = true
-              if (!hasError) {
-                onProgress({ stage: 'done', message: 'Compilation complete' })
-              }
-              resolve(
-                hasError
-                  ? { success: false, error: lastError }
-                  : { success: true, message: 'Compilation complete', hexPath },
-              )
-              return
-            }
-
-            // Forward plcStatus for runtime status updates
-            if (data.plcStatus) {
-              onProgress({ stage: 'arduino', message: '', plcStatus: data.plcStatus as string })
-            }
-
-            if (data.message) {
-              const message = decodeMessage(data.message)
-              // Structured CompileError travels alongside the formatted
-              // text whenever the compiler-module's strucpp failure
-              // path emits a per-error log entry.  Forward it as-is
-              // so the console can drive click-to-open from the
-              // structured fields rather than parsing text.
-              const compileError = data.compileError as CompileProgressEvent['compileError'] | undefined
-
-              if (data.logLevel === 'error') {
-                hasError = true
-                lastError = message
-                onProgress({
-                  stage: 'error',
-                  message,
-                  level: 'error',
-                  ...(compileError ? { compileError } : {}),
-                })
-              } else {
-                onProgress({
-                  stage: inferStage(message),
-                  message,
-                  level: (data.logLevel as string) ?? 'info',
-                  ...(compileError ? { compileError } : {}),
-                })
-              }
-            }
-          },
-        )
-      })
     },
 
     async compileForDebug(

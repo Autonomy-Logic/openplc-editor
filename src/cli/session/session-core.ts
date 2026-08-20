@@ -56,6 +56,9 @@ export interface SessionCoreOptions {
 
 /** Keeps the watch buffer bounded — a long recording must not grow forever. */
 const MAX_WATCH_SAMPLES = 5000
+/** How long to wait for an external write to survive a dispatcher drain. */
+const WRITE_SETTLE_TIMEOUT_MS = 1500
+const WRITE_SETTLE_POLL_MS = 50
 const MIN_WATCH_INTERVAL_MS = 20
 
 export class SessionCore {
@@ -133,6 +136,22 @@ export class SessionCore {
         const result = await control
         if (!result.success) {
           return this.fail(request.id, ErrorCode.TargetError, result.error ?? `Could not ${request.kind} the PLC`)
+        }
+        if (request.kind === 'stop') {
+          // Stopping the program clears the runtime's forces:
+          // `debug_write_journal_reset()` runs on program unload/stop. Keeping
+          // this session's list afterwards reports `[FORCED]` on variables the
+          // program is freely writing again — observed on hardware, where a
+          // forced BOOL read back as the program's own value while still
+          // flagged. It also makes `close` try to release forces that no longer
+          // exist.
+          //
+          // A stop this session did not issue (the runtime UI, a mode switch)
+          // still leaves the list stale: the debug protocol has no read for the
+          // forced-slot bitmap, so local bookkeeping is the only source there is.
+          // `status` therefore reports what this session forced and has not
+          // released, which is what `close` acts on.
+          this.forced.clear()
         }
         return {
           id: request.id,
@@ -245,15 +264,49 @@ export class SessionCore {
     }
     if (force) this.forced.add(variable.name.toUpperCase())
 
-    const readBack = await this.readValues([variable])
+    const readBack = await this.readBackAfterWrite(variable, input)
     if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
-    const value = readBack.values[0] ?? {
-      name: variable.name,
-      type: variable.type,
-      value: null,
-      forced: this.forced.has(variable.name.toUpperCase()),
+    return { id, ok: true, data: { kind: force ? 'force' : 'write', value: readBack.value } }
+  }
+
+  /**
+   * Read a variable back after writing it, waiting for the write to land.
+   *
+   * An external write does NOT take effect immediately: the runtime enqueues it
+   * on the debug-write journal and the dispatcher drains it once per cycle, at
+   * the no-task-running window. A single read straight after the write therefore
+   * races the drain and usually returns the OLD value — so `force x 3.5` would
+   * report `0`, and a test asserting on that reply would fail against a PLC that
+   * had done exactly what it was told.
+   *
+   * Polls briefly for the value to match what was asked, and gives up quietly
+   * after that: a mismatch is legitimate for a soft `write` the program
+   * overwrites on the next scan, so a timeout here is not an error.
+   */
+  private async readBackAfterWrite(
+    variable: ResolvedVariable,
+    requested: string,
+  ): Promise<{ value: VariableValue } | { error: string }> {
+    const deadline = this.now() + WRITE_SETTLE_TIMEOUT_MS
+    let last: VariableValue | undefined
+
+    for (;;) {
+      const result = await this.readValues([variable])
+      if ('error' in result) return { error: result.error }
+      last = result.values[0]
+      if (last && valueMatchesRequest(last, requested)) break
+      if (this.now() >= deadline) break
+      await delay(WRITE_SETTLE_POLL_MS)
     }
-    return { id, ok: true, data: { kind: force ? 'force' : 'write', value } }
+
+    return {
+      value: last ?? {
+        name: variable.name,
+        type: variable.type,
+        value: null,
+        forced: this.forced.has(variable.name.toUpperCase()),
+      },
+    }
   }
 
   private async applyUnforce(id: number, name: string): Promise<Response> {
@@ -268,6 +321,8 @@ export class SessionCore {
     }
     this.forced.delete(variable.name.toUpperCase())
 
+    // No expected value to wait for: unforcing hands the variable back to the
+    // program, so whatever it reads next is legitimate.
     const readBack = await this.readValues([variable])
     if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
     const value = readBack.values[0] ?? { name: variable.name, type: variable.type, value: null, forced: false }
@@ -431,4 +486,32 @@ export function channelPlcControl(channel: DeviceDebugChannel): PlcControl {
       return result.plcState === Number(PlcRuntimeState.RUNNING) ? 'running' : 'stopped'
     },
   }
+}
+
+/**
+ * Did a read-back land on what the caller asked for?
+ *
+ * Compared as text after normalising, because the request is a user string
+ * (`TRUE`, `3.5`, `16#FF`) and the reply is a typed value. Exact float equality
+ * is deliberately avoided: `3.5` written to a REAL reads back as `3.5`, but a
+ * value the target rounds would spin the poll for its whole timeout.
+ */
+function valueMatchesRequest(value: VariableValue, requested: string): boolean {
+  const wanted = requested.trim().toUpperCase()
+  if (typeof value.value === 'boolean') {
+    const asTrue = wanted === 'TRUE' || wanted === '1'
+    const asFalse = wanted === 'FALSE' || wanted === '0'
+    if (!asTrue && !asFalse) return true
+    return value.value === asTrue
+  }
+  if (typeof value.value === 'number') {
+    const parsed = Number(wanted.replace(/^16#/, '0x'))
+    return Number.isNaN(parsed) ? true : Math.abs(value.value - parsed) < 1e-6
+  }
+  if (typeof value.value === 'string') return value.value.toUpperCase() === wanted
+  return true
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

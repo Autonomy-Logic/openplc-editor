@@ -133,7 +133,14 @@ export const SessionStatusSchema = z.object({
   /** Whether that MD5 matches the locally compiled artifacts. */
   md5Matches: z.boolean(),
   plcState: PlcStateSchema,
-  /** Paths this session has forced and not yet released. */
+  /**
+   * Paths this session forced and has not released — what `close` will unforce.
+   *
+   * The session's own bookkeeping, because the debug protocol exposes no read
+   * of the runtime's forced-slot bitmap. It is cleared when this session stops
+   * the PLC (the runtime drops its forces then); a stop issued from elsewhere
+   * can leave it reporting a force the runtime has already released.
+   */
   forced: z.array(z.string()),
   watching: z.array(z.string()),
   startedAt: z.string(),

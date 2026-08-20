@@ -51,6 +51,7 @@ const BOOLEAN_FLAGS = [
   'upload-if-needed',
   'force-new',
   'keep-forces',
+  'keep-going',
   'all',
 ] as const
 
@@ -66,7 +67,8 @@ Usage
   openplc debug list
   openplc debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
   openplc debug close --session <id> | --all [--keep-forces]
-  openplc debug repl [--session <id>]
+  openplc debug repl [--session <id>]                       (interactive; needs a terminal)
+  openplc debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
 
 Credentials (upload, debug)
   --credentials user:pass, or --user + --password

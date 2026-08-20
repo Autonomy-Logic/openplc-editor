@@ -11,6 +11,7 @@
  * `Request`s and neither touches the debug channel directly.
  */
 
+import { readFile } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { createInterface } from 'node:readline'
 
@@ -20,7 +21,7 @@ import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
 import type { CliResult, Reporter } from '../output'
 import { sendRequest } from '../session/client'
 import type { OkResponse, Request, Response } from '../session/protocol'
-import { type SessionRecord,SessionRegistry } from '../session/registry'
+import { type SessionRecord, SessionRegistry } from '../session/registry'
 import { renderTable } from './devices'
 
 export interface DebugContext {
@@ -80,6 +81,8 @@ export async function runDebug(args: ParsedArgs, reporter: Reporter, context: De
       return runClose(args, reporter, context)
     case 'repl':
       return runRepl(args, reporter, context)
+    case 'exec':
+      return runExec(args, reporter, context)
     case 'status':
     case 'list-vars':
     case 'read':
@@ -543,6 +546,20 @@ async function runRepl(args: ParsedArgs, reporter: Reporter, context: DebugConte
   }
   const record = resolved.record
 
+  // Refused rather than degraded: readline over a pipe delivers buffered lines
+  // in one burst, so a scripted REPL silently drops commands. `exec` is the
+  // deterministic path and the error names it.
+  if (!process.stdin.isTTY) {
+    return reporter.failure(
+      {
+        code: ErrorCode.InvalidArgument,
+        message:
+          'debug repl needs a terminal. For a script, use `openplc debug exec -` (reads commands from stdin, one per line).',
+      },
+      ExitCode.Usage,
+    )
+  }
+
   process.stdout.write(
     `OpenPLC debug session ${record.sessionId}\n` +
       `target ${record.target || '-'}  project ${record.projectPath}\n` +
@@ -594,4 +611,115 @@ async function runRepl(args: ParsedArgs, reporter: Reporter, context: DebugConte
   })
 
   return reporter.success({ sessionId: record.sessionId, left: true }, () => `Left session ${record.sessionId}.`)
+}
+
+/**
+ * `debug exec` — run a script of REPL commands, one per line.
+ *
+ * Separate from the REPL rather than "the REPL with piped stdin", because
+ * readline is the wrong tool for a script: with a non-TTY input it delivers
+ * every buffered line in one synchronous burst, so pausing between commands
+ * cannot hold them back and lines get dropped. Observed exactly that — a piped
+ * seven-command script ran the first and the last.
+ *
+ * This reads the whole input, then runs the commands strictly in sequence over
+ * one connection each, which is also what makes the output deterministic enough
+ * to assert on. Stops at the first failure unless `--keep-going`, so a script
+ * cannot keep issuing writes after something went wrong.
+ */
+async function runExec(args: ParsedArgs, reporter: Reporter, context: DebugContext): Promise<CliResult> {
+  const resolved = resolveSession(args, context)
+  if ('error' in resolved) {
+    return reporter.failure({ code: ErrorCode.SessionNotFound, message: resolved.error }, ExitCode.NotFound)
+  }
+
+  const script = await readScript(args)
+  if ('error' in script) {
+    return reporter.failure({ code: ErrorCode.InvalidArgument, message: script.error }, ExitCode.Usage)
+  }
+
+  const keepGoing = boolFlag(args, 'keep-going')
+  const steps: Array<{ command: string; ok: boolean; output?: string; error?: string }> = []
+  let failures = 0
+  let id = 1
+
+  for (const line of script.lines) {
+    const parsed = parseReplLine(line, id++)
+    // `help` and blank lines are no-ops in a script; `quit` ends it early.
+    if (parsed === null || parsed === 'help') continue
+    if (parsed === 'quit') break
+
+    if ('error' in parsed) {
+      steps.push({ command: line, ok: false, error: parsed.error })
+      failures += 1
+      if (!keepGoing) break
+      continue
+    }
+
+    const result = await sendRequest(resolved.record.socketPath, parsed.request)
+    if (!result.success) {
+      steps.push({ command: line, ok: false, error: result.error })
+      failures += 1
+      if (!keepGoing) break
+      continue
+    }
+    if (!result.response.ok) {
+      steps.push({
+        command: line,
+        ok: false,
+        error: `[${result.response.error.code}] ${result.response.error.message}`,
+      })
+      failures += 1
+      if (!keepGoing) break
+      continue
+    }
+    const rendered = renderOk(result.response)
+    steps.push({ command: line, ok: true, output: rendered })
+    reporter.progress(`${line}`)
+  }
+
+  if (failures > 0) {
+    return reporter.failure(
+      {
+        code: ErrorCode.TargetError,
+        message: `${failures} of ${steps.length} command(s) failed`,
+        details: { steps },
+      },
+      ExitCode.TargetError,
+    )
+  }
+
+  return reporter.success({ steps }, () => steps.map((step) => `> ${step.command}\n${step.output ?? ''}`).join('\n'))
+}
+
+/** Command lines from a file argument, or from stdin when given `-`. */
+async function readScript(args: ParsedArgs): Promise<{ lines: string[] } | { error: string }> {
+  const source = args.positionals[0] ?? stringFlag(args, 'script') ?? '-'
+  let text: string
+  if (source === '-') {
+    text = await readAllStdin()
+  } else {
+    try {
+      text = await readFile(source, 'utf-8')
+    } catch {
+      return { error: `Could not read the command script at ${source}` }
+    }
+  }
+  const lines = text
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter((line) => line.length > 0)
+  if (lines.length === 0) return { error: 'The command script is empty' }
+  return { lines }
+}
+
+function readAllStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let buffered = ''
+    process.stdin.setEncoding('utf-8')
+    process.stdin.on('data', (chunk: string) => {
+      buffered += chunk
+    })
+    process.stdin.on('end', () => resolve(buffered))
+  })
 }

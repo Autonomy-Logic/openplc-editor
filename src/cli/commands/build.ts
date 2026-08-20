@@ -1,37 +1,27 @@
 /**
- * `openplc compile` and `openplc upload` — the same pipeline, one flag apart.
+ * `openplc compile` and `openplc upload` — the Build and Build & Upload clicks.
  *
- * Both run `CompilerModule.compileProgram`, the exact call the GUI's build
- * button makes. `compile` passes `compileOnly: true` and no runtime address, so
- * the pipeline stops after producing artifacts; `upload` logs in first and
- * hands the pipeline the address and token, so its existing upload step runs.
+ * Both call `compileProgramFlow`, the orchestration behind the editor's
+ * `CompilerPort.compileProgram`, through a CLI transport. Everything the flow
+ * does — resolving the board from the catalogue, grafting library C++ blocks,
+ * preprocessing POUs, shaping the pipeline arguments, interpreting the message
+ * stream — is therefore the same code the button runs. The only difference
+ * between the two commands is `compileOnly` and whether a runtime address and
+ * token are supplied, exactly as it is between the two menu items.
  *
- * There is deliberately no separate upload implementation. Framing the
- * multipart body, choosing the bundle, and the post-upload restart are all
- * pipeline concerns already solved once, and a second copy would only be
- * exercised by the CLI — where a mistake would surface as a device that quietly
- * runs the wrong program.
+ * What stays here is the CLI's own part: reading the target and credentials off
+ * argv, loading the project from disk, and rendering the result.
  */
 
-import { CompilerModule } from '@root/backend/editor/compiler'
-import { LibraryManagerModule } from '@root/backend/editor/library-manager'
-import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
-import { preprocessPous } from '@root/backend/shared/utils/PLC/preprocess-pous'
-import { injectLibraryCppBlocks, toIpcProjectData } from '@root/middleware/adapters/editor/compiler-adapter'
+import { compileProgramFlow } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
-import { createHeadlessCompileBridge, createProgressChannel } from '../compile/headless-bridge'
+import { createCliCompileTransport } from '../compile/cli-transport'
 import { ErrorCode, ExitCode } from '../exit-codes'
 import type { CliResult, Reporter } from '../output'
 import { loadProject } from '../project/load'
-
-/** One line of compiler output, as posted to the progress channel. */
-interface CompileEvent {
-  logLevel?: 'info' | 'warning' | 'error'
-  message?: string
-  closePort?: boolean
-}
 
 export interface BuildOptions {
   /** True for `upload`: connect to a runtime and let the pipeline flash it. */
@@ -54,8 +44,8 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   const project = loaded.project
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
 
-  // The project remembers its own board; --target overrides it so one fixture
-  // can be built for several targets in a test matrix.
+  // The project remembers the board its dropdown was left on; `--target`
+  // overrides it so one fixture can be built for several targets in a matrix.
   const target = stringFlag(args, 'target') ?? project.board
   if (!target) {
     return reporter.failure(
@@ -68,8 +58,9 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   }
 
   let runtime: RuntimeApiClient | null = null
+  let host: string | null = null
   if (options.withUpload) {
-    const host = stringFlag(args, 'host') ?? stringFlag(args, 'address')
+    host = stringFlag(args, 'host') ?? stringFlag(args, 'address') ?? null
     if (!host) {
       return reporter.failure(
         { code: ErrorCode.MissingArgument, message: 'upload needs --host <address> (see `openplc devices`)' },
@@ -92,80 +83,39 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     }
   }
 
-  const host = options.withUpload ? (stringFlag(args, 'host') ?? stringFlag(args, 'address') ?? null) : null
-  const cleanBuild = boolFlag(args, 'clean')
-
   reporter.progress(`${options.withUpload ? 'Building and uploading' : 'Building'} "${project.name}" for ${target}…`)
 
-  // The renderer's pre-compile chain, in the same order and with the same
-  // functions: graft library-supplied C++ blocks in, preprocess POUs (comment
-  // wrapping, Python -> ST stubs, C++ validation), then convert to the
-  // schema shape the pipeline consumes. Skipping any of it would compile a
-  // DIFFERENT program from the same sources — a project with a Python function
-  // block would silently lose it.
-  // Board info comes from `HardwareModule.getAvailableBoards()` — the same
-  // source the compiler adapter reads before a GUI build. `boardCore` and
-  // `isSimulator` are both derived from it rather than guessed: the adapter
-  // passes `boardInfo.core` to the pipeline, and infers the simulator from
-  // `compiler === 'simulator'`. Matching the target name against "simulator"
-  // instead would be a second, weaker rule that a renamed board silently breaks.
-  const boards = await new HardwareModule().getAvailableBoards()
-  const boardInfo = boards.get(target)
-  if (!boardInfo) {
-    return reporter.failure(
-      {
-        code: ErrorCode.TargetUnknown,
-        message:
-          `Board "${target}" is not available. It is neither in hals.json nor an installed VPP package — ` +
-          'check `openplc devices` for runtimes, or install the board package in the editor.',
-      },
-      ExitCode.NotFound,
-    )
-  }
-  const boardCore = boardInfo.core ?? null
-  const isSimulator = boardInfo.compiler === 'simulator'
+  let streamedError = false
+  const warnings: string[] = []
 
-  const archives = new LibraryManagerModule().loadAll()
-  const withLibraryCpp = injectLibraryCppBlocks(project.compileReady, archives)
-  const { projectData: processed, validationFailed } = preprocessPous(withLibraryCpp, isSimulator, (level, message) => {
-    reporter.progress(level === 'error' ? `error: ${message}` : message)
-  })
-  if (validationFailed) {
-    return reporter.failure(
-      {
-        code: ErrorCode.CompileFailed,
-        message: 'POU validation failed — check C/C++ POUs for missing setup()/loop() functions',
-      },
-      ExitCode.CompileFailed,
-    )
-  }
-
-  const outcome = await runCompilePipeline({
-    projectPath: project.projectPath,
-    target,
-    boardCore,
-    compileOnly: !options.withUpload,
-    projectData: toIpcProjectData(processed),
-    runtimeIpAddress: host,
-    runtimeJwtToken: runtime?.tokens.getToken() ?? null,
-    cleanBuild,
-    communicationPort: project.communicationPort ?? null,
-    vendorScreenData: project.vendorScreenData,
-    runtime,
-    onLine: (line, level) => {
-      if (level === 'error') reporter.progress(`error: ${line}`)
-      else reporter.progress(line)
+  const result = await compileProgramFlow(
+    {
+      projectPath: project.projectPath,
+      boardTarget: target,
+      // The alias-resolved snapshot, from the same store action the button uses.
+      projectData: project.compileReady,
+      compileOnly: !options.withUpload,
+      cleanBuild: boolFlag(args, 'clean'),
+      runtimeIpAddress: host,
+      runtimeJwtToken: runtime?.tokens.getToken() ?? null,
+      communicationPort: project.communicationPort || undefined,
+      vendorScreenData: project.vendorScreenData,
     },
-  })
+    createCliCompileTransport(runtime),
+    (event: CompileProgressEvent) => {
+      if (event.level === 'error' || event.stage === 'error') streamedError = true
+      if (event.level === 'warning' && event.message) warnings.push(event.message)
+      if (event.message) reporter.progress(event.level === 'error' ? `error: ${event.message}` : event.message)
+    },
+  )
 
-  if (!outcome.success) {
+  if (!result.success) {
     return reporter.failure(
       {
-        code: options.withUpload && outcome.stage === 'upload' ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
-        message: outcome.error,
-        details: { diagnostics: outcome.diagnostics },
+        code: options.withUpload && streamedError ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
+        message: result.error ?? 'Compilation failed',
       },
-      options.withUpload && outcome.stage === 'upload' ? ExitCode.TargetError : ExitCode.CompileFailed,
+      options.withUpload && streamedError ? ExitCode.TargetError : ExitCode.CompileFailed,
     )
   }
 
@@ -176,7 +126,8 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       target,
       uploaded: options.withUpload,
       buildDirectory: `${project.projectPath}/build/${target}`,
-      warnings: outcome.diagnostics.filter((line) => line.level === 'warning').map((line) => line.message),
+      firmwarePath: result.hexPath,
+      warnings,
     },
     () =>
       options.withUpload
@@ -187,8 +138,8 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
 
 /** Credentials from flags or the environment, with a clear message when absent. */
 export function resolveCredentials(args: ParsedArgs): { username: string; password: string } | { error: string } {
-  // `--credentials user:pass` is convenient; the environment form exists
-  // because a flag lands in shell history and CI logs.
+  // `--credentials user:pass` is convenient; the environment form exists because
+  // a flag lands in shell history and CI logs.
   const combined = stringFlag(args, 'credentials') ?? process.env.OPENPLC_CREDENTIALS
   if (combined) {
     const separator = combined.indexOf(':')
@@ -207,96 +158,4 @@ export function resolveCredentials(args: ParsedArgs): { username: string; passwo
     }
   }
   return { username, password }
-}
-
-export interface CompilePipelineResult {
-  success: boolean
-  error: string
-  stage: 'compile' | 'upload'
-  diagnostics: Array<{ level: 'info' | 'warning' | 'error'; message: string }>
-}
-
-/**
- * Drive `compileProgram` to completion.
- *
- * The pipeline reports asynchronously and signals the end by closing the
- * channel, so success is decided from what it said before closing rather than
- * from a return value — it has none. An `error` line is what a failed build
- * looks like from out here.
- */
-export async function runCompilePipeline(options: {
-  projectPath: string
-  target: string
-  boardCore: string | null
-  compileOnly: boolean
-  /** Schema-shape project data, as produced by `toIpcProjectData`. */
-  projectData: ReturnType<typeof toIpcProjectData>
-  runtimeIpAddress: string | null
-  runtimeJwtToken: string | null
-  cleanBuild: boolean
-  communicationPort: string | null
-  vendorScreenData: Record<string, unknown> | undefined
-  runtime: RuntimeApiClient | null
-  onLine: (message: string, level: 'info' | 'warning' | 'error') => void
-}): Promise<CompilePipelineResult> {
-  const diagnostics: Array<{ level: 'info' | 'warning' | 'error'; message: string }> = []
-  let sawUploadStage = false
-
-  return new Promise<CompilePipelineResult>((resolve) => {
-    const finish = () => {
-      const errors = diagnostics.filter((line) => line.level === 'error')
-      resolve({
-        success: errors.length === 0,
-        error: errors.length === 0 ? '' : errors[errors.length - 1].message,
-        stage: sawUploadStage ? 'upload' : 'compile',
-        diagnostics,
-      })
-    }
-
-    const channel = createProgressChannel({
-      onMessage: (message: unknown) => {
-        const event = readCompileEvent(message)
-        if (!event?.message) return
-        const level = event.logLevel ?? 'info'
-        // Anything the pipeline says after it starts uploading belongs to the
-        // upload stage, which the caller reports with a different exit code.
-        if (/upload/i.test(event.message)) sawUploadStage = true
-        diagnostics.push({ level, message: event.message })
-        options.onLine(event.message, level)
-      },
-      onClose: finish,
-    })
-
-    const compiler = new CompilerModule()
-    const compileArgs: Array<string | null | boolean | undefined | object> = [
-      options.projectPath,
-      options.target,
-      options.boardCore,
-      options.compileOnly,
-      options.projectData,
-      options.runtimeIpAddress,
-      options.runtimeJwtToken,
-      options.cleanBuild,
-      options.communicationPort,
-      options.vendorScreenData,
-    ]
-    void compiler
-      .compileProgram(compileArgs, channel, createHeadlessCompileBridge(options.runtime))
-      .catch((error: unknown) => {
-        diagnostics.push({ level: 'error', message: error instanceof Error ? error.message : String(error) })
-        channel.close()
-      })
-  })
-}
-
-/** Validate a progress payload instead of trusting its shape. */
-function readCompileEvent(message: unknown): CompileEvent | undefined {
-  if (typeof message !== 'object' || message === null) return undefined
-  const record: Record<string, unknown> = { ...message }
-  const level = record.logLevel
-  return {
-    logLevel: level === 'info' || level === 'warning' || level === 'error' ? level : undefined,
-    message: typeof record.message === 'string' ? record.message : undefined,
-    closePort: typeof record.closePort === 'boolean' ? record.closePort : undefined,
-  }
 }
