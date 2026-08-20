@@ -16,7 +16,15 @@ import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
-  constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
+  /**
+   * `serviceManager` is the window native dialogs are parented to, and only
+   * `openProject` — the interactive directory picker — needs one. It is
+   * optional so the headless CLI can use the file-level operations
+   * (`createProject`, `readRawProjectFiles`) without an Electron window, which
+   * is what keeps a CLI-created project byte-compatible with a GUI-created one
+   * instead of coming from a second writer.
+   */
+  constructor(private serviceManager: InstanceType<typeof BrowserWindow> | null = null) {}
 
   public getHistoryProjectsFilePath(): string {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
@@ -377,10 +385,16 @@ class ProjectService {
   }
 
   async openProject(): Promise<IProjectServiceResponse> {
-    const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
+    const dialogOptions = {
       title: 'Select a PLC project to open',
-      properties: ['openDirectory'],
-    })
+      properties: ['openDirectory' as const],
+    }
+    // Parented to the window when there is one. There is no window in the
+    // headless CLI, but the CLI never reaches an interactive picker either —
+    // it is given a path.
+    const { canceled, filePaths } = this.serviceManager
+      ? await dialog.showOpenDialog(this.serviceManager, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
 
     if (canceled) {
       return {

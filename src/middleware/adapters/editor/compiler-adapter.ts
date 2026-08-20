@@ -40,7 +40,7 @@ import type {
  * `as unknown as SchemaProjectData`, which is why the omission is not a compile
  * error. Adding a field to the project model means adding it here too.
  */
-interface IpcProjectData {
+export interface IpcProjectData {
   dataTypes: PLCProjectData['dataTypes']
   globalVariableLists?: PLCProjectData['globalVariableLists']
   pous: Array<{
@@ -75,6 +75,9 @@ function portPouToIpcPou(pou: PLCPou) {
 }
 
 /** Converts PLCProjectData (port format) to the editor's IPC format. */
+// Exported so the headless CLI can run the SAME pre-compile chain the renderer
+// runs (inject library C++ blocks -> preprocess POUs -> convert to the IPC/schema
+// shape). Skipping any step compiles a different program from the same sources.
 function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }): IpcProjectData {
   return {
     dataTypes: data.dataTypes,
@@ -462,4 +465,4 @@ export function createEditorCompilerAdapter(): CompilerPort {
   }
 }
 
-export { decodeMessage, inferStage, portPouToIpcPou, toIpcProjectData }
+export { decodeMessage, inferStage, injectLibraryCppBlocks, portPouToIpcPou, toIpcProjectData }

@@ -75,3 +75,7 @@ playwright-report
 
 # Claude Code session state (a running session's id and pid — never a project artefact)
 .claude/scheduled_tasks.lock
+
+# Development build of the headless CLI (see webpack.config.cli.dev.ts)
+openplc-cli.dev.js
+openplc-cli.dev.js.map

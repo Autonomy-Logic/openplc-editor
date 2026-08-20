@@ -54,6 +54,7 @@ export const ErrorCode = {
   NotConnected: 'not_connected',
   AuthRequired: 'auth_required',
   AuthRejected: 'auth_rejected',
+  TargetError: 'target_error',
   UploadRejected: 'upload_rejected',
   Md5Mismatch: 'md5_mismatch',
   Timeout: 'timeout',
