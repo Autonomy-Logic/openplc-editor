@@ -17,6 +17,7 @@ import {
   buildAliasRegistry,
   describeSource,
   nextFreeAddress,
+  resolveProjectAliases,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import {
@@ -27,7 +28,6 @@ import {
   migrateToRegistry,
   modbusConsumerId,
   recalculate as recalculateRegistry,
-  resolveLocation,
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
 } from '../../../../middleware/shared/utils/iec-address/registry'
@@ -2097,21 +2097,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
     getCompileReadyProjectData: () => {
       // Compile-time alias resolution (editor-side; the compiler/runtime never
-      // see aliases). Returns a COPY of the project data with every variable's
-      // `location` resolved: an alias name → its current IEC address, a
-      // literal `%addr` → verbatim, a missing/orphaned alias → '' (unlocated).
-      // The store keeps the alias-name form for display; only this snapshot is
-      // resolved.
+      // see aliases). The resolution RULES live in `resolveProjectAliases`, a
+      // pure function shared with openplc-web and with the headless CLI, which
+      // compiles without a store. This action's only job is to pair the live
+      // project data with the memoized alias index — so a project compiled
+      // from the terminal resolves identically to one compiled from the GUI.
       const live = getState()
-      const aliasIndex = getMemoizedAliasIndex(live)
-      const data = structuredClone(live.project.data)
-      const resolveAll = (variables: PLCVariable[] | undefined): void => {
-        if (!variables) return
-        for (const variable of variables) variable.location = resolveLocation(variable.location, aliasIndex)
-      }
-      for (const pou of data.pous) resolveAll(pou.interface?.variables)
-      resolveAll(data.configurations?.resource?.globalVariables)
-      return data
+      return resolveProjectAliases(live.project.data, getMemoizedAliasIndex(live))
     },
     getAliasIndex: () => getMemoizedAliasIndex(getState()),
     addIOGroup: (deviceName, group) => {
