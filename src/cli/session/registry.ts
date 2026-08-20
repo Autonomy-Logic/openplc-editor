@@ -77,12 +77,21 @@ export class SessionRegistry {
     return join(this.dir, `${sessionId}.json`)
   }
 
-  private ensureDir(): void {
+  /**
+   * Create the registry directory.
+   *
+   * Public because the socket has to be bound BEFORE the record is written —
+   * there is no point registering a session that failed to listen — and binding
+   * into a directory that does not exist fails. macOS reports that as `EACCES`
+   * rather than `ENOENT`, which reads like a permissions problem and sends you
+   * looking in entirely the wrong place.
+   */
+  ensureDirectory(): void {
     if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true })
   }
 
   register(record: SessionRecord): void {
-    this.ensureDir()
+    this.ensureDirectory()
     writeFileSync(this.recordPath(record.sessionId), `${JSON.stringify(record, null, 2)}\n`, 'utf-8')
   }
 

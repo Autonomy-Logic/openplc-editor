@@ -15,6 +15,7 @@
 
 import { CompilerModule } from '@root/backend/editor/compiler'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager'
+import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { preprocessPous } from '@root/backend/shared/utils/PLC/preprocess-pous'
 import { injectLibraryCppBlocks, toIpcProjectData } from '@root/middleware/adapters/editor/compiler-adapter'
@@ -102,9 +103,30 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   // schema shape the pipeline consumes. Skipping any of it would compile a
   // DIFFERENT program from the same sources — a project with a Python function
   // block would silently lose it.
+  // Board info comes from `HardwareModule.getAvailableBoards()` — the same
+  // source the compiler adapter reads before a GUI build. `boardCore` and
+  // `isSimulator` are both derived from it rather than guessed: the adapter
+  // passes `boardInfo.core` to the pipeline, and infers the simulator from
+  // `compiler === 'simulator'`. Matching the target name against "simulator"
+  // instead would be a second, weaker rule that a renamed board silently breaks.
+  const boards = await new HardwareModule().getAvailableBoards()
+  const boardInfo = boards.get(target)
+  if (!boardInfo) {
+    return reporter.failure(
+      {
+        code: ErrorCode.TargetUnknown,
+        message:
+          `Board "${target}" is not available. It is neither in hals.json nor an installed VPP package — ` +
+          'check `openplc devices` for runtimes, or install the board package in the editor.',
+      },
+      ExitCode.NotFound,
+    )
+  }
+  const boardCore = boardInfo.core ?? null
+  const isSimulator = boardInfo.compiler === 'simulator'
+
   const archives = new LibraryManagerModule().loadAll()
   const withLibraryCpp = injectLibraryCppBlocks(project.compileReady, archives)
-  const isSimulator = target.toLowerCase().includes('simulator')
   const { projectData: processed, validationFailed } = preprocessPous(withLibraryCpp, isSimulator, (level, message) => {
     reporter.progress(level === 'error' ? `error: ${message}` : message)
   })
@@ -121,7 +143,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   const outcome = await runCompilePipeline({
     projectPath: project.projectPath,
     target,
-    boardCore: null,
+    boardCore,
     compileOnly: !options.withUpload,
     projectData: toIpcProjectData(processed),
     runtimeIpAddress: host,

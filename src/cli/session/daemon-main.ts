@@ -69,6 +69,9 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   })
 
   try {
+    // Before binding, not after: the socket lives in the registry directory, and
+    // registering only happens once listening succeeds.
+    registry.ensureDirectory()
     await server.listen()
   } catch (error) {
     await opened.core.close(true)

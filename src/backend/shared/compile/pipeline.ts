@@ -587,6 +587,25 @@ async function runCompilePipelineInner(
       })
     }
 
+    // Write the bundle out BEFORE the compile-only branch, so `compile` and
+    // `upload` leave the same artifacts on disk. Until this existed, the bundle
+    // only ever reached disk as a side effect of the upload, and a compile-only
+    // v4 build left a build folder holding nothing but the VPP files.
+    if (port.materializeRuntimeV4Bundle) {
+      const materialized = await port.materializeRuntimeV4Bundle(
+        { bundle },
+        makePlatformLog(emit, 'runtime-v4-bundle'),
+      )
+      if (materialized.errors && materialized.errors.length > 0) {
+        return bailError(emit, 'runtime-v4-bundle', 'Could not write the Runtime v4 build artifacts.', materialized.errors)
+      }
+      emit({
+        stage: 'runtime-v4-bundle',
+        message: `Wrote ${materialized.written} build artifact(s) to the project build folder`,
+        level: 'info',
+      })
+    }
+
     if (compileOnly) {
       emit({ stage: 'done', message: 'Compile only mode — skipping upload to runtime.', level: 'info' })
       return { success: true, md5, uploaded: false }
