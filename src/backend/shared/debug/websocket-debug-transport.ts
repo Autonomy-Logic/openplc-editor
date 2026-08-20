@@ -376,8 +376,8 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
         fail('Request timeout')
       }, REQUEST_TIMEOUT_MS)
 
-      this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex })
+      this.socket.on('debug_response', responseHandler)
+      this.socket.emit('debug_command', { command: commandHex })
     })
   }
 }
