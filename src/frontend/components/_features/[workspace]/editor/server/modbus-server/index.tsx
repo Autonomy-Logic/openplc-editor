@@ -1,7 +1,5 @@
-import * as AccordionPrimitive from '@radix-ui/react-accordion'
-import { ChevronDownIcon } from '@radix-ui/react-icons'
 import type { ModbusBufferMapping } from '@root/middleware/shared/ports/types'
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
@@ -20,57 +18,19 @@ const DEFAULT_NETWORK_INTERFACE_OPTIONS = [
 const MAX_REGISTER_COUNT = 1024
 const MAX_BIT_COUNT = 8192
 
-// Accordion components for buffer mapping sections
-const AccordionItem = forwardRef<HTMLDivElement, AccordionPrimitive.AccordionItemProps>(
-  ({ children, className, ...props }, forwardedRef) => (
-    <AccordionPrimitive.Item
-      className={cn('overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700', className)}
-      {...props}
-      ref={forwardedRef}
-    >
-      {children}
-    </AccordionPrimitive.Item>
-  ),
-)
-AccordionItem.displayName = 'AccordionItem'
+interface BufferBlockProps {
+  title: string
+  children: React.ReactNode
+}
 
-const AccordionTrigger = forwardRef<HTMLButtonElement, AccordionPrimitive.AccordionTriggerProps>(
-  ({ children, className, ...props }, forwardedRef) => (
-    <AccordionPrimitive.Header className='flex'>
-      <AccordionPrimitive.Trigger
-        className={cn(
-          'group flex w-full items-center justify-between bg-neutral-50 px-3 py-2 text-left text-sm font-medium transition-all hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700',
-          className,
-        )}
-        {...props}
-        ref={forwardedRef}
-      >
-        {children}
-        <ChevronDownIcon
-          className='h-4 w-4 text-neutral-500 transition-transform duration-200 ease-in-out group-data-[state=open]:rotate-180 dark:text-neutral-400'
-          aria-hidden
-        />
-      </AccordionPrimitive.Trigger>
-    </AccordionPrimitive.Header>
-  ),
+const BufferBlock = ({ title, children }: BufferBlockProps) => (
+  <div className='rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/40'>
+    <div className='mb-2 text-xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400'>
+      {title}
+    </div>
+    <div className='flex flex-col gap-2'>{children}</div>
+  </div>
 )
-AccordionTrigger.displayName = 'AccordionTrigger'
-
-const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.AccordionContentProps>(
-  ({ children, className, ...props }, forwardedRef) => (
-    <AccordionPrimitive.Content
-      className={cn(
-        'overflow-hidden border-t border-neutral-200 bg-white transition-all duration-200 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:border-neutral-700 dark:bg-neutral-900',
-        className,
-      )}
-      {...props}
-      ref={forwardedRef}
-    >
-      <div className='p-3'>{children}</div>
-    </AccordionPrimitive.Content>
-  ),
-)
-AccordionContent.displayName = 'AccordionContent'
 
 interface BufferInputProps {
   label: string
@@ -159,9 +119,6 @@ const ModbusServerEditor = () => {
     },
     [],
   )
-
-  // Accordion state
-  const [openSections, setOpenSections] = useState<string[]>(['holding-registers'])
 
   useEffect(() => {
     if (server?.modbusSlaveConfig) {
@@ -384,120 +341,86 @@ const ModbusServerEditor = () => {
             many addresses are allocated for each IEC variable type.
           </p>
 
-          <AccordionPrimitive.Root
-            type='multiple'
-            value={openSections}
-            onValueChange={setOpenSections}
-            className='flex flex-col gap-2'
-          >
-            {/* Holding Registers Section */}
-            <AccordionItem value='holding-registers'>
-              <AccordionTrigger>
-                <span className='text-neutral-950 dark:text-white'>Holding Registers</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className='flex flex-col gap-3'>
-                  <BufferInput
-                    label='%QW'
-                    value={qwCount}
-                    onChange={setQwCount}
-                    onBlur={handleQwCountBlur}
-                    max={MAX_REGISTER_COUNT}
-                    description='Integer outputs'
-                  />
-                  <BufferInput
-                    label='%MW'
-                    value={mwCount}
-                    onChange={setMwCount}
-                    onBlur={handleMwCountBlur}
-                    max={MAX_REGISTER_COUNT}
-                    description='Integer memory'
-                  />
-                  <BufferInput
-                    label='%MD'
-                    value={mdCount}
-                    onChange={setMdCount}
-                    onBlur={handleMdCountBlur}
-                    max={MAX_REGISTER_COUNT}
-                    description='Double integer memory (2 regs each)'
-                  />
-                  <BufferInput
-                    label='%ML'
-                    value={mlCount}
-                    onChange={setMlCount}
-                    onBlur={handleMlCountBlur}
-                    max={MAX_REGISTER_COUNT}
-                    description='Long integer memory (4 regs each)'
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+          {/* Two columns of cards rather than an accordion: the four blocks are
+           *  peers, all four are small, and folding them hid the numbers the
+           *  reference table below is computed from. */}
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <BufferBlock title='Holding Registers'>
+              <BufferInput
+                label='%QW'
+                value={qwCount}
+                onChange={setQwCount}
+                onBlur={handleQwCountBlur}
+                max={MAX_REGISTER_COUNT}
+                description='Word outputs'
+              />
+              <BufferInput
+                label='%MW'
+                value={mwCount}
+                onChange={setMwCount}
+                onBlur={handleMwCountBlur}
+                max={MAX_REGISTER_COUNT}
+                description='Word memory'
+              />
+              <BufferInput
+                label='%MD'
+                value={mdCount}
+                onChange={setMdCount}
+                onBlur={handleMdCountBlur}
+                max={MAX_REGISTER_COUNT}
+                description='Double word memory (2 regs each)'
+              />
+              <BufferInput
+                label='%ML'
+                value={mlCount}
+                onChange={setMlCount}
+                onBlur={handleMlCountBlur}
+                max={MAX_REGISTER_COUNT}
+                description='Long word memory (4 regs each)'
+              />
+            </BufferBlock>
 
-            {/* Coils Section */}
-            <AccordionItem value='coils'>
-              <AccordionTrigger>
-                <span className='text-neutral-950 dark:text-white'>Coils</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className='flex flex-col gap-3'>
-                  <BufferInput
-                    label='%QX'
-                    value={qxBits}
-                    onChange={setQxBits}
-                    onBlur={handleQxBitsBlur}
-                    max={MAX_BIT_COUNT}
-                    description='Boolean outputs'
-                  />
-                  <BufferInput
-                    label='%MX'
-                    value={mxBits}
-                    onChange={setMxBits}
-                    onBlur={handleMxBitsBlur}
-                    max={MAX_BIT_COUNT}
-                    description='Boolean memory'
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+            <BufferBlock title='Coils'>
+              <BufferInput
+                label='%QX'
+                value={qxBits}
+                onChange={setQxBits}
+                onBlur={handleQxBitsBlur}
+                max={MAX_BIT_COUNT}
+                description='Boolean outputs'
+              />
+              <BufferInput
+                label='%MX'
+                value={mxBits}
+                onChange={setMxBits}
+                onBlur={handleMxBitsBlur}
+                max={MAX_BIT_COUNT}
+                description='Boolean memory'
+              />
+            </BufferBlock>
 
-            {/* Discrete Inputs Section */}
-            <AccordionItem value='discrete-inputs'>
-              <AccordionTrigger>
-                <span className='text-neutral-950 dark:text-white'>Discrete Inputs</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className='flex flex-col gap-3'>
-                  <BufferInput
-                    label='%IX'
-                    value={ixBits}
-                    onChange={setIxBits}
-                    onBlur={handleIxBitsBlur}
-                    max={MAX_BIT_COUNT}
-                    description='Boolean inputs'
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+            <BufferBlock title='Discrete Inputs'>
+              <BufferInput
+                label='%IX'
+                value={ixBits}
+                onChange={setIxBits}
+                onBlur={handleIxBitsBlur}
+                max={MAX_BIT_COUNT}
+                description='Boolean inputs'
+              />
+            </BufferBlock>
 
-            {/* Input Registers Section */}
-            <AccordionItem value='input-registers'>
-              <AccordionTrigger>
-                <span className='text-neutral-950 dark:text-white'>Input Registers</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className='flex flex-col gap-3'>
-                  <BufferInput
-                    label='%IW'
-                    value={iwCount}
-                    onChange={setIwCount}
-                    onBlur={handleIwCountBlur}
-                    max={MAX_REGISTER_COUNT}
-                    description='Integer inputs'
-                  />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </AccordionPrimitive.Root>
+            <BufferBlock title='Input Registers'>
+              <BufferInput
+                label='%IW'
+                value={iwCount}
+                onChange={setIwCount}
+                onBlur={handleIwCountBlur}
+                max={MAX_REGISTER_COUNT}
+                description='Word inputs'
+              />
+            </BufferBlock>
+          </div>
         </div>
 
         {/* Which Modbus address each IEC segment answers on, recomputed from

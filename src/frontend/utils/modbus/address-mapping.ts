@@ -22,52 +22,64 @@
  * change here without a matching change there silently misreports where a
  * variable lives. Keep the arithmetic in step with that file.
  *
+ * Beyond the per-segment ranges this module also answers the three questions
+ * the reference table asks of it: what sits at index *i* of a segment (the
+ * address matrix), where a given address lives (the search box), and the whole
+ * map as a file (the CSV export).
+ *
  * Pure — no I/O, no store, no React.
  */
 
 import type { ModbusBufferMapping } from '../../../middleware/shared/ports/types'
 import { DEFAULT_BUFFER_MAPPING } from './generate-modbus-slave-config'
 
-/** One IEC value inside a segment: where it answers and how wide it is. */
-interface AddressMappingEntry {
-  plcAddress: string
-  offset: number
-  bits: number
-}
+/** Addressable unit of a Modbus block. */
+type ModbusBlockKind = 'bit' | 'register'
+
+/** IEC width of one value in a segment. */
+type IecType = 'BOOL' | 'WORD' | 'DWORD' | 'LWORD'
+
+type SectionId = 'holding' | 'coils' | 'discrete' | 'input'
 
 interface ModiconRange {
   start: string
   end: string
 }
 
-/** What `listSegmentEntries` left out, or `null` when it listed everything. */
-interface OmittedEntries {
-  count: number
-  fromOffset: number
-  toOffset: number
-}
-
-interface SegmentEntries {
-  entries: AddressMappingEntry[]
-  omitted: OmittedEntries | null
-}
-
 interface AddressMappingRow {
   segment: string
-  /** Addressable unit of the block this row lives in — drives entry width. */
-  unit: 'bit' | 'register'
+  iecType: IecType
+  /** Addressable unit of the block this row lives in. */
+  unit: ModbusBlockKind
+  /**
+   * Registers each value occupies: 2 for `%MD`, 4 for `%ML`, 1 for everything
+   * else. This stride is why consecutive IEC values do not sit on consecutive
+   * Modbus offsets, and it is the reason the matrix exists.
+   */
+  registersPerValue: number
   plcAddressStart: string
   plcAddressEnd: string
   modbusStart: number
   modbusEnd: number
+  /** Number of IEC values in the segment. */
   count: number
+  /** Addresses the segment occupies: `count * registersPerValue`. */
   modbusCount: number
-  regsPerValue?: number
+  /** Cells per matrix row — a byte for bits, sixteen for registers. */
+  perRow: number
   disabled: boolean
 }
 
 interface AddressMappingSection {
+  id: SectionId
   title: string
+  kind: ModbusBlockKind
+  /**
+   * First address of the block in the 5-digit Modicon convention: `400001` for
+   * holding registers, `300001` for input registers, `100001` for discrete
+   * inputs and `1` for coils.
+   */
+  modiconBase: number
   totalAddresses: number
   /** `null` when the block holds nothing — there is no range to name. */
   modiconRange: ModiconRange | null
@@ -81,78 +93,50 @@ interface ModbusAddressMapping {
   inputRegisters: AddressMappingSection
 }
 
+/** Where a searched address turned out to live. */
+interface AddressHit {
+  sectionId: SectionId
+  segment: string
+  offset: number
+  /** Row of the segment's matrix holding the hit, so the UI can scroll to it. */
+  matrixRow: number
+}
+
+interface AddressQueryResult {
+  hits: AddressHit[]
+  /** Set only when the query was understood but matched nothing. */
+  error: string | null
+}
+
+const BITS_PER_BYTE = 8
+const REGISTERS_PER_MATRIX_ROW = 16
+
 /**
  * `%QX<byte>.<bit>` — the IEC 61131-3 bit convention, where `bit` is 0…7.
  * So bit index 7 is `%QX0.7` and bit index 8 rolls over to `%QX1.0`.
  */
 function formatBitAddress(prefix: string, bitIndex: number): string {
-  const byteIndex = Math.floor(bitIndex / 8)
-  const bit = bitIndex % 8
+  const byteIndex = Math.floor(bitIndex / BITS_PER_BYTE)
+  const bit = bitIndex % BITS_PER_BYTE
   return `${prefix}${byteIndex}.${bit}`
 }
 
 /**
- * The 5-digit Modicon convention datasheets and SCADA tools print: a block
- * digit followed by the **1-based** address, so holding register offset 0 is
- * `400001`. It names the same register the `offset` column does, one base
- * apart — which is the single most common source of off-by-one in Modbus
+ * The 5-digit Modicon convention datasheets and SCADA tools print: the block's
+ * base plus the offset, so holding register offset 0 is `400001` and coil
+ * offset 0 is `000001`. It names the same register the offset does, one base
+ * apart — which is the most common source of off-by-one in Modbus
  * integration, and the reason both are on screen at once.
  */
-function formatModiconAddress(blockDigit: string, offset: number): string {
-  return `${blockDigit}${String(offset + 1).padStart(5, '0')}`
+function formatModiconAddress(modiconBase: number, offset: number): string {
+  return String(modiconBase + offset).padStart(6, '0')
 }
 
-function buildModiconRange(blockDigit: string, totalAddresses: number): ModiconRange | null {
+function buildModiconRange(modiconBase: number, totalAddresses: number): ModiconRange | null {
   if (totalAddresses === 0) return null
   return {
-    start: formatModiconAddress(blockDigit, 0),
-    end: formatModiconAddress(blockDigit, totalAddresses - 1),
-  }
-}
-
-/**
- * How many entries `listSegmentEntries` will list before it stops counting.
- *
- * A default configuration is far larger than anyone reads: `%QX` alone is 8192
- * bits, and putting one row per bit in the DOM costs more than it informs.
- */
-const MAX_LISTED_ENTRIES = 256
-
-/**
- * Expand one segment into its individual IEC values — the address, the Modbus
- * offset it answers on, and its width.
- *
- * A `%MD` value spans two registers and a `%ML` four, so consecutive values do
- * not sit on consecutive offsets; that stride is the whole reason this list is
- * worth showing rather than leaving the reader to compute it.
- *
- * Truncated at `limit`, and what was dropped comes back in `omitted` so the
- * caller can say so instead of quietly showing a partial list.
- */
-function listSegmentEntries(row: AddressMappingRow, limit: number = MAX_LISTED_ENTRIES): SegmentEntries {
-  if (row.disabled) return { entries: [], omitted: null }
-
-  const isBit = row.unit === 'bit'
-  const stride = isBit ? 1 : (row.regsPerValue ?? 1)
-  const bits = isBit ? 1 : stride * 16
-
-  const listed = Math.min(row.count, limit)
-  const entries: AddressMappingEntry[] = []
-  for (let index = 0; index < listed; index++) {
-    entries.push({
-      plcAddress: isBit ? formatBitAddress(row.segment, index) : `${row.segment}${index}`,
-      offset: row.modbusStart + index * stride,
-      bits,
-    })
-  }
-
-  const omittedCount = row.count - listed
-  return {
-    entries,
-    omitted:
-      omittedCount > 0
-        ? { count: omittedCount, fromOffset: row.modbusStart + listed * stride, toOffset: row.modbusEnd }
-        : null,
+    start: formatModiconAddress(modiconBase, 0),
+    end: formatModiconAddress(modiconBase, totalAddresses - 1),
   }
 }
 
@@ -191,6 +175,61 @@ function withDefaults(bufferMapping: ModbusBufferMapping | undefined) {
 }
 
 /**
+ * One segment, laid out from `start`.
+ *
+ * `count` is a number of IEC **values**, never of registers — `mdCount: 1024`
+ * means 1024 `%MD` variables occupying 2048 registers, which is also how
+ * `simple_modbus.py` reads it. Treating it as a register budget would halve
+ * every `%MD` and `%ML` segment on screen.
+ */
+function buildRow(
+  segment: string,
+  iecType: IecType,
+  unit: ModbusBlockKind,
+  registersPerValue: number,
+  start: number,
+  count: number,
+): AddressMappingRow {
+  const modbusCount = count * registersPerValue
+  const lastIndex = Math.max(0, count - 1)
+  const isBit = unit === 'bit'
+
+  return {
+    segment,
+    iecType,
+    unit,
+    registersPerValue,
+    plcAddressStart: isBit ? formatBitAddress(segment, 0) : `${segment}0`,
+    plcAddressEnd: isBit ? formatBitAddress(segment, lastIndex) : `${segment}${lastIndex}`,
+    modbusStart: start,
+    modbusEnd: Math.max(start, start + modbusCount - 1),
+    count,
+    modbusCount,
+    perRow: isBit ? BITS_PER_BYTE : REGISTERS_PER_MATRIX_ROW,
+    disabled: count === 0,
+  }
+}
+
+function buildSection(
+  id: SectionId,
+  title: string,
+  kind: ModbusBlockKind,
+  modiconBase: number,
+  rows: AddressMappingRow[],
+): AddressMappingSection {
+  const totalAddresses = rows.reduce((sum, row) => sum + row.modbusCount, 0)
+  return {
+    id,
+    title,
+    kind,
+    modiconBase,
+    totalAddresses,
+    modiconRange: buildModiconRange(modiconBase, totalAddresses),
+    rows,
+  }
+}
+
+/**
  * Compute the full Modbus ↔ IEC address map for a buffer configuration.
  *
  * A segment sized 0 is reported as `disabled` rather than omitted, so the
@@ -200,158 +239,196 @@ function withDefaults(bufferMapping: ModbusBufferMapping | undefined) {
 function calculateModbusAddressMapping(bufferMapping?: ModbusBufferMapping): ModbusAddressMapping {
   const { holdingRegisters, coils, discreteInputs, inputRegisters } = withDefaults(bufferMapping)
 
-  const qwStart = 0
-  const qwEnd = holdingRegisters.qwCount > 0 ? holdingRegisters.qwCount - 1 : -1
+  const qw = buildRow('%QW', 'WORD', 'register', 1, 0, holdingRegisters.qwCount)
+  const mw = buildRow('%MW', 'WORD', 'register', 1, qw.modbusStart + qw.modbusCount, holdingRegisters.mwCount)
+  const md = buildRow('%MD', 'DWORD', 'register', 2, mw.modbusStart + mw.modbusCount, holdingRegisters.mdCount)
+  const ml = buildRow('%ML', 'LWORD', 'register', 4, md.modbusStart + md.modbusCount, holdingRegisters.mlCount)
 
-  const mwStart = holdingRegisters.qwCount
-  const mwEnd = holdingRegisters.mwCount > 0 ? mwStart + holdingRegisters.mwCount - 1 : mwStart - 1
-
-  const mdStart = mwStart + holdingRegisters.mwCount
-  const mdModbusCount = holdingRegisters.mdCount * 2
-  const mdEnd = holdingRegisters.mdCount > 0 ? mdStart + mdModbusCount - 1 : mdStart - 1
-
-  const mlStart = mdStart + mdModbusCount
-  const mlModbusCount = holdingRegisters.mlCount * 4
-  const mlEnd = holdingRegisters.mlCount > 0 ? mlStart + mlModbusCount - 1 : mlStart - 1
-
-  const totalHoldingRegisters = holdingRegisters.qwCount + holdingRegisters.mwCount + mdModbusCount + mlModbusCount
-
-  const qxStart = 0
-  const qxEnd = coils.qxBits > 0 ? coils.qxBits - 1 : -1
-
-  const mxStart = coils.qxBits
-  const mxEnd = coils.mxBits > 0 ? mxStart + coils.mxBits - 1 : mxStart - 1
-
-  const totalCoils = coils.qxBits + coils.mxBits
+  const qx = buildRow('%QX', 'BOOL', 'bit', 1, 0, coils.qxBits)
+  const mx = buildRow('%MX', 'BOOL', 'bit', 1, qx.modbusStart + qx.modbusCount, coils.mxBits)
 
   return {
-    holdingRegisters: {
-      title: 'Holding Registers',
-      totalAddresses: totalHoldingRegisters,
-      modiconRange: buildModiconRange('4', totalHoldingRegisters),
-      rows: [
-        {
-          segment: '%QW',
-          unit: 'register',
-          plcAddressStart: '%QW0',
-          plcAddressEnd: `%QW${Math.max(0, holdingRegisters.qwCount - 1)}`,
-          modbusStart: qwStart,
-          modbusEnd: Math.max(0, qwEnd),
-          count: holdingRegisters.qwCount,
-          modbusCount: holdingRegisters.qwCount,
-          disabled: holdingRegisters.qwCount === 0,
-        },
-        {
-          segment: '%MW',
-          unit: 'register',
-          plcAddressStart: '%MW0',
-          plcAddressEnd: `%MW${Math.max(0, holdingRegisters.mwCount - 1)}`,
-          modbusStart: mwStart,
-          modbusEnd: Math.max(mwStart, mwEnd),
-          count: holdingRegisters.mwCount,
-          modbusCount: holdingRegisters.mwCount,
-          disabled: holdingRegisters.mwCount === 0,
-        },
-        {
-          segment: '%MD',
-          unit: 'register',
-          plcAddressStart: '%MD0',
-          plcAddressEnd: `%MD${Math.max(0, holdingRegisters.mdCount - 1)}`,
-          modbusStart: mdStart,
-          modbusEnd: Math.max(mdStart, mdEnd),
-          count: holdingRegisters.mdCount,
-          modbusCount: mdModbusCount,
-          regsPerValue: 2,
-          disabled: holdingRegisters.mdCount === 0,
-        },
-        {
-          segment: '%ML',
-          unit: 'register',
-          plcAddressStart: '%ML0',
-          plcAddressEnd: `%ML${Math.max(0, holdingRegisters.mlCount - 1)}`,
-          modbusStart: mlStart,
-          modbusEnd: Math.max(mlStart, mlEnd),
-          count: holdingRegisters.mlCount,
-          modbusCount: mlModbusCount,
-          regsPerValue: 4,
-          disabled: holdingRegisters.mlCount === 0,
-        },
-      ],
-    },
-    coils: {
-      title: 'Coils',
-      totalAddresses: totalCoils,
-      modiconRange: buildModiconRange('0', totalCoils),
-      rows: [
-        {
-          segment: '%QX',
-          unit: 'bit',
-          plcAddressStart: '%QX0.0',
-          plcAddressEnd: formatBitAddress('%QX', Math.max(0, coils.qxBits - 1)),
-          modbusStart: qxStart,
-          modbusEnd: Math.max(0, qxEnd),
-          count: coils.qxBits,
-          modbusCount: coils.qxBits,
-          disabled: coils.qxBits === 0,
-        },
-        {
-          segment: '%MX',
-          unit: 'bit',
-          plcAddressStart: '%MX0.0',
-          plcAddressEnd: formatBitAddress('%MX', Math.max(0, coils.mxBits - 1)),
-          modbusStart: mxStart,
-          modbusEnd: Math.max(mxStart, mxEnd),
-          count: coils.mxBits,
-          modbusCount: coils.mxBits,
-          disabled: coils.mxBits === 0,
-        },
-      ],
-    },
-    discreteInputs: {
-      title: 'Discrete Inputs',
-      totalAddresses: discreteInputs.ixBits,
-      modiconRange: buildModiconRange('1', discreteInputs.ixBits),
-      rows: [
-        {
-          segment: '%IX',
-          unit: 'bit',
-          plcAddressStart: '%IX0.0',
-          plcAddressEnd: formatBitAddress('%IX', Math.max(0, discreteInputs.ixBits - 1)),
-          modbusStart: 0,
-          modbusEnd: Math.max(0, discreteInputs.ixBits - 1),
-          count: discreteInputs.ixBits,
-          modbusCount: discreteInputs.ixBits,
-          disabled: discreteInputs.ixBits === 0,
-        },
-      ],
-    },
-    inputRegisters: {
-      title: 'Input Registers',
-      totalAddresses: inputRegisters.iwCount,
-      modiconRange: buildModiconRange('3', inputRegisters.iwCount),
-      rows: [
-        {
-          segment: '%IW',
-          unit: 'register',
-          plcAddressStart: '%IW0',
-          plcAddressEnd: `%IW${Math.max(0, inputRegisters.iwCount - 1)}`,
-          modbusStart: 0,
-          modbusEnd: Math.max(0, inputRegisters.iwCount - 1),
-          count: inputRegisters.iwCount,
-          modbusCount: inputRegisters.iwCount,
-          disabled: inputRegisters.iwCount === 0,
-        },
-      ],
-    },
+    holdingRegisters: buildSection('holding', 'Holding Registers', 'register', 400001, [qw, mw, md, ml]),
+    coils: buildSection('coils', 'Coils', 'bit', 1, [qx, mx]),
+    discreteInputs: buildSection('discrete', 'Discrete Inputs', 'bit', 100001, [
+      buildRow('%IX', 'BOOL', 'bit', 1, 0, discreteInputs.ixBits),
+    ]),
+    inputRegisters: buildSection('input', 'Input Registers', 'register', 300001, [
+      buildRow('%IW', 'WORD', 'register', 1, 0, inputRegisters.iwCount),
+    ]),
   }
 }
 
-export { calculateModbusAddressMapping, formatBitAddress, formatModiconAddress, listSegmentEntries, MAX_LISTED_ENTRIES }
+/** Sections in the order the reference table renders them. */
+function sectionsOf(mapping: ModbusAddressMapping): AddressMappingSection[] {
+  return [mapping.holdingRegisters, mapping.coils, mapping.discreteInputs, mapping.inputRegisters]
+}
+
+/** Modbus offset the value at `index` of this segment answers on. */
+function offsetForIndex(row: AddressMappingRow, index: number): number {
+  return row.modbusStart + index * row.registersPerValue
+}
+
+/** IEC address of the value at `index` of this segment. */
+function plcAddressForIndex(row: AddressMappingRow, index: number): string {
+  return row.unit === 'bit' ? formatBitAddress(row.segment, index) : `${row.segment}${index}`
+}
+
+/** How many matrix rows the segment needs. */
+function matrixRowCount(row: AddressMappingRow): number {
+  return Math.ceil(row.count / row.perRow)
+}
+
+/**
+ * Leftmost label of a matrix row: the byte for a bit segment, the first index
+ * of the run for a register segment.
+ */
+function matrixRowLabel(row: AddressMappingRow, matrixRow: number): string {
+  return row.unit === 'bit' ? `${row.segment}${matrixRow}` : `${row.segment}${matrixRow * row.perRow}`
+}
+
+const IEC_ADDRESS_PATTERN = /^%?([QMI])([XWDL])(\d+)(?:\.(\d+))?$/
+const BYTE_BIT_PATTERN = /^(\d+)\.(\d+)$/
+const DIGITS_PATTERN = /^\d+$/
+/** A six-digit query is read as Modicon; anything shorter as a raw offset. */
+const MODICON_DIGITS = 6
+
+function hitFor(section: AddressMappingSection, row: AddressMappingRow, index: number): AddressHit {
+  return {
+    sectionId: section.id,
+    segment: row.segment,
+    offset: offsetForIndex(row, index),
+    matrixRow: Math.floor(index / row.perRow),
+  }
+}
+
+/**
+ * Resolve what the user typed into the search box to the addresses it names.
+ *
+ * Four forms are accepted, in this order: an IEC address (`%QX37.4`, `%MW12`),
+ * a bare `byte.bit` read as a coil, a six-digit Modicon address, and any other
+ * run of digits read as a raw offset.
+ *
+ * More than one hit is normal rather than exceptional: every block numbers its
+ * offsets from zero, so offset `12` exists in all four of them at once. The UI
+ * says as much instead of silently picking one.
+ */
+function resolveAddressQuery(query: string, mapping: ModbusAddressMapping): AddressQueryResult {
+  const normalized = query.trim().toUpperCase().replace(/\s+/g, '')
+  if (!normalized) return { hits: [], error: null }
+
+  const sections = sectionsOf(mapping)
+  const iecMatch = IEC_ADDRESS_PATTERN.exec(normalized)
+
+  if (iecMatch) {
+    const [, area, width, indexText, bitText] = iecMatch
+    const segment = `%${area}${width}`
+    const hits: AddressHit[] = []
+
+    for (const section of sections) {
+      for (const row of section.rows) {
+        if (row.segment !== segment) continue
+
+        let index: number
+        if (row.unit === 'bit') {
+          const bit = bitText === undefined ? 0 : Number.parseInt(bitText, 10)
+          if (bit >= BITS_PER_BYTE) return { hits: [], error: 'Bit index must be 0-7' }
+          index = Number.parseInt(indexText, 10) * BITS_PER_BYTE + bit
+        } else {
+          if (bitText !== undefined) return { hits: [], error: `${segment} is not a bit address` }
+          index = Number.parseInt(indexText, 10)
+        }
+
+        if (index < row.count) hits.push(hitFor(section, row, index))
+      }
+    }
+
+    return { hits, error: hits.length ? null : `${segment} is outside the configured range` }
+  }
+
+  const byteBitMatch = BYTE_BIT_PATTERN.exec(normalized)
+  if (byteBitMatch) return resolveAddressQuery(`%QX${byteBitMatch[1]}.${byteBitMatch[2]}`, mapping)
+
+  if (!DIGITS_PATTERN.test(normalized)) return { hits: [], error: 'Unrecognized address format' }
+
+  const value = Number.parseInt(normalized, 10)
+  const asModicon = normalized.length === MODICON_DIGITS
+  const hits: AddressHit[] = []
+
+  for (const section of sections) {
+    let offset: number | null = null
+    if (asModicon) {
+      const relative = value - section.modiconBase
+      if (relative >= 0 && relative < section.totalAddresses) offset = relative
+    } else if (value < section.totalAddresses) {
+      offset = value
+    }
+    if (offset === null) continue
+
+    for (const row of section.rows) {
+      if (offset >= row.modbusStart && offset < row.modbusStart + row.modbusCount) {
+        hits.push(hitFor(section, row, Math.floor((offset - row.modbusStart) / row.registersPerValue)))
+      }
+    }
+  }
+
+  return { hits, error: hits.length ? null : 'No address matches that value' }
+}
+
+const CSV_HEADER = 'block,segment,plc_address,modbus_offset,modicon_address,registers,iec_type'
+
+/**
+ * The whole map as CSV, one line per IEC value.
+ *
+ * Both address conventions are always emitted, so the file does not depend on
+ * which one the screen happened to be showing when it was exported. Disabled
+ * segments contribute nothing — there is no address to name.
+ */
+function mappingToCsv(mapping: ModbusAddressMapping): string {
+  const lines = [CSV_HEADER]
+
+  for (const section of sectionsOf(mapping)) {
+    for (const row of section.rows) {
+      for (let index = 0; index < row.count; index++) {
+        const offset = offsetForIndex(row, index)
+        lines.push(
+          [
+            section.title,
+            row.segment,
+            plcAddressForIndex(row, index),
+            offset,
+            formatModiconAddress(section.modiconBase, offset),
+            row.registersPerValue,
+            row.iecType,
+          ].join(','),
+        )
+      }
+    }
+  }
+
+  return `${lines.join('\n')}\n`
+}
+
+export {
+  calculateModbusAddressMapping,
+  formatBitAddress,
+  formatModiconAddress,
+  mappingToCsv,
+  matrixRowCount,
+  matrixRowLabel,
+  offsetForIndex,
+  plcAddressForIndex,
+  resolveAddressQuery,
+  sectionsOf,
+}
 export type {
-  AddressMappingEntry,
+  AddressHit,
   AddressMappingRow,
   AddressMappingSection,
+  AddressQueryResult,
+  IecType,
   ModbusAddressMapping,
+  ModbusBlockKind,
   ModiconRange,
-  SegmentEntries,
+  SectionId,
 }

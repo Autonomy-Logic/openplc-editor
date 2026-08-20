@@ -4,8 +4,13 @@ import {
   calculateModbusAddressMapping,
   formatBitAddress,
   formatModiconAddress,
-  listSegmentEntries,
-  MAX_LISTED_ENTRIES,
+  mappingToCsv,
+  matrixRowCount,
+  matrixRowLabel,
+  offsetForIndex,
+  plcAddressForIndex,
+  resolveAddressQuery,
+  sectionsOf,
 } from '../address-mapping'
 
 const rowFor = (section: AddressMappingSection, segment: string): AddressMappingRow => {
@@ -27,6 +32,16 @@ describe('formatBitAddress', () => {
   })
 })
 
+describe('formatModiconAddress', () => {
+  it('adds the block base to the offset and pads to six digits', () => {
+    expect(formatModiconAddress(400001, 0)).toBe('400001')
+    expect(formatModiconAddress(1, 0)).toBe('000001')
+    expect(formatModiconAddress(1, 8191)).toBe('008192')
+    expect(formatModiconAddress(100001, 16)).toBe('100017')
+    expect(formatModiconAddress(300001, 1023)).toBe('301024')
+  })
+})
+
 describe('calculateModbusAddressMapping — defaults', () => {
   // These boundaries are the contract with the runtime's Modbus slave plugin
   // (simple_modbus.py DEFAULT_* configs). If they move, the runtime moved too.
@@ -42,7 +57,8 @@ describe('calculateModbusAddressMapping — defaults', () => {
       modbusEnd: 4095,
       count: 1024,
       modbusCount: 2048,
-      regsPerValue: 2,
+      registersPerValue: 2,
+      iecType: 'DWORD',
     })
     expect(rowFor(holdingRegisters, '%ML')).toMatchObject({
       plcAddressStart: '%ML0',
@@ -51,9 +67,11 @@ describe('calculateModbusAddressMapping — defaults', () => {
       modbusEnd: 8191,
       count: 1024,
       modbusCount: 4096,
-      regsPerValue: 4,
+      registersPerValue: 4,
+      iecType: 'LWORD',
     })
     expect(holdingRegisters.totalAddresses).toBe(8192)
+    expect(holdingRegisters.modiconRange).toEqual({ start: '400001', end: '408192' })
   })
 
   it('exposes %QX on coils and leaves %MX disabled', () => {
@@ -64,45 +82,34 @@ describe('calculateModbusAddressMapping — defaults', () => {
       plcAddressEnd: '%QX1023.7',
       modbusStart: 0,
       modbusEnd: 8191,
+      iecType: 'BOOL',
+      perRow: 8,
       disabled: false,
     })
     expect(rowFor(coils, '%MX')).toMatchObject({ count: 0, modbusCount: 0, disabled: true })
-    expect(coils.totalAddresses).toBe(8192)
+    expect(coils.modiconRange).toEqual({ start: '000001', end: '008192' })
   })
 
   it('maps discrete inputs to %IX and input registers to %IW', () => {
     const { discreteInputs, inputRegisters } = calculateModbusAddressMapping()
 
-    expect(rowFor(discreteInputs, '%IX')).toMatchObject({
-      plcAddressEnd: '%IX1023.7',
-      modbusStart: 0,
-      modbusEnd: 8191,
-      disabled: false,
-    })
-    expect(rowFor(inputRegisters, '%IW')).toMatchObject({
-      plcAddressEnd: '%IW1023',
-      modbusStart: 0,
-      modbusEnd: 1023,
-      disabled: false,
-    })
-    expect(inputRegisters.totalAddresses).toBe(1024)
+    expect(rowFor(discreteInputs, '%IX')).toMatchObject({ plcAddressEnd: '%IX1023.7', modbusEnd: 8191 })
+    expect(discreteInputs.modiconRange).toEqual({ start: '100001', end: '108192' })
+    expect(rowFor(inputRegisters, '%IW')).toMatchObject({ plcAddressEnd: '%IW1023', modbusEnd: 1023, perRow: 16 })
+    expect(inputRegisters.modiconRange).toEqual({ start: '300001', end: '301024' })
   })
 
-  it('titles every section', () => {
-    const mapping = calculateModbusAddressMapping()
-    expect([
-      mapping.holdingRegisters.title,
-      mapping.coils.title,
-      mapping.discreteInputs.title,
-      mapping.inputRegisters.title,
-    ]).toEqual(['Holding Registers', 'Coils', 'Discrete Inputs', 'Input Registers'])
+  it('names and orders every section', () => {
+    const sections = sectionsOf(calculateModbusAddressMapping())
+
+    expect(sections.map((s) => s.id)).toEqual(['holding', 'coils', 'discrete', 'input'])
+    expect(sections.map((s) => s.title)).toEqual(['Holding Registers', 'Coils', 'Discrete Inputs', 'Input Registers'])
+    expect(sections.map((s) => s.kind)).toEqual(['register', 'bit', 'bit', 'register'])
   })
 })
 
 describe('calculateModbusAddressMapping — partial configuration', () => {
   it('falls back to the defaults field by field', () => {
-    // A server created but never edited has no bufferMapping at all; an older
-    // project can carry one that only names the segment its author touched.
     const partial: ModbusBufferMapping = { coils: { qxBits: 16 } }
     const { coils, holdingRegisters } = calculateModbusAddressMapping(partial)
 
@@ -124,7 +131,7 @@ describe('calculateModbusAddressMapping — partial configuration', () => {
   })
 })
 
-describe('calculateModbusAddressMapping — resized segments', () => {
+describe('calculateModbusAddressMapping — resized and disabled segments', () => {
   it('shifts every later segment when %QW shrinks', () => {
     const { holdingRegisters } = calculateModbusAddressMapping({
       holdingRegisters: { qwCount: 4, mwCount: 8, mdCount: 2, mlCount: 1 },
@@ -132,14 +139,14 @@ describe('calculateModbusAddressMapping — resized segments', () => {
 
     expect(rowFor(holdingRegisters, '%QW')).toMatchObject({ modbusStart: 0, modbusEnd: 3, plcAddressEnd: '%QW3' })
     expect(rowFor(holdingRegisters, '%MW')).toMatchObject({ modbusStart: 4, modbusEnd: 11, plcAddressEnd: '%MW7' })
-    // 2 registers per %MD value: 2 values occupy 12…15.
+    // 2 registers per %MD value: 2 values occupy 12…15, and the IEC index ends
+    // at 1 rather than 3 — the one place the two columns diverge.
     expect(rowFor(holdingRegisters, '%MD')).toMatchObject({
       modbusStart: 12,
       modbusEnd: 15,
       modbusCount: 4,
       plcAddressEnd: '%MD1',
     })
-    // 4 registers per %ML value: 1 value occupies 16…19.
     expect(rowFor(holdingRegisters, '%ML')).toMatchObject({
       modbusStart: 16,
       modbusEnd: 19,
@@ -153,17 +160,10 @@ describe('calculateModbusAddressMapping — resized segments', () => {
     const { coils } = calculateModbusAddressMapping({ coils: { qxBits: 800, mxBits: 8 } })
 
     expect(rowFor(coils, '%QX')).toMatchObject({ modbusEnd: 799, plcAddressEnd: '%QX99.7' })
-    expect(rowFor(coils, '%MX')).toMatchObject({
-      modbusStart: 800,
-      modbusEnd: 807,
-      plcAddressEnd: '%MX0.7',
-      disabled: false,
-    })
+    expect(rowFor(coils, '%MX')).toMatchObject({ modbusStart: 800, modbusEnd: 807, plcAddressEnd: '%MX0.7' })
     expect(coils.totalAddresses).toBe(808)
   })
-})
 
-describe('calculateModbusAddressMapping — disabled segments', () => {
   it('reports a zero-sized segment as disabled rather than dropping it', () => {
     const mapping = calculateModbusAddressMapping({
       holdingRegisters: { qwCount: 0, mwCount: 0, mdCount: 0, mlCount: 0 },
@@ -172,19 +172,13 @@ describe('calculateModbusAddressMapping — disabled segments', () => {
       inputRegisters: { iwCount: 0 },
     })
 
-    const everyRow = [
-      ...mapping.holdingRegisters.rows,
-      ...mapping.coils.rows,
-      ...mapping.discreteInputs.rows,
-      ...mapping.inputRegisters.rows,
-    ]
+    const everyRow = sectionsOf(mapping).flatMap((section) => section.rows)
     expect(everyRow).toHaveLength(8)
-    expect(everyRow.every((row) => row.disabled)).toBe(true)
-    expect(everyRow.every((row) => row.modbusCount === 0)).toBe(true)
+    expect(everyRow.every((row) => row.disabled && row.modbusCount === 0)).toBe(true)
     // Nothing is addressable, so no row may claim a negative or stray range.
     expect(everyRow.every((row) => row.modbusStart === 0 && row.modbusEnd === 0)).toBe(true)
-    expect(mapping.holdingRegisters.totalAddresses).toBe(0)
-    expect(mapping.coils.totalAddresses).toBe(0)
+    // With no addresses there is no range to name.
+    expect(sectionsOf(mapping).every((section) => section.modiconRange === null)).toBe(true)
   })
 
   it('keeps the following segments addressable when only one is switched off', () => {
@@ -192,109 +186,173 @@ describe('calculateModbusAddressMapping — disabled segments', () => {
       holdingRegisters: { qwCount: 0, mwCount: 4, mdCount: 0, mlCount: 2 },
     })
 
-    expect(rowFor(holdingRegisters, '%QW')).toMatchObject({ modbusStart: 0, modbusEnd: 0, disabled: true })
     expect(rowFor(holdingRegisters, '%MW')).toMatchObject({ modbusStart: 0, modbusEnd: 3, disabled: false })
     // %MD is off, so it collapses onto the boundary %ML then starts from.
     expect(rowFor(holdingRegisters, '%MD')).toMatchObject({ modbusStart: 4, modbusEnd: 4, disabled: true })
     expect(rowFor(holdingRegisters, '%ML')).toMatchObject({ modbusStart: 4, modbusEnd: 11, disabled: false })
-    expect(holdingRegisters.totalAddresses).toBe(12)
   })
 })
 
-describe('formatModiconAddress', () => {
-  it('prints the 1-based five-digit form of a 0-based offset', () => {
-    expect(formatModiconAddress('4', 0)).toBe('400001')
-    expect(formatModiconAddress('0', 7)).toBe('000008')
-    expect(formatModiconAddress('1', 16)).toBe('100017')
-    expect(formatModiconAddress('3', 8191)).toBe('308192')
+describe('matrix helpers', () => {
+  const mapping = calculateModbusAddressMapping({
+    holdingRegisters: { qwCount: 40, mwCount: 0, mdCount: 3, mlCount: 0 },
+    coils: { qxBits: 20, mxBits: 0 },
+  })
+  const qw = rowFor(mapping.holdingRegisters, '%QW')
+  const md = rowFor(mapping.holdingRegisters, '%MD')
+  const qx = rowFor(mapping.coils, '%QX')
+
+  it('folds registers sixteen to a row and bits eight to a row', () => {
+    expect(qw.perRow).toBe(16)
+    expect(qx.perRow).toBe(8)
+    expect(matrixRowCount(qw)).toBe(3)
+    expect(matrixRowCount(qx)).toBe(3)
+    expect(matrixRowCount(md)).toBe(1)
+  })
+
+  it('labels a register row by its first index and a bit row by its byte', () => {
+    expect(matrixRowLabel(qw, 0)).toBe('%QW0')
+    expect(matrixRowLabel(qw, 2)).toBe('%QW32')
+    expect(matrixRowLabel(qx, 0)).toBe('%QX0')
+    expect(matrixRowLabel(qx, 2)).toBe('%QX2')
+  })
+
+  it('walks offsets by the stride of the segment', () => {
+    expect(offsetForIndex(qw, 5)).toBe(5)
+    // %MD starts right after %QW's 40 registers and takes two per value.
+    expect(offsetForIndex(md, 0)).toBe(40)
+    expect(offsetForIndex(md, 2)).toBe(44)
+    expect(offsetForIndex(qx, 9)).toBe(9)
+  })
+
+  it('names the value at an index', () => {
+    expect(plcAddressForIndex(qw, 17)).toBe('%QW17')
+    expect(plcAddressForIndex(md, 2)).toBe('%MD2')
+    expect(plcAddressForIndex(qx, 9)).toBe('%QX1.1')
   })
 })
 
-describe('modiconRange', () => {
-  it('spans the whole block, one base up from the offsets', () => {
-    // 4 %MW + 1 %MD (2 regs) + 2 %ML (8 regs) = 14 registers.
-    const mapping = calculateModbusAddressMapping({
-      holdingRegisters: { qwCount: 0, mwCount: 4, mdCount: 1, mlCount: 2 },
+describe('resolveAddressQuery', () => {
+  const mapping = calculateModbusAddressMapping()
+
+  it('treats an empty query as no search rather than a failed one', () => {
+    expect(resolveAddressQuery('', mapping)).toEqual({ hits: [], error: null })
+    expect(resolveAddressQuery('   ', mapping)).toEqual({ hits: [], error: null })
+  })
+
+  it('resolves a register address', () => {
+    expect(resolveAddressQuery('%MW12', mapping)).toEqual({
+      hits: [{ sectionId: 'holding', segment: '%MW', offset: 1036, matrixRow: 0 }],
+      error: null,
     })
-
-    expect(mapping.holdingRegisters.totalAddresses).toBe(14)
-    expect(mapping.holdingRegisters.modiconRange).toEqual({ start: '400001', end: '400014' })
   })
 
-  it('uses the block digit of each table', () => {
-    const mapping = calculateModbusAddressMapping()
-
-    expect(mapping.coils.modiconRange).toEqual({ start: '000001', end: '008192' })
-    expect(mapping.discreteInputs.modiconRange).toEqual({ start: '100001', end: '108192' })
-    expect(mapping.inputRegisters.modiconRange).toEqual({ start: '300001', end: '301024' })
+  it('resolves a bit address, and reads a missing bit as bit 0', () => {
+    expect(resolveAddressQuery('%QX37.4', mapping).hits).toEqual([
+      { sectionId: 'coils', segment: '%QX', offset: 300, matrixRow: 37 },
+    ])
+    // The helper text only shows the dotted form, but the plain one is the
+    // shape a user types first.
+    expect(resolveAddressQuery('%QX33', mapping).hits).toEqual([
+      { sectionId: 'coils', segment: '%QX', offset: 264, matrixRow: 33 },
+    ])
   })
 
-  it('is null for a block that holds nothing', () => {
-    const mapping = calculateModbusAddressMapping({
-      coils: { qxBits: 0, mxBits: 0 },
-      discreteInputs: { ixBits: 0 },
+  it('walks the stride of a multi-register segment', () => {
+    expect(resolveAddressQuery('%MD5', mapping).hits[0]).toEqual({
+      sectionId: 'holding',
+      segment: '%MD',
+      offset: 2058,
+      matrixRow: 0,
     })
+  })
 
-    expect(mapping.coils.modiconRange).toBeNull()
-    expect(mapping.discreteInputs.modiconRange).toBeNull()
+  it('is case and whitespace insensitive, and the % is optional', () => {
+    expect(resolveAddressQuery('  mw12 ', mapping).hits).toEqual(resolveAddressQuery('%MW12', mapping).hits)
+  })
+
+  it('rejects a bit index outside a byte', () => {
+    expect(resolveAddressQuery('%QX0.8', mapping)).toEqual({ hits: [], error: 'Bit index must be 0-7' })
+  })
+
+  it('rejects a bit on a register segment', () => {
+    expect(resolveAddressQuery('%MW12.3', mapping)).toEqual({ hits: [], error: '%MW is not a bit address' })
+  })
+
+  it('says when an address is past the configured size', () => {
+    expect(resolveAddressQuery('%ML9999', mapping)).toEqual({
+      hits: [],
+      error: '%ML is outside the configured range',
+    })
+    // %MX is off by default, so every %MX address is out of range.
+    expect(resolveAddressQuery('%MX0.0', mapping).error).toBe('%MX is outside the configured range')
+  })
+
+  it('reads a bare byte.bit as a coil', () => {
+    expect(resolveAddressQuery('12.3', mapping).hits).toEqual([
+      { sectionId: 'coils', segment: '%QX', offset: 99, matrixRow: 12 },
+    ])
+  })
+
+  it('reads six digits as modicon and anything shorter as a raw offset', () => {
+    // 000301 is coil offset 300 — the base is 1, not 0.
+    expect(resolveAddressQuery('000301', mapping).hits).toEqual([
+      { sectionId: 'coils', segment: '%QX', offset: 300, matrixRow: 37 },
+    ])
+    expect(resolveAddressQuery('400001', mapping).hits).toEqual([
+      { sectionId: 'holding', segment: '%QW', offset: 0, matrixRow: 0 },
+    ])
+  })
+
+  it('finds a raw offset in every block that has one', () => {
+    // Each block numbers from zero, so offset 300 is four different addresses.
+    const { hits } = resolveAddressQuery('300', mapping)
+    expect(hits.map((hit) => `${hit.sectionId}:${hit.segment}`)).toEqual([
+      'holding:%QW',
+      'coils:%QX',
+      'discrete:%IX',
+      'input:%IW',
+    ])
+  })
+
+  it('reports a value no block holds', () => {
+    expect(resolveAddressQuery('999999', mapping)).toEqual({ hits: [], error: 'No address matches that value' })
+    expect(resolveAddressQuery('99999', mapping).error).toBe('No address matches that value')
+  })
+
+  it('reports an unparseable query', () => {
+    expect(resolveAddressQuery('%ZZ1', mapping)).toEqual({ hits: [], error: 'Unrecognized address format' })
+    expect(resolveAddressQuery('nonsense', mapping).error).toBe('Unrecognized address format')
   })
 })
 
-describe('listSegmentEntries', () => {
-  // %QW off, so %MW starts at 0: %MW 0…3, %MD 4…7 (2 regs each), %ML 8…11.
-  const resized = calculateModbusAddressMapping({
-    holdingRegisters: { qwCount: 0, mwCount: 4, mdCount: 2, mlCount: 1 },
+describe('mappingToCsv', () => {
+  it('emits one line per IEC value, in both conventions', () => {
+    const csv = mappingToCsv(
+      calculateModbusAddressMapping({
+        holdingRegisters: { qwCount: 0, mwCount: 0, mdCount: 2, mlCount: 0 },
+        coils: { qxBits: 2, mxBits: 0 },
+        discreteInputs: { ixBits: 0 },
+        inputRegisters: { iwCount: 1 },
+      }),
+    )
+
+    expect(csv).toBe(
+      [
+        'block,segment,plc_address,modbus_offset,modicon_address,registers,iec_type',
+        'Holding Registers,%MD,%MD0,0,400001,2,DWORD',
+        'Holding Registers,%MD,%MD1,2,400003,2,DWORD',
+        'Coils,%QX,%QX0.0,0,000001,1,BOOL',
+        'Coils,%QX,%QX0.1,1,000002,1,BOOL',
+        'Input Registers,%IW,%IW0,0,300001,1,WORD',
+        '',
+      ].join('\n'),
+    )
   })
 
-  it('gives one entry per IEC value, a register wide', () => {
-    const { entries, omitted } = listSegmentEntries(rowFor(resized.holdingRegisters, '%MW'))
-
-    expect(entries).toEqual([
-      { plcAddress: '%MW0', offset: 0, bits: 16 },
-      { plcAddress: '%MW1', offset: 1, bits: 16 },
-      { plcAddress: '%MW2', offset: 2, bits: 16 },
-      { plcAddress: '%MW3', offset: 3, bits: 16 },
-    ])
-    expect(omitted).toBeNull()
-  })
-
-  it('strides two registers per %MD value and four per %ML', () => {
-    // This stride is the reason the list exists: consecutive %MD values do not
-    // sit on consecutive offsets.
-    expect(listSegmentEntries(rowFor(resized.holdingRegisters, '%MD')).entries).toEqual([
-      { plcAddress: '%MD0', offset: 4, bits: 32 },
-      { plcAddress: '%MD1', offset: 6, bits: 32 },
-    ])
-    expect(listSegmentEntries(rowFor(resized.holdingRegisters, '%ML')).entries).toEqual([
-      { plcAddress: '%ML0', offset: 8, bits: 64 },
-    ])
-  })
-
-  it('numbers a bit segment byte.bit, one bit per entry', () => {
-    const { coils } = calculateModbusAddressMapping({ coils: { qxBits: 8, mxBits: 8 } })
-    const { entries } = listSegmentEntries(rowFor(coils, '%MX'))
-
-    expect(entries).toHaveLength(8)
-    expect(entries[0]).toEqual({ plcAddress: '%MX0.0', offset: 8, bits: 1 })
-    expect(entries[7]).toEqual({ plcAddress: '%MX0.7', offset: 15, bits: 1 })
-  })
-
-  it('lists nothing for a disabled segment', () => {
-    expect(listSegmentEntries(rowFor(resized.holdingRegisters, '%QW'))).toEqual({ entries: [], omitted: null })
-  })
-
-  it('caps a large segment and says what it left out', () => {
-    const { coils } = calculateModbusAddressMapping()
-    const { entries, omitted } = listSegmentEntries(rowFor(coils, '%QX'))
-
-    expect(entries).toHaveLength(MAX_LISTED_ENTRIES)
-    expect(omitted).toEqual({ count: 8192 - MAX_LISTED_ENTRIES, fromOffset: MAX_LISTED_ENTRIES, toOffset: 8191 })
-  })
-
-  it('reports the omitted range in offsets, so the stride is respected', () => {
-    // %MD occupies 4…7; listing only the first value leaves 6…7 unlisted.
-    const { omitted } = listSegmentEntries(rowFor(resized.holdingRegisters, '%MD'), 1)
-
-    expect(omitted).toEqual({ count: 1, fromOffset: 6, toOffset: 7 })
+  it('covers every address of a default configuration', () => {
+    const csv = mappingToCsv(calculateModbusAddressMapping())
+    // 1024 %QW + 1024 %MW + 1024 %MD + 1024 %ML + 8192 %QX + 8192 %IX + 1024 %IW
+    expect(csv.trimEnd().split('\n')).toHaveLength(1 + 21504)
   })
 })
