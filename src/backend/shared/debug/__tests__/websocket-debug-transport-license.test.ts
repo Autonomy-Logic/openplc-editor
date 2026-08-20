@@ -24,11 +24,16 @@
 import type { Socket } from 'socket.io-client'
 
 type Handler = (arg: unknown) => void
-type Responder = (commandHex: string) => { success: boolean; data?: string; error?: string }
+type DebugResponse = { success: boolean; data?: string; error?: string }
+/** One response, or several — several models a stale frame arriving first. */
+type Responder = (commandHex: string) => DebugResponse | DebugResponse[]
 
 /**
  * Fake Socket.IO socket: auto-connects and answers `debug_command` with whatever
- * the active responder returns for the PDU it was handed.
+ * the active responder returns for the PDU it was handed. When the responder
+ * returns an ARRAY, each entry is emitted as its own `debug_response` event, in
+ * order — how a stale frame from an earlier, timed-out command shows up on the
+ * real socket.
  */
 function makeFakeSocket(responder: Responder): Socket {
   const handlers: Record<string, Handler[]> = {}
@@ -45,7 +50,9 @@ function makeFakeSocket(responder: Responder): Socket {
     emit(event: string, payload: { command: string }) {
       if (event === 'debug_command') {
         const resp = responder(payload.command)
-        setTimeout(() => (handlers['debug_response'] || []).forEach((h) => h(resp)), 0)
+        for (const one of Array.isArray(resp) ? resp : [resp]) {
+          setTimeout(() => (handlers['debug_response'] || []).forEach((h) => h(one)), 0)
+        }
       }
       return socket
     },
@@ -194,6 +201,63 @@ describe('WebSocketDebugTransport license function codes', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('no license backend wired')
+  })
+
+  it('getBoardId (0x48) strips the four anchor-parity RAW vectors to one identity pre-image', async () => {
+    // The cross-repo contract (openplc-packages license-core/test/runtime-v4/
+    // anchor-parity.mjs): the same serial with tails NUL, LF, CRLF and " NUL"
+    // must all normalize to the SAME bytes — the pre-image of deviceId
+    // 7146518f9842adacfadc731ee7f546e5, pinned editor-side in
+    // device-identity.test.ts. If the strip set here ever drifts from
+    // license_platform.c's, one of these vectors stops matching.
+    const base = Array.from('8625807b0a83ae7d', (c) => c.charCodeAt(0))
+    const tails = [[0x00], [0x0a], [0x0d, 0x0a], [0x20, 0x00]]
+    const transport = await connected()
+    for (const tail of tails) {
+      const raw = [...base, ...tail]
+      currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, raw.length, ...raw]) })
+      const result = await transport.getBoardId()
+      expect(Array.from(result.boardId ?? [])).toEqual(base)
+    }
+  })
+
+  it('serialises concurrent commands — each caller gets ITS function code response', async () => {
+    // Socket.IO fires every registered listener per event and the envelope has
+    // no correlation id: without the send mutex two in-flight commands both
+    // consumed the FIRST response (review 2026-08-20, finding 1) — a licence
+    // check mid-debug-session took the poll's frame and failed on a healthy
+    // device. The responder answers by echoed FC, so if the mutex ever goes,
+    // one of these assertions receives the other's payload.
+    const anchor = Array.from('10000000abcdef01', (c) => c.charCodeAt(0))
+    const blob = new Uint8Array(98).fill(0x11)
+    currentResponder = (cmd) => {
+      const fc = cmd.split(' ')[0]
+      if (fc === '48') return { success: true, data: toSpacedHex([0x48, 0x7e, anchor.length, ...anchor]) }
+      return { success: true, data: toSpacedHex([0x4a, 0x7e, 0x00, 98, ...blob]) }
+    }
+    const transport = await connected()
+    const [board, license] = await Promise.all([transport.getBoardId(), transport.readLicense()])
+    expect(board.success).toBe(true)
+    expect(Array.from(board.boardId ?? [])).toEqual(anchor)
+    expect(license.success).toBe(true)
+    expect(license.blob?.length).toBe(98)
+  })
+
+  it('ignores a stale data frame from another function code and resolves on its own', async () => {
+    // A reply landing AFTER its command timed out has no listener left, so it
+    // arrives during the NEXT command's window. Data frames are correlated by
+    // echoed FC: the stale frame is skipped, the right one resolves.
+    const anchor = Array.from('10000000abcdef01', (c) => c.charCodeAt(0))
+    currentResponder = () => [
+      { success: true, data: '4A 83' }, // stale read-license frame from a dead command
+      { success: true, data: toSpacedHex([0x48, 0x7e, anchor.length, ...anchor]) },
+    ]
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(true)
+    expect(Array.from(result.boardId ?? [])).toEqual(anchor)
   })
 
   it('refuses all three calls when the socket is not connected', async () => {

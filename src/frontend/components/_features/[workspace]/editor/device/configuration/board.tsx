@@ -499,7 +499,7 @@ const Board = memo(function () {
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
   // Settle the licence for a RUNTIME target once its session is up — once per
-  // session.
+  // session PER BOARD.
   //
   // The serial flow settles it INSIDE `connect()`: one held link, awaited, so
   // the user cannot race the sequence. A runtime target has no such moment in
@@ -510,31 +510,56 @@ const Board = memo(function () {
   // means the licence FCs only ever run against an established session, over
   // the debug WebSocket the main process acquires per call.
   //
-  // The ref, not state: this must fire exactly once per session, and a
-  // re-render caused by the report landing must not re-run the flow.
-  const runtimeLicenseSettledRef = useRef(false)
+  // The ref holds the BOARD the settle ran for, not a boolean: a board switch
+  // over a live session (confirm-device-switch allows it) clears the report via
+  // resetDeviceLicense, and a boolean ref would leave the new board unchecked
+  // and badge-less until a manual reconnect (review 2026-08-20). A ref, not
+  // state: the re-render caused by the report landing must not re-run the flow.
+  const runtimeLicenseSettledForRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensing.isLicensable) return
+    // A platform whose device port cannot carry the licensing calls has nothing
+    // to settle — STRUCTURAL inertness, not incidental: on openplc-web nothing
+    // publishes a device link today, but the day one is published this gate is
+    // what keeps a capability the platform never had from popping error dialogs
+    // (web review 2026-08-20, finding 1).
+    if (!device.refreshLicense) return
     if (connectionStatus !== 'connected' || deviceLinkStatus !== 'connected') {
-      runtimeLicenseSettledRef.current = false
+      runtimeLicenseSettledForRef.current = null
       return
     }
-    if (runtimeLicenseSettledRef.current) return
-    runtimeLicenseSettledRef.current = true
+    if (runtimeLicenseSettledForRef.current === deviceBoard) return
+    runtimeLicenseSettledForRef.current = deviceBoard
+    // Cleanup guard: `refresh` can take seconds (device read + backend round
+    // trip). A dialog for a screen the user already left is noise at best and
+    // a modal over an unrelated screen at worst.
+    let cancelled = false
     void licensing.refresh().then((report) => {
-      if (!report) return
+      if (cancelled || !report) return
       explainLicenseOutcome(report, {
         openModal,
         buy: licensing.buy,
+        // AUTO flow: a check-failed outcome stays on the badge instead of
+        // opening an error modal the user did not ask for — the loudest case
+        // it suppresses is a runtime that predates the licence FCs, where
+        // every connect would otherwise open "Licence Check Failed" on a
+        // working device. User-initiated paths (serial connect, the badge's
+        // own retry) keep the dialog.
+        quietCheckFailed: true,
         // A retry re-runs the flow and explains the NEW outcome, so a transient
         // failure or a purchase completed in the browser resolves in place.
         retry: async () => {
           const next = await licensing.refresh()
-          if (next) explainLicenseOutcome(next, { openModal, buy: licensing.buy })
+          if (next && !cancelled) {
+            explainLicenseOutcome(next, { openModal, buy: licensing.buy, quietCheckFailed: true })
+          }
         },
       })
     })
-  }, [connectionStatus, deviceLinkStatus, currentBoardInfo, licensing, openModal])
+    return () => {
+      cancelled = true
+    }
+  }, [connectionStatus, deviceLinkStatus, currentBoardInfo, deviceBoard, device, licensing, openModal])
 
   return (
     <DeviceEditorSlot>

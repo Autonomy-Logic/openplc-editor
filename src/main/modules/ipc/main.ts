@@ -106,7 +106,9 @@ type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardId
  * optional on `DeviceDebugChannel` because not every medium implements them; the
  * runtime-v4 WebSocket implements all three. Narrows the client ITSELF rather
  * than wrapping it, so the flow talks to the same object every other caller
- * holds — and the frame mutex inside it keeps serialising everyone's traffic.
+ * holds — and the transport's own send mutex (the Modbus clients'
+ * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
+ * serialising everyone's traffic.
  */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
@@ -2299,8 +2301,12 @@ class MainProcessBridge implements MainIpcModule {
    * released by `debugger:disconnect`); every per-command caller goes through
    * `withDebugChannel`, which releases in a `finally`.
    */
-  private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
-    const acquired = await this.deviceSession.acquireDebugChannel(what)
+  private async requireDebug(holder: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
+    // `holder` may carry a per-call uniqueness suffix (`what#seq`); the trace
+    // and the messages use the human prefix so the once-per-combination dedup
+    // in traceChannelUse keeps working.
+    const what = holder.split('#')[0]
+    const acquired = await this.deviceSession.acquireDebugChannel(holder)
     if ('error' in acquired) {
       if (!this.deviceSession.isConnected()) return this.explainMissingChannel(what)
       this.traceDeviceLink(`${what}: debug channel unavailable — ${acquired.error}`)
@@ -2327,17 +2333,27 @@ class MainProcessBridge implements MainIpcModule {
    * under run/stop or the status poll. Only a session whose debug medium is its
    * own — v3's second Modbus TCP connection, v4's WebSocket — is ever closed.
    */
+  /**
+   * Monotonic suffix for per-command debug holders. The holder set is keyed by
+   * STRING, so two concurrent callers sharing a `what` would be one reference:
+   * the second's release found the set empty and closed the WebSocket under
+   * the first, mid-sequence (review 2026-08-20). Unique keys make the count
+   * honest; `what` stays as the human-readable prefix the trace shows.
+   */
+  private debugHolderSeq = 0
+
   private async withDebugChannel<T>(
     what: string,
     run: (client: DeviceDebugChannel) => Promise<T>,
     onUnavailable: (reason: ChannelUnavailable) => T,
   ): Promise<T> {
-    const acquired = await this.requireDebug(what)
+    const holder = `${what}#${++this.debugHolderSeq}`
+    const acquired = await this.requireDebug(holder)
     if ('error' in acquired) return onUnavailable(acquired)
     try {
       return await run(acquired.client)
     } finally {
-      this.deviceSession.releaseDebugChannel(what)
+      this.deviceSession.releaseDebugChannel(holder)
     }
   }
 
@@ -2496,6 +2512,10 @@ class MainProcessBridge implements MainIpcModule {
   private async readLicenseAnchor(client: LicenseChannel): Promise<{ anchor: Uint8Array } | { error: string }> {
     const board = await client.getBoardId()
     if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
+    // Liveness evidence for the CONTROL link's poll. On a REST session this
+    // frame rode the debug WebSocket instead — crediting it here is a no-op,
+    // not a lie: a REST session runs no liveness poll (openRestSession never
+    // starts one), so there is no check for this stamp to suppress.
     this.deviceSession.noteTraffic()
     return { anchor: board.boardId ?? new Uint8Array(0) }
   }

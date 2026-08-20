@@ -311,12 +311,15 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
 
-    expect(acquire).toHaveBeenCalledWith('read license')
+    // The holder key carries a per-call uniqueness suffix (review 2026-08-20,
+    // finding 2): concurrent same-named callers must be two references, or the
+    // second's release closes the channel under the first.
+    expect(acquire).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
     // The flow gets the CHANNEL ITSELF, not a wrapper: its frame mutex must keep
     // serialising this traffic with everyone else's.
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(wsClient, { ...REQUEST, anchor: ANCHOR })
     expect(result.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
-    expect(release).toHaveBeenCalledWith('read license')
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
   })
 
   it('routes refresh-license over the debug channel', async () => {
@@ -332,7 +335,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(wsClient, { ...REQUEST, anchor: ANCHOR })
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
-    expect(release).toHaveBeenCalledWith('refresh license')
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^refresh license#\d+$/))
   })
 
   it('reports check-failed when the debug channel cannot carry the license FCs', async () => {
@@ -350,7 +353,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
       error: 'this connection cannot carry the license protocol',
     })
     expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
-    expect(release).toHaveBeenCalledWith('read license')
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
   })
 
   it('reports check-failed — never "not licensed" — when the debug channel will not open', async () => {

@@ -162,7 +162,12 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   async getVariablesList(variableIndexes: number[]): Promise<DebugTransportResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildGetListRequest(variableIndexes), (bytes) => parseGetListResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildGetListRequest(variableIndexes),
+      (bytes) => parseGetListResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
 
   async setVariable(variableIndex: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult> {
@@ -172,6 +177,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
       buildSetVariableRequest(variableIndex, force, valueBuffer),
       (bytes) => parseSetVariableResponse(bytes),
       'resolve',
+      (error) => ({ success: false, error }),
     )
   }
 
@@ -206,6 +212,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
       buildGetBoardIdRequest(),
       (bytes) => parseGetBoardIdResponse(bytes),
       'resolve',
+      (error) => ({ success: false, error }),
     )
     if (!result.success || !result.boardId) return result
 
@@ -221,25 +228,50 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   async readLicense(): Promise<DebugLicenseReadResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildReadLicenseRequest(), (bytes) => parseReadLicenseResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildReadLicenseRequest(),
+      (bytes) => parseReadLicenseResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
 
   async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildWriteLicenseRequest(blob), (bytes) => parseWriteLicenseResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildWriteLicenseRequest(blob),
+      (bytes) => parseWriteLicenseResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
+
+  /**
+   * ONE command in flight at a time — the same serialisation guarantee the
+   * Modbus RTU/TCP clients give with their `sendRequestMutex`.
+   *
+   * Socket.IO invokes EVERY registered `debug_response` listener for each
+   * event, and the envelope carries no correlation id. Two commands in flight
+   * therefore meant both handlers consumed the FIRST response (each resolving
+   * from a payload that may belong to the other) and the second response found
+   * no listeners at all. That stopped being theoretical the moment the license
+   * FCs joined the variables poll on this socket (review 2026-08-20): a badge
+   * "Check again" mid-debug-session handed the poll's FC-0x41 frame to
+   * `parseGetBoardIdResponse` and the licence check failed on a healthy device.
+   */
+  private sendRequestMutex: Promise<void> = Promise.resolve()
 
   /**
    * Send a Modbus PDU over the `debug_command` event and parse the
    * matching `debug_response`.  `errorMode` controls whether a
    * runtime / parser error rejects the promise (used by
    * `getMd5Hash`, where any error means we can't proceed) or
-   * resolves it as a structured failure (used by polling /
-   * setVariable, where the caller wants a Result envelope).
+   * resolves it as a structured failure built by `onFailure` — each caller
+   * supplies its own envelope, so no cast ever bridges the generic gap.
    *
    * Single chokepoint for the Socket.IO envelope handling — every
-   * client method routes through here, so the hex encoding /
+   * client method routes through here, so the serialisation / hex encoding /
    * timeout / event registration logic lives in exactly one place.
    */
   private sendCommand<
@@ -249,7 +281,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
       | DebugBoardIdResult
       | DebugLicenseReadResult
       | DebugLicenseWriteResult,
-  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve'): Promise<T>
+  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve', onFailure: (error: string) => T): Promise<T>
   private sendCommand<T extends Md5ProbeResult>(
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,
@@ -259,21 +291,43 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,
     errorMode: 'resolve' | 'reject',
+    onFailure?: (error: string) => T,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => this.sendCommandNow(pdu, parse, errorMode, onFailure).then(resolve, reject)
+      // Chain regardless of the predecessor's fate: a failed command must not
+      // wedge the queue (same shape as the Modbus clients' mutex).
+      this.sendRequestMutex = this.sendRequestMutex.then(run, run)
+    })
+  }
+
+  private sendCommandNow<T>(
+    pdu: Uint8Array,
+    parse: (bytes: Uint8Array) => T,
+    errorMode: 'resolve' | 'reject',
+    onFailure?: (error: string) => T,
   ): Promise<T> {
     const commandHex = bytesToHexSpaced(pdu)
 
     return new Promise<T>((resolve, reject) => {
       const fail = (error: string) => {
-        if (errorMode === 'reject') {
+        if (errorMode === 'reject' || !onFailure) {
           reject(new Error(error))
         } else {
-          resolve({ success: false, error } as unknown as T)
+          resolve(onFailure(error))
         }
       }
 
-      const timeoutHandle = setTimeout(() => fail('Request timeout'), REQUEST_TIMEOUT_MS)
-
       const responseHandler = (response: { success: boolean; data?: string; error?: string }) => {
+        // Correlate DATA frames by echoed function code: a stale reply from a
+        // command that already timed out (its handler is gone) must not be
+        // consumed as OURS. Error envelopes carry no PDU to correlate on, so
+        // they are accepted as-is — the mutex means nothing else is in flight.
+        if (response.success && response.data) {
+          const bytes = hexSpacedToBytes(response.data)
+          if (bytes.length > 0 && bytes[0] !== pdu[0]) return // stale frame: keep waiting
+        }
+
         clearTimeout(timeoutHandle)
         this.socket?.off('debug_response', responseHandler)
 
@@ -292,6 +346,11 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
           fail(getErrorMessage(error))
         }
       }
+
+      const timeoutHandle = setTimeout(() => {
+        this.socket?.off('debug_response', responseHandler)
+        fail('Request timeout')
+      }, REQUEST_TIMEOUT_MS)
 
       this.socket!.on('debug_response', responseHandler)
       this.socket!.emit('debug_command', { command: commandHex })
