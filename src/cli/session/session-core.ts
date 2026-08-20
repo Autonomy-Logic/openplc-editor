@@ -65,7 +65,11 @@ export class SessionCore {
   private readonly startedAtMs: number
   private readonly startedAt: string
   private lastActivityAtMs: number
-  /** UPPERCASE canonical names this session has forced and not released. */
+  /**
+   * Names this session has forced and not released, in their CANONICAL casing —
+   * the composite key the GUI shows (`main:SL1_AO1`), not an uppercased form.
+   * Lookups go through `isForced`, which compares case-insensitively.
+   */
   private readonly forced = new Set<string>()
   private watching: ResolvedVariable[] = []
   private watchTimer: NodeJS.Timeout | null = null
@@ -243,7 +247,7 @@ export class SessionCore {
           payload: new Uint8Array(result.data),
           lastIndex: result.lastIndex,
           endian: this.options.endian,
-          forced: this.forced,
+          forced: this.forcedUpper(),
         }),
       )
     }
@@ -262,7 +266,7 @@ export class SessionCore {
     if (!result.success) {
       return this.fail(id, ErrorCode.TargetError, result.error ?? `The target refused the ${force ? 'force' : 'write'}`)
     }
-    if (force) this.forced.add(variable.name.toUpperCase())
+    if (force) this.forced.add(variable.name)
 
     const readBack = await this.readBackAfterWrite(variable, input)
     if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
@@ -304,7 +308,7 @@ export class SessionCore {
         name: variable.name,
         type: variable.type,
         value: null,
-        forced: this.forced.has(variable.name.toUpperCase()),
+        forced: this.isForced(variable.name),
       },
     }
   }
@@ -319,7 +323,7 @@ export class SessionCore {
     if (!result.success) {
       return this.fail(id, ErrorCode.TargetError, result.error ?? 'The target refused the unforce')
     }
-    this.forced.delete(variable.name.toUpperCase())
+    this.unmarkForced(variable.name)
 
     // No expected value to wait for: unforcing hands the variable back to the
     // program, so whatever it reads next is legitimate.
@@ -400,8 +404,8 @@ export class SessionCore {
     this.stopWatching()
     const released: string[] = []
     if (releaseForces) {
-      for (const upperName of [...this.forced]) {
-        const variable = findVariable(this.options.index, upperName)
+      for (const heldName of [...this.forced]) {
+        const variable = findVariable(this.options.index, heldName)
         /* istanbul ignore if -- every entry was resolved before being forced */
         if (!variable) continue
         try {
@@ -421,6 +425,21 @@ export class SessionCore {
       /* already disconnected */
     }
     return released
+  }
+
+  /** Case-insensitive membership, so a caller's casing never changes the answer. */
+  private isForced(name: string): boolean {
+    return this.forcedUpper().has(name.toUpperCase())
+  }
+
+  private forcedUpper(): Set<string> {
+    return new Set([...this.forced].map((name) => name.toUpperCase()))
+  }
+
+  private unmarkForced(name: string): void {
+    for (const held of this.forced) {
+      if (held.toUpperCase() === name.toUpperCase()) this.forced.delete(held)
+    }
   }
 
   private fail(id: number, code: (typeof ErrorCode)[keyof typeof ErrorCode], message: string): Response {

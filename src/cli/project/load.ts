@@ -17,9 +17,10 @@
  * here is literally the same call the GUI's build button makes.
  */
 
+import { HardwareModule } from '@root/backend/editor/hardware'
 import { ProjectService } from '@root/backend/editor/services'
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
-import { createOpenPLCStore } from '@root/frontend/store'
+import { openPLCStoreBase } from '@root/frontend/store'
 import { isDataTypeFilesEnabled } from '@root/frontend/utils/feature-flags'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
@@ -64,12 +65,24 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
     isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
   )
 
-  // A store instance per load, not the shared singleton: two loads in one
-  // process must not see each other's project.
-  const store = createOpenPLCStore()
-  store.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+  // Boards first, exactly as the workspace screen does on load: target-capability
+  // resolution and the debug-spec resolver both read `availableBoards`, and
+  // `setAvailableOptions` is what re-syncs aliases for the active target. Without
+  // it the store looks like an editor that has not finished starting up.
+  openPLCStoreBase
+    .getState()
+    .deviceActions.setAvailableOptions({ availableBoards: await new HardwareModule().getAvailableBoards() })
 
-  const state = store.getState()
+  // The SHARED singleton, not a private instance. Everything the editor's own
+  // resolvers read comes off it — `buildDeviceResolverContext` reads the device
+  // configuration and runtime connection from `useOpenPLCStore.getState()`, and
+  // the debug tree builder reads the project. Hydrating a private store would
+  // leave those resolvers looking at an empty one, and the CLI would have to
+  // reimplement them. One project per process is the same assumption the editor
+  // makes, and a CLI invocation is one project.
+  openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+
+  const state = openPLCStoreBase.getState()
   return {
     success: true,
     project: {

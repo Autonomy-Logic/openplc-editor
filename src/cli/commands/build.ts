@@ -19,8 +19,8 @@ import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { createCliCompileTransport } from '../compile/cli-transport'
-import { ErrorCode, ExitCode } from '../exit-codes'
-import type { CliResult, Reporter } from '../output'
+import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
+import type { CliFailure, CliResult, Reporter } from '../output'
 import { loadProject } from '../project/load'
 
 export interface BuildOptions {
@@ -80,6 +80,24 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
         { code: ErrorCode.AuthRejected, message: login.error ?? 'The runtime rejected the credentials' },
         ExitCode.Auth,
       )
+    }
+  }
+
+  // The same gate the GUI's build puts up. Targets that are not flashed over USB
+  // run the FINAL build step ON the device, and doing that while the PLC is
+  // scanning can stall the build or make the running program miss deadlines. The
+  // GUI asks "Stop PLC and Continue?"; a CLI cannot ask, so it refuses and names
+  // the flag — silently stopping someone's running PLC is not a default.
+  if (runtime && host) {
+    const gate = await ensurePlcStoppedForBuild({
+      runtime,
+      host,
+      target,
+      autoApprove: boolFlag(args, 'yes'),
+      reporter,
+    })
+    if ('error' in gate) {
+      return reporter.failure(gate.error, gate.exitCode)
     }
   }
 
@@ -158,4 +176,56 @@ export function resolveCredentials(args: ParsedArgs): { username: string; passwo
     }
   }
   return { username, password }
+}
+
+/**
+ * Stop the PLC before a build that runs on the device, or refuse.
+ *
+ * Mirrors the GUI's pre-build gate: when the target is reached through a runtime
+ * (rather than flashed over USB) and that runtime is RUNNING, the editor warns
+ * and stops it on the user's consent. `--yes` is that consent, the way `apt -y`
+ * is; without it the build stops and says so, because a scripted run must not
+ * silently halt a live PLC.
+ */
+async function ensurePlcStoppedForBuild(input: {
+  runtime: RuntimeApiClient
+  host: string
+  target: string
+  autoApprove: boolean
+  reporter: Reporter
+}): Promise<{ ok: true } | { error: CliFailure; exitCode: ExitCodeValue }> {
+  const status = await input.runtime.getStatus(input.host)
+  // Unknown state is not a reason to block: the build's own upload step reports
+  // a target it cannot reach far better than a pre-flight guess does.
+  if (!status.success) return { ok: true }
+  if (!(status.status ?? '').toUpperCase().includes('RUNNING')) return { ok: true }
+
+  if (!input.autoApprove) {
+    return {
+      error: {
+        code: ErrorCode.TargetError,
+        message:
+          `The PLC on ${input.host} is RUNNING and "${input.target}" builds on the device, which can stall ` +
+          'the build or make the running program miss scan deadlines. Stop it first, or pass --yes to have ' +
+          'this command stop it for you.',
+      },
+      exitCode: ExitCode.TargetError,
+    }
+  }
+
+  input.reporter.progress('--yes given: stopping the PLC before the build…')
+  const stopped = await input.runtime.setPlcState(input.host, 'stop')
+  if (!stopped.success) {
+    return {
+      error: {
+        code: ErrorCode.TargetError,
+        message: stopped.refusedBySwitch
+          ? 'The PLC refused to stop: its physical mode switch is in RUN. Move it to STOP and retry.'
+          : `Could not stop the PLC before building: ${stopped.error ?? 'unknown error'}`,
+      },
+      exitCode: ExitCode.TargetError,
+    }
+  }
+  input.reporter.progress('PLC stopped before build.')
+  return { ok: true }
 }

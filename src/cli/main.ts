@@ -48,6 +48,7 @@ const BOOLEAN_FLAGS = [
   'help',
   'version',
   'clean',
+  'yes',
   'upload-if-needed',
   'force-new',
   'keep-forces',
@@ -62,13 +63,17 @@ const USAGE = `openplc — headless OpenPLC Editor
 Usage
   openplc devices [--timeout <ms>]
   openplc compile <project> [--target <board>] [--clean]
-  openplc upload  <project> --host <address> [--target <board>] [--clean]
+  openplc upload  <project> --host <address> [--target <board>] [--clean] [-y|--yes]
   openplc debug open <project> --host <address> --target <board> [--upload-if-needed]
   openplc debug list
   openplc debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
   openplc debug close --session <id> | --all [--keep-forces]
   openplc debug repl [--session <id>]                       (interactive; needs a terminal)
   openplc debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
+
+Confirmation
+  Builds on a device-side target refuse while its PLC is RUNNING, as the editor warns.
+  --yes (-y) approves stopping it first, the way 'apt install -y' does.
 
 Credentials (upload, debug)
   --credentials user:pass, or --user + --password

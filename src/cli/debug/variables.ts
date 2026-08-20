@@ -18,6 +18,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { openPLCStoreBase } from '@root/frontend/store'
 import {
   buildLeafInfoMap,
   type DebugLeafInfo,
@@ -26,6 +27,11 @@ import {
   parseDebugMap,
 } from '@root/frontend/utils/debug-parser'
 import { walkDebugResponse } from '@root/frontend/utils/debug-response-walker'
+import {
+  buildDebugVariableTreeMap,
+  debugMapToEntries,
+  deriveVariableIndexMap,
+} from '@root/frontend/utils/debugger-session'
 import type { TargetEndian } from '@root/frontend/utils/endian'
 import { encodeForceValue } from '@root/frontend/utils/variable-sizes'
 
@@ -42,6 +48,8 @@ export interface ResolvedVariable extends DebugLeafInfo {
 export interface DebugVariableIndex {
   /** MD5 of the compiled program this map belongs to. */
   md5: string
+  /** Anything the tree walk could not resolve, surfaced by `debug open`. */
+  warnings: string[]
   /** Canonical order, as the compiler emitted it. */
   all: ResolvedVariable[]
   /** UPPERCASE path → variable. */
@@ -80,28 +88,70 @@ export async function loadDebugIndex(projectPath: string, boardTarget: string): 
   return { success: true, index: indexDebugMap(map) }
 }
 
+/**
+ * Index the debug map the way the editor's Debug button does.
+ *
+ * Identity is the COMPOSITE KEY (`main:counter`, `main:pid0.output`) that
+ * `buildDebugVariableTreeMap` mints and `deriveVariableIndexMap` maps to a
+ * packed address — the same names the watch panel, the ladder view and the FBD
+ * view use. Addressing variables by raw `debug-map.json` paths instead would
+ * mean a test asserting on names nobody sees in the GUI.
+ *
+ * `deriveVariableIndexMap` also keys every leaf by its raw path as a fallback,
+ * so library-FB internals the tree does not surface stay reachable. Both forms
+ * therefore resolve, with the composite key as the primary.
+ *
+ * Type and byte width come from the leaf at each address — straight from the
+ * compiler, never from the stored project model, which can drift from the
+ * compiled layout.
+ */
 export function indexDebugMap(map: DebugMap): DebugVariableIndex {
   const leafInfo = buildLeafInfoMap(map)
+  const byPackedIndex = new Map<number, DebugLeafInfo>()
+  for (const leaf of map.leaves) {
+    const packed = packDebugAddr({ arrayIdx: leaf.arrayIdx, elemIdx: leaf.elemIdx })
+    if (!byPackedIndex.has(packed)) {
+      byPackedIndex.set(
+        packed,
+        leafInfo.get(leaf.path.toUpperCase()) ?? {
+          arr: leaf.arrayIdx,
+          elem: leaf.elemIdx,
+          type: leaf.type,
+          size: leaf.size,
+        },
+      )
+    }
+  }
+
+  // The editor's own tree walk, off the hydrated store — same POUs, instances,
+  // datatypes and system libraries the GUI passes.
+  const state = openPLCStoreBase.getState()
+  const { treeMap, warnings } = buildDebugVariableTreeMap(
+    state.project.data.pous,
+    state.project.data.configurations.resource.instances,
+    debugMapToEntries(map),
+    state.project.data,
+    state.libraries.system,
+  )
+  const nameToIndex = deriveVariableIndexMap(treeMap, map)
+
   const all: ResolvedVariable[] = []
   const byName = new Map<string, ResolvedVariable>()
   const byIndex = new Map<number, ResolvedVariable>()
 
-  for (const leaf of map.leaves) {
-    const info = leafInfo.get(leaf.path.toUpperCase())
-    /* istanbul ignore if -- buildLeafInfoMap is built from these same leaves */
+  for (const [name, index] of nameToIndex) {
+    const info = byPackedIndex.get(index)
+    /* istanbul ignore if -- every index in the map came from a leaf */
     if (!info) continue
-    const resolved: ResolvedVariable = {
-      ...info,
-      name: leaf.path,
-      index: packDebugAddr({ arrayIdx: leaf.arrayIdx, elemIdx: leaf.elemIdx }),
-    }
+    const resolved: ResolvedVariable = { ...info, name, index }
     all.push(resolved)
-    // First declaration wins, matching `buildLeafPathMap`.
-    if (!byName.has(leaf.path.toUpperCase())) byName.set(leaf.path.toUpperCase(), resolved)
-    if (!byIndex.has(resolved.index)) byIndex.set(resolved.index, resolved)
+    if (!byName.has(name.toUpperCase())) byName.set(name.toUpperCase(), resolved)
+    // First name wins for decoding: a shared global appears under several
+    // composite keys at one address, and a reply carries the address only.
+    if (!byIndex.has(index)) byIndex.set(index, resolved)
   }
 
-  return { md5: map.md5, all, byName, byIndex }
+  return { md5: map.md5, all, byName, byIndex, warnings }
 }
 
 /**

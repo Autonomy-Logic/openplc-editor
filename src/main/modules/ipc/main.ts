@@ -43,10 +43,13 @@ import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import {
+  toDebugCandidate,
+  toDeviceLinkCandidates,
+} from '../../../backend/editor/hardware/debug-channel-factory'
+import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
   PATIENT_BOARD_ID_PROBE,
-  planBaudAttempts,
   QUICK_BOARD_ID_PROBE,
   SPECULATIVE_BOARD_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
@@ -57,10 +60,6 @@ import {
   type DeviceLinkStatus,
   DeviceSessionManager,
 } from '../../../backend/editor/hardware/device-session-manager'
-import {
-  buildDeviceModbusTransport,
-  modbusTransportKind,
-} from '../../../backend/editor/hardware/device-transport-factory'
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import { inspectDeviceLicense, resolveDeviceLicense } from '../../../backend/editor/license/license-flow'
@@ -73,7 +72,6 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
@@ -1568,74 +1566,22 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Turn a resolved channel config into something the link manager can try.
-   * The only transport-specific step left in the flow; a config that names a
-   * transport this build cannot speak is dropped rather than half-built.
+   * Turn resolved channel configs into things the link manager can try.
+   *
+   * Delegates to `debug-channel-factory` — see `toDebugCandidate` above.
    */
-  private toDeviceLinkCandidates(
+  private toDeviceLinkCandidates = (
     configs: DebugConnectionConfig[],
     opts: { probeBaudRates?: boolean } = {},
-  ): DeviceLinkCandidate[] {
-    const declared: DeviceLinkCandidate[] = []
-    // Baud guesses go AFTER everything the project declared: a configured Modbus
-    // TCP address is a better next try than a rate nobody asked for.
-    const speculative: DeviceLinkCandidate[] = []
+  ): DeviceLinkCandidate[] => toDeviceLinkCandidates(configs, opts, this.debugChannelDeps)
 
-    const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
-      const kind = modbusTransportKind(config.connectionType)
-      if (kind === null) return
-      const params = {
-        connectionType: config.connectionType,
-        port: config.connectionParams.port,
-        baudRate,
-        slaveId: config.connectionParams.slaveId,
-        host: config.connectionParams.ipAddress,
-      }
-      // Only the simulator needs an in-process serial port; building one for a real
-      // transport would allocate a virtual port nobody reads.
-      const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
-      // Probe the params now so a malformed config fails resolution rather than
-      // becoming a candidate that always throws on `create()`.
-      if ('error' in buildDeviceModbusTransport(params, options)) return
-      ;(isGuess ? speculative : declared).push({
-        transport: kind,
-        // The endpoint ONLY. It is matched against the OS port list and against
-        // the port an upload asks to borrow, so the baud travels beside it rather
-        // than inside it — decorating this string made every swept candidate match
-        // no port and be skipped in 1ms.
-        descriptor: describeDebugEndpoint(config),
-        baudRate,
-        speculative: isGuess,
-        create: () => {
-          const built = buildDeviceModbusTransport(params, options)
-          if ('error' in built) throw new Error(built.error)
-          return built.client
-        },
-      })
-    }
-
-    for (const config of configs) {
-      // A wrong baud is the one misconfiguration that looks like healthy silence:
-      // the port opens, so it is not "no response", and nothing decodes, so it
-      // reads as "no firmware" — and the user gets told to reflash a board that is
-      // running fine. Sweeping the rates OpenPLC is ever built with turns that dead
-      // end into a connection. Serial only; a TCP address is either right or not.
-      for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
-        build(config, attempt.baudRate, attempt.speculative)
-      }
-    }
-
-    // The patient budget belongs to the last DECLARED endpoint, not to the last
-    // candidate overall. Without this the baud sweep would silently take that
-    // patience away from the configured endpoint and hand it to a guess — and a
-    // board that was just flashed, still booting on the right rate, would be ruled
-    // out in ~10s instead of the ~32s it sometimes needs.
-    const lastDeclared = declared[declared.length - 1]
-    if (lastDeclared) lastDeclared.patient = true
-
-    return [...declared, ...speculative]
+  /**
+   * The simulator lives in this process, so the factory is given a way to build
+   * the in-process serial port it answers on.
+   */
+  private readonly debugChannelDeps = {
+    createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
   }
-
   /** Consume the classification the last verified candidate produced. */
   private takeDeviceLinkProbe(): DeviceProbeOutcome | null {
     const probe = this.deviceLinkProbe
@@ -1674,32 +1620,14 @@ class MainProcessBridge implements MainIpcModule {
     }
     return Promise.resolve({ success: true })
   }
-
   /**
-   * Turn a resolved channel config into an openable DEBUG channel. The one place
-   * that knows a WebSocket is a debug channel too.
+   * Turn a resolved channel config into an openable DEBUG channel.
+   *
+   * Delegates to `debug-channel-factory`, shared with the headless CLI so both
+   * build every declared transport from the same code.
    */
-  private toDebugCandidate(config: DebugConnectionConfig): DeviceDebugCandidate | null {
-    if (config.connectionType === 'websocket') {
-      const host = config.connectionParams.ipAddress
-      const token = config.connectionParams.jwtToken
-      if (!host || !token) return null
-      return {
-        transport: 'websocket',
-        descriptor: `websocket ${host}`,
-        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
-      }
-    }
-    // One config in, one candidate out: this builds the DEBUG channel for a
-    // session that already exists, so the rate is settled and guessing is wrong.
-    const [candidate] = this.toDeviceLinkCandidates([config], { probeBaudRates: false })
-    if (!candidate) return null
-    return {
-      transport: candidate.transport,
-      descriptor: `${candidate.transport} ${candidate.descriptor}`,
-      create: candidate.create,
-    }
-  }
+  private toDebugCandidate = (config: DebugConnectionConfig): DeviceDebugCandidate | null =>
+    toDebugCandidate(config, this.debugChannelDeps)
 
   /**
    * Is this freshly opened candidate a device we can work with? Runs the

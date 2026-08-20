@@ -76,6 +76,13 @@ export function parseArgs(argv: readonly string[], options: ParseOptions = {}): 
       continue
     }
 
+    // `-y` is the one short flag, because the confirmation prompt it answers is
+    // the one people type most and `apt -y` set the expectation.
+    if (token === '-y') {
+      setFlag(flags, 'yes', true)
+      continue
+    }
+
     if (!token.startsWith('--')) {
       positionals.push(token)
       continue

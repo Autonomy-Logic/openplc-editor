@@ -12,7 +12,8 @@
 
 import { app } from 'electron'
 
-import { openRuntimeSession } from '../debug/open-session'
+import { openDebugSession } from '../debug/open-session'
+import { loadProject } from '../project/load'
 import { mintSessionId, SessionRegistry, socketPathFor } from './registry'
 import { SessionServer } from './server'
 
@@ -37,18 +38,27 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   const socketPath = socketPathFor(config.registryDir, sessionId, process.platform)
   const registry = new SessionRegistry(config.registryDir)
 
-  const opened = await openRuntimeSession({
+  // Hydrate the editor state this process will resolve against: the debug-spec
+  // resolver reads the device configuration and available boards off the store,
+  // the same way it does behind the GUI's Debug button.
+  const loaded = await loadProject(config.projectPath)
+  if (!loaded.success) {
+    announce({ event: 'failed', code: 'not-compiled', error: loaded.error })
+    app.exit(1)
+    return
+  }
+
+  // Uploading from inside the daemon would need the whole compile pipeline here;
+  // `debug open --upload-if-needed` runs it in the PARENT before spawning, so by
+  // this point an MD5 mismatch is genuinely a mismatch.
+  const opened = await openDebugSession({
     sessionId,
     projectPath: config.projectPath,
     target: config.target,
-    host: config.host,
-    username: config.username,
-    password: config.password,
-    // Uploading from inside the daemon would need the whole compile pipeline
-    // here; `debug open --upload-if-needed` runs it in the PARENT before
-    // spawning, so by this point a mismatch is genuinely a mismatch.
-    onMd5Mismatch: undefined,
-    onProgress: (message) => announce({ event: 'progress', message }),
+    host: config.host || undefined,
+    username: config.username || undefined,
+    password: config.password || undefined,
+    onProgress: (message: string) => announce({ event: 'progress', message }),
   })
 
   if (!opened.success) {
