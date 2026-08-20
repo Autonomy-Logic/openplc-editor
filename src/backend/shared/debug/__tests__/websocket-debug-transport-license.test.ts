@@ -98,6 +98,19 @@ describe('WebSocketDebugTransport license function codes', () => {
     expect(Array.from(result.boardId ?? [])).toEqual(anchor)
   })
 
+  it('getBoardId (0x48) maps LIC_UNSUPPORTED to a terminal unsupported, not a retryable failure', async () => {
+    // A runtime-v4 host with no device-tree serial answers 0x85: it has no
+    // hardware anchor to license against — ever. The flow lands on the
+    // terminal 'unsupported' outcome instead of nagging retry forever.
+    currentResponder = () => ({ success: true, data: '48 85' })
+
+    const transport = await connected()
+    const result = await transport.getBoardId()
+
+    expect(result.success).toBe(false)
+    expect(result.unsupported).toBe(true)
+  })
+
   it('getBoardId (0x48) resolves a refusal as failure, never as an identity', async () => {
     // A runtime that predates the license FCs hands 0x48 to its realtime core,
     // which refuses it. That must resolve to success: false — the licensing flow

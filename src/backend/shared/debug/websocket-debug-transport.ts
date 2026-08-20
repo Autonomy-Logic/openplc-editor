@@ -153,6 +153,20 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     }
   }
 
+  /**
+   * Push a fresh JWT to the held socket (see `DeviceChannelTransport.reauth`).
+   *
+   * The runtime re-verifies the session token on EVERY debug_command
+   * (openplc-runtime#169) and answers a distinguishable `token_expired` once it
+   * lapses — the editor's token manager refreshes transparently and this is how
+   * the renewed token reaches a channel that is already open. Also kept locally
+   * so a socket.io reconnect would present the current token, not the stale one.
+   */
+  reauth(token: string): void {
+    this.token = token
+    this.socket?.emit('reauth', { token })
+  }
+
   async getMd5Hash(): Promise<Md5ProbeResult> {
     if (!this.socket) throw new Error('Not connected to target')
 
@@ -316,6 +330,16 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
         } else {
           resolve(onFailure(error))
         }
+      }
+
+      // Re-checked HERE, after the mutex wait — the public methods' guard ran
+      // when the command was QUEUED, and disconnect() can null the socket while
+      // predecessors drain (review 2026-08-20). Without this, `this.socket!`
+      // below throws a raw TypeError through the IPC instead of answering the
+      // same failure envelope the pre-mutex code answered in this situation.
+      if (!this.socket) {
+        fail('Not connected to target')
+        return
       }
 
       const responseHandler = (response: { success: boolean; data?: string; error?: string }) => {

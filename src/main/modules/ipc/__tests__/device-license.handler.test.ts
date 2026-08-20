@@ -366,6 +366,21 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
   })
 
+  it('maps an anchor-less target (0x85 on 0x48) to the terminal unsupported outcome', async () => {
+    // The target itself said "no hardware anchor to license against" — that is
+    // a property of the device, not a transient failure, so no retry nag.
+    const bridge = createBridge()
+    const wsClient = boardIdClient({
+      getBoardId: jest.fn(() => Promise.resolve({ success: false, unsupported: true, error: 'LIC_UNSUPPORTED' })),
+    })
+    holdRestSession(bridge, wsClient)
+
+    const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
+
+    expect(result.outcome).toEqual({ state: 'unsupported' })
+    expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
+  })
+
   it('reports check-failed when the runtime does not answer the anchor read (pre-licensing runtime)', async () => {
     // A runtime that predates the license FCs answers 0x48 with an error. The
     // flow must never run — a device id derived from nothing licenses nobody.

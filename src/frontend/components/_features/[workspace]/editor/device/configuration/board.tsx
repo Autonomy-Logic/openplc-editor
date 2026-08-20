@@ -548,10 +548,13 @@ const Board = memo(function () {
         quietCheckFailed: true,
         // A retry re-runs the flow and explains the NEW outcome, so a transient
         // failure or a purchase completed in the browser resolves in place.
+        // NO quietCheckFailed here: a retry CLICK is user-initiated — the user
+        // asked a question, and silence would read as success (review
+        // 2026-08-20, E3). Only the unprompted auto-settle above stays quiet.
         retry: async () => {
           const next = await licensing.refresh()
           if (next && !cancelled) {
-            explainLicenseOutcome(next, { openModal, buy: licensing.buy, quietCheckFailed: true })
+            explainLicenseOutcome(next, { openModal, buy: licensing.buy })
           }
         },
       })
@@ -559,7 +562,25 @@ const Board = memo(function () {
     return () => {
       cancelled = true
     }
-  }, [connectionStatus, deviceLinkStatus, currentBoardInfo, deviceBoard, device, licensing, openModal])
+    // Deps are the STABLE fields, never the `licensing` object (review
+    // 2026-08-20, E4): the hook returns a fresh literal each render, and
+    // `refresh()` itself flips `phase` in the store — an object dep re-ran this
+    // effect mid-flight and its cleanup set `cancelled` on the very run that
+    // started the refresh, so the report never reached the dialog. `refresh`
+    // and `buy` are useCallback'd on inputs that do not change during the
+    // flight (`buy`'s `report?.deviceId` only moves after the resolve).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    connectionStatus,
+    deviceLinkStatus,
+    currentBoardInfo,
+    deviceBoard,
+    device.refreshLicense,
+    licensing.isLicensable,
+    licensing.refresh,
+    licensing.buy,
+    openModal,
+  ])
 
   return (
     <DeviceEditorSlot>

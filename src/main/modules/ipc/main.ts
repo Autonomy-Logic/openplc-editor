@@ -224,6 +224,11 @@ class MainProcessBridge implements MainIpcModule {
     // the fresh token to the renderer so its store connection flag tracks it.
     this.tokens.onTokenChanged((newToken) => {
       this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
+      // A held debug channel (the debugger's long-lived WebSocket) outlives the
+      // token that opened it, and the runtime re-verifies per command — push
+      // the renewal so the session survives the refresh (review 2026-08-20,
+      // R1/E2). Channels opened per call already read the manager at create().
+      this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
   }
 
@@ -2152,7 +2157,20 @@ class MainProcessBridge implements MainIpcModule {
       return {
         transport: 'websocket',
         descriptor: `websocket ${host}`,
-        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
+        // The token is read from the TOKEN MANAGER at open time, never from a
+        // closure over the login-time value (review 2026-08-20, E2): the
+        // manager transparently re-logins with stored credentials, and a
+        // channel opened after that refresh must present the CURRENT token —
+        // the runtime re-verifies it on every command (openplc-runtime#169).
+        // The session-open token is only the fallback for the first instants,
+        // before the manager has a session recorded.
+        create: () =>
+          new WebSocketDebugTransport({
+            host,
+            port: 8443,
+            token: this.tokens.getToken() ?? token,
+            rejectUnauthorized: false,
+          }),
       }
     }
     // One config in, one candidate out: this builds the DEBUG channel for a
@@ -2509,8 +2527,14 @@ class MainProcessBridge implements MainIpcModule {
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(client: LicenseChannel): Promise<{ anchor: Uint8Array } | { error: string }> {
+  private async readLicenseAnchor(
+    client: LicenseChannel,
+  ): Promise<{ anchor: Uint8Array } | { error: string } | { unsupported: true }> {
     const board = await client.getBoardId()
+    // The target itself said "no hardware anchor to license against" (0x85 on
+    // 0x48 — a runtime-v4 host without a device-tree serial). Terminal, not
+    // retryable: surface it as the 'unsupported' outcome, never check-failed.
+    if (board.unsupported) return { unsupported: true }
     if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
     // Liveness evidence for the CONTROL link's poll. On a REST session this
     // frame rode the debug WebSocket instead — crediting it here is a no-op,
@@ -2572,6 +2596,7 @@ class MainProcessBridge implements MainIpcModule {
     return await this.withLicenseChannel('read license', async (client) => {
       try {
         const anchor = await this.readLicenseAnchor(client)
+        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
         if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
         return await inspectDeviceLicense(client, { ...request, anchor: anchor.anchor })
@@ -2604,6 +2629,7 @@ class MainProcessBridge implements MainIpcModule {
 
       try {
         const anchor = await this.readLicenseAnchor(client)
+        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
         if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
         const report = await resolveDeviceLicense(client, { ...request, anchor: anchor.anchor })
