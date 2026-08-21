@@ -208,6 +208,63 @@ export interface ModbusSlaveConfig {
   networkInterface: string
   port: number
   bufferMapping?: ModbusBufferMapping
+  /**
+   * Serial (RTU) slave. Only bare-metal targets have one — the runtime serves
+   * Modbus over TCP and nothing else — so `undefined` means "this target has
+   * no serial slave", not "not configured yet".
+   *
+   * Gated on the `modbusSerialSlave` target capability.
+   */
+  rtu?: ModbusRtuConfig
+  /**
+   * Link layer underneath Modbus TCP on a bare-metal target: which medium the
+   * board uses and how it gets an address. The runtime takes all of this from
+   * the host OS, so it configures none of it.
+   *
+   * Distinct from `networkInterface` above, which is the address the runtime
+   * binds its listener to. Gated on the same capability as `rtu`.
+   */
+  tcpLink?: ModbusTcpLinkConfig
+}
+
+/** Hardware UARTs a board can serve the RTU slave on. */
+export type ModbusSerialPort = 'Serial' | 'Serial1' | 'Serial2' | 'Serial3'
+
+/** Speeds the RTU slave — and therefore the debugger — can run at. */
+export type ModbusBaudRate = '9600' | '14400' | '19200' | '38400' | '57600' | '115200'
+
+export interface ModbusRtuConfig {
+  enabled: boolean
+  serialPort: ModbusSerialPort
+  /**
+   * String rather than number because it is dialled verbatim by the debugger
+   * connect flow as well as emitted into `defines.h`, and because the UI is a
+   * fixed list — there is no arithmetic anywhere on this value.
+   */
+  baudRate: ModbusBaudRate
+  /** Modbus RTU slave identifier, 1-247. */
+  slaveId: number
+  /** Board drives DE/RE on an external RS485 transceiver. */
+  useRs485EnPin: boolean
+  /** GPIO driving DE/RE. Only meaningful when `useRs485EnPin` is set. */
+  rs485EnPin: string
+}
+
+export type ModbusTcpMedium = 'ethernet' | 'wifi'
+
+export interface ModbusTcpLinkConfig {
+  enabled: boolean
+  medium: ModbusTcpMedium
+  /** Required only on boards without a built-in MAC (classic Ethernet shields). */
+  macAddress: string
+  wifiSsid: string
+  wifiPassword: string
+  useDhcp: boolean
+  /** Static host configuration. Only meaningful when `useDhcp` is false. */
+  ipAddress: string
+  gateway: string
+  subnet: string
+  dns: string
 }
 
 export interface ModbusBufferMapping {

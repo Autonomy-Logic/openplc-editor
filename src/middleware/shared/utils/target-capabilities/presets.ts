@@ -46,6 +46,9 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusTcpServer: true,
   opcuaServer: true,
   s7Server: true,
+  // Mirrors the server flags above: a project authored for a board
+  // keeps its serial config when the user switches to Simulator to try it.
+  modbusSerialSlave: true,
   // RTU over the emulated virtual serial port the in-process simulator
   // exposes — not Modbus TCP.
   debuggerTransports: ['modbus-serial'],
@@ -70,6 +73,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusTcpServer: false,
   opcuaServer: false,
   s7Server: false,
+  modbusSerialSlave: false,
   debuggerTransports: ['modbus-tcp'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -99,6 +103,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusTcpServer: true,
   opcuaServer: true,
   s7Server: true,
+  modbusSerialSlave: false,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -118,9 +123,15 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   vppIo: false,
   modbusTcpRemote: false,
   ethercat: false,
-  modbusTcpServer: false,
+  // Bare-metal boards do serve Modbus TCP — over an ethernet shield or the
+  // on-board Wi-Fi — and since DOPE-442 that server is where their RTU and
+  // link configuration lives. Leaving this false made switching to an Arduino
+  // target warn that the project's servers were unsupported, about the one
+  // screen the target needs most.
+  modbusTcpServer: true,
   opcuaServer: false,
   s7Server: false,
+  modbusSerialSlave: true,
   // Arduino targets speak RTU over USB always; some also speak TCP
   // via an ethernet shield. Both flagged available — the actual
   // user-facing protocol selector picks between them at debug time.

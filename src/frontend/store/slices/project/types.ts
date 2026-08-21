@@ -3,6 +3,8 @@ import type {
   EthercatConfig,
   ModbusBufferMapping,
   ModbusIOGroup,
+  ModbusRtuConfig,
+  ModbusTcpLinkConfig,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaTrustedCertificate,
@@ -301,6 +303,8 @@ export type ProjectActions = {
       networkInterface?: string
       port?: number
       bufferMapping?: Partial<ModbusBufferMapping>
+      rtu?: Partial<ModbusRtuConfig>
+      tcpLink?: Partial<ModbusTcpLinkConfig>
     },
   ) => ProjectResponse
 

@@ -142,11 +142,26 @@ describe('preset shapes', () => {
     expect(RUNTIME_V4_CAPABILITIES.hasRuntimeStats).toBe(true)
   })
 
-  it('Arduino-CLI has only pin mapping and Arduino API completions', () => {
+  it('Arduino-CLI maps pins, completes the Arduino API, and hosts both Modbus slaves', () => {
     expect(ARDUINO_CLI_CAPABILITIES.pinMapping).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.arduinoApiCompletions).toBe(true)
-    expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.pythonFunctionBlocks).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.debuggerTransports).toEqual(['modbus-serial', 'modbus-tcp'])
+    // Both slaves, because the Modbus server screen is where a bare-metal
+    // target configures its UART and its network link (DOPE-442). Before that
+    // unification `modbusTcpServer` was false here and switching to an Arduino
+    // board warned that the project's servers were unsupported.
+    expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(true)
+    expect(ARDUINO_CLI_CAPABILITIES.modbusSerialSlave).toBe(true)
+  })
+
+  it('only bare-metal targets configure a serial slave and their own link', () => {
+    expect(ARDUINO_CLI_CAPABILITIES.modbusSerialSlave).toBe(true)
+    // The Simulator keeps it for the same reason it keeps the server flags:
+    // trying a board project on the Simulator must not drop its configuration.
+    expect(SIMULATOR_CAPABILITIES.modbusSerialSlave).toBe(true)
+    // Both runtimes take their network from the host OS and speak TCP only.
+    expect(RUNTIME_V3_CAPABILITIES.modbusSerialSlave).toBe(false)
+    expect(RUNTIME_V4_CAPABILITIES.modbusSerialSlave).toBe(false)
   })
 })

@@ -299,11 +299,44 @@ const ModbusSlaveBufferMappingSchema = z.object({
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 
+// Bare-metal blocks of a Modbus server (DOPE-442). Mirrors ModbusRtuConfig /
+// ModbusTcpLinkConfig in `middleware/shared/ports/types`; they have to agree,
+// because this schema is what validates the project file and `z.object` drops
+// keys it does not declare.
+const ModbusSerialPortSchema = z.enum(['Serial', 'Serial1', 'Serial2', 'Serial3'])
+const ModbusBaudRateSchema = z.enum(['9600', '14400', '19200', '38400', '57600', '115200'])
+
+const ModbusRtuConfigSchema = z.object({
+  enabled: z.boolean(),
+  serialPort: ModbusSerialPortSchema,
+  baudRate: ModbusBaudRateSchema,
+  slaveId: z.number(),
+  useRs485EnPin: z.boolean(),
+  rs485EnPin: z.string(),
+})
+type ModbusRtuConfig = z.infer<typeof ModbusRtuConfigSchema>
+
+const ModbusTcpLinkConfigSchema = z.object({
+  enabled: z.boolean(),
+  medium: z.enum(['ethernet', 'wifi']),
+  macAddress: z.string(),
+  wifiSsid: z.string(),
+  wifiPassword: z.string(),
+  useDhcp: z.boolean(),
+  ipAddress: z.string(),
+  gateway: z.string(),
+  subnet: z.string(),
+  dns: z.string(),
+})
+type ModbusTcpLinkConfig = z.infer<typeof ModbusTcpLinkConfigSchema>
+
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
   networkInterface: z.string(),
   port: z.number(),
   bufferMapping: ModbusSlaveBufferMappingSchema.optional(),
+  rtu: ModbusRtuConfigSchema.optional(),
+  tcpLink: ModbusTcpLinkConfigSchema.optional(),
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
@@ -902,9 +935,11 @@ export {
   ModbusIOGroupSchema,
   ModbusIOPointSchema,
   ModbusParitySchema,
+  ModbusRtuConfigSchema,
   ModbusSlaveBufferMappingSchema,
   ModbusSlaveConfigSchema,
   ModbusTcpConfigSchema,
+  ModbusTcpLinkConfigSchema,
   ModbusTransportTypeSchema,
   OpcUaAddressSpaceConfigSchema,
   OpcUaAuthMethodSchema,
@@ -966,9 +1001,11 @@ export type {
   ModbusIOGroup,
   ModbusIOPoint,
   ModbusParity,
+  ModbusRtuConfig,
   ModbusSlaveBufferMapping,
   ModbusSlaveConfig,
   ModbusTcpConfig,
+  ModbusTcpLinkConfig,
   ModbusTransportType,
   OpcUaAddressSpaceConfig,
   OpcUaAuthMethod,
