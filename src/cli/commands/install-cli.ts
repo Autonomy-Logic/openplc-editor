@@ -85,11 +85,20 @@ function currentPlatform(): ShimPlatform | undefined {
  */
 function cliLeadingArgs(): string[] {
   if (app.isPackaged) return ['--cli']
-  const script = process.argv[1]
-  // Absolutised: argv[1] is whatever the caller typed, often relative
-  // (`./openplc-cli.dev.js`). A shim carrying a relative path only works from
-  // the directory it was installed from — which is exactly what a shim on PATH
-  // is meant to free you from, and it fails by HANGING rather than erroring
-  // (Electron given a missing script waits instead of exiting).
-  return script && script.endsWith('.js') ? [resolve(script), '--cli'] : ['--cli']
+
+  // The script is NOT reliably `argv[1]`. On Linux the entry point re-execs
+  // itself with the headless Chromium switches ahead of everything else (see
+  // `relaunchForLinuxCli`), so by the time this runs the bundle has been pushed
+  // down the list and `argv[1]` is `--no-sandbox`. Reading the fixed position
+  // there produced a shim with no script at all — `electron --cli "$@"` — which
+  // fails the worst possible way: Electron handed no script HANGS rather than
+  // erroring, so the installed command would sit forever instead of saying what
+  // was wrong.
+  //
+  // Absolutised because the argument is whatever the caller typed, often
+  // relative (`./openplc-cli.dev.js`), and a shim carrying a relative path only
+  // works from the directory it was installed from — exactly what a shim on
+  // PATH is meant to free you from.
+  const script = process.argv.slice(1).find((argument) => argument.endsWith('.js'))
+  return script ? [resolve(script), '--cli'] : ['--cli']
 }

@@ -20,6 +20,8 @@
 
 import { spawnSync } from 'node:child_process'
 
+import { ExitCode } from '../cli/exit-codes'
+
 /**
  * Is this process a CLI invocation?
  *
@@ -73,8 +75,31 @@ function relaunchForLinuxCli(): boolean {
   process.exit(result.status ?? 1)
 }
 
+/**
+ * Turn a failure to LOAD the CLI into an exit.
+ *
+ * Electron's own reaction to an exception escaping the main script is to print
+ * "App threw an error during load" and show a message box. In a GUI that is
+ * right; for a CLI it is a modal dialog with nobody to click it, so the process
+ * sits there — 90s and counting on a Windows VM, and forever on a build agent —
+ * having produced no output and no exit code. A missing or unloadable native
+ * module (`serialport`, on a build where its binary does not match the platform)
+ * is exactly how that happens, and "hangs" is the worst possible way to report
+ * it.
+ *
+ * The import is dynamic, so this handler is registered before the CLI's own
+ * imports are evaluated — which is the whole reason it can catch them. The
+ * in-CLI guards (`installNeverHangGuards`) cover everything after loading; this
+ * covers loading itself.
+ */
+function reportLoadFailureAndExit(error: unknown): never {
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error)
+  process.stderr.write(`openplc-cli: failed to start\n${message}\n`)
+  process.exit(ExitCode.Internal)
+}
+
 if (isCliInvocation(process.argv)) {
-  if (!relaunchForLinuxCli()) void import('../cli/main')
+  if (!relaunchForLinuxCli()) import('../cli/main').catch(reportLoadFailureAndExit)
 } else {
   void import('./main')
 }

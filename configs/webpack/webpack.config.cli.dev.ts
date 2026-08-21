@@ -36,6 +36,12 @@ const configuration: webpack.Configuration = {
   // emit them here too, and code splitting would scatter vendor chunks
   // alongside them — which is exactly the litter this replaced.
   optimization: { splitChunks: false, runtimeChunk: false },
+
+  // `entry.ts` reaches both roles through dynamic imports, which webpack would
+  // split into sibling chunk files next to this bundle in the repo root. Folded
+  // back into the one file instead — the point of this config is a single
+  // artifact you can hand to `electron`.
+  plugins: [new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 })],
 }
 
 const merged = merge(devMainConfig, configuration)
@@ -44,5 +50,15 @@ export default {
   ...merged,
   // Assigned after the merge: webpack-merge UNIONS `entry` objects, so the dev
   // main build's entries would survive an override expressed inside the merge.
-  entry: { 'openplc-cli.dev': `${webpackPaths.srcPath}/cli/main.ts` },
+  // `entry.ts`, NOT `cli/main.ts` — the same entry the packaged binary runs.
+  //
+  // Entering at `cli/main.ts` skipped the argv dispatcher, and with it two
+  // things that only exist there: the Linux re-exec that supplies the headless
+  // Chromium switches, and the handler that turns a failure to LOAD the CLI
+  // into an exit instead of a modal error dialog nobody can click. Both were
+  // therefore untestable with the bundle used to test everything else — a dev
+  // build that starts differently from the shipped one is a dev build that can
+  // pass while the product hangs. Costs `--cli` on every dev invocation, which
+  // is what the packaged binary needs anyway.
+  entry: { 'openplc-cli.dev': `${webpackPaths.srcPath}/main/entry.ts` },
 }
