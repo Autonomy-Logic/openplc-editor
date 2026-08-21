@@ -29,6 +29,10 @@ export async function runInstallCli(_args: ParsedArgs, reporter: Reporter): Prom
   const result = await installCliShim({
     appBinaryPath: process.execPath,
     leadingArgs: cliLeadingArgs(),
+    // Carried forward only if THIS invocation needed it. A caller in a container
+    // whose sandbox cannot start passes `--no-sandbox` once, to install, and gets
+    // a shim that keeps working; a desktop install keeps the sandbox on.
+    sandboxDisabled: process.argv.includes('--no-sandbox'),
     environment: {
       platform,
       home: homedir(),

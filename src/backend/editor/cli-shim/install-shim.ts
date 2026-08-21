@@ -46,6 +46,8 @@ export interface InstallShimOptions {
    * shim runs plain Electron.
    */
   leadingArgs: string[]
+  /** See `ShimInvocation.sandboxDisabled`. */
+  sandboxDisabled?: boolean
   environment: ShimEnvironment & { appImagePath?: string }
   /** Write even when a same-content shim already exists. */
   force?: boolean
@@ -125,7 +127,10 @@ export async function installCliShim(options: InstallShimOptions): Promise<Insta
     }
   }
 
-  const contents = renderShim({ command: target, leadingArgs: options.leadingArgs }, environment.platform)
+  const contents = renderShim(
+    { command: target, leadingArgs: options.leadingArgs, sandboxDisabled: options.sandboxDisabled },
+    environment.platform,
+  )
   const existing = existsSync(plan.shimPath) ? readSafely(plan.shimPath) : undefined
 
   if (!mayReplace(existing)) {

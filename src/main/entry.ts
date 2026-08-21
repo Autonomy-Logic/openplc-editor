@@ -39,7 +39,7 @@ export function isCliInvocation(argv: readonly string[]): boolean {
  * Kept in step with `platformSwitches` in `backend/editor/cli-shim/shim-plan`,
  * which puts the same list in the generated shim.
  */
-const LINUX_CLI_SWITCHES = ['--no-sandbox', '--ozone-platform=headless', '--disable-gpu']
+const LINUX_CLI_SWITCHES = ['--ozone-platform=headless', '--disable-gpu']
 
 /**
  * Re-exec ourselves with the switches Linux needs, when they are missing.
@@ -52,13 +52,17 @@ const LINUX_CLI_SWITCHES = ['--no-sandbox', '--ozone-platform=headless', '--disa
  *     display layer after this script runs, so without a DISPLAY (an SSH
  *     session, a CI runner) the relaunch is what makes a direct `--cli` call
  *     work at all. Verified: a container with no DISPLAY runs the CLI fine.
- *   - `--no-sandbox` is **not** fixable here. Chromium's SUID sandbox check
- *     happens before any JS runs, so a launch that fails it has already aborted.
- *     In practice this only bites where unprivileged user namespaces are
- *     unavailable — Docker's default seccomp profile, notably — because with
- *     them Chromium uses the namespace sandbox and needs no helper. Those
- *     callers pass `--no-sandbox` once, for the install; the generated shim
- *     carries it from then on.
+ *   - `--no-sandbox` is **not** fixable here, and is deliberately NOT added.
+ *     Chromium's SUID sandbox check happens before any JS runs, so a launch that
+ *     fails it has already aborted — adding the switch to this relaunch could
+ *     never rescue such a launch, and all it achieved was disabling the sandbox
+ *     for every Linux CLI run that did not need it. In practice the check only
+ *     bites where unprivileged user namespaces are unavailable (Docker's default
+ *     seccomp profile, notably); with them Chromium uses the namespace sandbox
+ *     and needs no helper. Those callers pass `--no-sandbox` themselves, once,
+ *     and `install-cli` records that in the generated shim so it is carried
+ *     forward for them and for nobody else. A switch the caller did supply
+ *     survives regardless: `process.argv.slice(1)` passes it to the child.
  *
  * Synchronous and stdio-inherited, so the child's output IS this process's
  * output and its exit code becomes ours — a caller cannot tell a relaunch
@@ -72,7 +76,17 @@ function relaunchForLinuxCli(): boolean {
     stdio: 'inherit',
     env: process.env,
   })
-  process.exit(result.status ?? 1)
+
+  // `status` is null when the child could not be created, or died on a signal.
+  // Exiting `1` there reported a plain failure and threw away the only
+  // explanation anyone was going to get — and `1` is not one of this CLI's
+  // documented codes, so a caller branching on the code learned nothing either.
+  if (result.error || result.signal !== null) {
+    const reason = result.error ? result.error.message : `killed by ${result.signal}`
+    process.stderr.write(`openplc-cli: could not relaunch for a headless run: ${reason}\n`)
+    process.exit(ExitCode.Internal)
+  }
+  process.exit(result.status ?? ExitCode.Internal)
 }
 
 /**

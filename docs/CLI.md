@@ -62,24 +62,31 @@ Launching the GUI once does the same thing, and is the simplest route on a
 desktop.
 
 You do **not** need `xvfb-run`, and you do not need to pass Chromium switches.
-A CLI run needs `--ozone-platform=headless` (Electron initialises its display
-layer during startup and exits without one) and, on some systems,
-`--no-sandbox`. The generated shim passes both, and a direct `--cli` call
-re-executes itself with the headless switch — so an SSH session or a CI runner
-with no display works as-is.
+A CLI run needs `--ozone-platform=headless`, because Electron initialises its
+display layer during startup and exits without one. The generated shim passes it,
+and a direct `--cli` call re-executes itself with it — so an SSH session or a CI
+runner with no display works as-is.
 
-The one exception is the **first** call in an environment where unprivileged user
-namespaces are unavailable, which is Docker's default. Chromium then falls back
-to its SUID sandbox helper and aborts before any of our code runs, so that call
-needs the switch itself — once, to create the shim:
+`--no-sandbox` is a separate matter, and it is **not** passed for you. Chromium's
+sandbox is left on wherever it can start, which is everywhere unprivileged user
+namespaces are available — any current desktop kernel. The exception is an
+environment where they are not, Docker's default being the notable one: Chromium
+falls back to its SUID sandbox helper and aborts _before any of our code runs_,
+so no relaunch can rescue it and the call has to carry the switch itself.
+
+Pass it once, to install, and it is remembered:
 
 ```sh
 ./'OpenPLC Editor-4.2.2.AppImage' --no-sandbox --cli install-cli
 openplc-cli devices        # no switches needed from here on
 ```
 
-Everywhere with user namespaces enabled — which is any current desktop kernel —
-the plain form above is enough.
+`install-cli` records that the installing call ran without the sandbox and writes
+`--no-sandbox` into the shim, so later `openplc-cli` calls in that container keep
+working. A desktop install writes a shim **without** it, and keeps the sandbox —
+which is the point: the switch follows the environment that needs it instead of
+being handed to every Linux user. Both cases are verified in a container, with
+and without `--security-opt seccomp=unconfined`.
 
 ### Windows
 

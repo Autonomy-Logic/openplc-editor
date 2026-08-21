@@ -318,10 +318,13 @@ function enableHeadlessPlatform(): void {
 
 async function main(): Promise<void> {
   enableHeadlessPlatform()
-  installNeverHangGuards()
+  // The daemon's stdout is a handshake channel the parent closes on purpose, so
+  // it must survive losing it — see `installNeverHangGuards`.
+  const isDaemon = process.argv.includes('--cli-daemon')
+  installNeverHangGuards({ exitWhenOutputClosed: !isDaemon })
 
   // The daemon reads its config from stdin and never parses argv.
-  if (process.argv.includes('--cli-daemon')) {
+  if (isDaemon) {
     alignUserDataWithEditor(undefined)
     await runDaemonFromStdin()
     return
@@ -437,10 +440,24 @@ async function exitAfterOutputDrains(code: ExitCodeValue): Promise<void> {
  * Registered before any command runs, because a command can reach a broken
  * stream on its first line of output.
  */
-function installNeverHangGuards(): void {
+function installNeverHangGuards(options: { exitWhenOutputClosed: boolean }): void {
   for (const stream of [process.stdout, process.stderr]) {
     stream.on('error', (error: NodeJS.ErrnoException) => {
-      app.exit(error.code === 'EPIPE' ? ExitCode.Ok : ExitCode.Internal)
+      if (error.code !== 'EPIPE') {
+        app.exit(ExitCode.Internal)
+        return
+      }
+      // A one-shot command has nothing left to say once its reader is gone.
+      //
+      // A DAEMON does. Its stdout carries the handshake and nothing else, and
+      // `spawn-session` destroys that pipe as soon as the session is registered
+      // — so the first idle-timeout diagnostic afterwards raises EPIPE on a
+      // stream nobody was listening to any more. Exiting there would kill a live
+      // session mid-flight, and the forces it was holding would stay pinned on
+      // the device: the runtime clears a forced slot when it is told to, not
+      // when its debugger disappears. Losing the pipe is expected here, so it is
+      // ignored and the session keeps running until something closes it.
+      if (options.exitWhenOutputClosed) app.exit(ExitCode.Ok)
     })
   }
 

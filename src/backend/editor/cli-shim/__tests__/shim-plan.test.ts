@@ -224,7 +224,7 @@ describe('renderShim', () => {
     )
     // Switches precede the script path, which is where Electron expects them.
     expect(shim).toContain(
-      `exec '/repo/node_modules/electron/dist/Electron' '--no-sandbox' '--ozone-platform=headless' ` +
+      `exec '/repo/node_modules/electron/dist/Electron' '--ozone-platform=headless' ` +
         `'--disable-gpu' '/repo/openplc-cli.dev.js' '--cli' "$@"`,
     )
   })
@@ -232,10 +232,32 @@ describe('renderShim', () => {
 
 describe('platformSwitches', () => {
   it('passes the Linux switches Chromium reads before our script runs', () => {
-    // Set from JS they are too late: the SUID sandbox and Ozone both initialise
-    // during startup, so `appendSwitch` never gets a chance. The shim IS the
-    // command line, which is why they live here.
-    expect(platformSwitches('linux')).toEqual(['--no-sandbox', '--ozone-platform=headless', '--disable-gpu'])
+    // Set from JS they are too late: Ozone initialises during startup, so
+    // `appendSwitch` never gets a chance. The shim IS the command line, which is
+    // why they live here.
+    expect(platformSwitches('linux')).toEqual(['--ozone-platform=headless', '--disable-gpu'])
+  })
+
+  it('leaves the Chromium sandbox ON unless the installing call had it off', () => {
+    // Baking `--no-sandbox` in unconditionally handed every Linux user a command
+    // that permanently disables the sandbox, to accommodate the containers that
+    // are the only place it cannot start.
+    expect(platformSwitches('linux')).not.toContain('--no-sandbox')
+    expect(platformSwitches('linux', { sandboxDisabled: false })).not.toContain('--no-sandbox')
+  })
+
+  it('carries --no-sandbox forward for the caller that needed it, first', () => {
+    // First, because Chromium reads it during startup.
+    expect(platformSwitches('linux', { sandboxDisabled: true })).toEqual([
+      '--no-sandbox',
+      '--ozone-platform=headless',
+      '--disable-gpu',
+    ])
+  })
+
+  it('adds no sandbox switch off Linux, even when asked', () => {
+    expect(platformSwitches('darwin', { sandboxDisabled: true })).toEqual([])
+    expect(platformSwitches('win32', { sandboxDisabled: true })).toEqual([])
   })
 
   it('adds nothing on macOS or Windows, which have neither problem', () => {
@@ -245,6 +267,14 @@ describe('platformSwitches', () => {
 
   it('renders them into the Linux shim ahead of the CLI marker', () => {
     const shim = renderShim({ command: '/home/dev/App.AppImage', leadingArgs: ['--cli'] }, 'linux')
+    expect(shim).toContain(`exec '/home/dev/App.AppImage' '--ozone-platform=headless' '--disable-gpu' '--cli' "$@"`)
+  })
+
+  it('renders the sandbox switch into the shim for a container install', () => {
+    const shim = renderShim(
+      { command: '/home/dev/App.AppImage', leadingArgs: ['--cli'], sandboxDisabled: true },
+      'linux',
+    )
     expect(shim).toContain(
       `exec '/home/dev/App.AppImage' '--no-sandbox' '--ozone-platform=headless' '--disable-gpu' '--cli' "$@"`,
     )

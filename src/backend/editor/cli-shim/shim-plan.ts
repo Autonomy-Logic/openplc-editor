@@ -175,6 +175,12 @@ export function planShimInstall(environment: ShimEnvironment, probes: ShimProbes
 export interface ShimInvocation {
   command: string
   leadingArgs: string[]
+  /**
+   * True when the process asking for this shim is itself running without the
+   * Chromium sandbox — the shim then carries `--no-sandbox` forward, and only
+   * then. See `platformSwitches`.
+   */
+  sandboxDisabled?: boolean
 }
 
 /**
@@ -194,9 +200,19 @@ export interface ShimInvocation {
  *     a window still needs this, and it saves callers wrapping everything in
  *     `xvfb-run`.
  */
-export function platformSwitches(platform: ShimPlatform): string[] {
+export function platformSwitches(platform: ShimPlatform, options: { sandboxDisabled?: boolean } = {}): string[] {
   if (platform !== 'linux') return []
-  return ['--no-sandbox', '--ozone-platform=headless', '--disable-gpu']
+  // The display switches always: they are what makes a headless run possible at
+  // all, and they weaken nothing.
+  //
+  // `--no-sandbox` ONLY when the invocation that asked for this shim was itself
+  // running without the sandbox. Baking it in unconditionally handed every Linux
+  // user a command that permanently disables Chromium's sandbox, when the only
+  // callers that need it are the environments where the sandbox cannot start —
+  // Docker's default seccomp profile blocking unprivileged user namespaces,
+  // notably. Those callers pass it once, to install, and it is carried forward
+  // for them; a desktop install keeps the sandbox.
+  return [...(options.sandboxDisabled ? ['--no-sandbox'] : []), '--ozone-platform=headless', '--disable-gpu']
 }
 
 /**
@@ -208,7 +224,11 @@ export function platformSwitches(platform: ShimPlatform): string[] {
  * project paths routinely contain them.
  */
 export function renderShim(invocation: ShimInvocation, platform: ShimPlatform): string {
-  const parts = [invocation.command, ...platformSwitches(platform), ...invocation.leadingArgs]
+  const parts = [
+    invocation.command,
+    ...platformSwitches(platform, { sandboxDisabled: invocation.sandboxDisabled }),
+    ...invocation.leadingArgs,
+  ]
   const quoted = parts.map((part) => quoteForShell(part, platform)).join(' ')
   if (platform === 'win32') {
     return [

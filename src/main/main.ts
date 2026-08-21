@@ -430,6 +430,18 @@ app
  * to the log — a PATH hint is useful but not worth a modal at launch.
  */
 async function installCliShimOnFirstRun(): Promise<void> {
+  // PACKAGED ONLY, and the guard has to be here rather than assumed.
+  //
+  // The shim is generated with `leadingArgs: ['--cli']` and nothing else,
+  // because a packaged build dispatches on that marker inside its own binary. A
+  // DEV launch has no such binary: the shim came out as
+  // `exec .../node_modules/electron/dist/Electron --cli "$@"`, which starts
+  // Electron with no application to run — and Electron with no script HANGS
+  // rather than erroring. So `npm run dev` was quietly installing a command that
+  // never worked, over whichever working one was there before. Observed on a
+  // developer machine, not theorised.
+  if (!app.isPackaged) return
+
   try {
     const outcome = await ensureCliShimInstalled({
       statePath: shimStatePath(app.getPath('userData')),
