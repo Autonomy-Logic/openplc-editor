@@ -8,6 +8,17 @@ describe('deriveDeviceId', () => {
     expect(deriveDeviceId(anchor)).toBe('659a3520540f803625ddc34081e893d3')
   })
 
+  it('derives the anchor-parity golden id for the runtime-v4 Pi serial', () => {
+    // Cross-repo pin (openplc-packages license-core/test/runtime-v4/
+    // anchor-parity.mjs): every RAW vector there — the ASCII serial
+    // "8625807b0a83ae7d" with trailing NUL/LF/CRLF/space — normalizes to these
+    // bytes and MUST derive this exact deviceId. The strip half of the contract
+    // is pinned in websocket-debug-transport-license.test.ts; this is the hash
+    // half. Together they make the cross-repo comment breakable by a test.
+    const normalized = Uint8Array.from('8625807b0a83ae7d', (c) => c.charCodeAt(0))
+    expect(deriveDeviceId(normalized)).toBe('7146518f9842adacfadc731ee7f546e5')
+  })
+
   it('returns 32 lowercase hex chars (16 bytes)', () => {
     const id = deriveDeviceId(Uint8Array.from([1, 2, 3]))
     expect(id).toMatch(/^[0-9a-f]{32}$/)
