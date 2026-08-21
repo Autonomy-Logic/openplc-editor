@@ -29,6 +29,23 @@ export interface EdgeUser {
   emailVerifiedAt?: string | null
 }
 
+/**
+ * What asking "who is signed in?" actually established.
+ *
+ * `unknown` is the whole reason this is not just `EdgeUser | null`. A request that
+ * never reached the server says NOTHING about whether a session exists, and
+ * collapsing it into "nobody is signed in" put a blocking sign-in dialog over a
+ * perfectly valid session every time the network blipped for a second — over an
+ * editor holding unsaved work, with no way out until the window happened to be
+ * refocused. The caller has to be able to tell the two apart and hold its ground.
+ */
+export type EdgeUserRead =
+  | { status: 'signed-in'; user: EdgeUser }
+  /** The server answered, and there is no usable session. */
+  | { status: 'no-session' }
+  /** The question could not be asked — offline, DNS, CORS, a dropped connection. */
+  | { status: 'unknown' }
+
 export type EdgeSignInOutcome =
   | { status: 'signed-in'; user: EdgeUser }
   /**
@@ -84,8 +101,11 @@ export interface EdgeAccountPort {
    * on the app that started it rather than on Edge.
    */
   oauthUrl(provider: EdgeOAuthProviderId, returnTo: string): string
-  /** The signed-in user, or null when there is no usable session. */
-  fetchUser(): Promise<EdgeUser | null>
+  /**
+   * Who is signed in — and, when that could not be established, the fact that it
+   * could not be. See `EdgeUserRead`: a network failure is not a signed-out user.
+   */
+  fetchUser(): Promise<EdgeUserRead>
   /** e.g. `Pro Plan`; null when the account has no active subscription. */
   fetchPlanCaption(): Promise<string | null>
   signIn(email: string, password: string): Promise<EdgeSignInOutcome>
