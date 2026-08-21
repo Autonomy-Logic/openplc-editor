@@ -6,14 +6,15 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
 import { enableMapSet } from 'immer'
-import { platform, release } from 'os'
+import { homedir, platform, release } from 'os'
 import { join, resolve } from 'path'
 
+import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shim/first-run'
 import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
@@ -407,6 +408,10 @@ app
   .whenReady()
   .then(() => {
     void createMainWindow()
+    // Put `openplc-cli` on PATH, once. After the window, so a slow filesystem
+    // never delays the app appearing, and best-effort: a convenience command
+    // failing to install is not a reason for the editor not to start.
+    void installCliShimOnFirstRun()
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
@@ -415,3 +420,47 @@ app
     })
   })
   .catch((err: unknown) => logger.error(getErrorMessage(err)))
+
+/**
+ * Install the `openplc-cli` shim on first run.
+ *
+ * Only the disk-image / translocation case reaches the user: it is the one where
+ * they have to act (move the app to Applications) and where silence would leave
+ * them with a command that never appears and no reason why. Everything else goes
+ * to the log — a PATH hint is useful but not worth a modal at launch.
+ */
+async function installCliShimOnFirstRun(): Promise<void> {
+  try {
+    const outcome = await ensureCliShimInstalled({
+      statePath: shimStatePath(app.getPath('userData')),
+      appBinaryPath: process.execPath,
+      // A packaged build dispatches on `--cli` in its own binary; the GUI only
+      // runs first-run install when packaged-shaped, so the marker suffices.
+      leadingArgs: ['--cli'],
+      environment: {
+        platform: process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux',
+        home: homedir(),
+        pathVariable: process.env.PATH ?? '',
+        localAppData: process.env.LOCALAPPDATA,
+        // The AppImage runtime exports the path of the .AppImage FILE, which is
+        // stable; `process.execPath` is a per-launch mount point.
+        appImagePath: process.env.APPIMAGE,
+      },
+      warn: (message) => {
+        logger.info(`[cli-shim] ${message}`)
+        void dialog.showMessageBox({
+          type: 'info',
+          title: 'Command line tool not installed',
+          message: 'The openplc-cli command could not be installed',
+          detail: message,
+          buttons: ['OK'],
+        })
+      },
+      onDiagnostic: (message) => logger.info(`[cli-shim] ${message}`),
+    })
+    logger.info(`[cli-shim] ${outcome.status}`)
+    if ('hint' in outcome && outcome.hint) logger.info(`[cli-shim] ${outcome.hint}`)
+  } catch (error) {
+    logger.error(`[cli-shim] install failed: ${getErrorMessage(error)}`)
+  }
+}

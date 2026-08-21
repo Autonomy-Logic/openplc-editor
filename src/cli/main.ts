@@ -28,9 +28,11 @@ import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
+import { cliArgv } from './argv'
 import { runBuild } from './commands/build'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
+import { runInstallCli } from './commands/install-cli'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
 import { createProcessReporter, Reporter } from './output'
@@ -61,6 +63,7 @@ const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
 Usage
+  openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
@@ -171,6 +174,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   switch (args.command) {
     case 'devices':
       return (await runDevices(args, reporter)).exitCode
+    case 'install-cli':
+      return (await runInstallCli(args, reporter)).exitCode
     case 'compile':
       return (await runBuild(args, reporter, { withUpload: false })).exitCode
     case 'upload':
@@ -267,7 +272,36 @@ function daemonSpawnArgs(): string[] {
   return [script, '--cli-daemon']
 }
 
+/**
+ * Make this process able to run without a display.
+ *
+ * Electron initialises its Ozone platform during startup, before any window
+ * exists, and on Linux that means connecting to X11 or Wayland. With neither —
+ * a CI runner, a container, an SSH session — it does not degrade, it exits:
+ * "Missing X server or $DISPLAY. The platform failed to initialize." So a CLI
+ * that never opens a window still cannot start.
+ *
+ * The `headless` Ozone platform is the supported answer, and asking for it here
+ * means callers do not have to wrap every invocation in `xvfb-run`. macOS and
+ * Windows have no equivalent problem and are left alone.
+ */
+function enableHeadlessPlatform(): void {
+  if (process.platform !== 'linux') return
+  app.commandLine.appendSwitch('ozone-platform', 'headless')
+  // A GPU process is pointless for a CLI.
+  app.commandLine.appendSwitch('disable-gpu')
+  app.disableHardwareAcceleration()
+  // Chromium's SUID sandbox refuses to start unless its helper is root-owned
+  // and mode 4755, which is not the case inside a container — the exact
+  // environment a CI run lives in. Turning it off is safe HERE and only here:
+  // this process creates no renderer and loads no web content, so the sandbox
+  // has nothing to isolate. The GUI never takes this path.
+  app.commandLine.appendSwitch('no-sandbox')
+}
+
 async function main(): Promise<void> {
+  enableHeadlessPlatform()
+
   // The daemon reads its config from stdin and never parses argv.
   if (process.argv.includes('--cli-daemon')) {
     alignUserDataWithEditor(undefined)
@@ -298,26 +332,6 @@ async function main(): Promise<void> {
     exitCode = reporter.internalError(error).exitCode
   }
   app.exit(exitCode)
-}
-
-/**
- * Strip the launcher's own arguments.
- *
- * Packaged: `[app, ...userArgs]`. Development: `[electron, scriptPath,
- * ...userArgs]`. Getting this wrong makes the first user argument disappear,
- * which reads as a missing command rather than as an argv bug.
- */
-export function cliArgv(argv: readonly string[]): string[] {
-  const rest = argv.slice(1)
-  const withoutMarker = rest.filter((argument) => argument !== '--cli')
-  if (withoutMarker.length > 0 && !withoutMarker[0].startsWith('-') && looksLikeEntryPath(withoutMarker[0])) {
-    return withoutMarker.slice(1)
-  }
-  return withoutMarker
-}
-
-function looksLikeEntryPath(value: string): boolean {
-  return value.endsWith('.js') || value.endsWith('.ts') || value.endsWith('.asar') || value.includes('/dist/')
 }
 
 /** `stringFlag` is re-exported for the daemon entry, which shares the parser. */
