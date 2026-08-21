@@ -23,8 +23,12 @@ interface EdgeAvatarProps {
 const EdgeAvatar = ({ name, imageSrc, customInitials, initialsColor, className }: EdgeAvatarProps) => {
   // A profileImage URL can 404 (deleted upload, expired link). Falling back to
   // initials keeps a broken-image icon out of the title bar.
-  const [imageFailed, setImageFailed] = useState(false)
-  const showImage = Boolean(imageSrc) && !imageFailed
+  //
+  // The failed URL is remembered, not a boolean: a user who replaces their photo
+  // arrives here with a different `imageSrc`, and a flag would keep showing
+  // initials for a URL that was never actually tried.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const showImage = Boolean(imageSrc) && imageSrc !== failedSrc
 
   return (
     <span
@@ -42,7 +46,7 @@ const EdgeAvatar = ({ name, imageSrc, customInitials, initialsColor, className }
           src={imageSrc ?? undefined}
           alt={name}
           className='size-full object-cover'
-          onError={() => setImageFailed(true)}
+          onError={() => setFailedSrc(imageSrc ?? null)}
         />
       ) : (
         <span

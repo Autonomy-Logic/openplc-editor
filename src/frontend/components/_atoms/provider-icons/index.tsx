@@ -25,8 +25,16 @@ const GoogleMark = () => (
   </svg>
 )
 
+/**
+ * `viewBox` is required here, unlike Google's mark above.
+ *
+ * This path is drawn on a 0–20 grid (`M20 0`, `V20`), so without a viewBox the user
+ * units map 1:1 to px and everything past 18 is simply cut off — the right-hand and
+ * bottom squares of the four-square logo rendered clipped, and the mark sat
+ * asymmetrically beside Google's, whose path already fits inside 18×18.
+ */
 const MicrosoftMark = () => (
-  <svg xmlns='http://www.w3.org/2000/svg' width={18} height={18} fill='none' aria-hidden>
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' width={18} height={18} fill='none' aria-hidden>
     <path
       className='fill-current'
       d='M9.328 0H0v8.988h9.328zM20 0h-9.327v8.988H20zM9.328 10.264H0V20h9.328zm10.672 0h-9.327V20H20z'

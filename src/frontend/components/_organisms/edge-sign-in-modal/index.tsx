@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { EdgeAccountPort } from '../../../../middleware/shared/ports/edge-account-port'
+import type { EdgeAccountPort, EdgeSignInOutcome } from '../../../../middleware/shared/ports/edge-account-port'
 import { AutonomyLogo } from '../../_atoms/autonomy-logo'
 import { ProviderIcon } from '../../_atoms/provider-icons'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
@@ -127,7 +127,13 @@ const EdgeSignInModal = ({ open, onSignedIn, account, reason = 'signed-out' }: E
     setSubmitting(true)
     setFormState({ kind: 'idle' })
 
-    const outcome = await account.signIn(values.email, values.password)
+    // The port contracts every failure into an outcome — `failed` — so a rejection
+    // is not a path the web adapter takes. Folded into that outcome anyway, because
+    // the type system does not enforce the contract: an unhandled rejection here
+    // would leave the button stuck on "Signing in…" having said nothing at all.
+    const outcome = await account
+      .signIn(values.email, values.password)
+      .catch((): EdgeSignInOutcome => ({ status: 'failed' }))
 
     setSubmitting(false)
 
@@ -236,16 +242,18 @@ const EdgeSignInModal = ({ open, onSignedIn, account, reason = 'signed-out' }: E
             )}
           </div>
 
-          <div className='flex items-center justify-between'>
-            <label className='flex cursor-pointer items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300'>
-              <input
-                type='checkbox'
-                className='size-4 cursor-pointer rounded border-neutral-300 accent-brand dark:border-neutral-700'
-              />
-              Remember me
-            </label>
+          {/* No "Remember me": the session length is Edge's to decide and it is
+              already a 30-day refresh cookie. A checkbox wired to nothing told the
+              user they were choosing something they were not.
+
+              `target='_blank'` for the same load-bearing reason as the providers
+              and the sign-up link below — recovery is an email round-trip, and it
+              must not navigate a tab holding an unsaved project. */}
+          <div className='flex items-center justify-end'>
             <a
               href={forgotPasswordUrl}
+              target='_blank'
+              rel='noreferrer'
               className='cursor-pointer text-sm text-brand underline-offset-4 hover:underline'
             >
               Forgot your password?
