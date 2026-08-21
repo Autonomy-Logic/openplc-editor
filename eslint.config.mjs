@@ -74,12 +74,15 @@ export default tseslint.config(
       '@typescript-eslint/unbound-method': 'warn',
       'simple-import-sort/imports': 'error',
       'simple-import-sort/exports': 'error',
-      // `crypto.randomUUID` is secure-context-only. This renderer always has
-      // one, so the rule guards nothing here directly — but `frontend/` and
-      // `middleware/shared/` are byte-identical with openplc-web, which
-      // autonomy-node serves over plain HTTP where the global is absent and
-      // the call throws. Without the rule on both sides, a call added here
-      // ships a silent failure there.
+      // `crypto.randomUUID` is secure-context-only. autonomy-node serves the web
+      // bundle over plain HTTP, so on a node reached by IP the global is absent and
+      // the call throws — which is how a build in the web editor once aborted in
+      // silence. openplc-editor's own renderer always has a secure context, but
+      // `frontend/` and `middleware/shared/` are byte-identical across the two
+      // repos, so a call added in either one ships that silent failure in the web
+      // bundle. One guarded call site did not stop the other 62 from shipping
+      // unguarded; the rule is what holds the line. Every mint goes through
+      // `newUuid()`, which names this API nowhere, so the rule needs no exception.
       'no-restricted-properties': [
         'error',
         {
