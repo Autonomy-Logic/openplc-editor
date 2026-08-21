@@ -68,8 +68,14 @@ export class SessionServer {
   /**
    * Chain each request behind the previous one.
    *
-   * The chain never rejects: a failed request resolves to an error response, so
-   * one bad call cannot poison the queue for everything after it.
+   * The chain must never reject, and the `catch` is what enforces that rather
+   * than assuming it. `core.handle` answers its own failures with an error
+   * response, but `write` can still throw — `socket.write` after a peer teardown,
+   * or a response carrying something `encodeMessage` cannot serialise. One
+   * escaped throw would leave `this.queue` rejected, and every later
+   * `.then(callback)` would skip its callback: the session stays connected,
+   * answers nothing more, and Node reports an unhandled rejection. From the
+   * client's side that is indistinguishable from a hang.
    */
   private enqueue(socket: Socket, line: string): void {
     this.armIdleTimer()
@@ -95,6 +101,15 @@ export class SessionServer {
         setImmediate(() => this.shutdown())
       }
     })
+    this.queue = this.queue.catch((error: unknown) => {
+      // Reached only if the reply itself could not be delivered, so there is
+      // nowhere to send an error response: drop the link and let the client's
+      // timeout speak. The chain resolves, so a later connection still works.
+      this.options.onDiagnostic?.(
+        `Dropping a connection after a failure past the reply: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      socket.destroy()
+    })
   }
 
   private write(socket: Socket, response: Response): void {
@@ -113,7 +128,7 @@ export class SessionServer {
     if (timeout <= 0) return
     this.idleTimer = setTimeout(() => {
       this.options.onDiagnostic?.(`Session idle for ${timeout} ms — closing`)
-      void this.options.core.close(true).then(() => this.shutdown())
+      void this.options.core.closeFromOutsideRequest(true).then(() => this.shutdown())
     }, timeout)
     this.idleTimer.unref()
   }

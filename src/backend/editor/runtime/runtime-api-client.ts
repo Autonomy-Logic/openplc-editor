@@ -37,6 +37,7 @@ import {
   createRuntimeTokenManager,
   type RuntimeTokenManager,
 } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
+import { z } from 'zod'
 
 /** The runtime's HTTPS API port. Also the debug WebSocket's port. */
 export const RUNTIME_API_PORT = 8443
@@ -46,6 +47,52 @@ export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false
 export interface RuntimeApiClientOptions {
   /** Notified on every transparent token refresh (the GUI mirrors it to the renderer). */
   onTokenChanged?: (token: string) => void
+}
+
+/**
+ * The runtime's own responses, validated rather than asserted.
+ *
+ * These are HTTP bodies from a device on the network — the definition of data
+ * this process does not control. `JSON.parse(...) as T` claimed a shape without
+ * checking it, so a runtime answering `{}` (or an error page, or a future
+ * version with a renamed field) produced `undefined` where a string was
+ * promised, and the failure surfaced somewhere else entirely as
+ * "cannot read property of undefined".
+ */
+const LoginResponseSchema = z.object({ access_token: z.string() })
+
+/** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */
+const PlcStatusResponseSchema = z.object({
+  status: z.string().optional(),
+  switchPosition: z.string().optional(),
+})
+
+/** Parse JSON without throwing; `null` for anything unparseable. */
+function parseJsonOrNull(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** A `Uint8Array` view over a `Buffer`'s bytes — no copy. */
+function asBytes(buffer: Buffer): Uint8Array {
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+}
+
+/**
+ * Make a value safe to interpolate into a multipart header.
+ *
+ * A `"` closes the quoted string early and a CR or LF ends the header line, so
+ * either one turns the rest of the filename into attacker-or-accident-controlled
+ * header content and corrupts the body the runtime tries to parse. Stripped
+ * rather than rejected: the filename is a label on a bundle we are already
+ * committed to sending, and failing an upload over a punctuation mark would be
+ * the worse outcome.
+ */
+function headerSafe(value: string): string {
+  return value.replace(/[\r\n"\\]/g, '_')
 }
 
 export class RuntimeApiClient {
@@ -238,12 +285,11 @@ export class RuntimeApiClient {
         timeoutMs: this.RUNTIME_LOGIN_TIMEOUT_MS,
       })
       if (res.statusCode === 200) {
-        try {
-          const response = JSON.parse(res.data) as { access_token: string }
-          return { success: true, accessToken: response.access_token }
-        } catch {
-          return { success: false, error: 'Invalid response format' }
-        }
+        // `safeParse` on the parsed JSON: a 200 with a body this code does not
+        // recognise is a failed login, not a session with an undefined token.
+        const parsed = LoginResponseSchema.safeParse(parseJsonOrNull(res.data))
+        if (!parsed.success) return { success: false, error: 'Invalid response format' }
+        return { success: true, accessToken: parsed.data.access_token }
       }
       return { success: false, error: res.data }
     } catch (error) {
@@ -461,11 +507,16 @@ export class RuntimeApiClient {
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
     const header = Buffer.from(
       `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
-        `Content-Type: ${opts.contentType}\r\n\r\n`,
+        `Content-Disposition: form-data; name="file"; filename="${headerSafe(opts.filename)}"\r\n` +
+        `Content-Type: ${headerSafe(opts.contentType)}\r\n\r\n`,
     )
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-    const reqBody = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
+    // `Buffer.concat` is typed as taking `Uint8Array`s, and this project's
+    // TS/@types/node pairing does not accept a `Buffer` there (their iterator
+    // types differ). A zero-copy view over the same memory satisfies the
+    // signature honestly — the previous `as unknown as` hid the mismatch, and
+    // copying a firmware bundle to appease a type would be worse than both.
+    const reqBody = Buffer.concat([asBytes(header), asBytes(opts.fileBuffer), asBytes(footer)])
     const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
 
     const doRequest = (token: string): Promise<UploadResult> =>
@@ -535,10 +586,12 @@ export class RuntimeApiClient {
     endpoint: string,
   ): Promise<{ success: boolean; status?: string; switchPosition?: string; error?: string }> {
     try {
-      const result = await this.makeRuntimeApiRequest<{ status?: string; switchPosition?: string }>(
+      const result = await this.makeRuntimeApiRequest<z.infer<typeof PlcStatusResponseSchema>>(
         address,
         endpoint,
-        (data: string) => JSON.parse(data) as { status?: string; switchPosition?: string },
+        // An unrecognised body reads as "no status", which the caller already
+        // handles — every field here is optional on purpose.
+        (data: string) => PlcStatusResponseSchema.safeParse(parseJsonOrNull(data)).data ?? {},
       )
       if (!result.success) return { success: false, error: result.error }
       return {

@@ -129,7 +129,7 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   // A terminated daemon must not leave a record pointing at a dead socket, and
   // must not leave variables pinned on the target.
   const shutdown = () => {
-    void opened.core.close(true).finally(() => {
+    void opened.core.closeFromOutsideRequest(true).finally(() => {
       registry.unregister(sessionId)
       app.exit(0)
     })

@@ -79,6 +79,20 @@ export class SessionCore {
   private nextSeq = 1
   private droppedSamples = 0
   private closed = false
+  /**
+   * Serialises everything that touches the debug channel.
+   *
+   * The channel is ONE request/response link. `SessionServer` queues client
+   * requests for exactly that reason — but the watch timer is a second actor,
+   * and it went straight to `readValues`, so a sample could be in flight while a
+   * read, a write, a force or an MD5 probe was in flight. Two overlapping
+   * exchanges on a single link do not fail cleanly: the replies interleave and
+   * BOTH are decoded wrong, which for a debugger means confidently reporting
+   * values that were never on the wire.
+   */
+  private channelChain: Promise<unknown> = Promise.resolve()
+  /** True while a sample is queued or running — see `recordSample`. */
+  private samplePending = false
   private readonly now: () => number
 
   constructor(private readonly options: SessionCoreOptions) {
@@ -99,11 +113,36 @@ export class SessionCore {
   /** Single entry point. Everything a client can ask goes through here. */
   async handle(request: Request): Promise<Response> {
     this.lastActivityAtMs = this.now()
-    try {
-      return await this.dispatch(request)
-    } catch (error) {
-      return this.fail(request.id, ErrorCode.Internal, error instanceof Error ? error.message : String(error))
-    }
+    // Whole dispatch, not the individual channel calls: a `write` reads back
+    // until the value settles, and a sample landing between the set and the
+    // read-back would be answering from the middle of someone else's exchange.
+    return this.runExclusive(async () => {
+      try {
+        return await this.dispatch(request)
+      } catch (error) {
+        return this.fail(request.id, ErrorCode.Internal, error instanceof Error ? error.message : String(error))
+      }
+    })
+  }
+
+  /**
+   * Run an operation with exclusive use of the debug channel.
+   *
+   * Nothing called from inside `operation` may call this again — the chain is a
+   * plain queue, not a re-entrant lock, and a nested acquire would wait on
+   * itself forever. The two callers are `handle` and `recordSample`, which is
+   * the whole point: they are the two independent actors.
+   */
+  private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.channelChain.then(operation)
+    // The chain must stay resolvable: one failed operation cannot be allowed to
+    // leave every later `.then` skipped, which is a session that stays connected
+    // and answers nothing.
+    this.channelChain = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
   }
 
   private async dispatch(request: Request): Promise<Response> {
@@ -353,16 +392,36 @@ export class SessionCore {
   }
 
   private async recordSample(): Promise<void> {
-    if (this.watching.length === 0 || this.closed) return
-    const result = await this.readValues(this.watching)
-    if ('error' in result) return
+    if (this.watching.length === 0 || this.closed || this.samplePending) return
+    // Dropped, not queued. The interval floor is 20 ms and one batched RTU read
+    // takes far longer, so without this the ticks pile up behind each other and
+    // every one of them eventually fires — a burst of samples all stamped with
+    // the time they finally ran, describing a signal that never looked like
+    // that.
+    this.samplePending = true
+    const watching = this.watching
+    try {
+      const result = await this.runExclusive(async () => {
+        // Re-checked after acquiring: this tick may have been queued behind the
+        // close that ended the session.
+        if (this.closed) return { error: 'session closed' }
+        return this.readValues(watching)
+      })
+      if ('error' in result) return
+      this.storeSample(result.values)
+    } finally {
+      this.samplePending = false
+    }
+  }
+
+  private storeSample(values: VariableValue[]): void {
     if (this.samples.length >= MAX_WATCH_SAMPLES) {
       // Drop the oldest and COUNT it. A silently truncated recording would let
       // a test conclude a transient never happened when it was simply evicted.
       this.samples.shift()
       this.droppedSamples += 1
     }
-    this.samples.push({ seq: this.nextSeq++, atMs: this.now() - this.startedAtMs, values: result.values })
+    this.samples.push({ seq: this.nextSeq++, atMs: this.now() - this.startedAtMs, values })
   }
 
   private async status(): Promise<SessionStatus> {
@@ -401,6 +460,19 @@ export class SessionCore {
    * program unload/stop. A session that exited quietly would leave outputs
    * pinned on a live PLC, and a test loop would strand them on real hardware.
    */
+  /**
+   * Close from OUTSIDE a request: the idle timer and the signal handlers.
+   *
+   * Takes the channel lock, which the in-request path must NOT do because it
+   * already holds it. Worth the distinction: watching is not activity, so a
+   * session can be idle by the timer's reckoning while its watch timer is still
+   * sampling — and releasing forces in the middle of a sample interleaves two
+   * exchanges on a one-at-a-time link.
+   */
+  async closeFromOutsideRequest(releaseForces: boolean): Promise<string[]> {
+    return this.runExclusive(() => this.close(releaseForces))
+  }
+
   async close(releaseForces: boolean): Promise<string[]> {
     this.stopWatching()
     const released: string[] = []
