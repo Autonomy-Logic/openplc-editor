@@ -343,7 +343,12 @@ async function main(): Promise<void> {
   // constructor, because a command can reach the compiler in the same tick and
   // the compiler reads that file eagerly. Without it a first run on a clean
   // machine (any CI container) failed with a bare ENOENT.
-  await new UserService().initialize()
+  //
+  // Skipped when there is no command to run. Answering `--help` should not
+  // create directories or spawn arduino-cli, and in a container without the
+  // toolchain it is the difference between printing the usage and taking a
+  // second to do it.
+  if (!isMetaOnly(args)) await new UserService().initialize()
 
   const reporter = createProcessReporter({
     json: boolFlag(args, 'json'),
@@ -358,6 +363,23 @@ async function main(): Promise<void> {
     exitCode = reporter.internalError(error).exitCode
   }
   await exitAfterOutputDrains(exitCode)
+}
+
+/**
+ * Does this invocation only ask the CLI to describe ITSELF?
+ *
+ * `--help`, `--version` and a bare invocation answer from constants alone: no
+ * project, no target, no toolchain. Anything else may reach the compiler, so it
+ * gets the full user-data scaffolding first.
+ */
+function isMetaOnly(args: ParsedArgs): boolean {
+  return (
+    args.command === undefined ||
+    args.command === 'help' ||
+    args.command === 'version' ||
+    boolFlag(args, 'help') ||
+    boolFlag(args, 'version')
+  )
 }
 
 /** `stringFlag` is re-exported for the daemon entry, which shares the parser. */

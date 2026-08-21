@@ -16,8 +16,22 @@ import type { ArduinoListOutput } from './types'
  * This approach is taken to avoid the need for a singleton instance and to leave room for future changes in the class structure.
  */
 class UserService {
+  /**
+   * The scaffolding run, started in the constructor and awaited by `initialize`.
+   *
+   * Held so the two entry points share ONE run. `initialize()` used to start a
+   * second one, which duplicated every "file already exists" warning and, worse,
+   * spawned `arduino-cli core list` and `lib list` twice on every single CLI
+   * invocation — four processes to answer `--help`.
+   */
+  readonly #ready: Promise<void>
+
   constructor() {
-    void this.#initializeUserSettingsAndHistory()
+    this.#ready = this.#initializeUserSettingsAndHistory()
+    // The GUI never awaits it. Attaching a handler here keeps a scaffolding
+    // failure from surfacing as an unhandled rejection; `#ready` itself still
+    // rejects, so an `initialize()` caller sees the error.
+    void this.#ready.catch(() => undefined)
   }
 
   /**
@@ -32,7 +46,7 @@ class UserService {
    * `ENOENT … arduino-core-control.json`.
    */
   async initialize(): Promise<void> {
-    await this.#initializeUserSettingsAndHistory()
+    await this.#ready
   }
 
   /**
@@ -292,8 +306,26 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    await this.#checkIfArduinoCoreControlFileExists()
-    await this.#checkIfArduinoLibraryControlFileExists()
+    // The last two SHELL OUT to arduino-cli, so they fail on a machine where it
+    // is not installed — and they are the least essential steps here: they
+    // refresh a cache of which cores and libraries arduino-cli has. Losing that
+    // degrades the install; it does not stop the editor, and it must not stop a
+    // command that never compiles anything (`--version`, `devices`, a debug
+    // session over websocket). The GUI already behaved this way by accident,
+    // its rejection swallowed by a fire-and-forget constructor; making it
+    // explicit is what lets the CLI await this call without inheriting a fatal
+    // dependency on a compiler toolchain it may not need.
+    await this.#tolerate('refresh the installed-core list', () => this.#checkIfArduinoCoreControlFileExists())
+    await this.#tolerate('refresh the installed-library list', () => this.#checkIfArduinoLibraryControlFileExists())
+  }
+
+  /** Run a non-essential scaffolding step; report a failure without raising it. */
+  async #tolerate(what: string, step: () => Promise<void>): Promise<void> {
+    try {
+      await step()
+    } catch (err) {
+      console.warn(`Could not ${what}: ${getErrorMessage(err)}`)
+    }
   }
 }
 
