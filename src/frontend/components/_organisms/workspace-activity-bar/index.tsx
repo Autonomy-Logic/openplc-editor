@@ -48,6 +48,14 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
   const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
   const navigation = useNavigation()
 
+  /**
+   * Whether this build has an account slot at the foot of the bar at all.
+   *
+   * Deliberately not "is someone signed in": that would move the exit arrow on
+   * every sign-in and again on every sign-out. This is a property of the build.
+   */
+  const hasAccountSlot = caps.hasEdgeAccount && edgeAccount !== undefined
+
   const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
   const isNineties = useIsNinetiesTheme()
@@ -123,8 +131,16 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
       </div>
       {/* Foot of the bar: leaving the project, then who is signed in. The account
           sits below the exit arrow because it is a destination, not a tool — the
-          same reasoning that keeps it out of the toolbox above the divider. */}
-      <div className='flex w-full shrink-0 flex-col items-center gap-4 pb-3'>
+          same reasoning that keeps it out of the toolbox above the divider.
+
+          The bottom padding follows the account slot instead of being fixed. Where
+          there is no slot — the desktop editor, which mirrors this file and sets
+          `hasEdgeAccount` to false — the exit arrow is still the last thing in the
+          bar and keeps the `pb-10` it has always had. Making room for a menu that
+          build never renders had moved it ~28px down the activity bar, which is a
+          visible change to an existing control for no reason. Where the account
+          does render it is the last thing, and it wants the smaller gap. */}
+      <div className={cn('flex w-full shrink-0 flex-col items-center gap-4', hasAccountSlot ? 'pb-3' : 'pb-10')}>
         <TooltipSidebarWrapperButton tooltipContent='Exit'>
           <ExitButton onClick={handleExitApplication} />
         </TooltipSidebarWrapperButton>
