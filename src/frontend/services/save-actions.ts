@@ -31,6 +31,7 @@ import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
 import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
+import { isSaveBlockedByEndedSession, resumeSaveAfterEdgeSignIn } from './resume-save-after-sign-in'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
@@ -557,6 +558,18 @@ export async function executeSaveProject(
           variant: 'default',
         })
       }
+    } else if (isSaveBlockedByEndedSession()) {
+      // A dead session is not a save error, and reporting it as one ("API error:
+      // 401 Unauthorized") told the user nothing they could act on. Say what
+      // happened, say the work is safe, and queue the save so signing in finishes
+      // it — the user should not have to remember to press save a second time.
+      setEditingState('unsaved')
+      resumeSaveAfterEdgeSignIn(() => executeSaveProject(projectPort, capabilities))
+      toast({
+        title: 'Not saved — your session ended',
+        description: 'Sign in again and this save finishes on its own. Everything you typed is still open here.',
+        variant: 'fail',
+      })
     } else {
       setEditingState('unsaved')
       toast({
@@ -623,6 +636,21 @@ export async function executeSaveFile(
 
   const fail = (description: string): { success: false } => {
     setEditingState('unsaved')
+
+    // Same reasoning as executeSaveProject: an expired session is not a file
+    // error, and the raw 401 text is useless to the reader. Queue the save so
+    // signing in completes it rather than leaving the file dirty and the user
+    // unaware.
+    if (isSaveBlockedByEndedSession()) {
+      resumeSaveAfterEdgeSignIn(() => executeSaveFile(fileName, projectPort, capabilities), 'file')
+      toast({
+        title: 'Not saved — your session ended',
+        description: `Sign in again and "${fileName}" saves on its own. Everything you typed is still open here.`,
+        variant: 'fail',
+      })
+      return { success: false }
+    }
+
     toast({ title: 'Error saving file', description, variant: 'fail' })
     return { success: false }
   }
