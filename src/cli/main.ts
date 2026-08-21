@@ -318,6 +318,7 @@ function enableHeadlessPlatform(): void {
 
 async function main(): Promise<void> {
   enableHeadlessPlatform()
+  installNeverHangGuards()
 
   // The daemon reads its config from stdin and never parses argv.
   if (process.argv.includes('--cli-daemon')) {
@@ -362,7 +363,13 @@ async function main(): Promise<void> {
 /** `stringFlag` is re-exported for the daemon entry, which shares the parser. */
 export { stringFlag }
 
-void main()
+// `.catch`, not `void`: a rejection here has to become an exit. An Electron main
+// process owns no window, so nothing ends it when the promise chain dies — it
+// just idles, and the caller waits forever. See `installNeverHangGuards`.
+main().catch((error) => {
+  writeIfPossible(process.stderr, `openplc-cli: ${error instanceof Error ? error.message : String(error)}\n`)
+  app.exit(ExitCode.Internal)
+})
 
 /**
  * Exit only once stdout and stderr have actually been written.
@@ -384,6 +391,60 @@ async function exitAfterOutputDrains(code: ExitCodeValue): Promise<void> {
     new Promise((resolve) => setTimeout(resolve, OUTPUT_DRAIN_TIMEOUT_MS)),
   ])
   app.exit(code)
+}
+
+/**
+ * Make every failure path end the process.
+ *
+ * A CLI that hangs is worse than one that fails: a failure is a red step, a
+ * hang is a build that burns its job timeout and reports nothing. This process
+ * has two ways to hang, and neither is hypothetical — both were reproduced:
+ *
+ *  1. **A reader that leaves.** `openplc-cli debug list-vars | head -20` closes
+ *     the pipe as soon as `head` has its lines, and the next write raises
+ *     EPIPE. Node surfaces that as an `error` event on the stream; with no
+ *     listener, the reporter's own attempt to report it raises EPIPE in turn,
+ *     `main()` rejects, and nothing exits. Exit code `Ok`: the reader asked for
+ *     a prefix and got it, so a `pipefail` pipeline must not turn that into a
+ *     failed build.
+ *
+ *  2. **A rejection with no handler.** Anything that throws outside
+ *     `dispatch`'s try — including the drain itself — used to leave the app
+ *     running with no window and no work.
+ *
+ * Registered before any command runs, because a command can reach a broken
+ * stream on its first line of output.
+ */
+function installNeverHangGuards(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error: NodeJS.ErrnoException) => {
+      app.exit(error.code === 'EPIPE' ? ExitCode.Ok : ExitCode.Internal)
+    })
+  }
+
+  process.on('unhandledRejection', (reason) => {
+    writeIfPossible(process.stderr, `openplc-cli: unhandled rejection: ${String(reason)}\n`)
+    app.exit(ExitCode.Internal)
+  })
+  process.on('uncaughtException', (error) => {
+    writeIfPossible(process.stderr, `openplc-cli: ${error.message}\n`)
+    app.exit(ExitCode.Internal)
+  })
+}
+
+/**
+ * Write a last word if the stream still accepts one.
+ *
+ * Used only on the paths that are already handling a failure: the stream may be
+ * the very thing that failed, and a throw from a handler whose job is to exit
+ * would put us back to hanging.
+ */
+function writeIfPossible(stream: NodeJS.WriteStream, text: string): void {
+  try {
+    stream.write(text)
+  } catch {
+    // Nowhere left to report to. The exit code is the whole message.
+  }
 }
 
 const OUTPUT_DRAIN_TIMEOUT_MS = 5000

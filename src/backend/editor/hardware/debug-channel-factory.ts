@@ -134,16 +134,43 @@ export function toDebugCandidate(
 ): DeviceDebugCandidate | null {
   if (config.connectionType === 'websocket') {
     const host = config.connectionParams.ipAddress
-    const token = config.connectionParams.jwtToken
-    if (!host || !token) return null
+    const loginToken = config.connectionParams.jwtToken
+    // Either source will do to justify BUILDING the candidate: the manager is
+    // the authority on the token, so a config that carries none is still
+    // openable when a session exists — and requiring the config's copy here
+    // would refuse a channel whose token is merely held elsewhere.
+    if (!host || !(deps.getToken?.() ?? loginToken)) return null
+
+    /** Re-read at OPEN time — see `getToken` on the deps. */
+    const resolveToken = (): string => {
+      const token = deps.getToken?.() ?? loginToken
+      // Reachable only if the token disappeared between building this candidate
+      // and opening it (a logout, mid-session). Opening an unauthenticated
+      // socket instead would fail on the runtime's first verify anyway, and
+      // report it as a debug fault rather than as the auth problem it is.
+      if (!token) throw new Error('No runtime access token for the debug WebSocket — log in again')
+      return token
+    }
+
     return {
       transport: 'websocket',
-      descriptor: `websocket ${host}`,
+      // The endpoint ONLY, like the serial candidates above: every display site
+      // composes `${transport} ${descriptor}` itself, so spelling the transport
+      // in here printed it twice ("websocket websocket 192.168.2.4").
+      descriptor: host,
       create: () =>
         new WebSocketDebugTransport({
           host,
           port: RUNTIME_DEBUG_PORT,
-          token,
+          // Read from the token MANAGER at open time, falling back to the token
+          // the session was opened with. The manager transparently re-logins
+          // with stored credentials, and the runtime re-verifies the token on
+          // every command (openplc-runtime#169) — so a channel opened after a
+          // refresh has to present the CURRENT token, not the one captured in
+          // this closure, or the session dies on its first command. The closure
+          // token only covers the first instants, before the manager has a
+          // session recorded.
+          token: resolveToken(),
           // The SHARED policy, not a hardcoded `false`. The REST path already
           // honours `getRuntimeHttpsOptions()`, so pinning this to `false` meant
           // an operator who tightened TLS verification for the runtime API
@@ -158,7 +185,10 @@ export function toDebugCandidate(
   if (!candidate) return null
   return {
     transport: candidate.transport,
-    descriptor: `${candidate.transport} ${candidate.descriptor}`,
+    // Bare, for the same reason as above and as the link candidates it is built
+    // from: the transport is a separate field, and every caller that shows it
+    // pairs the two itself.
+    descriptor: candidate.descriptor,
     create: candidate.create,
   }
 }

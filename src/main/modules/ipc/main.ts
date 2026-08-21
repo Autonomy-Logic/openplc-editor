@@ -12,6 +12,7 @@ import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/l
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
@@ -1074,7 +1075,7 @@ class MainProcessBridge implements MainIpcModule {
     xmlFormatTarget: 'old-editor' | 'codesys',
   ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
 
-  handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
+  handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
       mainProcessPort.postMessage({

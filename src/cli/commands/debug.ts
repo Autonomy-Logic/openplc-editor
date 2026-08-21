@@ -548,11 +548,17 @@ export function renderOk(response: OkResponse): string {
  * not mean relearning the verbs. `run`/`step`/`code` are absent on purpose:
  * they single-step a compiled binary, which a live PLC cannot do — `start` and
  * `stop` are the equivalents here.
+ *
+ * Three of those verbs are spelled differently as subcommands — `vars`/`get`/
+ * `set` here against `list-vars`/`read`/`write` outside — so BOTH spellings are
+ * accepted for each. They are one operation reached two ways, and a caller who
+ * learned `openplc-cli debug read x` should not be told `read` is unknown the
+ * first time it types it into `debug exec`. (It was: that is why this is here.)
  */
 const REPL_HELP = `Commands
-  vars [filter]              list variables in the program
-  get <name> [name...]       read one or more variables
-  set <name> <value>         write a variable (program may overwrite next scan)
+  vars | list-vars [filter]  list variables in the program
+  get | read <name>...       read one or more variables
+  set | write <name> <value> write a variable (program may overwrite next scan)
   force <name> <value>       pin a variable until unforced
   unforce <name>             release a pinned variable
   watch <name> [name...]     start recording; use poll to drain
@@ -580,12 +586,15 @@ export function parseReplLine(
     case '?':
       return 'help'
     case 'vars':
+    case 'list-vars':
       return { request: { id, kind: 'list-vars', filter: rest[0] } }
     case 'get':
-      if (rest.length === 0) return { error: 'get needs at least one variable name' }
+    case 'read':
+      if (rest.length === 0) return { error: `${verb} needs at least one variable name` }
       return { request: { id, kind: 'read', names: rest } }
     case 'set':
-      if (rest.length < 2) return { error: 'set needs a variable name and a value' }
+    case 'write':
+      if (rest.length < 2) return { error: `${verb} needs a variable name and a value` }
       return { request: { id, kind: 'write', name: rest[0], value: rest.slice(1).join(' ') } }
     case 'force':
       if (rest.length < 2) return { error: 'force needs a variable name and a value' }

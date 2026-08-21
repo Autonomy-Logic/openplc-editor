@@ -1,3 +1,4 @@
+import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
@@ -237,10 +238,7 @@ const rendererProcessBridge = {
     }>,
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
-  runCompileProgram: (
-    compileProgramArgs: Array<string | boolean | null | PLCProjectData | Record<string, unknown>>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+  runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     // Create a MessageChannel to communicate between the renderer and main process
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     // Send to the main process a message to run the compile program

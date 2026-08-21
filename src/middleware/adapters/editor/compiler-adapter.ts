@@ -199,8 +199,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         {
           getAvailableBoards: () => window.bridge.getAvailableBoards(),
           loadAllLibraries: async () => (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[],
-          runCompileProgram: (compileArgs, onMessage) =>
-            window.bridge.runCompileProgram(compileArgs as never, onMessage),
+          runCompileProgram: (compileArgs, onMessage) => window.bridge.runCompileProgram(compileArgs, onMessage),
         },
         onProgress,
       )
