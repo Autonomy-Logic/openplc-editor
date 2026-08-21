@@ -1,0 +1,181 @@
+# openplc-cli
+
+The editor's operations, headless: create a project, compile it, upload it to a
+target, and drive a live debug session. Every command runs the same code the GUI
+control it mirrors runs, so a test that passes here is testing the editor and not
+a parallel implementation.
+
+| GUI control                   | Command                            |
+| ----------------------------- | ---------------------------------- |
+| Build                         | `openplc-cli compile <project>`    |
+| Build & Upload                | `openplc-cli upload <project>`     |
+| Search / serial-port dropdown | `openplc-cli devices`              |
+| Debug                         | `openplc-cli debug open …`         |
+| Start / Stop                  | `openplc-cli debug start` / `stop` |
+| Variable poll, force dialog   | `openplc-cli debug read` / `force` |
+
+## Installing
+
+The command is a small shim on your PATH that runs the app with `--cli`. The app
+installs it **on first run**, so launching OpenPLC Editor once is usually all it
+takes. `openplc-cli install-cli` does it explicitly — for a CI image that never
+opens the GUI, or after the app moves.
+
+It goes in the first **user-writable** directory it finds, preferring one already
+on your PATH:
+
+| Platform     | Directories tried                     |
+| ------------ | ------------------------------------- |
+| macOS, Linux | `~/.local/bin`, then `~/bin`          |
+| Windows      | `%LOCALAPPDATA%\Programs\openplc-cli` |
+
+Nothing is installed to a privileged location, so no administrator password is
+ever requested. If the chosen directory is not on your PATH, the command prints
+the one line to add — on Windows the per-user PATH is updated for you, and a new
+terminal picks it up.
+
+### macOS
+
+Install OpenPLC Editor into `/Applications` first, then open it once.
+
+Running from the mounted `.dmg` cannot work: the shim would point inside the disk
+image and break the moment it is ejected, so the app says so instead of
+installing something that will fail later. The same applies when macOS has
+quarantined the app — launching it straight out of `Downloads` makes Gatekeeper
+run it from a randomised temporary path that changes every launch.
+
+### Linux
+
+The editor ships as an AppImage. The image is mounted at a fresh temporary path
+on every launch, so the shim points at the **`.AppImage` file** instead, which is
+wherever you keep it. Move the file to its final location before installing; if
+you move it later, run `install-cli` again (or just launch the app, which
+notices the change).
+
+```sh
+chmod +x 'OpenPLC Editor-4.2.2.AppImage'
+./'OpenPLC Editor-4.2.2.AppImage' --cli install-cli
+openplc-cli --version
+```
+
+Launching the GUI once does the same thing, and is the simplest route on a
+desktop.
+
+You do **not** need `xvfb-run`, and you do not need to pass Chromium switches.
+A CLI run needs `--ozone-platform=headless` (Electron initialises its display
+layer during startup and exits without one) and, on some systems,
+`--no-sandbox`. The generated shim passes both, and a direct `--cli` call
+re-executes itself with the headless switch — so an SSH session or a CI runner
+with no display works as-is.
+
+The one exception is the **first** call in an environment where unprivileged user
+namespaces are unavailable, which is Docker's default. Chromium then falls back
+to its SUID sandbox helper and aborts before any of our code runs, so that call
+needs the switch itself — once, to create the shim:
+
+```sh
+./'OpenPLC Editor-4.2.2.AppImage' --no-sandbox --cli install-cli
+openplc-cli devices        # no switches needed from here on
+```
+
+Everywhere with user namespaces enabled — which is any current desktop kernel —
+the plain form above is enough.
+
+### Windows
+
+Run the installer, then launch the editor once. `openplc-cli.cmd` is placed in
+`%LOCALAPPDATA%\Programs\openplc-cli` and that directory is added to your user
+PATH; open a new terminal afterwards.
+
+> Console output from a GUI-subsystem executable is not attached to an
+> interactive terminal on Windows. Redirection and piping work
+> (`openplc-cli devices > devices.json`), which is what a test harness does, but
+> this needs verifying on Windows before being relied on interactively.
+
+## Output contract
+
+Machine-readable when stdout is not a terminal, human-readable when it is;
+`--json` / `--no-json` override.
+
+- In JSON mode stdout carries **exactly one** JSON document — the result. Progress
+  and diagnostics go to stderr, so `JSON.parse(stdout)` needs no filtering.
+- No ANSI, spinners or progress bars in JSON mode.
+- Values carry their type, so `0` is unambiguously `BOOL FALSE` or `INT 0`.
+  64-bit integers arrive as decimal strings, which an IEEE double cannot hold.
+- Errors are objects with a stable `code`. The prose may be reworded; the code
+  will not.
+
+### Exit codes
+
+| Code | Meaning                                                |
+| ---- | ------------------------------------------------------ |
+| 0    | ok                                                     |
+| 2    | usage — unknown command, missing or malformed argument |
+| 3    | not found — project, file or session                   |
+| 4    | compile failed                                         |
+| 5    | connection — could not reach the target, or lost it    |
+| 6    | auth — credentials refused                             |
+| 7    | target error — the device reported failure             |
+| 8    | timeout                                                |
+| 70   | internal — a bug in the CLI                            |
+
+## Credentials
+
+Targets reached through a runtime API need them; a board flashed over USB does
+not.
+
+```sh
+--credentials user:pass          # or --user / --password
+OPENPLC_CREDENTIALS=user:pass    # or OPENPLC_USER + OPENPLC_PASSWORD
+```
+
+Prefer the environment form in CI: a flag lands in shell history and job logs.
+
+## Debug sessions
+
+A debug session is long-lived; a test step is one process. So `debug open` starts
+a background session and returns a `session_id`, and every other command is a
+cheap one-shot that attaches to it — no reconnect, no re-verify, no re-upload per
+command.
+
+```sh
+openplc-cli debug open ./my-project --target "OpenPLC Runtime v4" \
+  --host 192.168.2.4 --credentials op:op        # -> 8df020af1234
+
+openplc-cli debug list                          # every live session
+openplc-cli debug read main:counter
+openplc-cli debug force main:enable TRUE
+openplc-cli debug watch main:counter --interval 100
+openplc-cli debug poll                          # what was recorded meanwhile
+openplc-cli debug close --all
+```
+
+With one session open, `--session` is optional. With several, it is required.
+
+`watch` **records** into a buffer inside the session rather than streaming, so a
+transient that happens between two of your own commands is still there when you
+`poll`.
+
+`debug repl` is the same protocol with a prompt, for a human at a terminal. For a
+script use `debug exec`, which reads one command per line — the REPL refuses a
+pipe rather than dropping commands, which is what readline does with buffered
+input.
+
+### Forcing
+
+`close` releases the variables the session forced, unless you pass
+`--keep-forces`. This is deliberate: forcing lives in the runtime's forced-slot
+bitmap and the runtime cannot tell that a debugger went away — it clears forces
+only on program unload or stop. A session that exited quietly would leave outputs
+pinned on a live PLC.
+
+`status` reports what this session has forced, which is what `close` will
+release. A stop issued from elsewhere (the runtime UI, a mode switch) clears the
+runtime's forces without the session knowing, so that list can be stale.
+
+## Building on a running PLC
+
+Targets that build on the device refuse while its PLC is RUNNING, exactly as the
+editor warns — on-device compilation can stall the build or make the running
+program miss scan deadlines. `--yes` / `-y` approves stopping it first, the way
+`apt install -y` does. Nothing stops a running PLC without being asked.

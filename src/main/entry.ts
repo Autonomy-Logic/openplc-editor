@@ -18,6 +18,8 @@
  * command dispatch on the other), so importing both would start both.
  */
 
+import { spawnSync } from 'node:child_process'
+
 /**
  * Is this process a CLI invocation?
  *
@@ -29,8 +31,50 @@ export function isCliInvocation(argv: readonly string[]): boolean {
   return argv.includes('--cli') || argv.includes('--cli-daemon')
 }
 
+/**
+ * Chromium switches a Linux CLI run cannot start without.
+ *
+ * Kept in step with `platformSwitches` in `backend/editor/cli-shim/shim-plan`,
+ * which puts the same list in the generated shim.
+ */
+const LINUX_CLI_SWITCHES = ['--no-sandbox', '--ozone-platform=headless', '--disable-gpu']
+
+/**
+ * Re-exec ourselves with the switches Linux needs, when they are missing.
+ *
+ * They cannot be applied from JavaScript: Chromium reads them while starting up,
+ * so `app.commandLine.appendSwitch` is too late. Re-exec is early enough for
+ * SOME of them and not others, and the distinction matters:
+ *
+ *   - `--ozone-platform=headless` **is** fixed here. Electron initialises its
+ *     display layer after this script runs, so without a DISPLAY (an SSH
+ *     session, a CI runner) the relaunch is what makes a direct `--cli` call
+ *     work at all. Verified: a container with no DISPLAY runs the CLI fine.
+ *   - `--no-sandbox` is **not** fixable here. Chromium's SUID sandbox check
+ *     happens before any JS runs, so a launch that fails it has already aborted.
+ *     In practice this only bites where unprivileged user namespaces are
+ *     unavailable — Docker's default seccomp profile, notably — because with
+ *     them Chromium uses the namespace sandbox and needs no helper. Those
+ *     callers pass `--no-sandbox` once, for the install; the generated shim
+ *     carries it from then on.
+ *
+ * Synchronous and stdio-inherited, so the child's output IS this process's
+ * output and its exit code becomes ours — a caller cannot tell a relaunch
+ * happened. Guarded on the switches already being present, so it cannot recurse.
+ */
+function relaunchForLinuxCli(): boolean {
+  if (process.platform !== 'linux') return false
+  if (LINUX_CLI_SWITCHES.every((flag) => process.argv.includes(flag))) return false
+
+  const result = spawnSync(process.execPath, [...LINUX_CLI_SWITCHES, ...process.argv.slice(1)], {
+    stdio: 'inherit',
+    env: process.env,
+  })
+  process.exit(result.status ?? 1)
+}
+
 if (isCliInvocation(process.argv)) {
-  void import('../cli/main')
+  if (!relaunchForLinuxCli()) void import('../cli/main')
 } else {
   void import('./main')
 }
