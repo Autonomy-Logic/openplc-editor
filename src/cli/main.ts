@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
+import { UserService } from '@root/backend/editor/services'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { app } from 'electron'
 
@@ -318,6 +319,14 @@ async function main(): Promise<void> {
   // Before anything reads an app path: the compiler, the licence store and the
   // package manager all resolve off `userData`.
   alignUserDataWithEditor(stringFlag(args, 'user-data'))
+
+  // Create the editor's user-data scaffolding — settings, history, the
+  // arduino-cli config, `User/Runtime/arduino-core-control.json` — exactly as
+  // the GUI does at startup. AWAITED, unlike the GUI's fire-and-forget
+  // constructor, because a command can reach the compiler in the same tick and
+  // the compiler reads that file eagerly. Without it a first run on a clean
+  // machine (any CI container) failed with a bare ENOENT.
+  await new UserService().initialize()
 
   const reporter = createProcessReporter({
     json: boolFlag(args, 'json'),

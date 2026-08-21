@@ -21,6 +21,21 @@ class UserService {
   }
 
   /**
+   * The same scaffolding the constructor starts, but awaitable.
+   *
+   * The constructor is fire-and-forget, which is harmless for the GUI — a window
+   * takes far longer to appear than these few files take to create. A CLI has no
+   * such gap: it can reach the compiler in the same tick, and the compiler reads
+   * `User/Runtime/arduino-core-control.json` eagerly. On a machine where the
+   * editor had run before, the files already existed and nothing showed; in a
+   * fresh CI container the compile failed with a bare
+   * `ENOENT … arduino-core-control.json`.
+   */
+  async initialize(): Promise<void> {
+    await this.#initializeUserSettingsAndHistory()
+  }
+
+  /**
    * Static methods and properties.
    */
 

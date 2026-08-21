@@ -92,6 +92,60 @@ PATH; open a new terminal afterwards.
 > (`openplc-cli devices > devices.json`), which is what a test harness does, but
 > this needs verifying on Windows before being relied on interactively.
 
+## In a build pipeline
+
+Verified in a `debian:12` container as root and as an unprivileged user, with no
+`DISPLAY`, no TTY and stdout piped.
+
+You do not need a display server or `xvfb-run`. You do need Electron's shared
+libraries, which a slim base image will not have:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxtst6 \
+      libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+      libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libpango-1.0-0 libcairo2 libatspi2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+Then, once per image:
+
+```sh
+./OpenPLC-Editor.AppImage --no-sandbox --cli install-cli
+```
+
+`--no-sandbox` is needed here and not on a desktop: container runtimes usually
+block unprivileged user namespaces, so Chromium falls back to its SUID sandbox
+helper and refuses to start. The generated shim carries the switch, so nothing
+after this call needs it.
+
+A build step then looks like any other:
+
+```sh
+openplc-cli compile ./my-project --target "OpenPLC Runtime v4"   # exit 0, or 4 on a compile error
+openplc-cli upload  ./my-project --host "$PLC_HOST" --yes        # --yes stops a RUNNING PLC first
+```
+
+Reading the result:
+
+```sh
+BUILD=$(openplc-cli compile ./my-project --target "OpenPLC Runtime v4") || exit $?
+echo "$BUILD" | jq -r '.buildDirectory'
+```
+
+`stdout` is one JSON document, so `jq` needs no filtering; progress and Chromium's
+own D-Bus complaints go to `stderr`. Gate on the exit code — 4 is a compile
+error, 5 a connection problem, 7 the device refusing — rather than on log text.
+
+### First run on a clean machine
+
+The CLI creates the editor's user-data scaffolding itself (settings, history, the
+arduino-cli config), so a fresh container needs no warm-up step. Board packages
+are a different matter: a target from an installed `.vpp` package is only
+available if that package is installed in the image's user-data directory, which
+`--user-data <dir>` can point at a prepared one.
+
 ## Output contract
 
 Machine-readable when stdout is not a terminal, human-readable when it is;
