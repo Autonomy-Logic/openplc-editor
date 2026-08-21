@@ -30,6 +30,7 @@ import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 import { channelPlcControl, restPlcControl, SessionCore } from '../session/session-core'
+import { disconnectAndWait } from './close-channel'
 import { loadDebugIndex } from './variables'
 
 export interface OpenSessionOptions {
@@ -137,7 +138,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
     targetMd5 = probe.md5
     endian = probe.targetEndian
   } catch (error) {
-    channel.disconnect()
+    await disconnectAndWait(channel)
     // The debug surface only answers for a program that is scanning, so the
     // usual cause is a stopped PLC — which the transport error never says.
     const stopped = runtime && options.host ? await describeStoppedTarget(runtime, options.host) : undefined
@@ -153,7 +154,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
   }
 
   if (!md5Matches(targetMd5, index.md5)) {
-    channel.disconnect()
+    await disconnectAndWait(channel)
     return {
       success: false,
       code: 'md5',

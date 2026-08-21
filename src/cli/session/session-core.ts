@@ -17,6 +17,7 @@ import type { DeviceDebugChannel, PlcControlResult } from '@root/backend/shared/
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import type { TargetEndian } from '@root/frontend/utils/endian'
 
+import { disconnectAndWait } from '../debug/close-channel'
 import {
   type DebugVariableIndex,
   decodeVariableValues,
@@ -419,11 +420,8 @@ export class SessionCore {
     }
     this.forced.clear()
     this.closed = true
-    try {
-      this.options.channel.disconnect()
-    } catch {
-      /* already disconnected */
-    }
+    // Waits for the transport's native handle to release — see `disconnectAndWait`.
+    await disconnectAndWait(this.options.channel)
     return released
   }
 
