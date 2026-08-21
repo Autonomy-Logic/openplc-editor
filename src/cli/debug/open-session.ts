@@ -202,6 +202,6 @@ async function describeStoppedTarget(runtime: RuntimeApiClient, host: string): P
   }
   return (
     'The PLC is stopped, so no program is scanning and the debug interface has nothing to serve. ' +
-    'Start it (`openplc debug start`) and retry.'
+    'Start it (`openplc-cli debug start`) and retry.'
   )
 }

@@ -37,6 +37,9 @@ export interface ParseOptions {
   commandsWithSubcommands?: readonly string[]
 }
 
+/** The only single-dash forms accepted, mapped to their long names. */
+const SHORT_FLAGS: Record<string, string | undefined> = { '-y': 'yes', '-h': 'help' }
+
 function setFlag(flags: ParsedArgs['flags'], name: string, value: string | boolean): void {
   const existing = flags[name]
   if (existing === undefined) {
@@ -76,10 +79,13 @@ export function parseArgs(argv: readonly string[], options: ParseOptions = {}): 
       continue
     }
 
-    // `-y` is the one short flag, because the confirmation prompt it answers is
-    // the one people type most and `apt -y` set the expectation.
-    if (token === '-y') {
-      setFlag(flags, 'yes', true)
+    // Short flags are an explicit, closed map rather than a general `-x` rule:
+    // these two are the ones people reach for without reading anything
+    // (`apt -y` set that expectation, and `-h` is universal), while inventing
+    // short forms for the rest would make argv harder to read, not easier.
+    const shortFlag = SHORT_FLAGS[token]
+    if (shortFlag) {
+      setFlag(flags, shortFlag, true)
       continue
     }
 

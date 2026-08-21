@@ -78,3 +78,22 @@ describe('flag readers', () => {
     expect(boolFlag(parse(['compile']), 'json')).toBe(false)
   })
 })
+
+describe('short flags', () => {
+  it('maps the two accepted single-dash forms to their long names', () => {
+    expect(parse(['upload', './p', '-y']).flags.yes).toBe(true)
+    expect(parse(['-h']).flags.help).toBe(true)
+  })
+
+  it('does not treat a short flag as a positional', () => {
+    // `-h` used to fall through to `positionals`, so `openplc-cli -h` was read
+    // as the command "-h" and exited 2 instead of printing help and exiting 0.
+    expect(parse(['-h']).command).toBeUndefined()
+    expect(parse(['-h']).positionals).toEqual([])
+  })
+
+  it('leaves an unknown single-dash token alone rather than guessing', () => {
+    expect(parse(['compile', '-x']).positionals).toEqual(['-x'])
+    expect(parse(['compile', '-x']).flags.x).toBeUndefined()
+  })
+})

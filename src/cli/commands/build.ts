@@ -1,5 +1,5 @@
 /**
- * `openplc compile` and `openplc upload` — the Build and Build & Upload clicks.
+ * `openplc-cli compile` and `openplc-cli upload` — the Build and Build & Upload clicks.
  *
  * Both call `compileProgramFlow`, the orchestration behind the editor's
  * `CompilerPort.compileProgram`, through a CLI transport. Everything the flow
@@ -35,7 +35,10 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   const projectPath = args.positionals[0] ?? stringFlag(args, 'project')
   if (!projectPath) {
     return reporter.failure(
-      { code: ErrorCode.MissingArgument, message: 'Give the project directory, e.g. `openplc compile ./my-project`' },
+      {
+        code: ErrorCode.MissingArgument,
+        message: 'Give the project directory, e.g. `openplc-cli compile ./my-project`',
+      },
       ExitCode.Usage,
     )
   }
@@ -92,7 +95,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       return reporter.failure(
         {
           code: ErrorCode.MissingArgument,
-          message: `"${target}" is flashed over USB — pass --port <serial> (see \`openplc devices\`)`,
+          message: `"${target}" is flashed over USB — pass --port <serial> (see \`openplc-cli devices\`)`,
         },
         ExitCode.Usage,
       )
@@ -103,7 +106,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       return reporter.failure(
         {
           code: ErrorCode.MissingArgument,
-          message: `"${target}" is reached through its runtime API — pass --host <address> (see \`openplc devices\`)`,
+          message: `"${target}" is reached through its runtime API — pass --host <address> (see \`openplc-cli devices\`)`,
         },
         ExitCode.Usage,
       )

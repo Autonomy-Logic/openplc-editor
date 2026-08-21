@@ -2,7 +2,7 @@
  * A one-shot client: connect, send one request, read one response, exit.
  *
  * This is the shape every non-REPL debug command takes, and the reason the
- * session exists as a separate process. `openplc debug read x --session <id>`
+ * session exists as a separate process. `openplc-cli debug read x --session <id>`
  * pays a unix-socket round trip, not a connect + MD5 verify + possible
  * re-upload — so a test can make fifty assertions without fifty reconnects.
  */

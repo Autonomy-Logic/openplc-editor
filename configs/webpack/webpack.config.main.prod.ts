@@ -25,14 +25,12 @@ const configuration: webpack.Configuration = {
   target: 'electron-main',
 
   entry: {
-    main: join(webpackPaths.srcMainPath, 'main.ts'),
+    // `entry.ts`, not `main.ts`: a packaged Electron app always runs
+    // `package.json.main`, so the GUI and the headless CLI (DOPE-567) have to
+    // ship in one binary with argv deciding which starts. It imports the GUI
+    // only when this is not a `--cli` run.
+    main: join(webpackPaths.srcMainPath, 'entry.ts'),
     preload: join(webpackPaths.srcMainPath, 'modules/preload/preload.ts'),
-    // The headless CLI (DOPE-567). Built with the main-process target because
-    // it IS an Electron main process — one that never opens a window — so it can
-    // reuse CompilerModule and the rest of `backend/editor`, which reach the
-    // arduino-cli config, strucpp includes, licence store and installed VPP
-    // packages through Electron's `app` paths.
-    cli: join(webpackPaths.srcPath, 'cli/main.ts'),
   },
 
   output: {

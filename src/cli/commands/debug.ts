@@ -1,5 +1,5 @@
 /**
- * `openplc debug …` — the session-first debugger.
+ * `openplc-cli debug …` — the session-first debugger.
  *
  * Every subcommand here is a CLIENT of the session protocol. `open` forks a
  * daemon and registers its `session_id`; everything else dials that session's
@@ -130,7 +130,7 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
         code: ErrorCode.MissingArgument,
         message:
           'debug open needs a project path, plus --host <address> for a runtime target or --port <serial> for a ' +
-          'board (see `openplc devices`)',
+          'board (see `openplc-cli devices`)',
       },
       ExitCode.Usage,
     )
@@ -331,7 +331,7 @@ export function resolveSession(args: ParsedArgs, context: DebugContext): { recor
   }
   const sessions = context.registry.list()
   if (sessions.length === 1) return { record: sessions[0] }
-  if (sessions.length === 0) return { error: 'No open debug sessions — run `openplc debug open` first' }
+  if (sessions.length === 0) return { error: 'No open debug sessions — run `openplc-cli debug open` first' }
   return {
     error: `${sessions.length} sessions are open; name one with --session (${sessions.map((s) => s.sessionId).join(', ')})`,
   }
@@ -565,7 +565,7 @@ async function runRepl(args: ParsedArgs, reporter: Reporter, context: DebugConte
       {
         code: ErrorCode.InvalidArgument,
         message:
-          'debug repl needs a terminal. For a script, use `openplc debug exec -` (reads commands from stdin, one per line).',
+          'debug repl needs a terminal. For a script, use `openplc-cli debug exec -` (reads commands from stdin, one per line).',
       },
       ExitCode.Usage,
     )

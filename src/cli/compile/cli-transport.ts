@@ -3,7 +3,7 @@
  *
  * The renderer's transport is backed by `window.bridge`; this one is backed by
  * the main-process modules the bridge itself delegates to. Same three calls,
- * same flow above them — so `openplc compile` enters the orchestration a Build
+ * same flow above them — so `openplc-cli compile` enters the orchestration a Build
  * click enters, board resolution and POU preprocessing included, rather than
  * reassembling the steps and drifting on them.
  */

@@ -58,18 +58,18 @@ const BOOLEAN_FLAGS = [
 
 const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
 
-const USAGE = `openplc — headless OpenPLC Editor
+const USAGE = `openplc-cli — headless OpenPLC Editor
 
 Usage
-  openplc devices [--timeout <ms>]
-  openplc compile <project> [--target <board>] [--port <serial>] [--clean]
-  openplc upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
-  openplc debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
-  openplc debug list
-  openplc debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
-  openplc debug close --session <id> | --all [--keep-forces]
-  openplc debug repl [--session <id>]                       (interactive; needs a terminal)
-  openplc debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
+  openplc-cli devices [--timeout <ms>]
+  openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
+  openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
+  openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
+  openplc-cli debug list
+  openplc-cli debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
+  openplc-cli debug close --session <id> | --all [--keep-forces]
+  openplc-cli debug repl [--session <id>]                       (interactive; needs a terminal)
+  openplc-cli debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
 
 Confirmation
   Builds on a device-side target refuse while its PLC is RUNNING, as the editor warns.
@@ -162,7 +162,10 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   if (boolFlag(args, 'help') || args.command === 'help' || args.command === undefined) {
     process.stdout.write(`${USAGE}\n`)
     // No command at all is a usage error; asking for help is not.
-    return args.command === undefined && !boolFlag(args, 'help') ? ExitCode.Usage : ExitCode.Ok
+    // Asking for help succeeds; being given nothing is a usage error, so a
+    // script that invokes the CLI with an empty argument does not read as OK.
+    const askedForHelp = boolFlag(args, 'help') || args.command === 'help'
+    return askedForHelp ? ExitCode.Ok : ExitCode.Usage
   }
 
   switch (args.command) {
@@ -175,8 +178,12 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
     case 'debug':
       return (await runDebug(args, reporter, buildDebugContext())).exitCode
     default:
+      // Print the usage as well as the error: a mistyped command is the moment
+      // the list of real commands is most useful, and hunting for --help is a
+      // pointless second step.
+      process.stderr.write(`${USAGE}\n\n`)
       return reporter.failure(
-        { code: ErrorCode.UnknownCommand, message: `Unknown command "${args.command}". Try \`openplc --help\`.` },
+        { code: ErrorCode.UnknownCommand, message: `Unknown command "${args.command}".` },
         ExitCode.Usage,
       ).exitCode
   }
@@ -189,7 +196,7 @@ function buildDebugContext(): DebugContext {
     spawnSession: createSessionSpawner({
       registryDir: dir,
       execPath: process.execPath,
-      execArgs: [cliEntryPath()],
+      execArgs: daemonSpawnArgs(),
       uploadProgram: async ({ projectPath, target, host, username, password, onLine }) => {
         // The upload path is the ordinary `upload` command, driven in-process so
         // there is exactly one implementation of compile-then-flash.
@@ -242,17 +249,22 @@ function buildDebugContext(): DebugContext {
  * that can resolve to the app entry is therefore refused rather than guessed
  * at, because the failure mode is "silently starts the wrong program".
  */
-function cliEntryPath(): string {
+function daemonSpawnArgs(): string[] {
+  // Packaged: the app binary cannot be handed a script — it always runs
+  // `package.json.main`. `src/main/entry.ts` dispatches on argv instead, so the
+  // marker alone is the whole instruction.
+  if (app.isPackaged) return ['--cli-daemon']
+
   // Dev: Electron was handed this bundle's path, and webpack leaves __filename
   // as the real runtime path (`node: { __filename: false }`).
-  const candidate = app.isPackaged ? join(app.getAppPath(), 'dist', 'main', 'cli.js') : (process.argv[1] ?? __filename)
-  if (!candidate.endsWith('.js')) {
+  const script = process.argv[1] ?? __filename
+  if (!script.endsWith('.js')) {
     throw new Error(
-      `Cannot locate the CLI bundle to spawn a debug session (resolved "${candidate}"). ` +
+      `Cannot locate the CLI bundle to spawn a debug session (resolved "${script}"). ` +
         'Refusing to re-launch, because a non-bundle path starts the editor GUI instead.',
     )
   }
-  return candidate
+  return [script, '--cli-daemon']
 }
 
 async function main(): Promise<void> {

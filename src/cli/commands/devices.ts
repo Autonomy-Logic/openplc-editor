@@ -1,5 +1,5 @@
 /**
- * `openplc devices` — everything this machine can reach a PLC through.
+ * `openplc-cli devices` — everything this machine can reach a PLC through.
  *
  * Two lists, because the editor has two: the "Search" button's UDP scan for
  * Runtime v4 targets on the network (`discoverRuntimes`, covering bare v4 and v4

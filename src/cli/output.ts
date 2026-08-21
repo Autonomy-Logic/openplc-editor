@@ -79,7 +79,7 @@ export class Reporter {
 
   /**
    * A progress line. Goes to stderr in BOTH modes — in human mode because
-   * that keeps `openplc compile > log` behaving, in JSON mode because stdout
+   * that keeps `openplc-cli compile > log` behaving, in JSON mode because stdout
    * is reserved for the single result document.
    */
   progress(message: string): void {
