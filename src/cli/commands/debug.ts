@@ -33,7 +33,10 @@ export interface DebugContext {
 export interface SpawnSessionOptions {
   projectPath: string
   target: string
+  /** Runtime address. Empty for a target reached over serial. */
   host: string
+  /** Serial port. Empty for a target reached over the network. */
+  port: string
   username: string
   password: string
   uploadIfNeeded: boolean
@@ -119,19 +122,24 @@ export async function runDebug(args: ParsedArgs, reporter: Reporter, context: De
 async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugContext): Promise<CliResult> {
   const projectPath = args.positionals[0] ?? stringFlag(args, 'project')
   const host = stringFlag(args, 'host') ?? stringFlag(args, 'address')
+  const port = stringFlag(args, 'port')
   const target = stringFlag(args, 'target')
-  if (!projectPath || !host) {
+  if (!projectPath) {
     return reporter.failure(
       {
         code: ErrorCode.MissingArgument,
         message:
-          'debug open needs a project path and --host <address>, e.g. `openplc debug open ./proj --host 192.168.1.50`',
+          'debug open needs a project path, plus --host <address> for a runtime target or --port <serial> for a ' +
+          'board (see `openplc devices`)',
       },
       ExitCode.Usage,
     )
   }
 
-  const credentials = resolveDebugCredentials(args)
+  // Credentials are required only by targets controlled over a runtime API. A
+  // board on a serial port has nothing to log in to, and demanding a password
+  // for it would be a rule the editor does not have.
+  const credentials = host ? resolveDebugCredentials(args) : { username: '', password: '' }
   if ('error' in credentials) {
     return reporter.failure({ code: ErrorCode.MissingArgument, message: credentials.error }, ExitCode.Usage)
   }
@@ -153,7 +161,8 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
   const spawned = await context.spawnSession({
     projectPath,
     target: target ?? '',
-    host,
+    host: host ?? '',
+    port: port ?? '',
     username: credentials.username,
     password: credentials.password,
     uploadIfNeeded: boolFlag(args, 'upload-if-needed'),
@@ -402,7 +411,9 @@ export function renderOk(response: OkResponse): string {
       const md5 = status.programMd5 ? `${status.programMd5.slice(0, 8)}${status.md5Matches ? '' : ' (MISMATCH)'}` : '-'
       return [
         `session   ${status.sessionId}`,
-        `target    ${status.target || '-'} via ${status.transport} ${status.descriptor}`,
+        // `descriptor` already begins with the transport (the factory builds it as
+        // `${transport} ${endpoint}`), so printing both reads "via rtu rtu /dev/…".
+        `target    ${status.target || '-'} via ${status.descriptor}`,
         `project   ${status.projectPath}`,
         `program   ${md5}`,
         `plc       ${status.plcState}`,

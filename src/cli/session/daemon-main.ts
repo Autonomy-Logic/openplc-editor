@@ -13,7 +13,7 @@
 import { app } from 'electron'
 
 import { openDebugSession } from '../debug/open-session'
-import { loadProject } from '../project/load'
+import { applyConnectionOverrides, loadProject } from '../project/load'
 import { mintSessionId, SessionRegistry, socketPathFor } from './registry'
 import { SessionServer } from './server'
 
@@ -22,6 +22,8 @@ export interface DaemonConfig {
   projectPath: string
   target: string
   host: string
+  /** Serial port, for a target whose debug channel rides one. */
+  port: string
   username: string
   password: string
   uploadIfNeeded: boolean
@@ -47,6 +49,7 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
     app.exit(1)
     return
   }
+  applyConnectionOverrides({ port: config.port, host: config.host })
 
   // Uploading from inside the daemon would need the whole compile pipeline here;
   // `debug open --upload-if-needed` runs it in the PARENT before spawning, so by

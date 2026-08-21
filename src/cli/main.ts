@@ -62,9 +62,9 @@ const USAGE = `openplc — headless OpenPLC Editor
 
 Usage
   openplc devices [--timeout <ms>]
-  openplc compile <project> [--target <board>] [--clean]
-  openplc upload  <project> --host <address> [--target <board>] [--clean] [-y|--yes]
-  openplc debug open <project> --host <address> --target <board> [--upload-if-needed]
+  openplc compile <project> [--target <board>] [--port <serial>] [--clean]
+  openplc upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
+  openplc debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
   openplc debug list
   openplc debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
   openplc debug close --session <id> | --all [--keep-forces]

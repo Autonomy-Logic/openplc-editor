@@ -55,6 +55,7 @@ export function createSessionSpawner(deps: SpawnDependencies) {
       projectPath: options.projectPath,
       target: options.target,
       host: options.host,
+      port: options.port,
       username: options.username,
       password: options.password,
       uploadIfNeeded: false,

@@ -45,7 +45,7 @@ function readConfig(line: string): DaemonConfig | undefined {
   }
   if (typeof parsed !== 'object' || parsed === null) return undefined
   const record: Record<string, unknown> = { ...parsed }
-  const strings = ['registryDir', 'projectPath', 'target', 'host', 'username', 'password'] as const
+  const strings = ['registryDir', 'projectPath', 'target', 'host', 'port', 'username', 'password'] as const
   for (const key of strings) {
     if (typeof record[key] !== 'string') return undefined
   }
@@ -54,6 +54,7 @@ function readConfig(line: string): DaemonConfig | undefined {
     projectPath: String(record.projectPath),
     target: String(record.target),
     host: String(record.host),
+    port: String(record.port),
     username: String(record.username),
     password: String(record.password),
     uploadIfNeeded: record.uploadIfNeeded === true,

@@ -13,15 +13,18 @@
  * argv, loading the project from disk, and rendering the result.
  */
 
+import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
+import { openPLCStoreBase } from '@root/frontend/store'
 import { compileProgramFlow } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
+import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { createCliCompileTransport } from '../compile/cli-transport'
 import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
 import type { CliFailure, CliResult, Reporter } from '../output'
-import { loadProject } from '../project/load'
+import { applyConnectionOverrides, loadProject } from '../project/load'
 
 export interface BuildOptions {
   /** True for `upload`: connect to a runtime and let the pipeline flash it. */
@@ -44,6 +47,9 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   const project = loaded.project
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
 
+  // The port dropdown and the address field, from argv.
+  applyConnectionOverrides({ port: stringFlag(args, 'port'), host: stringFlag(args, 'host') })
+
   // The project remembers the board its dropdown was left on; `--target`
   // overrides it so one fixture can be built for several targets in a matrix.
   const target = stringFlag(args, 'target') ?? project.board
@@ -57,13 +63,48 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     )
   }
 
+  // Which arguments an upload needs is a property of the TARGET, and the editor
+  // already answers it: `directUsbUpload` is the difference between a board it
+  // flashes over USB (arduino-cli, needs a serial port) and one it reaches
+  // through a runtime API (needs an address and credentials). Asking for a host
+  // unconditionally made `upload` impossible for every Arduino-class board.
+  const boards = await new HardwareModule().getAvailableBoards()
+  const boardInfo = boards.get(target)
+  if (!boardInfo) {
+    return reporter.failure(
+      {
+        code: ErrorCode.TargetUnknown,
+        message:
+          `Board "${target}" is not available — it is neither in hals.json nor declared by an installed VPP ` +
+          'package. Install its package in the editor, or check the name.',
+      },
+      ExitCode.NotFound,
+    )
+  }
+  const capabilities = resolveTargetCapabilities(boardInfo)
+
   let runtime: RuntimeApiClient | null = null
   let host: string | null = null
-  if (options.withUpload) {
+
+  if (options.withUpload && capabilities.directUsbUpload) {
+    // arduino-cli needs the port; the project may already remember it.
+    if (!currentCommunicationPort()) {
+      return reporter.failure(
+        {
+          code: ErrorCode.MissingArgument,
+          message: `"${target}" is flashed over USB — pass --port <serial> (see \`openplc devices\`)`,
+        },
+        ExitCode.Usage,
+      )
+    }
+  } else if (options.withUpload) {
     host = stringFlag(args, 'host') ?? stringFlag(args, 'address') ?? null
     if (!host) {
       return reporter.failure(
-        { code: ErrorCode.MissingArgument, message: 'upload needs --host <address> (see `openplc devices`)' },
+        {
+          code: ErrorCode.MissingArgument,
+          message: `"${target}" is reached through its runtime API — pass --host <address> (see \`openplc devices\`)`,
+        },
         ExitCode.Usage,
       )
     }
@@ -116,7 +157,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       cleanBuild: boolFlag(args, 'clean'),
       runtimeIpAddress: host,
       runtimeJwtToken: runtime?.tokens.getToken() ?? null,
-      communicationPort: project.communicationPort || undefined,
+      communicationPort: currentCommunicationPort() || undefined,
       vendorScreenData: project.vendorScreenData,
     },
     createCliCompileTransport(runtime),
@@ -149,7 +190,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     },
     () =>
       options.withUpload
-        ? `Uploaded "${project.name}" to ${host ?? 'the target'} (${target}).`
+        ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort() ?? 'the target'} (${target}).`
         : `Built "${project.name}" for ${target}.\nArtifacts: ${project.projectPath}/build/${target}`,
   )
 }
@@ -228,4 +269,9 @@ async function ensurePlcStoppedForBuild(input: {
   }
   input.reporter.progress('PLC stopped before build.')
   return { ok: true }
+}
+
+/** The port the store now holds — after `--port` has been applied. */
+function currentCommunicationPort(): string | undefined {
+  return openPLCStoreBase.getState().deviceDefinitions.configuration.communicationPort || undefined
 }

@@ -97,3 +97,22 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
     },
   }
 }
+
+/**
+ * Apply the connection details a command was given, as the device screen does.
+ *
+ * `--port` is the serial-port dropdown and `--host` the runtime address field.
+ * They have to land in the STORE rather than being passed along the side,
+ * because the debug-spec resolver reads `configuration.communicationPort` /
+ * `configuration.runtimeIpAddress` from there — that is how a board's declared
+ * serial channel learns which port it is on. A command that only threaded them
+ * into the compile arguments would build fine and then fail to resolve a debug
+ * channel, for no visible reason.
+ */
+export function applyConnectionOverrides(overrides: { port?: string; host?: string }): void {
+  const configuration: { communicationPort?: string; runtimeIpAddress?: string } = {}
+  if (overrides.port) configuration.communicationPort = overrides.port
+  if (overrides.host) configuration.runtimeIpAddress = overrides.host
+  if (Object.keys(configuration).length === 0) return
+  openPLCStoreBase.getState().deviceActions.setDeviceDefinitions({ configuration })
+}
