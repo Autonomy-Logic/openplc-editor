@@ -109,6 +109,17 @@ export type PendingDatatypeRename = {
   resolve: (confirmed: boolean) => void
 }
 
+/** Global Variable Lists — the object CODESYS calls a GVL. */
+export type GlobalVariableListActions = {
+  /** Create the list and open its tab, as every other + button element does. */
+  create: (name: string) => SharedResponse
+  /** Ask for confirmation; the modal calls `delete`. */
+  deleteRequest: (name: string) => void
+  delete: (name: string) => void
+  rename: (oldName: string, newName: string) => SharedResponse
+  duplicate: (sourceName: string, newName: string) => SharedResponse
+}
+
 export type DatatypeActions = {
   create: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => SharedResponse
   deleteRequest: (name: string) => void
@@ -126,6 +137,7 @@ export type ServerActions = {
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
+  duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
 export type RemoteDeviceActions = {
@@ -133,6 +145,8 @@ export type RemoteDeviceActions = {
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse
+  /** The copy gets fresh ids and no alias/address bindings — see the implementation. */
+  duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
 export type EtherCATDeviceActions = {
@@ -201,6 +215,7 @@ export type SharedSlice = {
   pendingDatatypeRename: PendingDatatypeRename | null
   pouActions: PouActions
   datatypeActions: DatatypeActions
+  globalVariableListActions: GlobalVariableListActions
   serverActions: ServerActions
   remoteDeviceActions: RemoteDeviceActions
   ethercatDeviceActions: EtherCATDeviceActions

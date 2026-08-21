@@ -3,6 +3,7 @@ export type FileSliceType =
   | 'function-block'
   | 'program'
   | 'data-type'
+  | 'global-variable-list'
   | 'device'
   | 'resource'
   | 'server'

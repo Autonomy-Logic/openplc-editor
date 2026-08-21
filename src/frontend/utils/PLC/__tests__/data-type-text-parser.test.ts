@@ -176,6 +176,16 @@ describe('parseDataTypeFromText errors', () => {
     expect(parseDataTypeFromText(badFieldType).error).toMatch(/invalid structure field/)
   })
 
+  it('rejects a structure field whose ARRAY has a blank bound', () => {
+    // `parseArrayType` is shared with the variables text parser and declines a
+    // blank bound, so `buildFieldType` falls through to `identifierRegex`, which
+    // the bracketed type cannot satisfy.
+    const trailingComma = 'TYPE\n  P : STRUCT\n    m : ARRAY[0..1,] OF INT;\n  END_STRUCT;\nEND_TYPE\n'
+    expect(parseDataTypeFromText(trailingComma).error).toMatch(/invalid structure field/)
+    const doubledComma = 'TYPE\n  P : STRUCT\n    m : ARRAY[0..1,,0..2] OF INT;\n  END_STRUCT;\nEND_TYPE\n'
+    expect(parseDataTypeFromText(doubledComma).error).toMatch(/invalid structure field/)
+  })
+
   it('rejects invalid enumeration values', () => {
     expect(parseDataTypeFromText('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n').error).toMatch(/invalid enumeration value/)
   })

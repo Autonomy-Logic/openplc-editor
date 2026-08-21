@@ -13,7 +13,7 @@ import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../../store'
 import type { LadderFlowType } from '../../store/slices/ladder'
 import { getMemoryState } from '../../utils/toast'
-import { executeSaveFile, executeSaveProject } from '../save-actions'
+import { buildAllProjectFileContentsPure, executeSaveFile, executeSaveProject } from '../save-actions'
 
 const capabilities = { isNativeApplication: true } as PlatformCapabilities
 
@@ -158,5 +158,126 @@ describe('save-actions', () => {
       expect(warn).not.toHaveBeenCalled()
       expect(flowUpdated('Unrelated')).toBe(true)
     })
+  })
+})
+
+/**
+ * `project.json` is a field-by-field object, so anything not named in it is dropped from
+ * the saved project however well it lives in the store. A Global Variable List has no
+ * file of its own — this IS its persistence — so the omission cost every list on every
+ * save, silently, and reopening the project showed none of them.
+ *
+ * These cases exist to make the next field added to that object fail loudly instead.
+ */
+describe('project.json carries global variable lists', () => {
+  const createList = (name: string, members: string[]) => {
+    const state = openPLCStoreBase.getState()
+    state.projectActions.createGlobalVariableList(name)
+    state.projectActions.updateGlobalVariableList(
+      name,
+      members.map((member) => ({
+        name: member,
+        class: 'global' as const,
+        type: { definition: 'base-type' as const, value: 'BOOL' },
+        location: '',
+        initialValue: '',
+        documentation: '',
+      })),
+    )
+  }
+
+  it('serializes a list and its members into project.json', () => {
+    createList('SaveProbe', ['ProbeMember'])
+
+    const payload = buildAllProjectFileContentsPure()['project.json']
+
+    expect(payload).toContain('SaveProbe')
+    expect(payload).toContain('ProbeMember')
+    expect(JSON.parse(payload).data.globalVariableLists).toHaveLength(1)
+  })
+
+  it('writes an empty array rather than omitting the field', () => {
+    // A reader cannot tell "no lists" from "written by a build that did not know about
+    // them" if the key is simply absent.
+    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+      data: { globalVariableLists?: unknown }
+    }
+
+    expect(Array.isArray(parsed.data.globalVariableLists)).toBe(true)
+  })
+
+  it('folds a pending code-view buffer in before serializing', () => {
+    // Ctrl+S with the caret still in Monaco fires no blur, so the list would otherwise
+    // be serialized as it was before the user started typing.
+    // Through the shared action, so the list gets the editor model that holds the draft.
+    openPLCStoreBase.getState().globalVariableListActions.create('DraftProbe')
+    openPLCStoreBase.getState().editorActions.updateModelStructureForName('DraftProbe', {
+      display: 'code',
+      code: 'VAR_GLOBAL\n  TypedMember : INT;\nEND_VAR\n',
+    })
+
+    const payload = buildAllProjectFileContentsPure()['project.json']
+
+    expect(payload).toContain('TypedMember')
+  })
+})
+
+/**
+ * An unparseable declaration is written out as TEXT, never refused.
+ *
+ * Same contract a POU's unparseable variables block (`variablesText`) and an unreadable
+ * `.dt` file already follow: the file is still saved, the text is preserved verbatim,
+ * and it comes back in the code view to be corrected. Blocking the save is the one
+ * outcome that loses the user's work.
+ */
+describe('an unparseable list declaration is saved as text', () => {
+  const brokenDeclaration = 'VAR_GLOBAL\n  A : BOOL\nEND_VAR\n'
+
+  // The store is a singleton and the suites above deliberately corrupt ladder
+  // flows; a leftover stale flow would fail the save for reasons of its own.
+  beforeEach(() => {
+    openPLCStoreBase.getState().ladderFlowActions.clearLadderFlows()
+  })
+
+  const openWithBrokenText = (name: string) => {
+    openPLCStoreBase.getState().globalVariableListActions.create(name)
+    openPLCStoreBase
+      .getState()
+      .editorActions.updateModelStructureForName(name, { display: 'code', code: brokenDeclaration })
+  }
+
+  it('still reports the save as successful', async () => {
+    openWithBrokenText('BrokenSave')
+
+    const result = await executeSaveProject(makeProjectPort(), capabilities)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('writes the raw declaration into project.json', async () => {
+    openWithBrokenText('BrokenPersist')
+    await executeSaveProject(makeProjectPort(), capabilities)
+
+    const payload = buildAllProjectFileContentsPure()['project.json']
+    const saved = (
+      JSON.parse(payload) as { data: { globalVariableLists: { name: string; text?: string }[] } }
+    ).data.globalVariableLists.find((l) => l.name === 'BrokenPersist')
+
+    expect(saved?.text).toBe(brokenDeclaration)
+  })
+
+  it('drops the preserved text once the declaration parses again', async () => {
+    openWithBrokenText('BrokenThenFixed')
+    await executeSaveProject(makeProjectPort(), capabilities)
+
+    openPLCStoreBase.getState().editorActions.updateModelStructureForName('BrokenThenFixed', {
+      display: 'code',
+      code: 'VAR_GLOBAL\n  A : BOOL;\nEND_VAR\n',
+    })
+    await executeSaveProject(makeProjectPort(), capabilities)
+
+    const list = openPLCStoreBase.getState().project.data.globalVariableLists?.find((l) => l.name === 'BrokenThenFixed')
+    expect(list?.text).toBeUndefined()
+    expect(list?.variables.map((v) => v.name)).toEqual(['A'])
   })
 })

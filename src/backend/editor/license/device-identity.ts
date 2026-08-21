@@ -41,6 +41,22 @@ const VPP_ID_BYTES = 8
  * (32 lowercase hex chars). The prefix is concatenated as ASCII bytes
  * directly in front of the anchor bytes in a single buffer, so the
  * hash input is exactly `<prefix bytes><anchor bytes>`.
+ *
+ * ANCHOR NORMALIZATION CONTRACT — do not "fix" this by trimming here.
+ * The anchor is hashed EXACTLY as the board-id read (FC 0x48) answered it,
+ * because what 0x48 answers is already what the on-device verifier derives
+ * from:
+ *   - bare metal answers the raw ArduinoUniqueID bytes (modbus_debug.cpp),
+ *     and the closed core reads the same bytes raw (license_platform.c,
+ *     ARDUINO branch). A MAC that genuinely ends in 0x00/0x0A/0x0D/0x20
+ *     keeps those bytes in its identity — stripping them here would derive
+ *     a deviceId the device can never reproduce, and the purchased license
+ *     would simply never verify;
+ *   - a runtime-v4 target answers its device-tree serial with trailing
+ *     NUL/LF/CR/space ALREADY stripped: the runtime's webserver strips on
+ *     the wire and the closed core's __linux__ branch strips on read — the
+ *     same normative set, in the same place the identity is decided.
+ * Pinned by the "raw bytes ARE the identity" case in device-identity.test.ts.
  */
 export function deriveDeviceId(anchor: Uint8Array): string {
   // Single contiguous buffer: <prefix ASCII bytes><anchor bytes>. Built as

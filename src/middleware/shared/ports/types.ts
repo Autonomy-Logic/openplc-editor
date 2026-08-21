@@ -88,6 +88,43 @@ export interface PLCStructureVariable {
   documentation?: string
 }
 
+/**
+ * A Global Variable List — the same object CODESYS calls a GVL: a named
+ * `VAR_GLOBAL … END_VAR` block whose members are reached as `<name>.<variable>`.
+ *
+ * That is what the user sees. Underneath, a GVL compiles to a STRUCT type plus one
+ * global instance of it, because that is the shape STruC++ resolves qualified member
+ * access through — see `serializeGlobalVariableListsToTypes`.
+ *
+ * Two fields here are carried but deliberately NOT compiled, for the same reason:
+ * dropping either would quietly change the user's project on its first round trip.
+ *
+ *   - `variables[].location` — a CODESYS GVL often binds members to I/O
+ *     (`AT %QX0.0`), and a struct member cannot hold an address today: the compiler
+ *     accepts one and then silently discards it. So the address is parked here on
+ *     import, left out of the generated ST, and written back on export.
+ *   - `qualifier` — `CONSTANT` / `RETAIN` / `NON_RETAIN` / `PERSISTENT` off the
+ *     `VAR_GLOBAL` header. A struct type cannot express any of them, so none reaches
+ *     the compiler; keeping the text is what lets the declaration round-trip.
+ */
+export interface PLCGlobalVariableList {
+  name: string
+  variables: PLCVariable[]
+  /** Uppercased `VAR_GLOBAL` qualifier text (`'CONSTANT'`, `'RETAIN PERSISTENT'`, …). */
+  qualifier?: string
+  /**
+   * The declaration as the user last left it, kept ONLY while it does not parse.
+   *
+   * Same contract a POU's `variablesText` and an unparsed `.dt` file already follow:
+   * text that cannot be read is preserved verbatim rather than refused, so a
+   * half-finished declaration survives the save and comes back in the code view to
+   * be corrected. Cleared the moment the text parses — `variables` is the
+   * representation from then on.
+   */
+  text?: string
+  documentation?: string
+}
+
 export type PLCDataType =
   | { name: string; derivation: 'structure'; variable: PLCStructureVariable[] }
   | {
@@ -434,6 +471,9 @@ export interface PLCProjectLibraryRef {
 
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
+  /** CODESYS-style Global Variable Lists. Optional on the wire so projects saved
+   *  before GVLs existed still parse; absent reads as `[]`. */
+  globalVariableLists?: PLCGlobalVariableList[]
   pous: PLCPou[]
   configurations: {
     resource: {

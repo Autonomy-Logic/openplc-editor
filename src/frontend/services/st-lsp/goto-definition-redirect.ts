@@ -35,17 +35,19 @@
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
-import type { PLCDataType } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCGlobalVariableList } from '../../../middleware/shared/ports/types'
 import { sanitizeAxisName, softMotionAxisNames } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
+import { serializeGlobalVariableListsToTypes } from '../../utils/PLC/global-variable-list-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
 import {
   DATA_TYPES_URI,
   DT_VIEW_FRAME_LINE_COUNT,
+  GLOBAL_VARIABLE_LISTS_URI,
   parsePouUri,
   RESOURCE_GLOBALS_URI,
   SOFTMOTION_GLOBALS_URI,
@@ -212,6 +214,81 @@ function openResourceEditor(): boolean {
   return true
 }
 
+/**
+ * Open a Global Variable List's editor, mirroring the project-tree click path.
+ */
+function openGlobalVariableListEditor(name: string): boolean {
+  const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
+    name,
+    path: `/data/global-variables/${name}`,
+    elementType: { type: 'global-variable-list' },
+  }
+  const {
+    editorActions: { setEditor, addModel, getEditorFromEditors },
+    tabsActions: { updateTabs, setSelectedTab },
+  } = openPLCStoreBase.getState()
+  updateTabs(tabProps)
+  const existing = getEditorFromEditors(name)
+  if (existing) {
+    addModel(existing)
+    setEditor(existing)
+  } else {
+    const model = CreateEditorObjectFromTab(tabProps)
+    addModel(model)
+    setEditor(model)
+  }
+  setSelectedTab(name)
+  return true
+}
+
+/**
+ * Which list owns each line of the synthesized Global-Variable-Lists document.
+ *
+ * Ownership is POSITIONAL, and derived from the same serializers that produce the document —
+ * each list's own block is re-serialized to learn how many lines it takes — so the map cannot
+ * drift from the text, and adding a list or a member cannot silently shift it.
+ *
+ * Positional is also the only correct reading. A member line (`Output1 : BOOL;`) and an
+ * instance line (`GVL : GVL_TYPE;`) are the same shape, so resolving by name would send a
+ * definition on a member that happens to be called `MyGlobalList` to the list of that name
+ * instead of to the list the member is declared in. The frame lines — `TYPE`, `END_STRUCT;`,
+ * `END_TYPE`, `VAR_GLOBAL`, `END_VAR` — belong to no list and map to `undefined`, so a
+ * position on one is reported as unresolved rather than as the nearest list.
+ */
+function globalVariableListLineOwners(lists: PLCGlobalVariableList[]): (string | undefined)[] {
+  const withMembers = lists.filter((list) => list.variables.length > 0)
+  if (withMembers.length === 0) return []
+
+  const owners: (string | undefined)[] = [undefined] // TYPE
+  for (const list of withMembers) {
+    // `TYPE`, the block, `END_STRUCT;`, `END_TYPE`, `''` — keep the block and its END_STRUCT.
+    const block = serializeGlobalVariableListsToTypes([list]).split('\n').slice(1, -2)
+    block.forEach((_line, index) => owners.push(index === block.length - 1 ? undefined : list.name))
+  }
+  owners.push(undefined) // END_TYPE
+
+  owners.push(undefined) // VAR_GLOBAL
+  // One instance line per list, in this order — the serializer filters the same way.
+  for (const list of withMembers) owners.push(list.name)
+  owners.push(undefined) // END_VAR
+
+  return owners
+}
+
+/**
+ * Global-Variable-Lists doc → open the list's own editor rather than the synthesised
+ * (non-editable) STRUCT and instance declarations.
+ *
+ * Monaco has no editor host for that URI, so without this the redirect dead-ends silently —
+ * the same trap the data-types branch documents.
+ */
+function redirectGlobalVariableList(lineLsp: number): boolean {
+  const lists = openPLCStoreBase.getState().project.data.globalVariableLists ?? []
+  const name = globalVariableListLineOwners(lists)[lineLsp]
+  if (!name) return false
+  return openGlobalVariableListEditor(name)
+}
+
 export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
   const target = normaliseLocation(loc)
 
@@ -225,6 +302,11 @@ export function redirectDefinitionToStore(loc: Location | LocationLink): boolean
   // than the synthesised (non-editable) global declaration.
   if (target.uri === SOFTMOTION_GLOBALS_URI) {
     return redirectSoftMotionAxis(target.lineLsp)
+  }
+
+  // Global-Variable-Lists doc → open the list's editor.
+  if (target.uri === GLOBAL_VARIABLE_LISTS_URI) {
+    return redirectGlobalVariableList(target.lineLsp)
   }
 
   // Datatypes URI → open the matching data-type editor tab.  The LSP

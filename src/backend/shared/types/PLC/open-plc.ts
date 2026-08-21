@@ -805,11 +805,30 @@ const PLCProjectLibraryRefSchema = z.object({
 })
 type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
 
+/**
+ * A Global Variable List — the object CODESYS calls a GVL.
+ *
+ * Optional on the wire so projects written before lists existed still validate; absent
+ * reads as no lists. Members keep their `location`, which is deliberately not compiled
+ * (a struct member cannot be bound to I/O yet) but has to survive so the CODESYS export
+ * can put it back. `qualifier` is carried for the same reason — see
+ * `PLCGlobalVariableList` in `middleware/shared/ports/types.ts`.
+ */
+const PLCGlobalVariableListSchema = z.object({
+  name: z.string(),
+  variables: z.array(PLCVariableSchema).default([]),
+  qualifier: z.string().optional(),
+  /** Raw declaration kept while it does not parse — see `PLCGlobalVariableList.text`. */
+  text: z.string().optional(),
+  documentation: z.string().optional(),
+})
+
 const PLCProjectDataSchema = z.object({
   // Defaulted: once data types live in datatypes/<Name>.dt files the
   // field disappears from newly-written project.json (DOPE-385);
   // legacy projects still carry it and keep validating.
   dataTypes: z.array(PLCDataTypeSchema).default([]),
+  globalVariableLists: z.array(PLCGlobalVariableListSchema).optional(),
   pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
@@ -908,6 +927,7 @@ export {
   PLCEnumeratedDatatypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCGlobalVariableListSchema,
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
   PLCPouSchema,

@@ -247,19 +247,26 @@ export function useDeviceLicense(
     [report?.deviceId, setAwaitingPurchase, system, urlFor],
   )
 
-  return {
-    isLicensable: target.licensable,
-    configurationError:
-      !target.licensable && target.reason === 'no-package-id'
-        ? 'This board declares a licensed VPP but its package is missing an id. The VPP package needs fixing.'
-        : null,
-    report,
-    isChecking: phase === 'checking',
-    check,
-    refresh,
-    buyUrl,
-    buy,
-    awaitingPurchase,
-    cancelPurchaseWatch,
-  }
+  // Memoised so consumers can depend on the OBJECT when its fields are stable
+  // (review 2026-08-20, E4-hygiene): a fresh literal per render forced every
+  // consumer to know which fields are safe deps. Identity still changes when a
+  // field genuinely changes — that is the point of the dependency list below.
+  return useMemo(
+    () => ({
+      isLicensable: target.licensable,
+      configurationError:
+        !target.licensable && target.reason === 'no-package-id'
+          ? 'This board declares a licensed VPP but its package is missing an id. The VPP package needs fixing.'
+          : null,
+      report,
+      isChecking: phase === 'checking',
+      check,
+      refresh,
+      buyUrl,
+      buy,
+      awaitingPurchase,
+      cancelPurchaseWatch,
+    }),
+    [target, report, phase, check, refresh, buyUrl, buy, awaitingPurchase, cancelPurchaseWatch],
+  )
 }
