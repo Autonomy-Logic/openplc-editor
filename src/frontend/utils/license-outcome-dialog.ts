@@ -53,10 +53,26 @@ export interface LicenseDialogHandlers {
   buy: (deviceId?: string) => Promise<void>
   /** Re-run the full licensing flow (offered on a failed or unchecked outcome). */
   retry?: () => Promise<void>
+  /**
+   * Keep `check-failed` on the badge instead of opening the error modal.
+   *
+   * For the AUTOMATIC flows (the runtime settle effect) — a modal the user did
+   * not ask for, about a question they did not ask, is the wrong surface for
+   * "we could not tell". The loudest case this quiets is a runtime that
+   * predates the licence function codes, where every connect would otherwise
+   * open "Licence Check Failed" on a working device. User-INITIATED paths
+   * (serial connect, the badge's own recheck dialog) leave this unset: there
+   * the user asked a question and silence would read as success.
+   */
+  quietCheckFailed?: boolean
 }
 
+// "About two hours" mirrors LIC_GATE_DEMO_MS (7200000 ms) in the closed gate.
+// If the product decision changes the window, this sentence changes with it —
+// a dialog promising minutes while the device enforces hours (or the reverse)
+// is the kind of copy drift a customer notices before we do.
 const DEMO_EXPLANATION =
-  'The device will run in DEMO mode: the VPP stops driving outputs a few minutes after each start. ' +
+  'The device will run in DEMO mode: the VPP stops driving outputs about two hours after each start. ' +
   'You can still build and upload — the licence is enforced on the device, not by the editor.'
 
 /**
@@ -64,7 +80,7 @@ const DEMO_EXPLANATION =
  * which is what makes "licensed is silent" testable rather than assumed.
  */
 export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: LicenseDialogHandlers): boolean {
-  const { openModal, buy, retry } = handlers
+  const { openModal, buy, retry, quietCheckFailed } = handlers
   const outcome: DeviceLicenseState = report.outcome
 
   switch (outcome.state) {
@@ -121,6 +137,11 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       return true
 
     case 'check-failed':
+      if (quietCheckFailed) {
+        // The badge already renders the check-failed state with its own
+        // recheck affordance; the automatic flow adds no modal on top.
+        return false
+      }
       openModal('debugger-message', {
         type: 'error',
         title: 'Licence Check Failed',

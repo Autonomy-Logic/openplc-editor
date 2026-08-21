@@ -62,9 +62,16 @@ export interface DebugVersionResult {
  * Result of the board-id probe (FC 0x48). `boardId` is the raw unique-id bytes
  * (empty when the target has no unique-id support); `boardIdHex` is the same
  * bytes as a lowercase hex string for display.
+ *
+ * `unsupported` (status LIC_UNSUPPORTED, 0x85): the target answered that it has
+ * NO hardware anchor to license against — a runtime-v4 host without a
+ * device-tree serial (x86 box, container). Distinct from a transport failure on
+ * purpose: the licensing flow maps it to the terminal `unsupported` outcome
+ * (no retry nag) instead of an endlessly retryable check-failed.
  */
 export interface DebugBoardIdResult {
   success: boolean
+  unsupported?: boolean
   boardId?: Uint8Array
   boardIdHex?: string
   error?: string
@@ -152,10 +159,13 @@ export interface DebugTransport {
 export interface DeviceChannelTransport {
   connect(): Promise<void>
   disconnect(): void
-  /** Board-id read (FC 0x48) — the readiness probe that says whether an OpenPLC
-   *  firmware is answering at all. Optional for the same reason as `getStatus`:
-   *  it is a BAREMETAL question. The runtime-v4 WebSocket talks to a target whose
-   *  identity came from the REST login, so it never answers this. */
+  /** Board-id read (FC 0x48). On baremetal it is the readiness probe that says
+   *  whether an OpenPLC firmware is answering at all — and it doubles as the
+   *  LICENSING ANCHOR read. The runtime-v4 WebSocket implements it for the
+   *  anchor alone: the runtime answers 0x48 at the webserver level with the
+   *  hardware anchor the licensed plugin binds its device id to, while readiness
+   *  on a runtime target stays a REST question. Still optional: a medium that
+   *  carries neither role may omit it. */
   getBoardId?(): Promise<DebugBoardIdResult>
   /** Runtime status (FC 0x46): run/stop state, mode-switch position, scan
    *  counter, uptime. Doubles as the liveness probe for a held link — any
@@ -179,6 +189,12 @@ export interface DeviceChannelTransport {
   /** Store a VPP license blob (FC 0x49). Optional for the same reason as
    *  `readLicense`. Storing does not validate — read back to confirm. */
   writeLicense?(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  /** Hand the channel a fresh auth token mid-session. Only media that
+   *  authenticate per command need it — the runtime-v4 WebSocket, whose server
+   *  re-verifies the JWT on every debug_command (openplc-runtime#169): without
+   *  renewal a held debug session dies when the login-time token expires
+   *  (~15 min). Fire-and-forget: the server acks via its own event. */
+  reauth?(token: string): void
 }
 
 /**

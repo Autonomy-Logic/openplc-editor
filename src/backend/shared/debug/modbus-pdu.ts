@@ -404,6 +404,14 @@ export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
     return { success: false, error: 'Function code mismatch' }
   }
 
+  // LIC_UNSUPPORTED on the ANCHOR read: the target says it has no hardware
+  // anchor to license against (runtime-v4 host without a device-tree serial).
+  // Kept distinguishable so the flow lands on the terminal 'unsupported'
+  // outcome instead of a retryable check-failed (review 2026-08-20, R2/E5).
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
+    return { success: false, unsupported: true, error: statusError(status) }
+  }
+
   if (status !== ModbusDebugResponse.SUCCESS) {
     return { success: false, error: statusError(status) }
   }

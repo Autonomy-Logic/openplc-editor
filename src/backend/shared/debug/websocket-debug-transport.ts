@@ -24,11 +24,13 @@ import { io, type Socket } from 'socket.io-client'
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
+  buildGetBoardIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
+  parseGetBoardIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
   parseReadLicenseResponse,
@@ -36,6 +38,7 @@ import {
   parseWriteLicenseResponse,
 } from './modbus-pdu'
 import type {
+  DebugBoardIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -67,6 +70,21 @@ function bytesToHexSpaced(buf: Uint8Array): string {
     out[i] = buf[i].toString(16).toUpperCase().padStart(2, '0')
   }
   return out.join(' ')
+}
+
+/**
+ * Trailing bytes stripped from a runtime-v4 anchor: NUL, LF, CR, SPACE — the
+ * EXACT set `license_platform.c` (`__linux__` branch) strips before deciding
+ * the device identity, no more and no fewer. Every byte added to or removed
+ * from this set changes the derived deviceId of some board in the field.
+ */
+const ANCHOR_TRAILING_STRIP = new Set([0x00, 0x0a, 0x0d, 0x20])
+
+/** Strip the anchor's trailing normalization bytes (see the set above). */
+function stripAnchorTail(anchor: Uint8Array): Uint8Array {
+  let end = anchor.length
+  while (end > 0 && ANCHOR_TRAILING_STRIP.has(anchor[end - 1])) end--
+  return end === anchor.length ? anchor : anchor.subarray(0, end)
 }
 
 /** "AA BB CC" hex string → Uint8Array.  Tolerates extra whitespace. */
@@ -135,6 +153,20 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     }
   }
 
+  /**
+   * Push a fresh JWT to the held socket (see `DeviceChannelTransport.reauth`).
+   *
+   * The runtime re-verifies the session token on EVERY debug_command
+   * (openplc-runtime#169) and answers a distinguishable `token_expired` once it
+   * lapses — the editor's token manager refreshes transparently and this is how
+   * the renewed token reaches a channel that is already open. Also kept locally
+   * so a socket.io reconnect would present the current token, not the stale one.
+   */
+  reauth(token: string): void {
+    this.token = token
+    this.socket?.emit('reauth', { token })
+  }
+
   async getMd5Hash(): Promise<Md5ProbeResult> {
     if (!this.socket) throw new Error('Not connected to target')
 
@@ -144,7 +176,12 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   async getVariablesList(variableIndexes: number[]): Promise<DebugTransportResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildGetListRequest(variableIndexes), (bytes) => parseGetListResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildGetListRequest(variableIndexes),
+      (bytes) => parseGetListResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
 
   async setVariable(variableIndex: number, force: boolean, valueBuffer?: Uint8Array): Promise<DebugSetResult> {
@@ -154,46 +191,111 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
       buildSetVariableRequest(variableIndex, force, valueBuffer),
       (bytes) => parseSetVariableResponse(bytes),
       'resolve',
+      (error) => ({ success: false, error }),
     )
   }
 
-  // License function codes (0x49/0x4A), byte-identical to the serial/TCP
+  // License function codes (0x48/0x49/0x4A), byte-identical to the serial/TCP
   // clients: the runtime answers them at the webserver level, but the editor sees
   // ONE transport-agnostic contract, so the licensing flow has a single shape on
   // every target instead of a network-specific branch.
   //
-  // `getBoardId` (0x48) stays absent on purpose: a runtime-v4 target's identity
-  // comes from the REST login, so it never answers that FC. That is why
-  // `DeviceChannelTransport` declares the license methods optional — this class
-  // implements the pair it can serve without claiming the one it cannot.
+  // `getBoardId` (0x48) is the licensing ANCHOR read here, not the readiness
+  // probe it doubles as on baremetal — readiness on a runtime target is a REST
+  // question. The runtime answers 0x48 with the hardware anchor the licensed
+  // plugin derives its device id from (`/proc/device-tree/serial-number`,
+  // normalized exactly as the plugin's C does), so the editor derives the SAME
+  // identity a license must be signed for. A runtime that predates the license
+  // FCs answers with an error, which resolves to `success: false`: the licensing
+  // flow reports check-failed rather than inventing an identity.
+  //
+  // The trailing strip below is DEFENSIVE re-normalization, not the primary
+  // one: the runtime already strips on the wire, so on a current runtime it is
+  // a no-op. It exists because the closed core's __linux__ branch strips the
+  // same set before deciding the identity — so if a runtime build ever answers
+  // raw, an unstripped anchor here would derive a deviceId the device never
+  // reproduces, and a license bought for it would never verify. Stripping is
+  // always identity-correct on THIS medium and only this medium: the serial
+  // clients must never do it (a baremetal unique-id is raw binary, and a MAC
+  // genuinely ending in one of these bytes keeps it in its identity).
+
+  async getBoardId(): Promise<DebugBoardIdResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+
+    const result = await this.sendCommand(
+      buildGetBoardIdRequest(),
+      (bytes) => parseGetBoardIdResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
+    if (!result.success || !result.boardId) return result
+
+    const anchor = stripAnchorTail(result.boardId)
+    if (anchor.length === result.boardId.length) return result
+    return {
+      ...result,
+      boardId: anchor,
+      boardIdHex: Array.from(anchor, (b) => b.toString(16).padStart(2, '0')).join(''),
+    }
+  }
 
   async readLicense(): Promise<DebugLicenseReadResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildReadLicenseRequest(), (bytes) => parseReadLicenseResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildReadLicenseRequest(),
+      (bytes) => parseReadLicenseResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
 
   async writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
-    return this.sendCommand(buildWriteLicenseRequest(blob), (bytes) => parseWriteLicenseResponse(bytes), 'resolve')
+    return this.sendCommand(
+      buildWriteLicenseRequest(blob),
+      (bytes) => parseWriteLicenseResponse(bytes),
+      'resolve',
+      (error) => ({ success: false, error }),
+    )
   }
+
+  /**
+   * ONE command in flight at a time — the same serialisation guarantee the
+   * Modbus RTU/TCP clients give with their `sendRequestMutex`.
+   *
+   * Socket.IO invokes EVERY registered `debug_response` listener for each
+   * event, and the envelope carries no correlation id. Two commands in flight
+   * therefore meant both handlers consumed the FIRST response (each resolving
+   * from a payload that may belong to the other) and the second response found
+   * no listeners at all. That stopped being theoretical the moment the license
+   * FCs joined the variables poll on this socket (review 2026-08-20): a badge
+   * "Check again" mid-debug-session handed the poll's FC-0x41 frame to
+   * `parseGetBoardIdResponse` and the licence check failed on a healthy device.
+   */
+  private sendRequestMutex: Promise<void> = Promise.resolve()
 
   /**
    * Send a Modbus PDU over the `debug_command` event and parse the
    * matching `debug_response`.  `errorMode` controls whether a
    * runtime / parser error rejects the promise (used by
    * `getMd5Hash`, where any error means we can't proceed) or
-   * resolves it as a structured failure (used by polling /
-   * setVariable, where the caller wants a Result envelope).
+   * resolves it as a structured failure built by `onFailure` — each caller
+   * supplies its own envelope, so no cast ever bridges the generic gap.
    *
    * Single chokepoint for the Socket.IO envelope handling — every
-   * client method routes through here, so the hex encoding /
+   * client method routes through here, so the serialisation / hex encoding /
    * timeout / event registration logic lives in exactly one place.
    */
   private sendCommand<
-    T extends DebugTransportResult | DebugSetResult | DebugLicenseReadResult | DebugLicenseWriteResult,
-  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve'): Promise<T>
+    T extends
+      | DebugTransportResult
+      | DebugSetResult
+      | DebugBoardIdResult
+      | DebugLicenseReadResult
+      | DebugLicenseWriteResult,
+  >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve', onFailure: (error: string) => T): Promise<T>
   private sendCommand<T extends Md5ProbeResult>(
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,
@@ -203,21 +305,53 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     pdu: Uint8Array,
     parse: (bytes: Uint8Array) => T,
     errorMode: 'resolve' | 'reject',
+    onFailure?: (error: string) => T,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => this.sendCommandNow(pdu, parse, errorMode, onFailure).then(resolve, reject)
+      // Chain regardless of the predecessor's fate: a failed command must not
+      // wedge the queue (same shape as the Modbus clients' mutex).
+      this.sendRequestMutex = this.sendRequestMutex.then(run, run)
+    })
+  }
+
+  private sendCommandNow<T>(
+    pdu: Uint8Array,
+    parse: (bytes: Uint8Array) => T,
+    errorMode: 'resolve' | 'reject',
+    onFailure?: (error: string) => T,
   ): Promise<T> {
     const commandHex = bytesToHexSpaced(pdu)
 
     return new Promise<T>((resolve, reject) => {
       const fail = (error: string) => {
-        if (errorMode === 'reject') {
+        if (errorMode === 'reject' || !onFailure) {
           reject(new Error(error))
         } else {
-          resolve({ success: false, error } as unknown as T)
+          resolve(onFailure(error))
         }
       }
 
-      const timeoutHandle = setTimeout(() => fail('Request timeout'), REQUEST_TIMEOUT_MS)
+      // Re-checked HERE, after the mutex wait — the public methods' guard ran
+      // when the command was QUEUED, and disconnect() can null the socket while
+      // predecessors drain (review 2026-08-20). Without this, `this.socket!`
+      // below throws a raw TypeError through the IPC instead of answering the
+      // same failure envelope the pre-mutex code answered in this situation.
+      if (!this.socket) {
+        fail('Not connected to target')
+        return
+      }
 
       const responseHandler = (response: { success: boolean; data?: string; error?: string }) => {
+        // Correlate DATA frames by echoed function code: a stale reply from a
+        // command that already timed out (its handler is gone) must not be
+        // consumed as OURS. Error envelopes carry no PDU to correlate on, so
+        // they are accepted as-is — the mutex means nothing else is in flight.
+        if (response.success && response.data) {
+          const bytes = hexSpacedToBytes(response.data)
+          if (bytes.length > 0 && bytes[0] !== pdu[0]) return // stale frame: keep waiting
+        }
+
         clearTimeout(timeoutHandle)
         this.socket?.off('debug_response', responseHandler)
 
@@ -237,8 +371,13 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
         }
       }
 
-      this.socket!.on('debug_response', responseHandler)
-      this.socket!.emit('debug_command', { command: commandHex })
+      const timeoutHandle = setTimeout(() => {
+        this.socket?.off('debug_response', responseHandler)
+        fail('Request timeout')
+      }, REQUEST_TIMEOUT_MS)
+
+      this.socket.on('debug_response', responseHandler)
+      this.socket.emit('debug_command', { command: commandHex })
     })
   }
 }
