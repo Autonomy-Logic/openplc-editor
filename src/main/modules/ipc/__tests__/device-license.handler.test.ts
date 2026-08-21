@@ -2,11 +2,13 @@
  * The two licensing IPC handlers, over a fake held link.
  *
  * What is worth testing HERE (as opposed to in `license-flow`, which owns the
- * decision logic) is the wiring: that the handlers take the CONTROL channel
- * rather than opening a connection, that a missing link is reported as
- * `check-failed` and never as "not licensed", that the anchor is read fresh, that
- * the compound sequence is guarded, and that device traffic is noted so the
- * liveness poll does not declare a healthy link lost mid-sequence.
+ * decision logic) is the wiring: that the handlers pick the channel licensing
+ * rides for the session — the held CONTROL link on baremetal, the debug
+ * WebSocket on a REST-controlled runtime (v4), acquired per call and released
+ * afterwards — that a missing link is reported as `check-failed` and never as
+ * "not licensed", that the anchor is read fresh, that the compound sequence is
+ * guarded, and that device traffic is noted so the liveness poll does not
+ * declare a healthy link lost mid-sequence.
  */
 
 import MainProcessBridge from '../main'
@@ -82,6 +84,38 @@ function boardIdClient(overrides: Partial<{ getBoardId: jest.Mock }> = {}) {
     writeLicense: jest.fn(),
     ...overrides,
   }
+}
+
+/**
+ * Install a fake REST-controlled session (runtime v4): no control client, a REST
+ * address, and a debug channel that hands out `client` — or refuses with
+ * `acquireError`. Mirrors what `openRestSession` + `acquireDebugChannel` set up.
+ */
+function holdRestSession(
+  bridge: ReturnType<typeof createBridge>,
+  client: Record<string, jest.Mock> | null,
+  options: { acquireError?: string } = {},
+) {
+  const session = (
+    bridge as unknown as {
+      deviceSession: {
+        getRestAddress: () => string | null
+        acquireDebugChannel: (reason: string) => Promise<unknown>
+        releaseDebugChannel: (reason: string) => void
+        isConnected: () => boolean
+      }
+    }
+  ).deviceSession
+  jest.spyOn(session, 'getRestAddress').mockReturnValue('192.168.0.50')
+  jest.spyOn(session, 'isConnected').mockReturnValue(true)
+  const acquire = jest.spyOn(session, 'acquireDebugChannel')
+  if (options.acquireError) {
+    acquire.mockResolvedValue({ error: options.acquireError })
+  } else {
+    acquire.mockResolvedValue({ client })
+  }
+  const release = jest.spyOn(session, 'releaseDebugChannel')
+  return { acquire, release }
 }
 
 beforeEach(() => {
@@ -259,5 +293,106 @@ describe('device:refresh-license', () => {
     const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
+  })
+})
+
+describe('licensing over a REST-controlled session (runtime v4)', () => {
+  it('routes read-license over the debug channel, and releases it afterwards', async () => {
+    // A runtime session holds NO control client — control is REST. The license
+    // FCs ride the debug WebSocket instead, acquired for the call and released
+    // in a finally, like every other per-command debug caller.
+    const bridge = createBridge()
+    const wsClient = boardIdClient()
+    const { acquire, release } = holdRestSession(bridge, wsClient)
+    licenseFlow.inspectDeviceLicense.mockResolvedValue({
+      deviceId: 'abc',
+      outcome: { state: 'licensed', how: 'already-stored' },
+    })
+
+    const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
+
+    // The holder key carries a per-call uniqueness suffix (review 2026-08-20,
+    // finding 2): concurrent same-named callers must be two references, or the
+    // second's release closes the channel under the first.
+    expect(acquire).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
+    // The flow gets the CHANNEL ITSELF, not a wrapper: its frame mutex must keep
+    // serialising this traffic with everyone else's.
+    expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(wsClient, { ...REQUEST, anchor: ANCHOR })
+    expect(result.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
+  })
+
+  it('routes refresh-license over the debug channel', async () => {
+    const bridge = createBridge()
+    const wsClient = boardIdClient()
+    const { release } = holdRestSession(bridge, wsClient)
+    licenseFlow.resolveDeviceLicense.mockResolvedValue({
+      deviceId: 'abc',
+      outcome: { state: 'licensed', how: 'activated' },
+    })
+
+    const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(wsClient, { ...REQUEST, anchor: ANCHOR })
+    expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^refresh license#\d+$/))
+  })
+
+  it('reports check-failed when the debug channel cannot carry the license FCs', async () => {
+    // A medium without the license methods (they are optional on the channel
+    // contract) must be refused BEFORE anything is asked of it — and still
+    // released, or the channel could never close.
+    const bridge = createBridge()
+    const partial = { getBoardId: jest.fn(), writeLicense: jest.fn() } // no readLicense
+    const { release } = holdRestSession(bridge, partial)
+
+    const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
+
+    expect(result.outcome).toEqual({
+      state: 'check-failed',
+      error: 'this connection cannot carry the license protocol',
+    })
+    expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))
+  })
+
+  it('reports check-failed — never "not licensed" — when the debug channel will not open', async () => {
+    const bridge = createBridge()
+    holdRestSession(bridge, null, { acquireError: 'the runtime refused the WebSocket' })
+
+    const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
+
+    expect(result.outcome).toEqual({ state: 'check-failed', error: 'the runtime refused the WebSocket' })
+    expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
+  })
+
+  it('maps an anchor-less target (0x85 on 0x48) to the terminal unsupported outcome', async () => {
+    // The target itself said "no hardware anchor to license against" — that is
+    // a property of the device, not a transient failure, so no retry nag.
+    const bridge = createBridge()
+    const wsClient = boardIdClient({
+      getBoardId: jest.fn(() => Promise.resolve({ success: false, unsupported: true, error: 'LIC_UNSUPPORTED' })),
+    })
+    holdRestSession(bridge, wsClient)
+
+    const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
+
+    expect(result.outcome).toEqual({ state: 'unsupported' })
+    expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
+  })
+
+  it('reports check-failed when the runtime does not answer the anchor read (pre-licensing runtime)', async () => {
+    // A runtime that predates the license FCs answers 0x48 with an error. The
+    // flow must never run — a device id derived from nothing licenses nobody.
+    const bridge = createBridge()
+    const wsClient = boardIdClient({
+      getBoardId: jest.fn(() => Promise.resolve({ success: false, error: 'Unknown function code' })),
+    })
+    holdRestSession(bridge, wsClient)
+
+    const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(result.outcome).toEqual({ state: 'check-failed', error: 'Unknown function code' })
+    expect(licenseFlow.resolveDeviceLicense).not.toHaveBeenCalled()
   })
 })
