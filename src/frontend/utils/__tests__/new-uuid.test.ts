@@ -27,8 +27,22 @@ describe('newUuid', () => {
       const { newUuid: freshNewUuid } = await import('../new-uuid')
       expect(freshNewUuid()).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     } finally {
-      if (original) Object.defineProperty(crypto, 'randomUUID', original)
+      // `randomUUID` lives on `Crypto.prototype`, not on the `crypto` instance,
+      // so there is no own descriptor to put back — restoring only when one
+      // existed would leave our `undefined` own property shadowing the real
+      // method for every later test in this file.
+      if (original) {
+        Object.defineProperty(crypto, 'randomUUID', original)
+      } else {
+        Reflect.deleteProperty(crypto, 'randomUUID')
+      }
       jest.resetModules()
     }
+  })
+
+  // Guards the teardown above: if the property is ever left shadowed, this
+  // fails right here instead of surfacing as an unrelated test breaking later.
+  it('leaves crypto.randomUUID intact after that test', () => {
+    expect(typeof crypto.randomUUID).toBe('function')
   })
 })
