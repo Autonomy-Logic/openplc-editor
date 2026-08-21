@@ -1,3 +1,4 @@
+import { toPowerShellLiteral } from '../install-shim'
 import {
   candidateDirectories,
   describeUnstableLocation,
@@ -9,6 +10,7 @@ import {
   resolveShimTarget,
   SHIM_MARKER,
   platformSwitches,
+  quoteForShell,
   shimFileName,
   type ShimEnvironment,
 } from '../shim-plan'
@@ -120,7 +122,7 @@ describe('renderShim', () => {
     expect(shim).toContain('#!/bin/sh')
     // `exec` so the shim does not linger and the exit code passes through;
     // `"$@"` so a project path containing spaces survives.
-    expect(shim).toContain('exec "/Applications/OpenPLC Editor.app/Contents/MacOS/OpenPLC Editor" "--cli" "$@"')
+    expect(shim).toContain(`exec '/Applications/OpenPLC Editor.app/Contents/MacOS/OpenPLC Editor' '--cli' "$@"`)
     expect(shim).toContain(SHIM_MARKER)
   })
 
@@ -222,8 +224,8 @@ describe('renderShim', () => {
     )
     // Switches precede the script path, which is where Electron expects them.
     expect(shim).toContain(
-      'exec "/repo/node_modules/electron/dist/Electron" "--no-sandbox" "--ozone-platform=headless" ' +
-        '"--disable-gpu" "/repo/openplc-cli.dev.js" "--cli" "$@"',
+      `exec '/repo/node_modules/electron/dist/Electron' '--no-sandbox' '--ozone-platform=headless' ` +
+        `'--disable-gpu' '/repo/openplc-cli.dev.js' '--cli' "$@"`,
     )
   })
 })
@@ -244,7 +246,35 @@ describe('platformSwitches', () => {
   it('renders them into the Linux shim ahead of the CLI marker', () => {
     const shim = renderShim({ command: '/home/dev/App.AppImage', leadingArgs: ['--cli'] }, 'linux')
     expect(shim).toContain(
-      'exec "/home/dev/App.AppImage" "--no-sandbox" "--ozone-platform=headless" "--disable-gpu" "--cli" "$@"',
+      `exec '/home/dev/App.AppImage' '--no-sandbox' '--ozone-platform=headless' '--disable-gpu' '--cli' "$@"`,
     )
+  })
+})
+
+describe('quoteForShell', () => {
+  it('suppresses POSIX expansion, so a path with $ or a backtick runs literally', () => {
+    // Double quotes would still expand these — the shim would run something else.
+    expect(quoteForShell('/home/$USER/bin/app', 'linux')).toBe("'/home/$USER/bin/app'")
+    expect(quoteForShell('/home/`whoami`/app', 'darwin')).toBe("'/home/`whoami`/app'")
+  })
+
+  it('escapes an embedded single quote by closing, escaping and reopening', () => {
+    expect(quoteForShell("/home/o'brien/app", 'linux')).toBe("'/home/o'\\''brien/app'")
+  })
+
+  it('doubles % on Windows so cmd reads it literally, keeping spaces quoted', () => {
+    expect(quoteForShell('C:\\Program Files\\%APPDATA%\\app.exe', 'win32')).toBe(
+      '"C:\\Program Files\\%%APPDATA%%\\app.exe"',
+    )
+  })
+})
+
+describe('toPowerShellLiteral', () => {
+  it('single-quotes so nothing is expanded, doubling an embedded quote', () => {
+    // `powershell -Command <script> <arg>` does NOT populate $args, so the
+    // directory is embedded — this is the escaping that makes that safe.
+    expect(toPowerShellLiteral('C:\\Users\\dev\\bin')).toBe("'C:\\Users\\dev\\bin'")
+    expect(toPowerShellLiteral("C:\\o'brien")).toBe("'C:\\o''brien'")
+    expect(toPowerShellLiteral('C:\\$env\\bin')).toBe("'C:\\$env\\bin'")
   })
 })

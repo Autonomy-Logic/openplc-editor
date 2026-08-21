@@ -83,7 +83,10 @@ export function parseArgs(argv: readonly string[], options: ParseOptions = {}): 
     // these two are the ones people reach for without reading anything
     // (`apt -y` set that expectation, and `-h` is universal), while inventing
     // short forms for the rest would make argv harder to read, not easier.
-    const shortFlag = SHORT_FLAGS[token]
+    // `Object.hasOwn`, not a bare index: a plain object resolves inherited keys,
+    // so a token literally named `constructor` or `toString` would be consumed
+    // as a short flag.
+    const shortFlag = Object.hasOwn(SHORT_FLAGS, token) ? SHORT_FLAGS[token] : undefined
     if (shortFlag) {
       setFlag(flags, shortFlag, true)
       continue

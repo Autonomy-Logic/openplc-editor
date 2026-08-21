@@ -17,7 +17,7 @@ import { discoverRuntimes } from '@root/backend/editor/hardware/discover-runtime
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { ErrorCode } from '../exit-codes'
 import { ExitCode } from '../exit-codes'
-import type { CliResult, Reporter } from '../output'
+import { type CliResult, renderTable, type Reporter } from '../output'
 
 export async function runDevices(args: ParsedArgs, reporter: Reporter): Promise<CliResult> {
   const rawTimeout = stringFlag(args, 'timeout')
@@ -80,19 +80,6 @@ export async function runDevices(args: ParsedArgs, reporter: Reporter): Promise<
 
     return sections.join('\n\n')
   })
-}
-
-/** Column-aligned plain text — no box drawing, so it survives a narrow terminal. */
-export function renderTable(headers: string[], rows: string[][]): string {
-  const widths = headers.map((header, column) =>
-    Math.max(header.length, ...rows.map((row) => (row[column] ?? '').length)),
-  )
-  const line = (cells: string[]) =>
-    cells
-      .map((cell, column) => (column === cells.length - 1 ? cell : cell.padEnd(widths[column])))
-      .join('  ')
-      .trimEnd()
-  return [line(headers), ...rows.map(line)].join('\n')
 }
 
 /** The parenthetical the port dropdown shows: board name when arduino-cli knows it. */

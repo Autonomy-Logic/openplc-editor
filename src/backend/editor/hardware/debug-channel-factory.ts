@@ -14,6 +14,7 @@
  * resolver that reads it; a second opinion in a front end can only be wrong.
  */
 
+import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
 
@@ -26,6 +27,18 @@ import { buildDeviceModbusTransport, modbusTransportKind } from './device-transp
 const RUNTIME_DEBUG_PORT = 8443
 
 export interface DebugChannelFactoryDeps {
+  /**
+   * The live access token, read at channel-OPEN time.
+   *
+   * Not a closure over the login-time value. The token manager re-authenticates
+   * transparently when the 15-minute JWT expires, and the runtime re-verifies the
+   * token on every debug command (openplc-runtime#169) — so a channel opened
+   * after a refresh and holding the old token is rejected on its first command,
+   * taking the debug session and the licensing PDUs that ride the same WebSocket
+   * with it. `config.connectionParams.jwtToken` is only the fallback for the
+   * first instants, before a session exists.
+   */
+  getToken?: () => string | null
   /**
    * Builds the in-process serial port the simulator answers on. Injected because
    * the simulator instance belongs to whoever is hosting it — the main process
@@ -126,7 +139,17 @@ export function toDebugCandidate(
     return {
       transport: 'websocket',
       descriptor: `websocket ${host}`,
-      create: () => new WebSocketDebugTransport({ host, port: RUNTIME_DEBUG_PORT, token, rejectUnauthorized: false }),
+      create: () =>
+        new WebSocketDebugTransport({
+          host,
+          port: RUNTIME_DEBUG_PORT,
+          token,
+          // The SHARED policy, not a hardcoded `false`. The REST path already
+          // honours `getRuntimeHttpsOptions()`, so pinning this to `false` meant
+          // an operator who tightened TLS verification for the runtime API
+          // silently kept an unverified debug socket to the same device.
+          rejectUnauthorized: getRuntimeHttpsOptions().rejectUnauthorized,
+        }),
     }
   }
   // One config in, one candidate out: this builds the DEBUG channel for a

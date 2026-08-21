@@ -42,10 +42,7 @@ import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
-import {
-  toDebugCandidate,
-  toDeviceLinkCandidates,
-} from '../../../backend/editor/hardware/debug-channel-factory'
+import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
 import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
@@ -197,61 +194,15 @@ class MainProcessBridge implements MainIpcModule {
   private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
   private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
 
-  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      const res = await this.httpRequest({
-        method: 'GET',
-        url: this.runtimeUrl(ipAddress, '/api/get-users-info'),
-      })
-      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+  handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 
-      if (res.statusCode === 404) {
-        return { hasUsers: false, runtimeVersion }
-      } else if (res.statusCode === 200) {
-        return { hasUsers: true, runtimeVersion }
-      } else {
-        return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
-      }
-    } catch (error) {
-      return { hasUsers: false, error: getErrorMessage(error) }
-    }
-  }
-
-  handleRuntimeCreateUser = async (
+  handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     username: string,
     password: string,
     role?: RuntimeUserRole,
-  ) => {
-    try {
-      // `role` is only honoured by the runtime for authenticated (admin) creation;
-      // the unauthenticated first-user bootstrap always becomes an admin regardless.
-      const body: { username: string; password: string; role?: RuntimeUserRole } = { username, password }
-      if (role) body.role = role
-      const payload = JSON.stringify(body)
-
-      // First-user bootstrap runs before any login (no token yet) and the
-      // runtime allows it unauthenticated. Once a session exists this is an
-      // admin adding an account, which the runtime requires to be authenticated
-      // — route it through the token authority (mutation helper accepts the
-      // runtime's 201 Created and refreshes an expired token).
-      if (this.tokens.hasToken()) {
-        const res = await this.makeRuntimeApiMutation('POST', ipAddress, '/api/create-user', payload)
-        return res.success ? { success: true } : { success: false, error: res.error }
-      }
-
-      const res = await this.httpRequest({
-        method: 'POST',
-        url: this.runtimeUrl(ipAddress, '/api/create-user'),
-        body: payload,
-      })
-      if (res.statusCode === 201) return { success: true }
-      return { success: false, error: res.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  ) => this.runtimeApi.createUser(ipAddress, username, password, role)
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
@@ -537,20 +488,7 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<{ success: true; data: string } | { success: false; error: string }> =>
     this.runtimeApi.makeRuntimeApiMutation(method, ipAddress, endpoint, body)
 
-  private httpRequest = (options: {
-    method: 'GET' | 'POST'
-    url: string
-    body?: string
-    headers?: Record<string, string>
-    timeoutMs?: number
-  }) => this.runtimeApi.httpRequest(options)
-
   private restStartPlc = (address: string) => this.runtimeApi.startPlc(address)
-
-  private runtimeUrl = (ipAddress: string, endpoint: string) => this.runtimeApi.runtimeUrl(ipAddress, endpoint)
-
-  private performAuthentication = (ipAddress: string, username: string, password: string) =>
-    this.runtimeApi.login(ipAddress, username, password)
 
   /** The token authority, so existing call sites keep reading `this.tokens`. */
   private get tokens() {
@@ -1581,6 +1519,9 @@ class MainProcessBridge implements MainIpcModule {
    */
   private readonly debugChannelDeps = {
     createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
+    // Read from the TOKEN MANAGER at open time, never from a closure over the
+    // login-time value — see `DebugChannelFactoryDeps.getToken`.
+    getToken: () => this.runtimeApi.tokens.getToken(),
   }
   /** Consume the classification the last verified candidate produced. */
   private takeDeviceLinkProbe(): DeviceProbeOutcome | null {

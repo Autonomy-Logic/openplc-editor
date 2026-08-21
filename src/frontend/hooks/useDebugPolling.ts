@@ -30,14 +30,6 @@ import { DEBUG_MEDIUM_PROFILE, debugProfileFor, DEFAULT_DEBUG_MEDIUM } from '../
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
 import { walkDebugResponse } from '../utils/debug-response-walker'
 
-/**
- * Poll pacing and batching per medium now live in
- * `utils/debug-medium-profile`, so non-React callers (the headless CLI's debug
- * session) can size their reads from the same table. Re-exported here because
- * this module has been the import site for both since they were introduced.
- */
-export { DEBUG_MEDIUM_PROFILE, debugProfileFor } from '../utils/debug-medium-profile'
-
 /** Floor for the adaptive batch shrink below — a batch of one still makes progress. */
 const MIN_BATCH_SIZE = 2
 
@@ -283,7 +275,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         },
       })
       const positionsConsumed = walk.positionsConsumed
-      const loopReachedEnd = walk.reachedEnd
+      const reachedEnd = walk.reachedEnd
 
       // Advance round-robin offset by what we actually consumed.
       //
@@ -304,7 +296,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // to runtime's lastIndex+1 so positions the runtime skipped
       // (var_size == 0, e.g. STRING stubs) still advance us.  Otherwise
       // honor positionsConsumed so unread positions get retried.
-      if (loopReachedEnd) {
+      if (reachedEnd) {
         itemsProcessed = result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
       } else {
         itemsProcessed = positionsConsumed

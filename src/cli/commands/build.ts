@@ -18,10 +18,12 @@ import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-clien
 import { openPLCStoreBase } from '@root/frontend/store'
 import { compileProgramFlow } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
+import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { createCliCompileTransport } from '../compile/cli-transport'
+import { connectToRuntime } from '../connect-runtime'
 import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
 import type { CliFailure, CliResult, Reporter } from '../output'
 import { applyConnectionOverrides, loadProject } from '../project/load'
@@ -29,6 +31,11 @@ import { applyConnectionOverrides, loadProject } from '../project/load'
 export interface BuildOptions {
   /** True for `upload`: connect to a runtime and let the pipeline flash it. */
   withUpload: boolean
+  /**
+   * Credentials supplied by an in-process caller, bypassing the flag/env lookup.
+   * Used by `debug open --upload-if-needed`, which already holds them.
+   */
+  credentials?: { username: string; password: string }
 }
 
 export async function runBuild(args: ParsedArgs, reporter: Reporter, options: BuildOptions): Promise<CliResult> {
@@ -111,20 +118,21 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
         ExitCode.Usage,
       )
     }
-    const credentials = resolveCredentials(args)
-    if ('error' in credentials) {
-      return reporter.failure({ code: ErrorCode.MissingArgument, message: credentials.error }, ExitCode.Usage)
-    }
-
-    reporter.progress(`Authenticating with ${host}…`)
-    runtime = new RuntimeApiClient()
-    const login = await runtime.login(host, credentials.username, credentials.password)
-    if (!login.success) {
+    // Shared with `debug open`, including the first-user bootstrap a fresh
+    // runtime needs (`--create-user`).
+    const connected = await connectToRuntime({
+      host,
+      args,
+      credentials: options.credentials,
+      onProgress: (m) => reporter.progress(m),
+    })
+    if (!connected.ok) {
       return reporter.failure(
-        { code: ErrorCode.AuthRejected, message: login.error ?? 'The runtime rejected the credentials' },
-        ExitCode.Auth,
+        { code: connected.failure.code, message: connected.failure.message },
+        connected.failure.exitCode,
       )
     }
+    runtime = connected.value.runtime
   }
 
   // The same gate the GUI's build puts up. Targets that are not flashed over USB
@@ -137,6 +145,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       runtime,
       host,
       target,
+      buildsOnDevice: !capabilities.directUsbUpload,
       autoApprove: boolFlag(args, 'yes'),
       reporter,
     })
@@ -198,60 +207,39 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   )
 }
 
-/** Credentials from flags or the environment, with a clear message when absent. */
-export function resolveCredentials(args: ParsedArgs): { username: string; password: string } | { error: string } {
-  // `--credentials user:pass` is convenient; the environment form exists because
-  // a flag lands in shell history and CI logs.
-  const combined = stringFlag(args, 'credentials') ?? process.env.OPENPLC_CREDENTIALS
-  if (combined) {
-    const separator = combined.indexOf(':')
-    if (separator <= 0 || separator === combined.length - 1) {
-      return { error: 'Credentials must look like user:password' }
-    }
-    return { username: combined.slice(0, separator), password: combined.slice(separator + 1) }
-  }
-  const username = stringFlag(args, 'user') ?? process.env.OPENPLC_USER
-  const password = stringFlag(args, 'password') ?? process.env.OPENPLC_PASSWORD
-  if (!username || !password) {
-    return {
-      error:
-        'Runtime credentials are required: pass --credentials user:pass (or --user/--password), ' +
-        'or set OPENPLC_CREDENTIALS / OPENPLC_USER + OPENPLC_PASSWORD',
-    }
-  }
-  return { username, password }
-}
-
 /**
- * Stop the PLC before a build that runs on the device, or refuse.
+ * Apply the shared pre-build gate, obtaining consent the way a CLI can.
  *
- * Mirrors the GUI's pre-build gate: when the target is reached through a runtime
- * (rather than flashed over USB) and that runtime is RUNNING, the editor warns
- * and stops it on the user's consent. `--yes` is that consent, the way `apt -y`
- * is; without it the build stops and says so, because a scripted run must not
- * silently halt a live PLC.
+ * The DECISION is `evaluatePreBuildPlcGate`, the same function the editor's
+ * build button uses — so the two cannot disagree about when a build may start.
+ * What differs is only the consent: the GUI shows "Stop PLC and Continue"; here
+ * `--yes` is that click, the way `apt -y` is. Without it the command refuses,
+ * because silently halting a running PLC from a script is not a default.
  */
 async function ensurePlcStoppedForBuild(input: {
   runtime: RuntimeApiClient
   host: string
   target: string
+  buildsOnDevice: boolean
   autoApprove: boolean
   reporter: Reporter
 }): Promise<{ ok: true } | { error: CliFailure; exitCode: ExitCodeValue }> {
   const status = await input.runtime.getStatus(input.host)
-  // Unknown state is not a reason to block: the build's own upload step reports
-  // a target it cannot reach far better than a pre-flight guess does.
-  if (!status.success) return { ok: true }
-  if (!(status.status ?? '').toUpperCase().includes('RUNNING')) return { ok: true }
+
+  const verdict = evaluatePreBuildPlcGate({
+    buildsOnDevice: input.buildsOnDevice,
+    // A status call that failed means we could not establish a connection, which
+    // the gate treats as "proceed" — the upload step reports it far better.
+    connected: status.success,
+    running: (status.status ?? '').toUpperCase().includes('RUNNING'),
+  })
+  if (verdict.kind === 'proceed') return { ok: true }
 
   if (!input.autoApprove) {
     return {
       error: {
         code: ErrorCode.TargetError,
-        message:
-          `The PLC on ${input.host} is RUNNING and "${input.target}" builds on the device, which can stall ` +
-          'the build or make the running program miss scan deadlines. Stop it first, or pass --yes to have ' +
-          'this command stop it for you.',
+        message: `${verdict.reason} Stop it first, or pass --yes to have this command stop it for you.`,
       },
       exitCode: ExitCode.TargetError,
     }
@@ -277,4 +265,47 @@ async function ensurePlcStoppedForBuild(input: {
 /** The port the store now holds — after `--port` has been applied. */
 function currentCommunicationPort(): string | undefined {
   return openPLCStoreBase.getState().deviceDefinitions.configuration.communicationPort || undefined
+}
+
+/**
+ * Build (and optionally upload) a project from structured options.
+ *
+ * The seam `runBuild` sits on. `debug open --upload-if-needed` used to reach the
+ * upload by hand-building a `ParsedArgs` literal and serialising credentials
+ * into a `user:pass` string purely so `resolveRuntimeCredentials` could split
+ * them again — which truncated a username containing a colon on that path and
+ * only that path, and made any future required flag on `upload` an invisible
+ * runtime failure instead of a compile error.
+ */
+export async function buildProject(options: {
+  projectPath: string
+  target?: string
+  host?: string
+  port?: string
+  credentials?: { username: string; password: string }
+  withUpload: boolean
+  cleanBuild?: boolean
+  autoApprove?: boolean
+  reporter: Reporter
+}): Promise<CliResult> {
+  // Rebuilt as argv rather than duplicating `runBuild`'s body: one code path,
+  // and the flags are the same contract the command line uses. Credentials go
+  // through the structured field, not a colon-joined string.
+  const flags: ParsedArgs['flags'] = {}
+  if (options.target) flags.target = options.target
+  if (options.host) flags.host = options.host
+  if (options.port) flags.port = options.port
+  if (options.cleanBuild) flags.clean = true
+  if (options.autoApprove) flags.yes = true
+
+  return runBuild(
+    {
+      command: options.withUpload ? 'upload' : 'compile',
+      subcommand: undefined,
+      positionals: [options.projectPath],
+      flags,
+    },
+    options.reporter,
+    { withUpload: options.withUpload, credentials: options.credentials },
+  )
 }

@@ -13,7 +13,14 @@ export async function runDaemonFromStdin(): Promise<void> {
   const raw = await readFirstLine()
   const config = readConfig(raw)
   if (!config) {
-    process.stdout.write(`${JSON.stringify({ event: 'failed', code: 'internal', error: 'Malformed daemon config' })}\n`)
+    // Written and awaited before exiting: piped stdout is async, and `app.exit`
+    // would drop the line the parent is waiting on.
+    await new Promise<void>((resolve) => {
+      process.stdout.write(
+        `${JSON.stringify({ event: 'failed', code: 'internal', error: 'Malformed daemon config' })}\n`,
+        () => resolve(),
+      )
+    })
     app.exit(1)
     return
   }

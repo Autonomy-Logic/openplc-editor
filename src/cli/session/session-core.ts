@@ -299,7 +299,7 @@ export class SessionCore {
       const result = await this.readValues([variable])
       if ('error' in result) return { error: result.error }
       last = result.values[0]
-      if (last && valueMatchesRequest(last, requested)) break
+      if (last && writeHasSettled(last, requested)) break
       if (this.now() >= deadline) break
       await delay(WRITE_SETTLE_POLL_MS)
     }
@@ -506,14 +506,23 @@ export function channelPlcControl(channel: DeviceDebugChannel): PlcControl {
 }
 
 /**
- * Did a read-back land on what the caller asked for?
+ * Should the read-back poll stop?
+ *
+ * Named for what it decides, not for what the caller hopes: it returns true both
+ * when the value MATCHES the request and when the two cannot be compared at all
+ * (a non-boolean string against a BOOL, an unparseable number, a formatted TIME
+ * literal). Calling it `valueMatchesRequest` asserted more than it computed — a
+ * reader would conclude a write had landed when the code had merely given up.
+ *
+ * Giving up is the right behaviour here: the value is reported to the caller
+ * either way, and a soft `write` the program overwrites next scan is legitimate,
+ * so an incomparable read-back must not spin for the whole timeout.
  *
  * Compared as text after normalising, because the request is a user string
  * (`TRUE`, `3.5`, `16#FF`) and the reply is a typed value. Exact float equality
- * is deliberately avoided: `3.5` written to a REAL reads back as `3.5`, but a
- * value the target rounds would spin the poll for its whole timeout.
+ * is avoided deliberately: a value the target rounds would never compare equal.
  */
-function valueMatchesRequest(value: VariableValue, requested: string): boolean {
+function writeHasSettled(value: VariableValue, requested: string): boolean {
   const wanted = requested.trim().toUpperCase()
   if (typeof value.value === 'boolean') {
     const asTrue = wanted === 'TRUE' || wanted === '1'

@@ -15,7 +15,7 @@
 
 import { execFile } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import {
@@ -52,15 +52,33 @@ export interface InstallShimOptions {
   onDiagnostic?: (message: string) => void
 }
 
-/** Can we create files here? Tested by creating the directory, not by guessing at modes. */
+/**
+ * Could we create files here?
+ *
+ * Probes WITHOUT creating the directory when it does not exist: `planShimInstall`
+ * asks about every candidate, so creating them made an install grow both
+ * `~/.local/bin` and `~/bin` even though it uses one — contradicting the policy
+ * note that says the second exists only for users who already have it. An absent
+ * directory is judged by whether its PARENT would allow creating it.
+ */
 function directoryIsWritable(directory: string): boolean {
-  try {
-    mkdirSync(directory, { recursive: true })
-  } catch {
-    return false
+  if (existsSync(directory)) return canWriteInto(directory)
+
+  // Walk to the nearest ancestor that exists and ask there. Testing only the
+  // immediate parent judged `~/.local/bin` unwritable on a machine with no
+  // `~/.local` at all — which handed the install to `~/bin` and quietly
+  // abandoned the XDG-conventional location the policy prefers.
+  let ancestor = dirname(directory)
+  while (!existsSync(ancestor)) {
+    const parent = dirname(ancestor)
+    if (parent === ancestor) return false
+    ancestor = parent
   }
-  // `access(W_OK)` lies on some network and container filesystems, so probe by
-  // actually writing — the only answer that matters is whether a write works.
+  return canWriteInto(ancestor)
+}
+
+/** Probe by writing, since `access(W_OK)` lies on some network filesystems. */
+function canWriteInto(directory: string): boolean {
   const probe = join(directory, `.openplc-cli-probe-${process.pid}`)
   try {
     writeFileSync(probe, '')
@@ -94,6 +112,16 @@ export async function installCliShim(options: InstallShimOptions): Promise<Insta
       reason:
         'No writable directory was found for the openplc-cli command. Tried: ' +
         `${candidatesFor(environment).join(', ')}.`,
+    }
+  }
+
+  // Created here, once, for the directory actually chosen.
+  try {
+    mkdirSync(plan.directory, { recursive: true })
+  } catch (error) {
+    return {
+      status: 'failed',
+      reason: `Could not create ${plan.directory}: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
 
@@ -181,18 +209,37 @@ async function ensureOnPath(
  * that — it would silently destroy entries. Reads the current user-scope value
  * (not the process one, which is the user and machine values already merged) so
  * the machine PATH is never copied into the user's.
+ *
+ * The directory is EMBEDDED in the script as a quoted literal rather than passed
+ * as a trailing argument. `powershell -Command <script> <arg>` does not populate
+ * `$args` — that only happens with `-File` — so an earlier version read
+ * `$args[0]` as empty, silently added nothing, and reported success. Embedding
+ * has no such failure mode, and single-quoted PowerShell strings have exactly one
+ * escape to get right: a literal `'` is doubled.
  */
 async function appendToWindowsUserPath(directory: string): Promise<void> {
+  // Deliberately a flat sequence of statements with no multi-statement block:
+  // the pieces are joined with `; `, and a brace-delimited body would put a
+  // separator immediately after `{`. `-Command` (not `-File`) also matters —
+  // running a .ps1 is subject to the execution policy, which blocks it by
+  // default on a stock Windows install, while `-Command` is not.
   const script = [
-    '$dir = $args[0]',
+    `$dir = ${toPowerShellLiteral(directory)}`,
     "$current = [Environment]::GetEnvironmentVariable('Path', 'User')",
-    "if ([string]::IsNullOrEmpty($current)) { $current = '' }",
-    "$entries = $current.Split(';') | Where-Object { $_ -ne '' }",
-    'if ($entries -notcontains $dir) {',
-    "  $updated = (@($entries) + $dir) -join ';'",
-    "  [Environment]::SetEnvironmentVariable('Path', $updated, 'User')",
-    '}',
+    "if (-not $current) { $current = '' }",
+    "$entries = @($current.Split(';') | Where-Object { $_ -ne '' })",
+    "if ($entries -notcontains $dir) { [Environment]::SetEnvironmentVariable('Path', (($entries + $dir) -join ';'), 'User') }",
   ].join('; ')
 
-  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script, directory])
+  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script])
+}
+
+/**
+ * A PowerShell single-quoted string literal.
+ *
+ * Single quotes so nothing inside is expanded — a directory containing `$` must
+ * not become a variable reference — with the one required escape: `'` doubled.
+ */
+export function toPowerShellLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
 }

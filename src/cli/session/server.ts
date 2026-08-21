@@ -77,7 +77,12 @@ export class SessionServer {
       const request = decodeRequest(line)
       if (!request) {
         this.write(socket, {
-          id: 0,
+          // The id is recovered BEFORE schema validation, because the client only
+          // settles on a matching id. Answering `0` meant the client discarded
+          // the error and blocked for its full 60 s timeout — reachable from
+          // ordinary input: `debug watch x --interval abc` produces `NaN`, which
+          // the schema rejects, so a typo looked like a hung session.
+          id: recoverRequestId(line),
           ok: false,
           error: { code: ErrorCode.InvalidArgument, message: `Malformed request: ${line.slice(0, 200)}` },
         })
@@ -119,5 +124,24 @@ export class SessionServer {
     this.sockets.clear()
     this.server.close()
     this.options.onClosed()
+  }
+}
+
+/**
+ * The `id` of a line that failed validation, so the error can be addressed.
+ *
+ * Best effort by design: a line that is not even JSON has no id, and `0` is then
+ * the honest answer — but the common case is a structurally valid request with
+ * one bad field, where the id is right there.
+ */
+function recoverRequestId(line: string): number {
+  try {
+    const parsed: unknown = JSON.parse(line)
+    if (typeof parsed !== 'object' || parsed === null) return 0
+    const record: Record<string, unknown> = { ...parsed }
+    const id = record.id
+    return typeof id === 'number' && Number.isFinite(id) ? id : 0
+  } catch {
+    return 0
   }
 }

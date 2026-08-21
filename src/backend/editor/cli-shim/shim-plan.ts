@@ -208,9 +208,8 @@ export function platformSwitches(platform: ShimPlatform): string[] {
  * project paths routinely contain them.
  */
 export function renderShim(invocation: ShimInvocation, platform: ShimPlatform): string {
-  const quoted = [invocation.command, ...platformSwitches(platform), ...invocation.leadingArgs]
-    .map((part) => `"${part}"`)
-    .join(' ')
+  const parts = [invocation.command, ...platformSwitches(platform), ...invocation.leadingArgs]
+  const quoted = parts.map((part) => quoteForShell(part, platform)).join(' ')
   if (platform === 'win32') {
     return [
       '@echo off',
@@ -304,4 +303,22 @@ export function pathHint(plan: ShimPlan, platform: ShimPlatform): string | undef
     `  echo 'export PATH="${plan.directory}:$PATH"' >> ~/.profile\n` +
     'then open a new terminal.'
   )
+}
+
+/**
+ * Quote one argument so the shell runs it literally.
+ *
+ * Double quotes are NOT enough. In POSIX sh a double-quoted string still expands
+ * `$`, backticks and `\`, and a Windows `.cmd` still expands `%…%` — so an
+ * install path containing any of them would change the command the shim runs.
+ * Rare, but the blast radius is "executes something else entirely".
+ *
+ *   - POSIX: single quotes, which suppress every expansion; a literal `'` is
+ *     closed, escaped and reopened (`'\''`).
+ *   - Windows: keep double quotes (paths contain spaces) and neutralise `%` by
+ *     doubling it, which `cmd` reads as a literal percent.
+ */
+export function quoteForShell(value: string, platform: ShimPlatform): string {
+  if (platform === 'win32') return `"${value.replace(/%/g, '%%')}"`
+  return `'${value.replace(/'/g, "'\\''")}'`
 }

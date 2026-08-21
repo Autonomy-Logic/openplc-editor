@@ -136,3 +136,22 @@ export function createProcessReporter(options: { json?: boolean; noJson?: boolea
     },
   })
 }
+
+/**
+ * Column-aligned plain text — no box drawing, so it survives a narrow terminal.
+ *
+ * Lives with the other output concerns. It used to sit in `commands/devices.ts`,
+ * which made `commands/debug.ts` import its table formatter from the devices
+ * command — a dependency between two unrelated commands for no reason.
+ */
+export function renderTable(headers: string[], rows: string[][]): string {
+  const widths = headers.map((header, column) =>
+    Math.max(header.length, ...rows.map((row) => (row[column] ?? '').length)),
+  )
+  const line = (cells: string[]) =>
+    cells
+      .map((cell, column) => (column === cells.length - 1 ? cell : cell.padEnd(widths[column])))
+      .join('  ')
+      .trimEnd()
+  return [line(headers), ...rows.map(line)].join('\n')
+}

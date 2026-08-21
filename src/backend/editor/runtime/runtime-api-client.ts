@@ -101,6 +101,67 @@ export class RuntimeApiClient {
     return result
   }
 
+  /**
+   * Does this runtime have any user account yet?
+   *
+   * A freshly installed runtime has none, and answers `/api/get-users-info` with
+   * 404 — which is not an error, it is the bootstrap state. `createUser` is
+   * allowed unauthenticated in exactly that state.
+   *
+   * The runtime version rides along in a response header, and it is the only
+   * place it is available before logging in.
+   */
+  async getUsersInfo(address: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> {
+    try {
+      const res = await this.httpRequest({ method: 'GET', url: this.runtimeUrl(address, '/api/get-users-info') })
+      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+
+      if (res.statusCode === 404) return { hasUsers: false, runtimeVersion }
+      if (res.statusCode === 200) return { hasUsers: true, runtimeVersion }
+      return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
+    } catch (error) {
+      return { hasUsers: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * Create a user account.
+   *
+   * Two different operations behind one route, and the runtime treats them
+   * differently: with no session this is the FIRST-USER bootstrap, which the
+   * runtime allows unauthenticated and always makes an admin (so `role` is
+   * ignored); with a session it is an admin adding an account, which must be
+   * authenticated and goes through the token authority so an expired token
+   * self-heals.
+   */
+  async createUser(
+    address: string,
+    username: string,
+    password: string,
+    role?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const body: { username: string; password: string; role?: string } = { username, password }
+      if (role) body.role = role
+      const payload = JSON.stringify(body)
+
+      if (this.tokens.hasToken()) {
+        const res = await this.makeRuntimeApiMutation('POST', address, '/api/create-user', payload)
+        return res.success ? { success: true } : { success: false, error: res.error }
+      }
+
+      const res = await this.httpRequest({
+        method: 'POST',
+        url: this.runtimeUrl(address, '/api/create-user'),
+        body: payload,
+      })
+      if (res.statusCode === 201) return { success: true }
+      return { success: false, error: res.data }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
   /** Forget the session (logout / disconnect). */
   clearSession(): void {
     this.tokens.clear()
@@ -110,7 +171,7 @@ export class RuntimeApiClient {
    * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
    * Returns the raw status code, response body, and headers for the caller to interpret.
    */
-  httpRequest(options: {
+  private httpRequest(options: {
     method: 'GET' | 'POST'
     url: string
     body?: string
@@ -159,8 +220,8 @@ export class RuntimeApiClient {
     })
   }
 
-  /** Full URL for a runtime endpoint. Public because handlers build their own requests. */
-  runtimeUrl(ipAddress: string, endpoint: string): string {
+  /** Full URL for a runtime endpoint. */
+  private runtimeUrl(ipAddress: string, endpoint: string): string {
     return `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`
   }
 
@@ -445,7 +506,12 @@ export class RuntimeApiClient {
     return this.tokens
       .withAuth<UploadResult>(
         (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
+        // STATUS CODE ONLY for an upload. `isTokenExpiredError` also returns true
+        // for any body containing "token" / "expired" / "unauthorized", and a
+        // retried upload is not idempotent — a runtime that rejected a bundle for
+        // an unrelated reason mentioning one of those words would get the program
+        // sent twice.
+        (r) => !r.success && (r.statusCode === 401 || r.statusCode === 403),
       )
       .then((result) => {
         if (result.success) {
@@ -456,57 +522,57 @@ export class RuntimeApiClient {
       })
   }
 
-  /** The `/api/start-plc` call, shared by the session router and the IPC handler. */
-  async startPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
+  /**
+   * One authenticated GET whose body carries a `status` string.
+   *
+   * `start-plc`, `stop-plc` and `status` were three copies of this eight-line
+   * body differing only in the endpoint. The runtime answers all three the same
+   * way — HTTP 200 with the outcome in `status` — so there is one shape to
+   * implement, not three to keep in step.
+   */
+  private async statusCommand(
+    address: string,
+    endpoint: string,
+  ): Promise<{ success: boolean; status?: string; switchPosition?: string; error?: string }> {
     try {
-      // The body is parsed because the runtime answers `COMMAND:BUSY` while it is
-      // still unloading a previous program after an upload, and callers drive a
-      // retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
+      const result = await this.makeRuntimeApiRequest<{ status?: string; switchPosition?: string }>(
         address,
-        '/api/start-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
+        endpoint,
+        (data: string) => JSON.parse(data) as { status?: string; switchPosition?: string },
       )
       if (!result.success) return { success: false, error: result.error }
-      return { success: true, status: (result.data?.status ?? '').trim() }
+      return {
+        success: true,
+        status: (result.data?.status ?? '').trim(),
+        ...(result.data?.switchPosition ? { switchPosition: result.data.switchPosition } : {}),
+      }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
   /**
+   * Start the PLC.
+   *
+   * The body is parsed because the runtime answers `COMMAND:BUSY` while it is
+   * still unloading a previous program after an upload, and callers drive a
+   * retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
+   */
+  startPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
+    return this.statusCommand(address, '/api/start-plc')
+  }
+
+  /**
    * Stop the PLC. GET, like `startPlc` — see this module's docblock for why the
    * verb and the body-vs-status distinction both matter.
    */
-  async stopPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
-    try {
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
-        address,
-        '/api/stop-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      return { success: true, status: (result.data?.status ?? '').trim() }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
+  stopPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
+    return this.statusCommand(address, '/api/stop-plc')
   }
 
   /** Run state and mode-switch position. */
-  async getStatus(
-    address: string,
-  ): Promise<{ success: boolean; status?: string; switchPosition?: string; error?: string }> {
-    try {
-      const result = await this.makeRuntimeApiRequest<{ status?: string; switchPosition?: string }>(
-        address,
-        '/api/status',
-        (data: string) => JSON.parse(data) as { status?: string; switchPosition?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      return { success: true, status: result.data?.status, switchPosition: result.data?.switchPosition }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
+  getStatus(address: string): Promise<{ success: boolean; status?: string; switchPosition?: string; error?: string }> {
+    return this.statusCommand(address, '/api/status')
   }
 
   /**

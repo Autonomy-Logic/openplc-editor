@@ -13,7 +13,15 @@ import { decodeResponse, encodeMessage, type Request, type Response, splitLines 
 
 const DEFAULT_TIMEOUT_MS = 60_000
 
-export type SendResult = { success: true; response: Response } | { success: false; error: string }
+export type SendResult =
+  | { success: true; response: Response }
+  /**
+   * `unreachable` separates a daemon that is GONE (ENOENT / ECONNREFUSED — its
+   * socket outlived it) from one that merely did not answer in time. Callers act
+   * very differently: the first justifies deleting the session record, the second
+   * must not, or a busy session loses the only handle for closing it.
+   */
+  | { success: false; error: string; unreachable: boolean }
 
 /** Send one request to a live session and resolve with its reply. */
 export function sendRequest(socketPath: string, request: Request, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<SendResult> {
@@ -32,7 +40,7 @@ export function sendRequest(socketPath: string, request: Request, timeoutMs = DE
     const socket = connect(socketPath)
 
     const timer = setTimeout(
-      () => finish({ success: false, error: `The session did not answer within ${timeoutMs} ms` }),
+      () => finish({ success: false, error: `The session did not answer within ${timeoutMs} ms`, unreachable: false }),
       timeoutMs,
     )
 
@@ -59,9 +67,15 @@ export function sendRequest(socketPath: string, request: Request, timeoutMs = DE
         error.code === 'ENOENT' || error.code === 'ECONNREFUSED'
           ? ' (the session is no longer listening — it may have exited; run `debug list`)'
           : ''
-      finish({ success: false, error: `${error.message}${hint}` })
+      finish({
+        success: false,
+        error: `${error.message}${hint}`,
+        unreachable: error.code === 'ENOENT' || error.code === 'ECONNREFUSED',
+      })
     })
 
-    socket.on('close', () => finish({ success: false, error: 'The session closed the connection without replying' }))
+    socket.on('close', () =>
+      finish({ success: false, error: 'The session closed the connection without replying', unreachable: true }),
+    )
   })
 }

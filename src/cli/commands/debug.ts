@@ -13,16 +13,17 @@
 
 import { readFile } from 'node:fs/promises'
 import { userInfo } from 'node:os'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 import { boolFlag, listFlag, type ParsedArgs, stringFlag } from '../args'
+import { resolveRuntimeCredentials } from '../credentials'
 import { formatValue, formatVariableList } from '../debug/format'
-import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
-import type { CliResult, Reporter } from '../output'
+import { ErrorCode, type ErrorCodeValue, ExitCode, type ExitCodeValue } from '../exit-codes'
+import { type CliResult, renderTable, type Reporter } from '../output'
 import { sendRequest } from '../session/client'
 import type { OkResponse, Request, Response } from '../session/protocol'
 import { type SessionRecord, SessionRegistry } from '../session/registry'
-import { renderTable } from './devices'
 
 export interface DebugContext {
   registry: SessionRegistry
@@ -44,9 +45,31 @@ export interface SpawnSessionOptions {
   onProgress: (message: string) => void
 }
 
+/**
+ * Why opening a session failed.
+ *
+ * ONE named union, referenced by the spawn result, the daemon handshake and the
+ * error-code mapper. It used to be spelled out inline in three places with
+ * different members: `openDebugSession` could return `unsupported`, the
+ * handshake validator did not accept it, and the mapper's ternary chain fell
+ * through to `internal` — so an unknown board name exited 70, documented as
+ * "a bug in the CLI, not in the caller's input".
+ */
+export const SPAWN_FAILURE_CODES = [
+  'auth',
+  'connection',
+  'md5',
+  'upload',
+  'not-compiled',
+  'unsupported',
+  'internal',
+] as const
+
+export type SpawnFailureCode = (typeof SPAWN_FAILURE_CODES)[number]
+
 export type SpawnSessionResult =
   | { success: true; record: SessionRecord }
-  | { success: false; code: 'auth' | 'connection' | 'md5' | 'not-compiled' | 'internal'; error: string }
+  | { success: false; code: SpawnFailureCode; error: string }
 
 /** Map a session-side error code onto the process exit code a caller branches on. */
 function exitCodeForError(code: string): ExitCodeValue {
@@ -71,6 +94,33 @@ function exitCodeForError(code: string): ExitCodeValue {
       return ExitCode.TargetError
     default:
       return ExitCode.Internal
+  }
+}
+
+/**
+ * Map a session-spawn failure onto a stable `ErrorCode`.
+ *
+ * An exhaustive switch, not a ternary chain: `SpawnSessionResult['code']` is a
+ * string-literal union, so adding a code becomes a compile error here instead of
+ * silently falling through to `Internal` — which is how `unsupported` came to
+ * report exit 70 ("a bug in the CLI") for a plain unknown-board typo.
+ */
+function errorCodeForSpawnFailure(code: SpawnFailureCode): ErrorCodeValue {
+  switch (code) {
+    case 'auth':
+      return ErrorCode.AuthRejected
+    case 'connection':
+      return ErrorCode.NotConnected
+    case 'md5':
+      return ErrorCode.Md5Mismatch
+    case 'upload':
+      return ErrorCode.UploadRejected
+    case 'not-compiled':
+      return ErrorCode.ProjectInvalid
+    case 'unsupported':
+      return ErrorCode.TargetUnknown
+    case 'internal':
+      return ErrorCode.Internal
   }
 }
 
@@ -139,7 +189,21 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
   // Credentials are required only by targets controlled over a runtime API. A
   // board on a serial port has nothing to log in to, and demanding a password
   // for it would be a rule the editor does not have.
-  const credentials = host ? resolveDebugCredentials(args) : { username: '', password: '' }
+  // The project remembers its board, and `runBuild` already falls back to it.
+  // `debug open` did not, so it reached the daemon with `target: ''` and failed
+  // with `Board "" is not available` on a project `compile` builds fine.
+  const resolvedTarget = target ?? (await projectBoard(projectPath))
+  if (!resolvedTarget) {
+    return reporter.failure(
+      {
+        code: ErrorCode.MissingArgument,
+        message: `This project names no board — pass --target (see \`openplc-cli devices\`)`,
+      },
+      ExitCode.Usage,
+    )
+  }
+
+  const credentials = host ? resolveRuntimeCredentials(args) : { username: '', password: '' }
   if ('error' in credentials) {
     return reporter.failure({ code: ErrorCode.MissingArgument, message: credentials.error }, ExitCode.Usage)
   }
@@ -147,8 +211,8 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
   // Reuse before opening: a target that serves one client at a time simply
   // never answers a second connection, and the failure reads as a bare timeout
   // while a perfectly good session sits idle.
-  if (target && !boolFlag(args, 'force-new')) {
-    const existing = context.registry.findReusable(projectPath, target)
+  if (!boolFlag(args, 'force-new')) {
+    const existing = context.registry.findReusable(projectPath, resolvedTarget)
     if (existing) {
       reporter.progress(`Reusing session ${existing.sessionId} for the same project and target`)
       return reporter.success(
@@ -160,7 +224,7 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
 
   const spawned = await context.spawnSession({
     projectPath,
-    target: target ?? '',
+    target: resolvedTarget,
     host: host ?? '',
     port: port ?? '',
     username: credentials.username,
@@ -171,16 +235,7 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
   })
 
   if (!spawned.success) {
-    const code =
-      spawned.code === 'auth'
-        ? ErrorCode.AuthRejected
-        : spawned.code === 'connection'
-          ? ErrorCode.NotConnected
-          : spawned.code === 'md5'
-            ? ErrorCode.Md5Mismatch
-            : spawned.code === 'not-compiled'
-              ? ErrorCode.ProjectInvalid
-              : ErrorCode.Internal
+    const code = errorCodeForSpawnFailure(spawned.code)
     return reporter.failure({ code, message: spawned.error }, exitCodeForError(code))
   }
 
@@ -200,11 +255,31 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
 
 export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 
-function runList(reporter: Reporter, context: DebugContext): Promise<CliResult> {
+/** Short, because `list` must stay responsive even if one session is busy. */
+const LIST_STATUS_TIMEOUT_MS = 5000
+
+async function runList(reporter: Reporter, context: DebugContext): Promise<CliResult> {
   // Reaping first means the listing never advertises a session nobody is
   // listening on — an operator reads this to find forces that need clearing.
   const reaped = context.registry.reapStale()
-  const sessions = context.registry.list()
+  const records = context.registry.list()
+
+  // Ask each live session for its state. The registry record cannot carry this:
+  // PLC state and the forced set change constantly, and a stale copy on disk
+  // would be worse than none. This is the whole reason an operator reads the
+  // list — "which session is holding a force I need to clear" — so the columns
+  // are worth one round trip each. A session that fails to answer is still
+  // listed, with its live columns blank.
+  const sessions = await Promise.all(
+    records.map(async (record) => {
+      const result = await sendRequest(record.socketPath, { id: 1, kind: 'status' }, LIST_STATUS_TIMEOUT_MS)
+      if (!result.success || !result.response.ok || result.response.data.kind !== 'status') {
+        return { ...record, plcState: 'unknown' as const, forced: [] as string[], answered: false }
+      }
+      const status = result.response.data.status
+      return { ...record, plcState: status.plcState, forced: status.forced, answered: true }
+    }),
+  )
 
   return Promise.resolve(
     reporter.success({ sessions, reaped }, () => {
@@ -220,13 +295,14 @@ function runList(reporter: Reporter, context: DebugContext): Promise<CliResult> 
       }
       lines.push(
         renderTable(
-          ['SESSION', 'TARGET', 'PROJECT', 'MD5', 'STARTED'],
+          ['SESSION', 'TARGET', 'MD5', 'PLC', 'FORCED', 'PROJECT'],
           sessions.map((session) => [
             session.sessionId,
             session.target || '-',
-            session.projectPath,
             (session.programMd5 ?? '-').slice(0, 8),
-            session.startedAt,
+            session.answered ? session.plcState : '(no answer)',
+            session.forced.length > 0 ? session.forced.join(', ') : '-',
+            session.projectPath,
           ]),
         ),
       )
@@ -239,21 +315,20 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
   const releaseForces = !boolFlag(args, 'keep-forces')
   const closeAll = boolFlag(args, 'all')
 
-  const targets = closeAll
-    ? context.registry.list()
-    : (() => {
-        const sessionId = stringFlag(args, 'session') ?? args.positionals[0]
-        if (!sessionId) return undefined
-        const record = context.registry.get(sessionId)
-        return record ? [record] : []
-      })()
-
-  if (targets === undefined) {
+  // The missing-argument case returns early, so `targets` is a plain list.
+  // Encoding three outcomes in `undefined` / `[]` / `[record]` made the next
+  // line's check the only thing separating a usage error from a silent no-op.
+  const sessionId = stringFlag(args, 'session') ?? args.positionals[0]
+  if (!closeAll && !sessionId) {
     return reporter.failure(
       { code: ErrorCode.MissingArgument, message: 'debug close needs --session <id> or --all' },
       ExitCode.Usage,
     )
   }
+
+  const targets: SessionRecord[] = closeAll
+    ? context.registry.list()
+    : [context.registry.get(sessionId ?? '')].filter((record): record is SessionRecord => record !== undefined)
 
   const closed: Array<{ sessionId: string; released: string[] }> = []
   const failed: Array<{ sessionId: string; error: string }> = []
@@ -262,9 +337,11 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
     const result = await sendRequest(record.socketPath, { id: 1, kind: 'close', releaseForces })
     if (!result.success) {
       failed.push({ sessionId: record.sessionId, error: result.error })
-      // The socket is unreachable, so the daemon is gone; drop the record
-      // rather than leaving a listing entry that can never be dialled.
-      context.registry.unregister(record.sessionId)
+      // Only drop the record when the daemon is genuinely GONE. A timeout means
+      // it did not answer within the window, which a busy session can hit — and
+      // deleting its record there strands a live daemon still holding the
+      // device, with no id left to close it by.
+      if (result.unreachable) context.registry.unregister(record.sessionId)
       continue
     }
     const released = result.response.ok && result.response.data.kind === 'close' ? result.response.data.released : []
@@ -398,9 +475,15 @@ function coerceErrorCode(code: string): (typeof ErrorCode)[keyof typeof ErrorCod
   return known ?? ErrorCode.Internal
 }
 
+/**
+ * The response payload, widened for `Reporter.success`.
+ *
+ * A shallow copy only because the reporter wants `Record<string, unknown>`; an
+ * earlier version destructured `kind` off and spread it straight back in the
+ * same position, which read like extraction but was `{ ...response.data }`.
+ */
 function payloadOf(response: OkResponse): Record<string, unknown> {
-  const { kind, ...rest } = response.data
-  return { kind, ...rest }
+  return { ...response.data }
 }
 
 export function renderOk(response: OkResponse): string {
@@ -411,9 +494,8 @@ export function renderOk(response: OkResponse): string {
       const md5 = status.programMd5 ? `${status.programMd5.slice(0, 8)}${status.md5Matches ? '' : ' (MISMATCH)'}` : '-'
       return [
         `session   ${status.sessionId}`,
-        // `descriptor` already begins with the transport (the factory builds it as
-        // `${transport} ${endpoint}`), so printing both reads "via rtu rtu /dev/…".
-        `target    ${status.target || '-'} via ${status.descriptor}`,
+        // Composed here, from the two fields the status carries separately.
+        `target    ${status.target || '-'} via ${status.transport} ${status.descriptor}`,
         `project   ${status.projectPath}`,
         `program   ${md5}`,
         `plc       ${status.plcState}`,
@@ -455,27 +537,6 @@ export function renderOk(response: OkResponse): string {
     case 'close':
       return data.released.length > 0 ? `Closed, released: ${data.released.join(', ')}` : 'Closed.'
   }
-}
-
-/** Credentials for `debug open`. Same precedence as the build commands. */
-export function resolveDebugCredentials(args: ParsedArgs): { username: string; password: string } | { error: string } {
-  const combined = stringFlag(args, 'credentials') ?? process.env.OPENPLC_CREDENTIALS
-  if (combined) {
-    const separator = combined.indexOf(':')
-    if (separator <= 0 || separator === combined.length - 1)
-      return { error: 'Credentials must look like user:password' }
-    return { username: combined.slice(0, separator), password: combined.slice(separator + 1) }
-  }
-  const username = stringFlag(args, 'user') ?? process.env.OPENPLC_USER
-  const password = stringFlag(args, 'password') ?? process.env.OPENPLC_PASSWORD
-  if (!username || !password) {
-    return {
-      error:
-        'Runtime credentials are required: pass --credentials user:pass (or --user/--password), ' +
-        'or set OPENPLC_CREDENTIALS / OPENPLC_USER + OPENPLC_PASSWORD',
-    }
-  }
-  return { username, password }
 }
 
 // ---------------------------------------------------------------------------
@@ -718,7 +779,11 @@ async function readScript(args: ParsedArgs): Promise<{ lines: string[] } | { err
   }
   const lines = text
     .split('\n')
-    .map((line) => line.replace(/#.*$/, '').trim())
+    // A comment starts at the beginning of a line or after whitespace. `#` is
+    // ALSO IEC based-literal syntax, which this CLI accepts — `force x 16#FF`.
+    // Stripping from any `#` turned that into `force x 16` and wrote 16 instead
+    // of 255 to live hardware, silently.
+    .map((line) => line.replace(/(^|\s)#.*$/, '').trim())
     .filter((line) => line.length > 0)
   if (lines.length === 0) return { error: 'The command script is empty' }
   return { lines }
@@ -733,4 +798,23 @@ function readAllStdin(): Promise<string> {
     })
     process.stdin.on('end', () => resolve(buffered))
   })
+}
+
+/**
+ * The board a project last selected, for when `--target` is omitted.
+ *
+ * Read straight off `devices/configuration.json` rather than through a full
+ * project load: this runs before the daemon exists, and the only thing needed is
+ * the dropdown's remembered value.
+ */
+async function projectBoard(projectPath: string): Promise<string | undefined> {
+  try {
+    const raw = await readFile(join(projectPath, 'devices', 'configuration.json'), 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const record: Record<string, unknown> = { ...parsed }
+    return typeof record.deviceBoard === 'string' && record.deviceBoard.length > 0 ? record.deviceBoard : undefined
+  } catch {
+    return undefined
+  }
 }

@@ -12,22 +12,18 @@
  * that makes a green test worthless.
  */
 
+import type { CompileProgressChannel } from '@root/backend/editor/compiler/types'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import type { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 
 /**
- * What the compile pipeline actually needs from its progress channel.
+ * A progress channel for a headless caller.
  *
- * `compileProgram` only ever calls `start`, `postMessage` and `close` on the
- * Electron `MessagePortMain` it is handed, so a plain object satisfies the
- * contract structurally — no message channel and no cast required.
+ * `CompileProgressChannel` is imported rather than restated: it used to be
+ * declared here too, with the same three members and near-identical doc
+ * comments. Structural typing made that compile, so a fourth method or a changed
+ * `postMessage` signature would have compiled here and failed at runtime.
  */
-export interface CompileProgressChannel {
-  start(): void
-  postMessage(message: unknown): void
-  close(): void
-}
-
 export function createProgressChannel(options: {
   onMessage: (message: unknown) => void
   onClose: () => void

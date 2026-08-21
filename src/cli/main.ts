@@ -30,7 +30,8 @@ import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
 import { cliArgv } from './argv'
-import { runBuild } from './commands/build'
+import { buildProject, runBuild } from './commands/build'
+import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
 import { runInstallCli } from './commands/install-cli'
@@ -41,8 +42,14 @@ import { SessionRegistry } from './session/registry'
 import { createSessionSpawner } from './spawn-session'
 
 /**
- * Flags that must never consume the following token. Missing one here is how
- * `--upload-if-needed --target x` silently parses `--target` as a value.
+ * Flags that must never consume the following token.
+ *
+ * What this list protects is a boolean flag followed by a POSITIONAL:
+ * `openplc-cli debug open --upload-if-needed ./project` swallows the project
+ * path unless `upload-if-needed` is declared here. A boolean followed by another
+ * `--flag` is already safe — `parseArgs` treats that as a bare boolean — so
+ * testing a new flag that way passes, the declaration gets skipped, and the
+ * swallowed-positional bug ships.
  */
 const BOOLEAN_FLAGS = [
   'json',
@@ -64,6 +71,9 @@ const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
 Usage
+  openplc-cli create <name> --path <dir> [--type plc-project|plc-library]
+                            [--language st|il|ld|sfc|fbd] [--time <interval>]
+  openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
@@ -164,7 +174,10 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   }
 
   if (boolFlag(args, 'help') || args.command === 'help' || args.command === undefined) {
-    process.stdout.write(`${USAGE}\n`)
+    // stderr, not stdout: in JSON mode stdout carries exactly one JSON document,
+    // and prose there breaks `openplc-cli --help | jq` for no benefit — help is a
+    // diagnostic, not a result.
+    process.stderr.write(`${USAGE}\n`)
     // No command at all is a usage error; asking for help is not.
     // Asking for help succeeds; being given nothing is a usage error, so a
     // script that invokes the CLI with an empty argument does not read as OK.
@@ -173,6 +186,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   }
 
   switch (args.command) {
+    case 'create':
+      return (await runCreate(args, reporter)).exitCode
     case 'devices':
       return (await runDevices(args, reporter)).exitCode
     case 'install-cli':
@@ -203,30 +218,31 @@ function buildDebugContext(): DebugContext {
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
-      uploadProgram: async ({ projectPath, target, host, username, password, onLine }) => {
-        // The upload path is the ordinary `upload` command, driven in-process so
-        // there is exactly one implementation of compile-then-flash.
-        // A reporter whose progress channel forwards to the caller's `onLine`
-        // and whose result channel is discarded — `debug open` reports the
-        // outcome itself, so a second result document would be noise.
+      uploadProgram: async ({ projectPath, target, host, username, password, port, onLine }) => {
+        // A reporter whose progress forwards to the caller and whose result is
+        // discarded — `debug open` reports the outcome itself.
         const uploadReporter = new Reporter({
           mode: 'json',
           streams: { out: () => undefined, err: (text) => onLine(text.replace(/\n$/, '')) },
         })
-        const result = await runBuild(
-          {
-            command: 'upload',
-            subcommand: undefined,
-            positionals: [projectPath],
-            flags: { host, target, credentials: `${username}:${password}` },
-          },
-          uploadReporter,
-          { withUpload: true },
-        )
+        const result = await buildProject({
+          projectPath,
+          target,
+          host: host || undefined,
+          port: port || undefined,
+          // Passed structurally, not colon-joined and re-split.
+          credentials: host ? { username, password } : undefined,
+          withUpload: true,
+          // `debug open --upload-if-needed` is already an explicit instruction to
+          // put this program on the device, so the stop-PLC consent is implied.
+          autoApprove: true,
+          reporter: uploadReporter,
+        })
         return result.exitCode === ExitCode.Ok
           ? { success: true }
           : { success: false, error: 'The compile-and-upload step failed (see the progress output above)' }
       },
+
       probeTargetMd5: async ({ host, username, password }) => {
         const runtime = new RuntimeApiClient()
         const login = await runtime.login(host, username, password)
@@ -340,10 +356,43 @@ async function main(): Promise<void> {
   } catch (error) {
     exitCode = reporter.internalError(error).exitCode
   }
-  app.exit(exitCode)
+  await exitAfterOutputDrains(exitCode)
 }
 
 /** `stringFlag` is re-exported for the daemon entry, which shares the parser. */
 export { stringFlag }
 
 void main()
+
+/**
+ * Exit only once stdout and stderr have actually been written.
+ *
+ * Node's stdout is ASYNCHRONOUS when it is a pipe on POSIX (synchronous only for
+ * files and TTYs) — and `resolveOutputMode` picks JSON mode precisely when
+ * stdout is not a TTY, so the machine-readable path is the queued one.
+ * `app.exit` discards whatever is still queued, which makes
+ * `openplc-cli debug list-vars | jq` truncate deterministically above the ~64 KiB
+ * pipe buffer: exactly the "stdout carries one complete JSON document" promise
+ * this CLI makes.
+ *
+ * Waiting for the drain callbacks is bounded, because a reader that never
+ * consumes (a closed pipe) would otherwise hang the process forever.
+ */
+async function exitAfterOutputDrains(code: ExitCodeValue): Promise<void> {
+  await Promise.race([
+    Promise.all([drain(process.stdout), drain(process.stderr)]),
+    new Promise((resolve) => setTimeout(resolve, OUTPUT_DRAIN_TIMEOUT_MS)),
+  ])
+  app.exit(code)
+}
+
+const OUTPUT_DRAIN_TIMEOUT_MS = 5000
+
+/** Resolve when this stream has flushed what is queued. */
+function drain(stream: NodeJS.WriteStream): Promise<void> {
+  // `write('')` invokes its callback once everything queued ahead of it has been
+  // handed to the OS, which is the signal we need and the one `app.exit` skips.
+  return new Promise((resolve) => {
+    stream.write('', () => resolve())
+  })
+}

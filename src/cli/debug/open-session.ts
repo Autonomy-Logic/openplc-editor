@@ -29,6 +29,7 @@ import type { TargetEndian } from '@root/frontend/utils/endian'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
+import type { SpawnFailureCode } from '../commands/debug'
 import { channelPlcControl, restPlcControl, SessionCore } from '../session/session-core'
 import { disconnectAndWait } from './close-channel'
 import { loadDebugIndex } from './variables'
@@ -46,7 +47,7 @@ export interface OpenSessionOptions {
 
 export type OpenSessionResult =
   | { success: true; core: SessionCore; programMd5: string | null }
-  | { success: false; code: 'auth' | 'connection' | 'md5' | 'not-compiled' | 'unsupported'; error: string }
+  | { success: false; code: SpawnFailureCode; error: string }
 
 export async function openDebugSession(options: OpenSessionOptions): Promise<OpenSessionResult> {
   const progress = options.onProgress ?? (() => undefined)
@@ -110,7 +111,9 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
     }
   }
 
-  const candidate = toDebugCandidate(config)
+  // Same seam the main process uses: the token is read when the channel opens,
+  // so a transparent re-login does not leave this session on a stale JWT.
+  const candidate = toDebugCandidate(config, { getToken: () => runtime?.tokens.getToken() ?? null })
   if (!candidate) {
     return {
       success: false,
@@ -119,7 +122,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
     }
   }
 
-  progress(`Opening the debug channel (${candidate.descriptor})…`)
+  progress(`Opening the debug channel (${candidate.transport} ${candidate.descriptor})…`)
   const channel: DeviceDebugChannel = candidate.create()
   try {
     await channel.connect()
@@ -127,7 +130,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
     return {
       success: false,
       code: 'connection',
-      error: `Could not open ${candidate.descriptor}: ${error instanceof Error ? error.message : String(error)}`,
+      error: `Could not open ${candidate.transport} ${candidate.descriptor}: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
 
@@ -147,7 +150,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
       code: 'connection',
       error:
         stopped ??
-        `The target did not answer the program MD5 probe over ${candidate.descriptor}: ${
+        `The target did not answer the program MD5 probe over ${candidate.transport} ${candidate.descriptor}: ${
           error instanceof Error ? error.message : String(error)
         }`,
     }

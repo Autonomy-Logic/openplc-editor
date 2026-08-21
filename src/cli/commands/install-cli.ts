@@ -57,6 +57,13 @@ export async function runInstallCli(_args: ParsedArgs, reporter: Reporter): Prom
       return reporter.failure({ code: ErrorCode.InvalidArgument, message: result.reason }, ExitCode.Usage)
     case 'failed':
       return reporter.failure({ code: ErrorCode.Internal, message: result.reason }, ExitCode.Internal)
+    default: {
+      // Exhaustiveness: a new `InstallShimResult` status becomes a compile error
+      // here rather than this function returning undefined while its type
+      // promises a `CliResult`.
+      const unreachable: never = result
+      return unreachable
+    }
   }
 }
 

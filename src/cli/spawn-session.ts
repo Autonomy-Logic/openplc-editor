@@ -15,7 +15,12 @@
 
 import { spawn } from 'node:child_process'
 
-import type { SpawnSessionOptions, SpawnSessionResult } from './commands/debug'
+import {
+  SPAWN_FAILURE_CODES,
+  type SpawnFailureCode,
+  type SpawnSessionOptions,
+  type SpawnSessionResult,
+} from './commands/debug'
 import { loadDebugIndex } from './debug/variables'
 import { splitLines } from './session/protocol'
 
@@ -28,7 +33,10 @@ export interface SpawnDependencies {
   uploadProgram: (options: {
     projectPath: string
     target: string
+    /** Empty for a USB target. */
     host: string
+    /** Serial port, for a USB target. */
+    port: string
     username: string
     password: string
     onLine: (message: string) => void
@@ -81,6 +89,12 @@ export function createSessionSpawner(deps: SpawnDependencies) {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        // A child that never reported ready must not be left running. It can
+        // still become ready afterwards, register a session and TAKE THE TARGET
+        // — a serial port, or a single-client Modbus TCP socket — while the
+        // caller has already been told the open failed and holds no id to close
+        // it with.
+        if (!result.success) child.kill('SIGTERM')
         child.stdout.removeAllListeners('data')
         // Let go of the child so this process can exit while it keeps serving.
         // The streams are destroyed rather than unref'd: `unref` is a socket
@@ -157,28 +171,39 @@ async function ensureProgramMatches(
   const index = await loadDebugIndex(options.projectPath, options.target)
   if (!index.success) return { success: false, code: 'not-compiled', error: index.error }
 
-  const probe = await deps.probeTargetMd5({
-    host: options.host,
-    username: options.username,
-    password: options.password,
-  })
-  if (!probe.success) return { success: false, code: 'connection', error: probe.error }
+  // The shortcut probe is a RUNTIME REST call, so it only applies to a target
+  // that has a runtime. Running it unconditionally broke `--upload-if-needed` on
+  // every USB board: the probe logged in to an empty host, failed, and aborted
+  // the open — so the flag the usage text advertises turned a working
+  // `debug open` into a connection error.
+  //
+  // With no probe the local build is uploaded unconditionally, which is the
+  // correct conservative choice: the session's own MD5 check is authoritative
+  // either way, and the probe exists only to skip a needless upload.
+  if (options.host) {
+    const probe = await deps.probeTargetMd5({
+      host: options.host,
+      username: options.username,
+      password: options.password,
+    })
+    if (!probe.success) return { success: false, code: 'connection', error: probe.error }
+    if (probe.md5 && probe.md5.toLowerCase() === index.index.md5.toLowerCase()) return { success: true }
+  }
 
-  if (probe.md5 && probe.md5.toLowerCase() === index.index.md5.toLowerCase()) return { success: true }
-
-  options.onProgress(
-    `The target runs a different program (${probe.md5 ?? 'unknown'} vs ${index.index.md5}); uploading the local build…`,
-  )
+  options.onProgress(`Uploading the local build (${index.index.md5}) before opening the session…`)
   const uploaded = await deps.uploadProgram({
     projectPath: options.projectPath,
     target: options.target,
     host: options.host,
+    port: options.port,
     username: options.username,
     password: options.password,
     onLine: options.onProgress,
   })
   if (!uploaded.success) {
-    return { success: false, code: 'md5', error: uploaded.error ?? 'The upload failed' }
+    // `upload`, not `md5`: the target's program is not the problem, the upload
+    // is. Callers branch on the code, so a wrong code is a wrong answer.
+    return { success: false, code: 'upload', error: uploaded.error ?? 'The upload failed' }
   }
   return { success: true }
 }
@@ -186,7 +211,7 @@ async function ensureProgramMatches(
 interface HandshakeMessage {
   event?: 'progress' | 'ready' | 'failed'
   message?: string
-  code?: 'auth' | 'connection' | 'md5' | 'not-compiled' | 'internal'
+  code?: SpawnFailureCode
   error?: string
   record?: {
     sessionId: string
@@ -215,9 +240,11 @@ function readHandshake(line: string): HandshakeMessage | undefined {
   const message: HandshakeMessage = { event }
   if (typeof record.message === 'string') message.message = record.message
   if (typeof record.error === 'string') message.error = record.error
+  // Validated against the ONE shared union, so a member added there is accepted
+  // here instead of being silently downgraded to `internal`.
   const code = record.code
-  if (code === 'auth' || code === 'connection' || code === 'md5' || code === 'not-compiled' || code === 'internal') {
-    message.code = code
+  if (typeof code === 'string' && (SPAWN_FAILURE_CODES as readonly string[]).includes(code)) {
+    message.code = code as SpawnFailureCode
   }
   if (typeof record.record === 'object' && record.record !== null) {
     const raw: Record<string, unknown> = { ...record.record }

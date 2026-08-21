@@ -35,6 +35,23 @@ function announce(payload: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify(payload)}\n`)
 }
 
+/**
+ * Announce, then exit once the line has actually left.
+ *
+ * The daemon is spawned with piped stdio, so its stdout is asynchronous on
+ * POSIX and `app.exit` drops whatever is queued. Every failure path here
+ * announced a reason and exited on the next statement, so the parent never saw
+ * it: a wrong runtime password or a genuine MD5 mismatch reached the user as
+ * `The session process exited with code 1` — discarding the specific reason the
+ * handshake exists to carry.
+ */
+async function announceAndExit(payload: Record<string, unknown>, code: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    process.stdout.write(`${JSON.stringify(payload)}\n`, () => resolve())
+  })
+  app.exit(code)
+}
+
 export async function runDaemon(config: DaemonConfig): Promise<void> {
   const sessionId = mintSessionId()
   const socketPath = socketPathFor(config.registryDir, sessionId, process.platform)
@@ -45,8 +62,7 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   // the same way it does behind the GUI's Debug button.
   const loaded = await loadProject(config.projectPath)
   if (!loaded.success) {
-    announce({ event: 'failed', code: 'not-compiled', error: loaded.error })
-    app.exit(1)
+    await announceAndExit({ event: 'failed', code: 'not-compiled', error: loaded.error }, 1)
     return
   }
   applyConnectionOverrides({ port: config.port, host: config.host })
@@ -65,8 +81,7 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   })
 
   if (!opened.success) {
-    announce({ event: 'failed', code: opened.code, error: opened.error })
-    app.exit(1)
+    await announceAndExit({ event: 'failed', code: opened.code, error: opened.error }, 1)
     return
   }
 
@@ -88,12 +103,14 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
     await server.listen()
   } catch (error) {
     await opened.core.close(true)
-    announce({
-      event: 'failed',
-      code: 'internal',
-      error: `Could not listen on ${socketPath}: ${error instanceof Error ? error.message : String(error)}`,
-    })
-    app.exit(1)
+    await announceAndExit(
+      {
+        event: 'failed',
+        code: 'internal',
+        error: `Could not listen on ${socketPath}: ${error instanceof Error ? error.message : String(error)}`,
+      },
+      1,
+    )
     return
   }
 

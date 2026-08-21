@@ -26,22 +26,15 @@ export async function disconnectAndWait(channel: DeviceDebugChannel): Promise<vo
     /* already disconnected */
   }
 
-  // Probed rather than declared on `DeviceDebugChannel`: only transports with a
-  // native handle have anything to wait for, and widening the interface would
-  // oblige the WebSocket and the simulator to implement a no-op.
-  const closed = readCloseSignal(channel)
-  if (!closed) {
+  // A declared optional member, checked by the compiler — the same pattern
+  // `channelPlcControl` already uses for `setPlcState` / `getStatus`.
+  if (!channel.closed) {
     // Still yield once, so any synchronous teardown the transport queued runs
     // before the caller exits.
     await delay(0)
     return
   }
-  await Promise.race([closed(), delay(CHANNEL_CLOSE_TIMEOUT_MS)])
-}
-
-function readCloseSignal(channel: DeviceDebugChannel): (() => Promise<void>) | undefined {
-  const candidate: unknown = Reflect.get(channel, 'closed')
-  return typeof candidate === 'function' ? () => Promise.resolve(Reflect.apply(candidate, channel, [])) : undefined
+  await Promise.race([channel.closed(), delay(CHANNEL_CLOSE_TIMEOUT_MS)])
 }
 
 function delay(ms: number): Promise<void> {
