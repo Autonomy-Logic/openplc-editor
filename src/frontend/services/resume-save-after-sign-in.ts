@@ -14,6 +14,7 @@
  */
 
 import type { EdgeSessionState } from '../../middleware/shared/ports/edge-account-port'
+import { openPLCStoreBase } from '../store'
 
 /**
  * The session signals, handed in at boot.
@@ -44,29 +45,70 @@ export function isSaveBlockedByEndedSession(): boolean {
 }
 
 /**
- * The save waiting for a working session, and how much of the project it covers.
+ * Which save is waiting, and what it covers.
  *
- * Exactly one entry, but "newest wins" is wrong on its own. A project save writes
- * every dirty file, so it supersedes a queued single-file save; a single-file save
- * does NOT supersede a queued project save — letting it would replay one file and
- * leave every other dirty file unwritten, while the toast said the save would
- * finish on its own. Widest scope wins; ties go to the newest.
+ * A project save writes every dirty file, so it supersedes any queued single-file
+ * save; a single-file save does NOT supersede a queued project save — letting it
+ * would replay one file and leave every other dirty file unwritten, while the toast
+ * said the save would finish on its own.
+ *
+ * A file save must name its file, because two of them for DIFFERENT files do not
+ * supersede each other either. That used to be a single slot, so the second Ctrl+S
+ * silently evicted the first: the user was told "sign in again and PouA saves on
+ * its own", then told the same about PouB, and only PouB was ever written.
  */
-type SaveScope = 'file' | 'project'
+export type SaveTarget = { scope: 'project' } | { scope: 'file'; fileName: string }
 
-let pending: { run: () => Promise<unknown>; scope: SaveScope } | null = null
+type QueuedSave = {
+  run: () => Promise<unknown>
+  /**
+   * The project this save was queued for.
+   *
+   * `run` closes over nothing that identifies it — both variants read the store at
+   * replay time — so without this a save queued for one project and replayed after
+   * the user opened another wrote whatever happened to be loaded, leaving the edits
+   * that were actually queued unsaved. The single-file variant announced it, too:
+   * `executeSaveFile('PouA', …)` against a project with no `PouA` toasted
+   * `File "PouA" not found` seconds after an unrelated sign-in.
+   */
+  projectPath: string
+}
+
+/** The queued project-wide save, if one is waiting. Excludes the per-file queue. */
+let pendingProject: QueuedSave | null = null
+
+/** Queued single-file saves, by file name. Empty whenever `pendingProject` is set. */
+const pendingFiles = new Map<string, QueuedSave>()
 
 /** Live only while something is actually waiting, so an idle editor holds no listener. */
 let unsubscribe: (() => void) | null = null
 
-export function resumeSaveAfterEdgeSignIn(run: () => Promise<unknown>, scope: SaveScope = 'project'): void {
+/** The project currently open, as the store knows it. */
+function currentProjectPath(): string {
+  return openPLCStoreBase.getState().project.meta.path
+}
+
+export function resumeSaveAfterEdgeSignIn(
+  run: () => Promise<unknown>,
+  target: SaveTarget = { scope: 'project' },
+): void {
   if (!session) {
     return
   }
 
-  // A narrower save never displaces a broader one already waiting.
-  if (pending?.scope === 'project' && scope === 'file') {
-    return
+  const projectPath = currentProjectPath()
+
+  if (target.scope === 'project') {
+    // Writes every dirty file, so whatever single files were waiting are covered.
+    pendingFiles.clear()
+    pendingProject = { run, projectPath }
+  } else {
+    // A narrower save never displaces a broader one already waiting.
+    if (pendingProject) {
+      return
+    }
+
+    pendingFiles.set(target.fileName, { run, projectPath })
   }
 
   // NOT guarded on `session.isExpired()`.
@@ -79,32 +121,51 @@ export function resumeSaveAfterEdgeSignIn(run: () => Promise<unknown>, scope: Sa
   // meant to defer. The window is a few microseconds (the caller checks expiry
   // immediately before calling), and losing a queued replay there is strictly
   // better than re-entering the save path.
-  pending = { run, scope }
-
   unsubscribe ??= session.onRestored(() => {
-    const queued = pending
+    const queued = pendingProject ? [pendingProject] : [...pendingFiles.values()]
 
-    // Cleared BEFORE running: the replay can fail again (the session could die a
+    // Cleared BEFORE running: a replay can fail again (the session could die a
     // second time), and it has to be free to register itself afresh rather than
     // being cancelled by this teardown.
-    pending = null
+    pendingProject = null
+    pendingFiles.clear()
     unsubscribe?.()
     unsubscribe = null
 
-    if (queued) {
-      void queued.run()
-    }
+    void replayQueued(queued, currentProjectPath())
   })
+}
+
+/**
+ * Run the queued saves, skipping any that belong to a project no longer open.
+ *
+ * Sequential rather than concurrent: these write into the same project through the
+ * same store, and interleaving two of them is how a half-written project happens.
+ */
+async function replayQueued(queued: QueuedSave[], openProject: string): Promise<void> {
+  for (const save of queued) {
+    if (save.projectPath !== openProject) {
+      continue
+    }
+
+    try {
+      await save.run()
+    } catch {
+      // Both save variants report their own failures and neither rejects; caught
+      // anyway so one throwing cannot strand the saves queued behind it.
+    }
+  }
 }
 
 /** True while a save is waiting for the session to come back. */
 export function hasSaveWaitingForSignIn(): boolean {
-  return pending !== null
+  return pendingProject !== null || pendingFiles.size > 0
 }
 
-/** Test seam: drop the queued save, the subscription and the wiring between cases. */
+/** Test seam: drop the queued saves, the subscription and the wiring between cases. */
 export function resetResumeSaveForTests(state?: EdgeSessionState): void {
-  pending = null
+  pendingProject = null
+  pendingFiles.clear()
   unsubscribe?.()
   unsubscribe = null
   session = state
