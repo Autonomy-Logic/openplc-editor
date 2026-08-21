@@ -87,10 +87,33 @@ Run the installer, then launch the editor once. `openplc-cli.cmd` is placed in
 `%LOCALAPPDATA%\Programs\openplc-cli` and that directory is added to your user
 PATH; open a new terminal afterwards.
 
+Verified on Windows 11 (24H2): `--help` exits 0, no arguments and an unknown
+command exit 2, a missing project exits 3, `--version` and `devices` each write
+one JSON document to stdout, the usage text goes to stderr, and a closed pipe
+returns in ~3s instead of hanging. The shim is invoked by name from a new shell:
+
+```bat
+openplc-cli --version
+openplc-cli devices > devices.json
+```
+
+> **Calling it from a `.bat` / `.cmd` script needs `call`.** The shim is a batch
+> file, and batch invoking batch without `call` TRANSFERS control instead of
+> returning — the rest of your script silently never runs, and you never see
+> `%ERRORLEVEL%`. This is how every `.cmd` wrapper behaves (`npm.cmd` included),
+> not something specific to this one:
+>
+> ```bat
+> call openplc-cli compile "C:\path\to\project"
+> if errorlevel 1 exit /b %ERRORLEVEL%
+> ```
+>
+> From PowerShell, `cmd`'s interactive prompt, or any non-batch caller, the plain
+> form is correct and `$LASTEXITCODE` / `%ERRORLEVEL%` is set as expected.
+
 > Console output from a GUI-subsystem executable is not attached to an
 > interactive terminal on Windows. Redirection and piping work
-> (`openplc-cli devices > devices.json`), which is what a test harness does, but
-> this needs verifying on Windows before being relied on interactively.
+> (`openplc-cli devices > devices.json`), which is what a test harness does.
 
 ## In a build pipeline
 
