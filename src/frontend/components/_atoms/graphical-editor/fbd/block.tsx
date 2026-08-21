@@ -792,7 +792,6 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     // has to be told rather than left to notice a missing connection later.
     if (reads.rewired > 0 || reads.dropped > 0) {
       addLog({
-        id: crypto.randomUUID(),
         level: reads.dropped > 0 ? 'warning' : 'info',
         message:
           `${blockVariantName}: VAR_IN_OUT pins no longer have an output side. ` +

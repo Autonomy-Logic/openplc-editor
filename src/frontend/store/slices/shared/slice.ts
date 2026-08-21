@@ -10,6 +10,7 @@ import { generateIecVariablesToString } from '../../../utils/generate-iec-variab
 import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
@@ -232,10 +233,10 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
       ...next.modbusTcpConfig,
       ioGroups: (next.modbusTcpConfig.ioGroups ?? []).map((group) => ({
         ...group,
-        id: crypto.randomUUID(),
+        id: newUuid(),
         ioPoints: (group.ioPoints ?? []).map((point) => ({
           ...point,
-          id: crypto.randomUUID(),
+          id: newUuid(),
           iecLocation: '',
           alias: undefined,
         })),
@@ -257,7 +258,7 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
         taken.add(name)
         return {
           ...slave,
-          id: crypto.randomUUID(),
+          id: newUuid(),
           name,
           channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
             ...mapping,
@@ -1189,7 +1190,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (convertibleInOutPous.size > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message:
             `A VAR_IN_OUT parameter is now drawn as a single input-side pin. ` +
@@ -1202,7 +1202,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (libraryInOutBlocks.size > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message:
             `${[...libraryInOutBlocks].sort().join(', ')}: this project places library blocks with a ` +
