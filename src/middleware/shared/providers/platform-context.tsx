@@ -118,6 +118,17 @@ export function useEsi() {
   return usePlatform().esi
 }
 
+/**
+ * The Edge account port, or undefined on a platform that has no Edge account.
+ *
+ * Named `useEdgeAccount` here and re-exported as `useEdgeAccountPort` so it does
+ * not collide with the `useEdgeAccount` hook in `frontend/hooks`, which is the
+ * stateful consumer of this port rather than an accessor for it.
+ */
+export function useEdgeAccount() {
+  return usePlatform().edgeAccount
+}
+
 export function useLibrary() {
   return usePlatform().library
 }
