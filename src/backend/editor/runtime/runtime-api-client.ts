@@ -67,6 +67,20 @@ const PlcStatusResponseSchema = z.object({
   switchPosition: z.string().optional(),
 })
 
+/**
+ * One header value, whatever the wire gave us.
+ *
+ * `IncomingHttpHeaders` values are `string | string[] | undefined`: a header sent
+ * twice arrives as an array, and asserting it to `string` meant the runtime
+ * version was reported as a comma-joined array — read as a version, compared as
+ * a version, and wrong.
+ */
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value[0]
+  return undefined
+}
+
 /** Parse JSON without throwing; `null` for anything unparseable. */
 function parseJsonOrNull(raw: string): unknown {
   try {
@@ -161,7 +175,7 @@ export class RuntimeApiClient {
   async getUsersInfo(address: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> {
     try {
       const res = await this.httpRequest({ method: 'GET', url: this.runtimeUrl(address, '/api/get-users-info') })
-      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
+      const runtimeVersion = firstHeaderValue(res.headers['x-openplc-runtime-version'])
 
       if (res.statusCode === 404) return { hasUsers: false, runtimeVersion }
       if (res.statusCode === 200) return { hasUsers: true, runtimeVersion }

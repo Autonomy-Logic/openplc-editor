@@ -584,7 +584,12 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(result.success).toBe(true)
     expect(port.materializeRuntimeV4Bundle).toHaveBeenCalledTimes(1)
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
-    const bundle = jest.mocked(port.materializeRuntimeV4Bundle!).mock.calls[0][0].bundle
+    // Narrowed, not asserted: the port declares this method optional, and a `!`
+    // here would turn "the mock was never wired up" into a confusing crash
+    // inside jest's internals instead of a failed expectation.
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
     expect(Object.keys(bundle).length).toBeGreaterThan(0)
     expect(events.some((e) => e.message.includes('build artifact'))).toBe(true)
   })

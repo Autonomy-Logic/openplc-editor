@@ -123,7 +123,24 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
   }
 
   progress(`Opening the debug channel (${candidate.transport} ${candidate.descriptor})…`)
-  const channel: DeviceDebugChannel = candidate.create()
+  // `create()` is inside the guard, not just `connect()`. Building a channel can
+  // throw as readily as opening one: the WebSocket candidate refuses when the
+  // token manager holds nothing at open time, and a serial client constructor
+  // rejects a malformed descriptor. An escape here is not a failed command but a
+  // DEAD DAEMON — `runDaemon` awaits this function with no try/catch, so the
+  // process would exit without announcing a reason and the parent would report a
+  // bare exit code for what is really "log in again".
+  let channel: DeviceDebugChannel
+  try {
+    channel = candidate.create()
+  } catch (error) {
+    return {
+      success: false,
+      code: 'connection',
+      error: `Could not build the ${candidate.transport} channel for ${candidate.descriptor}: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+
   try {
     await channel.connect()
   } catch (error) {

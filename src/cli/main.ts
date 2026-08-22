@@ -61,6 +61,8 @@ const BOOLEAN_FLAGS = [
   'yes',
   'upload-if-needed',
   'force-new',
+  // `create --force`: overwrite an existing destination instead of refusing it.
+  'force',
   'keep-forces',
   'keep-going',
   'all',
@@ -73,6 +75,7 @@ const USAGE = `openplc-cli — headless OpenPLC Editor
 Usage
   openplc-cli create <name> --path <dir> [--type plc-project|plc-library]
                             [--language st|il|ld|sfc|fbd] [--time <interval>]
+                            [--force]   (overwrite an existing destination)
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]

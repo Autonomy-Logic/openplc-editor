@@ -18,7 +18,7 @@
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
-import type { BoardInfo, CompileProgressEvent, CompileResult } from '../../shared/ports/types'
+import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
 import type { IpcProjectData } from './compiler-adapter'
 import { decodeMessage, inferStage, injectLibraryCppBlocks, toIpcProjectData } from './compiler-adapter'
 
@@ -135,8 +135,11 @@ export async function compileProgramFlow(
     transport.runCompileProgram(compileArgs, (data: Record<string, unknown>) => {
       // Extract simulator firmware path BEFORE the closePort early return,
       // because the backend sends both fields in the same message.
-      if (data.simulatorFirmwarePath) {
-        hexPath = data.simulatorFirmwarePath as string
+      // `typeof`, not a cast: callers treat `firmwarePath` as a filesystem path
+      // and hand it to the simulator, so a non-string arriving here would travel
+      // a long way before failing, and far from the message that produced it.
+      if (typeof data.simulatorFirmwarePath === 'string' && data.simulatorFirmwarePath.length > 0) {
+        hexPath = data.simulatorFirmwarePath
         onProgress({ stage: 'done', message: 'Simulator firmware ready', firmwarePath: hexPath })
       }
 
@@ -153,8 +156,8 @@ export async function compileProgramFlow(
       }
 
       // Forward plcStatus for runtime status updates
-      if (data.plcStatus) {
-        onProgress({ stage: 'arduino', message: '', plcStatus: data.plcStatus as string })
+      if (typeof data.plcStatus === 'string') {
+        onProgress({ stage: 'arduino', message: '', plcStatus: data.plcStatus })
       }
 
       if (data.message) {
@@ -164,7 +167,7 @@ export async function compileProgramFlow(
         // path emits a per-error log entry.  Forward it as-is
         // so the console can drive click-to-open from the
         // structured fields rather than parsing text.
-        const compileError = data.compileError as CompileProgressEvent['compileError'] | undefined
+        const compileError = asStructuredCompileError(data.compileError)
 
         if (data.logLevel === 'error') {
           hasError = true
@@ -179,11 +182,51 @@ export async function compileProgramFlow(
           onProgress({
             stage: inferStage(message),
             message,
-            level: (data.logLevel as string) ?? 'info',
+            level: typeof data.logLevel === 'string' ? data.logLevel : 'info',
             ...(compileError ? { compileError } : {}),
           })
         }
       }
     })
   })
+}
+
+/**
+ * Accept a structured diagnostic only if it carries the fields consumers read.
+ *
+ * This one is more than a `typeof` because the console navigates with it: a
+ * partial object cast to the type produced `NaN` line numbers and a
+ * click-to-open that jumped nowhere. The narrow check — a message plus real
+ * coordinates — is exactly what the click needs, and anything less is dropped so
+ * the plain text still shows.
+ */
+function asStructuredCompileError(value: unknown): StructuredCompileError | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const candidate: Record<string, unknown> = { ...value }
+  if (typeof candidate.message !== 'string') return undefined
+  if (typeof candidate.line !== 'number' || typeof candidate.column !== 'number') return undefined
+  if (candidate.severity !== 'error' && candidate.severity !== 'warning' && candidate.severity !== 'info') {
+    return undefined
+  }
+  // Rebuilt field by field rather than spread wholesale, so an unexpected extra
+  // key cannot ride along into the event.
+  const error: StructuredCompileError = {
+    message: candidate.message,
+    line: candidate.line,
+    column: candidate.column,
+    severity: candidate.severity,
+  }
+  if (typeof candidate.endLine === 'number') error.endLine = candidate.endLine
+  if (typeof candidate.endColumn === 'number') error.endColumn = candidate.endColumn
+  if (typeof candidate.file === 'string') error.file = candidate.file
+  if (typeof candidate.pouName === 'string') error.pouName = candidate.pouName
+  if (candidate.pouKind === 'PROGRAM' || candidate.pouKind === 'FUNCTION' || candidate.pouKind === 'FUNCTION_BLOCK') {
+    error.pouKind = candidate.pouKind
+  }
+  if (candidate.section === 'interface' || candidate.section === 'var-block' || candidate.section === 'body') {
+    error.section = candidate.section
+  }
+  if (typeof candidate.bodyLine === 'number') error.bodyLine = candidate.bodyLine
+  if (typeof candidate.variableName === 'string') error.variableName = candidate.variableName
+  return error
 }

@@ -14,10 +14,10 @@
  */
 
 import { execFile } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 
+import { directoryIsWritable } from '../utils/directory-writable'
 import {
   describeUnstableLocation,
   mayReplace,
@@ -52,48 +52,6 @@ export interface InstallShimOptions {
   /** Write even when a same-content shim already exists. */
   force?: boolean
   onDiagnostic?: (message: string) => void
-}
-
-/**
- * Could we create files here?
- *
- * Probes WITHOUT creating the directory when it does not exist: `planShimInstall`
- * asks about every candidate, so creating them made an install grow both
- * `~/.local/bin` and `~/bin` even though it uses one — contradicting the policy
- * note that says the second exists only for users who already have it. An absent
- * directory is judged by whether its PARENT would allow creating it.
- */
-function directoryIsWritable(directory: string): boolean {
-  if (existsSync(directory)) return canWriteInto(directory)
-
-  // Walk to the nearest ancestor that exists and ask there. Testing only the
-  // immediate parent judged `~/.local/bin` unwritable on a machine with no
-  // `~/.local` at all — which handed the install to `~/bin` and quietly
-  // abandoned the XDG-conventional location the policy prefers.
-  let ancestor = dirname(directory)
-  while (!existsSync(ancestor)) {
-    const parent = dirname(ancestor)
-    if (parent === ancestor) return false
-    ancestor = parent
-  }
-  return canWriteInto(ancestor)
-}
-
-/** Probe by writing, since `access(W_OK)` lies on some network filesystems. */
-function canWriteInto(directory: string): boolean {
-  const probe = join(directory, `.openplc-cli-probe-${process.pid}`)
-  try {
-    writeFileSync(probe, '')
-    return true
-  } catch {
-    return false
-  } finally {
-    try {
-      rmSync(probe, { force: true })
-    } catch {
-      /* the probe is disposable */
-    }
-  }
 }
 
 export async function installCliShim(options: InstallShimOptions): Promise<InstallShimResult> {

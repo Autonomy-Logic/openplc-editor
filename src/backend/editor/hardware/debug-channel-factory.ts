@@ -14,6 +14,7 @@
  * resolver that reads it; a second opinion in a front end can only be wrong.
  */
 
+import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
@@ -23,8 +24,13 @@ import { planBaudAttempts } from './device-probe'
 import type { DeviceDebugCandidate, DeviceLinkCandidate } from './device-session-manager'
 import { buildDeviceModbusTransport, modbusTransportKind } from './device-transport-factory'
 
-/** The runtime's HTTPS port, shared by its REST API and its debug WebSocket. */
-const RUNTIME_DEBUG_PORT = 8443
+/**
+ * The runtime's HTTPS port, shared by its REST API and its debug WebSocket.
+ *
+ * Imported rather than restated: it is one port on one device, and two
+ * constants for it can only ever drift apart.
+ */
+const RUNTIME_DEBUG_PORT = RUNTIME_API_PORT
 
 export interface DebugChannelFactoryDeps {
   /**

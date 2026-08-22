@@ -331,17 +331,22 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
     : [context.registry.get(sessionId ?? '')].filter((record): record is SessionRecord => record !== undefined)
 
   const closed: Array<{ sessionId: string; released: string[] }> = []
-  const failed: Array<{ sessionId: string; error: string }> = []
+  // `recordRemoved` because the two failures are not the same outcome: a daemon
+  // that is GONE loses its record, a daemon that merely did not answer in time
+  // keeps it and stays closable by id. Reporting both as "record removed" told
+  // the caller its only handle on a live session was gone when it was not.
+  const failed: Array<{ sessionId: string; error: string; recordRemoved: boolean }> = []
 
   for (const record of targets) {
     const result = await sendRequest(record.socketPath, { id: 1, kind: 'close', releaseForces })
     if (!result.success) {
-      failed.push({ sessionId: record.sessionId, error: result.error })
       // Only drop the record when the daemon is genuinely GONE. A timeout means
       // it did not answer within the window, which a busy session can hit — and
       // deleting its record there strands a live daemon still holding the
       // device, with no id left to close it by.
-      if (result.unreachable) context.registry.unregister(record.sessionId)
+      const recordRemoved = result.unreachable === true
+      if (recordRemoved) context.registry.unregister(record.sessionId)
+      failed.push({ sessionId: record.sessionId, error: result.error, recordRemoved })
       continue
     }
     const released = result.response.ok && result.response.data.kind === 'close' ? result.response.data.released : []
@@ -360,7 +365,11 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
           : `Closed ${entry.sessionId}`,
       )
     }
-    for (const entry of failed) lines.push(`${entry.sessionId}: ${entry.error} (record removed)`)
+    for (const entry of failed) {
+      lines.push(
+        `${entry.sessionId}: ${entry.error} ${entry.recordRemoved ? '(record removed)' : '(record retained — still closable by id)'}`,
+      )
+    }
     if (lines.length === 0) lines.push('Nothing to close.')
     return lines.join('\n')
   })

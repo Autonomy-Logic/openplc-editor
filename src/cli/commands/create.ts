@@ -12,14 +12,16 @@
  * reproducibly.
  */
 
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { ProjectService } from '@root/backend/editor/services'
+import { directoryIsWritable } from '@root/backend/editor/utils/directory-writable'
 import type { CreateProjectFileProps } from '@root/types/IPC/project-service/create-project'
 
 import type { ParsedArgs } from '../args'
-import { stringFlag } from '../args'
+import { boolFlag, stringFlag } from '../args'
 import { ErrorCode, ExitCode } from '../exit-codes'
 import type { CliResult, Reporter } from '../output'
 
@@ -46,17 +48,61 @@ export async function runCreate(args: ParsedArgs, reporter: Reporter): Promise<C
     return reporter.failure({ code: ErrorCode.InvalidArgument, message: spec.error }, ExitCode.Usage)
   }
 
+  // An existing target is refused, not overwritten.
+  //
+  // `createProjectDefaultStructure` writes into whatever directory it is given,
+  // so pointing `create` at an existing project replaced its `project.json` and
+  // device files without a word. For a command whose whole purpose is setting up
+  // fixtures, one mistyped `--path` could take a real project with it. `--force`
+  // is the way to say you meant it.
+  if (existsSync(spec.value.path) && !boolFlag(args, 'force')) {
+    return reporter.failure(
+      {
+        code: ErrorCode.InvalidArgument,
+        message: `${spec.value.path} already exists. Pass --force to overwrite what is in it.`,
+      },
+      ExitCode.Usage,
+    )
+  }
+
+  // Writability is settled BEFORE the service runs, and by probing rather than by
+  // reading the failure afterwards.
+  //
+  // An unwritable `--path` is the caller's input, so it should exit 2 — but the
+  // service reports it as "Failed to create project file at …" with no errno in
+  // the text, so classifying it after the fact meant pattern-matching prose and
+  // getting exit 70 ("a bug in the CLI") for a directory the caller chose.
+  // Asking first gives a definite answer and a message that names the problem.
+  if (!directoryIsWritable(dirname(spec.value.path))) {
+    return reporter.failure(
+      {
+        code: ErrorCode.InvalidArgument,
+        message: `Cannot write to ${dirname(spec.value.path)} — check the path and its permissions.`,
+      },
+      ExitCode.Usage,
+    )
+  }
+
   reporter.progress(`Creating ${spec.value.type === 'plc-library' ? 'library' : 'project'} "${spec.value.name}"…`)
 
   // No window: `ProjectService`'s dialog parent is optional, and the create path
   // never opens one.
-  const result = await new ProjectService().createProject(spec.value)
+  //
+  // Wrapped because not every failure comes back as a response: the service
+  // updates the project history after writing, and that throws on its own.
+  let result
+  try {
+    result = await new ProjectService().createProject(spec.value)
+  } catch (error) {
+    return reporter.failure(
+      { code: ErrorCode.Internal, message: error instanceof Error ? error.message : String(error) },
+      ExitCode.Internal,
+    )
+  }
+
   if (!result.success || !result.data) {
     return reporter.failure(
-      {
-        code: ErrorCode.Internal,
-        message: result.error?.description ?? 'Failed to create the project',
-      },
+      { code: ErrorCode.Internal, message: result.error?.description ?? 'Failed to create the project' },
       ExitCode.Internal,
     )
   }
@@ -133,5 +179,7 @@ function asString(value: unknown): string | undefined {
 }
 
 function isOneOf<T extends readonly string[]>(value: string, allowed: T): value is T[number] {
-  return (allowed as readonly string[]).includes(value)
+  // `some`, not `includes`: `includes` on a `readonly [..]` wants the literal
+  // union as its argument, which is what the cast here used to paper over.
+  return allowed.some((candidate) => candidate === value)
 }

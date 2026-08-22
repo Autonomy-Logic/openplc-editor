@@ -225,6 +225,18 @@ interface HandshakeMessage {
 }
 
 /** Validate the handshake line rather than trusting the child's output. */
+/**
+ * Is this one of the handshake's failure codes?
+ *
+ * A predicate rather than a membership test plus a cast: `includes` on a
+ * `readonly` tuple demands the literal union as its argument, so the old form
+ * needed two assertions to compile — and a cast is exactly what should not be
+ * guarding a value that arrived over a pipe.
+ */
+function isSpawnFailureCode(value: unknown): value is SpawnFailureCode {
+  return typeof value === 'string' && SPAWN_FAILURE_CODES.some((code) => code === value)
+}
+
 function readHandshake(line: string): HandshakeMessage | undefined {
   let parsed: unknown
   try {
@@ -242,10 +254,7 @@ function readHandshake(line: string): HandshakeMessage | undefined {
   if (typeof record.error === 'string') message.error = record.error
   // Validated against the ONE shared union, so a member added there is accepted
   // here instead of being silently downgraded to `internal`.
-  const code = record.code
-  if (typeof code === 'string' && (SPAWN_FAILURE_CODES as readonly string[]).includes(code)) {
-    message.code = code as SpawnFailureCode
-  }
+  if (isSpawnFailureCode(record.code)) message.code = record.code
   if (typeof record.record === 'object' && record.record !== null) {
     const raw: Record<string, unknown> = { ...record.record }
     if (

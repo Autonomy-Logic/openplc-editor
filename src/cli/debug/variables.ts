@@ -281,6 +281,15 @@ export function normaliseValue(displayValue: string, typeName: string): boolean 
     case 'date-ns-i64':
     case 'tod-ns-i64':
       return displayValue
+
+    default: {
+      // A `wireFormat` added to `IEC_BASE_TYPES` and not handled above becomes a
+      // compile error here. Without this the function fell off the end and
+      // returned `undefined` against a `boolean | number | string` signature —
+      // the new type would read as a missing value rather than as the gap it is.
+      const unhandled: never = meta.wireFormat
+      return String(unhandled)
+    }
   }
 }
 
