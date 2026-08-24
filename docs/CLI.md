@@ -224,7 +224,7 @@ command.
 
 ```sh
 openplc-cli debug open ./my-project --target "OpenPLC Runtime v4" \
-  --host 192.168.2.4 --credentials op:op        # -> 8df020af1234
+  --host 10.0.0.10 --credentials user:pass      # -> 8df020af1234
 
 openplc-cli debug list                          # every live session
 openplc-cli debug read main:counter
@@ -264,8 +264,8 @@ point of naming a timeout is that the default was wrong for this run.
 | `--idle-timeout <ms>`  | `debug open`                        | idle budget; `0` disables (see above)                                                               |
 | `--force-new`          | `debug open`                        | start a session even if one is already open for this project and target                             |
 | `--upload-if-needed`   | `debug open`                        | upload first when the target's program does not match                                               |
-| `--var <name>`         | `read`, `write`, `force`, `unforce` | the variable, when you would rather not pass it positionally                                        |
-| `--value <literal>`    | `write`, `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
+| `--var <name>`         | `read`, `force`, `unforce`           | the variable, when you would rather not pass it positionally                                        |
+| `--value <literal>`    | `force`                             | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
 | `--filter <substring>` | `list-vars`                         | only variables whose path contains it                                                               |
 | `--interval <ms>`      | `watch`                             | sampling cadence; floor 20 ms                                                                       |
 | `--since <seq>`        | `poll`                              | only samples after this sequence number                                                             |

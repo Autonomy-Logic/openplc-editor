@@ -167,9 +167,8 @@ export class SessionCore {
         return { id: request.id, ok: true, data: { kind: 'read', values: values.values } }
       }
 
-      case 'write':
       case 'force':
-        return this.applyWrite(request.id, request.name, request.value, request.kind === 'force')
+        return this.applyForce(request.id, request.name, request.value)
 
       case 'unforce':
         return this.applyUnforce(request.id, request.name)
@@ -294,7 +293,7 @@ export class SessionCore {
     return { values }
   }
 
-  private async applyWrite(id: number, name: string, input: string, force: boolean): Promise<Response> {
+  private async applyForce(id: number, name: string, input: string): Promise<Response> {
     const variable = findVariable(this.options.index, name)
     if (!variable) {
       return this.fail(id, ErrorCode.VariableNotFound, `No variable "${name}" in this program's debug map`)
@@ -302,15 +301,15 @@ export class SessionCore {
     const encoded = encodeValue(variable, input)
     if (!encoded.success) return this.fail(id, ErrorCode.ValueInvalid, encoded.error)
 
-    const result = await this.options.channel.setVariable(variable.index, force, encoded.bytes)
+    const result = await this.options.channel.setVariable(variable.index, true, encoded.bytes)
     if (!result.success) {
-      return this.fail(id, ErrorCode.TargetError, result.error ?? `The target refused the ${force ? 'force' : 'write'}`)
+      return this.fail(id, ErrorCode.TargetError, result.error ?? 'The target refused the force')
     }
-    if (force) this.forced.add(variable.name)
+    this.forced.add(variable.name)
 
     const readBack = await this.readBackAfterWrite(variable, input)
     if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
-    return { id, ok: true, data: { kind: force ? 'force' : 'write', value: readBack.value } }
+    return { id, ok: true, data: { kind: 'force', value: readBack.value } }
   }
 
   /**
