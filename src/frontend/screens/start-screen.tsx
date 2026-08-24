@@ -6,6 +6,7 @@ import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
 import { VideoIcon } from '../assets/icons/interface/Video'
 import { StartAccountSection } from '../components/_features/[start]/account'
+import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
@@ -123,6 +124,11 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar setSearchFilterValue={searchFilter} />
+        {/* Above the local list, and hidden entirely when there is nothing to show — so
+            an editor with no account, or nobody signed in, looks exactly as it did. The
+            filter box covers both sections, because a person searching for a project
+            does not care which side of the line it is on. */}
+        <StartCloudProjects searchNameFilterValue={searchFilterValue} />
         <DisplayRecentProjects searchNameFilterValue={searchFilterValue} />
       </StartMainContent>
     </>

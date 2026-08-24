@@ -218,6 +218,16 @@ export interface RawProjectFiles {
   error?: { title: string; description: string; status?: number }
 }
 
+/** A project on the user's Autonomy Edge account, as a list needs to show it. */
+export interface CloudProjectSummary {
+  id: string
+  name: string
+  /** IEC language slug, e.g. `st` / `ld`. Absent on projects that never set one. */
+  language?: string | null
+  /** ISO timestamp of the last change, which is what "recent" is ordered by. */
+  updatedAt: string
+}
+
 export interface ProjectPort {
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
@@ -275,6 +285,22 @@ export interface ProjectPort {
 
   /** Get list of recently opened projects. */
   getRecentProjects(): Promise<RecentProject[]>
+
+  /**
+   * The most recently changed projects on the signed-in Autonomy Edge account.
+   *
+   * OPTIONAL, because not every platform lists cloud projects. The desktop editor does:
+   * it is the only place that shows local and cloud side by side, and reaching one from
+   * the other is the point. The web editor does not — it is always opened on a specific
+   * project, and Edge's own SPA is where a person browses them.
+   *
+   * Ordering is the server's (`updatedAt` descending). Sorting a truncated page here
+   * would be wrong: the five newest of ten fetched rows are not the five newest overall.
+   *
+   * Resolves an empty list for every "nothing to show", signed out included. Signing in
+   * is optional, so having no account is not an error.
+   */
+  listRecentCloudProjects?(limit: number): Promise<CloudProjectSummary[]>
 
   /**
    * Drop a project entry from the recent-projects list without
