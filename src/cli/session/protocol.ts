@@ -43,7 +43,6 @@ export const RequestKindSchema = z.enum([
   'status',
   'list-vars',
   'read',
-  'write',
   'force',
   'unforce',
   'start',
@@ -76,9 +75,17 @@ export const RequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ id: idField, kind: z.literal('list-vars'), filter: z.string().optional() }),
   z.object({ id: idField, kind: z.literal('read'), names: nonEmptyNames }),
-  /** Soft write — the program may overwrite it on the next scan. */
-  z.object({ id: idField, kind: z.literal('write'), name: z.string(), value: z.string() }),
-  /** Force — pinned until unforced; survives the program's own writes. */
+  /**
+   * Force — pinned until unforced; survives the program's own writes.
+   *
+   * There is deliberately no soft-write verb. The debug protocol's only
+   * mutation PDU (FC 0x42) carries a force flag, not a three-way op, so a
+   * "write" could only ever be sent as force=0 — which the target reads as an
+   * UNFORCE and which discards the value bytes. The in-process soft write
+   * (`DBGW_OP_WRITE` / `handle_write`) exists for consumers that run inside
+   * the runtime, such as the OPC-UA plugin and retain restore; it has no wire
+   * representation and does not need one.
+   */
   z.object({ id: idField, kind: z.literal('force'), name: z.string(), value: z.string() }),
   z.object({ id: idField, kind: z.literal('unforce'), name: z.string() }),
   z.object({ id: idField, kind: z.literal('start') }),
@@ -177,7 +184,6 @@ const ResponseDataSchema = z.discriminatedUnion('kind', [
     variables: z.array(z.object({ name: z.string(), type: z.string(), size: z.number() })),
   }),
   z.object({ kind: z.literal('read'), values: z.array(VariableValueSchema) }),
-  z.object({ kind: z.literal('write'), value: VariableValueSchema }),
   z.object({ kind: z.literal('force'), value: VariableValueSchema }),
   z.object({ kind: z.literal('unforce'), value: VariableValueSchema }),
   z.object({ kind: z.literal('plc-state'), plcState: z.enum(['running', 'stopped']) }),

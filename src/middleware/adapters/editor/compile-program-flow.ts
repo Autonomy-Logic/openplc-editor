@@ -72,6 +72,11 @@ export interface CompileProgramTransport {
   /**
    * Start the compile pipeline and stream its messages back. Fire-and-forget:
    * completion is signalled by a `closePort` message, not by resolution.
+   *
+   * That message carries `success` — the pipeline's verdict, derived from the
+   * exit codes of the processes it ran. A transport that cannot supply one
+   * (because it only sees the channel close) may omit it, and the flow falls
+   * back to whether anything was logged at error level.
    */
   runCompileProgram: (compileArgs: CompileProgramIpcArgs, onMessage: (data: Record<string, unknown>) => void) => void
 }
@@ -146,11 +151,28 @@ export async function compileProgramFlow(
       if (data.closePort) {
         if (settled) return
         settled = true
-        if (!hasError) {
+        // Prefer the pipeline's own verdict when it sent one. It comes from the
+        // exit code of every process the build ran, which is the only thing
+        // that actually knows whether the build failed.
+        //
+        // `hasError` is the fallback, and it is a weaker signal: it is set by
+        // ANY message that arrived at error level, and a compiler writes
+        // warnings to stderr, so "an error was logged" and "the build failed"
+        // are different questions. Trusting it made a warning-only build
+        // resolve as a failure whose message was a bare `^~~~` caret line.
+        // It is still needed, because a transport can close the channel
+        // without a verdict — the CLI synthesises `closePort` from the
+        // socket's close event (see cli-transport.ts).
+        const failed = typeof data.success === 'boolean' ? !data.success : hasError
+        if (!failed) {
           onProgress({ stage: 'done', message: 'Compilation complete' })
         }
         resolve(
-          hasError ? { success: false, error: lastError } : { success: true, message: 'Compilation complete', hexPath },
+          failed
+            ? // `lastError` can be empty when the verdict is the only evidence:
+              // a step failed on its exit code without logging at error level.
+              { success: false, error: lastError || 'Compilation failed' }
+            : { success: true, message: 'Compilation complete', hexPath },
         )
         return
       }

@@ -26,7 +26,7 @@ import {
   findVariable,
   type ResolvedVariable,
 } from '../debug/variables'
-import { ErrorCode } from '../exit-codes'
+import { ErrorCode, type ErrorCodeValue } from '../exit-codes'
 import type { Request, Response, SessionStatus, VariableValue, WatchSample } from './protocol'
 
 /** How a session controls run/stop, which differs by target family. */
@@ -167,9 +167,8 @@ export class SessionCore {
         return { id: request.id, ok: true, data: { kind: 'read', values: values.values } }
       }
 
-      case 'write':
       case 'force':
-        return this.applyWrite(request.id, request.name, request.value, request.kind === 'force')
+        return this.applyForce(request.id, request.name, request.value)
 
       case 'unforce':
         return this.applyUnforce(request.id, request.name)
@@ -294,7 +293,7 @@ export class SessionCore {
     return { values }
   }
 
-  private async applyWrite(id: number, name: string, input: string, force: boolean): Promise<Response> {
+  private async applyForce(id: number, name: string, input: string): Promise<Response> {
     const variable = findVariable(this.options.index, name)
     if (!variable) {
       return this.fail(id, ErrorCode.VariableNotFound, `No variable "${name}" in this program's debug map`)
@@ -302,15 +301,15 @@ export class SessionCore {
     const encoded = encodeValue(variable, input)
     if (!encoded.success) return this.fail(id, ErrorCode.ValueInvalid, encoded.error)
 
-    const result = await this.options.channel.setVariable(variable.index, force, encoded.bytes)
+    const result = await this.options.channel.setVariable(variable.index, true, encoded.bytes)
     if (!result.success) {
-      return this.fail(id, ErrorCode.TargetError, result.error ?? `The target refused the ${force ? 'force' : 'write'}`)
+      return this.fail(id, ErrorCode.TargetError, result.error ?? 'The target refused the force')
     }
-    if (force) this.forced.add(variable.name)
+    this.forced.add(variable.name)
 
     const readBack = await this.readBackAfterWrite(variable, input)
-    if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
-    return { id, ok: true, data: { kind: force ? 'force' : 'write', value: readBack.value } }
+    if ('error' in readBack) return this.fail(id, readBack.code, readBack.error)
+    return { id, ok: true, data: { kind: 'force', value: readBack.value } }
   }
 
   /**
@@ -323,24 +322,51 @@ export class SessionCore {
    * report `0`, and a test asserting on that reply would fail against a PLC that
    * had done exactly what it was told.
    *
-   * Polls briefly for the value to match what was asked, and gives up quietly
-   * after that: a mismatch is legitimate for a soft `write` the program
-   * overwrites on the next scan, so a timeout here is not an error.
+   * Polls briefly for the value to match what was asked. A timeout is now an
+   * ERROR: `force` is the only caller (the soft-write verb was removed, and it
+   * had no wire representation), and forcing PINS a value — the program cannot
+   * overwrite it. So a forced variable that has not taken the value by the
+   * deadline means the target acked the PDU and the force did not land, which
+   * is precisely what a caller needs to hear. It used to give up quietly on the
+   * rationale that "a mismatch is legitimate for a soft write the program
+   * overwrites next scan" — true of the verb that no longer exists, and it let
+   * `debug force main:enable TRUE` print FALSE and exit 0.
+   *
+   * False positives are already excluded by `writeHasSettled`, which reports
+   * "settled" for anything it cannot compare — an unparseable literal, a
+   * non-primitive value — and compares numbers with a 1e-6 epsilon. A timeout
+   * therefore only happens when the value was comparable and genuinely differs.
    */
   private async readBackAfterWrite(
     variable: ResolvedVariable,
     requested: string,
-  ): Promise<{ value: VariableValue } | { error: string }> {
+  ): Promise<{ value: VariableValue } | { error: string; code: ErrorCodeValue }> {
     const deadline = this.now() + WRITE_SETTLE_TIMEOUT_MS
     let last: VariableValue | undefined
+    let settled = false
 
     for (;;) {
       const result = await this.readValues([variable])
-      if ('error' in result) return { error: result.error }
+      if ('error' in result) return { error: result.error, code: ErrorCode.NotConnected }
       last = result.values[0]
-      if (last && writeHasSettled(last, requested)) break
+      if (last && writeHasSettled(last, requested)) {
+        settled = true
+        break
+      }
       if (this.now() >= deadline) break
       await delay(WRITE_SETTLE_POLL_MS)
+    }
+
+    if (!settled) {
+      return {
+        // TargetError, not NotConnected: the reads succeeded, so the channel is
+        // fine — the device took the PDU and the value did not change.
+        code: ErrorCode.TargetError,
+        error:
+          `The target acknowledged the force but ${variable.name} did not take the value ` +
+          `within ${WRITE_SETTLE_TIMEOUT_MS} ms` +
+          (last === undefined ? '' : ` (still ${String(last.value)})`),
+      }
     }
 
     return {
