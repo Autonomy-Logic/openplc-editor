@@ -15,6 +15,7 @@ import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
 import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
 import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
@@ -56,17 +57,22 @@ const Board = memo(function () {
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
   // CONNECT flow (D72): open the device channel, classify it, and drive the
-  // flash follow-up when nothing answered the debug protocol.
+  // flash follow-up when nothing answered the debug protocol. `deviceLinkStatus`
+  // mirrors the MAIN process's session — it flips to 'connected' for a held
+  // serial/TCP link and for a runtime (REST) session alike, so it is the one
+  // signal that a session actually exists, whatever the medium.
   const {
     connect: connectDevice,
     disconnect: disconnectDevice,
     isConnected,
-    status: serialStatus,
+    status: deviceLinkStatus,
   } = useDeviceConnect(currentBoardInfo)
 
   // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
-  // every built-in board — `isLicensable` gates the whole affordance.
-  const licensing = useDeviceLicense(currentBoardInfo)
+  // every built-in board — `isLicensable` gates the whole affordance. This mount
+  // OWNS the purchase watch: `useDeviceConnect` above holds a second instance of
+  // the hook, and without a single owner both would poll on every watch tick.
+  const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
 
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
@@ -89,6 +95,7 @@ const Board = memo(function () {
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
+  const clearDeviceLicense = useOpenPLCStore((state) => state.deviceActions.clearDeviceLicense)
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
@@ -381,6 +388,10 @@ const Board = memo(function () {
       // The session goes with it: control was this REST connection, and any debug
       // channel opened off it has nothing left to belong to.
       await device.closeRuntimeSession?.()
+      // A DELIBERATE disconnect drops the licence report too, exactly as the
+      // serial flow does: leaving a badge behind would assert possession for
+      // hardware nothing is talking to.
+      clearDeviceLicense()
       return
     }
 
@@ -462,6 +473,7 @@ const Board = memo(function () {
     connectionStatus,
     setRuntimeConnectionStatus,
     setRuntimeJwtToken,
+    clearDeviceLicense,
     openModal,
     deviceBoard,
   ])
@@ -485,6 +497,90 @@ const Board = memo(function () {
       setIncludeEthercatStatsInPolling(false)
     }
   }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+
+  // Settle the licence for a RUNTIME target once its session is up — once per
+  // session PER BOARD.
+  //
+  // The serial flow settles it INSIDE `connect()`: one held link, awaited, so
+  // the user cannot race the sequence. A runtime target has no such moment in
+  // the renderer — login opens the session MAIN-side (useDeviceConnectionMonitor
+  // reacts to the REST login and calls `openRuntimeSession`), and the device
+  // link status flipping to 'connected' is the announcement that it exists.
+  // Keying on the REST login alone would race that IPC call; keying on BOTH
+  // means the licence FCs only ever run against an established session, over
+  // the debug WebSocket the main process acquires per call.
+  //
+  // The ref holds the BOARD the settle ran for, not a boolean: a board switch
+  // over a live session (confirm-device-switch allows it) clears the report via
+  // resetDeviceLicense, and a boolean ref would leave the new board unchecked
+  // and badge-less until a manual reconnect (review 2026-08-20). A ref, not
+  // state: the re-render caused by the report landing must not re-run the flow.
+  const runtimeLicenseSettledForRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensing.isLicensable) return
+    // A platform whose device port cannot carry the licensing calls has nothing
+    // to settle — STRUCTURAL inertness, not incidental: on openplc-web nothing
+    // publishes a device link today, but the day one is published this gate is
+    // what keeps a capability the platform never had from popping error dialogs
+    // (web review 2026-08-20, finding 1).
+    if (!device.refreshLicense) return
+    if (connectionStatus !== 'connected' || deviceLinkStatus !== 'connected') {
+      runtimeLicenseSettledForRef.current = null
+      return
+    }
+    if (runtimeLicenseSettledForRef.current === deviceBoard) return
+    runtimeLicenseSettledForRef.current = deviceBoard
+    // Cleanup guard: `refresh` can take seconds (device read + backend round
+    // trip). A dialog for a screen the user already left is noise at best and
+    // a modal over an unrelated screen at worst.
+    let cancelled = false
+    void licensing.refresh().then((report) => {
+      if (cancelled || !report) return
+      explainLicenseOutcome(report, {
+        openModal,
+        buy: licensing.buy,
+        // AUTO flow: a check-failed outcome stays on the badge instead of
+        // opening an error modal the user did not ask for — the loudest case
+        // it suppresses is a runtime that predates the licence FCs, where
+        // every connect would otherwise open "Licence Check Failed" on a
+        // working device. User-initiated paths (serial connect, the badge's
+        // own retry) keep the dialog.
+        quietCheckFailed: true,
+        // A retry re-runs the flow and explains the NEW outcome, so a transient
+        // failure or a purchase completed in the browser resolves in place.
+        // NO quietCheckFailed here: a retry CLICK is user-initiated — the user
+        // asked a question, and silence would read as success (review
+        // 2026-08-20, E3). Only the unprompted auto-settle above stays quiet.
+        retry: async () => {
+          const next = await licensing.refresh()
+          if (next && !cancelled) {
+            explainLicenseOutcome(next, { openModal, buy: licensing.buy })
+          }
+        },
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Deps are the STABLE fields, never the `licensing` object (review
+    // 2026-08-20, E4): the hook returns a fresh literal each render, and
+    // `refresh()` itself flips `phase` in the store — an object dep re-ran this
+    // effect mid-flight and its cleanup set `cancelled` on the very run that
+    // started the refresh, so the report never reached the dialog. `refresh`
+    // and `buy` are useCallback'd on inputs that do not change during the
+    // flight (`buy`'s `report?.deviceId` only moves after the resolve).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    connectionStatus,
+    deviceLinkStatus,
+    currentBoardInfo,
+    deviceBoard,
+    device.refreshLicense,
+    licensing.isLicensable,
+    licensing.refresh,
+    licensing.buy,
+    openModal,
+  ])
 
   return (
     <DeviceEditorSlot>
@@ -634,6 +730,20 @@ const Board = memo(function () {
                 {connectionStatus === 'connected' && plcStatus && (
                   <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
+                {/* Same affordance as the serial connect row below: renders
+                    nothing at all unless this board's VPP is sold licensed AND a
+                    check has landed, so a plain runtime's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
               </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
@@ -700,7 +810,7 @@ const Board = memo(function () {
               </div>
               <DeviceConnectButton
                 containerId='device-connect-button-container'
-                status={serialStatus}
+                status={deviceLinkStatus}
                 onConnect={connectDevice}
                 onDisconnect={disconnectDevice}
                 // A missing port only blocks Connect when serial is the ONLY way in.
@@ -720,8 +830,10 @@ const Board = memo(function () {
                     report={licensing.report}
                     isChecking={licensing.isChecking}
                     buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
                   />
                 ) : null}
               </DeviceConnectButton>

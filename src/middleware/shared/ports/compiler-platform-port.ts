@@ -197,6 +197,16 @@ export interface InstallArduinoCoreArgs {
    *  fails if it is unavailable — required for prebuilt arduino-hal boards
    *  whose precompiled `.a` is ABI-locked to that core version. */
   coreVersion?: string
+  /** Optional third-party board-manager index URL (e.g. a vendor's
+   *  `package_<vendor>_index.json`).  Sourced from the VPP manifest's
+   *  `target.boardManagerUrl` (or `board_manager_url` in hals.json) and
+   *  forwarded to arduino-cli as `--additional-urls`.
+   *
+   *  Cores outside arduino-cli's built-in index are invisible without it:
+   *  `core install industrialshields:esp32` fails with "Platform not found"
+   *  unless the vendor index is supplied AND `core update-index` has been
+   *  run against it.  The editor does both; web ignores this field. */
+  boardManagerUrl?: string
 }
 
 /** Arduino-CLI library install (editor-only.  Same no-op

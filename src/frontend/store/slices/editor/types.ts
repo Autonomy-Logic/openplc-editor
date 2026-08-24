@@ -139,6 +139,18 @@ export type EditorModel = EditorModelBase &
         structure: StructureTableType
       }
     | {
+        /**
+         * A Global Variable List. It reuses `StructureTableType` because it presents the
+         * same way a structure does — a table of declarations with a code view behind the
+         * same toggle — which is also how CODESYS shows a GVL.
+         */
+        type: 'plc-global-variable-list'
+        meta: {
+          name: string
+        }
+        structure: StructureTableType
+      }
+    | {
         type: 'plc-resource'
         meta: {
           name: string

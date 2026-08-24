@@ -5,6 +5,7 @@ import { basename, extname, join } from 'path'
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
+import type { PublicLibrary } from '../../../middleware/shared/ports/public-catalog-types'
 import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../../shared/library/installed-library-rows'
 import {
   prepareCodesysUpload,
@@ -34,6 +35,30 @@ export interface CatalogInstallItemResult {
 
 export interface CatalogInstallBatchResult {
   results: CatalogInstallItemResult[]
+}
+
+/**
+ * Splice resolved displayName/description into a `.stlib` archive's
+ * own manifest before it's persisted.  Only called when a catalog
+ * install's metadata actually differs from what the downloaded
+ * archive's manifest carries — a no-op archive is returned unchanged
+ * on any parse failure so a malformed download still surfaces its
+ * real error from `persistPrepared`'s own validation, not this helper.
+ */
+function withOverriddenManifestMetadata(
+  archiveText: string,
+  overrides: { displayName?: string; description?: string },
+): string {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(archiveText)
+  } catch {
+    return archiveText
+  }
+  if (!parsed || typeof parsed !== 'object') return archiveText
+  const manifest = (parsed as { manifest?: unknown }).manifest
+  if (!manifest || typeof manifest !== 'object') return archiveText
+  return JSON.stringify({ ...parsed, manifest: { ...manifest, ...overrides } })
 }
 
 /**
@@ -212,9 +237,13 @@ export class LibraryManagerModule {
 
   /**
    * Install one or more libraries from the public catalog hosted on
-   * autonomy-edge.  Each id is fetched, validated, and persisted via
-   * the same `.stlib` install path the file picker uses — only the
-   * source of the archive bytes differs.
+   * autonomy-edge.  Each row's archive is fetched, validated, and
+   * persisted via the same `.stlib` install path the file picker
+   * uses — only the source of the archive bytes differs.  Takes the
+   * full catalog rows (not just ids) for the same reason the web
+   * adapter does: `authorHandle`/`displayName`/`description` are
+   * metadata the downloaded `.stlib` archive's own manifest doesn't
+   * reliably carry — see `library-port.ts`.
    *
    * Failures are per-item: a 404 / parse error / name-collision on
    * one library doesn't abort the rest, so the modal can show
@@ -222,32 +251,62 @@ export class LibraryManagerModule {
    * Emits a single `libraries:changed` after the loop (the IPC
    * handler does this) so the renderer refreshes once, not N times.
    */
-  async installFromCatalog(publishedLibraryIds: string[]): Promise<CatalogInstallBatchResult> {
+  async installFromCatalog(libraries: PublicLibrary[]): Promise<CatalogInstallBatchResult> {
     const results: CatalogInstallItemResult[] = []
-    for (const id of publishedLibraryIds) {
+    for (const row of libraries) {
       try {
-        const archiveText = await downloadPublicLibrary(this.catalogTransport, { id })
+        const archiveText = await downloadPublicLibrary(this.catalogTransport, { id: row.id })
         const prepared = prepareStlibUpload(archiveText)
-        const persistResult = this.persistPrepared(prepared)
+        // The archive's own manifest carries the author as whatever
+        // free text the library's author typed in — the catalog
+        // row's authorHandle is the real, authoritative publisher
+        // identity from autonomy-edge, so it wins here.  Mirrors the
+        // web adapter's finalization in web-library-manager.ts.
+        //
+        // Unlike web (which sends displayName/description/author as
+        // separate fields to a backend that stores them alongside the
+        // archive), this platform has nowhere else to keep them:
+        // `listInstalled()` reads displayName/description straight
+        // back off the persisted archive's own manifest (see
+        // `userArchiveToInstalledRow`), so the override has to be
+        // baked into the archive text before it's written — otherwise
+        // it's computed here and silently dropped. `InstalledLibrary`
+        // has no author field on this platform at all, so `author`
+        // is finalized for parity with web's PreparedLibrary shape
+        // but isn't persisted or shown anywhere (yet).
+        const finalized: PreparedLibrary = {
+          ...prepared,
+          displayName: row.displayName || prepared.displayName,
+          description: row.description ?? prepared.description,
+          author: row.authorHandle || prepared.author,
+        }
+        const archive =
+          finalized.displayName === prepared.displayName && finalized.description === prepared.description
+            ? finalized.archive
+            : withOverriddenManifestMetadata(finalized.archive, {
+                displayName: finalized.displayName,
+                description: finalized.description,
+              })
+        const persistResult = this.persistPrepared({ ...finalized, archive })
         if (persistResult.success && !persistResult.canceled) {
           results.push({
-            publishedLibraryId: id,
+            publishedLibraryId: row.id,
             success: true,
             name: persistResult.name,
             version: persistResult.version,
           })
         } else if (!persistResult.success) {
           results.push({
-            publishedLibraryId: id,
+            publishedLibraryId: row.id,
             success: false,
-            name: prepared.name,
-            version: prepared.version,
+            name: finalized.name,
+            version: finalized.version,
             error: persistResult.error,
           })
         }
       } catch (err) {
         results.push({
-          publishedLibraryId: id,
+          publishedLibraryId: row.id,
           success: false,
           error: err instanceof Error ? err.message : String(err),
         })

@@ -17,6 +17,7 @@ import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
+import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
@@ -34,6 +35,7 @@ import { UsersIcon } from '../../../assets/icons/project/Users'
 import { useOpenPLCStore } from '../../../store'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
+import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -88,6 +90,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   branchTarget:
     | 'data-type'
+    | 'global-variable-list'
     | 'function'
     | 'function-block'
     | 'program'
@@ -100,6 +103,10 @@ type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
 
 const BranchSources = {
   'data-type': { BranchIcon: DataTypeIcon, label: 'Data Types' },
+  // CODESYS groups Global Variable Lists under their own tree node; the lists inside are
+  // named by the user (`GVL` by default), which is also the name their members are
+  // qualified with in code.
+  'global-variable-list': { BranchIcon: GlobalVariableListIcon, label: 'Global Variables' },
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
@@ -111,7 +118,7 @@ const BranchSources = {
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes, servers, remoteDevices },
+      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -122,6 +129,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     pous.some((pou) => pou.pouType === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
+    (branchTarget === 'global-variable-list' && (globalVariableLists?.length ?? 0) > 0) ||
     (branchTarget === 'server' && servers !== undefined && servers.length > 0) ||
     (branchTarget === 'remote-device' && remoteDevices !== undefined && remoteDevices.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
@@ -450,6 +458,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'arr'
     | 'enum'
     | 'str'
+    | 'gvl'
     | 'res'
     | 'devConfig'
     | 'devPin'
@@ -484,6 +493,7 @@ const LeafSources = {
   arr: { LeafIcon: ArrayIcon },
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },
+  gvl: { LeafIcon: GlobalVariableListIcon },
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
@@ -520,10 +530,22 @@ const ProjectTreeLeaf = ({
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
-    serverActions: { deleteRequest: deleteServerRequest, rename: renameServer },
-    remoteDeviceActions: { deleteRequest: deleteRemoteDeviceRequest, rename: renameRemoteDevice },
+    globalVariableListActions: {
+      deleteRequest: deleteGlobalVariableListRequest,
+      rename: renameGlobalVariableList,
+      duplicate: duplicateGlobalVariableList,
+    },
+    serverActions: { deleteRequest: deleteServerRequest, rename: renameServer, duplicate: duplicateServer },
+    remoteDeviceActions: {
+      deleteRequest: deleteRemoteDeviceRequest,
+      rename: renameRemoteDevice,
+      duplicate: duplicateRemoteDevice,
+    },
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
+    project: {
+      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
+    },
   } = useOpenPLCStore()
 
   const [isEditing, setIsEditing] = useState(false)
@@ -534,6 +556,7 @@ const ProjectTreeLeaf = ({
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+  const isGlobalVariableList = useMemo(() => leafLang === 'gvl', [leafLang])
   const isServer = useMemo(() => leafLang === 'server', [leafLang])
   const isRemoteDevice = useMemo(() => leafLang === 'remoteDevice', [leafLang])
   // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
@@ -563,10 +586,13 @@ const ProjectTreeLeaf = ({
   const handleRenameFile = (newLabel: string) => {
     setIsEditing(false)
 
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    // Keep this list in step with the dispatch below — a type handled there but
+    // missing here bails out at the guard, which makes its branch dead code and
+    // the tree's own Rename entry a no-op.
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, server, or remote device files can be renamed.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be renamed.',
         variant: 'fail',
       })
       return
@@ -603,6 +629,12 @@ const ProjectTreeLeaf = ({
       return
     }
 
+    if (isGlobalVariableList) {
+      const res = renameGlobalVariableList(label, newLabel)
+      if (!res.ok) setNewLabel(label || '')
+      return
+    }
+
     if (isServer) {
       const res = renameServer(label, newLabel)
       if (!res.ok) setNewLabel(label || '')
@@ -628,11 +660,49 @@ const ProjectTreeLeaf = ({
     }
   }
 
+  /**
+   * Every element name the project has, in one list.
+   *
+   * File state, tabs and editor models are all keyed by raw element name, across kinds,
+   * so a candidate has to be free of ALL of them and not only of its own collection.
+   * Checking same-kind names alone let a duplicated POU called `Pump_copy` take over the
+   * `files['Pump_copy']` entry of a data type that already had that name.
+   */
+  const allElementNames = useMemo(
+    () => [
+      ...pous.map((pou) => pou.name),
+      ...dataTypes.map((dataType) => dataType.name),
+      ...(globalVariableLists ?? []).map((list) => list.name),
+      ...(servers ?? []).map((server) => server.name),
+      ...(remoteDevices ?? []).map((device) => device.name),
+      ...collectAllSlaveNames(remoteDevices),
+    ],
+    [pous, dataTypes, globalVariableLists, servers, remoteDevices],
+  )
+
+  /**
+   * `<label>_copy`, then `_copy_2`, `_copy_3`… against every name in use.
+   *
+   * Duplicating twice used to call the action with the same `_copy` name both times;
+   * the second call failed on the collision and the result was discarded, so the menu
+   * item simply did nothing. Picking a free name up front is what makes the second
+   * duplicate behave like the first.
+   */
+  const nextCopyName = (base: string): string => {
+    const used = new Set(allElementNames.map((n) => n.toLowerCase()))
+    const first = `${base}_copy`
+    if (!used.has(first.toLowerCase())) return first
+    for (let n = 2; ; n++) {
+      const candidate = `${first}_${n}`
+      if (!used.has(candidate.toLowerCase())) return candidate
+    }
+  }
+
   const handleDuplicateFile = () => {
-    if (!isAPou && !isDatatype) {
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be duplicated.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be duplicated.',
         variant: 'fail',
       })
       return
@@ -641,7 +711,7 @@ const ProjectTreeLeaf = ({
     if (!label) {
       toast({
         title: 'Error',
-        description: 'Pou or datatype label is required to select.',
+        description: 'Label is required to duplicate.',
         variant: 'fail',
       })
       return
@@ -649,28 +719,32 @@ const ProjectTreeLeaf = ({
 
     // Duplicating is a soft, unsaved change: the shared duplicate actions flag
     // the new element dirty; it persists on the next save, like create.
-    if (isAPou) {
-      duplicatePou(label, `${label}_copy`)
-      return
-    }
+    //
+    // Every branch reports its failure. Discarding the result is how a duplicate
+    // that could not be made looks identical to one that was.
+    const copyName = nextCopyName(label)
+    const duplicated = ((): { ok: boolean; message?: string } => {
+      if (isAPou) return duplicatePou(label, copyName)
+      if (isDatatype) return duplicateDatatype(label, copyName)
+      if (isGlobalVariableList) return duplicateGlobalVariableList(label, copyName)
+      if (isServer) return duplicateServer(label, copyName)
+      return duplicateRemoteDevice(label, copyName)
+    })()
 
-    if (isDatatype) {
-      duplicateDatatype(label, `${label}_copy`)
-      return
+    if (!duplicated.ok) {
+      toast({
+        title: 'Duplicate failed',
+        description: duplicated.message ?? `"${label}" could not be duplicated.`,
+        variant: 'fail',
+      })
     }
-
-    toast({
-      title: 'Error',
-      description: 'Only POU or datatype files can be duplicated.',
-      variant: 'fail',
-    })
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, server, or remote device files can be deleted.',
+        description: 'Only POU, datatype, global variable list, server, or remote device files can be deleted.',
         variant: 'fail',
       })
       return
@@ -692,6 +766,11 @@ const ProjectTreeLeaf = ({
 
     if (isDatatype) {
       deleteDatatypeRequest(label)
+      return
+    }
+
+    if (isGlobalVariableList) {
+      deleteGlobalVariableListRequest(label)
       return
     }
 

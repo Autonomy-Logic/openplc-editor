@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
@@ -120,7 +121,7 @@ import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
-import { PackageManagerModule } from '../package-manager'
+import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -938,9 +939,18 @@ class CompilerModule {
   // and the Arduino sketch walks them dynamically for I/O binding.
   // The debugger will be redesigned in Phase 4.
 
-  // TODO: This method is used to update the index of the Arduino core.
-  // We should validate if this is necessary and if it works correctly.
-  async handleCoreUpdateIndex(handleOutputData: HandleOutputDataCallback) {
+  /**
+   * `arduino-cli core update-index` — refetch the platform indexes.
+   *
+   * Required before installing a core that lives in a third-party index:
+   * passing `--additional-urls` to `core install` alone is not enough,
+   * because the CLI resolves the platform against its *cached* index and
+   * reports "Platform not found" until that cache has seen the vendor URL.
+   *
+   * `additionalUrls` is forwarded so the refresh covers the vendor index
+   * as well as the ones configured in `arduino-cli.yaml`.
+   */
+  async handleCoreUpdateIndex(handleOutputData: HandleOutputDataCallback, additionalUrls?: string) {
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
       let binaryPath = this.arduinoCliBinaryPath
       const [flag, configFilePath] = this.arduinoCliBaseParameters
@@ -949,7 +959,13 @@ class CompilerModule {
         // INFO: On Windows, we need to add the .exe extension to the binary path.
         binaryPath += '.exe'
       }
-      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, configFilePath])
+      const executeCommand = spawn(binaryPath, [
+        'core',
+        'update-index',
+        ...(additionalUrls ? ['--additional-urls', additionalUrls] : []),
+        flag,
+        configFilePath,
+      ])
 
       let stderrData = ''
 
@@ -971,10 +987,24 @@ class CompilerModule {
     })
   }
 
+  /**
+   * Install the Arduino core a board needs, pulling it from a vendor
+   * board-manager index when the board declares one.
+   *
+   * `boardManagerUrl` comes from the VPP manifest (`target.boardManagerUrl`)
+   * or hals.json (`board_manager_url`).  Cores outside arduino-cli's
+   * built-in index — `industrialshields:esp32`, for example — are
+   * unresolvable without it, and the install dies with
+   * "Platform '<id>' not found" (exit 7).  When one is supplied we refresh
+   * the index against that URL first, then install with the same
+   * `--additional-urls`; both steps are needed, since `core install`
+   * resolves against the cached index.
+   */
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
     coreVersion?: string,
+    boardManagerUrl?: string,
   ) {
     if (boardCore === null) return
 
@@ -994,6 +1024,25 @@ class CompilerModule {
       handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
     }
 
+    // Refresh the platform index against the vendor URL before installing.
+    // Non-fatal: a transient network failure here should not mask the far
+    // more useful error that `core install` produces a moment later.
+    if (boardManagerUrl) {
+      handleOutputData(`Using vendor board index: ${boardManagerUrl}`, 'info')
+      try {
+        // `handleCoreUpdateIndex` logs at the wider 'info' | 'warning' |
+        // 'error' level set; this callback only accepts 'info' | 'error',
+        // so fold 'warning' down to 'info'.
+        await this.handleCoreUpdateIndex(
+          (chunk, level) => handleOutputData(chunk, level === 'error' ? 'error' : 'info'),
+          boardManagerUrl,
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        handleOutputData(`Warning: could not refresh the board index (${message}). Continuing.`, 'info')
+      }
+    }
+
     let binaryPath = this.arduinoCliBinaryPath
 
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -1001,7 +1050,13 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', coreRef, ...this.arduinoCliBaseParameters])
+      const executeCommand = spawn(binaryPath, [
+        'core',
+        'install',
+        coreRef,
+        ...(boardManagerUrl ? ['--additional-urls', boardManagerUrl] : []),
+        ...this.arduinoCliBaseParameters,
+      ])
 
       let stderrData = ''
 
@@ -2010,6 +2065,102 @@ class CompilerModule {
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
+    // Second gate, deliberately re-run here rather than trusted from
+    // `compileProgram` (DOPE-539). This step is what copies vendor C into the
+    // bundle the runtime compiles ON the PLC, and it runs late — transpile,
+    // strucpp and the v4 bundle compose happen in between, which on a large
+    // project is minutes of wall clock during which the package directory is
+    // still writable. Checking again costs one directory hash.
+    //
+    // This sits OUTSIDE the catch-all below on purpose. Every other failure in
+    // this method degrades the build and reports it; this one has to stop it,
+    // and `packageVppPlugin` in the platform port turns a throw into the
+    // `errors[]` the pipeline bails on.
+    const integrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!integrity.ok) {
+      const message = formatPackageIntegrityError(boardTarget, integrity)
+      handleOutputData(message, 'error')
+      throw new Error(message)
+    }
+
+    // Trusted-keys table for a licensable runtime-v4 VPP. The licensable
+    // prebuilt link set (`license_core.o` and friends) references
+    // `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as EXTERN symbols — the
+    // table itself travels as `trusted_keys.json` at the package root
+    // (injected per environment when the package is published) and the editor
+    // defines the symbols at project build time, the same per-project movement
+    // as `defines.h`. The generated unit joins the `vpp_plugin/` link set the
+    // device builds the plugin `.so` from.
+    //
+    // Resolved HERE, outside the degrade-and-continue catch below, for the
+    // same reason the integrity gate is: a licensable package whose key table
+    // is unusable must STOP the build (the plugin cannot link without the
+    // symbols), and `packageVppPlugin` in the platform port turns a throw into
+    // the `errors[]` the pipeline bails on, whereas a logged error would let
+    // the build upload a bundle whose licensed driver dies at link time on the
+    // PLC. `resolveTrustedKeysArtifact` owns the gate, the validation and the
+    // fault wording; this block only does the file I/O the shared step
+    // deliberately avoids.
+    let trustedKeysC: string | null = null
+    {
+      const licensableMatch = new PackageManagerModule().findDeviceByBoardName(boardTarget)
+      // A failed lookup cannot tell a plain non-VPP board from a licensable
+      // one whose manifest broke or whose board name drifted — and for the
+      // latter, silence relocates the diagnosis to the PLC's linker
+      // (undefined LIC_TRUSTED_KEYS), the least diagnosable place it can
+      // land. But warning on EVERY null lookup put a yellow "reinstall the
+      // package" line in every plain v4 build of the built-in runtime target
+      // (Thiago's review of #1014), so the built-ins are excluded first:
+      // a board that hals.json knows legitimately has no VPP package. What
+      // remains — known to neither store — is precisely the drifted/broken
+      // case the warning exists for.
+      if (!licensableMatch) {
+        let isBuiltinTarget = false
+        try {
+          const hals = await readHalsFile<HalsFile>()
+          isBuiltinTarget = Boolean(hals[boardTarget])
+        } catch {
+          isBuiltinTarget = false
+        }
+        if (!isBuiltinTarget) {
+          handleOutputData(
+            `No installed VPP package matches board "${boardTarget}", so the licensing gate could not be ` +
+              'evaluated. If this board belongs to a licensed VPP, its trusted-keys table was NOT generated ' +
+              'and the plugin will fail to link on the device — reinstall the package.',
+            'warning',
+          )
+        }
+      }
+      if (
+        licensableMatch &&
+        licensableMatch.device.target.type === 'runtime-v4' &&
+        licensableMatch.device.capabilities?.isLicensable === true
+      ) {
+        let trustedKeysJson: string | null = null
+        try {
+          trustedKeysJson = await readFile(join(licensableMatch.pkg.path, 'trusted_keys.json'), 'utf-8')
+        } catch {
+          trustedKeysJson = null
+        }
+        const artifact = resolveTrustedKeysArtifact({
+          isLicensable: true,
+          packageLabel: licensableMatch.pkg.packageId,
+          trustedKeysJson,
+        })
+        if (artifact.kind === 'packaging-fault') {
+          handleOutputData(artifact.message, 'error')
+          throw new Error(artifact.message)
+        }
+        if (artifact.kind === 'generated') {
+          trustedKeysC = artifact.content
+          handleOutputData(
+            `Trusted-keys table generated for the plugin link set: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+            'info',
+          )
+        }
+      }
+    }
+
     try {
       const match = new PackageManagerModule().findDeviceByBoardName(boardTarget)
 
@@ -2233,6 +2384,15 @@ class CompilerModule {
         return
       }
 
+      // The generated trusted-keys unit joins the link set AND the checksum:
+      // a key rotation with unchanged plugin source must still change the
+      // checksum, or the runtime's compile.sh would skip the rebuild and the
+      // device would keep validating blobs against the previous table.
+      if (trustedKeysC !== null) {
+        await writeFile(join(destPluginDir, 'trusted_keys.c'), trustedKeysC, 'utf-8')
+        copiedFiles.push('trusted_keys.c')
+      }
+
       // Compute SHA-256 over all copied files (sorted for determinism)
       // Format: "<sha256> <relative-path>\n" per file, then a final SHA-256 of that list
       copiedFiles.sort()
@@ -2309,6 +2469,53 @@ class CompilerModule {
   }
 
   /**
+   * Arduino-path trusted-keys injection (the sketch-tree half of ADR-0004;
+   * the runtime-v4 half lives in `handleVendorPluginPackaging`). Extracted
+   * from `compileProgram` so the path the FIRST licensable package actually
+   * uses is unit-testable — review #1014 finding A.
+   *
+   * Gate rules: runtime-v3 never links Arduino firmware, so the gate must
+   * not fire for it; a non-licensable board generates nothing. For a
+   * licensable board, an unusable table is a HARD STOP (return `false` after
+   * posting the packaging fault): without the symbols the link either dies
+   * in an undefined-reference wall (naming a symbol, not the package) or —
+   * if a stale definition is ever lying around — succeeds while trusting
+   * the wrong keys. `resolveTrustedKeysArtifact` owns the gate semantics,
+   * validation and fault wording; the caller does the file I/O.
+   *
+   * Returns `true` to proceed, `false` when the caller must stop the build
+   * (the fault message has already been posted).
+   */
+  applyTrustedKeysToSkeleton(input: {
+    isRuntimeV3: boolean
+    isLicensable: boolean
+    packageLabel: string
+    trustedKeysJson: string | null
+    firmwareSkeleton: Record<string, string>
+    postMessage: (msg: { logLevel: 'info' | 'warning' | 'error'; message: string }) => void
+  }): boolean {
+    const { isRuntimeV3, isLicensable, packageLabel, trustedKeysJson, firmwareSkeleton, postMessage } = input
+    if (isRuntimeV3 || !isLicensable) return true
+
+    const artifact = resolveTrustedKeysArtifact({ isLicensable: true, packageLabel, trustedKeysJson })
+    if (artifact.kind === 'packaging-fault') {
+      postMessage({ logLevel: 'error', message: `${artifact.message}\nStopping compilation process.` })
+      return false
+    }
+    if (artifact.kind === 'generated') {
+      firmwareSkeleton['examples/Baremetal/trusted_keys.c'] = artifact.content
+      // Logged on SUCCESS for the same reason the license-store include is:
+      // without this line, a build with and without the table looks identical
+      // until the linker (or worse, the licence check) says otherwise.
+      postMessage({
+        logLevel: 'info',
+        message: `Trusted-keys table generated: ${artifact.keyCount} key(s), table size ${artifact.tableSize}`,
+      })
+    }
+    return true
+  }
+
+  /**
    * Main compile entry point.  Drives the full Step 0-13 flow
    * through the shared `runCompilePipeline` orchestrator
    * (`backend/shared/compile/pipeline.ts`); platform-specific bits
@@ -2369,6 +2576,22 @@ class CompilerModule {
       string | null | undefined,
       Record<string, unknown> | undefined,
     ]
+
+    // VPP integrity gate (DOPE-539). FIRST, before the manifest is read for
+    // anything else: from here on this method trusts the package directory for
+    // the HAL it links, the licence-store backend it injects and every
+    // capability it branches on. The import check and the project-open sweep
+    // are both behind us and neither says anything about the package as it
+    // exists right now.
+    const boardPackageIntegrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!boardPackageIntegrity.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${formatPackageIntegrityError(boardTarget, boardPackageIntegrity)}\nStopping compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
 
     // Resolve board info uniformly across hals.json + installed VPP
     // packages via the shared `resolveBoardSelection` helper — the
@@ -2593,6 +2816,44 @@ class CompilerModule {
               '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
               'firmware will link the weak default and report that its licence storage is missing.',
           })
+        }
+
+        // Trusted-keys table for a licensable VPP. The licensable prebuilt
+        // archive references `LIC_TRUSTED_KEYS` / `LIC_TRUSTED_KEY_COUNT` as
+        // EXTERN symbols — the table itself travels as `trusted_keys.json` at
+        // the package root (injected per environment when the package is
+        // published) and the editor defines the symbols here at project build
+        // time, the same per-project movement as `defines.h`. The generated
+        // unit lands in the SKETCH directory so its object is always linked
+        // (sketch objects are never archive-pruned the way library members
+        // can be).
+        //
+        // Unlike the license-store warning above, an unusable table is a HARD
+        // STOP, not a degraded build — see `applyTrustedKeysToSkeleton` for
+        // the gate, the skeleton write and the message voice. This site only
+        // does the file I/O the shared step deliberately avoids, and turns a
+        // `false` into the port close + return the fault demands.
+        {
+          let trustedKeysJson: string | null = null
+          if (!isRuntimeV3 && boardInfo.capabilities?.isLicensable === true && boardInfo.vppPackagePath) {
+            try {
+              trustedKeysJson = await readFile(join(boardInfo.vppPackagePath, 'trusted_keys.json'), 'utf-8')
+            } catch {
+              trustedKeysJson = null
+            }
+          }
+          const proceed = this.applyTrustedKeysToSkeleton({
+            isRuntimeV3,
+            isLicensable: boardInfo.capabilities?.isLicensable === true,
+            packageLabel: boardInfo.vppPackageId ?? boardTarget,
+            trustedKeysJson,
+            firmwareSkeleton,
+            postMessage: (msg) => _mainProcessPort.postMessage(msg),
+          })
+          if (!proceed) {
+            _mainProcessPort.close()
+            return
+          }
         }
       }
       try {
@@ -2828,6 +3089,21 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting debug compilation process...' })
 
     const [projectPath, boardTarget, projectData] = args as [string, string, PLCProjectData]
+
+    // Same gate as `compileProgram` (DOPE-539). The debug build is a smaller
+    // consumer of the package — it resolves the board and its debug spec — but
+    // it is still a build the user runs against a live device, and letting it
+    // through on a package the normal compile just refused would only teach
+    // that the check is avoidable.
+    const debugPackageIntegrity = new PackageManagerModule().verifyBoardPackageIntegrity(boardTarget)
+    if (!debugPackageIntegrity.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `${formatPackageIntegrityError(boardTarget, debugPackageIntegrity)}\nStopping debug compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
 
     const debugResolver = await this.#createBoardInfoResolver()
     const { boardRuntime } = debugResolver.resolve(boardTarget)

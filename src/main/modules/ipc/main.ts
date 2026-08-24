@@ -2,13 +2,14 @@ import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type {
+  DebugBoardIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
   DeviceModbusTransport,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
-import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
+import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -28,6 +29,7 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
@@ -67,7 +69,11 @@ import {
   modbusTransportKind,
 } from '../../../backend/editor/hardware/device-transport-factory'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { inspectDeviceLicense, resolveDeviceLicense } from '../../../backend/editor/license/license-flow'
+import {
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  resolveDeviceLicense,
+} from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -85,6 +91,31 @@ import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-en
 interface ChannelUnavailable {
   error: string
   needsReconnect: true
+}
+
+/**
+ * What the licensing flow needs from whichever channel carries it: the two
+ * license FCs plus the anchor read. `DeviceModbusTransport` satisfies it
+ * structurally (all three are required there); a debug channel is narrowed into
+ * it by `isLicenseChannel`.
+ */
+type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardIdResult> }
+
+/**
+ * Whether a debug channel can carry the licensing flow. The three methods are
+ * optional on `DeviceDebugChannel` because not every medium implements them; the
+ * runtime-v4 WebSocket implements all three. Narrows the client ITSELF rather
+ * than wrapping it, so the flow talks to the same object every other caller
+ * holds — and the transport's own send mutex (the Modbus clients'
+ * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
+ * serialising everyone's traffic.
+ */
+function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
+  return (
+    typeof client.getBoardId === 'function' &&
+    typeof client.readLicense === 'function' &&
+    typeof client.writeLicense === 'function'
+  )
 }
 
 /** Program-identity comparison, case-insensitively — targets report either case. */
@@ -193,6 +224,11 @@ class MainProcessBridge implements MainIpcModule {
     // the fresh token to the renderer so its store connection flag tracks it.
     this.tokens.onTokenChanged((newToken) => {
       this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
+      // A held debug channel (the debugger's long-lived WebSocket) outlives the
+      // token that opened it, and the runtime re-verifies per command — push
+      // the renewal so the session survives the refresh (review 2026-08-20,
+      // R1/E2). Channels opened per call already read the manager at create().
+      this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
   }
 
@@ -1429,11 +1465,15 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, publishedLibraryIds: string[]) => {
-    if (!Array.isArray(publishedLibraryIds) || publishedLibraryIds.length === 0) {
+  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, libraries: PublicLibrary[]) => {
+    if (!Array.isArray(libraries) || libraries.length === 0) {
       return { results: [] }
     }
-    const batch = await this.libraryManagerModule.installFromCatalog(publishedLibraryIds)
+    const validLibraries = libraries.filter((row): row is PublicLibrary => PublicLibrarySchema.safeParse(row).success)
+    if (validLibraries.length === 0) {
+      return { results: [] }
+    }
+    const batch = await this.libraryManagerModule.installFromCatalog(validLibraries)
     // Fire one change event for the whole batch — saves N renderer
     // refreshes for an N-library install.
     if (batch.results.some((r) => r.success)) {
@@ -1487,7 +1527,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppQuit = () => {
-    this.simulatorModule.stop()
+    this.stopSimulator()
     if (this.mainWindow) {
       this.mainWindow.destroy()
     }
@@ -1579,7 +1619,10 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleWindowReload = () => {
-    this.simulatorModule.stop()
+    // The reload wipes the renderer's store back to 'disconnected', so the
+    // session has to go with the emulator — otherwise main keeps holding an open
+    // simulator session that the reloaded UI has no idea about.
+    this.stopSimulator()
     this.mainWindow?.webContents.reload()
   }
   handleWindowRebuildMenu = () => {
@@ -2114,7 +2157,20 @@ class MainProcessBridge implements MainIpcModule {
       return {
         transport: 'websocket',
         descriptor: `websocket ${host}`,
-        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
+        // The token is read from the TOKEN MANAGER at open time, never from a
+        // closure over the login-time value (review 2026-08-20, E2): the
+        // manager transparently re-logins with stored credentials, and a
+        // channel opened after that refresh must present the CURRENT token —
+        // the runtime re-verifies it on every command (openplc-runtime#169).
+        // The session-open token is only the fallback for the first instants,
+        // before the manager has a session recorded.
+        create: () =>
+          new WebSocketDebugTransport({
+            host,
+            port: 8443,
+            token: this.tokens.getToken() ?? token,
+            rejectUnauthorized: false,
+          }),
       }
     }
     // One config in, one candidate out: this builds the DEBUG channel for a
@@ -2263,8 +2319,12 @@ class MainProcessBridge implements MainIpcModule {
    * released by `debugger:disconnect`); every per-command caller goes through
    * `withDebugChannel`, which releases in a `finally`.
    */
-  private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
-    const acquired = await this.deviceSession.acquireDebugChannel(what)
+  private async requireDebug(holder: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
+    // `holder` may carry a per-call uniqueness suffix (`what#seq`); the trace
+    // and the messages use the human prefix so the once-per-combination dedup
+    // in traceChannelUse keeps working.
+    const what = holder.split('#')[0]
+    const acquired = await this.deviceSession.acquireDebugChannel(holder)
     if ('error' in acquired) {
       if (!this.deviceSession.isConnected()) return this.explainMissingChannel(what)
       this.traceDeviceLink(`${what}: debug channel unavailable — ${acquired.error}`)
@@ -2291,17 +2351,27 @@ class MainProcessBridge implements MainIpcModule {
    * under run/stop or the status poll. Only a session whose debug medium is its
    * own — v3's second Modbus TCP connection, v4's WebSocket — is ever closed.
    */
+  /**
+   * Monotonic suffix for per-command debug holders. The holder set is keyed by
+   * STRING, so two concurrent callers sharing a `what` would be one reference:
+   * the second's release found the set empty and closed the WebSocket under
+   * the first, mid-sequence (review 2026-08-20). Unique keys make the count
+   * honest; `what` stays as the human-readable prefix the trace shows.
+   */
+  private debugHolderSeq = 0
+
   private async withDebugChannel<T>(
     what: string,
     run: (client: DeviceDebugChannel) => Promise<T>,
     onUnavailable: (reason: ChannelUnavailable) => T,
   ): Promise<T> {
-    const acquired = await this.requireDebug(what)
+    const holder = `${what}#${++this.debugHolderSeq}`
+    const acquired = await this.requireDebug(holder)
     if ('error' in acquired) return onUnavailable(acquired)
     try {
       return await run(acquired.client)
     } finally {
-      this.deviceSession.releaseDebugChannel(what)
+      this.deviceSession.releaseDebugChannel(holder)
     }
   }
 
@@ -2427,9 +2497,14 @@ class MainProcessBridge implements MainIpcModule {
   // or reflash. Exposing the step means the buy dialog can simply call it again on
   // the link that is already open.
   //
-  // Both ride the CONTROL channel (`requireControl`): the license FCs are ordinary
-  // frames on the same held Modbus link as run/stop and the status poll, so they
-  // queue behind the same mutex and need no connection of their own.
+  // CHANNEL CHOICE (`withLicenseChannel`). On baremetal the license FCs are
+  // ordinary frames on the same held Modbus link as run/stop and the status poll,
+  // so they ride the CONTROL channel and queue behind the same mutex. A
+  // REST-controlled runtime (v4) holds no control channel at all — there the SAME
+  // PDUs ride the debug WebSocket, which the runtime answers at the webserver
+  // level, ahead of its is_connected gate, so a device can be activated while the
+  // PLC is stopped. That channel is acquired per call and released in a
+  // `finally`, exactly like every other per-command debug caller.
 
   /**
    * True while a COMPOUND licensing sequence is running over the held client.
@@ -2452,11 +2527,59 @@ class MainProcessBridge implements MainIpcModule {
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(client: DeviceModbusTransport): Promise<{ anchor: Uint8Array } | { error: string }> {
+  private async readLicenseAnchor(
+    client: LicenseChannel,
+  ): Promise<{ anchor: Uint8Array } | { error: string } | { unsupported: true }> {
     const board = await client.getBoardId()
+    // The target itself said "no hardware anchor to license against" (0x85 on
+    // 0x48 — a runtime-v4 host without a device-tree serial). Terminal, not
+    // retryable: surface it as the 'unsupported' outcome, never check-failed.
+    if (board.unsupported) return { unsupported: true }
     if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
+    // Liveness evidence for the CONTROL link's poll. On a REST session this
+    // frame rode the debug WebSocket instead — crediting it here is a no-op,
+    // not a lie: a REST session runs no liveness poll (openRestSession never
+    // starts one), so there is no check for this stamp to suppress.
     this.deviceSession.noteTraffic()
     return { anchor: board.boardId ?? new Uint8Array(0) }
+  }
+
+  /**
+   * Run one licensing call over the channel that carries licensing for THIS
+   * session: the held CONTROL link on baremetal, the debug WebSocket on a
+   * REST-controlled runtime. See the CHANNEL CHOICE comment above.
+   *
+   * Every unavailable-channel answer is `check-failed` — never "not licensed":
+   * nothing was asked of the device, so nothing can be asserted about it.
+   */
+  private async withLicenseChannel(
+    what: string,
+    run: (client: LicenseChannel) => Promise<DeviceLicenseReport>,
+  ): Promise<DeviceLicenseReport> {
+    const checkFailed = (error: string): DeviceLicenseReport => ({ outcome: { state: 'check-failed', error } })
+
+    const control = this.deviceClient()
+    if (control) {
+      this.traceChannelUse(what, 'control')
+      return run(control)
+    }
+
+    // No control channel and no REST session: nothing is connected (or the link
+    // is mid-recovery) — explain which, in the same words every handler uses.
+    if (this.deviceSession.getRestAddress() === null) {
+      return checkFailed(this.explainMissingChannel(what).error)
+    }
+
+    return this.withDebugChannel(
+      what,
+      async (client) => {
+        if (!isLicenseChannel(client)) {
+          return checkFailed('this connection cannot carry the license protocol')
+        }
+        return run(client)
+      },
+      (reason) => checkFailed(reason.error),
+    )
   }
 
   /**
@@ -2470,17 +2593,17 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('read license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('read license', async (client) => {
+      try {
+        const anchor = await this.readLicenseAnchor(client)
+        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
+        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      return await inspectDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    }
+        return await inspectDeviceLicense(client, { ...request, anchor: anchor.anchor })
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      }
+    })
   }
 
   /**
@@ -2493,31 +2616,33 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('refresh license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('refresh license', async (client) => {
+      // Checked INSIDE the channel scope, so a caller with no channel at all does
+      // not consume the guard — see the "no link to run on" test.
+      if (this.deviceLicenseSequenceInFlight) {
+        // Reported rather than queued: the caller is a button or a connect, and a
+        // second answer arriving later for a question already being answered is
+        // noise at best and a contradictory badge at worst.
+        return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
+      }
+      this.deviceLicenseSequenceInFlight = true
 
-    if (this.deviceLicenseSequenceInFlight) {
-      // Reported rather than queued: the caller is a button or a connect, and a
-      // second answer arriving later for a question already being answered is
-      // noise at best and a contradictory badge at worst.
-      return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
-    }
-    this.deviceLicenseSequenceInFlight = true
+      try {
+        const anchor = await this.readLicenseAnchor(client)
+        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
+        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      const report = await resolveDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-      // The license FCs are device traffic like any other: without noting them the
-      // liveness poll can fall due mid-sequence and declare a healthy link lost.
-      this.deviceSession.noteTraffic()
-      return report
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    } finally {
-      this.deviceLicenseSequenceInFlight = false
-    }
+        const report = await resolveDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        // The license FCs are device traffic like any other: without noting them the
+        // liveness poll can fall due mid-sequence and declare a healthy link lost.
+        this.deviceSession.noteTraffic()
+        return report
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      } finally {
+        this.deviceLicenseSequenceInFlight = false
+      }
+    })
   }
 
   handleDebuggerSetVariable = async (
@@ -2573,8 +2698,7 @@ class MainProcessBridge implements MainIpcModule {
   /** Stops the simulator and notifies the renderer so it can update UI state. */
   private stopSimulatorAndNotify(): void {
     if (this.simulatorModule.isRunning()) {
-      this.closeSimulatorSession()
-      this.simulatorModule.stop()
+      this.stopSimulator()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
   }
@@ -2825,26 +2949,45 @@ class MainProcessBridge implements MainIpcModule {
         this.toDeviceLinkCandidates([{ connectionType: 'simulator', connectionParams: {} }]),
       )
       if (!opened.ok) {
-        this.simulatorModule.stop()
+        this.stopSimulator()
         const reason = opened.attempts.map((attempt) => attempt.error).join('; ')
         return { success: false, error: reason || 'The simulator did not answer its debug protocol' }
       }
       this.debuggerConnectionType = 'simulator'
       return { success: true }
     } catch (error) {
+      // A start that threw part-way still leaves state behind: `loadAndRun`
+      // marks the emulator running before it finishes wiring, so a throw after
+      // that point leaked a running emulator with no session — and no button to
+      // reach it, because the renderer never learned it had started. Web ends up
+      // in the right place through its worker, which cleans up and reports
+      // 'stopped' when `loadAndRun` throws; this is the editor's counterpart.
+      this.stopSimulator()
       return { success: false, error: getErrorMessage(error) }
     }
   }
 
   /**
    * Stop the emulator entirely — the simulator's Stop button means "stop the
-   * simulator", not "stop the program it is running". The session closes first so
-   * the client is dropped before the thing it talks to disappears.
+   * simulator", not "stop the program it is running".
    */
   handleSimulatorStop = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
+    this.stopSimulator()
+    return Promise.resolve({ success: true })
+  }
+
+  /**
+   * The one way the emulator stops: session first, then the emulator, so the
+   * debug client is dropped before the thing it talks to disappears.
+   *
+   * Every stop path routes through here on purpose. The session is a consumer of
+   * the emulator, so an emulator that goes away while its session stays open
+   * leaves the renderer gated on a session whose target no longer exists — which
+   * a window reload and a failed start both used to do.
+   */
+  private stopSimulator(): void {
     this.closeSimulatorSession()
     this.simulatorModule.stop()
-    return Promise.resolve({ success: true })
   }
 
   /** Close the session if it is the simulator's. No-op for any other target. */

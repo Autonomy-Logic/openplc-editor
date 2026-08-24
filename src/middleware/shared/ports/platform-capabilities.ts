@@ -24,6 +24,17 @@ export interface PlatformCapabilities {
   /** True if the app requires user authentication to access the workspace. */
   hasAuthentication: boolean
 
+  /**
+   * True if the Edge account UI belongs in this build — the profile menu in the
+   * title bar and the sign-in gate, both talking to the Edge API.
+   *
+   * Distinct from {@link hasAuthentication} on purpose. The autonomy-node build
+   * shares WEB_CAPABILITIES and is also authenticated, but its API is node's own,
+   * not Edge's: showing Edge's account UI there would offer a sign-in that cannot
+   * work. Gate the account UI on THIS flag, never on `hasAuthentication`.
+   */
+  hasEdgeAccount: boolean
+
   // --- Device & Hardware ---
 
   /** True if the app can detect local serial/communication ports. */
@@ -129,6 +140,8 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   isNativeApplication: true,
   hasNativeFileDialogs: true,
   hasAuthentication: false,
+  // Desktop editor works against the local filesystem, with no Edge account.
+  hasEdgeAccount: false,
   hasLocalSerialPorts: true,
   hasOrchestratorDevices: false,
   hasWebRTC: false,
@@ -158,6 +171,8 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   isNativeApplication: false,
   hasNativeFileDialogs: false,
   hasAuthentication: true,
+  // Default for the web build; the autonomy-node build turns this off via env.
+  hasEdgeAccount: true,
   hasLocalSerialPorts: false,
   hasOrchestratorDevices: true,
   hasWebRTC: true,

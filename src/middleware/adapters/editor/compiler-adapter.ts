@@ -31,9 +31,18 @@ import type {
   Result,
 } from '../../shared/ports/types'
 
-/** Shape of the project data expected by the editor's IPC bridge. */
+/**
+ * Shape of the project data expected by the editor's IPC bridge.
+ *
+ * This interface and `toIpcProjectData` below are a field-by-field restatement
+ * of `PLCProjectData`, so anything not named in BOTH is silently dropped on the
+ * way to the main process — the receiving end casts through
+ * `as unknown as SchemaProjectData`, which is why the omission is not a compile
+ * error. Adding a field to the project model means adding it here too.
+ */
 interface IpcProjectData {
   dataTypes: PLCProjectData['dataTypes']
+  globalVariableLists?: PLCProjectData['globalVariableLists']
   pous: Array<{
     type: string
     data: {
@@ -69,6 +78,11 @@ function portPouToIpcPou(pou: PLCPou) {
 function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }): IpcProjectData {
   return {
     dataTypes: data.dataTypes,
+    // Without this the main process never sees a Global Variable List, and every
+    // `GVL.Member` in the project fails to compile with "Undeclared variable
+    // 'GVL'" — the transpiler emits the backing struct, its instance and the
+    // per-POU `VAR_EXTERNAL` from this field alone.
+    globalVariableLists: data.globalVariableLists,
     pous: data.pous.map(portPouToIpcPou),
     configuration: data.configurations,
     servers: data.servers,

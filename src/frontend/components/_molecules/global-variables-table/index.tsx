@@ -14,7 +14,30 @@ import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
 
-const columns = [
+/**
+ * The columns, built per table rather than shared as one constant.
+ *
+ * Two tables use these: the Resource globals and a Global Variable List's members. They
+ * differ in exactly two ways, so those are the options — everything else, including every
+ * cell, is the same code in both, which is the point of building them here.
+ *
+ * `includeDebug` is off for a list: nothing collects a list member into the debugger's
+ * variable set, so the toggle would render a watch that never happens.
+ *
+ * `includeLocation` is off for a list for the same reason — an address on a list member does
+ * not drive anything. The compiler shape a list becomes is a STRUCT, and `AT %QX0.0` on a
+ * struct member is accepted and then silently discarded, producing no located mapping, so
+ * the serializers deliberately omit it (see `global-variable-list-serializer`). An address a
+ * project arrives with is still kept on the member and still written back on export to
+ * CODESYS; what is withheld is the editing affordance for a binding openplc cannot honour.
+ *
+ * `skipReferenceImpact` is on for a list: see the prop's note on the name cell.
+ */
+const buildColumns = ({
+  includeDebug = true,
+  includeLocation = true,
+  skipReferenceImpact = false,
+}: { includeDebug?: boolean; includeLocation?: boolean; skipReferenceImpact?: boolean } = {}) => [
   columnHelper.display({
     id: 'rowNumber',
     header: '#',
@@ -30,7 +53,7 @@ const columns = [
     size: 300,
     minSize: 150,
     maxSize: 300,
-    cell: EditableNameCell,
+    cell: (props) => <EditableNameCell {...props} skipReferenceImpact={skipReferenceImpact} />,
   }),
   columnHelper.accessor('class', {
     header: 'Class',
@@ -45,11 +68,15 @@ const columns = [
     maxSize: 300,
     cell: SelectableTypeCell,
   }),
-  columnHelper.accessor('location', {
-    header: 'Location',
-    enableResizing: true,
-    cell: EditableLocationCell,
-  }),
+  ...(includeLocation
+    ? [
+        columnHelper.accessor('location', {
+          header: 'Location',
+          enableResizing: true,
+          cell: EditableLocationCell,
+        }),
+      ]
+    : []),
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
@@ -63,8 +90,24 @@ const columns = [
     maxSize: 468,
     cell: EditableDocumentationCell,
   }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
+  ...(includeDebug
+    ? [
+        columnHelper.accessor('debug', {
+          header: 'Debug',
+          size: 64,
+          minSize: 64,
+          maxSize: 64,
+          cell: SelectableDebugCell,
+        }),
+      ]
+    : []),
 ]
+
+/** The Resource globals table's columns, which never change. */
+const resourceColumns = buildColumns()
+
+/** A list's columns: no address, no debugger watch, no bare-name reference rewriting. */
+const listColumns = buildColumns({ includeDebug: false, includeLocation: false, skipReferenceImpact: true })
 
 type PLCVariablesTableProps = {
   tableData: PLCGlobalVariable[]
@@ -85,7 +128,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
 
   return (
     <GenericTable<PLCGlobalVariable>
-      columns={columns}
+      columns={resourceColumns}
       tableData={tableData}
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
@@ -102,4 +145,45 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
   )
 }
 
-export { GlobalVariablesTable }
+/**
+ * A Global Variable List's members, as a table.
+ *
+ * Same table and same cells as the Resource globals above — a member is a variable in the
+ * same sense a resource global is — with the writes going to the list instead, through the
+ * `global-variable-list` scope on the shared variable actions.
+ */
+const GlobalVariableListTable = ({
+  listName,
+  tableData,
+  selectedRow,
+  handleRowClick,
+}: PLCVariablesTableProps & { listName: string }) => {
+  const {
+    projectActions: { updateVariable },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
+  } = useOpenPLCStore()
+
+  return (
+    <GenericTable<PLCGlobalVariable>
+      columns={listColumns}
+      tableData={tableData}
+      selectedRow={selectedRow}
+      handleRowClick={handleRowClick}
+      updateData={(rowIndex, columnId, value) => {
+        const result = updateVariable({
+          scope: 'global-variable-list',
+          associatedList: listName,
+          rowId: rowIndex,
+          data: { [columnId]: value },
+        })
+        if (result.ok) {
+          handleFileAndWorkspaceSavedState(listName)
+        }
+        return result
+      }}
+      tableContext='Variables'
+    />
+  )
+}
+
+export { GlobalVariableListTable, GlobalVariablesTable }
