@@ -26,6 +26,8 @@ interface InterfaceEntry {
   keyword: string
   vars: TranspileVariable[]
   located?: boolean
+  /** Block qualifier for this group; absent = plain `VAR`. */
+  flag?: TranspileVariable['flag']
 }
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
@@ -67,7 +69,7 @@ export function generateGraphicalPou(pou: TranspilePou, project: TranspileProjec
   const iface = computeInterface(pou.interface?.variables ?? [], emitted.syntheticVars)
   for (const entry of iface) {
     const variableType = locationCategory(entry.keyword)
-    program.push([`  ${entry.keyword}`, []])
+    program.push([`  ${entry.keyword}${flagKeyword(entry.flag)}`, []])
     program.push(['\n', []])
     entry.vars.forEach((v, varNumber) => {
       program.push(['    ', []])
@@ -216,6 +218,11 @@ function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeCon
   return { variableType, resolveBlock }
 }
 
+/** `CONSTANT` / `RETAIN` suffix for a var-block header; empty for a plain VAR. */
+function flagKeyword(flag: TranspileVariable['flag']): string {
+  return flag === 'constant' ? ' CONSTANT' : flag === 'retain' ? ' RETAIN' : ''
+}
+
 function computeInterface(variables: TranspileVariable[], syntheticVars: SyntheticVar[]): InterfaceEntry[] {
   const classToKeyword: Record<TranspileVariableClass, string> = {
     input: varTypeNames.inputVars,
@@ -225,21 +232,25 @@ function computeInterface(variables: TranspileVariable[], syntheticVars: Synthet
     local: varTypeNames.localVars,
     temp: varTypeNames.tempVars,
   }
-  // Group by keyword, preserving IR insertion order.
-  const grouped = new Map<string, TranspileVariable[]>()
+  // Group by keyword × flag, preserving IR insertion order. The flag belongs to
+  // the var BLOCK in IEC, so variables of one class with different qualifiers
+  // cannot share a `…END_VAR` pair.
+  const grouped = new Map<string, { keyword: string; flag?: TranspileVariable['flag']; vars: TranspileVariable[] }>()
   for (const v of variables) {
     const keyword = classToKeyword[v.class ?? 'local'] ?? varTypeNames.localVars
-    const bucket = grouped.get(keyword) ?? []
-    bucket.push(v)
-    grouped.set(keyword, bucket)
+    const key = `${keyword}\u0000${v.flag ?? ''}`
+    const bucket = grouped.get(key) ?? { keyword, ...(v.flag !== undefined ? { flag: v.flag } : {}), vars: [] }
+    bucket.vars.push(v)
+    grouped.set(key, bucket)
   }
   // python splits each varlist into an unlocated block then a located one (DIV-03)
   const out: InterfaceEntry[] = []
-  for (const [keyword, vars] of grouped) {
+  for (const { keyword, flag, vars } of grouped.values()) {
+    const flagPart = flag !== undefined ? { flag } : {}
     const unlocated = vars.filter((v) => !v.location)
     const located = vars.filter((v) => v.location)
-    if (unlocated.length > 0) out.push({ keyword, vars: unlocated })
-    if (located.length > 0) out.push({ keyword, vars: located, located: true })
+    if (unlocated.length > 0) out.push({ keyword, vars: unlocated, ...flagPart })
+    if (located.length > 0) out.push({ keyword, vars: located, located: true, ...flagPart })
   }
   if (syntheticVars.length > 0) {
     const synth: TranspileVariable[] = syntheticVars.map((sv) => {
@@ -254,7 +265,12 @@ function computeInterface(variables: TranspileVariable[], syntheticVars: Synthet
     })
     const last = out[out.length - 1]
     // python reuses the trailing block only when it is a plain unlocated VAR (DIV-16)
-    if (last !== undefined && last.keyword === varTypeNames.localVars && !last.located) {
+    if (
+      last !== undefined &&
+      last.keyword === varTypeNames.localVars &&
+      !last.located &&
+      last.flag === undefined
+    ) {
       last.vars.push(...synth)
     } else {
       out.push({ keyword: varTypeNames.localVars, vars: synth })

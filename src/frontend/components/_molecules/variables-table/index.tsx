@@ -10,7 +10,7 @@ import {
   EditableLocationCell,
   EditableNameCell,
 } from './editable-cell'
-import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
+import { SelectableClassCell, SelectableDebugCell, SelectableFlagCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCVariable>()
 
@@ -36,6 +36,14 @@ const columnsPrograms = [
     header: 'Class',
     enableResizing: true,
     cell: SelectableClassCell,
+  }),
+  columnHelper.accessor('flag', {
+    header: 'Flags',
+    enableResizing: true,
+    size: 120,
+    minSize: 90,
+    maxSize: 160,
+    cell: SelectableFlagCell,
   }),
   columnHelper.accessor('type', {
     header: 'Type',
@@ -88,6 +96,14 @@ const columns = [
     header: 'Class',
     enableResizing: true,
     cell: SelectableClassCell,
+  }),
+  columnHelper.accessor('flag', {
+    header: 'Flags',
+    enableResizing: true,
+    size: 120,
+    minSize: 90,
+    maxSize: 160,
+    cell: SelectableFlagCell,
   }),
   columnHelper.accessor('type', {
     header: 'Type',

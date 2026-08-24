@@ -97,6 +97,21 @@ describe('force read-back', () => {
     expect(response.ok).toBe(true)
   })
 
+  it('does not mark a refused force as [FORCED] in later reads', async () => {
+    // `setVariable` succeeding only means the request was QUEUED on runtime v4;
+    // the .so's refusal of a CONSTANT leaf lands later at the dispatcher's drain
+    // and never travels back. Recording the force before the read-back had
+    // confirmed it labelled a refused force `[FORCED]` for the rest of the
+    // session — observed on an SLM-RP4 against a real `VAR CONSTANT`.
+    const core = makeCore()
+    await core.handle({ id: 1, kind: 'force', name: 'main:flag', value: 'FALSE' })
+
+    const read = await core.handle({ id: 2, kind: 'read', names: ['main:flag'] })
+    if (!read.ok) throw new Error('expected the read to succeed')
+    const values = (read.data as { kind: 'read'; values: Array<{ forced?: boolean }> }).values
+    expect(values[0]?.forced).not.toBe(true)
+  })
+
   it('still reports a read failure as a connection problem, not a target error', async () => {
     // The two failures are different: one means the channel died, the other
     // means the device answered and ignored us.

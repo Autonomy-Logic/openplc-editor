@@ -381,6 +381,13 @@ export class ModbusRtuClient {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+        return {
+          success: false,
+          error: 'This variable is declared CONSTANT and cannot be written or forced',
+        }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -465,6 +472,13 @@ export class ModbusRtuClient {
 
       if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
+
+      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+        return {
+          success: false,
+          error: 'This variable is declared CONSTANT and cannot be written or forced',
+        }
       }
 
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
