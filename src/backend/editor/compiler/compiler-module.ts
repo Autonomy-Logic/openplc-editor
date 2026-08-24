@@ -1879,8 +1879,16 @@ class CompilerModule {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
-      handleOutputData('No communication port specified', 'error')
-      return
+      // THROW rather than return. `uploadArduinoBoard` only awaits this call
+      // and reports `{ ok: true }` on any normal return, so bailing out here
+      // told the pipeline the board had been flashed when nothing was sent.
+      //
+      // That used to be masked: the error-level log line set the compile
+      // flow's `hasError`, which failed the build for the wrong reason. The
+      // outcome now comes from the pipeline's verdict, so a step that cannot
+      // run has to fail through the channel the verdict is built from — the
+      // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
+      throw new Error('No communication port specified — select a serial port for this board')
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -3045,7 +3053,12 @@ class CompilerModule {
     // --- Editor-specific epilogue: simulator firmware path + closePort ---
     if (isSimulator) {
       if (compileOnly) {
-        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        // Gated on the verdict: this line used to be unconditional, so a
+        // simulator compile-only build whose strucpp step failed printed the
+        // real error and then "Compilation successful." directly under it.
+        if (result.success) {
+          _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        }
         _mainProcessPort.postMessage({ closePort: true, success: result.success })
         _mainProcessPort.close()
         return

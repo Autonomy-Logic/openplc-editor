@@ -318,7 +318,6 @@ a line it received.
 | `status`            | `probe?` — true means "only listing", which does not count as activity | `status`                        |
 | `list-vars`         | `filter?`                                                              | `list-vars`                     |
 | `read`              | `names[]`                                                              | `read` — `values[]`             |
-| `write`             | `name`, `value`                                                        | `write` — the value read back   |
 | `force` / `unforce` | `name`, plus `value` for `force`                                       | `force` / `unforce`             |
 | `start` / `stop`    | —                                                                      | `plc-state`                     |
 | `watch`             | `names[]`, `intervalMs?`                                               | `watch` — what is recording     |

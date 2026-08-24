@@ -231,7 +231,7 @@ describe('createEditorCompilerPlatformPort', () => {
   // ---- uploadArduinoBoard — port wiring (regression for issue #5) ----
 
   it('uploadArduinoBoard forwards args.port to the handler as communicationPort', async () => {
-    const handleUploadProgram = jest.fn(async () => undefined)
+    const handleUploadProgram = jest.fn(async () => ({ success: true, data: '' }))
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleUploadProgram }), makeContext())
     await port.uploadArduinoBoard(
       { compilationPath: '', fqbn: 'arduino:avr:mega', port: '/dev/cu.usbmodem1101' },
@@ -250,7 +250,7 @@ describe('createEditorCompilerPlatformPort', () => {
     // handler must fall back to the disk-persisted value rather than
     // call arduino-cli with `--port ""`.  The undefined sentinel
     // signals "fall through" to the handler's legacy code path.
-    const handleUploadProgram = jest.fn(async () => undefined)
+    const handleUploadProgram = jest.fn(async () => ({ success: true, data: '' }))
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleUploadProgram }), makeContext())
     await port.uploadArduinoBoard({ compilationPath: '', fqbn: 'arduino:avr:mega', port: '' }, () => undefined)
     expect(handleUploadProgram).toHaveBeenCalledWith(expect.objectContaining({ communicationPort: undefined }))
