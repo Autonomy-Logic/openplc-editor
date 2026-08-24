@@ -56,7 +56,13 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
     // Resolves empty for every "nothing to show" — signed out, offline, or an account
     // with no projects yet. None of those is worth a message on a screen the user came
     // to for their local work.
-    setProjects(await project.listRecentCloudProjects(RECENT_LIMIT))
+    //
+    // `catch` because this is the ONLY thing standing between a failed IPC call and the
+    // start screen: a rejection inside this effect takes the whole renderer down, which
+    // is exactly what happened when the list was called against a main process that did
+    // not have the channel yet. A cloud list nobody asked for must never cost someone
+    // their local projects.
+    setProjects(await project.listRecentCloudProjects(RECENT_LIMIT).catch(() => []))
   }, [project])
 
   useEffect(() => {

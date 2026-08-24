@@ -781,6 +781,20 @@ describe('cloud projects', () => {
     cloudAdapter = createEditorProjectAdapter()
   })
 
+  /**
+   * Found by running the app, not by reading it: the preload bundle and the renderer
+   * bundle are built separately, and a renderer newer than the main process called a
+   * channel that did not exist. The rejection escaped a `useEffect` and took the whole
+   * start screen down — local projects included. A cloud list nobody asked for must
+   * never cost someone their local work.
+   */
+  it('answers empty when the bridge predates this feature, instead of throwing', async () => {
+    const bridge = window.bridge as unknown as Record<string, unknown>
+    delete bridge.edgeProjectsListRecent
+
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual([])
+  })
+
   it('lists the account projects through the bridge', async () => {
     const summary = { id: 'cmt7', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' }
     ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([summary])

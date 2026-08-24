@@ -355,6 +355,14 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     listRecentCloudProjects(limit: number): Promise<CloudProjectSummary[]> {
+      // Guarded, not assumed: the preload bundle and the renderer bundle are built
+      // separately and can skew — a running app whose main process predates this
+      // feature has no such channel. An empty list is the honest answer there, and it
+      // is what stops a missing channel taking the whole start screen down with it.
+      if (typeof window.bridge.edgeProjectsListRecent !== 'function') {
+        return Promise.resolve([])
+      }
+
       return window.bridge.edgeProjectsListRecent(limit)
     },
 
