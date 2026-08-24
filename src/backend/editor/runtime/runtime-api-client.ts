@@ -44,11 +44,6 @@ export const RUNTIME_API_PORT = 8443
 
 export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false; error: string }
 
-export interface RuntimeApiClientOptions {
-  /** Notified on every transparent token refresh (the GUI mirrors it to the renderer). */
-  onTokenChanged?: (token: string) => void
-}
-
 /**
  * The runtime's own responses, validated rather than asserted.
  *
@@ -131,10 +126,6 @@ export class RuntimeApiClient {
       return { success: result.success, token: result.accessToken, error: result.error }
     },
   })
-
-  constructor(options: RuntimeApiClientOptions = {}) {
-    if (options.onTokenChanged) this.tokens.onTokenChanged(options.onTokenChanged)
-  }
 
   /** The address the token authority will re-authenticate against. */
   setAddress(ipAddress: string): void {

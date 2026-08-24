@@ -48,7 +48,10 @@ export const defaultIsProcessAlive: IsProcessAlive = (pid) => {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM'
+    // EPERM means the process exists and belongs to someone else — still alive.
+    // Read without a cast: `code` is not on `Error`, and CLAUDE.md rules out
+    // asserting a shape onto a value the runtime handed us.
+    return error instanceof Error && 'code' in error && error.code === 'EPERM'
   }
 }
 

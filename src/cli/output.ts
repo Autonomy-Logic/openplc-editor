@@ -97,6 +97,25 @@ export class Reporter {
     return { exitCode: ExitCode.Ok }
   }
 
+  /**
+   * Some of what was asked, not all of it.
+   *
+   * The document keeps the full payload a success would have carried — a
+   * consumer parsing it loses nothing — but `ok` is false and the exit code says
+   * so. Added because `debug close --all` had no way to express its actual
+   * outcome: it closed some sessions and could not close others, and calling
+   * that `success` exited 0 while forces stayed pinned on a live PLC.
+   */
+  partial(
+    payload: Record<string, unknown>,
+    failure: CliFailure,
+    exitCode: ExitCodeValue,
+    humanRender: () => string,
+  ): CliResult {
+    this.emitResult({ ok: false, error: failure, ...payload }, humanRender)
+    return { exitCode }
+  }
+
   /** A failure, with the exit code the caller should see. */
   failure(failure: CliFailure, exitCode: ExitCodeValue): CliResult {
     this.emitResult({ ok: false, error: failure }, () => `error [${failure.code}]: ${failure.message}`)

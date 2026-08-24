@@ -13,6 +13,8 @@
  * argv, loading the project from disk, and rendering the result.
  */
 
+import { join } from 'node:path'
+
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { openPLCStoreBase } from '@root/frontend/store'
@@ -196,14 +198,14 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       projectPath: project.projectPath,
       target,
       uploaded: options.withUpload,
-      buildDirectory: `${project.projectPath}/build/${target}`,
+      buildDirectory: join(project.projectPath, 'build', target),
       firmwarePath: result.hexPath,
       warnings,
     },
     () =>
       options.withUpload
         ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort() ?? 'the target'} (${target}).`
-        : `Built "${project.name}" for ${target}.\nArtifacts: ${project.projectPath}/build/${target}`,
+        : `Built "${project.name}" for ${target}.\nArtifacts: ${join(project.projectPath, 'build', target)}`,
   )
 }
 

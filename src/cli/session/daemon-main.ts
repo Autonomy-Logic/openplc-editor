@@ -16,6 +16,7 @@ import { openDebugSession } from '../debug/open-session'
 import { applyConnectionOverrides, loadProject } from '../project/load'
 import { mintSessionId, SessionRegistry, socketPathFor } from './registry'
 import { SessionServer } from './server'
+import type { SessionCore } from './session-core'
 
 export interface DaemonConfig {
   registryDir: string
@@ -57,6 +58,27 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   const socketPath = socketPathFor(config.registryDir, sessionId, process.platform)
   const registry = new SessionRegistry(config.registryDir)
 
+  // The teardown is armed BEFORE anything is opened, and learns about the
+  // session once there is one.
+  //
+  // Registering the signal handlers after `openDebugSession` left a window —
+  // the seconds spent hydrating the project, authenticating and probing MD5 —
+  // in which a SIGTERM killed the process with the debug channel already open
+  // and, on a target that had been forced before, its forces still pinned. A
+  // harness that times out a slow `debug open` and kills it lands exactly
+  // there.
+  let session: { core: SessionCore } | null = null
+  let registered = false
+  const shutdown = () => {
+    const closing = session ? session.core.closeFromOutsideRequest(true) : Promise.resolve([])
+    void closing.finally(() => {
+      if (registered) registry.unregister(sessionId)
+      app.exit(0)
+    })
+  }
+  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', shutdown)
+
   // Hydrate the editor state this process will resolve against: the debug-spec
   // resolver reads the device configuration and available boards off the store,
   // the same way it does behind the GUI's Debug button.
@@ -84,6 +106,9 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
     await announceAndExit({ event: 'failed', code: opened.code, error: opened.error }, 1)
     return
   }
+
+  // From here a signal has something to close.
+  session = { core: opened.core }
 
   const server = new SessionServer({
     core: opened.core,
@@ -124,16 +149,6 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
     startedAt: new Date().toISOString(),
   }
   registry.register(record)
+  registered = true
   announce({ event: 'ready', record })
-
-  // A terminated daemon must not leave a record pointing at a dead socket, and
-  // must not leave variables pinned on the target.
-  const shutdown = () => {
-    void opened.core.closeFromOutsideRequest(true).finally(() => {
-      registry.unregister(sessionId)
-      app.exit(0)
-    })
-  }
-  process.on('SIGTERM', shutdown)
-  process.on('SIGINT', shutdown)
 }

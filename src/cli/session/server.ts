@@ -31,6 +31,7 @@ export class SessionServer {
   private readonly sockets = new Set<Socket>()
   /** Serialises work onto the single debug channel. */
   private queue: Promise<unknown> = Promise.resolve()
+  private isShutDown = false
   private idleTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly options: SessionServerOptions) {
@@ -78,9 +79,11 @@ export class SessionServer {
    * client's side that is indistinguishable from a hang.
    */
   private enqueue(socket: Socket, line: string): void {
-    this.armIdleTimer()
     this.queue = this.queue.then(async () => {
       const request = decodeRequest(line)
+      // Armed from the decoded request, not on arrival: a `status` marked
+      // `probe` is `debug list` looking, and looking is not using.
+      if (!request || request.kind !== 'status' || !request.probe) this.armIdleTimer()
       if (!request) {
         this.write(socket, {
           // The id is recovered BEFORE schema validation, because the client only
@@ -134,6 +137,11 @@ export class SessionServer {
   }
 
   shutdown(): void {
+    // Two paths reach here — the `close` request's `setImmediate(shutdown)` and
+    // the idle timer's `.then(shutdown)` — and they can both fire for the same
+    // session, running `registry.unregister` and `app.exit(0)` twice.
+    if (this.isShutDown) return
+    this.isShutDown = true
     if (this.idleTimer) clearTimeout(this.idleTimer)
     for (const socket of this.sockets) socket.destroy()
     this.sockets.clear()

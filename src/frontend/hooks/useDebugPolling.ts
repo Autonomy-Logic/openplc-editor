@@ -227,7 +227,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // collapse the throughput to one variable per poll, which makes
       // related variables visibly desync as the round-robin sweeps.
       //
-      // `loopReachedEnd` records whether the loop walked the full batch
+      // `reachedEnd` records whether the walk covered the full batch
       // before exiting.  The early-exit paths below (bounds check, lastIndex
       // cap) leave `pos` pointing at the FIRST unprocessed slot, so we
       // capture that to advance the round-robin offset by exactly the

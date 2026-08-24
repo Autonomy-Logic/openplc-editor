@@ -72,7 +72,28 @@ export type SpawnSessionResult =
   | { success: false; code: SpawnFailureCode; error: string }
 
 /** Map a session-side error code onto the process exit code a caller branches on. */
-function exitCodeForError(code: string): ExitCodeValue {
+/**
+ * `--idle-timeout` in milliseconds: omitted means the default, `0` means never.
+ *
+ * A rejected value is a usage error rather than a silent fallback — the whole
+ * point of naming a timeout is that the default was wrong for this run, and
+ * quietly restoring it is the one answer that cannot be right.
+ */
+export function parseIdleTimeout(raw: string | undefined): { value: number } | { error: string } {
+  if (raw === undefined) return { value: DEFAULT_IDLE_TIMEOUT_MS }
+  // Empty is rejected explicitly, because `Number('')` is 0 and 0 is meaningful
+  // here: `--idle-timeout=` would otherwise have meant "never close".
+  if (raw.trim() === '') {
+    return { error: '--idle-timeout needs a value in milliseconds (0 disables it)' }
+  }
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return { error: `--idle-timeout must be a number of milliseconds (0 disables it); got "${raw}"` }
+  }
+  return { value: parsed }
+}
+
+export function exitCodeForError(code: string): ExitCodeValue {
   switch (code) {
     case ErrorCode.SessionNotFound:
     case ErrorCode.VariableNotFound:
@@ -92,6 +113,15 @@ function exitCodeForError(code: string): ExitCodeValue {
     case ErrorCode.UploadRejected:
     case ErrorCode.Md5Mismatch:
       return ExitCode.TargetError
+    // A board this build does not know, or a project not compiled for it, is
+    // something the CALLER named — the same class `compile` already exits 3 for.
+    // Without these they fell through to 70, which this CLI documents as "a bug
+    // in the CLI, not in the caller's input": the same typo answered 3 from
+    // `compile` and 70 from `debug open`.
+    case ErrorCode.TargetUnknown:
+    case ErrorCode.ProjectInvalid:
+    case ErrorCode.ProjectNotFound:
+      return ExitCode.NotFound
     default:
       return ExitCode.Internal
   }
@@ -222,6 +252,16 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
     }
   }
 
+  // B2: parsed, not coerced. `Number(x) || DEFAULT` sent `--idle-timeout 0` to
+  // the default (0 is falsy) — so "no idle timeout", which the server supports
+  // via `timeout <= 0`, was unreachable — and turned `--idle-timeout 5min` into
+  // a silent 30 minutes. A soak test that asked for no timeout had its session
+  // closed mid-run, releasing its forces on live hardware.
+  const idleTimeout = parseIdleTimeout(stringFlag(args, 'idle-timeout'))
+  if ('error' in idleTimeout) {
+    return reporter.failure({ code: ErrorCode.InvalidArgument, message: idleTimeout.error }, ExitCode.Usage)
+  }
+
   const spawned = await context.spawnSession({
     projectPath,
     target: resolvedTarget,
@@ -230,7 +270,7 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
     username: credentials.username,
     password: credentials.password,
     uploadIfNeeded: boolFlag(args, 'upload-if-needed'),
-    idleTimeoutMs: Number(stringFlag(args, 'idle-timeout') ?? '') || DEFAULT_IDLE_TIMEOUT_MS,
+    idleTimeoutMs: idleTimeout.value,
     onProgress: (message) => reporter.progress(message),
   })
 
@@ -272,7 +312,11 @@ async function runList(reporter: Reporter, context: DebugContext): Promise<CliRe
   // listed, with its live columns blank.
   const sessions = await Promise.all(
     records.map(async (record) => {
-      const result = await sendRequest(record.socketPath, { id: 1, kind: 'status' }, LIST_STATUS_TIMEOUT_MS)
+      const result = await sendRequest(
+        record.socketPath,
+        { id: 1, kind: 'status', probe: true },
+        LIST_STATUS_TIMEOUT_MS,
+      )
       if (!result.success || !result.response.ok || result.response.data.kind !== 'status') {
         return { ...record, plcState: 'unknown' as const, forced: [] as string[], answered: false }
       }
@@ -356,7 +400,11 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
 
   const reaped = context.registry.reapStale()
 
-  return reporter.success({ closed, failed, reaped }, () => {
+  // A1: `failed` is not a success. A session that will not answer keeps its
+  // forces PINNED on a live PLC — the outcome the release-on-close rule exists
+  // to prevent — and exiting 0 told a harness the opposite. The JSON said so all
+  // along; the exit code is what callers are told to branch on.
+  const render = () => {
     const lines: string[] = []
     for (const entry of closed) {
       lines.push(
@@ -372,7 +420,20 @@ async function runClose(args: ParsedArgs, reporter: Reporter, context: DebugCont
     }
     if (lines.length === 0) lines.push('Nothing to close.')
     return lines.join('\n')
-  })
+  }
+
+  if (failed.length === 0) return reporter.success({ closed, failed, reaped }, render)
+
+  return reporter.partial(
+    { closed, failed, reaped },
+    {
+      code: ErrorCode.TargetError,
+      message: `${failed.length} session(s) could not be closed`,
+      details: { failed },
+    },
+    ExitCode.TargetError,
+    render,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -787,6 +848,19 @@ async function readScript(args: ParsedArgs): Promise<{ lines: string[] } | { err
   const source = args.positionals[0] ?? stringFlag(args, 'script') ?? '-'
   let text: string
   if (source === '-') {
+    // Reading a terminal's stdin waits for a person to type and then press
+    // ctrl-D, which nobody typing `openplc-cli debug exec` is expecting: it
+    // looked like a hang, and no guard could rescue it because nothing rejects
+    // and nothing raises EPIPE. `debug repl` refuses the mirror-image case (a
+    // pipe) for the same reason.
+    if (process.stdin.isTTY) {
+      return {
+        error:
+          'debug exec reads its script from stdin or a file. Pass a path, or pipe one:\n' +
+          '  openplc-cli debug exec commands.txt\n' +
+          "  printf 'status\\nread main:blink\\n' | openplc-cli debug exec -",
+      }
+    }
     text = await readAllStdin()
   } else {
     try {

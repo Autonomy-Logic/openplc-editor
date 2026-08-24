@@ -61,7 +61,19 @@ const idField = z.number().finite()
 const nonEmptyNames = z.array(z.string()).min(1)
 
 export const RequestSchema = z.discriminatedUnion('kind', [
-  z.object({ id: idField, kind: z.literal('status') }),
+  z.object({
+    id: idField,
+    kind: z.literal('status'),
+    /**
+     * True when the caller is only LISTING sessions, not using one.
+     *
+     * `debug list` dials every session for its PLC state and forced set, and
+     * that reached the idle timer — so a harness polling `list` in a loop kept
+     * every session alive past its timeout for ever. `SessionCore` is already
+     * careful that watching is not activity; being listed is not either.
+     */
+    probe: z.boolean().optional(),
+  }),
   z.object({ id: idField, kind: z.literal('list-vars'), filter: z.string().optional() }),
   z.object({ id: idField, kind: z.literal('read'), names: nonEmptyNames }),
   /** Soft write — the program may overwrite it on the next scan. */

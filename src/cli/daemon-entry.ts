@@ -65,6 +65,12 @@ function readConfig(line: string): DaemonConfig | undefined {
     username: String(record.username),
     password: String(record.password),
     uploadIfNeeded: record.uploadIfNeeded === true,
-    idleTimeoutMs: typeof record.idleTimeoutMs === 'number' ? record.idleTimeoutMs : 0,
+    // Finite and non-negative, not merely `number`: `NaN` passed the old check
+    // and `setTimeout(NaN)` fires immediately, which would close a session the
+    // instant it opened.
+    idleTimeoutMs:
+      typeof record.idleTimeoutMs === 'number' && Number.isFinite(record.idleTimeoutMs) && record.idleTimeoutMs >= 0
+        ? record.idleTimeoutMs
+        : 0,
   }
 }

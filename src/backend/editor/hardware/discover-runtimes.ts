@@ -22,6 +22,8 @@
 import dgram from 'node:dgram'
 import { networkInterfaces } from 'node:os'
 
+import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
+
 export const DISCOVERY_PORT = 33333
 export const DISCOVERY_MAGIC = 'OPENPLC_DISCOVER_V1'
 export const DISCOVERY_DEFAULT_DURATION_MS = 3000
@@ -98,7 +100,7 @@ export function parseAdvertisement(payload: string, sourceAddress: string): Disc
     ipAddress: sourceAddress,
     hostname: typeof record.hostname === 'string' ? record.hostname : '',
     runtimeVersion: typeof record.runtime_version === 'string' ? record.runtime_version : '',
-    apiPort: typeof record.api_port === 'number' ? record.api_port : 8443,
+    apiPort: typeof record.api_port === 'number' ? record.api_port : RUNTIME_API_PORT,
   }
 }
 

@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
@@ -1299,7 +1300,7 @@ class CompilerModule {
   }
 
   /**
-   * Probes the runtime at `<ip>:8443/api/version` (unauthenticated)
+   * Probes the runtime at `<ip>:RUNTIME_API_PORT/api/version` (unauthenticated)
    * to discover what version it speaks.  Used by the upload path to
    * gate strucpp builds against older MatIEC runtimes.
    *
@@ -1313,7 +1314,7 @@ class CompilerModule {
       const req = https.request(
         {
           hostname: runtimeIpAddress,
-          port: 8443,
+          port: RUNTIME_API_PORT,
           path: '/api/version',
           method: 'GET',
           timeout: 5000,

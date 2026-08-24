@@ -236,6 +236,47 @@ openplc-cli debug close --all
 
 With one session open, `--session` is optional. With several, it is required.
 
+### A session closes itself after 30 minutes idle
+
+This is the one fact a long-running harness has to know, because closing
+**releases the session's forces** — mid-test, on live hardware, if the run is
+quiet for long enough.
+
+|                       |                                     |
+| --------------------- | ----------------------------------- |
+| default               | 30 minutes with no command          |
+| `--idle-timeout <ms>` | on `debug open`; a different budget |
+| `--idle-timeout 0`    | never close on idle                 |
+
+"Idle" means no command reached the session. Two things deliberately do **not**
+count: `watch` sampling in the background (the session is busy, but nobody asked
+for anything) and `debug list`, which dials each session to report its state —
+polling a list must not keep sessions alive for ever.
+
+A value that is not a number is a usage error rather than a silent fallback: the
+point of naming a timeout is that the default was wrong for this run.
+
+### Flags, by command
+
+| Flag                        | Command                             | Meaning                                                                 |
+| --------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| `--session <id>`            | any `debug` subcommand              | which session, when several are open                                    |
+| `--idle-timeout <ms>`       | `debug open`                        | idle budget; `0` disables (see above)                                   |
+| `--force-new`               | `debug open`                        | start a session even if one is already open for this project and target |
+| `--upload-if-needed`        | `debug open`                        | upload first when the target's program does not match                   |
+| `--var <name>`              | `read`, `write`, `force`, `unforce` | the variable, when you would rather not pass it positionally            |
+| `--value <literal>`         | `write`, `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them        |
+| `--filter <substring>`      | `list-vars`                         | only variables whose path contains it                                   |
+| `--interval <ms>`           | `watch`                             | sampling cadence; floor 20 ms                                           |
+| `--since <seq>`             | `poll`                              | only samples after this sequence number                                 |
+| `--keep-forces`             | `close`                             | leave forced variables pinned                                           |
+| `--all`                     | `close`                             | every session, not just one                                             |
+| `--keep-going`              | `exec`                              | run the remaining lines after one fails                                 |
+| `--force`                   | `create`                            | overwrite an existing destination                                       |
+| `--clean`                   | `compile`, `upload`                 | discard the build directory first                                       |
+| `-y`, `--yes`               | `upload`                            | skip the confirmation                                                   |
+| `--create-user <user:pass>` | `upload`, `debug open`              | create the first user on a fresh runtime v4                             |
+
 `watch` **records** into a buffer inside the session rather than streaming, so a
 transient that happens between two of your own commands is still there when you
 `poll`.

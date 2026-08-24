@@ -166,14 +166,16 @@ class MainProcessBridge implements MainIpcModule {
    * CLI makes the same calls rather than carrying its own copy — see that
    * module's docblock for the two bugs a second copy produced.
    *
-   * When the token authority transparently refreshes an expired token, the fresh
-   * token is pushed to the renderer so its store connection flag tracks it.
+   * The token-refresh listener is registered in the CONSTRUCTOR, not here. Both
+   * did, briefly: the extraction added this constructor option while #1023's
+   * registration stayed, and since `this.tokens` IS `runtimeApi.tokens` the same
+   * manager notified twice, sending `runtime:token-refreshed` twice per refresh.
+   * Harmless downstream — the renderer's setter is idempotent — but two
+   * registrations for one event is a bug waiting for a listener that is not.
+   * The constructor's does strictly more (it also re-authenticates a held debug
+   * channel), so this one goes.
    */
-  private runtimeApi = new RuntimeApiClient({
-    onTokenChanged: (newToken) => {
-      this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
-    },
-  })
+  private runtimeApi = new RuntimeApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   // Current project root path used to validate file-watcher IPC calls
@@ -226,9 +228,10 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== RUNTIME API HANDLERS =====================
-  private readonly RUNTIME_API_PORT = 8443
-  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
-  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
+  // The port and the two timeouts live on `RuntimeApiClient` now, with the eight
+  // call sites that used them. The declarations stayed behind here with zero
+  // references — invisible because `noUnusedLocals` is off, and misleading
+  // because one of them was the `8443` this work claimed to have unified.
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 

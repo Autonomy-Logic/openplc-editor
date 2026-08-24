@@ -358,7 +358,10 @@ async function main(): Promise<void> {
 
   const reporter = createProcessReporter({
     json: boolFlag(args, 'json'),
-    noJson: args.flags.json === false,
+    // `--json=false` arrives as the STRING 'false', so `=== false` never matched
+    // and the form documented in `args.ts` silently selected neither mode — it
+    // fell through to the isTTY default. "Given, and false" is the question.
+    noJson: args.flags.json !== undefined && !boolFlag(args, 'json'),
     quiet: boolFlag(args, 'quiet'),
   })
 

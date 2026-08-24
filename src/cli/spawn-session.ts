@@ -77,6 +77,12 @@ export function createSessionSpawner(deps: SpawnDependencies) {
       env: { ...process.env, OPENPLC_CLI_DAEMON: '1' },
     })
 
+    // A daemon that exits before reading its config closes this pipe, and the
+    // write then raises EPIPE asynchronously. Unhandled, that is an uncaught
+    // exception that pre-empts the `exit` handler below — so the caller loses
+    // the real reason (a bad password, a busy port) and gets the plumbing
+    // instead. Swallowed here; the handshake's own failure path reports it.
+    child.stdin.on('error', () => undefined)
     child.stdin.write(`${JSON.stringify(config)}\n`)
     child.stdin.end()
 
