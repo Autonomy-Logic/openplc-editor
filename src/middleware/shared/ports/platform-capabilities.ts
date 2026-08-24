@@ -34,6 +34,20 @@ export interface PlatformCapabilities {
    * work. Gate the account UI on THIS flag, never on `hasAuthentication`.
    */
   hasEdgeAccount: boolean
+  /**
+   * Whether the build is UNUSABLE without an Edge account.
+   *
+   * Distinct from `hasEdgeAccount`, and the distinction is load-bearing. The web
+   * editor reaches a project only through Edge's API, so a visitor who is not signed
+   * in has nothing to look at and the sign-in dialog opens on its own. The desktop
+   * editor opens local projects from disk and works offline: an account is how you
+   * reach CLOUD projects, and forcing a dialog on someone editing a local file would
+   * block an editor that needs nothing from Edge at all.
+   *
+   * Both builds show the same account control in the same place. This only decides
+   * whether the sign-in dialog opens by itself or when the user asks for it.
+   */
+  requiresEdgeAccount: boolean
 
   // --- Device & Hardware ---
 
@@ -140,8 +154,10 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   isNativeApplication: true,
   hasNativeFileDialogs: true,
   hasAuthentication: false,
-  // Desktop editor works against the local filesystem, with no Edge account.
-  hasEdgeAccount: false,
+  // The desktop editor has an Edge account, for cloud projects...
+  hasEdgeAccount: true,
+  // ...but never demands one: local projects and offline work need no sign-in.
+  requiresEdgeAccount: false,
   hasLocalSerialPorts: true,
   hasOrchestratorDevices: false,
   hasWebRTC: false,
@@ -173,6 +189,9 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAuthentication: true,
   // Default for the web build; the autonomy-node build turns this off via env.
   hasEdgeAccount: true,
+  // The web editor reaches a project only through Edge's API, so without a session
+  // there is nothing to show and the dialog opens on its own.
+  requiresEdgeAccount: true,
   hasLocalSerialPorts: false,
   hasOrchestratorDevices: true,
   hasWebRTC: true,

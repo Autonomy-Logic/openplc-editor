@@ -12,9 +12,13 @@
  * desktop editor, and a direct adapter import compiles that app against an API it
  * does not talk to.
  *
- * OPTIONAL on `PlatformPorts`, like `ai` and `esi`: the desktop editor has no Edge
- * account and sets `capabilities.hasEdgeAccount` to false. Gate on the capability,
- * not on the port being present.
+ * OPTIONAL on `PlatformPorts`, like `ai` and `esi`: a platform may have no Edge
+ * account at all (the autonomy-node build talks to its own API). Gate on
+ * `capabilities.hasEdgeAccount`, not on the port being present.
+ *
+ * Both editors implement it, over different transports: the web build authenticates by
+ * the cookie Edge leaves on a shared parent domain, while the desktop holds its own
+ * tokens because its renderer is not on that domain.
  */
 
 /** Mirrors Edge's `UserProfile`, narrowed to what the account UI renders. */
