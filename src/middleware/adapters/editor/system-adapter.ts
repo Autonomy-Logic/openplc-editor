@@ -35,6 +35,17 @@ const PRODUCTION_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
  */
 const EDGE_WEB_URL = process.env.OPENPLC_EDGE_WEB_URL || PRODUCTION_EDGE_WEB_URL
 
+/**
+ * The Edge SPA origin, for anything in the editor that links out to it.
+ *
+ * Exported so the Edge account adapter resolves the same value from the same
+ * override rather than re-deriving it — two copies would drift the moment one of
+ * them gained a fallback the other did not.
+ */
+export function getEdgeWebUrl(): string {
+  return EDGE_WEB_URL
+}
+
 export function createEditorSystemAdapter(): SystemPort {
   return {
     getSystemInfo(): Promise<SystemInfo> {

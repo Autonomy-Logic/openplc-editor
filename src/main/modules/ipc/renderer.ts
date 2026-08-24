@@ -5,6 +5,7 @@ import type {
   DeviceLicenseReport,
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
+import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -182,6 +183,16 @@ const rendererProcessBridge = {
       error?: string
     }>
   }> => ipcRenderer.invoke('catalog:install-many', libraries),
+  // ----- Edge account (optional sign-in, autonomy-edge) -----
+  // Every call crosses to the main process because the desktop holds its own session:
+  // the renderer is not on Edge's origin, so it can neither inherit the shared-domain
+  // cookie the web editor uses nor issue the request itself.
+  edgeAccountFetchUser: (): Promise<EdgeUserRead> => ipcRenderer.invoke('edge-account:fetch-user'),
+  edgeAccountFetchPlanCaption: (): Promise<string | null> => ipcRenderer.invoke('edge-account:fetch-plan-caption'),
+  edgeAccountSignIn: (email: string, password: string): Promise<EdgeSignInOutcome> =>
+    ipcRenderer.invoke('edge-account:sign-in', { email, password }),
+  edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
+  edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

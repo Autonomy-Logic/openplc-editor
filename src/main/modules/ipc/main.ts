@@ -1,3 +1,10 @@
+import {
+  fetchPlanCaption as fetchEdgePlanCaption,
+  fetchUser as fetchEdgeUser,
+  isEncryptionAvailable,
+  signIn as signInToEdge,
+  signOut as signOutOfEdge,
+} from '@root/backend/editor/edge-account/edge-account-service'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import type {
@@ -15,6 +22,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
+import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -588,6 +596,14 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('catalog:list', this.handleCatalogList)
+    // ----- Edge account (optional sign-in) -----
+    // All of it runs in the main process: the renderer is not on Edge's origin, so
+    // it can neither inherit a shared-domain cookie nor make the request itself.
+    this.registerHandle('edge-account:fetch-user', this.handleEdgeFetchUser)
+    this.registerHandle('edge-account:fetch-plan-caption', this.handleEdgeFetchPlanCaption)
+    this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
+    this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
+    this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -988,6 +1004,35 @@ class MainProcessBridge implements MainIpcModule {
    * rather than thrown across the IPC boundary so the modal can
    * surface the failure without trying to read a rejected promise.
    */
+  // ===================== EDGE ACCOUNT =====================
+  // Signing in is OPTIONAL throughout. Every handler resolves to a value the renderer
+  // can render, none of them is an error the editor must recover from, and someone
+  // working offline on a local project never triggers any of it.
+
+  handleEdgeFetchUser = (_event: IpcMainInvokeEvent): Promise<EdgeUserRead> => fetchEdgeUser()
+
+  handleEdgeFetchPlanCaption = (_event: IpcMainInvokeEvent): Promise<string | null> => fetchEdgePlanCaption()
+
+  handleEdgeSignIn = (
+    _event: IpcMainInvokeEvent,
+    credentials: { email: string; password: string },
+  ): Promise<EdgeSignInOutcome> => {
+    // Validated rather than trusted: this crosses IPC, and a malformed payload must
+    // come back as a failed sign-in instead of throwing inside the handler and
+    // rejecting the invoke with a stack trace the UI cannot render.
+    if (typeof credentials?.email !== 'string' || typeof credentials?.password !== 'string') {
+      return Promise.resolve({ status: 'failed' })
+    }
+
+    return signInToEdge(credentials.email, credentials.password)
+  }
+
+  handleEdgeSignOut = (_event: IpcMainInvokeEvent): Promise<void> => signOutOfEdge()
+
+  /** Whether a session on this machine survives a restart — see `session-store`. */
+  handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
+    Promise.resolve(isEncryptionAvailable())
+
   handleCatalogList = async (
     _event: IpcMainInvokeEvent,
     args: ListPublicLibrariesArgs,
