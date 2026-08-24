@@ -3046,7 +3046,7 @@ class CompilerModule {
     if (isSimulator) {
       if (compileOnly) {
         _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
-        _mainProcessPort.postMessage({ closePort: true })
+        _mainProcessPort.postMessage({ closePort: true, success: result.success })
         _mainProcessPort.close()
         return
       }
@@ -3063,15 +3063,16 @@ class CompilerModule {
           logLevel: 'info',
           message: 'Compilation successful. Loading firmware into simulator...',
         })
-        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true, success: true })
         _mainProcessPort.close()
         return
       }
-      // Failure path on simulator — separator + close.
+      // Failure path on simulator — separator + verdict + close.
       _mainProcessPort.postMessage({
         message:
           '-------------------------------------------------------------------------------------------------------------\n',
       })
+      _mainProcessPort.postMessage({ closePort: true, success: false })
       _mainProcessPort.close()
       return
     }
@@ -3087,6 +3088,20 @@ class CompilerModule {
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
     })
+    // The build's verdict, from the layer that owns it. Every step the pipeline
+    // ran reported through a real exit code — arduino-cli's process status, or
+    // the runtime's `/api/compilation-status` exit_code by way of
+    // `deployRuntimeProgram` — and `runCompilePipeline` already reduced those to
+    // one boolean.
+    //
+    // This used to be dropped on the floor here: only the simulator branch read
+    // `result.success`, so the consumer was left to infer an outcome from
+    // whether any log line had arrived at error level. Those are different
+    // questions. A compiler writes warnings to stderr, so a build that merely
+    // warned resolved as a failure — `upload_rejected`, with a bare `^~~~`
+    // caret line as its message, on a build the device had completed and
+    // started.
+    _mainProcessPort.postMessage({ closePort: true, success: result.success })
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)
