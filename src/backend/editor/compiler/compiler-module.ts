@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
@@ -116,7 +117,6 @@ import {
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
-import type { MessagePortMain } from 'electron/main'
 import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
@@ -125,7 +125,7 @@ import { formatPackageIntegrityError, PackageManagerModule } from '../package-ma
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
-import type { ArduinoCoreControl, HalsFile, ToolchainProperties } from './types'
+import type { ArduinoCoreControl, CompileProgressChannel, HalsFile, ToolchainProperties } from './types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -1300,7 +1300,7 @@ class CompilerModule {
   }
 
   /**
-   * Probes the runtime at `<ip>:8443/api/version` (unauthenticated)
+   * Probes the runtime at `<ip>:RUNTIME_API_PORT/api/version` (unauthenticated)
    * to discover what version it speaks.  Used by the upload path to
    * gate strucpp builds against older MatIEC runtimes.
    *
@@ -1314,7 +1314,7 @@ class CompilerModule {
       const req = https.request(
         {
           hostname: runtimeIpAddress,
-          port: 8443,
+          port: RUNTIME_API_PORT,
           path: '/api/version',
           method: 'GET',
           timeout: 5000,
@@ -2524,8 +2524,23 @@ class CompilerModule {
    * for compile behaviour shared with openplc-web.
    */
   async compileProgram(
-    args: Array<string | null | PLCProjectData>,
-    _mainProcessPort: MessagePortMain,
+    /**
+     * Positional arguments, destructured below.
+     *
+     * The element union names every type the destructure actually reads —
+     * previously it admitted only `string | null | PLCProjectData`, so the four
+     * boolean/record positions were representable only because the sole caller
+     * came through IPC, where the payload is re-declared. A direct caller (the
+     * headless CLI) needs them declared.
+     *
+     * The `as` below is the boundary between this loose array and the named
+     * positions. It stays because `projectData` arrives as the ports-shape
+     * object converted by `toIpcProjectData`, while this module declares the
+     * SCHEMA shape — two definitions of `PLCProjectData` that the IPC edge
+     * already reconciles with a cast. Unifying them is its own piece of work.
+     */
+    args: Array<string | null | boolean | undefined | object>,
+    _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: {
       makeRuntimeApiRequest: <T = void>(
         ipAddress: string,
@@ -3079,7 +3094,7 @@ class CompilerModule {
 
   async compileForDebugger(
     args: Array<string | null | PLCProjectData>,
-    _mainProcessPort: MessagePortMain,
+    _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: {
       loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
     },
@@ -3309,7 +3324,7 @@ class CompilerModule {
    */
   async compileLibrary(
     args: Array<string | PLCProjectData | boolean>,
-    _mainProcessPort: MessagePortMain,
+    _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: LibraryCompileBridge,
   ): Promise<void> {
     _mainProcessPort.start()
@@ -3453,9 +3468,7 @@ class CompilerModule {
 
       // The boolean slots (compileOnly / cleanBuild) are runtime
       // values the inner `compileProgram` re-casts off `args as [...]`,
-      // so the outer cast is needed to silence the strict arg type
-      // (which only admits `string | null | PLCProjectData`).
-      const compileArgs = [
+      const compileArgs: Array<string | null | boolean | undefined | object> = [
         projectPath,
         SIMULATOR_BOARD,
         boardCore,
@@ -3464,7 +3477,9 @@ class CompilerModule {
         null,
         null,
         true,
-      ] as unknown as Array<string | null | PLCProjectData>
+        null,
+        undefined,
+      ]
       void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
         settle({ success: false, message: getErrorMessage(err) }),
       )

@@ -39,6 +39,8 @@ import type {
   CompilerPlatformPort,
   InstallArduinoCoreArgs,
   InstallArduinoLibArgs,
+  MaterializeRuntimeV4BundleArgs,
+  MaterializeRuntimeV4BundleResult,
   PackageVppPluginArgs,
   PackageVppPluginResult,
   PlatformDeviceContext,
@@ -351,15 +353,10 @@ export function createEditorCompilerPlatformPort(
     async uploadRuntimeV4(args: UploadRuntimeV4Args, log: PlatformLog): Promise<UploadResult> {
       const deviceContext = assertEditorHttpsContext(args.context)
       try {
-        // Materialise the bundle to disk under sourceTargetFolderPath
-        // so the existing `compressSourceFolder` can zip it.
-        await Promise.all(
-          Object.entries(args.bundle).map(async ([relPath, content]) => {
-            const absPath = join(context.sourceTargetFolderPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
-        )
+        // The bundle is already on disk: the pipeline calls
+        // `materializeRuntimeV4Bundle` for every v4 compile, upload or not. This
+        // used to write it here, which is precisely why a compile-only build
+        // produced no artifacts.
         const fileBuffer = await context.compressSourceFolder(context.sourceTargetFolderPath)
 
         const deployOutcome = await deployRuntimeProgram({
@@ -581,6 +578,34 @@ export function createEditorCompilerPlatformPort(
      * disk layer is already the source of truth for the editor; web's
      * adapter will need to surface them in the returned map instead.
      */
+    /**
+     * Write the composed v4 bundle into `build/<target>/src`.
+     *
+     * The same directory `compressSourceFolder` zips for the upload, so a
+     * compile-only build and a build-and-upload leave byte-identical artifacts —
+     * which is what lets a test inspect a compile without touching a device.
+     */
+    async materializeRuntimeV4Bundle(
+      args: MaterializeRuntimeV4BundleArgs,
+      log: PlatformLog,
+    ): Promise<MaterializeRuntimeV4BundleResult> {
+      try {
+        const entries: Array<[string, string]> = Object.entries(args.bundle)
+        await Promise.all(
+          entries.map(async ([relPath, content]: [string, string]) => {
+            const absPath = join(context.sourceTargetFolderPath, relPath)
+            await fs.mkdir(dirname(absPath), { recursive: true })
+            await fs.writeFile(absPath, content, 'utf-8')
+          }),
+        )
+        return { written: entries.length }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        log(`Could not write build artifacts: ${message}`, 'error')
+        return { written: 0, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+      }
+    },
+
     async packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult> {
       try {
         await handlers.handleVendorPluginPackaging(

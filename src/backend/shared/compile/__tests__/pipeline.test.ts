@@ -93,6 +93,7 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
     checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0' }),
     packageVppPlugin: jest.fn().mockResolvedValue({ files: {} }),
+    materializeRuntimeV4Bundle: jest.fn().mockResolvedValue({ written: 0 }),
     ...overrides,
   } as jest.Mocked<CompilerPlatformPort>
 }
@@ -560,6 +561,103 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(result.uploaded).toBe(false)
     expect(port.checkRuntimeVersion).not.toHaveBeenCalled()
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+  })
+
+  it('writes the v4 bundle to disk on the compileOnly path', async () => {
+    // The bundle used to reach disk only as a side effect of uploadRuntimeV4,
+    // which compileOnly returns before — so a compile-only build left a build
+    // folder holding nothing but the VPP files.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(port.materializeRuntimeV4Bundle).toHaveBeenCalledTimes(1)
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    // Narrowed, not asserted: the port declares this method optional, and a `!`
+    // here would turn "the mock was never wired up" into a confusing crash
+    // inside jest's internals instead of a failed expectation.
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
+    expect(Object.keys(bundle).length).toBeGreaterThan(0)
+    expect(events.some((e) => e.message.includes('build artifact'))).toBe(true)
+  })
+
+  it('writes the v4 bundle on the upload path too, so both leave the same artifacts', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(port.materializeRuntimeV4Bundle).toHaveBeenCalledTimes(1)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts the build when the bundle cannot be written', async () => {
+    // A build that reports success while its artifacts are missing is worse
+    // than one that fails.
+    const port = makePort({
+      materializeRuntimeV4Bundle: jest.fn().mockResolvedValue({
+        written: 0,
+        errors: [{ message: 'EACCES: permission denied', line: 0, column: 0, severity: 'error' }],
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.errors?.[0].message).toContain('EACCES')
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => e.message.includes('Could not write the Runtime v4 build artifacts'))).toBe(true)
+  })
+
+  it('skips the write on a platform that does not implement it', async () => {
+    // Web has no project build directory; the pipeline must not require one.
+    const port = makePort({ materializeRuntimeV4Bundle: undefined })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
   })
 
   it('returns warning + success=true when deviceContext is missing on v4', async () => {
