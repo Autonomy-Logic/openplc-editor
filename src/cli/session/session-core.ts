@@ -305,10 +305,18 @@ export class SessionCore {
     if (!result.success) {
       return this.fail(id, ErrorCode.TargetError, result.error ?? 'The target refused the force')
     }
-    this.forced.add(variable.name)
 
+    // Recorded only AFTER the value is confirmed to have taken.
+    //
+    // A successful `setVariable` is not proof the force landed: on runtime v4 it
+    // means the request was QUEUED — `runtime_external_write` enqueues it and
+    // answers 0x7E, and the .so's own refusal (a CONSTANT leaf answers
+    // STATUS_READ_ONLY) happens later at the dispatcher's drain, where nothing
+    // carries it back to us. Marking the variable forced at that point labelled
+    // a refused force as `[FORCED]` in every later read of the session.
     const readBack = await this.readBackAfterWrite(variable, input)
     if ('error' in readBack) return this.fail(id, readBack.code, readBack.error)
+    this.forced.add(variable.name)
     return { id, ok: true, data: { kind: 'force', value: readBack.value } }
   }
 

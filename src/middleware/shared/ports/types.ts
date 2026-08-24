@@ -43,6 +43,22 @@ export type VariableClass = 'input' | 'output' | 'inOut' | 'external' | 'local' 
 
 export type VariableTypeDefinition = 'base-type' | 'user-data-type' | 'array' | 'derived'
 
+/**
+ * The IEC block qualifier a variable is declared under — what the variables
+ * table shows in its **Flags** column.
+ *
+ * Single-valued, and deliberately so: `CONSTANT` and `RETAIN` are mutually
+ * exclusive (STruC++ rejects the combination), so one optional field makes the
+ * invalid pair unrepresentable rather than merely validated. Absent means a
+ * plain `VAR` — which is IEC's `NON_RETAIN`, the default.
+ *
+ * CODESYS's `PERSISTENT` maps to `'retain'` on import. It promises more than
+ * that (it also survives a program download) and the toolchain does not deliver
+ * the difference yet, so it is folded in rather than given a value of its own —
+ * matching how STruC++ treats the keyword.
+ */
+export type VariableFlag = 'constant' | 'retain'
+
 export interface PLCVariableType {
   definition: VariableTypeDefinition
   value: string
@@ -66,6 +82,8 @@ export interface PLCVariable {
   initialValue?: string | null
   documentation: string
   debug?: boolean
+  /** IEC block qualifier; absent = plain `VAR`. See {@link VariableFlag}. */
+  flag?: VariableFlag
 }
 
 export interface PLCTask {

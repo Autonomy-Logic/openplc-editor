@@ -155,6 +155,16 @@ const PLCVariableSchema = z.object({
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean().optional(),
+  /**
+   * IEC block qualifier — the variables table's **Flags** column.
+   *
+   * Optional, so every project written before this field existed still
+   * validates: absent means a plain `VAR`, which is IEC's NON_RETAIN default
+   * and exactly what those projects meant. One field rather than two booleans
+   * because CONSTANT and RETAIN are mutually exclusive — the invalid pair is
+   * unrepresentable instead of merely rejected.
+   */
+  flag: z.enum(['constant', 'retain']).optional(),
 })
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>

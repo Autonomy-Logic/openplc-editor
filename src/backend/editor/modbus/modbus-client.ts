@@ -55,6 +55,10 @@ export enum ModbusDebugResponse {
   /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
   REFUSED_BY_SWITCH = 0x86,
+  /** DEBUG_SET only: refused because the variable is an IEC `CONSTANT`.
+   *  Mirrors `STATUS_READ_ONLY` in STruC++'s `debug_dispatch.hpp`, and the copy
+   *  of this enum in `backend/shared/simulator/types.ts`. */
+  READ_ONLY = 0x87,
 }
 
 interface ModbusTcpClientOptions {
@@ -271,6 +275,15 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -375,6 +388,15 @@ export class ModbusTcpClient implements DeviceModbusTransport {
 
       if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
+
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
       }
 
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
