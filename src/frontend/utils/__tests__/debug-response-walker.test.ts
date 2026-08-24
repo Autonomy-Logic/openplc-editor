@@ -1,6 +1,6 @@
 import { walkDebugResponse } from '../debug-response-walker'
 
-type Decoded = { index: number; position: number; type: string; value: string }
+type Decoded = { index: number; position: number; type: string; value: string; meta: string }
 
 function walk(options: {
   requested: number[]
@@ -10,20 +10,51 @@ function walk(options: {
   endian?: 'le' | 'be'
 }) {
   const decoded: Decoded[] = []
-  const failed: Array<{ index: number; type: string }> = []
+  const failed: Array<{ index: number; type: string; meta: string }> = []
   const result = walkDebugResponse({
     requested: options.requested,
     payload: new Uint8Array(options.payload),
     lastIndex: options.lastIndex,
     endian: options.endian ?? 'le',
-    typeOf: (index) => options.types[index],
+    // The walk ferries whatever `typeOf` resolved through to `emit`/`onError`;
+    // here the index itself stands in for the caller's metadata, which is enough
+    // to prove it arrives with the RIGHT position rather than merely arriving.
+    typeOf: (index) => {
+      const type = options.types[index]
+      return type === undefined ? undefined : { type, meta: `meta-${index}` }
+    },
     emit: (entry) => decoded.push(entry),
-    onError: (entry) => failed.push({ index: entry.index, type: entry.type }),
+    onError: (entry) => failed.push({ index: entry.index, type: entry.type, meta: entry.meta }),
   })
   return { ...result, decoded, failed }
 }
 
 describe('walkDebugResponse', () => {
+  it('hands each callback the metadata resolved for THAT position', () => {
+    // The reason `typeOf` returns metadata at all: callers used to re-look-up
+    // the index in `emit` and again in `onError`, three lookups per position
+    // where one will do, and guarded the two that could not fail with dead
+    // branches. Pairing has to be exact — metadata from the wrong position
+    // would write a decoded value onto the wrong variable, silently.
+    const out = walk({
+      requested: [10, 11, 12],
+      payload: [1, 0x2a, 0x00, 0],
+      types: { 10: 'BOOL', 11: 'INT', 12: 'BOOL' },
+    })
+
+    expect(out.decoded.map((d) => [d.index, d.meta])).toEqual([
+      [10, 'meta-10'],
+      [11, 'meta-11'],
+      [12, 'meta-12'],
+    ])
+
+    // `onError` carries the same `meta` from the same resolution, one line
+    // above in the walk. It is not pinned here because nothing in this codec
+    // throws on demand: the only type that does under jest is `STRING`, and
+    // only because jsdom has no `TextDecoder` — a test asserting on that is
+    // testing the environment, not the walker.
+  })
+
   it('decodes positions in request order, sized by each type', () => {
     // BOOL(1) then INT(2, LE) then BOOL(1)
     const out = walk({

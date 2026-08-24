@@ -197,11 +197,12 @@ export function decodeVariableValues(options: {
     payload,
     lastIndex,
     endian,
-    typeOf: (index) => byIndex.get(index)?.type,
-    emit: ({ index, type, value }) => {
+    // Resolved once here; the walk carries the variable to both callbacks.
+    typeOf: (index) => {
       const variable = byIndex.get(index)
-      /* istanbul ignore if -- typeOf resolved this index a moment ago */
-      if (!variable) return
+      return variable ? { type: variable.type, meta: variable } : undefined
+    },
+    emit: ({ type, value, meta: variable }) => {
       values.push({
         name: variable.name,
         type,
@@ -209,10 +210,7 @@ export function decodeVariableValues(options: {
         forced: forced.has(variable.name.toUpperCase()),
       })
     },
-    onError: ({ index, type }) => {
-      const variable = byIndex.get(index)
-      /* istanbul ignore if -- typeOf resolved this index a moment ago */
-      if (!variable) return
+    onError: ({ type, meta: variable }) => {
       // `null` rather than a sentinel string: a caller checking the value must
       // not have to know that "ERR" means unreadable.
       values.push({ name: variable.name, type, value: null, forced: forced.has(variable.name.toUpperCase()) })

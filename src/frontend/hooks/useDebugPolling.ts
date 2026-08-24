@@ -245,16 +245,14 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         payload: responseBuffer,
         lastIndex: result.lastIndex,
         endian: debugTargetEndian,
+        // Resolved ONCE per position, and carried to `emit`/`onError` by the
+        // walk. The leaves at one index are the same underlying variable and
+        // address, so they share type and size.
         typeOf: (index) => {
           const metas = allLeaves.get(index)
-          // Every leaf at one index is the same underlying variable/address, so
-          // they share type/size.
-          return metas && metas.length > 0 ? metas[0].type : undefined
+          return metas && metas.length > 0 ? { type: metas[0].type, meta: metas } : undefined
         },
-        emit: ({ index, type, value }) => {
-          const metas = allLeaves.get(index)
-          /* istanbul ignore if -- typeOf already resolved metadata for this index */
-          if (!metas || metas.length === 0) return
+        emit: ({ type, value, meta: metas }) => {
           // Translate enum integers to member names so every consumer (watch
           // panel, ladder, FBD, hover) reads the same display value.
           // Out-of-range falls back to the raw integer.
@@ -266,10 +264,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
             if (current.get(m.compositeKey) !== stored) changed.set(m.compositeKey, stored)
           }
         },
-        onError: ({ index, type }) => {
-          const metas = allLeaves.get(index)
-          /* istanbul ignore if -- typeOf already resolved metadata for this index */
-          if (!metas || metas.length === 0) return
+        onError: ({ type, meta: metas }) => {
           const changed = type === 'BOOL' ? changedBool : changedNonBool
           for (const m of metas) changed.set(m.compositeKey, 'ERR')
         },

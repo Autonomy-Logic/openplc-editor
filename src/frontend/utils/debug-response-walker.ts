@@ -27,7 +27,28 @@ import type { TargetEndian } from './endian'
 import { applySwapToVariableBytes } from './endian'
 import { getTypeSizeByName, parseValueByTypeName } from './variable-sizes'
 
-export interface DebugResponseWalkOptions {
+/**
+ * What the caller resolved for one index: the IEC type, plus whatever the caller
+ * needed to look up in order to know it.
+ *
+ * `meta` is the caller's own — the GUI carries the leaves sharing that address,
+ * the CLI carries its resolved variable — and the walker only ferries it from
+ * `typeOf` to `emit`/`onError`. It exists because `typeOf` used to return the
+ * type NAME alone: the caller resolved the metadata, threw it away, and looked
+ * the same index up again in `emit`, and again in `onError`. Three map lookups
+ * per decoded position where one will do — and worse, the second and third
+ * lookups could not fail, so both callers guarded them with `if (!meta) return`
+ * branches marked `istanbul ignore if`, four dead branches in total whose only
+ * purpose was to satisfy the type checker about something the walk had already
+ * proved.
+ */
+export interface ResolvedDebugType<TMeta> {
+  /** Canonical IEC type name, as the compiler emitted it. */
+  type: string
+  meta: TMeta
+}
+
+export interface DebugResponseWalkOptions<TMeta> {
   /** Requested indexes, in the exact order the request packed them. */
   requested: readonly number[]
   /** The value bytes from `parseGetListResponse`. Mutated in place when the target is BE. */
@@ -36,19 +57,19 @@ export interface DebugResponseWalkOptions {
   lastIndex: number | undefined
   endian: TargetEndian
   /**
-   * Canonical IEC type for a requested index, or undefined when the caller has
-   * no metadata for it. Undefined consumes the position without decoding.
+   * The type and metadata for a requested index, or undefined when the caller
+   * has none for it. Undefined consumes the position without decoding.
    */
-  typeOf: (index: number, position: number) => string | undefined
+  typeOf: (index: number, position: number) => ResolvedDebugType<TMeta> | undefined
   /** Called once per successfully decoded position. */
-  emit: (decoded: { index: number; position: number; type: string; value: string }) => void
+  emit: (decoded: { index: number; position: number; type: string; value: string; meta: TMeta }) => void
   /**
    * Called when the codec throws for a position. The walk still advances by the
    * type's size and counts the position consumed: the runtime wrote those bytes
    * whether or not we could read them, so skipping the advance would misalign
    * every position after it.
    */
-  onError?: (failed: { index: number; position: number; type: string }) => void
+  onError?: (failed: { index: number; position: number; type: string; meta: TMeta }) => void
 }
 
 export interface DebugResponseWalkResult {
@@ -61,7 +82,7 @@ export interface DebugResponseWalkResult {
   reachedEnd: boolean
 }
 
-export function walkDebugResponse(options: DebugResponseWalkOptions): DebugResponseWalkResult {
+export function walkDebugResponse<TMeta>(options: DebugResponseWalkOptions<TMeta>): DebugResponseWalkResult {
   const { requested, payload, lastIndex, endian, typeOf, emit, onError } = options
   let offset = 0
   let positionsConsumed = 0
@@ -76,13 +97,14 @@ export function walkDebugResponse(options: DebugResponseWalkOptions): DebugRespo
     }
 
     const index = requested[position]
-    const type = typeOf(index, position)
-    if (type === undefined) {
+    const resolved = typeOf(index, position)
+    if (resolved === undefined) {
       // No metadata, but the runtime still consumed the slot.
       positionsConsumed = position + 1
       continue
     }
 
+    const { type, meta } = resolved
     const size = getTypeSizeByName(type)
     if (offset + size > payload.length) {
       // Do NOT count this position: the caller must retry it.
@@ -96,10 +118,10 @@ export function walkDebugResponse(options: DebugResponseWalkOptions): DebugRespo
 
     try {
       const { value, bytesRead } = parseValueByTypeName(payload, offset, type)
-      emit({ index, position, type, value })
+      emit({ index, position, type, value, meta })
       offset += bytesRead
     } catch {
-      onError?.({ index, position, type })
+      onError?.({ index, position, type, meta })
       offset += size
     }
     positionsConsumed = position + 1
