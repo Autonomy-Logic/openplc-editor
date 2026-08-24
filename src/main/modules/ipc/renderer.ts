@@ -6,6 +6,11 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
+import type {
+  CloudProjectSummary,
+  RawProjectFiles,
+  WriteProjectFiles,
+} from '@root/middleware/shared/ports/project-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -193,6 +198,15 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-account:sign-in', { email, password }),
   edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
+  // ----- Edge projects -----
+  edgeProjectsListRecent: (limit: number): Promise<CloudProjectSummary[]> =>
+    ipcRenderer.invoke('edge-projects:list-recent', limit),
+  edgeProjectsRead: (projectId: string): Promise<RawProjectFiles> =>
+    ipcRenderer.invoke('edge-projects:read', projectId),
+  edgeProjectsSaveProject: (files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('edge-projects:save-project', files),
+  edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('edge-projects:save-file', filePath, content),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

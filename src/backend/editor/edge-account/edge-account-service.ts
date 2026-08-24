@@ -160,15 +160,23 @@ async function usableAccessToken(): Promise<string | null> {
  * know the session was revoked from another device, or that the account's tokens were
  * invalidated by a password change — both of which arrive as a 401 on a token whose
  * `exp` is comfortably in the future.
+ *
+ * Exported because the cloud-project layer needs exactly this treatment. Renewal, the
+ * single-flight guard and the one retry belong here rather than being reimplemented per
+ * caller. Resolves null when no session could be obtained, and REJECTS on a transport
+ * failure — callers have to keep "denied" apart from "unreachable".
  */
-async function authedRequest(path: string): Promise<{ status: number; body: string } | null> {
+export async function edgeAuthedRequest(
+  path: string,
+  init: { method?: 'GET' | 'POST'; json?: unknown } = {},
+): Promise<{ status: number; body: string } | null> {
   const token = await usableAccessToken()
 
   if (!token) {
     return null
   }
 
-  const first = await edgeRequest(path, { accessToken: token })
+  const first = await edgeRequest(path, { ...init, accessToken: token })
 
   if (first.status !== 401) {
     return first
@@ -178,7 +186,7 @@ async function authedRequest(path: string): Promise<{ status: number; body: stri
     return null
   }
 
-  return edgeRequest(path, { accessToken })
+  return edgeRequest(path, { ...init, accessToken })
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +202,7 @@ async function authedRequest(path: string): Promise<{ status: number; body: stri
  */
 export async function fetchUser(): Promise<EdgeUserRead> {
   try {
-    const response = await authedRequest('/auth/me')
+    const response = await edgeAuthedRequest('/auth/me')
 
     if (!response || response.status < 200 || response.status >= 300) {
       return { status: 'no-session' }
@@ -218,7 +226,7 @@ export async function fetchUser(): Promise<EdgeUserRead> {
  */
 export async function fetchPlanCaption(): Promise<string | null> {
   try {
-    const response = await authedRequest('/me/subscription')
+    const response = await edgeAuthedRequest('/me/subscription')
 
     if (!response || response.status < 200 || response.status >= 300) {
       return null

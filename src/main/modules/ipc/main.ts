@@ -5,6 +5,12 @@ import {
   signIn as signInToEdge,
   signOut as signOutOfEdge,
 } from '@root/backend/editor/edge-account/edge-account-service'
+import {
+  listRecentCloudProjects,
+  readCloudProject,
+  saveCloudFile,
+  saveCloudProject,
+} from '@root/backend/editor/edge-projects'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import type {
@@ -23,6 +29,11 @@ import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/com
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
+import type {
+  CloudProjectSummary,
+  RawProjectFiles,
+  WriteProjectFiles,
+} from '@root/middleware/shared/ports/project-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -604,6 +615,11 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
     this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
     this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
+    // ----- Edge projects (the cloud half of the start screen) -----
+    this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
+    this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
+    this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
+    this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1032,6 +1048,52 @@ class MainProcessBridge implements MainIpcModule {
   /** Whether a session on this machine survives a restart — see `session-store`. */
   handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
     Promise.resolve(isEncryptionAvailable())
+
+  // ===================== EDGE PROJECTS =====================
+  // The cloud round trip. Reads and writes go through the same session the account
+  // handlers use, so a revoked token is renewed once rather than per call site.
+
+  handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectSummary[]> => {
+    // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
+    // forwarded straight into the API's own bounds check as a 400.
+    const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5
+
+    return listRecentCloudProjects(Math.min(Math.max(requested, 1), 50))
+  }
+
+  handleEdgeProjectsRead = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<RawProjectFiles> => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      return Promise.resolve({
+        success: false,
+        error: { title: 'Failed to open project', description: 'No project id was given.' },
+      })
+    }
+
+    return readCloudProject(projectId)
+  }
+
+  handleEdgeProjectsSaveProject = (
+    _event: IpcMainInvokeEvent,
+    files: WriteProjectFiles,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (typeof files?.projectPath !== 'string' || files.projectPath.length === 0) {
+      return Promise.resolve({ success: false, error: 'No project id was given.' })
+    }
+
+    return saveCloudProject(files)
+  }
+
+  handleEdgeProjectsSaveFile = (
+    _event: IpcMainInvokeEvent,
+    filePath: unknown,
+    content: unknown,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      return Promise.resolve({ success: false, error: 'No file path was given.' })
+    }
+
+    return saveCloudFile(filePath, content)
+  }
 
   handleCatalogList = async (
     _event: IpcMainInvokeEvent,

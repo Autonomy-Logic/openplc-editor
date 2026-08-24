@@ -12,6 +12,7 @@
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type {
+  CloudProjectSummary,
   CreatePouParams,
   CreateProjectParams,
   ProjectPort,
@@ -173,6 +174,29 @@ function mapIpcResponse(
   }
 }
 
+/**
+ * Whether an identifier names a project on Autonomy Edge rather than one on disk.
+ *
+ * The editor now opens both, and `project.meta.path` is the single identifier every save
+ * flows through — so this is the one place that decides which world a project belongs to.
+ * The test is "is it an absolute filesystem path": local projects always are, and a cloud
+ * id (a cuid) never is. Deciding by shape rather than by a prefix we invent keeps the
+ * cloud identifier byte-identical to the one the API uses, which is what lets the shared
+ * save flow drive both platforms without knowing which it is on — the web build already
+ * puts a bare project id in that field.
+ */
+export function isCloudProjectId(identifier: string): boolean {
+  if (identifier.length === 0) {
+    return false
+  }
+
+  const isPosixAbsolute = identifier.startsWith('/')
+  // `C:\...` or `C:/...`, and `\\server\share` for a UNC path.
+  const isWindowsAbsolute = /^[A-Za-z]:[\\/]/.test(identifier) || identifier.startsWith('\\\\')
+
+  return !isPosixAbsolute && !isWindowsAbsolute
+}
+
 export function createEditorProjectAdapter(): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
@@ -218,8 +242,12 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async openProjectByPath(projectPath: string): Promise<ProjectResponse> {
-      // Read raw files and parse on the frontend
-      const raw = (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
+      // Read raw files and parse on the frontend. The parsing below is identical either
+      // way — only where the bytes come from differs, which is the whole point of the
+      // cloud reader returning the same `RawProjectFiles` the filesystem one does.
+      const raw = isCloudProjectId(projectPath)
+        ? await window.bridge.edgeProjectsRead(projectPath)
+        : ((await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles)
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
@@ -247,6 +275,10 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
+      if (isCloudProjectId(files.projectPath)) {
+        return window.bridge.edgeProjectsSaveProject(files)
+      }
+
       const response = (await window.bridge.writeProjectFiles(files)) as { success: boolean; error?: string }
       if (!response.success) {
         return { success: false, error: response.error ?? 'Save failed' }
@@ -255,6 +287,12 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async saveFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> {
+      // `projectId/relative/path` for a cloud project, an absolute path for a local one.
+      // Both arrive here from the same shared save flow.
+      if (isCloudProjectId(filePath)) {
+        return window.bridge.edgeProjectsSaveFile(filePath, content)
+      }
+
       return window.bridge.saveFile(filePath, content)
     },
 
@@ -314,6 +352,10 @@ export function createEditorProjectAdapter(): ProjectPort {
 
     async pickPath(): Promise<{ success: boolean; path?: string; error?: { title: string; description: string } }> {
       return window.bridge.pathPicker()
+    },
+
+    listRecentCloudProjects(limit: number): Promise<CloudProjectSummary[]> {
+      return window.bridge.edgeProjectsListRecent(limit)
     },
 
     async getRecentProjects(): Promise<RecentProject[]> {

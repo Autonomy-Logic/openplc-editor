@@ -1,5 +1,10 @@
 import type { ProjectPort } from '../../../shared/ports/project-port'
-import { createEditorProjectAdapter, mapIpcPouToPortPou, mapPortPouToIpcPou } from '../project-adapter'
+import {
+  createEditorProjectAdapter,
+  isCloudProjectId,
+  mapIpcPouToPortPou,
+  mapPortPouToIpcPou,
+} from '../project-adapter'
 
 const mockIpcProjectResponse = {
   success: true,
@@ -124,6 +129,10 @@ beforeEach(() => {
     }),
     pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
     exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
+    edgeProjectsListRecent: jest.fn().mockResolvedValue([]),
+    edgeProjectsRead: jest.fn().mockResolvedValue(mockRawProjectFiles),
+    edgeProjectsSaveProject: jest.fn().mockResolvedValue({ success: true }),
+    edgeProjectsSaveFile: jest.fn().mockResolvedValue({ success: true }),
   } as unknown as typeof window.bridge
 })
 
@@ -731,5 +740,105 @@ describe('mapIpcPouToPortPou', () => {
     })
 
     expect(result.documentation).toBe('Test documentation')
+  })
+})
+
+/**
+ * The editor now opens projects from two worlds, and `project.meta.path` is the single
+ * identifier every save flows through. These cases pin down the one place that decides
+ * which world a project belongs to — get it wrong and a local save is sent to the API,
+ * or a cloud save is written to a directory that does not exist.
+ */
+describe('isCloudProjectId', () => {
+  it.each(['cmt7n5ke2077o07jofjr3dgr0', 'abc123', 'cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st'])(
+    'treats %s as a cloud identifier',
+    (identifier) => {
+      expect(isCloudProjectId(identifier)).toBe(true)
+    },
+  )
+
+  it.each([
+    '/Users/ada/projects/mine',
+    '/home/ada/p',
+    'C:\\Users\\ada\\projects',
+    'C:/Users/ada/projects',
+    '\\\\server\\share\\project',
+  ])('treats %s as a local path', (identifier) => {
+    expect(isCloudProjectId(identifier)).toBe(false)
+  })
+
+  it('treats an empty identifier as neither', () => {
+    // The start screen's "no project open" state. Routing it to the API would turn an
+    // empty workspace into a request for a project with no id.
+    expect(isCloudProjectId('')).toBe(false)
+  })
+})
+
+describe('cloud projects', () => {
+  let cloudAdapter: ProjectPort
+
+  beforeEach(() => {
+    cloudAdapter = createEditorProjectAdapter()
+  })
+
+  it('lists the account projects through the bridge', async () => {
+    const summary = { id: 'cmt7', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' }
+    ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([summary])
+
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual([summary])
+    expect(window.bridge.edgeProjectsListRecent).toHaveBeenCalledWith(5)
+  })
+
+  it('reads a cloud project from the API and a local one from disk', async () => {
+    await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(window.bridge.edgeProjectsRead).toHaveBeenCalledWith('cmt7n5ke2077o07jofjr3dgr0')
+    expect(window.bridge.readProjectFiles).not.toHaveBeenCalled()
+
+    await cloudAdapter.openProjectByPath('/Users/ada/projects/mine')
+
+    expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/Users/ada/projects/mine')
+  })
+
+  it('forwards a cloud read failure as the adapter response', async () => {
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: false,
+      error: { title: 'Failed to open project', description: 'Autonomy Edge answered 403.', status: 403 },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.success).toBe(false)
+    // The status rides along so a caller can tell a permission denial from a broken
+    // project.
+    expect(result.error?.status).toBe(403)
+  })
+
+  it('saves a cloud project to the API and a local one to disk', async () => {
+    const files = { projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never
+
+    await expect(cloudAdapter.saveProject(files)).resolves.toEqual({ success: true })
+    expect(window.bridge.edgeProjectsSaveProject).toHaveBeenCalledWith(files)
+    expect(window.bridge.writeProjectFiles).not.toHaveBeenCalled()
+
+    const local = { projectPath: '/Users/ada/projects/mine', deletions: [] } as never
+
+    await cloudAdapter.saveProject(local)
+
+    expect(window.bridge.writeProjectFiles).toHaveBeenCalledWith(local)
+  })
+
+  it('saves a cloud file to the API and a local one to disk', async () => {
+    await cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x := TRUE;')
+
+    expect(window.bridge.edgeProjectsSaveFile).toHaveBeenCalledWith(
+      'cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st',
+      'x := TRUE;',
+    )
+    expect(window.bridge.saveFile).not.toHaveBeenCalled()
+
+    await cloudAdapter.saveFile('/Users/ada/projects/mine/pous/programs/main.st', 'x := TRUE;')
+
+    expect(window.bridge.saveFile).toHaveBeenCalled()
   })
 })
