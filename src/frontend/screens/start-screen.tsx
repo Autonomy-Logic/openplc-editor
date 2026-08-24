@@ -5,6 +5,7 @@ import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
 import { VideoIcon } from '../assets/icons/interface/Video'
+import { StartAccountSection } from '../components/_features/[start]/account'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
@@ -108,6 +109,9 @@ const StartScreen = () => {
             <MenuItem ghosted>
               <VideoIcon /> Tutorials
             </MenuItem>
+            {/* Above the divider, with the things you DO here. Below it is only
+                leaving, and the account is not on the way out. */}
+            <StartAccountSection />
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
