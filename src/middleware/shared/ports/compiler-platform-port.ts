@@ -372,4 +372,37 @@ export interface CompilerPlatformPort {
    *  remote VPP packages).  The pipeline calls this between
    *  `composeRuntimeV4Bundle` and `uploadRuntimeV4`. */
   packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
+
+  /**
+   * Persist a composed runtime-v4 bundle to the platform's build location.
+   *
+   * Split out of `uploadRuntimeV4`, which used to be the only thing that wrote
+   * the bundle anywhere. That made `compileOnly` produce almost nothing on disk
+   * for a v4 target: the bundle is composed in memory, and the compile-only path
+   * returned before the upload that happened to materialise it. A build folder
+   * left holding only the VPP files (which `packageVppPlugin` writes directly)
+   * looked plausible enough to be mistaken for a complete build — and stale
+   * files from an earlier upload made it look complete outright.
+   *
+   * Called for every v4 compile, upload or not, so `compile` and `upload` leave
+   * byte-identical artifacts.
+   *
+   * Optional: a platform with no project build directory can omit it, and the
+   * pipeline simply skips the write.
+   */
+  materializeRuntimeV4Bundle?(
+    args: MaterializeRuntimeV4BundleArgs,
+    log: PlatformLog,
+  ): Promise<MaterializeRuntimeV4BundleResult>
+}
+
+export interface MaterializeRuntimeV4BundleArgs {
+  /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
+  bundle: Record<string, string>
+}
+
+export interface MaterializeRuntimeV4BundleResult {
+  /** Number of files written, for the progress line. */
+  written: number
+  errors?: StructuredCompileError[]
 }

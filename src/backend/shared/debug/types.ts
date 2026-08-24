@@ -219,6 +219,16 @@ export interface DeviceDebugChannel extends DeviceChannelTransport {
     error?: string
   }>
   setVariable(index: number, force: boolean, valueBuffer?: Uint8Array | Buffer): Promise<DebugSetResult>
+  /**
+   * Resolves once `disconnect()` has released this channel's native handle.
+   *
+   * Optional because only transports WITH a native handle have anything to wait
+   * for — the WebSocket and the simulator are not obliged to implement a no-op.
+   * Declared here rather than probed reflectively so the one call the SIGABRT fix
+   * depends on is typechecked: renaming `ModbusRtuClient.closed` used to fall
+   * back silently to a zero-length wait, which is precisely the bug it guards.
+   */
+  closed?(): Promise<void>
 }
 
 /**
