@@ -119,7 +119,10 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
   }
 
   return (
-    <section className='flex w-full select-none flex-col pr-9 4xl:pr-0'>
+    // `mb-10` is the only spacing this section adds. The heading-to-cards rhythm is
+    // `mb-6` (24px), so the gap BETWEEN the two sections has to be larger than that or
+    // the local "Projects" heading reads as a label for the cloud cards above it.
+    <section className='mb-10 flex w-full select-none flex-col pr-9 4xl:pr-0'>
       <h2 className='mb-6 flex cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Autonomy Edge projects
       </h2>
