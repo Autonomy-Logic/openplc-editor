@@ -26,6 +26,7 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { createCliCompileTransport } from '../compile/cli-transport'
 import { connectToRuntime } from '../connect-runtime'
+import { resolveRuntimeCredentials } from '../credentials'
 import { ErrorCode, ExitCode, type ExitCodeValue } from '../exit-codes'
 import type { CliFailure, CliResult, Reporter } from '../output'
 import { applyConnectionOverrides, loadProject } from '../project/load'
@@ -40,6 +41,32 @@ export interface BuildOptions {
   credentials?: { username: string; password: string }
 }
 
+/**
+ * Everything a build needs, independent of where it was asked for.
+ *
+ * The seam between "what the caller wants" and "how it was typed". `debug open
+ * --upload-if-needed` used to reach the upload by hand-building a `ParsedArgs`
+ * literal, which meant a new required input on `upload` was an invisible runtime
+ * failure on that path instead of a compile error. Adding a field here breaks
+ * every caller that has not supplied it, which is the point.
+ */
+export interface BuildRequest {
+  projectPath: string
+  /** Overrides the board the project remembers. */
+  target?: string
+  host?: string
+  port?: string
+  credentials?: { username: string; password: string }
+  /** Why credentials are absent, when the caller tried and could not give them. */
+  credentialsProblem?: string
+  /** `--create-user`: may bootstrap the first user on a fresh runtime. */
+  mayCreateUser: boolean
+  withUpload: boolean
+  cleanBuild: boolean
+  autoApprove: boolean
+}
+
+/** The command line's entry: parse argv into a `BuildRequest`, then run it. */
 export async function runBuild(args: ParsedArgs, reporter: Reporter, options: BuildOptions): Promise<CliResult> {
   const projectPath = args.positionals[0] ?? stringFlag(args, 'project')
   if (!projectPath) {
@@ -52,6 +79,32 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     )
   }
 
+  // Resolved here, reported later: credentials are only REQUIRED for a target
+  // reached through a runtime API, and which target that is is not known until
+  // the board has been looked up.
+  const resolved = options.credentials ?? resolveRuntimeCredentials(args)
+  const failedToResolve = 'error' in resolved
+
+  return executeBuild(
+    {
+      projectPath,
+      target: stringFlag(args, 'target'),
+      host: stringFlag(args, 'host') ?? stringFlag(args, 'address'),
+      port: stringFlag(args, 'port'),
+      credentials: failedToResolve ? undefined : resolved,
+      credentialsProblem: failedToResolve ? resolved.error : undefined,
+      mayCreateUser: boolFlag(args, 'create-user'),
+      withUpload: options.withUpload,
+      cleanBuild: boolFlag(args, 'clean'),
+      autoApprove: boolFlag(args, 'yes'),
+    },
+    reporter,
+  )
+}
+
+async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<CliResult> {
+  const projectPath = request.projectPath
+
   const loaded = await loadProject(projectPath)
   if (!loaded.success) {
     return reporter.failure({ code: ErrorCode.ProjectNotFound, message: loaded.error }, ExitCode.NotFound)
@@ -60,11 +113,11 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
 
   // The port dropdown and the address field, from argv.
-  applyConnectionOverrides({ port: stringFlag(args, 'port'), host: stringFlag(args, 'host') })
+  applyConnectionOverrides({ port: request.port, host: request.host })
 
   // The project remembers the board its dropdown was left on; `--target`
   // overrides it so one fixture can be built for several targets in a matrix.
-  const target = stringFlag(args, 'target') ?? project.board
+  const target = request.target ?? project.board
   if (!target) {
     return reporter.failure(
       {
@@ -98,7 +151,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   let runtime: RuntimeApiClient | null = null
   let host: string | null = null
 
-  if (options.withUpload && capabilities.directUsbUpload) {
+  if (request.withUpload && capabilities.directUsbUpload) {
     // arduino-cli needs the port; the project may already remember it.
     if (!currentCommunicationPort()) {
       return reporter.failure(
@@ -109,8 +162,8 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
         ExitCode.Usage,
       )
     }
-  } else if (options.withUpload) {
-    host = stringFlag(args, 'host') ?? stringFlag(args, 'address') ?? null
+  } else if (request.withUpload) {
+    host = request.host ?? null
     if (!host) {
       return reporter.failure(
         {
@@ -122,10 +175,23 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     }
     // Shared with `debug open`, including the first-user bootstrap a fresh
     // runtime needs (`--create-user`).
+    // Required only on this branch — a USB target needs no login at all, which
+    // is why the resolution upstream is allowed to have failed.
+    if (!request.credentials) {
+      return reporter.failure(
+        {
+          code: ErrorCode.MissingArgument,
+          message:
+            request.credentialsProblem ??
+            'Runtime credentials are required: pass --credentials user:pass (or --user/--password)',
+        },
+        ExitCode.Usage,
+      )
+    }
     const connected = await connectToRuntime({
       host,
-      args,
-      credentials: options.credentials,
+      credentials: request.credentials,
+      mayCreateUser: request.mayCreateUser,
       onProgress: (m) => reporter.progress(m),
     })
     if (!connected.ok) {
@@ -148,7 +214,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       host,
       target,
       buildsOnDevice: !capabilities.directUsbUpload,
-      autoApprove: boolFlag(args, 'yes'),
+      autoApprove: request.autoApprove,
       reporter,
     })
     if ('error' in gate) {
@@ -156,7 +222,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
     }
   }
 
-  reporter.progress(`${options.withUpload ? 'Building and uploading' : 'Building'} "${project.name}" for ${target}…`)
+  reporter.progress(`${request.withUpload ? 'Building and uploading' : 'Building'} "${project.name}" for ${target}…`)
 
   let streamedError = false
   const warnings: string[] = []
@@ -167,8 +233,8 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       boardTarget: target,
       // The alias-resolved snapshot, from the same store action the button uses.
       projectData: project.compileReady,
-      compileOnly: !options.withUpload,
-      cleanBuild: boolFlag(args, 'clean'),
+      compileOnly: !request.withUpload,
+      cleanBuild: request.cleanBuild,
       runtimeIpAddress: host,
       runtimeJwtToken: runtime?.tokens.getToken() ?? null,
       communicationPort: currentCommunicationPort() || undefined,
@@ -185,10 +251,10 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   if (!result.success) {
     return reporter.failure(
       {
-        code: options.withUpload && streamedError ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
+        code: request.withUpload && streamedError ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
         message: result.error ?? 'Compilation failed',
       },
-      options.withUpload && streamedError ? ExitCode.TargetError : ExitCode.CompileFailed,
+      request.withUpload && streamedError ? ExitCode.TargetError : ExitCode.CompileFailed,
     )
   }
 
@@ -197,13 +263,13 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
       project: project.name,
       projectPath: project.projectPath,
       target,
-      uploaded: options.withUpload,
+      uploaded: request.withUpload,
       buildDirectory: join(project.projectPath, 'build', target),
       firmwarePath: result.hexPath,
       warnings,
     },
     () =>
-      options.withUpload
+      request.withUpload
         ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort() ?? 'the target'} (${target}).`
         : `Built "${project.name}" for ${target}.\nArtifacts: ${join(project.projectPath, 'build', target)}`,
   )
@@ -290,24 +356,20 @@ export async function buildProject(options: {
   autoApprove?: boolean
   reporter: Reporter
 }): Promise<CliResult> {
-  // Rebuilt as argv rather than duplicating `runBuild`'s body: one code path,
-  // and the flags are the same contract the command line uses. Credentials go
-  // through the structured field, not a colon-joined string.
-  const flags: ParsedArgs['flags'] = {}
-  if (options.target) flags.target = options.target
-  if (options.host) flags.host = options.host
-  if (options.port) flags.port = options.port
-  if (options.cleanBuild) flags.clean = true
-  if (options.autoApprove) flags.yes = true
-
-  return runBuild(
+  return executeBuild(
     {
-      command: options.withUpload ? 'upload' : 'compile',
-      subcommand: undefined,
-      positionals: [options.projectPath],
-      flags,
+      projectPath: options.projectPath,
+      target: options.target,
+      host: options.host,
+      port: options.port,
+      credentials: options.credentials,
+      // An in-process caller holds real credentials, so there is nothing to
+      // bootstrap and nothing to explain.
+      mayCreateUser: false,
+      withUpload: options.withUpload,
+      cleanBuild: options.cleanBuild ?? false,
+      autoApprove: options.autoApprove ?? false,
     },
     options.reporter,
-    { withUpload: options.withUpload, credentials: options.credentials },
   )
 }

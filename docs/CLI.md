@@ -258,24 +258,24 @@ point of naming a timeout is that the default was wrong for this run.
 
 ### Flags, by command
 
-| Flag                        | Command                             | Meaning                                                                 |
-| --------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
-| `--session <id>`            | any `debug` subcommand              | which session, when several are open                                    |
-| `--idle-timeout <ms>`       | `debug open`                        | idle budget; `0` disables (see above)                                   |
-| `--force-new`               | `debug open`                        | start a session even if one is already open for this project and target |
-| `--upload-if-needed`        | `debug open`                        | upload first when the target's program does not match                   |
-| `--var <name>`              | `read`, `write`, `force`, `unforce` | the variable, when you would rather not pass it positionally            |
-| `--value <literal>`         | `write`, `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them        |
-| `--filter <substring>`      | `list-vars`                         | only variables whose path contains it                                   |
-| `--interval <ms>`           | `watch`                             | sampling cadence; floor 20 ms                                           |
-| `--since <seq>`             | `poll`                              | only samples after this sequence number                                 |
-| `--keep-forces`             | `close`                             | leave forced variables pinned                                           |
-| `--all`                     | `close`                             | every session, not just one                                             |
-| `--keep-going`              | `exec`                              | run the remaining lines after one fails                                 |
-| `--force`                   | `create`                            | overwrite an existing destination                                       |
-| `--clean`                   | `compile`, `upload`                 | discard the build directory first                                       |
-| `-y`, `--yes`               | `upload`                            | skip the confirmation                                                   |
-| `--create-user <user:pass>` | `upload`, `debug open`              | create the first user on a fresh runtime v4                             |
+| Flag                   | Command                             | Meaning                                                                                             |
+| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--session <id>`       | any `debug` subcommand              | which session, when several are open                                                                |
+| `--idle-timeout <ms>`  | `debug open`                        | idle budget; `0` disables (see above)                                                               |
+| `--force-new`          | `debug open`                        | start a session even if one is already open for this project and target                             |
+| `--upload-if-needed`   | `debug open`                        | upload first when the target's program does not match                                               |
+| `--var <name>`         | `read`, `write`, `force`, `unforce` | the variable, when you would rather not pass it positionally                                        |
+| `--value <literal>`    | `write`, `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
+| `--filter <substring>` | `list-vars`                         | only variables whose path contains it                                                               |
+| `--interval <ms>`      | `watch`                             | sampling cadence; floor 20 ms                                                                       |
+| `--since <seq>`        | `poll`                              | only samples after this sequence number                                                             |
+| `--keep-forces`        | `close`                             | leave forced variables pinned                                                                       |
+| `--all`                | `close`                             | every session, not just one                                                                         |
+| `--keep-going`         | `exec`                              | run the remaining lines after one fails                                                             |
+| `--force`              | `create`                            | overwrite an existing destination                                                                   |
+| `--clean`              | `compile`, `upload`                 | discard the build directory first                                                                   |
+| `-y`, `--yes`          | `upload`                            | skip the confirmation                                                                               |
+| `--create-user`        | `upload`, `debug open`              | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed |
 
 `watch` **records** into a buffer inside the session rather than streaming, so a
 transient that happens between two of your own commands is still there when you
@@ -285,6 +285,62 @@ transient that happens between two of your own commands is still there when you
 script use `debug exec`, which reads one command per line — the REPL refuses a
 pipe rather than dropping commands, which is what readline does with buffered
 input.
+
+### The session protocol
+
+`debug exec` and `debug repl` are two front ends over one protocol, and it is
+open for a third. A session listens on a per-session socket:
+
+|         |                                                                  |
+| ------- | ---------------------------------------------------------------- |
+| POSIX   | `<userData>/User/cli-sessions/<session-id>.sock` (a unix socket) |
+| Windows | `\\.\pipe\openplc-debug-<session-id>` (a named pipe)             |
+
+`debug list` prints the ids; the registry file beside the socket
+(`<session-id>.json`) holds the pid, target and project path.
+
+**Framing.** One JSON object per line, UTF-8, `\n`-terminated — NDJSON in both
+directions. Nothing is streamed unsolicited: every line the session sends answers
+a line it received.
+
+**Requests** carry an `id` you choose and a `kind`:
+
+```json
+{"id":1,"kind":"read","names":["main:counter","main:enable"]}
+{"id":2,"kind":"force","name":"main:enable","value":"TRUE"}
+{"id":3,"kind":"watch","names":["main:counter"],"intervalMs":100}
+{"id":4,"kind":"poll","since":42}
+{"id":5,"kind":"close","releaseForces":true}
+```
+
+| `kind`              | fields                                                                 | answers with                    |
+| ------------------- | ---------------------------------------------------------------------- | ------------------------------- |
+| `status`            | `probe?` — true means "only listing", which does not count as activity | `status`                        |
+| `list-vars`         | `filter?`                                                              | `list-vars`                     |
+| `read`              | `names[]`                                                              | `read` — `values[]`             |
+| `write`             | `name`, `value`                                                        | `write` — the value read back   |
+| `force` / `unforce` | `name`, plus `value` for `force`                                       | `force` / `unforce`             |
+| `start` / `stop`    | —                                                                      | `plc-state`                     |
+| `watch`             | `names[]`, `intervalMs?`                                               | `watch` — what is recording     |
+| `poll`              | `since?` (sequence number)                                             | `poll` — `samples[]`, `dropped` |
+| `unwatch`           | `names?` (all when omitted)                                            | `unwatch`                       |
+| `close`             | `releaseForces?` (default true)                                        | `close` — `released[]`          |
+
+**Responses** echo the `id` and discriminate on `ok`:
+
+```json
+{"id":1,"ok":true,"data":{"kind":"read","values":[{"name":"main:counter","type":"INT","value":7,"forced":false}]}}
+{"id":2,"ok":false,"error":{"code":"variable_not_found","message":"..."}}
+```
+
+The `code` values are the stable set the CLI prints (see **Exit codes**); the
+prose beside them is not stable. Requests are answered **one at a time, in
+order** — the channel underneath is a single request/response link, and the
+session serialises its own watch sampling against your commands for that reason.
+
+A line that is not valid JSON, or not a valid request, is answered with an error
+carrying the `id` recovered from the raw text where possible, so a malformed
+request fails immediately instead of leaving a client waiting out its timeout.
 
 ### Forcing
 

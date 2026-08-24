@@ -19,8 +19,6 @@
 
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 
-import { boolFlag, type ParsedArgs } from './args'
-import { resolveRuntimeCredentials } from './credentials'
 import { ErrorCode, type ErrorCodeValue, ExitCode, type ExitCodeValue } from './exit-codes'
 
 export interface ConnectRuntimeResult {
@@ -37,22 +35,20 @@ export interface ConnectRuntimeFailure {
 
 export interface ConnectRuntimeOptions {
   host: string
-  args: ParsedArgs
-  /** Supplied by an in-process caller that already holds them. */
-  credentials?: { username: string; password: string }
+  credentials: { username: string; password: string }
+  /**
+   * `--create-user`: may bootstrap the FIRST user on a runtime that has none.
+   *
+   * A boolean, not a value: the user it creates is the one in `credentials`.
+   */
+  mayCreateUser: boolean
   onProgress: (message: string) => void
 }
 
 export async function connectToRuntime(
   options: ConnectRuntimeOptions,
 ): Promise<{ ok: true; value: ConnectRuntimeResult } | { ok: false; failure: ConnectRuntimeFailure }> {
-  const credentials = options.credentials ?? resolveRuntimeCredentials(options.args)
-  if ('error' in credentials) {
-    return {
-      ok: false,
-      failure: { code: ErrorCode.MissingArgument, message: credentials.error, exitCode: ExitCode.Usage },
-    }
-  }
+  const credentials = options.credentials
 
   const runtime = new RuntimeApiClient()
 
@@ -73,7 +69,7 @@ export async function connectToRuntime(
 
   let createdUser = false
   if (!users.hasUsers) {
-    if (!boolFlag(options.args, 'create-user')) {
+    if (!options.mayCreateUser) {
       return {
         ok: false,
         failure: {
