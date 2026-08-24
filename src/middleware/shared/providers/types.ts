@@ -8,6 +8,7 @@ import type { AIPort } from '../ports/ai-port'
 import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
+import type { EdgeAccountPort } from '../ports/edge-account-port'
 import type { EsiPort } from '../ports/esi-port'
 import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
@@ -42,6 +43,12 @@ export interface PlatformPorts {
   packages?: PackagePort
   esi?: EsiPort
   ai?: AIPort
+  /**
+   * Optional — the web build only. The desktop editor has no Edge account and
+   * sets `capabilities.hasEdgeAccount` false; gate on that capability rather than
+   * on this being present.
+   */
+  edgeAccount?: EdgeAccountPort
   /**
    * Optional — present only on platforms that intend to host the
    * STruC++ language server.  When `capabilities.hasStLSP` is true

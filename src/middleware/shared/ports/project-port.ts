@@ -93,6 +93,17 @@ export interface ProjectResponse {
   error?: {
     title: string
     description: string
+    /**
+     * HTTP status behind the failure, when the platform had one.
+     *
+     * Carried separately because the router has to tell "you cannot see this
+     * project" (403) from "the project would not load" (anything else), and those
+     * need opposite things said to the user. The status used to survive only
+     * inside `description` as prose, so the only way to classify was to match on
+     * the text — which is how a permission denial ended up telling people to
+     * contact support.
+     */
+    status?: number
   }
 }
 
@@ -198,7 +209,13 @@ export interface RawProjectFiles {
      */
     pendingPlcopenSource?: string
   }
-  error?: { title: string; description: string }
+  /**
+   * `status` carries the HTTP status when the platform had one, for the same
+   * reason it exists on `ProjectResponse`: this is the error `openProjectByPath`
+   * forwards, so a 403 that stops here can never be told apart from a broken
+   * project further up. See the note on `ProjectResponse['error']`.
+   */
+  error?: { title: string; description: string; status?: number }
 }
 
 export interface ProjectPort {
