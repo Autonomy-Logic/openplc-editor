@@ -152,6 +152,7 @@ beforeEach(() => {
     md5Hash: 'a'.repeat(32),
     splitterFallbackMessage: null,
     debugMapSummary: null,
+    retainBlobSize: null,
   })
   // Default-mock: version gate returns compatible.
   mockedVersionGate.mockReturnValue(true)
@@ -914,6 +915,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: 'Falling back to monolithic compile (POU offsets unavailable).',
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -932,6 +934,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: 'Debug map: 42 leaves in 3 arrays',
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -951,6 +954,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -973,6 +977,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -1048,6 +1053,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: '',
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { emit } = captureEvents()
@@ -1147,6 +1153,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     mockedConfs.mockImplementationOnce(() => {
       throw new Error('EtherCAT validator: vendor id missing on slave #0')

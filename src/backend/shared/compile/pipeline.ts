@@ -796,6 +796,9 @@ async function runCompilePipelineInner(
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    ...(strucppResult.retainBlobSize !== null
+      ? { retainBlobSize: strucppResult.retainBlobSize }
+      : {}),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose

@@ -434,6 +434,23 @@ describe('generateDefinesContent — Arduino library toggles', () => {
   })
 })
 
+describe('generateDefinesContent — retain blob size', () => {
+  it('emits OPLC_RETAIN_BLOB_SIZE when the program retains something', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 148 })
+    expect(out).toContain('//Retain')
+    expect(out).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+  })
+
+  it('emits nothing when the program retains nothing', () => {
+    // Boards that never touch retain must see byte-identical defines.h to
+    // before this existed, or every one of them rebuilds for no reason.
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 0 })).not.toContain(
+      'OPLC_RETAIN_BLOB_SIZE',
+    )
+  })
+})
+
 describe('generateDefinesContent — full output snapshot', () => {
   it('produces the canonical defines.h for a typical simulator project', () => {
     const out = generateDefinesContent({
