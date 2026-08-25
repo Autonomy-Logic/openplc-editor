@@ -124,7 +124,7 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
     // the local "Projects" heading reads as a label for the cloud cards above it.
     <section className='mb-10 flex w-full select-none flex-col pr-9 4xl:pr-0'>
       <h2 className='mb-6 flex cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
-        Autonomy Edge projects
+        Autonomy Edge Cloud Projects
       </h2>
       <div className='flex h-auto w-full flex-wrap gap-[25px]'>
         {visible.map((summary) => (
