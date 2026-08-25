@@ -22,12 +22,14 @@
  * no extra request.
  */
 
+import { CloudUpload } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CloudProjectsResult, CloudProjectSummary } from '../../../../../middleware/shared/ports/project-port'
 import { useCapabilities, useEdgeAccountPort, useProject } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
 import { File } from '../../../_atoms/file'
+import { EdgeSignInModal } from '../../../_organisms/edge-sign-in-modal'
 import { toast } from '../../[app]/toast/use-toast'
 
 /**
@@ -51,6 +53,7 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
 
   /** `null` until the first answer lands — which is not the same as having none. */
   const [result, setResult] = useState<CloudProjectsResult | null>(null)
+  const [signInOpen, setSignInOpen] = useState(false)
 
   const available = caps.hasEdgeAccount && project.listRecentCloudProjects !== undefined
 
@@ -118,7 +121,11 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
 
   // Nothing at all only where there is no Edge account to speak of — the autonomy-node
   // build, or a platform with no such channel. Everywhere else the space is reserved.
-  if (!available || result?.status === 'unavailable') {
+  //
+  // `edgeAccount` is in the guard rather than checked at each use: without the port there
+  // is no sign-in to offer and no session to observe, so there is nothing to render — and
+  // stating it once here is what lets the invitation below use it without a null check.
+  if (!available || !edgeAccount || result?.status === 'unavailable') {
     return null
   }
 
@@ -141,10 +148,51 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
         // first would be worse than a beat of nothing. The heading holds the space.
         <div className='h-[52px]' />
       ) : result.status === 'signed-out' ? (
-        <p className='max-w-xl text-base text-neutral-600 dark:text-neutral-400'>
-          Sign in with your Autonomy Edge account to access Edge features — your cloud projects, open here and saved
-          straight back.
-        </p>
+        /* A card with a real button, not a line of grey text. This is the one place in
+           the editor where someone who has never signed in learns what an account is
+           FOR, and a sentence they can ignore converts nobody. Tinted with the brand
+           rather than a warning colour, because it is an invitation, not a problem.
+
+           `blue-500` for the tint and not `brand`: the brand token is a `var()` holding a
+           hex, and Tailwind 3 cannot reliably apply an opacity modifier to that. Same
+           substitution the account menu makes, same colour. */
+        <div className='flex max-w-xl flex-col items-start gap-4 rounded-xl border border-blue-500/25 bg-blue-500/5 px-6 py-5'>
+          <div className='flex items-start gap-3'>
+            <span className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-brand'>
+              <CloudUpload className='size-5' />
+            </span>
+            <div className='flex flex-col gap-1'>
+              <h3 className='font-caption text-base font-semibold text-neutral-1000 dark:text-white'>
+                Bring your cloud projects here
+              </h3>
+              <p className='text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
+                Sign in with your Autonomy Edge account to access Edge features — open your cloud projects in this
+                editor and save straight back to them.
+              </p>
+            </div>
+          </div>
+
+          <div className='flex items-center gap-4 pl-12'>
+            <button
+              type='button'
+              onClick={() => setSignInOpen(true)}
+              className='cursor-pointer rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-medium-dark'
+            >
+              Sign in
+            </button>
+            {/* For the visitor with no account at all — the other half of "everyone
+                connects". It opens Edge, because signing up is an email round-trip that
+                does not belong inside the editor. */}
+            <a
+              href={new URL('/signup', edgeAccount.frontendBaseUrl).toString()}
+              target='_blank'
+              rel='noreferrer'
+              className='cursor-pointer text-sm font-medium text-brand hover:underline'
+            >
+              Create an account
+            </a>
+          </div>
+        </div>
       ) : result.status === 'unreachable' ? (
         <p className='max-w-xl text-base text-neutral-600 dark:text-neutral-400'>
           Could not reach Autonomy Edge. Your local projects below are unaffected.
@@ -171,6 +219,21 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
           ))}
         </div>
       )}
+
+      {/* Its own instance, and that is fine: this and the account row in the menu are
+          both signed-out-only, so the user reaches one or the other, never both. */}
+      <EdgeSignInModal
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        account={edgeAccount}
+        reason='signed-out'
+        onSignedIn={() => {
+          setSignInOpen(false)
+          // The session's `onRestored` fires and reloads too; calling it here as well
+          // means the list is already arriving by the time the dialog is gone.
+          void load()
+        }}
+      />
     </section>
   )
 }

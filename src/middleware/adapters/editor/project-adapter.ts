@@ -363,7 +363,20 @@ export function createEditorProjectAdapter(): ProjectPort {
         return Promise.resolve({ status: 'unavailable' })
       }
 
-      return window.bridge.edgeProjectsListRecent(limit)
+      // The SHAPE is checked too, not just the presence of the function. An older main
+      // process answers with a bare array, and an unrecognised shape falls through every
+      // branch of the section's state machine into "no cloud projects yet" — telling a
+      // signed-out user their account is empty. Observed, not imagined: it is what a
+      // stale bundle did on the first run of this code.
+      return window.bridge.edgeProjectsListRecent(limit).then((result): CloudProjectsResult => {
+        const status = (result as { status?: unknown } | null)?.status
+
+        if (status === 'ok' || status === 'signed-out' || status === 'unreachable' || status === 'unavailable') {
+          return result
+        }
+
+        return { status: 'unavailable' }
+      })
     },
 
     async getRecentProjects(): Promise<RecentProject[]> {
