@@ -91,6 +91,25 @@ export function isStrucppCompatibleRuntime(raw: string | null | undefined): bool
   return isVersionAtLeast(raw, MIN_RUNTIME_VERSION)
 }
 
+/** Minimum runtime version that ships the persistent-storage (RETAIN)
+ *  settings API — `GET`/`PUT /api/retain-config` and the built-in file
+ *  store they configure. */
+export const MIN_RETAIN_CONFIG_RUNTIME_VERSION = '4.2.0'
+
+/**
+ * Returns true iff the runtime ships the persistent-storage settings API
+ * (>= 4.2.0).
+ *
+ * Older runtimes have no built-in retain store and no endpoints to configure
+ * one, so the editor hides the Persistent Storage screen for them rather than
+ * offering settings that would 404. Retain itself still works on those
+ * runtimes when a VPP plugin provides storage — the screen configures the
+ * BUILT-IN store, which is what did not exist before this version.
+ */
+export function isRetainConfigCapableRuntime(raw: string | null | undefined): boolean {
+  return isVersionAtLeast(raw, MIN_RETAIN_CONFIG_RUNTIME_VERSION)
+}
+
 /** Minimum runtime version that ships the user-management API
  *  (roles, whoami, unified update-user, delete/last-admin guards). */
 export const MIN_USER_MANAGEMENT_RUNTIME_VERSION = '4.1.9'

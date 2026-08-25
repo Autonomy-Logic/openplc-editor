@@ -7,7 +7,7 @@ import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
-import { isUserManagementCapableRuntime } from '../../../utils/device'
+import { isRetainConfigCapableRuntime, isUserManagementCapableRuntime } from '../../../utils/device'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -63,6 +63,12 @@ const Project = () => {
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
+
+  // Persistent Storage configures the runtime's BUILT-IN retain store, which
+  // only exists from 4.2.0. Older runtimes can still do retain through a VPP
+  // driver — there is simply nothing here to configure on them, and the
+  // endpoints would 404.
+  const showPersistentStorage = runtimeConnected && isRetainConfigCapableRuntime(runtimeVersion)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -415,6 +421,21 @@ const Project = () => {
                       name: 'Orchestrators',
                       path: `/device/orchestrators`,
                       elementType: { type: 'device', derivation: 'orchestrators' },
+                    })
+                  }
+                />
+              )}
+              {showPersistentStorage && (
+                <ProjectTreeLeaf
+                  key='Persistent Storage'
+                  leafLang='persistentStorage'
+                  leafType='persistent-storage'
+                  label='Persistent Storage'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Persistent Storage',
+                      path: `/device/persistent-storage`,
+                      elementType: { type: 'persistent-storage' },
                     })
                   }
                 />
