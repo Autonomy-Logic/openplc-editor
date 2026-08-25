@@ -169,7 +169,7 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
                 line of body text a thousand pixels wide is genuinely hard to read, so
                 the paragraph keeps a measure and centres inside it. */}
             <p className='max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
-              Sign in with your Autonomy Edge account to access Edge features — open your cloud projects in this editor
+              Sign in with your Autonomy Edge account to access Edge features. Open your cloud projects in this editor
               and save straight back to them.
             </p>
           </div>
