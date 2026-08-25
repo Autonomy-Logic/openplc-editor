@@ -11,7 +11,6 @@
  */
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
-import { isDataTypeFilesEnabled } from '../../../frontend/utils/feature-flags'
 import type {
   CreatePouParams,
   CreateProjectParams,
@@ -208,11 +207,12 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // .dt files only feed the parser while the flag is on —
-        // off keeps legacy project.json as the source of truth.
+        // Read is unconditional: a flag-off build must still open a project
+        // a flag-on build migrated, so turning the flag off is a round trip
+        // rather than a project that loads with no data types.
         // Array guard: the IPC payload is a cast, not validated — a
         // version-skewed main process must not crash project open.
-        isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },
@@ -232,11 +232,12 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // .dt files only feed the parser while the flag is on —
-        // off keeps legacy project.json as the source of truth.
+        // Read is unconditional: a flag-off build must still open a project
+        // a flag-on build migrated, so turning the flag off is a round trip
+        // rather than a project that loads with no data types.
         // Array guard: the IPC payload is a cast, not validated — a
         // version-skewed main process must not crash project open.
-        isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
       )
       return { success: true, data: parsed }
     },

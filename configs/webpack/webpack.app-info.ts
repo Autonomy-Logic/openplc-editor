@@ -29,5 +29,9 @@ export function getAppInfoDefines() {
   return {
     APP_NAME: JSON.stringify('OpenPLC Editor'),
     BUILD_DATE: JSON.stringify(buildDate),
+    // Per-build data-type persistence switch (DOPE-385). Off unless the build
+    // environment opts in; the web build injects the same global from its
+    // own `define` block.
+    DATATYPES_DT_FILES: JSON.stringify(process.env.DATATYPES_DT_FILES === 'true'),
   }
 }
