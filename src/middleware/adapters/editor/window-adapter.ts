@@ -53,45 +53,24 @@ export function createEditorWindowAdapter(): WindowPort {
     },
 
     onCloseRequested(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.windowIsClosing(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.windowIsClosing(() => callback())
     },
 
     onDarwinAppQuitting(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.darwinAppIsClosing(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.darwinAppIsClosing(() => callback())
     },
 
     enableAutoCloseHandshake(): Unsubscribe {
-      window.bridge.handleCloseOrHideWindowAccelerator()
-      return () => {
-        window.bridge.removeHandleCloseOrHideWindowAccelerator()
-      }
+      return window.bridge.handleCloseOrHideWindowAccelerator()
     },
 
     onMaximizedChanged(callback: (isMaximized: boolean) => void): Unsubscribe {
       let maximized = false
 
-      const handler = () => {
+      return window.bridge.isMaximizedWindow(() => {
         maximized = !maximized
         callback(maximized)
-      }
-
-      window.bridge.isMaximizedWindow(handler)
-
-      return () => {
-        // Electron IPC does not expose per-listener unsubscribe for this channel.
-      }
+      })
     },
   }
 }
