@@ -8,6 +8,7 @@ import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
 import { isRetainConfigCapableRuntime, isUserManagementCapableRuntime } from '../../../utils/device'
+import { isNativeScreenAvailable } from '../../../utils/native-screens'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -64,11 +65,6 @@ const Project = () => {
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
 
-  // Persistent Storage configures the runtime's BUILT-IN retain store, which
-  // only exists from 4.2.0. Older runtimes can still do retain through a VPP
-  // driver — there is simply nothing here to configure on them, and the
-  // endpoints would 404.
-  const showPersistentStorage = runtimeConnected && isRetainConfigCapableRuntime(runtimeVersion)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -90,6 +86,21 @@ const Project = () => {
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
+
+  // Persistent Storage configures the runtime's BUILT-IN retain store. Two
+  // things have to be true for it to mean anything:
+  //
+  //   • the runtime is >= 4.2.0, or there is no built-in store to configure
+  //     and the endpoints would 404;
+  //   • the target has not taken retention over. A VPP whose driver implements
+  //     its own store declares `hidesNativeScreens: ['persistent-storage']`,
+  //     and then the native store is switched off (see
+  //     `useNativeScreenEnforcement`) — so showing the screen would offer
+  //     settings that are deliberately inert.
+  const showPersistentStorage =
+    runtimeConnected &&
+    isRetainConfigCapableRuntime(runtimeVersion) &&
+    isNativeScreenAvailable(currentBoardInfo, 'persistent-storage')
 
   const handleCreateTab = ({ elementType, name, path, configuration: tabConfig }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }

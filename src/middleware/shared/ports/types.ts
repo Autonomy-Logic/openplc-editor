@@ -758,6 +758,16 @@ export interface VppModuleDefinition {
   addressMapping?: unknown
 }
 
+/**
+ * Screens the runtime itself provides, which a VPP may replace.
+ *
+ * A closed union rather than a free string: a name that is not a native screen
+ * is a typo, and silently ignoring it would leave the native feature running
+ * alongside the vendor's — which is the whole thing this mechanism exists to
+ * stop.
+ */
+export type NativeScreenId = 'persistent-storage'
+
 export interface VppMetadata {
   packageId: string
   /** Human-readable vendor name from the package manifest's
@@ -768,6 +778,9 @@ export interface VppMetadata {
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
+  /** Native screens this device replaces; see
+   *  `PackageManifest.devices[].hidesNativeScreens`. */
+  hidesNativeScreens?: NativeScreenId[]
   moduleSystem: {
     enabled: boolean
     maxSlots: number
@@ -891,6 +904,17 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Native runtime-v4 screens this device REPLACES.
+     *
+     *  Hiding a screen disables the functionality behind it. The editor removes
+     *  it from the project tree AND turns the native feature off on the device,
+     *  so the vendor's driver is the only thing handling it — two live
+     *  implementations of the same feature is the failure this prevents.
+     *
+     *  Declared only when the device's own HAL/driver implements the feature.
+     *  The vendor may then offer its own screen under `screens`, or none at all
+     *  when the platform needs no configuration. */
+    hidesNativeScreens?: NativeScreenId[]
     /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
      *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
      *  `select` fields via `optionsRef: 'board.serialPorts'`. */

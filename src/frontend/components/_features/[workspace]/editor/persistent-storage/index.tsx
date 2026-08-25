@@ -12,11 +12,12 @@ import { useCallback, useEffect, useState } from 'react'
  * that live on the runtime, not in the project. Two people opening the same
  * project against different devices are configuring different things.
  *
- * The screen configures the runtime's BUILT-IN file store. A VPP driver can
- * provide its own retain backend — FRAM, battery-backed SRAM — and when one
- * does it overrides the file store entirely. That is why the runtime reports
- * the live backend separately from the settings, and why this screen says so
- * rather than showing "enabled" over a file that will never be written.
+ * The screen configures the runtime's BUILT-IN file store, and it is only ever
+ * shown for a target that uses it. A VPP whose own driver handles retention
+ * declares `hidesNativeScreens: ['persistent-storage']`, and the editor then
+ * removes this screen AND disables the native store — so there is no state in
+ * which this screen is visible but inert, and no state in which two stores are
+ * live at once.
  */
 const PersistentStorageEditor = () => {
   const runtime = useRuntime()
@@ -108,8 +109,6 @@ const PersistentStorageEditor = () => {
     )
   }
 
-  const vppProvidesStorage = config?.backend === 'plugin'
-
   return (
     <div className='flex h-full w-full select-none flex-col overflow-auto p-8'>
       <div className='mb-6 flex items-start justify-between'>
@@ -140,21 +139,6 @@ const PersistentStorageEditor = () => {
 
       {!loading && config && (
         <div className='flex max-w-2xl flex-col gap-6'>
-          {/* A VPP driver overriding the built-in store is the one thing that
-              makes every setting below inert, so it is said first and plainly
-              rather than left for the operator to deduce from an unchanging
-              file. */}
-          {vppProvidesStorage && (
-            <div
-              className='rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200'
-              role='status'
-            >
-              This device stores retained variables through its hardware driver
-              {config.backendDetail ? ` (${config.backendDetail})` : ''}, which takes precedence over the
-              settings below. They are saved, but not in use.
-            </div>
-          )}
-
           <label className='flex items-start gap-3'>
             <input
               type='checkbox'

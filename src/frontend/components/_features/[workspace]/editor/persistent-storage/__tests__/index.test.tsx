@@ -117,25 +117,20 @@ describe('PersistentStorageEditor', () => {
     )
   })
 
-  it('says so when a VPP driver has taken over from the file store', async () => {
-    // The one thing that makes every setting on the screen inert. Left unsaid,
-    // the operator sees "enabled" and goes looking for a file that never grows.
+  it('never renders a notice about a driver takeover', async () => {
+    // The screen is not shown at all for a target whose driver handles
+    // retention — see `isNativeScreenAvailable` and the enforcement hook. A
+    // banner explaining that the settings are inert would mean the screen was
+    // reachable in a state where it does nothing, which is the state this
+    // design removes.
     runtime.getRetainConfig.mockResolvedValue({
       success: true,
       config: { ...CONFIG, enabled: true, backend: 'plugin', backendDetail: 'synergy', active: true },
     })
     render(<PersistentStorageEditor />)
-    expect((await screen.findByRole('status')).textContent).toMatch(/hardware driver \(synergy\)/i)
-  })
-
-  it('does not claim a driver override when the file store is the one in use', async () => {
-    runtime.getRetainConfig.mockResolvedValue({
-      success: true,
-      config: { ...CONFIG, enabled: true, backend: 'file', active: true },
-    })
-    render(<PersistentStorageEditor />)
     await screen.findByLabelText(/file location/i)
     expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByText(/synergy/i)).toBeNull()
   })
 
   it('Cancel puts the loaded settings back', async () => {
