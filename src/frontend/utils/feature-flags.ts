@@ -4,15 +4,22 @@
  * Compile-time feature switches shared by both IDEs (mirrored file).
  *
  * `DATATYPES_DT_FILES` gates the per-type data type persistence
- * (`datatypes/<Name>.dt`, DOPE-385): the write path and the read
- * preference both key off it, so a build with the flag off behaves
- * exactly like the legacy project.json format in every scenario.
- * Flip the constant in the release PR once the whole DOPE-385 series
- * has landed.
+ * (`datatypes/<Name>.dt`, DOPE-385). It gates the **write** side only —
+ * `.dt` files are always read when present, so a build with the flag
+ * off still opens a migrated project and its next save writes the
+ * legacy `project.json` form back. That makes turning the flag off a
+ * round trip rather than a data-loss event.
  *
- * Exposed as a function rather than a bare constant so call sites
- * stay mockable in tests (both flag states need coverage).
+ * Injected per build (Vite `define` / webpack `DefinePlugin`) rather
+ * than hard-coded, so `development` and `main` carry identical source
+ * and "on in staging, off in production" is a deploy setting. A branch
+ * that has to be edited during promotion is a branch someone forgets
+ * to edit.
+ *
+ * Undefined in un-injected builds (unit tests, any bundler that skips
+ * the define) — those read as off. Exposed as a function rather than a
+ * bare constant so call sites stay mockable in tests.
  */
-const DATATYPES_DT_FILES = false
+const dataTypeFilesEnabled = typeof DATATYPES_DT_FILES !== 'undefined' && DATATYPES_DT_FILES
 
-export const isDataTypeFilesEnabled = (): boolean => DATATYPES_DT_FILES
+export const isDataTypeFilesEnabled = (): boolean => dataTypeFilesEnabled

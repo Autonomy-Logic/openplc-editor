@@ -23,64 +23,15 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import type { DebugMedium, DebugTreeNode } from '../../middleware/shared/ports/types'
+import type { DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useCapabilities, useDebugger } from '../../middleware/shared/providers'
 import { openPLCStoreBase, useOpenPLCStore } from '../store'
+import { DEBUG_MEDIUM_PROFILE, debugProfileFor, DEFAULT_DEBUG_MEDIUM } from '../utils/debug-medium-profile'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
-import { applySwapToVariableBytes } from '../utils/endian'
-import { getTypeSizeByName, parseValueByTypeName } from '../utils/variable-sizes'
+import { walkDebugResponse } from '../utils/debug-response-walker'
 
-/**
- * How to pace and size the debug poll, per medium.
- *
- * These are two INDEPENDENT physical limits, which is why they live in one table
- * rather than being derived from each other:
- *
- * `batchSize` — the frame budget at the far end. The request packs 3 bytes per
- * variable (arr:u8 + elem:u16) and the response packs raw type-sized values after
- * a small header. It is a property of the TARGET, never of the board the user
- * picked, since the same board can be reached over RTU or TCP.
- *   rtu / simulator : 19, so the request stays ≤63 bytes and fits one 64-byte
- *                     USB-CDC packet (6 + 3·19 = 63). A 20-variable request is 66
- *                     bytes, which a SAMD21 / P1AM-100 receives split across two
- *                     packets — older firmware whose serial framer cannot
- *                     reassemble then drops it. The simulator's virtual serial
- *                     port mirrors the same framing.
- *   tcp             : the Arduino sketch's MAX_MB_FRAME caps it; 60 has headroom.
- *   websocket /     : the Linux runtime's MAX_DEBUG_FRAME=4096 — ~500 variables
- *   webrtc /          with room for value bytes. All three reach the SAME debug
- *   http-relay        socket on the runtime, so they share its budget; only the
- *                     number of hops in front of it differs.
- *
- * `pollIntervalMs` — round-trip latency of the link.
- *   rtu / simulator : 50ms, no network in the way; keep the UI responsive.
- *   tcp / websocket : 200ms, one network hop.
- *   webrtc          : 200ms, peer-to-peer to the agent — as direct as it gets.
- *   http-relay      : 1000ms. Every poll is browser -> Edge -> agent websocket ->
- *                     runtime and back. Polling this at the direct rate buries the
- *                     relay in requests for data that cannot arrive any faster.
- *                     Overridable per deployment via
- *                     `capabilities.debugRelayPollIntervalMs`.
- *
- * A medium the caller has not published yet reads as `tcp` — the middle of the
- * range, and what this defaulted to before the media were named.
- */
-export const DEBUG_MEDIUM_PROFILE: Record<DebugMedium, { batchSize: number; pollIntervalMs: number }> = {
-  rtu: { batchSize: 19, pollIntervalMs: 50 },
-  simulator: { batchSize: 19, pollIntervalMs: 50 },
-  tcp: { batchSize: 60, pollIntervalMs: 200 },
-  websocket: { batchSize: 500, pollIntervalMs: 200 },
-  webrtc: { batchSize: 500, pollIntervalMs: 200 },
-  'http-relay': { batchSize: 500, pollIntervalMs: 1000 },
-}
-
-const DEFAULT_MEDIUM: DebugMedium = 'tcp'
+/** Floor for the adaptive batch shrink below — a batch of one still makes progress. */
 const MIN_BATCH_SIZE = 2
-
-/** The profile for a medium, tolerating one not yet published. */
-export function debugProfileFor(medium: DebugMedium | null): { batchSize: number; pollIntervalMs: number } {
-  return DEBUG_MEDIUM_PROFILE[medium ?? DEFAULT_MEDIUM]
-}
 
 interface LeafMeta {
   compositeKey: string
@@ -152,7 +103,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
   // Dynamic batch size — overwritten with the medium's ceiling on session start;
   // halves on ERROR_OUT_OF_MEMORY and resets on the next session start.
-  const batchSizeRef = useRef(DEBUG_MEDIUM_PROFILE[DEFAULT_MEDIUM].batchSize)
+  const batchSizeRef = useRef(DEBUG_MEDIUM_PROFILE[DEFAULT_DEBUG_MEDIUM].batchSize)
 
   // Full leaf index→metadata map — computed once when debugger starts.
   // One index → many leaves (a shared global appears under each POU's key).
@@ -266,7 +217,6 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       } = openPLCStoreBase.getState().workspace
       const changedBool = new Map<string, string>()
       const changedNonBool = new Map<string, string>()
-      let bufferOffset = 0
 
       // Wire format note: result.lastIndex is the runtime's last_req_idx —
       // a 0-based POSITION INTO THE REQUEST LIST, not a variable index.
@@ -276,80 +226,50 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // collapse the throughput to one variable per poll, which makes
       // related variables visibly desync as the round-robin sweeps.
       //
-      // `loopReachedEnd` records whether the loop walked the full batch
+      // `reachedEnd` records whether the walk covered the full batch
       // before exiting.  The early-exit paths below (bounds check, lastIndex
       // cap) leave `pos` pointing at the FIRST unprocessed slot, so we
       // capture that to advance the round-robin offset by exactly the
       // positions the editor actually consumed.  See the offset-advancement
       // block below this loop for why naive use of `lastIndex+1` strands
       // the tail of the active set.
-      let positionsConsumed = 0
-      let loopReachedEnd = true
-      for (let pos = 0; pos < batch.length; pos++) {
-        if (result.lastIndex !== undefined && pos > result.lastIndex) {
-          // Runtime processed fewer positions than the request; subsequent
-          // slots are valid but unread by the runtime, so they are also
-          // unread by us.  `positionsConsumed = pos` reflects exactly how
-          // far the runtime got.
-          loopReachedEnd = false
-          break
-        }
-
-        const index = batch[pos]
-        const metas = allLeaves.get(index)
-        if (!metas || metas.length === 0) {
-          // No leaf metadata — the runtime still consumed the position
-          // (it doesn't know our index→type map).  Count it consumed and
-          // press on; the value bytes for this slot are forfeit.
-          positionsConsumed = pos + 1
-          continue
-        }
-
-        // Every leaf at one index is the same underlying variable/address, so
-        // they share type/size; parse once off the first, then fan the value
-        // out to every composite key (a shared global lives under each POU's).
-        const meta = metas[0]
-        const typeSize = getTypeSizeByName(meta.type)
-        if (bufferOffset + typeSize > responseBuffer.length) {
-          // Response buffer ran out before we reached every position the
-          // runtime claims to have processed.  Stop here; do NOT advance
-          // past `pos`.  The next poll cycle retries from this same slot
-          // (round-robin offset += positionsConsumed below) so variables
-          // sitting at the tail of the active set still get their reads
-          // — which is the entire reason this is structured around
-          // `positionsConsumed` rather than `lastIndex+1`.
-          loopReachedEnd = false
-          break
-        }
-
-        const isBool = meta.type === 'BOOL'
-
-        // Wire bytes arrive in the target's native byte order; the
-        // internal codec below (parseValueByTypeName → DataView.getFloat32
-        // with littleEndian=true) is LE-only.  Normalise here when
-        // talking to a BE target.  No-op on LE (the common case).
-        applySwapToVariableBytes(responseBuffer, bufferOffset, typeSize, meta.type, debugTargetEndian)
-
-        try {
-          const { value, bytesRead } = parseValueByTypeName(responseBuffer, bufferOffset, meta.type)
-          // Translate enum integers to member names so every consumer
-          // (watch panel, ladder, FBD, hover) reads the same display value.
+      // The positional walk itself lives in `utils/debug-response-walker`, shared
+      // with the headless CLI's debug session: `lastIndex` handling, the
+      // consumed-but-undecodable slot, the short-buffer stop and the endian swap
+      // are all silent-corruption bugs when they differ between callers. What
+      // stays here is what is genuinely this caller's: enum member names and the
+      // fan-out to every composite key sharing an address.
+      const walk = walkDebugResponse({
+        requested: batch,
+        payload: responseBuffer,
+        lastIndex: result.lastIndex,
+        endian: debugTargetEndian,
+        // Resolved ONCE per position, and carried to `emit`/`onError` by the
+        // walk. The leaves at one index are the same underlying variable and
+        // address, so they share type and size.
+        typeOf: (index) => {
+          const metas = allLeaves.get(index)
+          return metas && metas.length > 0 ? { type: metas[0].type, meta: metas } : undefined
+        },
+        emit: ({ type, value, meta: metas }) => {
+          // Translate enum integers to member names so every consumer (watch
+          // panel, ladder, FBD, hover) reads the same display value.
           // Out-of-range falls back to the raw integer.
-          const stored = meta.enumValues !== undefined ? (meta.enumValues[Number(value)] ?? value) : value
-          const current = isBool ? currentBool : currentNonBool
-          const changed = isBool ? changedBool : changedNonBool
-          // Fan out to every composite key sharing this address (shared globals).
+          const enumValues = metas[0].enumValues
+          const stored = enumValues !== undefined ? (enumValues[Number(value)] ?? value) : value
+          const changed = type === 'BOOL' ? changedBool : changedNonBool
+          const current = type === 'BOOL' ? currentBool : currentNonBool
           for (const m of metas) {
             if (current.get(m.compositeKey) !== stored) changed.set(m.compositeKey, stored)
           }
-          bufferOffset += bytesRead
-        } catch {
-          const changed = isBool ? changedBool : changedNonBool
+        },
+        onError: ({ type, meta: metas }) => {
+          const changed = type === 'BOOL' ? changedBool : changedNonBool
           for (const m of metas) changed.set(m.compositeKey, 'ERR')
-          bufferOffset += typeSize
-        }
-        positionsConsumed = pos + 1
-      }
+        },
+      })
+      const positionsConsumed = walk.positionsConsumed
+      const reachedEnd = walk.reachedEnd
 
       // Advance round-robin offset by what we actually consumed.
       //
@@ -370,7 +290,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
       // to runtime's lastIndex+1 so positions the runtime skipped
       // (var_size == 0, e.g. STRING stubs) still advance us.  Otherwise
       // honor positionsConsumed so unread positions get retried.
-      if (loopReachedEnd) {
+      if (reachedEnd) {
         itemsProcessed = result.lastIndex !== undefined ? Math.min(result.lastIndex + 1, batch.length) : batch.length
       } else {
         itemsProcessed = positionsConsumed

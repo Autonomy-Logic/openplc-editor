@@ -16,7 +16,15 @@ import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
-  constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
+  /**
+   * `serviceManager` is the window native dialogs are parented to, and only
+   * `openProject` — the interactive directory picker — needs one. It is
+   * optional so the headless CLI can use the file-level operations
+   * (`createProject`, `readRawProjectFiles`) without an Electron window, which
+   * is what keeps a CLI-created project byte-compatible with a GUI-created one
+   * instead of coming from a second writer.
+   */
+  constructor(private serviceManager: InstanceType<typeof BrowserWindow> | null = null) {}
 
   public getHistoryProjectsFilePath(): string {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
@@ -377,10 +385,16 @@ class ProjectService {
   }
 
   async openProject(): Promise<IProjectServiceResponse> {
-    const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
+    const dialogOptions = {
       title: 'Select a PLC project to open',
-      properties: ['openDirectory'],
-    })
+      properties: ['openDirectory' as const],
+    }
+    // Parented to the window when there is one. There is no window in the
+    // headless CLI, but the CLI never reaches an interactive picker either —
+    // it is given a path.
+    const { canceled, filePaths } = this.serviceManager
+      ? await dialog.showOpenDialog(this.serviceManager, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
 
     if (canceled) {
       return {
@@ -482,13 +496,29 @@ class ProjectService {
       // shared iterator.  Each yielded entry is one independent
       // file write; the batch fans out in parallel since paths
       // are distinct and mkdir(recursive) is idempotent.
-      await Promise.all(
-        Array.from(iterateWriteProjectFiles(files), async (entry) => {
-          const filePath = join(dir, entry.relativePath)
-          await promises.mkdir(dirname(filePath), { recursive: true })
-          await promises.writeFile(filePath, entry.content, 'utf-8')
-        }),
-      )
+      const writeEntry = async (entry: { relativePath: string; content: string }) => {
+        const filePath = join(dir, entry.relativePath)
+        await promises.mkdir(dirname(filePath), { recursive: true })
+        await promises.writeFile(filePath, entry.content, 'utf-8')
+      }
+
+      // `project.json` goes last, on its own. It is the index that declares
+      // what the content files no longer hold — `dataTypes: []` once a type
+      // lives in `datatypes/<Name>.dt`, `pous: []` likewise. Landing it while
+      // a content write rejects would leave the project describing files that
+      // were never written, losing that element from both places.
+      const entries = Array.from(iterateWriteProjectFiles(files))
+      const projectJson = entries.filter((e) => e.category === 'project-json')
+      const contents = entries.filter((e) => e.category !== 'project-json')
+
+      // `allSettled`, not `all`: a rejection must not return control while the
+      // other writes are still touching the disk, or a straggler from a failed
+      // save can land after — and overwrite — a write from the user's retry.
+      const settled = await Promise.allSettled(contents.map(writeEntry))
+      const rejected = settled.find((result) => result.status === 'rejected')
+      if (rejected?.status === 'rejected') throw rejected.reason
+
+      await Promise.all(projectJson.map(writeEntry))
 
       // Process deletions
       for (const relativePath of deletions) {

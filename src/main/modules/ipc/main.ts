@@ -1,6 +1,5 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
-import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type {
   DebugBoardIdResult,
   DebugStatusResult,
@@ -13,6 +12,7 @@ import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/l
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
@@ -33,27 +33,22 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
-import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import dgram from 'dgram'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
-import type { IncomingHttpHeaders, IncomingMessage } from 'http'
-import https from 'https'
-import { networkInterfaces } from 'os'
 import { join, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
 import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
   PATIENT_BOARD_ID_PROBE,
-  planBaudAttempts,
   QUICK_BOARD_ID_PROBE,
   SPECULATIVE_BOARD_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
@@ -64,10 +59,7 @@ import {
   type DeviceLinkStatus,
   DeviceSessionManager,
 } from '../../../backend/editor/hardware/device-session-manager'
-import {
-  buildDeviceModbusTransport,
-  modbusTransportKind,
-} from '../../../backend/editor/hardware/device-transport-factory'
+import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
   inspectDeviceLicense,
@@ -75,6 +67,7 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
   getOpenProjectPath,
@@ -82,7 +75,6 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
@@ -169,20 +161,23 @@ class MainProcessBridge implements MainIpcModule {
   /** Classification of the candidate the held link came from. */
   private deviceLinkProbe: DeviceProbeOutcome | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
+  /**
+   * The runtime REST API, extracted to `backend/editor/runtime` so the headless
+   * CLI makes the same calls rather than carrying its own copy — see that
+   * module's docblock for the two bugs a second copy produced.
+   *
+   * The token-refresh listener is registered in the CONSTRUCTOR, not here. Both
+   * did, briefly: the extraction added this constructor option while #1023's
+   * registration stayed, and since `this.tokens` IS `runtimeApi.tokens` the same
+   * manager notified twice, sending `runtime:token-refreshed` twice per refresh.
+   * Harmless downstream — the renderer's setter is idempotent — but two
+   * registrations for one event is a bug waiting for a listener that is not.
+   * The constructor's does strictly more (it also re-authenticates a held debug
+   * channel), so this one goes.
+   */
+  private runtimeApi = new RuntimeApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
-  private runtimeIp: string | null = null
-  // Single token authority for the editor: owns the access token + credentials
-  // and the refresh/retry-on-401 logic, shared byte-for-byte with the web app.
-  // Every runtime HTTP call (GET, POST, and the project upload) goes through it,
-  // so they all self-heal identically when the 15-min JWT expires.
-  private tokens = createRuntimeTokenManager({
-    login: async (credentials) => {
-      if (!this.runtimeIp) return { success: false, error: 'No runtime address configured' }
-      const result = await this.performAuthentication(this.runtimeIp, credentials.username, credentials.password)
-      return { success: result.success, token: result.accessToken, error: result.error }
-    },
-  })
   // Current project root path used to validate file-watcher IPC calls
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
@@ -233,122 +228,20 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== RUNTIME API HANDLERS =====================
-  private readonly RUNTIME_API_PORT = 8443
-  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
-  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
+  // The port and the two timeouts live on `RuntimeApiClient` now, with the eight
+  // call sites that used them. The declarations stayed behind here with zero
+  // references — invisible because `noUnusedLocals` is off, and misleading
+  // because one of them was the `8443` this work claimed to have unified.
 
-  /**
-   * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
-   * Returns the raw status code, response body, and headers for the caller to interpret.
-   */
-  private httpRequest(options: {
-    method: 'GET' | 'POST'
-    url: string
-    body?: string
-    headers?: Record<string, string>
-    timeoutMs?: number
-  }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
-    return new Promise((resolve, reject) => {
-      const parsedUrl = new URL(options.url)
-      const reqOptions = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: options.method,
-        headers: {
-          ...options.headers,
-          ...(options.body
-            ? {
-                'Content-Type': 'application/json',
-                'Content-Length': String(Buffer.byteLength(options.body)),
-              }
-            : {}),
-        },
-        ...getRuntimeHttpsOptions(),
-      }
+  handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 
-      const req = https.request(reqOptions as https.RequestOptions, (res: IncomingMessage) => {
-        let data = ''
-        res.on('data', (chunk: Buffer) => {
-          data += chunk.toString()
-        })
-        res.on('end', () => {
-          resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
-        })
-      })
-      req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-        req.destroy()
-        reject(new Error('Connection timeout'))
-      })
-      req.on('error', (error: Error) => {
-        reject(error)
-      })
-      if (options.body) {
-        req.write(options.body)
-      }
-      req.end()
-    })
-  }
-
-  private runtimeUrl(ipAddress: string, endpoint: string): string {
-    return `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`
-  }
-
-  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      const res = await this.httpRequest({
-        method: 'GET',
-        url: this.runtimeUrl(ipAddress, '/api/get-users-info'),
-      })
-      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
-
-      if (res.statusCode === 404) {
-        return { hasUsers: false, runtimeVersion }
-      } else if (res.statusCode === 200) {
-        return { hasUsers: true, runtimeVersion }
-      } else {
-        return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
-      }
-    } catch (error) {
-      return { hasUsers: false, error: getErrorMessage(error) }
-    }
-  }
-
-  handleRuntimeCreateUser = async (
+  handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     username: string,
     password: string,
     role?: RuntimeUserRole,
-  ) => {
-    try {
-      // `role` is only honoured by the runtime for authenticated (admin) creation;
-      // the unauthenticated first-user bootstrap always becomes an admin regardless.
-      const body: { username: string; password: string; role?: RuntimeUserRole } = { username, password }
-      if (role) body.role = role
-      const payload = JSON.stringify(body)
-
-      // First-user bootstrap runs before any login (no token yet) and the
-      // runtime allows it unauthenticated. Once a session exists this is an
-      // admin adding an account, which the runtime requires to be authenticated
-      // — route it through the token authority (mutation helper accepts the
-      // runtime's 201 Created and refreshes an expired token).
-      if (this.tokens.hasToken()) {
-        const res = await this.makeRuntimeApiMutation('POST', ipAddress, '/api/create-user', payload)
-        return res.success ? { success: true } : { success: false, error: res.error }
-      }
-
-      const res = await this.httpRequest({
-        method: 'POST',
-        url: this.runtimeUrl(ipAddress, '/api/create-user'),
-        body: payload,
-      })
-      if (res.statusCode === 201) return { success: true }
-      return { success: false, error: res.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  ) => this.runtimeApi.createUser(ipAddress, username, password, role)
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
@@ -391,92 +284,10 @@ class MainProcessBridge implements MainIpcModule {
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 
-  private async performAuthentication(
-    ipAddress: string,
-    username: string,
-    password: string,
-  ): Promise<{ success: boolean; accessToken?: string; error?: string }> {
-    try {
-      const res = await this.httpRequest({
-        method: 'POST',
-        url: this.runtimeUrl(ipAddress, '/api/login'),
-        body: JSON.stringify({ username, password }),
-        timeoutMs: this.RUNTIME_LOGIN_TIMEOUT_MS,
-      })
-      if (res.statusCode === 200) {
-        try {
-          const response = JSON.parse(res.data) as { access_token: string }
-          return { success: true, accessToken: response.access_token }
-        } catch {
-          return { success: false, error: 'Invalid response format' }
-        }
-      }
-      return { success: false, error: res.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
-
-  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
-    const result = await this.performAuthentication(ipAddress, username, password)
-    if (result.success && result.accessToken) {
-      // Hand the session to the token authority so it can transparently
-      // re-authenticate against this device when the token expires.
-      this.runtimeIp = ipAddress
-      this.tokens.setSession(result.accessToken, { username, password })
-    }
-    return result
-  }
-
-  private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
-    if (statusCode === 401 || statusCode === 403) {
-      return true
-    }
-    const lowerError = errorMessage.toLowerCase()
-    return (
-      lowerError.includes('unauthorized') ||
-      lowerError.includes('token') ||
-      lowerError.includes('expired') ||
-      lowerError.includes('invalid token')
-    )
-  }
-
-  private parseApiResponse<T>(
-    data: string,
-    responseParser?: (data: string) => T,
-  ): { success: true; data?: T } | { success: false; error: string } {
-    if (responseParser) {
-      try {
-        return { success: true, data: responseParser(data) }
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Invalid response format' }
-      }
-    }
-    return { success: true }
-  }
-
-  async makeRuntimeApiRequest<T = void>(
-    ipAddress: string,
-    endpoint: string,
-    responseParser?: (data: string) => T,
-  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    // The token authority owns the live token + refresh.
-    type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
-    const url = this.runtimeUrl(ipAddress, endpoint)
-    const result = await this.tokens.withAuth<Raw>(
-      async (token) => {
-        try {
-          const res = await this.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${token}` } })
-          if (res.statusCode === 200) return this.parseApiResponse(res.data, responseParser)
-          return { success: false, error: res.data, statusCode: res.statusCode }
-        } catch (error) {
-          return { success: false, error: getErrorMessage(error) }
-        }
-      },
-      (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-    )
-    return result.success ? result : { success: false, error: result.error }
-  }
+  handleRuntimeLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
+    // The client adopts the session so it can transparently re-authenticate
+    // against this device when the token expires.
+    this.runtimeApi.login(ipAddress, username, password)
 
   /**
    * Wrap a service call with standardized error handling.
@@ -487,222 +298,6 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: String(error) }
     }
-  }
-
-  /**
-   * Make an authenticated POST request to the runtime API with automatic token refresh on 401/403.
-   */
-  makeRuntimeApiPostRequest<T>(
-    ipAddress: string,
-    endpoint: string,
-    body: string,
-    responseParser: (data: string) => T,
-    timeoutMs?: number,
-  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    // Token + refresh owned by the authority.
-    type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
-
-    const doRequest = (token: string): Promise<PostResult> => {
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: endpoint,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(body),
-              Authorization: `Bearer ${token}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  resolve({ success: true, data: responseParser(data) })
-                } catch (err) {
-                  resolve({ success: false, error: err instanceof Error ? err.message : 'Invalid response format' })
-                }
-              } else {
-                // Propagate HTTP status so the caller can detect 401/403 for
-                // token-refresh without relying on brittle message parsing.
-                resolve({
-                  success: false,
-                  error: data || `Unexpected status: ${res.statusCode}`,
-                  statusCode: res.statusCode,
-                })
-              }
-            })
-          },
-        )
-        req.setTimeout(timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(body)
-        req.end()
-      })
-    }
-
-    const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
-      r.success ? r : { success: false, error: r.error }
-
-    return this.tokens
-      .withAuth<PostResult>(
-        (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-      )
-      .then(stripStatus)
-  }
-
-  /**
-   * Authenticated PUT/DELETE against the runtime API, going through the token
-   * authority. Unlike the GET/POST helpers this retries only on 401 (a genuine
-   * expired token): the user-management endpoints use 403 as a legitimate
-   * business response (e.g. "current password incorrect", "admin required"),
-   * so retrying on 403 would trigger a pointless re-authentication. Any 2xx is
-   * success; the raw body is returned so callers can surface error messages.
-   */
-  private makeRuntimeApiMutation(
-    method: 'POST' | 'PUT' | 'DELETE',
-    ipAddress: string,
-    endpoint: string,
-    body?: string,
-  ): Promise<{ success: true; data: string } | { success: false; error: string }> {
-    type R = { success: true; data: string } | { success: false; error: string; statusCode?: number }
-
-    const doRequest = (token: string): Promise<R> =>
-      new Promise((resolve) => {
-        const headers: Record<string, string | number> = { Authorization: `Bearer ${token}` }
-        if (body !== undefined) {
-          headers['Content-Type'] = 'application/json'
-          headers['Content-Length'] = Buffer.byteLength(body)
-        }
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: endpoint,
-            method,
-            headers,
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              const statusCode = res.statusCode ?? 0
-              if (statusCode >= 200 && statusCode < 300) {
-                resolve({ success: true, data })
-              } else {
-                resolve({ success: false, error: data || `Unexpected status: ${statusCode}`, statusCode })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        if (body !== undefined) req.write(body)
-        req.end()
-      })
-
-    return this.tokens
-      .withAuth<R>(
-        (token) => doRequest(token),
-        (r) => !r.success && r.statusCode === 401,
-      )
-      .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
-  }
-
-  /**
-   * Upload a compiled program (multipart) to the runtime, going through the
-   * token authority so an expired token is transparently refreshed and the
-   * upload retried — the same self-healing every other runtime call gets. This
-   * is the path that previously had no refresh, so a long session's upload 401'd
-   * while status polling kept working.
-   */
-  makeRuntimeApiUpload(opts: {
-    ipAddress: string
-    fileBuffer: Buffer
-    filename: string
-    contentType: string
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }): Promise<{ success: true; data: string } | { success: false; error: string }> {
-    type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
-    const header = Buffer.from(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
-        `Content-Type: ${opts.contentType}\r\n\r\n`,
-    )
-    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-    const reqBody = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
-    const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
-
-    const doRequest = (token: string): Promise<UploadResult> =>
-      new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: opts.ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path,
-            method: 'POST',
-            headers: {
-              'Content-Type': `multipart/form-data; boundary=${boundary}`,
-              'Content-Length': reqBody.length,
-              Authorization: `Bearer ${token}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          } as https.RequestOptions,
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) resolve({ success: true, data })
-              else resolve({ success: false, error: data || `HTTP ${res.statusCode}`, statusCode: res.statusCode })
-            })
-          },
-        )
-        req.setTimeout(300_000, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
-        })
-        req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
-        req.write(reqBody)
-        req.end()
-      })
-
-    return this.tokens
-      .withAuth<UploadResult>(
-        (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-      )
-      .then((result) => {
-        if (result.success) {
-          opts.onUploadAccepted?.(result.data)
-          return { success: true as const, data: result.data }
-        }
-        return { success: false as const, error: result.error }
-      })
   }
 
   handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, includeStats?: boolean) => {
@@ -832,146 +427,37 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.tokens.clear()
-    this.runtimeIp = null
+    this.runtimeApi.clearSession()
     return { success: true }
   }
 
   // ===================== RUNTIME LAN DISCOVERY =====================
-  private readonly DISCOVERY_PORT = 33333
-  private readonly DISCOVERY_MAGIC = 'OPENPLC_DISCOVER_V1'
-  private readonly DISCOVERY_DEFAULT_DURATION_MS = 3000
 
-  /**
-   * Compute the directed broadcast address for an IPv4 interface
-   * given its address and netmask in dotted-quad form.  Returns
-   * `255.255.255.255` for /32 or otherwise-degenerate masks where a
-   * meaningful broadcast cannot be derived.
-   */
-  private computeBroadcastAddress(address: string, netmask: string): string {
-    const toOctets = (s: string): number[] | null => {
-      const parts = s.split('.').map((p) => Number(p))
-      if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
-        return null
-      }
-      return parts
-    }
-    const addr = toOctets(address)
-    const mask = toOctets(netmask)
-    if (!addr || !mask) {
-      return '255.255.255.255'
-    }
-    const broadcast = addr.map((octet, i) => (octet & mask[i]) | (~mask[i] & 0xff))
-    return broadcast.join('.')
-  }
-
-  handleRuntimeDiscoverDevices = (
+  handleRuntimeDiscoverDevices = async (
     event: IpcMainInvokeEvent,
     opts?: { durationMs?: number },
   ): Promise<{
     success: boolean
-    devices?: Array<{ ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }>
+    devices?: DiscoveredRuntime[]
     error?: string
   }> => {
-    const duration = Math.max(500, Math.min(10000, opts?.durationMs ?? this.DISCOVERY_DEFAULT_DURATION_MS))
+    // The scan itself lives in `backend/editor/hardware/discover-runtimes` so
+    // the headless CLI runs exactly this code — which interfaces get probed and
+    // how replies are deduplicated is what decides whether a device is found,
+    // and a second copy would drift on precisely those details.
     const senderWebContents = event.sender
-
-    return new Promise((resolveOuter) => {
-      const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true })
-      // Dedup by source IP; last reply wins so a runtime updating its
-      // hostname mid-scan still settles on fresh data.
-      const discovered = new Map<
-        string,
-        { ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }
-      >()
-      let settled = false
-      let timer: NodeJS.Timeout | null = null
-
-      const finish = (err?: Error) => {
-        if (settled) return
-        settled = true
-        if (timer) clearTimeout(timer)
-        try {
-          sock.close()
-        } catch {
-          /* socket already closed */
-        }
-        if (err) {
-          resolveOuter({ success: false, error: err.message })
-        } else {
-          resolveOuter({ success: true, devices: Array.from(discovered.values()) })
-        }
-      }
-
-      sock.on('error', (err) => finish(err))
-
-      sock.on('message', (msg, rinfo) => {
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(msg.toString('utf-8'))
-        } catch {
-          return
-        }
-        if (
-          typeof parsed !== 'object' ||
-          parsed === null ||
-          (parsed as { service?: unknown }).service !== 'openplc-runtime'
-        ) {
-          return
-        }
-        const p = parsed as {
-          runtime_version?: unknown
-          hostname?: unknown
-          api_port?: unknown
-        }
-        const device = {
-          ipAddress: rinfo.address,
-          hostname: typeof p.hostname === 'string' ? p.hostname : '',
-          runtimeVersion: typeof p.runtime_version === 'string' ? p.runtime_version : '',
-          apiPort: typeof p.api_port === 'number' ? p.api_port : 8443,
-        }
-        discovered.set(device.ipAddress, device)
-        // Stream the live update to the renderer so the modal can
-        // append rows as devices come in, instead of waiting for the
-        // full timeout.
+    const result = await discoverRuntimes({
+      durationMs: opts?.durationMs,
+      onDevice: (device) => {
+        // Stream live so the modal appends rows as devices come in rather than
+        // waiting out the whole window.
         if (!senderWebContents.isDestroyed()) {
           senderWebContents.send('runtime:device-discovered', device)
         }
-      })
-
-      sock.bind(0, () => {
-        try {
-          sock.setBroadcast(true)
-        } catch (err) {
-          finish(err as Error)
-          return
-        }
-
-        const magic = new Uint8Array(Buffer.from(this.DISCOVERY_MAGIC, 'utf-8'))
-        const targets = new Set<string>(['255.255.255.255'])
-        const ifaces = networkInterfaces()
-        for (const list of Object.values(ifaces)) {
-          if (!list) continue
-          for (const ifaceInfo of list) {
-            if (ifaceInfo.family !== 'IPv4' || ifaceInfo.internal) continue
-            const broadcast = this.computeBroadcastAddress(ifaceInfo.address, ifaceInfo.netmask)
-            targets.add(broadcast)
-          }
-        }
-
-        for (const target of targets) {
-          sock.send(magic, this.DISCOVERY_PORT, target, (sendErr) => {
-            // Per-target send errors are logged but don't abort the
-            // scan; some interfaces (e.g. VPN tun adapters) reject
-            // broadcast and that's fine.
-            if (sendErr) {
-              logger.debug(`Discovery send to ${target} failed: ${sendErr.message}`)
-            }
-          })
-        }
-
-        timer = setTimeout(() => finish(), duration)
-      })
+      },
+      onDiagnostic: (message) => logger.debug(message),
     })
+    return result.success ? { success: true, devices: result.devices } : { success: false, error: result.error }
   }
 
   handleRuntimeGetSerialPorts = async (
@@ -1001,6 +487,55 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  // ===================== RUNTIME API (delegated) =====================
+  // Thin pass-throughs to `RuntimeApiClient`. They stay on this class because
+  // `CompilerModule`'s bridge contract and several handlers call them by name.
+
+  makeRuntimeApiRequest = <T = void>(
+    ipAddress: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ): Promise<{ success: true; data?: T } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiRequest(ipAddress, endpoint, responseParser)
+
+  makeRuntimeApiPostRequest = <T>(
+    ipAddress: string,
+    endpoint: string,
+    body: string,
+    responseParser: (data: string) => T,
+    timeoutMs?: number,
+  ): Promise<{ success: true; data: T } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiPostRequest(ipAddress, endpoint, body, responseParser, timeoutMs)
+
+  makeRuntimeApiUpload = (opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }): Promise<{ success: true; data: string } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiUpload(opts)
+
+  private makeRuntimeApiMutation = (
+    method: 'POST' | 'PUT' | 'DELETE',
+    ipAddress: string,
+    endpoint: string,
+    body?: string,
+  ): Promise<{ success: true; data: string } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiMutation(method, ipAddress, endpoint, body)
+
+  private restStartPlc = (address: string) => this.runtimeApi.startPlc(address)
+
+  /** The token authority, so existing call sites keep reading `this.tokens`. */
+  private get tokens() {
+    return this.runtimeApi.tokens
+  }
+
+  private get runtimeIp(): string | null {
+    return this.runtimeApi.getAddress()
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -1543,7 +1078,7 @@ class MainProcessBridge implements MainIpcModule {
     xmlFormatTarget: 'old-editor' | 'codesys',
   ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
 
-  handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
+  handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
       mainProcessPort.postMessage({
@@ -1816,43 +1351,13 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Run/stop over a REST control channel, reported in the same shape the Modbus
-   * path returns — so the caller handles one result type, not two.
-   *
-   * `ERROR_SWITCH_STOP` in the runtime's reply is its way of saying the hardware
-   * mode switch refused a start, which is exactly what `refusedBySwitch` means on
-   * the Modbus side (FC 0x4b status 0x86).
+   * Run/stop over a REST control channel. Lives on `RuntimeApiClient` so the
+   * headless CLI gets the same semantics — notably the `ERROR_SWITCH_STOP`
+   * translation, which is the runtime's way of saying a hardware mode switch
+   * refused a start.
    */
-  private async restSetPlcState(address: string, action: 'run' | 'stop'): Promise<PlcControlResult> {
-    const result =
-      action === 'run' ? await this.restStartPlc(address) : await this.makeRuntimeApiRequest(address, '/api/stop-plc')
-    if (!result.success) return { success: false, error: result.error }
-
-    const status = 'status' in result ? (result.status ?? '') : ''
-    if (status.includes('ERROR_SWITCH_STOP')) return { success: false, refusedBySwitch: true }
-
-    // The runtime settles into the new state on its next scan; report the state the
-    // command asked for so the button can reflect it without a second round trip.
-    return { success: true, state: action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED }
-  }
-
-  /** The `/api/start-plc` call, shared by the session router and the IPC handler. */
-  private async restStartPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
-    try {
-      // The body is parsed because the runtime answers `COMMAND:BUSY` while it is
-      // still unloading a previous program after an upload, and callers drive a
-      // retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
-        address,
-        '/api/start-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      return { success: true, status: (result.data?.status ?? '').trim() }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  private restSetPlcState = (address: string, action: 'run' | 'stop'): Promise<PlcControlResult> =>
+    this.runtimeApi.setPlcState(address, action)
 
   handleDebuggerGetVariablesList = async (
     _event: IpcMainInvokeEvent,
@@ -2038,74 +1543,25 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Turn a resolved channel config into something the link manager can try.
-   * The only transport-specific step left in the flow; a config that names a
-   * transport this build cannot speak is dropped rather than half-built.
+   * Turn resolved channel configs into things the link manager can try.
+   *
+   * Delegates to `debug-channel-factory` — see `toDebugCandidate` above.
    */
-  private toDeviceLinkCandidates(
+  private toDeviceLinkCandidates = (
     configs: DebugConnectionConfig[],
     opts: { probeBaudRates?: boolean } = {},
-  ): DeviceLinkCandidate[] {
-    const declared: DeviceLinkCandidate[] = []
-    // Baud guesses go AFTER everything the project declared: a configured Modbus
-    // TCP address is a better next try than a rate nobody asked for.
-    const speculative: DeviceLinkCandidate[] = []
+  ): DeviceLinkCandidate[] => toDeviceLinkCandidates(configs, opts, this.debugChannelDeps)
 
-    const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
-      const kind = modbusTransportKind(config.connectionType)
-      if (kind === null) return
-      const params = {
-        connectionType: config.connectionType,
-        port: config.connectionParams.port,
-        baudRate,
-        slaveId: config.connectionParams.slaveId,
-        host: config.connectionParams.ipAddress,
-      }
-      // Only the simulator needs an in-process serial port; building one for a real
-      // transport would allocate a virtual port nobody reads.
-      const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
-      // Probe the params now so a malformed config fails resolution rather than
-      // becoming a candidate that always throws on `create()`.
-      if ('error' in buildDeviceModbusTransport(params, options)) return
-      ;(isGuess ? speculative : declared).push({
-        transport: kind,
-        // The endpoint ONLY. It is matched against the OS port list and against
-        // the port an upload asks to borrow, so the baud travels beside it rather
-        // than inside it — decorating this string made every swept candidate match
-        // no port and be skipped in 1ms.
-        descriptor: describeDebugEndpoint(config),
-        baudRate,
-        speculative: isGuess,
-        create: () => {
-          const built = buildDeviceModbusTransport(params, options)
-          if ('error' in built) throw new Error(built.error)
-          return built.client
-        },
-      })
-    }
-
-    for (const config of configs) {
-      // A wrong baud is the one misconfiguration that looks like healthy silence:
-      // the port opens, so it is not "no response", and nothing decodes, so it
-      // reads as "no firmware" — and the user gets told to reflash a board that is
-      // running fine. Sweeping the rates OpenPLC is ever built with turns that dead
-      // end into a connection. Serial only; a TCP address is either right or not.
-      for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
-        build(config, attempt.baudRate, attempt.speculative)
-      }
-    }
-
-    // The patient budget belongs to the last DECLARED endpoint, not to the last
-    // candidate overall. Without this the baud sweep would silently take that
-    // patience away from the configured endpoint and hand it to a guess — and a
-    // board that was just flashed, still booting on the right rate, would be ruled
-    // out in ~10s instead of the ~32s it sometimes needs.
-    const lastDeclared = declared[declared.length - 1]
-    if (lastDeclared) lastDeclared.patient = true
-
-    return [...declared, ...speculative]
+  /**
+   * The simulator lives in this process, so the factory is given a way to build
+   * the in-process serial port it answers on.
+   */
+  private readonly debugChannelDeps = {
+    createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
+    // Read from the TOKEN MANAGER at open time, never from a closure over the
+    // login-time value — see `DebugChannelFactoryDeps.getToken`.
+    getToken: () => this.runtimeApi.tokens.getToken(),
   }
-
   /** Consume the classification the last verified candidate produced. */
   private takeDeviceLinkProbe(): DeviceProbeOutcome | null {
     const probe = this.deviceLinkProbe
@@ -2144,45 +1600,14 @@ class MainProcessBridge implements MainIpcModule {
     }
     return Promise.resolve({ success: true })
   }
-
   /**
-   * Turn a resolved channel config into an openable DEBUG channel. The one place
-   * that knows a WebSocket is a debug channel too.
+   * Turn a resolved channel config into an openable DEBUG channel.
+   *
+   * Delegates to `debug-channel-factory`, shared with the headless CLI so both
+   * build every declared transport from the same code.
    */
-  private toDebugCandidate(config: DebugConnectionConfig): DeviceDebugCandidate | null {
-    if (config.connectionType === 'websocket') {
-      const host = config.connectionParams.ipAddress
-      const token = config.connectionParams.jwtToken
-      if (!host || !token) return null
-      return {
-        transport: 'websocket',
-        descriptor: `websocket ${host}`,
-        // The token is read from the TOKEN MANAGER at open time, never from a
-        // closure over the login-time value (review 2026-08-20, E2): the
-        // manager transparently re-logins with stored credentials, and a
-        // channel opened after that refresh must present the CURRENT token —
-        // the runtime re-verifies it on every command (openplc-runtime#169).
-        // The session-open token is only the fallback for the first instants,
-        // before the manager has a session recorded.
-        create: () =>
-          new WebSocketDebugTransport({
-            host,
-            port: 8443,
-            token: this.tokens.getToken() ?? token,
-            rejectUnauthorized: false,
-          }),
-      }
-    }
-    // One config in, one candidate out: this builds the DEBUG channel for a
-    // session that already exists, so the rate is settled and guessing is wrong.
-    const [candidate] = this.toDeviceLinkCandidates([config], { probeBaudRates: false })
-    if (!candidate) return null
-    return {
-      transport: candidate.transport,
-      descriptor: `${candidate.transport} ${candidate.descriptor}`,
-      create: candidate.create,
-    }
-  }
+  private toDebugCandidate = (config: DebugConnectionConfig): DeviceDebugCandidate | null =>
+    toDebugCandidate(config, this.debugChannelDeps)
 
   /**
    * Is this freshly opened candidate a device we can work with? Runs the

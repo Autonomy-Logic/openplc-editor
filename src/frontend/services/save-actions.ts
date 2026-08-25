@@ -418,7 +418,19 @@ export async function executeSaveProject(
   const { setAllToSaved, updateFile } = state.fileActions
   const { markAllSaved } = state.snapshotActions
 
-  const deletionsBeforeSave = [...pendingDeletions]
+  // With the write side off, project.json is the source of truth again — but
+  // the `.dt` files stay on disk unless we say otherwise, and hydration
+  // prefers them whenever they exist. Leaving them behind would let a
+  // pre-rollback copy silently outrank these edits the next time the flag is
+  // on. Web already drops them by omission; this makes desktop agree.
+  const legacyDataTypeCleanup = isDataTypeFilesEnabled()
+    ? []
+    : [
+        ...project.data.dataTypes.map((dt) => `datatypes/${dt.name}.dt`),
+        ...state.unparsedDataTypeFiles.map((f) => f.relativePath),
+      ]
+
+  const deletionsBeforeSave = [...new Set([...pendingDeletions, ...legacyDataTypeCleanup])]
 
   setEditingState('save-request')
   // Same capability-gate as the success toast below: on desktop the
@@ -496,7 +508,7 @@ export async function executeSaveProject(
       serverFiles,
       remoteDeviceFiles,
       dataTypeFiles,
-      deletions: [...pendingDeletions],
+      deletions: deletionsBeforeSave,
     }
 
     const res = await projectPort.saveProject(files)

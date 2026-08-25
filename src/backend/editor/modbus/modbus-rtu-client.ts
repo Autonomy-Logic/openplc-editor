@@ -76,6 +76,8 @@ export class ModbusRtuClient implements DeviceModbusTransport {
   private serialPort: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private injectedSerialPort: any = null
+  /** In-flight close, awaited via `closed()`. */
+  private closing: Promise<void> | null = null
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -182,11 +184,39 @@ export class ModbusRtuClient implements DeviceModbusTransport {
     })
   }
 
+  /**
+   * Close the port.
+   *
+   * `close()` is asynchronous in the native binding, and the callback is passed
+   * so a failure is HANDLED rather than surfacing as an unhandled `error` event
+   * on a port we have already dropped.
+   *
+   * `closed` resolves when the native handle is actually released. A caller that
+   * is about to end the process must await it: `@serialport/bindings-cpp`
+   * registers a NAPI async cleanup hook, and tearing the Node environment down
+   * mid-close makes that hook throw a C++ exception, which aborts the process
+   * (SIGABRT, "Electron quit unexpectedly"). Long-lived hosts like the editor
+   * never noticed, because they keep running after a disconnect.
+   */
   disconnect(): void {
     if (this.serialPort && this.serialPort.isOpen) {
-      this.serialPort.close()
+      const port = this.serialPort
       this.serialPort = null
+      this.closing = new Promise<void>((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        port.close((error: Error | null) => {
+          if (error) console.warn(`Warning: failed to close serial port: ${error.message}`)
+          resolve()
+        })
+      })
+      return
     }
+    this.serialPort = null
+  }
+
+  /** Resolves once a `disconnect()` has released the native handle. */
+  closed(): Promise<void> {
+    return this.closing ?? Promise.resolve()
   }
 
   private flushInputBuffer(): Promise<void> {

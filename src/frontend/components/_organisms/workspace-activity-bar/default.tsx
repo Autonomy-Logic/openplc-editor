@@ -1,3 +1,4 @@
+import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -243,9 +244,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const boardInfo = state.deviceAvailableOptions.availableBoards.get(
           state.deviceDefinitions.configuration.deviceBoard,
         )
-        const requiresRuntimeConnection = !resolveTargetCapabilities(boardInfo).directUsbUpload
         const { connectionStatus: connStatus, plcStatus: runStatus } = state.runtimeConnection
-        if (requiresRuntimeConnection && connStatus === 'connected' && runStatus === 'RUNNING') {
+        // The RULE lives in `evaluatePreBuildPlcGate`, shared with the headless
+        // CLI. Only the consent mechanism differs — a dialog here, `--yes` there
+        // — so the two cannot disagree about when a build is allowed to start.
+        const gate = evaluatePreBuildPlcGate({
+          buildsOnDevice: !resolveTargetCapabilities(boardInfo).directUsbUpload,
+          connected: connStatus === 'connected',
+          running: runStatus === 'RUNNING',
+        })
+        if (gate.kind === 'must-stop') {
           const response = await showDeviceDialog(
             'warning',
             'Stop PLC',
