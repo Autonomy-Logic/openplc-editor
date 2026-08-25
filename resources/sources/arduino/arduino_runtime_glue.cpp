@@ -387,9 +387,30 @@ static void runtime_reinit_program()
 // ---------------------------------------------------------------------------
 
 // Cap on the retain blob this firmware will handle. Sized for the boards the
-// editor targets; a project needing more is refused at compile time by the
-// editor's capacity check rather than silently truncated here.
+// editor targets, and deliberately a fixed allocation: this buffer is filled
+// from inside the scan cycle, so it cannot come from the heap.
 #define RETAIN_BUFFER_MAX 512
+
+// A program that outgrows the buffer FAILS THE BUILD.
+//
+// The editor emits OPLC_RETAIN_BLOB_SIZE into defines.h whenever a program
+// retains anything, and the check has to happen here because there is nowhere
+// else for it to happen: a microcontroller has no console to report on, so the
+// alternative is firmware that links, runs, quietly decides the blob will not
+// fit and behaves as NON_RETAIN — on a machine somebody has already installed,
+// with the fault only visible after a power cycle.
+//
+// Retained state adds up faster than it looks. A retained TON is 36 bytes
+// (four interface leaves plus the four internal ones that make it a timer),
+// so this cap is reached at around fourteen of them.
+#ifdef OPLC_RETAIN_BLOB_SIZE
+static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
+              "This program's retained variables need more storage than this "
+              "board's retain buffer holds (RETAIN_BUFFER_MAX). Retain fewer "
+              "variables, or mark some of them NON_RETAIN. Remember that a "
+              "retained function block instance retains all of its internal "
+              "state, not only its inputs and outputs.");
+#endif
 
 static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
@@ -422,7 +443,10 @@ void runtime_retain_init()
 
     const size_t needed = strucpp::retain::blob_size(retain_size_leaf);
     if (needed == 0) return;           // the program retains nothing
-    if (needed > RETAIN_BUFFER_MAX) return;  // refused; see the editor's gate
+    // Unreachable when the editor supplied OPLC_RETAIN_BLOB_SIZE — the
+    // static_assert above already refused the build. Kept for firmware built
+    // by other means, where silently degrading still beats overrunning.
+    if (needed > RETAIN_BUFFER_MAX) return;
 
     const uint16_t capacity = openplc_retain_capacity();
     if (capacity == 0) return;         // no backend — retain degrades to NON_RETAIN

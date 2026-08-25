@@ -83,6 +83,15 @@ export interface GenerateDefinesInput {
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
+  /** Bytes the program's retain blob occupies (`debugMap.retainBlobSize`);
+   *  absent or 0 when the program retains nothing.
+   *
+   *  Emitted as `OPLC_RETAIN_BLOB_SIZE` so the firmware can `static_assert`
+   *  it against its own buffer. Without it, a program retaining more than the
+   *  board holds links, runs, and drops retain in silence — there is no
+   *  console on a microcontroller to report it, so the check has to happen at
+   *  build time or not at all. */
+  retainBlobSize?: number
 }
 
 /**
@@ -112,6 +121,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     boardRuntime,
     vppModbusState,
     defaultSerial,
+    retainBlobSize,
   } = input
 
   let DEFINES_CONTENT = ''
@@ -277,6 +287,16 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     stProgramFileContent.includes('SM_8MOSFET;')
   ) {
     DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
+  }
+
+  // 6. Retain blob size.  Emitted only when the program retains something,
+  //    so boards that never touch retain see no change at all.  The firmware
+  //    static_asserts this against RETAIN_BUFFER_MAX: a program that outgrows
+  //    the buffer must fail the build rather than silently start behaving as
+  //    NON_RETAIN on a machine somebody has already installed.
+  if (retainBlobSize !== undefined && retainBlobSize > 0) {
+    DEFINES_CONTENT += '\n//Retain\n'
+    DEFINES_CONTENT += `#define OPLC_RETAIN_BLOB_SIZE ${retainBlobSize}\n`
   }
 
   return DEFINES_CONTENT
