@@ -218,6 +218,24 @@ export interface RawProjectFiles {
   error?: { title: string; description: string; status?: number }
 }
 
+/**
+ * The outcome of asking for the account's cloud projects.
+ *
+ * NOT just an array, and the distinction is the whole point: an empty list would
+ * collapse "you are not signed in", "you have no projects yet" and "we could not
+ * reach Edge" into one value, and the three call for completely different words on
+ * screen. Telling someone to sign in when they are already signed in and simply
+ * offline is the same class of bug `EdgeUserRead.unknown` exists to prevent.
+ */
+export type CloudProjectsResult =
+  | { status: 'ok'; projects: CloudProjectSummary[] }
+  /** The server answered, and there is no usable session. */
+  | { status: 'signed-out' }
+  /** The question could not be asked — offline, DNS, a dropped connection. */
+  | { status: 'unreachable' }
+  /** This build has no channel for cloud projects at all. */
+  | { status: 'unavailable' }
+
 /** A project on the user's Autonomy Edge account, as a list needs to show it. */
 export interface CloudProjectSummary {
   id: string
@@ -297,10 +315,11 @@ export interface ProjectPort {
    * Ordering is the server's (`updatedAt` descending). Sorting a truncated page here
    * would be wrong: the five newest of ten fetched rows are not the five newest overall.
    *
-   * Resolves an empty list for every "nothing to show", signed out included. Signing in
-   * is optional, so having no account is not an error.
+   * Resolves a DISCRIMINATED result rather than a list, so the caller can tell being
+   * signed out from having no projects from being offline. Signing in is optional, so
+   * none of those is an error — but they are not the same thing to say.
    */
-  listRecentCloudProjects?(limit: number): Promise<CloudProjectSummary[]>
+  listRecentCloudProjects?(limit: number): Promise<CloudProjectsResult>
 
   /**
    * Drop a project entry from the recent-projects list without

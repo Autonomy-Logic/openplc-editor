@@ -19,7 +19,7 @@
 
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
 import type {
-  CloudProjectSummary,
+  CloudProjectsResult,
   RawProjectFiles,
   WriteProjectFiles,
 } from '../../../middleware/shared/ports/project-port'
@@ -51,26 +51,41 @@ interface ApiProjectRow {
  * the API for it costs nothing while sorting a truncated page locally would be wrong —
  * the five newest of ten fetched rows are not the five newest overall.
  *
- * Resolves an empty list for every "nothing to show", including no session. Signing in
- * is optional, so an editor with no account is not an error state.
+ * Reports WHICH kind of nothing it found — no session, nothing to show, or a server it
+ * could not reach — because the start screen says something different for each.
  */
-export async function listRecentCloudProjects(limit: number): Promise<CloudProjectSummary[]> {
+export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
   const query = new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' })
-  const response = await edgeAuthedRequest(`/projects?${query.toString()}`)
 
-  if (!response || response.status < 200 || response.status >= 300) {
-    return []
+  let response: { status: number; body: string } | null
+
+  try {
+    response = await edgeAuthedRequest(`/projects?${query.toString()}`)
+  } catch {
+    // Never reached the server. Saying "signed out" here would tell someone who is
+    // signed in and merely offline to go and sign in again.
+    return { status: 'unreachable' }
+  }
+
+  // No token could be obtained, or the server refused one.
+  if (!response || response.status === 401 || response.status === 403) {
+    return { status: 'signed-out' }
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    // A 5xx says nothing about the session.
+    return { status: 'unreachable' }
   }
 
   const rows = parseJsonBody<Envelope<{ projects?: ApiProjectRow[] }>>(response.body)?.data?.projects
 
   if (!Array.isArray(rows)) {
-    return []
+    return { status: 'ok', projects: [] }
   }
 
   // Narrowed field by field rather than cast: this is a remote payload, and a row
   // missing an id would otherwise become a list entry that cannot be opened.
-  return rows.flatMap((row) => {
+  const projects = rows.flatMap((row) => {
     if (typeof row?.id !== 'string' || typeof row.name !== 'string' || typeof row.updatedAt !== 'string') {
       return []
     }
@@ -84,6 +99,8 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
       },
     ]
   })
+
+  return { status: 'ok', projects }
 }
 
 /**

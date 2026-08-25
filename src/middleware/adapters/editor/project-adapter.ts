@@ -12,7 +12,7 @@
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type {
-  CloudProjectSummary,
+  CloudProjectsResult,
   CreatePouParams,
   CreateProjectParams,
   ProjectPort,
@@ -354,13 +354,13 @@ export function createEditorProjectAdapter(): ProjectPort {
       return window.bridge.pathPicker()
     },
 
-    listRecentCloudProjects(limit: number): Promise<CloudProjectSummary[]> {
+    listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
       // Guarded, not assumed: the preload bundle and the renderer bundle are built
       // separately and can skew — a running app whose main process predates this
-      // feature has no such channel. An empty list is the honest answer there, and it
+      // feature has no such channel. `unavailable` is the honest answer there, and it
       // is what stops a missing channel taking the whole start screen down with it.
       if (typeof window.bridge.edgeProjectsListRecent !== 'function') {
-        return Promise.resolve([])
+        return Promise.resolve({ status: 'unavailable' })
       }
 
       return window.bridge.edgeProjectsListRecent(limit)

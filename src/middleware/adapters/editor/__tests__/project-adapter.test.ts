@@ -129,7 +129,7 @@ beforeEach(() => {
     }),
     pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
     exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
-    edgeProjectsListRecent: jest.fn().mockResolvedValue([]),
+    edgeProjectsListRecent: jest.fn().mockResolvedValue({ status: 'ok', projects: [] }),
     edgeProjectsRead: jest.fn().mockResolvedValue(mockRawProjectFiles),
     edgeProjectsSaveProject: jest.fn().mockResolvedValue({ success: true }),
     edgeProjectsSaveFile: jest.fn().mockResolvedValue({ success: true }),
@@ -788,18 +788,20 @@ describe('cloud projects', () => {
    * start screen down — local projects included. A cloud list nobody asked for must
    * never cost someone their local work.
    */
-  it('answers empty when the bridge predates this feature, instead of throwing', async () => {
+  it('reports the channel unavailable when the bridge predates this feature', async () => {
     const bridge = window.bridge as unknown as Record<string, unknown>
     delete bridge.edgeProjectsListRecent
 
-    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual([])
+    // Not `signed-out`: nobody asked about the session. The start screen hides the
+    // section entirely for this, rather than inviting a sign-in that cannot help.
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
   })
 
   it('lists the account projects through the bridge', async () => {
     const summary = { id: 'cmt7', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' }
-    ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([summary])
+    ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce({ status: 'ok', projects: [summary] })
 
-    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual([summary])
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'ok', projects: [summary] })
     expect(window.bridge.edgeProjectsListRecent).toHaveBeenCalledWith(5)
   })
 

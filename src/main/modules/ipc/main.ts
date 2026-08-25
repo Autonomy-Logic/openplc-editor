@@ -30,7 +30,7 @@ import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
-  CloudProjectSummary,
+  CloudProjectsResult,
   RawProjectFiles,
   WriteProjectFiles,
 } from '@root/middleware/shared/ports/project-port'
@@ -1053,7 +1053,7 @@ class MainProcessBridge implements MainIpcModule {
   // The cloud round trip. Reads and writes go through the same session the account
   // handlers use, so a revoked token is renewed once rather than per call site.
 
-  handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectSummary[]> => {
+  handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectsResult> => {
     // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
     // forwarded straight into the API's own bounds check as a 400.
     const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5

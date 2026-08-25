@@ -61,10 +61,13 @@ describe('listRecentCloudProjects', () => {
       }),
     )
 
-    await expect(listRecentCloudProjects(5)).resolves.toEqual([
-      { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' },
-      { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z' },
-    ])
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({
+      status: 'ok',
+      projects: [
+        { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' },
+        { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z' },
+      ],
+    })
   })
 
   it('drops rows it cannot open instead of listing them', async () => {
@@ -80,20 +83,49 @@ describe('listRecentCloudProjects', () => {
     )
 
     // A card with no id is a card that does nothing when clicked.
-    await expect(listRecentCloudProjects(5)).resolves.toEqual([
-      { id: 'p3', name: 'Fine', language: null, updatedAt: '2026-08-24T00:00:00.000Z' },
-    ])
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({
+      status: 'ok',
+      projects: [{ id: 'p3', name: 'Fine', language: null, updatedAt: '2026-08-24T00:00:00.000Z' }],
+    })
+  })
+
+  /**
+   * The three kinds of nothing, kept apart. Collapsing them into an empty list is what
+   * makes a start screen tell an offline user to sign in — sending them to fix a problem
+   * they do not have.
+   */
+  it('reports no session when there is no token to use', async () => {
+    request.mockResolvedValueOnce(null)
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'signed-out' })
+  })
+
+  it.each([401, 403])('reports no session when the server answers %i', async (status) => {
+    request.mockResolvedValueOnce({ status, body: '{}' })
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'signed-out' })
+  })
+
+  it('reports unreachable on a transport failure, NOT signed out', async () => {
+    request.mockRejectedValueOnce(new Error('ENOTFOUND'))
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'unreachable' })
+  })
+
+  it('reports unreachable on a 5xx, which says nothing about the session', async () => {
+    request.mockResolvedValueOnce({ status: 503, body: '' })
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'unreachable' })
   })
 
   it.each([
-    ['no session', null],
-    ['a non-2xx', { status: 500, body: '{}' }],
     ['a payload with no projects array', ok({})],
     ['an unparseable body', { status: 200, body: 'not json' }],
-  ])('resolves empty on %s', async (_label, response) => {
+  ])('reports an empty account for %s', async (_label, response) => {
+    // The server answered and the session is fine; there is simply nothing to list.
     request.mockResolvedValueOnce(response as never)
 
-    await expect(listRecentCloudProjects(5)).resolves.toEqual([])
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'ok', projects: [] })
   })
 })
 

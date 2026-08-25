@@ -7,7 +7,7 @@ import type {
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
-  CloudProjectSummary,
+  CloudProjectsResult,
   RawProjectFiles,
   WriteProjectFiles,
 } from '@root/middleware/shared/ports/project-port'
@@ -199,7 +199,7 @@ const rendererProcessBridge = {
   edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
   // ----- Edge projects -----
-  edgeProjectsListRecent: (limit: number): Promise<CloudProjectSummary[]> =>
+  edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
   edgeProjectsRead: (projectId: string): Promise<RawProjectFiles> =>
     ipcRenderer.invoke('edge-projects:read', projectId),
