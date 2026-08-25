@@ -1,5 +1,4 @@
 import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
@@ -12,6 +11,7 @@ import {
   rewireInOutReads,
 } from '../../../../utils/graphical/in-out-pin-rules'
 import { isLegalIdentifier } from '../../../../utils/keywords'
+import { newUuid } from '../../../../utils/new-uuid'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -228,7 +228,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: `BLOCK_${newUuid()}`,
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -554,7 +554,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
         const creationResult = createVariable({
           data: {
-            id: uuidv4(),
+            id: newUuid(),
             name: variableNameToSubmit,
             type: { definition: 'derived', value: blockType },
             class: 'local',
@@ -660,7 +660,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     const updatedNewNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
+      id: `BLOCK_${newUuid()}`,
       position: {
         x: node.position.x,
         y: node.position.y,
@@ -792,7 +792,6 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     // has to be told rather than left to notice a missing connection later.
     if (reads.rewired > 0 || reads.dropped > 0) {
       addLog({
-        id: crypto.randomUUID(),
         level: reads.dropped > 0 ? 'warning' : 'info',
         message:
           `${blockVariantName}: VAR_IN_OUT pins no longer have an output side. ` +

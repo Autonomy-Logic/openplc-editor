@@ -454,7 +454,6 @@ const WorkspaceScreen = () => {
       if (cancelled) return
       for (const packageId of removed) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: `Removed untrusted VPP package "${packageId}": its signature is missing or invalid.`,
         })

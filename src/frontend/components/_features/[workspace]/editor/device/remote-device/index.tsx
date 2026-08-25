@@ -600,7 +600,6 @@ const RemoteDeviceEditor = () => {
         setSerialPortOptions(options)
       } else {
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: `Failed to fetch serial ports: ${result.error || 'Unknown error'}`,
         })
@@ -608,7 +607,6 @@ const RemoteDeviceEditor = () => {
       }
     } catch (error) {
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'warning',
         message: `Error fetching serial ports: ${getErrorMessage(error)}`,
       })
