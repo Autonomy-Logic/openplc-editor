@@ -156,23 +156,25 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
            `blue-500` for the tint and not `brand`: the brand token is a `var()` holding a
            hex, and Tailwind 3 cannot reliably apply an opacity modifier to that. Same
            substitution the account menu makes, same colour. */
-        <div className='flex max-w-xl flex-col items-start gap-4 rounded-xl border border-blue-500/25 bg-blue-500/5 px-6 py-5'>
-          <div className='flex items-start gap-3'>
-            <span className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-brand'>
-              <CloudUpload className='size-5' />
-            </span>
-            <div className='flex flex-col gap-1'>
-              <h3 className='font-caption text-base font-semibold text-neutral-1000 dark:text-white'>
-                Bring your cloud projects here
-              </h3>
-              <p className='text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
-                Sign in with your Autonomy Edge account to access Edge features — open your cloud projects in this
-                editor and save straight back to them.
-              </p>
-            </div>
+        <div className='flex w-full flex-col items-center gap-4 rounded-xl border border-blue-500/25 bg-blue-500/5 px-6 py-8 text-center'>
+          <span className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-brand'>
+            <CloudUpload className='size-5' />
+          </span>
+          <div className='flex flex-col items-center gap-1'>
+            <h3 className='font-caption text-base font-semibold text-neutral-1000 dark:text-white'>
+              Bring your cloud projects here
+            </h3>
+            {/* The CARD spans the row; the SENTENCE does not. It stretches to the same
+                right edge as the folders below so the space reads as one block, but a
+                line of body text a thousand pixels wide is genuinely hard to read, so
+                the paragraph keeps a measure and centres inside it. */}
+            <p className='max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
+              Sign in with your Autonomy Edge account to access Edge features — open your cloud projects in this editor
+              and save straight back to them.
+            </p>
           </div>
 
-          <div className='flex items-center gap-4 pl-12'>
+          <div className='flex items-center gap-4'>
             <button
               type='button'
               onClick={() => setSignInOpen(true)}
