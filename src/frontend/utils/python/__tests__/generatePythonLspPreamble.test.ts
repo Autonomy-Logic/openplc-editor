@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Autonomy / OpenPLC Project
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generatePythonLspPreamble } from '../generatePythonLspPreamble'
 
 const makeScalar = (
@@ -209,19 +209,155 @@ describe('generatePythonLspPreamble', () => {
   })
 
   describe('user-data-type handling', () => {
-    it('skips user-data-type variables (structs / enums)', () => {
-      // `injectPythonRuntime` doesn't pack these into shared memory
-      // either; LSP stays in lockstep by not declaring them.
-      const structVar: PLCVariable = {
-        name: 'myStruct',
+    const structVar: PLCVariable = {
+      name: 'm',
+      class: 'input',
+      type: { definition: 'user-data-type', value: 'Motor' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    const MOTOR: PLCDataType = {
+      name: 'Motor',
+      derivation: 'structure',
+      variable: [
+        { name: 'speed', type: { definition: 'base-type', value: 'int' } },
+        { name: 'label', type: { definition: 'base-type', value: 'string' } },
+      ],
+    }
+
+    const MODE: PLCDataType = {
+      name: 'Mode',
+      derivation: 'enumerated',
+      values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+    }
+
+    it('declares a structure as a class, so the editor resolves m.speed', () => {
+      const result = generatePythonLspPreamble([structVar], [MOTOR])
+
+      expect(result.text).toContain('class Motor:')
+      expect(result.text).toContain('    speed: int')
+      expect(result.text).toContain('    label: str')
+      expect(result.text).toContain('m: Motor = None')
+    })
+
+    it('declares an enumeration as an IntEnum with its members', () => {
+      const enumVar: PLCVariable = { ...structVar, name: 'md', type: { definition: 'user-data-type', value: 'Mode' } }
+      const result = generatePythonLspPreamble([enumVar], [MODE])
+
+      expect(result.text).toContain('from enum import IntEnum')
+      expect(result.text).toContain('class Mode(IntEnum):')
+      expect(result.text).toContain('    RUNNING = 1')
+    })
+
+    it('declares a nested structure before the one referencing it', () => {
+      const rig: PLCDataType = {
+        name: 'Rig',
+        derivation: 'structure',
+        variable: [{ name: 'drive', type: { definition: 'user-data-type', value: 'Motor' } }],
+      }
+      const rigVar: PLCVariable = { ...structVar, name: 'r', type: { definition: 'user-data-type', value: 'Rig' } }
+      const result = generatePythonLspPreamble([rigVar], [rig, MOTOR])
+
+      expect(result.text.indexOf('class Motor:')).toBeLessThan(result.text.indexOf('class Rig:'))
+      expect(result.text).toContain('    drive: Motor')
+    })
+
+    it('declares each type once however many variables use it', () => {
+      const b: PLCVariable = { ...structVar, name: 'b' }
+      const result = generatePythonLspPreamble([structVar, b], [MOTOR])
+
+      expect(result.text.match(/class Motor:/g)).toHaveLength(1)
+    })
+
+    it('still declares the variable when the project declares no data types', () => {
+      // The compile path refuses such a POU, but the editor should not silently
+      // drop a name the user can see in the Variables Table.
+      const result = generatePythonLspPreamble([structVar])
+
+      expect(result.text).toContain('m: Motor = None')
+      expect(result.text).not.toContain('class Motor:')
+    })
+
+    it('keeps the line map pointing past the type stubs', () => {
+      // The diagnostic line mapping depends on the declaration's absolute line,
+      // so stubs inserted above it have to shift it.
+      const withStubs = generatePythonLspPreamble([structVar], [MOTOR])
+      const withoutStubs = generatePythonLspPreamble([structVar])
+      const lineOf = (p: typeof withStubs) => [...p.variableNameByPreambleLine.entries()][0][0]
+
+      expect(lineOf(withStubs)).toBeGreaterThan(lineOf(withoutStubs))
+    })
+
+    it('annotates a member whose type has no Python equivalent as Any', () => {
+      // A function block instance inside a structure is refused at compile time,
+      // but the stub still has to name the attribute or Pyright reports every
+      // use of it as an error on code the user has not finished writing.
+      const rig: PLCDataType = {
+        name: 'Rig',
+        derivation: 'structure',
+        variable: [{ name: 'timer', type: { definition: 'base-type', value: 'float32' } }],
+      }
+      const rigVar: PLCVariable = { ...structVar, name: 'r', type: { definition: 'user-data-type', value: 'Rig' } }
+      const result = generatePythonLspPreamble([rigVar], [rig])
+
+      expect(result.text).toContain('    timer: Any')
+    })
+
+    it('declares neither the variable nor a stub for an array of structures', () => {
+      // It has no Python annotation and is refused at compile time, so the
+      // editor stays in lockstep with what the build will accept.
+      const bank: PLCVariable = {
+        name: 'bank',
         class: 'input',
-        type: { definition: 'user-data-type', value: 'MyStruct' },
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..1] OF Motor',
+          data: {
+            baseType: { definition: 'user-data-type', value: 'Motor' },
+            dimensions: [{ dimension: '0..1' }],
+          },
+        },
         location: '',
         documentation: '',
         debug: false,
       }
-      const result = generatePythonLspPreamble([structVar])
+      const result = generatePythonLspPreamble([bank], [MOTOR])
+
       expect(result.text).toBe('')
+    })
+
+    it('stops rather than recursing when a structure contains itself', () => {
+      const loop: PLCDataType = {
+        name: 'Loop',
+        derivation: 'structure',
+        variable: [{ name: 'inner', type: { definition: 'user-data-type', value: 'Loop' } }],
+      }
+      const loopVar: PLCVariable = { ...structVar, name: 'l', type: { definition: 'user-data-type', value: 'Loop' } }
+
+      expect(generatePythonLspPreamble([loopVar], [loop]).text).toContain('class Loop:')
+    })
+
+    it('declares a scalar alongside a structure without stubbing the scalar', () => {
+      const result = generatePythonLspPreamble([makeScalar('x', 'input', 'INT'), structVar], [MOTOR])
+
+      expect(result.text).toContain('x: int = 0')
+      expect(result.text).toContain('class Motor:')
+      expect(result.text).not.toContain('class int')
+    })
+
+    it('ignores a named ARRAY type, which has no class to declare', () => {
+      const named: PLCDataType = {
+        name: 'Bank',
+        derivation: 'array',
+        baseType: { definition: 'base-type', value: 'INT' },
+        dimensions: [{ dimension: '0..3' }],
+      }
+      const bankVar: PLCVariable = { ...structVar, name: 'b', type: { definition: 'user-data-type', value: 'Bank' } }
+      const result = generatePythonLspPreamble([bankVar], [named])
+
+      expect(result.text).not.toContain('class Bank')
     })
   })
 

@@ -152,6 +152,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       meta: { path: projectPath },
       data: {
         pous,
+        dataTypes,
         configurations: {
           resource: { globalVariables },
         },
@@ -342,8 +343,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   useEffect(() => {
     if (!capabilities.hasPythonLSP) return
     if (language !== 'python') return
-    updatePythonLspContext(name, pouVariables)
-  }, [capabilities.hasPythonLSP, language, name, pouVariables])
+    updatePythonLspContext(name, pouVariables, dataTypes)
+  }, [capabilities.hasPythonLSP, language, name, pouVariables, dataTypes])
 
   useEffect(() => {
     return () => {
@@ -949,6 +950,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           setupPythonLSPForEditor(editorInstance, {
             pouName: name,
             variables: pou.interface?.variables ?? [],
+            // The structures and enumerations the interface can name, so Pyright
+            // resolves `m.speed` to the same shape the runtime will build.
+            dataTypes,
           }),
         )
         .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
