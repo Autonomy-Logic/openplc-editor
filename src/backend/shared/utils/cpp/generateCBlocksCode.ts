@@ -132,9 +132,16 @@ const generateUndef = (variable: PLCVariable): string => {
  * Bring the project's own type names into the C block's scope.
  *
  * The generated declarations live in `namespace strucpp`, so without this a
- * user has to write `strucpp::Motor` / `(strucpp::Mode)` in their own block —
+ * user has to write `strucpp::MOTOR` / `(strucpp::MODE)` in their own block —
  * the namespace is an implementation detail of the toolchain leaking into code
  * that is supposed to look like ordinary C++ against the Variables Table.
+ *
+ * Upper-case throughout, and not a typo: strucpp's lexer upper-cases the whole
+ * ST source except string literals and `{external}` bodies, so a data type the
+ * user declared as `Motor` is `struct MOTOR` by the time `type-codegen` names
+ * it. The aliases below therefore match what the compiler actually emits; an
+ * earlier revision of this comment said `strucpp::Motor`, which would not
+ * resolve.
  *
  * A blanket `using namespace strucpp;` is not an option: the baseline defines
  * raw `IEC_BOOL` / `IEC_INT` / … typedefs at file scope for the user's local
