@@ -11,6 +11,11 @@
  *   - Port uses `configurations` (plural), IPC uses `configuration` (singular)
  */
 
+import {
+  findLibrariesMissingNativeSources,
+  injectLibraryBlocks,
+} from '../../../backend/shared/library/inject-library-blocks'
+import { collectNativePous } from '../../../backend/shared/library/native-pou-list'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
   CompileLibraryArgs,
@@ -27,7 +32,6 @@ import type {
   DebugCompileResult,
   PLCPou,
   PLCProjectData,
-  PLCVariable,
   Result,
 } from '../../shared/ports/types'
 import { compileProgramFlow } from './compile-program-flow'
@@ -112,63 +116,6 @@ function decodeMessage(raw: unknown): string {
   return String(raw)
 }
 
-/**
- * Graft any library-supplied C/C++ function blocks into the
- * project's POU list before the standard preprocessor runs.  Each
- * library archive's `cppBlocks` entry becomes a synthesized
- * `PLCPou` with `body.language: 'cpp'` — from there it flows
- * through `preprocessPous` exactly like a user-defined C++ POU
- * (ST stub generation, `originalCppPous` sidecar, downstream
- * `c_blocks.h` / `c_blocks_code.cpp` generation, link-time
- * resolution).  Strucpp never sees the C++ — it sees the
- * generated ST stub that calls into `c_blocks.h` externs.
- *
- * **Renaming**: each block's name is prefixed with the library's
- * manifest name (`${library_name}__${block_name}`) so two
- * different libraries can ship a block called `Foo` without
- * collision, and so a consumer's user-defined POU can also be
- * called `Foo` without colliding with a library's block.  The
- * editor's library-tree picker surfaces the prefixed name, so the
- * user authors their ST against that name directly — no parse +
- * rewrite of the user's source.
- *
- * Symbol-level renames inside the synthesized POU (the struct
- * `<NAME>_VARS`, the C functions `<name>_setup` /
- * `<name>_loop`) happen automatically because
- * `generateCppSTCode` / `generateCBlocksHeader` /
- * `generateCBlocksCode` all derive their names from
- * `pou.name`.
- */
-function injectLibraryCppBlocks(projectData: PLCProjectData, archives: StlibArchiveDTO[]): PLCProjectData {
-  if (!projectData.libraries || projectData.libraries.length === 0) return projectData
-
-  const enabledNames = new Set(projectData.libraries.map((ref) => ref.name))
-  const synthesized: PLCPou[] = []
-
-  for (const archive of archives) {
-    if (!archive.cppBlocks || archive.cppBlocks.length === 0) continue
-    if (!enabledNames.has(archive.manifest.name)) continue
-    for (const block of archive.cppBlocks) {
-      // `variables` rides through the StlibArchiveDTO as `unknown[]`
-      // by design — the manifest layer doesn't know our PLCVariable
-      // shape.  The on-disk archives are produced by THIS editor's
-      // own save pipeline using the same PLCVariable type, so the
-      // narrowing here matches reality at runtime.
-      synthesized.push({
-        name: `${archive.manifest.name}__${block.name}`,
-        pouType: 'function-block',
-        interface: { variables: block.variables as PLCVariable[] },
-        body: { language: 'cpp', value: block.code },
-        documentation: block.documentation ?? '',
-      })
-    }
-  }
-
-  if (synthesized.length === 0) return projectData
-
-  return { ...projectData, pous: [...projectData.pous, ...synthesized] }
-}
-
 /** Best-effort stage inference from compiler log messages. */
 function inferStage(message: string): CompileProgressEvent['stage'] {
   const lower = message.toLowerCase()
@@ -209,9 +156,20 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: DebugCompileArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<DebugCompileResult> {
-      // Same library-C++ injection as the program build path.
+      // Same graft as the program build path — a debug compile has to see
+      // the identical POU set or the debug map won't match the firmware.
       const archives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
-      const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
+
+      const missingSources = findLibrariesMissingNativeSources(args.projectData, archives)
+      if (missingSources.length > 0) {
+        const error =
+          `These libraries ship C/C++ or Python blocks without their source, so they cannot be built: ${missingSources.join(', ')}. ` +
+          'Reinstall them from a build that includes sources.'
+        onProgress({ stage: 'st', message: error, level: 'error' })
+        return { success: false, error }
+      }
+
+      const dataWithLibCpp = injectLibraryBlocks(args.projectData, archives)
 
       // Preprocess for debug compilation too
       const { projectData: processedData, validationFailed } = preprocessPous(
@@ -298,6 +256,12 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // The renderer-side `onProgress` log channel only sees the
       // build pass's preprocess output to avoid duplicate "Found
       // Python POU…" lines.
+      // Taken BEFORE preprocessing: that step lowers every native body to
+      // bridge ST and rewrites the language tag with it, leaving nothing to
+      // identify a native POU by.  Sent over IPC because the main process
+      // only ever sees the already-lowered data.
+      const nativePous = collectNativePous(args.projectData)
+
       const buildResult = preprocessPous(args.projectData, false, (level, message) => {
         onProgress({ stage: 'st', message, level })
       })
@@ -331,7 +295,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcDataForBuild as never, ipcDataForVerify as never, args.cleanBuild ?? false],
+          [
+            args.projectPath,
+            ipcDataForBuild as never,
+            ipcDataForVerify as never,
+            args.cleanBuild ?? false,
+            nativePous as never,
+          ],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult
@@ -369,4 +339,4 @@ export function createEditorCompilerAdapter(): CompilerPort {
   }
 }
 
-export { decodeMessage, inferStage, injectLibraryCppBlocks, portPouToIpcPou, toIpcProjectData }
+export { decodeMessage, inferStage, portPouToIpcPou, toIpcProjectData }
