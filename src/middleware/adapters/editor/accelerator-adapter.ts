@@ -3,11 +3,14 @@
  *
  * Each accelerator fires an IPC event from the main process menu when the user
  * presses a keyboard shortcut. This adapter wraps `window.bridge.*` listener
- * registrations and returns an Unsubscribe function that deactivates the callback.
+ * registrations and returns the bridge's own Unsubscribe.
  *
- * Note: Electron's `ipcRenderer.on` only supports `removeAllListeners(channel)`,
- * not per-listener removal. We use an active flag so that unsubscribing prevents
- * the callback from firing without removing all listeners on the channel.
+ * Note: every `window.bridge.*Accelerator` registration returns a real
+ * per-listener disposer (`ipcRenderer.removeListener` with the exact wrapped
+ * function — see the `subscribe` helper in `src/main/modules/ipc/renderer.ts`).
+ * Returning it verbatim is what keeps the IPC listener count flat: the
+ * subscribing effects in `accelerator-handler.tsx` re-run on every dependency
+ * change, so a no-op unsubscribe would leak one listener per re-run.
  *
  * IPC channels:
  *   project:create-accelerator
@@ -32,153 +35,63 @@ import type { Unsubscribe } from '../../shared/ports/types'
 export function createEditorAcceleratorAdapter(): AcceleratorPort {
   return {
     onCreateProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.createProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.createProjectAccelerator(() => callback())
     },
 
     onOpenProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleOpenProjectRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.handleOpenProjectRequest(() => callback())
     },
 
     onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe {
-      let active = true
-      window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => {
-        if (active) callback(response)
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => callback(response))
     },
 
     onSaveProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.saveProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.saveProjectAccelerator(() => callback())
     },
 
     onSaveFile(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.saveFileAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.saveFileAccelerator(() => callback())
     },
 
     onCloseProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.closeProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.closeProjectAccelerator(() => callback())
     },
 
     onExportProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.exportProjectRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.exportProjectRequest(() => callback())
     },
 
     onCloseTab(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.closeTabAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.closeTabAccelerator(() => callback())
     },
 
     onDeleteFile(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.deleteFileAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.deleteFileAccelerator(() => callback())
     },
 
     onFindInProject(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.findInProjectAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.findInProjectAccelerator(() => callback())
     },
 
     onUndo(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleUndoRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.handleUndoRequest(() => callback())
     },
 
     onRedo(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.handleRedoRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.handleRedoRequest(() => callback())
     },
 
     onSwitchPerspective(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.switchPerspective(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.switchPerspective(() => callback())
     },
 
     onAbout(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.aboutModalAccelerator(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.aboutModalAccelerator(() => callback())
     },
 
     onQuitApp(callback: () => void): Unsubscribe {
-      let active = true
-      window.bridge.quitAppRequest(() => {
-        if (active) callback()
-      })
-      return () => {
-        active = false
-      }
+      return window.bridge.quitAppRequest(() => callback())
     },
   }
 }

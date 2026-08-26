@@ -5,8 +5,35 @@ let adapter: AcceleratorPort
 
 /**
  * Each bridge method captures its callback so tests can invoke it manually.
+ * A captured handler going back to `null` stands in for the real bridge
+ * dropping the IPC listener — the adapter must return the bridge's disposer
+ * verbatim for that to happen.
  */
 const capturedHandlers: Record<string, ((...args: unknown[]) => void) | null> = {}
+
+/** Invokes a captured bridge listener, failing loudly if none was registered.
+ *  CLAUDE.md forbids non-null assertions, and a bare `?.()` would let a missing
+ *  registration pass the test silently. */
+const fire = (key: string, ...args: unknown[]): void => {
+  const handler = capturedHandlers[key]
+  if (!handler) throw new Error(`no listener captured for "${key}"`)
+  handler(...args)
+}
+
+/** Emits on a channel whose listener may already be gone — used after an
+ *  unsubscribe to show the callback stays silent. */
+const fireIfRegistered = (key: string, ...args: unknown[]): void => {
+  capturedHandlers[key]?.(...args)
+}
+
+/** Mirrors the bridge contract: register the listener, return its disposer. */
+const register = (key: string) =>
+  jest.fn().mockImplementation((cb: (...args: unknown[]) => void) => {
+    capturedHandlers[key] = cb
+    return () => {
+      capturedHandlers[key] = null
+    }
+  })
 
 beforeEach(() => {
   for (const key of Object.keys(capturedHandlers)) {
@@ -14,51 +41,21 @@ beforeEach(() => {
   }
 
   window.bridge = {
-    createProjectAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.createProject = cb
-    }),
-    handleOpenProjectRequest: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.openProject = cb
-    }),
-    openRecentAccelerator: jest.fn().mockImplementation((cb: (...args: unknown[]) => void) => {
-      capturedHandlers.openRecent = cb
-    }),
-    saveProjectAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.saveProject = cb
-    }),
-    saveFileAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.saveFile = cb
-    }),
-    closeProjectAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.closeProject = cb
-    }),
-    exportProjectRequest: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.exportProject = cb
-    }),
-    closeTabAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.closeTab = cb
-    }),
-    deleteFileAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.deleteFile = cb
-    }),
-    findInProjectAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.findInProject = cb
-    }),
-    handleUndoRequest: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.undo = cb
-    }),
-    handleRedoRequest: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.redo = cb
-    }),
-    switchPerspective: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.switchPerspective = cb
-    }),
-    aboutModalAccelerator: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.about = cb
-    }),
-    quitAppRequest: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.quitApp = cb
-    }),
+    createProjectAccelerator: register('createProject'),
+    handleOpenProjectRequest: register('openProject'),
+    openRecentAccelerator: register('openRecent'),
+    saveProjectAccelerator: register('saveProject'),
+    saveFileAccelerator: register('saveFile'),
+    closeProjectAccelerator: register('closeProject'),
+    exportProjectRequest: register('exportProject'),
+    closeTabAccelerator: register('closeTab'),
+    deleteFileAccelerator: register('deleteFile'),
+    findInProjectAccelerator: register('findInProject'),
+    handleUndoRequest: register('undo'),
+    handleRedoRequest: register('redo'),
+    switchPerspective: register('switchPerspective'),
+    aboutModalAccelerator: register('about'),
+    quitAppRequest: register('quitApp'),
   } as unknown as typeof window.bridge
 
   adapter = createEditorAcceleratorAdapter()
@@ -73,7 +70,7 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
 
       expect((window.bridge as unknown as Record<string, jest.Mock>)[bridgeMethodName]).toHaveBeenCalledTimes(1)
 
-      capturedHandlers[handlerKey]!()
+      fire(handlerKey)
       expect(cb).toHaveBeenCalledTimes(1)
     })
 
@@ -82,9 +79,20 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
       const unsub = (adapter[methodName] as (cb: () => void) => () => void)(cb)
 
       unsub()
-      capturedHandlers[handlerKey]!()
+      fireIfRegistered(handlerKey)
 
       expect(cb).not.toHaveBeenCalled()
+    })
+
+    it('removes the underlying bridge listener on unsubscribe', () => {
+      const unsub = (adapter[methodName] as (cb: () => void) => () => void)(jest.fn())
+
+      expect(capturedHandlers[handlerKey]).toBeInstanceOf(Function)
+      unsub()
+
+      // Not merely flagged inactive — the listener itself is gone, so repeated
+      // mount/unmount cycles cannot pile up dead IPC listeners.
+      expect(capturedHandlers[handlerKey]).toBeNull()
     })
   })
 }
@@ -113,7 +121,7 @@ describe('onOpenRecent', () => {
 
     const mockEvent = {}
     const mockResponse = { projectPath: '/some/path' }
-    capturedHandlers.openRecent!(mockEvent, mockResponse)
+    fire('openRecent', mockEvent, mockResponse)
 
     expect(cb).toHaveBeenCalledWith(mockResponse)
   })
@@ -123,8 +131,17 @@ describe('onOpenRecent', () => {
     const unsub = adapter.onOpenRecent(cb)
 
     unsub()
-    capturedHandlers.openRecent!({}, { projectPath: '/x' })
+    fireIfRegistered('openRecent', {}, { projectPath: '/x' })
 
     expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('removes the underlying bridge listener on unsubscribe', () => {
+    const unsub = adapter.onOpenRecent(jest.fn())
+
+    expect(capturedHandlers.openRecent).toBeInstanceOf(Function)
+    unsub()
+
+    expect(capturedHandlers.openRecent).toBeNull()
   })
 })
