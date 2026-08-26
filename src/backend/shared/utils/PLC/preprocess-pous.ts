@@ -143,10 +143,10 @@ function preprocessPous(
       }
     }
     if (unsupported.length > 0) {
-      const message =
-        `Python function blocks cannot exchange these variables: ${unsupported.join('; ')}. ` +
-        'Supported types are BOOL, the integer and bit-string types, REAL/LREAL, TIME/DATE/TOD/DT, ' +
-        'STRING, WSTRING, arrays of those, and structures and enumerations built from them.'
+      // Each refusal explains itself — an unsupported type names the supported
+      // ones, a function block instance says why it cannot be held at all. A
+      // single trailing list would be wrong for half of them.
+      const message = `Python function blocks cannot exchange these variables: ${unsupported.join('; ')}.`
       log('error', message)
       return {
         projectData: processedProjectData as ProjectDataWithCpp,

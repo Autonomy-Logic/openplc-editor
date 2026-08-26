@@ -169,14 +169,18 @@ const walk = (
     return { refusal: { path, reason: 'a named ARRAY type cannot cross into Python yet' } }
   }
 
-  if (typeDefinition === 'user-data-type') {
-    // Not in the project's data types: a function block instance. Python runs in
-    // its own process and cannot call one — the block would have to reach back
-    // into the scan it is not part of.
+  // A function block instance. `derived` is what the variables parser marks one
+  // as, having resolved the name against the project's POUs and libraries;
+  // `user-data-type` reaches here only when the name matched no declared data
+  // type either, which is the same situation from this side. Both are refused
+  // with the reason, because the reason is not "unsupported type" — Python runs
+  // in its own process and cannot call an instance, so holding one would give
+  // the user pins that never advance.
+  if (typeDefinition === 'derived' || typeDefinition === 'user-data-type') {
     return {
       refusal: {
         path,
-        reason: `"${typeValue}" is a function block instance, which a Python block cannot hold — it runs in its own process and cannot call into the scan`,
+        reason: `"${typeValue}" is a function block instance. A Python block cannot hold one — it runs in its own process, so it cannot call the instance, and an uncalled instance never updates its outputs. Use EN/ENO on the block itself for execution control, or call the instance from an ST block and pass its outputs in as inputs`,
       },
     }
   }
@@ -188,7 +192,15 @@ const walk = (
     documentation: '',
   })
   if (!descriptor) {
-    return { refusal: { path, reason: `${typeValue.toUpperCase()} is not a type Python can exchange` } }
+    return {
+      refusal: {
+        path,
+        reason:
+          `${typeValue.toUpperCase()} is not a type a Python block can exchange. Supported are BOOL, ` +
+          'the integer and bit-string types, REAL/LREAL, TIME/DATE/TOD/DT, STRING, WSTRING, arrays of ' +
+          'those, and structures and enumerations built from them',
+      },
+    }
   }
 
   return {

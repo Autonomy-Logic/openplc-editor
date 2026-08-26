@@ -150,7 +150,10 @@ const generateUserTypeAliases = (cppPous: CppPouData[], userTypeNames: Iterable<
   const referenced = new Set<string>(Array.from(userTypeNames, (name) => name.toUpperCase()))
   for (const pou of cppPous) {
     for (const variable of pou.variables) {
-      if (variable.type.definition === 'user-data-type') {
+      // `derived` is a function block instance, `user-data-type` a structure or
+      // enumeration. A block may name either — casting to an enumeration, or
+      // declaring a local of an FB class — so both belong in scope.
+      if (variable.type.definition === 'user-data-type' || variable.type.definition === 'derived') {
         referenced.add(variable.type.value.toUpperCase())
       }
       if (variable.type.definition === 'array' && variable.type.data?.baseType.definition === 'user-data-type') {

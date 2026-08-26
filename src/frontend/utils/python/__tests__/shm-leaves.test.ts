@@ -193,7 +193,7 @@ describe('describeShmLeaves', () => {
       debug: false,
     }
 
-    expect(refusalOf(describeShmLeaves(bare))?.reason).toContain('not a type Python can exchange')
+    expect(refusalOf(describeShmLeaves(bare))?.reason).toContain('not a type a Python block can exchange')
   })
 
   describe('refusals', () => {
@@ -223,7 +223,12 @@ describe('describeShmLeaves', () => {
     })
 
     it('refuses an unsupported elementary type', () => {
-      expect(refusalOf(describeShmLeaves(scalar('x', 'float32')))?.reason).toContain('not a type Python can exchange')
+      const reason = refusalOf(describeShmLeaves(scalar('x', 'float32')))?.reason
+      // The reason lists what IS supported, so the message stands on its own —
+      // an FB-instance refusal needs a different explanation entirely, and a
+      // single trailing list would be wrong for one of them.
+      expect(reason).toContain('FLOAT32 is not a type a Python block can exchange')
+      expect(reason).toContain('STRING, WSTRING')
     })
 
     it('names the member that cannot cross, not the variable containing it', () => {
