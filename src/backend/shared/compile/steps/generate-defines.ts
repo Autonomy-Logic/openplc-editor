@@ -83,13 +83,31 @@ export interface GenerateDefinesInput {
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
+  /** Whether this target's board package declares `isLicensable`
+   *  (`TargetCapabilities.isLicensable`).  Governs one define, and the
+   *  polarity is deliberately inverted: a licensable board gets nothing,
+   *  and EVERY OTHER board gets `OPENPLC_NO_UNIQUE_ID`.
+   *
+   *  A hardware unique id exists for exactly one purpose — binding a paid
+   *  VPP licence to a board — so a free target has no use for one, and
+   *  `ArduinoUniqueID` (which `#error`s on any core it doesn't cover, mbed
+   *  included) should never enter the build for one.  Absent is read as
+   *  `false`: a package that says nothing about licensing is a free
+   *  package, and the safe default is the one that compiles everywhere.
+   *
+   *  `modbus_debug.cpp` reads the flag; with it set, `FC 0x48` answers
+   *  `id_len = 0`, which `device-probe` and the licence flow already treat
+   *  as "this board has no unique id". */
+  isLicensable?: boolean
 }
 
 /**
  * Build the contents of `defines.h`.
  *
  * Output sections, in order:
- *   1. `// Board defines` — only when `boardEntry.define` is present.
+ *   1. `// Board defines` — `boardEntry.define` plus
+ *      `OPENPLC_NO_UNIQUE_ID` on every non-licensable target; omitted
+ *      entirely only when both sources are empty.
  *   2. `#define PROGRAM_MD5 "<md5>"` — always.
  *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
  *      over emulated USART0 so avr8js's serial bridge can drive
@@ -112,22 +130,37 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     boardRuntime,
     vppModbusState,
     defaultSerial,
+    isLicensable,
   } = input
 
   let DEFINES_CONTENT = ''
 
-  // 1. Board defines from hals.json.  Single-string and array forms
-  //    both supported; absent `define` field means no Board defines
-  //    section header at all (the next section starts directly).
+  // 1. Board defines.  Two sources, both landing under the one
+  //    `// Board defines` header:
+  //      - `hals.json`'s per-board `define` field (single-string and
+  //        array forms both supported, emitted verbatim);
+  //      - `OPENPLC_NO_UNIQUE_ID`, emitted for every target that is NOT
+  //        licensable — see the `isLicensable` field doc for why the
+  //        default is the flag rather than its absence.
+  //    An empty list means no header at all (the next section starts
+  //    directly), which is the pre-licensing behaviour for a board with
+  //    no `define` field.
+  const boardDefines: string[] = []
   if (boardEntry && boardEntry.define) {
-    DEFINES_CONTENT = '// Board defines\n'
     if (Array.isArray(boardEntry.define)) {
-      boardEntry.define.forEach((define) => {
-        DEFINES_CONTENT += `#define ${define}\n`
-      })
+      boardDefines.push(...boardEntry.define)
     } else if (typeof boardEntry.define === 'string') {
-      DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+      boardDefines.push(boardEntry.define)
     }
+  }
+  if (isLicensable !== true) {
+    boardDefines.push('OPENPLC_NO_UNIQUE_ID')
+  }
+  if (boardDefines.length > 0) {
+    DEFINES_CONTENT = '// Board defines\n'
+    boardDefines.forEach((define) => {
+      DEFINES_CONTENT += `#define ${define}\n`
+    })
   }
 
   // 2. Trailing blank-line pair after the board-defines section
