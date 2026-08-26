@@ -92,12 +92,22 @@ function formatDtValue(totalNs: bigint): string {
 }
 
 /**
- * Format a strucpp DATE (int64 nanoseconds since the Unix epoch, but
- * semantically date-only) as `D#YYYY-MM-DD`.
+ * Format a strucpp DATE as `D#YYYY-MM-DD`.
+ *
+ * DATE is a count of **days** since the Unix epoch, not nanoseconds. It is the
+ * one temporal type that is: TIME is a nanosecond duration, TOD is nanoseconds
+ * since midnight and DT is nanoseconds since the epoch, but STruC++ lowers a
+ * DATE literal through a helper it named `parseDateLiteralToDays`, and
+ * `D#2026-08-26` compiles to `20691LL`.
+ *
+ * This used to divide by 1_000_000 as though the payload were nanoseconds, so
+ * every DATE in the debugger read `D#1970-01-01` — 20691 nanoseconds rounds to
+ * zero milliseconds. The value on the device was always correct; only the
+ * display was wrong.
  */
-function formatDateValue(totalNs: bigint): string {
-  const ms = Number(totalNs / 1_000_000n)
-  const d = new Date(ms)
+function formatDateValue(totalDays: bigint): string {
+  const MS_PER_DAY = 86_400_000n
+  const d = new Date(Number(totalDays * MS_PER_DAY))
   if (Number.isNaN(d.getTime())) return 'ERR'
   return `D#${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }
