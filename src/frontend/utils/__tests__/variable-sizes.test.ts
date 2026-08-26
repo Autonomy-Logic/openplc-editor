@@ -431,17 +431,55 @@ describe('parseVariableValue', () => {
     expect(result.value).toBe('1h1m')
   })
 
-  // DATE and TOD share the int64 nanoseconds wire format with TIME but
-  // represent absolute timestamps (epoch / midnight reference). The
-  // formatters render them as IEC literals matching the watch-panel
-  // convention TIME established (`T#3s800ms`).
+  // TOD and DT are nanoseconds like TIME. DATE is the exception: it is a count
+  // of DAYS since the epoch, because STruC++ lowers a DATE literal through
+  // `parseDateLiteralToDays` — `D#2026-08-26` compiles to `20691LL`. This test
+  // previously wrote a nanosecond count and expected it to render as a date,
+  // which is what let the formatter divide by 1_000_000 and render every DATE
+  // in the debugger as `D#1970-01-01`.
 
-  it('parses DATE as an IEC date literal in UTC, dropping time-of-day', () => {
-    // 1970-01-02 00:00:00 UTC = 86_400_000_000_000 ns since epoch.
+  it('parses DATE as a count of days since the epoch', () => {
     const buf = new Uint8Array(8)
-    writeTimeNs(buf, 86_400_000_000_000n)
+    writeTimeNs(buf, 1n)
     const result = parseVariableValue(buf, 0, makeBaseVar('d', 'DATE'))
     expect(result).toEqual({ value: 'D#1970-01-02', bytesRead: 8 })
+  })
+
+  it('renders the date STruC++ actually compiles a literal to', () => {
+    // The value observed on hardware for `D#2026-08-26`.
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 20691n)
+    expect(parseVariableValue(buf, 0, makeBaseVar('d', 'DATE')).value).toBe('D#2026-08-26')
+  })
+
+  it('renders day zero as the epoch itself', () => {
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 0n)
+    expect(parseVariableValue(buf, 0, makeBaseVar('d', 'DATE')).value).toBe('D#1970-01-01')
+  })
+
+  it('renders a negative day count as a date before the epoch', () => {
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, -1n)
+    expect(parseVariableValue(buf, 0, makeBaseVar('d', 'DATE')).value).toBe('D#1969-12-31')
+  })
+
+  it('does not read DATE with the same unit as DT', () => {
+    // The same payload has to mean different things for the two types; reading
+    // both as nanoseconds is precisely the defect.
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 20691n)
+    const asDate = parseVariableValue(buf, 0, makeBaseVar('d', 'DATE')).value
+    const asDt = parseVariableValue(buf, 0, makeBaseVar('d', 'DT')).value
+
+    expect(asDate).toBe('D#2026-08-26')
+    expect(asDt).toContain('1970-01-01')
+  })
+
+  it('renders a day count too large for a JS Date as an error, not a wrong date', () => {
+    const buf = new Uint8Array(8)
+    writeTimeNs(buf, 100_000_000_000n)
+    expect(parseVariableValue(buf, 0, makeBaseVar('d', 'DATE')).value).toBe('ERR')
   })
 
   it('parses TOD as nanoseconds-since-midnight, formatted HH:MM:SS.mmm', () => {
