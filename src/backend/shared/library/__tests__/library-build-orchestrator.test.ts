@@ -484,6 +484,32 @@ describe('runLibraryBuildPipeline', () => {
     ])
   })
 
+  // A hand-authored project may put a native file under `pous/functions/`.
+  // The read has to follow the POU type, or the build dies on a path we guessed
+  // wrong instead of letting strucpp explain that a native block cannot be a
+  // FUNCTION.
+  it('reads a native POU from the directory its type implies', async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+
+    const FN = 'FUNCTION CPP_ADD : INT\nVAR_INPUT A : INT; END_VAR\nint add(){}\nEND_FUNCTION\n'
+    harness.files.set('pous/functions/CPP_ADD.cpp', FN)
+
+    const projectData = {
+      ...projectDataEmpty(),
+      pous: [{ type: 'function', data: { name: 'CPP_ADD', body: { language: 'cpp' } } }],
+    } as unknown as PLCProjectData
+
+    await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.nativeSources).toEqual([{ fileName: 'CPP_ADD.cpp', source: FN }])
+  })
+
   it('fails naming the block when its authored source is missing from disk', async () => {
     const harness = makePort()
     const { emit } = captureEvents()

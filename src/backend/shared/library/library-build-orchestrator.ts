@@ -85,10 +85,18 @@ export interface LibraryBuildArgs {
 const VERIFY_CACHE_REL_PATH = 'build/.verify-cache-library.json'
 const LIBRARY_MANIFEST_REL_PATH = 'library.json'
 const STLIB_OUT_DIR = 'build'
-/** Where the editor persists function-block POU files. Native blocks are read
+/** Directory the editor persists each POU kind under. Native blocks are read
  *  back from here so the archive ships the author's bytes, not the lowered
- *  bridge ST that `preprocessPous` leaves on the project data. */
-const NATIVE_POU_REL_DIR = 'pous/function-blocks'
+ *  bridge ST that `preprocessPous` leaves on the project data. Keyed by POU
+ *  type because a hand-authored project may put a C/C++ file under
+ *  `pous/functions/` — strucpp rejects a native FUNCTION with a message that
+ *  says why, and it can only do that if we hand it the file rather than
+ *  failing here on a path we guessed wrong. */
+const POU_REL_DIR: Record<string, string> = {
+  program: 'pous/programs',
+  function: 'pous/functions',
+  'function-block': 'pous/function-blocks',
+}
 
 /**
  * Run the full library-build pipeline.  Pure with respect to its
@@ -296,7 +304,8 @@ export async function runLibraryBuildPipeline(
     const language = pou.data.body?.language
     if (language !== 'cpp' && language !== 'python') continue
     const fileName = `${pou.data.name}.${language === 'cpp' ? 'cpp' : 'py'}`
-    const relPath = `${NATIVE_POU_REL_DIR}/${fileName}`
+    const dir = POU_REL_DIR[pou.type] ?? POU_REL_DIR['function-block']
+    const relPath = `${dir}/${fileName}`
     let source: string | null
     try {
       source = await port.readBuildFile(projectPath, relPath)
