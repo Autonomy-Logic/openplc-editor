@@ -213,6 +213,26 @@ export const parseIecStringToVariables = (
       )
     }
 
+    // A length-qualified string (`STRING[20]`, `WSTRING[8]`) is legal IEC and
+    // legal CODESYS, and STruC++ does not accept it. Left alone it is not even
+    // recognised as a string: it becomes a user data type literally named
+    // "STRING[20]", which is persisted, shown in the type cell, and emitted
+    // verbatim into the generated ST — where the compiler fails with
+    // `Expected Semicolon, found [` pointing at a line the user never wrote.
+    //
+    // Refusing here says what is true today. The transport carries a fixed
+    // 126-character budget, so a declared length would not be honoured even if
+    // it parsed; when the compiler grows the declaration, this guard is the one
+    // place that has to change.
+    const lengthQualifiedString = /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType)
+    if (lengthQualifiedString) {
+      const keyword = lengthQualifiedString[1].toUpperCase()
+      throw new Error(
+        `Syntax error on line ${lineNumber}: "${line}". A declared length is not supported on ${keyword} — ` +
+          `use plain ${keyword}, which carries up to 126 characters.`,
+      )
+    }
+
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())
 
     const isUserFunctionBlock = pous?.some(
