@@ -4,6 +4,7 @@ import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
 import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
 import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
+import { describeShmField, describeVariableType } from '../../../../frontend/utils/python/shm-type-map'
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSoftMotionArtifacts } from '../../ethercat/generate-softmotion'
 
@@ -97,6 +98,38 @@ function preprocessPous(
       projectData: processedProjectData as ProjectDataWithCpp,
       validationFailed: true,
       validationError: message,
+    }
+  }
+
+  // A Python POU's interface can only carry types both sides of the shared
+  // memory boundary describe identically. Anything else is refused here rather
+  // than skipped during encoding: a field the Python format string omits does
+  // not go missing, it shifts every later field's offset, so the failure lands
+  // on unrelated variables and looks like corrupted data instead of an
+  // unsupported type. Structures, enumerations and function block instances
+  // arrive in later phases.
+  if (hasPythonCode) {
+    const unsupported: string[] = []
+    for (const pou of projectData.pous) {
+      if (pou.body.language !== 'python') continue
+      for (const variable of pou.interface?.variables ?? []) {
+        if (variable.class !== 'input' && variable.class !== 'output') continue
+        if (describeShmField(variable) === null) {
+          unsupported.push(`"${pou.name}.${variable.name}" (${describeVariableType(variable)})`)
+        }
+      }
+    }
+    if (unsupported.length > 0) {
+      const message =
+        `Python function blocks cannot exchange these variable types yet: ${unsupported.join(', ')}. ` +
+        'Supported types are BOOL, the integer and bit-string types, REAL/LREAL, TIME/DATE/TOD/DT, ' +
+        'STRING, WSTRING, and arrays of those.'
+      log('error', message)
+      return {
+        projectData: processedProjectData as ProjectDataWithCpp,
+        validationFailed: true,
+        validationError: message,
+      }
     }
   }
 

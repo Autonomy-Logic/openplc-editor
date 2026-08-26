@@ -19,6 +19,15 @@ const makeStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
   debug: false,
 })
 
+const makeWStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
+  name,
+  class: cls,
+  type: { definition: 'base-type', value: 'wstring' },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
 const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
@@ -153,8 +162,74 @@ describe('generateSTCode (python)', () => {
     })
 
     expect(result).toContain('auto __s = MSG.get();')
-    expect(result).toContain('data_in.msg.len = (__strlen_t)__s.length();')
-    expect(result).toContain('std::memcpy(data_in.msg.body, __s.c_str(), STR_MAX_LEN);')
+    // The length is clamped to the transport budget and the body zero-filled
+    // before the copy, so a short string cannot carry the previous tail.
+    expect(result).toContain('data_in.msg.len = __n;')
+    expect(result).toContain('std::memset(data_in.msg.body, 0, STR_MAX_LEN);')
+    expect(result).toContain('std::memcpy(data_in.msg.body, __s.c_str(), (size_t)__n);')
+  })
+
+  it('packs the string typedefs themselves, not just the structs using them', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeWStringVar('wmsg', 'input')],
+      processedPythonCode: '',
+    })
+
+    // Regression: `#pragma pack` applies to the struct being defined, not to a
+    // member type already laid out elsewhere. Without its own packed region,
+    // shm_iec_wstring_t's uint16_t body forces a padding byte after `len` and
+    // the field becomes 254 bytes where Python packs 253 — every later field
+    // then decodes from the wrong offset. Only a real compile surfaced this.
+    const preamble = result.slice(0, result.indexOf('shm_data_in_t'))
+    const packedRegion = preamble.slice(preamble.indexOf('#pragma pack(push, 1)'), preamble.indexOf('#pragma pack(pop)'))
+    expect(packedRegion).toContain('shm_iec_string_t')
+    expect(packedRegion).toContain('shm_iec_wstring_t')
+  })
+
+  it('reads WSTRING inputs as UTF-16 code units, not bytes', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeWStringVar('wmsg', 'input')],
+      processedPythonCode: '',
+    })
+
+    // WSTRING gets its own struct shape; sharing STRING's meant copying
+    // STR_MAX_LEN *bytes* (half the characters) under a character count.
+    expect(result).toContain('shm_iec_wstring_t wmsg;')
+    expect(result).toContain('std::memcpy(data_in.wmsg.body, __s.c_str(), (size_t)__n * sizeof(uint16_t));')
+    expect(result).toContain('std::memset(data_in.wmsg.body, 0, STR_MAX_LEN * sizeof(uint16_t));')
+  })
+
+  it('writes WSTRING outputs back through char16_t, not a reinterpreted char*', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeWStringVar('wmsg', 'output')],
+      processedPythonCode: '',
+    })
+
+    expect(result).toContain('reinterpret_cast<const char16_t*>(data_out.wmsg.body)')
+    expect(result).toContain('strucpp::IECWString<254>')
+  })
+
+  it('emits int64 fields for the duration and calendar types', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [
+        makeScalarVar('t', 'input', 'time'),
+        makeScalarVar('d', 'input', 'date'),
+        makeScalarVar('td', 'input', 'tod'),
+        makeScalarVar('dt', 'input', 'dt'),
+      ],
+      processedPythonCode: '',
+    })
+
+    // Previously these reached the C struct as int64_t while the Python format
+    // string omitted them entirely, shifting every later field.
+    expect(result).toContain('int64_t t;')
+    expect(result).toContain('int64_t d;')
+    expect(result).toContain('int64_t td;')
+    expect(result).toContain('int64_t dt;')
   })
 
   it('writes STRING outputs back through IECStringVar (force-respect)', () => {

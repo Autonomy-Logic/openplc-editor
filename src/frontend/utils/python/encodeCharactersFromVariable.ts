@@ -1,33 +1,24 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Autonomy / OpenPLC Project
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayBaseTypeValue, getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
-
-const TYPE_ENCODING_MAP: Record<string, string> = {
-  bool: 'B',
-  sint: 'b',
-  int: 'h',
-  dint: 'i',
-  lint: 'q',
-  usint: 'B',
-  uint: 'H',
-  udint: 'I',
-  ulint: 'Q',
-  real: 'f',
-  lreal: 'd',
-  byte: 'B',
-  word: 'H',
-  dword: 'I',
-  lword: 'Q',
-  string: 'b126s',
-}
+import { getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { describeShmField } from './shm-type-map'
 
 /**
- * Converts an array of PLC variables into a format string for Python's struct.pack/unpack.
- * For scalar variables, returns the corresponding format character.
- * For array variables, repeats the base type's format character N times (e.g., ARRAY[0..9] OF INT -> '10h').
- * @param variables Array of PLC variables
- * @returns String in the format '=hfb126sib126sH' for use with struct.pack/unpack
+ * Convert a POU's interface variables into the format string Python's
+ * `struct.pack` / `struct.unpack` use for the shared-memory exchange.
+ *
+ * The per-type formats come from `shm-type-map.ts`, which the C-side struct
+ * emitter reads as well — the two sides cannot drift because there is only one
+ * table. This function's own job is just repetition and ordering.
+ *
+ * Unsupported types are refused upstream (`preprocessPous`) rather than skipped
+ * here. Skipping was the original defect: a dropped field does not merely go
+ * missing, it shifts every later field's offset and silently corrupts them.
+ *
+ * @returns a `struct` format string such as `'=hfb126s'`, native byte order and
+ *   no alignment, matching the `#pragma pack(push, 1)` struct on the C side.
  */
-
 const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
   if (!variables || variables.length === 0) {
     return '='
@@ -35,32 +26,26 @@ const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
 
   const encodedChars = variables
     .map((variable) => {
-      if (isArrayVariable(variable)) {
-        const baseType = getArrayBaseTypeValue(variable).toLowerCase()
-        const encodingChar = TYPE_ENCODING_MAP[baseType]
-        if (!encodingChar) {
-          console.warn(`Warning: Unknown base type "${baseType}" for array variable "${variable.name}". Skipping.`)
-          return ''
-        }
-        const totalElements = getArrayTotalElements(variable)
-        // For multi-char encodings (e.g., 'b126s' for STRING), the repeat count
-        // only applies to the first char in Python struct format ('10b126s' != 10x'b126s').
-        // Repeat the full encoding string instead.
-        if (encodingChar.length > 1) {
-          return encodingChar.repeat(totalElements)
-        }
-        return `${totalElements}${encodingChar}`
-      }
-
-      const typeValue = variable.type.value.toLowerCase()
-      const encodingChar = TYPE_ENCODING_MAP[typeValue]
-
-      if (!encodingChar) {
-        console.warn(`Warning: Unknown type "${typeValue}" for variable "${variable.name}". Skipping.`)
+      const descriptor = describeShmField(variable)
+      if (!descriptor) {
+        // Unreachable through the compile path — `preprocessPous` rejects an
+        // unsupported type before any of this runs. Kept as a total function so
+        // a direct caller cannot produce a half-formed layout.
         return ''
       }
 
-      return encodingChar
+      if (isArrayVariable(variable)) {
+        const totalElements = getArrayTotalElements(variable)
+        // A repeat count applies only to the FIRST character of a struct
+        // format, so `10b126s` is not ten strings. Multi-character formats are
+        // repeated whole.
+        if (descriptor.pyFormat.length > 1) {
+          return descriptor.pyFormat.repeat(totalElements)
+        }
+        return `${totalElements}${descriptor.pyFormat}`
+      }
+
+      return descriptor.pyFormat
     })
     .filter((char) => char !== '')
 

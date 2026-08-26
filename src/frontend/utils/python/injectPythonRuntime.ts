@@ -1,5 +1,6 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { describeShmField, SHM_STRING_CHARS } from './shm-type-map'
 
 type PythonRuntimeInjectionParams = {
   fmtIn: string
@@ -19,7 +20,8 @@ const generateOutputInitialization = (outputVariables: PLCVariable[]): string =>
         const totalElements = getArrayTotalElements(variable)
         return `${variable.name} = [0] * ${totalElements}`
       }
-      const defaultValue = variable.type?.value === 'string' ? '""' : variable.initialValue || 0
+      const kind = describeShmField(variable)?.kind
+      const defaultValue = kind === 'string' || kind === 'wstring' ? '""' : variable.initialValue || 0
       return `${variable.name} = ${defaultValue}`
     })
     .join('\n')
@@ -41,12 +43,24 @@ const generateInputUnpackCode = (inputVariables: PLCVariable[]): string => {
       const count = getArrayTotalElements(variable)
       code += `    ${variable.name} = list(_vals[_idx:_idx+${count}])\n`
       code += `    _idx += ${count}\n`
-    } else if (variable.type?.definition === 'base-type' && variable.type?.value === 'string') {
+    } else if (describeShmField(variable)?.kind === 'string') {
       code += `    ${variable.name}_len = _vals[_idx]\n`
       code += `    _idx += 1\n`
       code += `    ${variable.name}_body = _vals[_idx]\n`
       code += `    _idx += 1\n`
+      // The C side clamps the length to the budget, but the prefix is a signed
+      // int8 and the buffer starts zeroed, so clamp on read too: a negative
+      // slice bound would silently truncate from the end instead of failing.
+      code += `    ${variable.name}_len = max(0, min(${variable.name}_len, ${SHM_STRING_CHARS}))\n`
       code += `    ${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')\n`
+    } else if (describeShmField(variable)?.kind === 'wstring') {
+      // The length counts UTF-16 code units, so the byte slice is twice it.
+      code += `    ${variable.name}_len = _vals[_idx]\n`
+      code += `    _idx += 1\n`
+      code += `    ${variable.name}_body = _vals[_idx]\n`
+      code += `    _idx += 1\n`
+      code += `    ${variable.name}_len = max(0, min(${variable.name}_len, ${SHM_STRING_CHARS}))\n`
+      code += `    ${variable.name} = ${variable.name}_body[:${variable.name}_len * 2].decode('utf-16-le', errors='ignore')\n`
     } else {
       code += `    ${variable.name} = _vals[_idx]\n`
       code += `    _idx += 1\n`
@@ -69,10 +83,20 @@ const generateOutputPackCode = (outputVariables: PLCVariable[]): string => {
   outputVariables.forEach((variable) => {
     if (isArrayVariable(variable)) {
       code += `    _out.extend(${variable.name})\n`
-    } else if (variable.type?.definition === 'base-type' && variable.type?.value === 'string') {
-      code += `    _body = ${variable.name}.encode('utf-8')[:126]\n`
+    } else if (describeShmField(variable)?.kind === 'string') {
+      code += `    _body = ${variable.name}.encode('utf-8')[:${SHM_STRING_CHARS}]\n`
       code += `    _len = len(_body)\n`
-      code += `    _body = _body.ljust(126, b'\\0')\n`
+      code += `    _body = _body.ljust(${SHM_STRING_CHARS}, b'\\0')\n`
+      code += `    _out.append(_len)\n`
+      code += `    _out.append(_body)\n`
+    } else if (describeShmField(variable)?.kind === 'wstring') {
+      // Truncate on a code-unit boundary, never mid-unit: encode, clip to the
+      // byte budget, then round down to an even length. `_len` is the code-unit
+      // count the C side expects, not the byte count.
+      code += `    _body = ${variable.name}.encode('utf-16-le')[:${SHM_STRING_CHARS * 2}]\n`
+      code += `    _body = _body[: len(_body) - (len(_body) % 2)]\n`
+      code += `    _len = len(_body) // 2\n`
+      code += `    _body = _body.ljust(${SHM_STRING_CHARS * 2}, b'\\0')\n`
       code += `    _out.append(_len)\n`
       code += `    _out.append(_body)\n`
     } else {
