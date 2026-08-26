@@ -16,10 +16,10 @@
  */
 
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
-import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
+import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type { IpcProjectData } from './compiler-adapter'
 import { decodeMessage, inferStage, injectLibraryCppBlocks, toIpcProjectData } from './compiler-adapter'
 

@@ -12,7 +12,6 @@
  */
 
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
-import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type {
   CompileLibraryArgs,
   CompileProgramArgs,
@@ -31,6 +30,7 @@ import type {
   PLCVariable,
   Result,
 } from '../../shared/ports/types'
+import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import { compileProgramFlow } from './compile-program-flow'
 
 /**
