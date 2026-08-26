@@ -35,6 +35,20 @@ describe('getRungNodesBounds', () => {
     expect(bounds).toEqual({ width: 290, height: 300 })
   })
 
+  it('falls back to the initial dimensions when nothing else is set', () => {
+    const bounds = getRungNodesBounds([node({ position: { x: 400, y: 300 }, initialWidth: 70, initialHeight: 90 })])
+
+    expect(bounds).toEqual({ width: 470, height: 390 })
+  })
+
+  it('prefers the declared size over the initial one', () => {
+    const bounds = getRungNodesBounds([
+      node({ position: { x: 400, y: 300 }, width: 100, height: 200, initialWidth: 5, initialHeight: 5 }),
+    ])
+
+    expect(bounds).toEqual({ width: 500, height: 500 })
+  })
+
   it('treats a node with no dimensions as a point', () => {
     const bounds = getRungNodesBounds([node({ position: { x: 700, y: 500 } })])
 

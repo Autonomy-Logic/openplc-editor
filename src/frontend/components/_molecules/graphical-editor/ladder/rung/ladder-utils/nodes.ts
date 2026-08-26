@@ -43,14 +43,21 @@ const ORIGIN_NODE_SIZE = { width: 150, height: 40 }
  * `parentId`, no node `origin`), so the box is just the node rectangles unioned
  * with the origin, exactly what xyflow computed.
  *
- * The `measured ?? width` precedence mirrors xyflow's own `nodeToRect`:
- * `applyNodeChanges` writes `measured` on dimension changes.
+ * The dimension precedence mirrors xyflow's own `nodeToRect`:
+ * `measured` (written by `applyNodeChanges` on dimension changes), then the
+ * declared `width`/`height`, then `initialWidth`/`initialHeight`. Every ladder
+ * builder in `_atoms/graphical-editor/ladder/node-builders.ts` sets explicit
+ * dimensions, so the initial-* step is unreachable today — it is here so the
+ * fallback chain stays honest to the helper it replaces.
  */
 export const getRungNodesBounds = (nodes: Node[]): { width: number; height: number } =>
   nodes.reduce(
     (bounds, node) => ({
-      width: Math.max(bounds.width, node.position.x + (node.measured?.width ?? node.width ?? 0)),
-      height: Math.max(bounds.height, node.position.y + (node.measured?.height ?? node.height ?? 0)),
+      width: Math.max(bounds.width, node.position.x + (node.measured?.width ?? node.width ?? node.initialWidth ?? 0)),
+      height: Math.max(
+        bounds.height,
+        node.position.y + (node.measured?.height ?? node.height ?? node.initialHeight ?? 0),
+      ),
     }),
     { ...ORIGIN_NODE_SIZE },
   )
