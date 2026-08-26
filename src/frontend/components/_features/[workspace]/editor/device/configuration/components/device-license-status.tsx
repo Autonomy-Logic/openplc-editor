@@ -126,8 +126,8 @@ function describeOutcome(report: DeviceLicenseReport): {
         Icon: ShieldUnknownIcon,
         negative: false,
         detail:
-          'The firmware on this device reports no licence storage. This board supports it, ' +
-          'but the image was built without the storage backend. Rebuild and upload.',
+          'The firmware on this device reports no licence storage. This hardware supports it, ' +
+          'so the image was built without the storage backend. Rebuild and upload.',
       }
     case 'check-failed':
       return {
@@ -267,8 +267,8 @@ export function DeviceLicenseStatus({
 
           {awaitingPurchase ? (
             <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-              Waiting for the purchase to complete. OpenPLC checks periodically and writes the licence to this device
-              when the purchase clears. You can keep working in the meantime.
+              Waiting for the purchase to complete. OpenPLC keeps checking for a few minutes and writes the licence to
+              this device as soon as the purchase clears. You can keep working in the meantime.
             </p>
           ) : null}
 

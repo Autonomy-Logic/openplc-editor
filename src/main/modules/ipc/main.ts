@@ -1824,7 +1824,7 @@ class MainProcessBridge implements MainIpcModule {
   private explainMissingChannel(what: string): ChannelUnavailable {
     if (this.deviceSession.isRecovering()) {
       this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
-      return { error: 'the connection dropped and is being restored. Try again in a moment.', needsReconnect: true }
+      return { error: 'the connection dropped and is being restored, try again in a moment', needsReconnect: true }
     }
     this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }

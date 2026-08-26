@@ -73,7 +73,7 @@ export interface LicenseDialogHandlers {
 // is the kind of copy drift a customer notices before we do.
 const DEMO_EXPLANATION =
   'The device will run in DEMO mode: the VPP stops driving outputs about two hours after each start. ' +
-  'You can still build and upload. The licence is enforced on the device, not in the editor.'
+  'You can still build and upload. The licence is enforced on the device, not by the editor.'
 
 /**
  * Show the dialog this outcome warrants, if any. Returns whether one was opened,
@@ -127,8 +127,9 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         title: 'Licence Storage Missing From This Firmware',
         message:
           'The firmware on this device reports no licence storage, so a licence cannot be ' +
-          'written to it.\n\nThe image on the board was built without the storage backend, so ' +
-          `rebuild and upload it.\n\n${DEMO_EXPLANATION}`,
+          'written to it.\n\nThis hardware supports it: every licensed VPP targets hardware that ' +
+          'does. The image on the board was built without the storage backend, so rebuild and ' +
+          `upload it.\n\n${DEMO_EXPLANATION}`,
         // No purchase offered: buying would not fix a firmware built wrong.
         buttons: ['OK'],
         onResponse: () => undefined,
@@ -146,7 +147,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         title: 'Licence Check Failed',
         message:
           `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
-          'This is not the same as having no licence. Nothing has changed on the device.',
+          'This is NOT the same as having no licence. Nothing has changed on the device.',
         buttons: retry ? ['Try Again', 'Continue'] : ['OK'],
         onResponse: (buttonIndex: number) => {
           if (retry && buttonIndex === 0) void retry()

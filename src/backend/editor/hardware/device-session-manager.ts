@@ -316,7 +316,9 @@ export class DeviceSessionManager {
       client = this.debugCandidate.create()
       await client.connect()
     } catch (error) {
-      this.trace(`debug channel: could not open: ${describeError(error)} (control connection unaffected)`)
+      this.trace(
+        `debug channel: could not open ${this.debugCandidate.descriptor}: ${describeError(error)} (control connection unaffected)`,
+      )
       return { error: describeError(error) }
     }
     this.debugClientHeld = client
