@@ -1,5 +1,5 @@
 import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
-import { isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
+import { isArrayVariable, multiDimensionalContainerType } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 type CppPouData = {
@@ -104,7 +104,13 @@ const generateDefine = (variable: PLCVariable): string => {
   const name = variable.name
   const upperName = name.toUpperCase()
 
-  if (isArrayVariable(variable)) {
+  // A one-dimensional array is a pointer to its first element offset by the
+  // lower bound, so the name binds to the pointer itself and `name[i]` indexes
+  // by the declared IEC range. Everything else — scalars, structures, function
+  // block instances, and multi-dimensional arrays, which are passed as the
+  // container — binds to the dereferenced pointer, so the user writes
+  // `name = 5`, `name.field`, `name()` or `name(i, j)` as the type allows.
+  if (isArrayVariable(variable) && !multiDimensionalContainerType(variable)) {
     return `#define ${name} (vars->${upperName})\n`
   }
   return `#define ${name} (*(vars->${upperName}))\n`

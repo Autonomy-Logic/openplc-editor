@@ -114,6 +114,43 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
 }
 
 /**
+ * strucpp container type for an array of rank two or three, or `null` for
+ * anything else.
+ *
+ * A one-dimensional array is passed as a pointer to its first element, offset by
+ * the lower bound, so the block writes `arr[i]` with the declared IEC indices
+ * and the element type is all the struct has to name. That trick does not extend
+ * past rank one: `IEC_ARRAY_2D` deliberately has no `operator[]` — a row
+ * subscript would have to return a view — and takes every index in one
+ * `operator()` call instead. So a multi-dimensional array is passed as a pointer
+ * to the container itself, and the block indexes it as `grid(i, j)`, which is
+ * the same accessor the compiler's own generated code uses.
+ *
+ * `Array2D` / `Array3D` are strucpp's documented public aliases, and the bounds
+ * handed to them come from the user's own declaration rather than from any
+ * assumption about how the container is laid out.
+ *
+ * Rank four and beyond returns `null`: strucpp declares no alias for it, so
+ * there is no type to name and no array to describe.
+ */
+const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string | null => {
+  if (variable.type.definition !== 'array' || !variable.type.data) return null
+
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length < 2 || dimensions.length > 3) return null
+
+  const bounds: number[] = []
+  for (const dimension of dimensions) {
+    const range = parseDimensionRange(dimension.dimension)
+    if (!range) return null
+    bounds.push(range.lower, range.upper)
+  }
+
+  const elementType = mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+  return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
+}
+
+/**
  * Generate a C struct member declaration for a variable.
  * Both scalars and arrays use pointers:
  * - Scalars: pointer to the single value
@@ -136,13 +173,17 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * declarations inside `setup()` / `loop()`.
  */
 const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
-  const iecType = getVariableIECType(variable, userTypeNames)
   const name = variable.name.toUpperCase()
+  const multiDimensional = multiDimensionalContainerType(variable, userTypeNames)
+  if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
+
+  const iecType = getVariableIECType(variable, userTypeNames)
   return `  strucpp::${iecType} *${name};\n`
 }
 
 export {
   generateStructMember,
+  multiDimensionalContainerType,
   mapUserTypeToIEC,
   getArrayBaseTypeValue,
   getArrayStartIndex,

@@ -1,5 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayStartIndex, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { getArrayStartIndex, isArrayVariable, multiDimensionalContainerType } from '../PLC/array-codegen-helpers'
 import { cBlockExternalVariables, cBlockInterfaceVariables } from './block-interface'
 
 type STCodeGenerationParams = {
@@ -17,14 +17,23 @@ type STCodeGenerationParams = {
  *   `*name = 5` / `name = "hi"` routes through the wrapper's
  *   `operator=`, which respects forcing.
  *
- * - Base-type arrays: `vars.NAME = &NAME[lower] - lower`. `Array1D<T>`
+ * - One-dimensional arrays: `vars.NAME = &NAME[lower] - lower`. `Array1D<T>`
  *   stores `std::array<IECVar<T>, N>`; element 0 sits at `&NAME[lower]`.
  *   Subtracting `lower` shifts the pointer so `vars->NAME[iec_idx]`
  *   works for any IEC index in the declared range. Per-element forcing
  *   is preserved.
+ *
+ * - Multi-dimensional arrays: `vars.NAME = &NAME`. The offset trick does not
+ *   extend past rank one — `IEC_ARRAY_2D` has no `operator[]` and takes every
+ *   index in one `operator()` call — so the container itself is passed and the
+ *   block indexes it as `grid(i, j)`, the same accessor the compiler's own
+ *   generated code uses.
  */
 const generateVariableAssignment = (variable: PLCVariable): string => {
   const name = variable.name.toUpperCase()
+  if (multiDimensionalContainerType(variable)) {
+    return `vars.${name} = &${name};\n`
+  }
   if (isArrayVariable(variable)) {
     const startIndex = getArrayStartIndex(variable)
     return `vars.${name} = &${name}[${startIndex}] - ${startIndex};\n`
@@ -69,11 +78,13 @@ const wrapInGlobalLocks = (externals: PLCVariable[], call: string): string => {
     const name = variable.name.toUpperCase()
     const held = `g${depth}`
     open += `${name}->with_lock([&](auto* ${held}) {\n`
-    if (isArrayVariable(variable)) {
+    if (isArrayVariable(variable) && !multiDimensionalContainerType(variable)) {
       const startIndex = getArrayStartIndex(variable)
       open += `auto& ${held}_arr = *${held};\n`
       open += `vars.${name} = &${held}_arr[${startIndex}] - ${startIndex};\n`
     } else {
+      // Scalars, structures, function block instances and multi-dimensional
+      // arrays are all passed as the pointer `with_lock` already hands over.
       open += `vars.${name} = ${held};\n`
     }
     close = `});\n` + close

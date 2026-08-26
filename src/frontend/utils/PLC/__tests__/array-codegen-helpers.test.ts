@@ -8,6 +8,7 @@ import {
   isArrayVariable,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,
+  multiDimensionalContainerType,
 } from '../array-codegen-helpers'
 
 // ---------------------------------------------------------------------------
@@ -292,6 +293,87 @@ describe('mapUserTypeToIEC', () => {
 
   it('matches case-insensitively, since the set is uppercased by the caller', () => {
     expect(mapUserTypeToIEC('mOtOr', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+})
+
+describe('multiDimensionalContainerType', () => {
+  const arrayOfRank = (dimensions: string[], baseType = 'INT'): PLCVariable => ({
+    name: 'grid',
+    class: 'input',
+    type: {
+      definition: 'array',
+      value: `ARRAY [${dimensions.join(', ')}] OF ${baseType}`,
+      data: {
+        baseType: { definition: 'base-type', value: baseType },
+        dimensions: dimensions.map((dimension) => ({ dimension })),
+      },
+    },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  it('names the 2-D container with the user’s own bounds', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['1..2', '0..3']))).toBe('Array2D<strucpp::IEC_INT, 1, 2, 0, 3>')
+  })
+
+  it('names the 3-D container', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', '0..1', '0..1']))).toBe(
+      'Array3D<strucpp::IEC_INT, 0, 1, 0, 1, 0, 1>',
+    )
+  })
+
+  it('returns null for rank one, which is passed as an offset element pointer', () => {
+    // `arr[i]` with IEC indices is a better surface than `arr(i)`, and rank one
+    // is the only rank where the offset trick works.
+    expect(multiDimensionalContainerType(arrayOfRank(['0..9']))).toBeNull()
+  })
+
+  it('returns null past rank three, for which strucpp declares no alias', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', '0..1', '0..1', '0..1']))).toBeNull()
+  })
+
+  it('returns null when a bound cannot be read rather than guessing one', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', 'nonsense']))).toBeNull()
+  })
+
+  it('returns null for anything that is not an array', () => {
+    const scalar: PLCVariable = {
+      name: 'x',
+      class: 'input',
+      type: { definition: 'base-type', value: 'INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(multiDimensionalContainerType(scalar)).toBeNull()
+  })
+
+  it('returns null for an array declaration carrying no dimension data', () => {
+    const bare: PLCVariable = {
+      name: 'grid',
+      class: 'input',
+      type: { definition: 'array', value: 'ARRAY [0..1, 0..1] OF INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(multiDimensionalContainerType(bare)).toBeNull()
+  })
+
+  it('applies the user-defined type spelling to the element type', () => {
+    const v = arrayOfRank(['0..1', '0..1'], 'Motor')
+    v.type.data!.baseType = { definition: 'user-data-type', value: 'Motor' }
+
+    expect(multiDimensionalContainerType(v, new Set(['MOTOR']))).toBe('Array2D<strucpp::IEC_MOTOR, 0, 1, 0, 1>')
+  })
+
+  it('makes generateStructMember emit a pointer to the container', () => {
+    expect(generateStructMember(arrayOfRank(['1..2', '0..3']))).toBe(
+      '  strucpp::Array2D<strucpp::IEC_INT, 1, 2, 0, 3> *GRID;\n',
+    )
   })
 })
 
