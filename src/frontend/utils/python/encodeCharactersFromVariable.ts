@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Autonomy / OpenPLC Project
-import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
-import type { ShmLeaf } from './shm-leaves'
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
 import { describeShmLayout } from './shm-leaves'
 
 /**
@@ -36,12 +36,12 @@ const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
   return '=' + encoded.join('')
 }
 
-const encodeCharactersFromVariable = (variables: PLCVariable[], dataTypes: readonly PLCDataType[] = []): string => {
+const encodeCharactersFromVariable = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (!variables || variables.length === 0) {
     return '='
   }
 
-  const walked = describeShmLayout(variables, dataTypes)
+  const walked = describeShmLayout(variables, context)
   // Unreachable through the compile path — `preprocessPous` refuses anything
   // that cannot cross before any of this runs. Kept as a total function so a
   // direct caller cannot produce a half-formed layout.

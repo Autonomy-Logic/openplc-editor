@@ -313,19 +313,36 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // The renderer-side `onProgress` log channel only sees the
       // build pass's preprocess output to avoid duplicate "Found
       // Python POU…" lines.
-      const buildResult = preprocessPous(args.projectData, false, (level, message) => {
-        onProgress({ stage: 'st', message, level })
-      })
+      // A library's own Python POU may hold a function block instance too, so it
+      // needs the same pin source a project build gets.
+      const libraryArchives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
+      const fbSources = libraryArchives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks }))
+
+      const buildResult = preprocessPous(
+        args.projectData,
+        false,
+        (level, message) => {
+          onProgress({ stage: 'st', message, level })
+        },
+        undefined,
+        fbSources,
+      )
       if (buildResult.validationFailed) {
         return {
           success: false,
           error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
         }
       }
-      const verifyResult = preprocessPous(args.projectData, true, () => {
-        // Silent — same project gets logged once via the build
-        // pass; a second round of "Found …" lines is noise.
-      })
+      const verifyResult = preprocessPous(
+        args.projectData,
+        true,
+        () => {
+          // Silent — same project gets logged once via the build
+          // pass; a second round of "Found …" lines is noise.
+        },
+        undefined,
+        fbSources,
+      )
       const ipcDataForBuild = toIpcProjectData(buildResult.projectData)
       const ipcDataForVerify = toIpcProjectData(verifyResult.projectData)
 

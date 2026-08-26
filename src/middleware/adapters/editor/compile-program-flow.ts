@@ -120,6 +120,10 @@ export async function compileProgramFlow(
       onProgress({ stage: 'st', message, level })
     },
     pythonSupport,
+    // The archives are already loaded for the C++ graft above. A native block
+    // declaring `ton0 : TON` needs that block's pin list before the instance can
+    // cross into Python, and the manifest is where it lives.
+    archives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks })),
   )
 
   if (validationFailed) {

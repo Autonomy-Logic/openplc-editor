@@ -1,7 +1,8 @@
-import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
 import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
-import type { ShmLeaf } from './shm-leaves'
-import { describeShmLayout, describeShmLeaves } from './shm-leaves'
+import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
+import { describeShmLayout, describeShmLeaves, pythonFunctionBlockInstances } from './shm-leaves'
 import { SHM_STRING_CHARS } from './shm-type-map'
 
 type STCodeGenerationParams = {
@@ -10,6 +11,10 @@ type STCodeGenerationParams = {
   processedPythonCode: string
   /** The project's data types, so a structure or enumeration can be walked. */
   dataTypes?: readonly PLCDataType[]
+  /** Project POUs, for resolving a function block instance's pins. */
+  pous?: readonly PLCPou[]
+  /** Bundled libraries, for resolving a standard block such as TON. */
+  libraries?: readonly LibraryFunctionBlockSource[]
 }
 
 /**
@@ -137,15 +142,10 @@ const throughLock = (variable: PLCVariable, leaf: ShmLeaf): ShmLeaf => {
 }
 
 /** Emit one direction's copies, grouping each external's leaves under its lock. */
-const generateCopies = (
-  variables: PLCVariable[],
-  dataTypes: readonly PLCDataType[],
-  struct: string,
-  toShm: boolean,
-): string => {
+const generateCopies = (variables: PLCVariable[], context: ShmWalkContext, struct: string, toShm: boolean): string => {
   let code = ''
   for (const variable of variables) {
-    const result = describeShmLeaves(variable, dataTypes)
+    const result = describeShmLeaves(variable, context)
     /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
     if ('refusal' in result) continue
     const body = result.leaves.map((leaf) => generateLeafCopy(throughLock(variable, leaf), struct, toShm)).join('')
@@ -154,10 +154,10 @@ const generateCopies = (
   return code
 }
 
-const generateInputCopyCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateInputCopyCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return ''
   let code = '        shm_data_in_t data_in;\n'
-  code += generateCopies(variables, dataTypes, 'data_in', true)
+  code += generateCopies(variables, context, 'data_in', true)
   code += '        memcpy(shm_in_ptr, &data_in, sizeof(data_in));\n\n'
   return code
 }
@@ -175,41 +175,99 @@ const generateInputCopyCode = (variables: PLCVariable[], dataTypes: readonly PLC
  * Shared memory is created zeroed, so there is nothing for Python to seed from
  * unless the C side puts it there.
  */
-const generateOutputSeedCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return ''
   let code = '        shm_data_out_t seed_out;\n'
   code += '        std::memset(&seed_out, 0, sizeof(seed_out));\n'
-  code += generateCopies(variables, dataTypes, 'seed_out', true)
+  code += generateCopies(variables, context, 'seed_out', true)
   code += '        memcpy(shm_out_ptr, &seed_out, sizeof(seed_out));\n'
   return code
 }
 
-const generateOutputCopyCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateOutputCopyCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return ''
   let code = '        shm_data_out_t data_out;\n'
   code += '        memcpy(&data_out, shm_out_ptr, sizeof(data_out));\n'
-  code += generateCopies(variables, dataTypes, 'data_out', false)
+  code += generateCopies(variables, context, 'data_out', false)
   return code
 }
 
+/**
+ * One ST call per function block instance the block declares.
+ *
+ * This is what makes an instance usable from Python at all. Python cannot call
+ * it — it runs in another process — but the wrapper does, in the PLC process
+ * where the instance lives, once per scan. The call sits between applying
+ * Python's writes to the input pins and publishing the pins back, so within a
+ * scan the sequence is: take what Python wrote, run the instance, report what it
+ * produced.
+ *
+ * Written as ST rather than inside an `{external}` block so the call goes through
+ * the same path a hand-written `ton0();` would, including the EN gate the
+ * compiler puts at every call site.
+ */
+const generateInstanceCalls = (instances: PLCVariable[]): string =>
+  instances.map((instance) => `${instance.name}();`).join('\n')
+
 const generateSTCode = (params: STCodeGenerationParams): string => {
-  const { pouName, allVariables, processedPythonCode, dataTypes = [] } = params
+  const { pouName, allVariables, processedPythonCode, dataTypes = [], pous = [], libraries = [] } = params
 
   const inputVariables = pythonInboundVariables(allVariables)
   const outputVariables = pythonOutboundVariables(allVariables)
+  const instances = pythonFunctionBlockInstances(allVariables, dataTypes)
+
+  // Direction decides which of a function block instance's pins cross: Python
+  // drives the inputs and reads the outputs. Everything else is symmetric.
+  const inbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'in' }
+  const outbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'out' }
 
   // The struct layout and the copy statements are generated from the same leaf
   // walk, so a structure cannot be laid out one way and copied another.
-  const inboundLeaves = describeShmLayout(inputVariables, dataTypes)
-  const outboundLeaves = describeShmLayout(outputVariables, dataTypes)
+  const inboundLeaves = describeShmLayout(inputVariables, inbound)
+  const outboundLeaves = describeShmLayout(outputVariables, outbound)
   /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
   const cStructs = generateCStructs(
     'leaves' in inboundLeaves ? inboundLeaves.leaves : [],
     'leaves' in outboundLeaves ? outboundLeaves.leaves : [],
   )
-  const inputCopyCode = generateInputCopyCode(inputVariables, dataTypes)
-  const outputCopyCode = generateOutputCopyCode(outputVariables, dataTypes)
-  const outputSeedCode = generateOutputSeedCode(outputVariables, dataTypes)
+  const inputCopyCode = generateInputCopyCode(inputVariables, inbound)
+  const outputCopyCode = generateOutputCopyCode(outputVariables, outbound)
+  const outputSeedCode = generateOutputSeedCode(outputVariables, outbound)
+  const instanceCalls = generateInstanceCalls(instances)
+
+  // The pointer guards, repeated in each `{external}` block that needs them:
+  // ST scoping puts every block in the same function, but re-deriving them keeps
+  // each block readable on its own and costs nothing.
+  const mapSegments = (
+    which: 'in' | 'out',
+  ) => `        void *shm_${which}_ptr = (void *)(uint64_t)SHM_${which.toUpperCase()}_PTR;
+        if (shm_${which}_ptr == NULL)
+        {
+            printf("shm_${which}_ptr is NULL!\\n");
+            return;
+        }
+`
+
+  // With no function block instance the exchange is one block, exactly as it was
+  // before instances existed: publish the PLC's values, then take Python's back.
+  //
+  // With instances there is an order to respect. Python's writes have to reach
+  // the input pins before the instance runs, and the pins it produces have to be
+  // published after — otherwise a user setting `ton0.IN` would see `ton0.Q`
+  // answer a scan late for no reason. So the exchange splits around the calls:
+  // take what Python wrote, run the instances, publish what they produced.
+  const exchangeCode =
+    instances.length === 0
+      ? `    {external
+${mapSegments('in')}${mapSegments('out')}
+${inputCopyCode}${outputCopyCode}    }`
+      : `    {external
+${mapSegments('out')}
+${outputCopyCode}    }
+${instanceCalls}
+    {external
+${mapSegments('in')}
+${inputCopyCode}    }`
 
   const escapedPythonCode = processedPythonCode
     .replace(/\\/g, '\\\\')
@@ -284,22 +342,7 @@ if first_run = false then
 ${outputSeedCode}    }
     first_run := true;
 else
-    {external
-        void *shm_in_ptr = (void *)(uint64_t)SHM_IN_PTR;
-        void *shm_out_ptr = (void *)(uint64_t)SHM_OUT_PTR;
-
-        if (shm_in_ptr == NULL)
-        {
-            printf("shm_in_ptr is NULL!\\n");
-            return;
-        }
-        if (shm_out_ptr == NULL)
-        {
-            printf("shm_out_ptr is NULL!\\n");
-            return;
-        }
-
-${inputCopyCode}${outputCopyCode}    }
+${exchangeCode}
 end_if;`
 
   return stCode

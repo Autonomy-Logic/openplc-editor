@@ -1,5 +1,6 @@
 import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
-import { describeShmLayout, describeShmLeaves } from '../shm-leaves'
+import type { ShmWalkContext } from '../shm-leaves'
+import { describeShmLayout, describeShmLeaves, pythonFunctionBlockInstances } from '../shm-leaves'
 
 const scalar = (name: string, value: string): PLCVariable => ({
   name,
@@ -47,12 +48,37 @@ const MODE: PLCDataType = {
   values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
 }
 
+/**
+ * The inbound direction, which is the wider one — for a function block instance
+ * it carries the outputs as well as the inputs. Tests that care about direction
+ * pass their own.
+ */
+const inbound = (dataTypes: PLCDataType[] = []): ShmWalkContext => ({ dataTypes, direction: 'in' })
+
+/** A library declaring TON, in the shape a `.stlib` manifest provides. */
+const TON_LIB = {
+  functionBlocks: [
+    {
+      name: 'TON',
+      inputs: [
+        { name: 'IN', type: 'BOOL' },
+        { name: 'PT', type: 'TIME' },
+      ],
+      inouts: [],
+      outputs: [
+        { name: 'Q', type: 'BOOL' },
+        { name: 'ET', type: 'TIME' },
+      ],
+    },
+  ],
+}
+
 const leavesOf = (result: ReturnType<typeof describeShmLeaves>) => ('leaves' in result ? result.leaves : [])
 const refusalOf = (result: ReturnType<typeof describeShmLeaves>) => ('refusal' in result ? result.refusal : null)
 
 describe('describeShmLeaves', () => {
   it('describes a scalar as one leaf reaching the member directly', () => {
-    const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT')))
+    const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT'), inbound()))
 
     expect(leaf.field).toBe('x')
     expect(leaf.path).toEqual(['x'])
@@ -61,14 +87,14 @@ describe('describeShmLeaves', () => {
   })
 
   it('describes an array as one leaf with its element count and lower bound', () => {
-    const [leaf] = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5')))
+    const [leaf] = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5'), inbound()))
 
     expect(leaf.count).toBe(4)
     expect(leaf.startIndex).toBe(2)
   })
 
   it('flattens a structure into one leaf per member, in declaration order', () => {
-    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), [MOTOR]))
+    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), inbound([MOTOR])))
 
     expect(leaves.map((l) => l.field)).toEqual(['m_speed', 'm_label'])
     expect(leaves.map((l) => l.path)).toEqual([
@@ -82,7 +108,7 @@ describe('describeShmLeaves', () => {
     // `#pragma pack` applies to the struct being defined, never to a member type
     // already laid out — the trap that made WSTRING 254 bytes against Python's
     // 253. Every leaf sits at the top level of one packed struct.
-    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), [MOTOR]))
+    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), inbound([MOTOR])))
 
     expect(leaves.every((l) => !l.field.includes('.'))).toBe(true)
   })
@@ -93,14 +119,14 @@ describe('describeShmLeaves', () => {
       derivation: 'structure',
       variable: [{ name: 'drive', type: { definition: 'user-data-type', value: 'Motor' } }],
     }
-    const leaves = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [outer, MOTOR]))
+    const leaves = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([outer, MOTOR])))
 
     expect(leaves.map((l) => l.field)).toEqual(['r_drive_speed', 'r_drive_label'])
     expect(leaves.map((l) => l.access)).toEqual(['R.DRIVE.SPEED', 'R.DRIVE.LABEL'])
   })
 
   it('describes an enumeration as its stored integer, naming the type for Python', () => {
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('md', 'Mode'), [MODE]))
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('md', 'Mode'), inbound([MODE])))
 
     expect(leaf.descriptor.cType).toBe('int16_t')
     expect(leaf.enumTypeName).toBe('Mode')
@@ -119,7 +145,7 @@ describe('describeShmLeaves', () => {
       derivation: 'structure',
       variable: [{ name: 'mode', type: { definition: 'user-data-type', value: 'Mode' } }],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig, MODE]))
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig, MODE])))
 
     expect(leaf.access).toBe('R.MODE_')
   })
@@ -132,7 +158,7 @@ describe('describeShmLeaves', () => {
       derivation: 'structure',
       variable: [{ name: 'time', type: { definition: 'base-type', value: 'TIME' } }],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
     expect(leaf.access).toBe('R.TIME')
   })
@@ -152,7 +178,7 @@ describe('describeShmLeaves', () => {
         },
       ],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
     expect(leaf.count).toBe(3)
     expect(leaf.startIndex).toBe(1)
@@ -176,7 +202,7 @@ describe('describeShmLeaves', () => {
         },
       ],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
     expect(leaf.startIndex).toBe(0)
   })
@@ -193,22 +219,213 @@ describe('describeShmLeaves', () => {
       debug: false,
     }
 
-    expect(refusalOf(describeShmLeaves(bare))?.reason).toContain('not a type a Python block can exchange')
+    expect(refusalOf(describeShmLeaves(bare, inbound()))?.reason).toContain('not a type a Python block can exchange')
+  })
+
+  describe('function block instances', () => {
+    // Python cannot call an instance, but the generated ST wrapper does, once per
+    // scan, in the PLC process where the instance lives. So the pins cross like a
+    // structure's members — and which ones cross depends on the direction, because
+    // the block's inputs are the caller's to drive and its outputs are the
+    // instance's to produce.
+    const ton = (name: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: { definition: 'derived', value: 'TON' },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const ctx = (direction: 'in' | 'out'): ShmWalkContext => ({ dataTypes: [], libraries: [TON_LIB], direction })
+
+    it('carries every pin inbound, so Python can read what the instance produced', () => {
+      const leaves = leavesOf(describeShmLeaves(ton('ton0'), ctx('in')))
+
+      expect(leaves.map((l) => l.field)).toEqual(['ton0_IN', 'ton0_PT', 'ton0_Q', 'ton0_ET'])
+    })
+
+    it('carries only the drivable pins outbound, so Python cannot forge an output', () => {
+      const leaves = leavesOf(describeShmLeaves(ton('ton0'), ctx('out')))
+
+      expect(leaves.map((l) => l.field)).toEqual(['ton0_IN', 'ton0_PT'])
+    })
+
+    it('reaches each pin as an upper-cased member of the instance', () => {
+      const leaves = leavesOf(describeShmLeaves(ton('ton0'), ctx('in')))
+
+      expect(leaves.map((l) => l.access)).toEqual(['TON0.IN', 'TON0.PT', 'TON0.Q', 'TON0.ET'])
+    })
+
+    it('describes each pin with its own IEC type', () => {
+      const leaves = leavesOf(describeShmLeaves(ton('ton0'), ctx('in')))
+
+      expect(leaves.map((l) => l.descriptor.cType)).toEqual(['uint8_t', 'int64_t', 'uint8_t', 'int64_t'])
+    })
+
+    it('gives Python an attribute path per pin', () => {
+      const leaves = leavesOf(describeShmLeaves(ton('ton0'), ctx('in')))
+
+      expect(leaves.map((l) => l.path)).toEqual([
+        ['ton0', 'IN'],
+        ['ton0', 'PT'],
+        ['ton0', 'Q'],
+        ['ton0', 'ET'],
+      ])
+    })
+
+    it('leaves a project block’s internal state out entirely', () => {
+      // A block's own locals are its business; letting Python write them would
+      // corrupt the instance from outside. Only a project-declared block can
+      // have them — a library manifest lists pins only.
+      const withLocal = {
+        name: 'Accum',
+        pouType: 'function-block' as const,
+        interface: {
+          variables: [
+            {
+              name: 'step',
+              class: 'input' as const,
+              type: { definition: 'base-type' as const, value: 'INT' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'carry',
+              class: 'local' as const,
+              type: { definition: 'base-type' as const, value: 'DINT' },
+              location: '',
+              documentation: '',
+            },
+            {
+              name: 'total',
+              class: 'output' as const,
+              type: { definition: 'base-type' as const, value: 'DINT' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        },
+        body: { language: 'st' as const, value: '' },
+      }
+      const acc: PLCVariable = { ...ton('acc'), type: { definition: 'derived', value: 'Accum' } }
+      const leaves = leavesOf(describeShmLeaves(acc, { dataTypes: [], pous: [withLocal], direction: 'in' }))
+
+      expect(leaves.map((l) => l.field)).toEqual(['acc_STEP', 'acc_TOTAL'])
+    })
+
+    it('omits a library block’s pins that are not declared', () => {
+      // A block's own locals are its business; letting Python write them would
+      // corrupt the instance from outside.
+      const withLocals = {
+        functionBlocks: [
+          {
+            name: 'ACC',
+            inputs: [{ name: 'STEP', type: 'INT' }],
+            inouts: [],
+            outputs: [{ name: 'TOTAL', type: 'DINT' }],
+          },
+        ],
+      }
+      const acc: PLCVariable = { ...ton('acc'), type: { definition: 'derived', value: 'ACC' } }
+      const leaves = leavesOf(describeShmLeaves(acc, { dataTypes: [], libraries: [withLocals], direction: 'in' }))
+
+      expect(leaves.map((l) => l.field)).toEqual(['acc_STEP', 'acc_TOTAL'])
+    })
+
+    it('resolves a project-declared block, which shadows a library of the same name', () => {
+      const projectPou = {
+        name: 'TON',
+        pouType: 'function-block' as const,
+        interface: {
+          variables: [
+            {
+              name: 'mine',
+              class: 'input' as const,
+              type: { definition: 'base-type' as const, value: 'INT' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        },
+        body: { language: 'st' as const, value: '' },
+      }
+      const leaves = leavesOf(
+        describeShmLeaves(ton('t'), { dataTypes: [], pous: [projectPou], libraries: [TON_LIB], direction: 'in' }),
+      )
+
+      // Upper-cased even though the project declared it lowercase: the compiler
+      // upper-cases members, and the Python attribute has to match the slot.
+      expect(leaves.map((l) => l.field)).toEqual(['t_MINE'])
+    })
+  })
+
+  describe('pythonFunctionBlockInstances', () => {
+    it('finds the instances the wrapper has to call, in declaration order', () => {
+      const vars: PLCVariable[] = [
+        scalar('x', 'INT'),
+        { ...scalar('b', 'INT'), type: { definition: 'derived', value: 'TON' } },
+        userTyped('m', 'Motor'),
+        { ...scalar('a', 'INT'), type: { definition: 'derived', value: 'ACC' } },
+      ]
+
+      expect(pythonFunctionBlockInstances(vars, [MOTOR]).map((v) => v.name)).toEqual(['b', 'a'])
+    })
+
+    it('does not mistake a declared structure for an instance', () => {
+      expect(pythonFunctionBlockInstances([userTyped('m', 'Motor')], [MOTOR])).toEqual([])
+    })
+
+    it('treats a name the project does not declare as an instance', () => {
+      // The parser leaves it `user-data-type` when it resolved nothing; from here
+      // that is the same situation as `derived`.
+      expect(pythonFunctionBlockInstances([userTyped('t', 'TON')], [MOTOR]).map((v) => v.name)).toEqual(['t'])
+    })
   })
 
   describe('refusals', () => {
-    it('refuses a function block instance, naming why', () => {
-      const refusal = refusalOf(describeShmLeaves(userTyped('t', 'TON'), [MOTOR]))
+    it('refuses an instance whose block cannot be found anywhere', () => {
+      // No project POU and no library declares it, so there are no pins to walk.
+      // The reason says that rather than blaming the type.
+      const refusal = refusalOf(describeShmLeaves(userTyped('t', 'Nowhere'), inbound([MOTOR])))
 
-      expect(refusal?.reason).toContain('function block instance')
-      expect(refusal?.reason).toContain('its own process')
+      expect(refusal?.reason).toContain('no function block by that name was found')
+    })
+
+    it('refuses an array of function block instances', () => {
+      const bank: PLCVariable = {
+        name: 'bank',
+        class: 'local',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..1] OF TON',
+          data: { baseType: { definition: 'user-data-type', value: 'TON' }, dimensions: [{ dimension: '0..1' }] },
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      }
+
+      expect(refusalOf(describeShmLeaves(bank, { ...inbound(), libraries: [TON_LIB] }))?.reason).toContain(
+        'array of function block instances',
+      )
+    })
+
+    it('refuses an instance whose pin type cannot cross, naming the pin', () => {
+      // A generic pin (`ANY_NUM`) has no type until it is wired, so there is no
+      // width to marshal.
+      const generic = {
+        functionBlocks: [{ name: 'ADD', inputs: [{ name: 'IN1', type: 'ANY_NUM' }], outputs: [], inouts: [] }],
+      }
+      const refusal = refusalOf(describeShmLeaves(userTyped('a', 'ADD'), { ...inbound(), libraries: [generic] }))
+
+      expect(refusal?.path).toEqual(['a', 'IN1'])
     })
 
     it('refuses an array of structures', () => {
       const bank = arrayOf('bank', 'Motor')
       bank.type.data!.baseType = { definition: 'user-data-type', value: 'Motor' }
 
-      expect(refusalOf(describeShmLeaves(bank, [MOTOR]))?.reason).toContain('array of structures')
+      expect(refusalOf(describeShmLeaves(bank, inbound([MOTOR])))?.reason).toContain('array of structures')
     })
 
     it('refuses a named ARRAY type', () => {
@@ -219,11 +436,13 @@ describe('describeShmLeaves', () => {
         dimensions: [{ dimension: '0..3' }],
       }
 
-      expect(refusalOf(describeShmLeaves(userTyped('b', 'Bank'), [named]))?.reason).toContain('named ARRAY type')
+      expect(refusalOf(describeShmLeaves(userTyped('b', 'Bank'), inbound([named])))?.reason).toContain(
+        'named ARRAY type',
+      )
     })
 
     it('refuses an unsupported elementary type', () => {
-      const reason = refusalOf(describeShmLeaves(scalar('x', 'float32')))?.reason
+      const reason = refusalOf(describeShmLeaves(scalar('x', 'float32'), inbound()))?.reason
       // The reason lists what IS supported, so the message stands on its own —
       // an FB-instance refusal needs a different explanation entirely, and a
       // single trailing list would be wrong for one of them.
@@ -237,7 +456,7 @@ describe('describeShmLeaves', () => {
         derivation: 'structure',
         variable: [{ name: 'timer', type: { definition: 'user-data-type', value: 'TON' } }],
       }
-      const refusal = refusalOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+      const refusal = refusalOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
       expect(refusal?.path).toEqual(['r', 'timer'])
     })
@@ -249,14 +468,16 @@ describe('describeShmLeaves', () => {
         variable: [{ name: 'inner', type: { definition: 'user-data-type', value: 'Loop' } }],
       }
 
-      expect(refusalOf(describeShmLeaves(userTyped('l', 'Loop'), [loop]))?.reason).toContain('refers to itself')
+      expect(refusalOf(describeShmLeaves(userTyped('l', 'Loop'), inbound([loop])))?.reason).toContain(
+        'refers to itself',
+      )
     })
   })
 })
 
 describe('describeShmLayout', () => {
   it('concatenates every variable’s leaves in order', () => {
-    const result = describeShmLayout([scalar('a', 'INT'), userTyped('m', 'Motor')], [MOTOR])
+    const result = describeShmLayout([scalar('a', 'INT'), userTyped('m', 'Motor')], inbound([MOTOR]))
 
     expect(leavesOf(result).map((l) => l.field)).toEqual(['a', 'm_speed', 'm_label'])
   })
@@ -264,12 +485,12 @@ describe('describeShmLayout', () => {
   it('reports the first refusal rather than a partial layout', () => {
     // A partial layout is the corruption this design exists to prevent: a
     // missing field shifts every later field's offset.
-    const result = describeShmLayout([scalar('a', 'INT'), userTyped('t', 'TON')], [MOTOR])
+    const result = describeShmLayout([scalar('a', 'INT'), userTyped('t', 'TON')], inbound([MOTOR]))
 
     expect('refusal' in result).toBe(true)
   })
 
   it('is empty for no variables', () => {
-    expect(leavesOf(describeShmLayout([]))).toEqual([])
+    expect(leavesOf(describeShmLayout([], inbound()))).toEqual([])
   })
 })

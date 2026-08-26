@@ -1,5 +1,9 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { ShmWalkContext } from '../shm-leaves'
 import { encodeCharactersFromVariable } from '../encodeCharactersFromVariable'
+
+/** These tests describe layout, not direction. */
+const ctx: ShmWalkContext = { direction: 'in' }
 
 const makeScalarVar = (name: string, baseType: string): PLCVariable => ({
   name,
@@ -28,84 +32,84 @@ const makeArrayVar = (name: string, baseType: string, dimension: string): PLCVar
 
 describe('encodeCharactersFromVariable', () => {
   it('returns = for empty array', () => {
-    expect(encodeCharactersFromVariable([])).toBe('=')
+    expect(encodeCharactersFromVariable([], ctx)).toBe('=')
   })
 
   it('returns = for undefined input', () => {
-    expect(encodeCharactersFromVariable(undefined as unknown as PLCVariable[])).toBe('=')
+    expect(encodeCharactersFromVariable(undefined as unknown as PLCVariable[], ctx)).toBe('=')
   })
 
   it('returns = for null input', () => {
-    expect(encodeCharactersFromVariable(null as unknown as PLCVariable[])).toBe('=')
+    expect(encodeCharactersFromVariable(null as unknown as PLCVariable[], ctx)).toBe('=')
   })
 
   it('encodes BOOL as B', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'BOOL')])).toBe('=B')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'BOOL')], ctx)).toBe('=B')
   })
 
   it('encodes SINT as b', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'SINT')])).toBe('=b')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'SINT')], ctx)).toBe('=b')
   })
 
   it('encodes INT as h', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'INT')])).toBe('=h')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'INT')], ctx)).toBe('=h')
   })
 
   it('encodes DINT as i', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'DINT')])).toBe('=i')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'DINT')], ctx)).toBe('=i')
   })
 
   it('encodes LINT as q', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LINT')])).toBe('=q')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LINT')], ctx)).toBe('=q')
   })
 
   it('encodes USINT as B', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'USINT')])).toBe('=B')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'USINT')], ctx)).toBe('=B')
   })
 
   it('encodes UINT as H', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'UINT')])).toBe('=H')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'UINT')], ctx)).toBe('=H')
   })
 
   it('encodes UDINT as I', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'UDINT')])).toBe('=I')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'UDINT')], ctx)).toBe('=I')
   })
 
   it('encodes ULINT as Q', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'ULINT')])).toBe('=Q')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'ULINT')], ctx)).toBe('=Q')
   })
 
   it('encodes REAL as f', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'REAL')])).toBe('=f')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'REAL')], ctx)).toBe('=f')
   })
 
   it('encodes LREAL as d', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LREAL')])).toBe('=d')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LREAL')], ctx)).toBe('=d')
   })
 
   it('encodes BYTE as B', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'BYTE')])).toBe('=B')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'BYTE')], ctx)).toBe('=B')
   })
 
   it('encodes WORD as H', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'WORD')])).toBe('=H')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'WORD')], ctx)).toBe('=H')
   })
 
   it('encodes DWORD as I', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'DWORD')])).toBe('=I')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'DWORD')], ctx)).toBe('=I')
   })
 
   it('encodes LWORD as Q', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LWORD')])).toBe('=Q')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'LWORD')], ctx)).toBe('=Q')
   })
 
   it('encodes STRING as b126s', () => {
-    expect(encodeCharactersFromVariable([makeScalarVar('x', 'STRING')])).toBe('=b126s')
+    expect(encodeCharactersFromVariable([makeScalarVar('x', 'STRING')], ctx)).toBe('=b126s')
   })
 
   it('encodes multiple variables in order', () => {
     const vars = [makeScalarVar('a', 'INT'), makeScalarVar('b', 'REAL'), makeScalarVar('c', 'BOOL')]
-    expect(encodeCharactersFromVariable(vars)).toBe('=hfB')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=hfB')
   })
 
   it('describes nothing at all when one type cannot cross', () => {
@@ -116,27 +120,27 @@ describe('encodeCharactersFromVariable', () => {
     // half-formed one.
     const vars = [makeScalarVar('x', 'UNKNOWN_TYPE'), makeScalarVar('y', 'INT')]
 
-    expect(encodeCharactersFromVariable(vars)).toBe('=')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=')
   })
 
   it('encodes array variables with repeated format chars', () => {
     const vars = [makeArrayVar('arr', 'INT', '0..4')]
-    expect(encodeCharactersFromVariable(vars)).toBe('=5h')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=5h')
   })
 
   it('encodes array of strings by repeating the full encoding string', () => {
     const vars = [makeArrayVar('arr', 'STRING', '0..2')]
-    expect(encodeCharactersFromVariable(vars)).toBe('=b126sb126sb126s')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=b126sb126sb126s')
   })
 
   it('skips array with unknown base type and warns', () => {
     const vars = [makeArrayVar('arr', 'UNKNOWN', '0..2')]
-    const result = encodeCharactersFromVariable(vars)
+    const result = encodeCharactersFromVariable(vars, ctx)
     expect(result).toBe('=')
   })
 
   it('encodes mixed scalar and array variables', () => {
     const vars = [makeScalarVar('a', 'INT'), makeArrayVar('b', 'REAL', '0..2'), makeScalarVar('c', 'BOOL')]
-    expect(encodeCharactersFromVariable(vars)).toBe('=h3fB')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=h3fB')
   })
 })

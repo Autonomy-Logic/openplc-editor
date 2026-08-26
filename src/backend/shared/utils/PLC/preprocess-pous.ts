@@ -1,6 +1,7 @@
 import { addCppLocalVariables } from '../../../../frontend/utils/cpp/addCppLocalVariables'
 import { generateSTCode as generateCppSTCode } from '../../../../frontend/utils/cpp/generateSTCode'
 import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
+import type { LibraryFunctionBlockSource } from '../../../../frontend/utils/PLC/function-block-pins'
 import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
 import { pythonInterfaceVariables, pythonRefusedVariables } from '../../../../frontend/utils/python/block-interface'
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
@@ -76,6 +77,14 @@ function preprocessPous(
   isSimulator: boolean,
   log: LogFn,
   pythonSupport?: PythonTargetSupport,
+  /**
+   * Bundled libraries, needed only to resolve the pins of a function block
+   * instance a native block declares — `ton0 : TON` has to become a pin list
+   * before it can cross into Python. Passed in rather than read from the store,
+   * which this layer may not reach; omitted, only project-declared blocks
+   * resolve.
+   */
+  libraries: readonly LibraryFunctionBlockSource[] = [],
 ): PreprocessResult {
   let processedProjectData: PLCProjectData = projectData
 
@@ -136,7 +145,16 @@ function preprocessPous(
       for (const variable of pythonInterfaceVariables(pou.interface?.variables ?? [])) {
         // The walk descends into structures, so the refusal names the member
         // that cannot cross rather than the variable that contains it.
-        const walked = describeShmLeaves(variable, projectData.dataTypes ?? [])
+        // Refusals are direction-independent for every shape except a function
+        // block instance, and for that the inbound direction is the wider set —
+        // it carries the outputs too — so a pin that cannot cross is caught here
+        // whichever way it travels.
+        const walked = describeShmLeaves(variable, {
+          dataTypes: projectData.dataTypes ?? [],
+          pous: projectData.pous,
+          libraries,
+          direction: 'in',
+        })
         if ('refusal' in walked) {
           unsupported.push(`"${pou.name}.${walked.refusal.path.join('.')}": ${walked.refusal.reason}`)
         }
@@ -184,7 +202,12 @@ function preprocessPous(
     } else {
       // Full pipeline for runtime targets
       const pythonData = extractPythonData(processedProjectData.pous)
-      const processedPythonCodes = injectPythonCode(pythonData, projectData.dataTypes ?? [])
+      const processedPythonCodes = injectPythonCode(
+        pythonData,
+        projectData.dataTypes ?? [],
+        projectData.pous,
+        libraries,
+      )
 
       let pythonIndex = 0
       processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
@@ -198,6 +221,8 @@ function preprocessPous(
                 pou.interface?.variables ?? [],
               processedPythonCode: processedPythonCodes[pythonIndex],
               dataTypes: projectData.dataTypes ?? [],
+              pous: projectData.pous,
+              libraries,
             })
 
             pythonIndex++

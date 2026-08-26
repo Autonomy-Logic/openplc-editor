@@ -1,7 +1,9 @@
-import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
 import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
 import { encodeCharactersFromVariable } from './encodeCharactersFromVariable'
 import { injectPythonRuntime } from './injectPythonRuntime'
+import type { ShmWalkContext } from './shm-leaves'
 
 type PythonPouData = {
   name: string
@@ -11,13 +13,24 @@ type PythonPouData = {
   variables: PLCVariable[]
 }
 
-const injectPythonCode = (pythonPous: PythonPouData[], dataTypes: readonly PLCDataType[] = []): string[] => {
+const injectPythonCode = (
+  pythonPous: PythonPouData[],
+  dataTypes: readonly PLCDataType[] = [],
+  pous: readonly PLCPou[] = [],
+  libraries: readonly LibraryFunctionBlockSource[] = [],
+): string[] => {
   return pythonPous.map((pou) => {
     const inputVariables = pythonInboundVariables(pou.variables)
     const outputVariables = pythonOutboundVariables(pou.variables)
 
-    const fmtIn = encodeCharactersFromVariable(inputVariables, dataTypes)
-    const fmtOut = encodeCharactersFromVariable(outputVariables, dataTypes)
+    // Direction decides which of a function block instance's pins cross: the
+    // block drives its inputs and reads its outputs. Both contexts otherwise
+    // describe the same project.
+    const inbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'in' }
+    const outbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'out' }
+
+    const fmtIn = encodeCharactersFromVariable(inputVariables, inbound)
+    const fmtOut = encodeCharactersFromVariable(outputVariables, outbound)
 
     const injectedCode = injectPythonRuntime({
       fmtIn,
@@ -26,7 +39,8 @@ const injectPythonCode = (pythonPous: PythonPouData[], dataTypes: readonly PLCDa
       outputVariables,
       originalCode: pou.code,
       pouName: pou.name,
-      dataTypes,
+      inbound,
+      outbound,
     })
 
     return injectedCode

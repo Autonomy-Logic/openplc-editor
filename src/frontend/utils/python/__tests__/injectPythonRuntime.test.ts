@@ -68,6 +68,109 @@ const MODE: PLCDataType = {
   values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
 }
 
+const TON_LIB = {
+  functionBlocks: [
+    {
+      name: 'TON',
+      inputs: [
+        { name: 'IN', type: 'BOOL' },
+        { name: 'PT', type: 'TIME' },
+      ],
+      inouts: [],
+      outputs: [
+        { name: 'Q', type: 'BOOL' },
+        { name: 'ET', type: 'TIME' },
+      ],
+    },
+  ],
+}
+
+describe('function block instances', () => {
+  const instance = (name: string): PLCVariable => ({
+    name,
+    class: 'local',
+    type: { definition: 'derived', value: 'TON' },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+  const run = (variables: PLCVariable[]) =>
+    injectPythonRuntime({
+      fmtIn: '=',
+      fmtOut: '=',
+      inputVariables: variables,
+      outputVariables: variables,
+      originalCode: '',
+      pouName: 'test',
+      inbound: { dataTypes: [], libraries: [TON_LIB], direction: 'in' },
+      outbound: { dataTypes: [], libraries: [TON_LIB], direction: 'out' },
+    })
+
+  it('declares a class carrying every pin, so one class serves both directions', () => {
+    const result = run([instance('ton0')])
+
+    expect(result).toContain('class TON:')
+    expect(result).toContain("__slots__ = ('IN', 'PT', 'Q', 'ET')")
+  })
+
+  it('says the instances are called by the PLC, not by the block', () => {
+    expect(run([instance('ton0')])).toContain('# Function block instances — called once per scan by the PLC')
+  })
+
+  it('declares each block type once however many instances use it', () => {
+    const result = run([instance('a'), instance('b')])
+
+    expect(result.match(/class TON:/g)).toHaveLength(1)
+  })
+
+  it('rebuilds the instance from every pin on the way in', () => {
+    const result = run([instance('ton0')])
+
+    expect(result).toContain('ton0 = TON(IN=_ton0_IN, PT=_ton0_PT, Q=_ton0_Q, ET=_ton0_ET)')
+  })
+
+  it('rebuilds it from only the drivable pins when seeding outputs', () => {
+    // The seed decodes the outbound layout, which has no output pins in it.
+    // Naming one here is what killed the block with `NameError: _ton0_Q`.
+    const result = run([instance('ton0')])
+    const seed = result.slice(result.indexOf('# Seed outputs'), result.indexOf('# Initialize block'))
+
+    expect(seed).toContain('ton0 = TON(IN=_ton0_IN, PT=_ton0_PT)')
+    expect(seed).not.toContain('_ton0_Q')
+  })
+
+  it('packs only the drivable pins back', () => {
+    const result = run([instance('ton0')])
+    const pack = result.slice(result.indexOf('# Write output variables'))
+
+    expect(pack).toContain('_out.append(ton0.IN)')
+    expect(pack).not.toContain('_out.append(ton0.Q)')
+  })
+
+  it('upper-cases a pin the project declared in lower case', () => {
+    // The compiler upper-cases members, and the Python attribute has to match
+    // the slot it was constructed with.
+    const lower = {
+      functionBlocks: [{ name: 'ACC', inputs: [{ name: 'step', type: 'INT' }], inouts: [], outputs: [] }],
+    }
+    const acc: PLCVariable = { ...instance('acc'), type: { definition: 'derived', value: 'ACC' } }
+    const result = injectPythonRuntime({
+      fmtIn: '=',
+      fmtOut: '=',
+      inputVariables: [acc],
+      outputVariables: [acc],
+      originalCode: '',
+      pouName: 'test',
+      inbound: { dataTypes: [], libraries: [lower], direction: 'in' },
+      outbound: { dataTypes: [], libraries: [lower], direction: 'out' },
+    })
+
+    expect(result).toContain("__slots__ = ('STEP',)")
+    expect(result).toContain('acc = ACC(STEP=_acc_STEP)')
+    expect(result).toContain('_out.append(acc.STEP)')
+  })
+})
+
 describe('structures and enumerations', () => {
   const run = (variables: PLCVariable[], dataTypes: PLCDataType[]) =>
     injectPythonRuntime({
@@ -77,7 +180,8 @@ describe('structures and enumerations', () => {
       outputVariables: variables.filter((v) => v.class === 'output'),
       originalCode: '',
       pouName: 'test',
-      dataTypes,
+      inbound: { dataTypes, direction: 'in' },
+      outbound: { dataTypes, direction: 'out' },
     })
 
   it('declares a structure as a slotted class, so the user writes m.speed', () => {
@@ -133,7 +237,7 @@ describe('structures and enumerations', () => {
   it('says so plainly when a block uses no composite type', () => {
     const result = run([makeScalarVar('x', 'input', 'INT')], [MOTOR])
 
-    expect(result).toContain('# This block uses no structures or enumerations')
+    expect(result).toContain('# This block uses no structures, enumerations or function block instances')
     expect(result).not.toContain('class Motor:')
   })
 
@@ -196,13 +300,15 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('b', 'input', 'Bank')], [named])
 
-    expect(result).toContain('# This block uses no structures or enumerations')
+    expect(result).toContain('# This block uses no structures, enumerations or function block instances')
   })
 
-  it('ignores a type the project does not declare', () => {
+  it('declares nothing for an instance whose block cannot be resolved', () => {
+    // With no library and no project POU there are no pins to expose. The build
+    // is refused upstream; here there is simply no class to emit.
     const result = run([userTyped('t', 'input', 'TON')], [MOTOR])
 
-    expect(result).toContain('# This block uses no structures or enumerations')
+    expect(result).not.toContain('class TON:')
   })
 
   it('declares a structure reached through an array element type', () => {
@@ -240,6 +346,8 @@ describe('WSTRING crosses as UTF-16, counted in code units', () => {
       outputVariables: variables.filter((v) => v.class === 'output'),
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
   it('decodes an inbound WSTRING as utf-16-le over twice the length', () => {
@@ -292,6 +400,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: 'def block_init():\n    pass\ndef block_loop():\n    pass',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('def block_init():')
@@ -314,6 +424,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('_vals = struct.unpack(fmt_in, shm_in.buf[:data_size_in])')
@@ -330,6 +442,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeScalarVar('result', 'output', 'INT'), makeScalarVar('flag', 'output', 'BOOL')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('_out = []')
@@ -347,6 +461,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('data = list(_vals[_idx:_idx+5])')
@@ -361,6 +477,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeArrayVar('temps', 'output', 'REAL', '0..2')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('_out.extend(temps)')
@@ -374,6 +492,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('msg_len = _vals[_idx]')
@@ -389,6 +509,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeStringVar('msg', 'output')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain("_body = msg.encode('utf-8')[:126]")
@@ -406,6 +528,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeScalarVar('count', 'output', 'INT')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     // The old behaviour set `count = 0` from the declaration and wrote that
@@ -424,6 +548,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeArrayVar('arr', 'output', 'INT', '0..2')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('arr = list(_vals[_idx:_idx+3])')
@@ -447,6 +573,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [outputVar],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain("msg = msg_body[:msg_len].decode('utf-8', errors='ignore')")
@@ -471,6 +599,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [outputVar],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     // The declaration's initial value is applied by the runtime on the IEC
@@ -488,6 +618,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [makeScalarVar('count', 'output', 'INT')],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result.indexOf('# Seed outputs')).toBeLessThan(result.indexOf('block_init()'))
@@ -503,6 +635,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('# No output variables to seed')
@@ -516,6 +650,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('# No input variables to read')
@@ -529,6 +665,8 @@ describe('injectPythonRuntime', () => {
       outputVariables: [],
       originalCode: '',
       pouName: 'test',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
     })
 
     expect(result).toContain('# No output variables to write')

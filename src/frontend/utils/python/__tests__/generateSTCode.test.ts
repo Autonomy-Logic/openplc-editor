@@ -396,6 +396,95 @@ describe('generateSTCode (python)', () => {
     })
   })
 
+  describe('function block instances', () => {
+    const TON_LIB = {
+      functionBlocks: [
+        {
+          name: 'TON',
+          inputs: [
+            { name: 'IN', type: 'BOOL' },
+            { name: 'PT', type: 'TIME' },
+          ],
+          inouts: [],
+          outputs: [
+            { name: 'Q', type: 'BOOL' },
+            { name: 'ET', type: 'TIME' },
+          ],
+        },
+      ],
+    }
+    const instance = (name: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: { definition: 'derived', value: 'TON' },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const run = (variables: PLCVariable[]) =>
+      generateSTCode({
+        pouName: 'blk',
+        allVariables: variables,
+        processedPythonCode: '',
+        dataTypes: [],
+        libraries: [TON_LIB],
+      })
+
+    it('calls the instance once per scan, as ST', () => {
+      // This is what makes an instance usable from Python at all: Python cannot
+      // call it, but the wrapper runs in the PLC process where it lives. Written
+      // as ST so the call goes through the same path a hand-written `ton0();`
+      // would, including the EN gate the compiler puts at every call site.
+      expect(run([instance('ton0')])).toContain('ton0();')
+    })
+
+    it('calls each instance, in declaration order', () => {
+      const result = run([instance('first'), instance('second')])
+
+      expect(result.indexOf('first();')).toBeLessThan(result.indexOf('second();'))
+    })
+
+    it('applies Python’s pin writes before the call and publishes after', () => {
+      // Otherwise setting `ton0.IN` would see `ton0.Q` answer a scan late for no
+      // reason. The exchange splits around the call.
+      const result = run([instance('ton0')])
+      const applied = result.indexOf('TON0.IN = data_out.ton0_IN;')
+      const called = result.indexOf('ton0();')
+      const published = result.indexOf('data_in.ton0_Q = TON0.Q;')
+
+      expect(applied).toBeGreaterThan(-1)
+      expect(called).toBeGreaterThan(applied)
+      expect(published).toBeGreaterThan(called)
+    })
+
+    it('puts every pin in the inbound struct and only drivable pins in the outbound one', () => {
+      const result = run([instance('ton0')])
+      const inStart = result.indexOf('typedef struct {', result.indexOf('#pragma pack(pop)'))
+      const inbound = result.slice(inStart, result.indexOf('} shm_data_in_t;'))
+      const outbound = result.slice(
+        result.indexOf('typedef struct {', result.indexOf('} shm_data_in_t;')),
+        result.indexOf('} shm_data_out_t;'),
+      )
+
+      expect(inbound).toContain('uint8_t ton0_Q;')
+      expect(inbound).toContain('int64_t ton0_ET;')
+      expect(outbound).toContain('uint8_t ton0_IN;')
+      expect(outbound).not.toContain('ton0_Q')
+    })
+
+    it('keeps the single-block exchange when there is no instance', () => {
+      // The split only earns its keep when something has to run between the two
+      // copies; without an instance the wrapper stays as it was.
+      const result = generateSTCode({
+        pouName: 'blk',
+        allVariables: [makeScalarVar('x', 'input', 'INT')],
+        processedPythonCode: '',
+      })
+
+      expect(result.match(/\{external/g)?.length).toBe(3)
+    })
+  })
+
   describe('variable classes', () => {
     const byClass = (name: string, cls: PLCVariable['class'], type = 'INT'): PLCVariable => ({
       name,

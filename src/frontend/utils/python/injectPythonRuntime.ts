@@ -1,6 +1,7 @@
 import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
-import type { ShmLeaf } from './shm-leaves'
-import { describeShmLeaves } from './shm-leaves'
+import { resolveFunctionBlockPins } from '../PLC/function-block-pins'
+import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
+import { describeShmLeaves, pinCrossesInDirection, pythonFunctionBlockInstances } from './shm-leaves'
 import { SHM_STRING_CHARS } from './shm-type-map'
 
 type PythonRuntimeInjectionParams = {
@@ -10,8 +11,10 @@ type PythonRuntimeInjectionParams = {
   outputVariables: PLCVariable[]
   originalCode: string
   pouName: string
-  /** The project's data types, so a structure or enumeration can be rebuilt. */
-  dataTypes?: readonly PLCDataType[]
+  /** Walk context for what the PLC sends the block. */
+  inbound: ShmWalkContext
+  /** Walk context for what the block sends back. */
+  outbound: ShmWalkContext
 }
 
 /**
@@ -28,11 +31,18 @@ type PythonRuntimeInjectionParams = {
  * so `mode == Mode.RUNNING` reads naturally while the value crossing the
  * boundary stays the plain integer the PLC stores.
  */
-const generateTypeDeclarations = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateTypeDeclarations = (variables: PLCVariable[], context: ShmWalkContext): string => {
+  const dataTypes = context.dataTypes ?? []
   const referenced = collectReferencedTypes(variables, dataTypes)
-  if (referenced.length === 0) return '# This block uses no structures or enumerations'
+  const instanceClasses = generateInstanceClasses(variables, context)
 
-  let code = '# Structures and enumerations from the Variables Table\n'
+  if (referenced.length === 0 && instanceClasses === '') {
+    return '# This block uses no structures, enumerations or function block instances'
+  }
+
+  let code = ''
+  if (referenced.length === 0) return instanceClasses
+  code += '# Structures and enumerations from the Variables Table\n'
   for (const dataType of referenced) {
     if (dataType.derivation === 'enumerated') {
       code += `class ${dataType.name}(IntEnum):\n`
@@ -53,6 +63,54 @@ const generateTypeDeclarations = (variables: PLCVariable[], dataTypes: readonly 
       }
       code += '\n'
     }
+  }
+  return code + instanceClasses
+}
+
+/**
+ * Python classes for the function block instances a block declares.
+ *
+ * Python cannot call an instance, but it does not need to: the generated ST
+ * wrapper calls each one every scan, in the PLC process where the instance
+ * lives. What Python gets is the pins, and it should use them the way ST does —
+ * `ton0.IN = True`, then `ton0.Q` — so each instance becomes an object with its
+ * pins as attributes.
+ *
+ * Pin names are upper-cased, matching how the compiler names them and how the
+ * copy statements reach them, so a user writes `ton0.IN` rather than `ton0.in`
+ * (which would also collide with a Python keyword).
+ *
+ * Only the pins that cross appear. FB-internal `local` state is left out: it is
+ * the instance's own business, and exposing it would invite writes that corrupt
+ * the block from outside.
+ */
+const generateInstanceClasses = (variables: PLCVariable[], context: ShmWalkContext): string => {
+  const instances = pythonFunctionBlockInstances(variables, context.dataTypes ?? [])
+  if (instances.length === 0) return ''
+
+  const emitted = new Set<string>()
+  let code = '# Function block instances — called once per scan by the PLC\n'
+  for (const instance of instances) {
+    const typeName = instance.type.value
+    if (emitted.has(typeName.toUpperCase())) continue
+    emitted.add(typeName.toUpperCase())
+
+    const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
+    /* istanbul ignore next -- defensive: an unresolvable instance is refused upstream */
+    if (!pins) continue
+    const names = pins
+      // Every pin that ever crosses, in either direction, so one class serves
+      // both the seed (inputs only) and the per-cycle read (all pins).
+      .filter((pin) => pinCrossesInDirection(pin.class, 'in'))
+      .map((pin) => pin.name.toUpperCase())
+    /* istanbul ignore next -- defensive: a block with no pins at all */
+    if (names.length === 0) continue
+
+    code += `class ${typeName}:\n`
+    code += `    __slots__ = (${names.map((n) => `'${n}'`).join(', ')}${names.length === 1 ? ',' : ''})\n`
+    code += `    def __init__(self${names.map((n) => `, ${n}=None`).join('')}):\n`
+    for (const n of names) code += `        self.${n} = ${n}\n`
+    code += '\n'
   }
   return code
 }
@@ -98,8 +156,8 @@ const collectReferencedTypes = (variables: PLCVariable[], dataTypes: readonly PL
  * members, innermost first, so nesting rebuilds correctly. An enumeration is
  * wrapped in its IntEnum.
  */
-const generateVariableUnpack = (variable: PLCVariable, dataTypes: readonly PLCDataType[], indent: string): string => {
-  const walked = describeShmLeaves(variable, dataTypes)
+const generateVariableUnpack = (variable: PLCVariable, context: ShmWalkContext, indent: string): string => {
+  const walked = describeShmLeaves(variable, context)
   /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
   if ('refusal' in walked) return ''
 
@@ -119,35 +177,64 @@ const generateVariableUnpack = (variable: PLCVariable, dataTypes: readonly PLCDa
     return only.enumTypeName ? `${code}${indent}${variable.name} = ${only.enumTypeName}(${variable.name})\n` : code
   }
 
-  code += `${indent}${variable.name} = ${buildValue(variable, dataTypes, [variable.name])}\n`
+  code += `${indent}${variable.name} = ${buildValue(variable, context, [variable.name])}\n`
   return code
 }
 
-/** Construct expression for a structure, recursing into nested members. */
-const buildValue = (variable: PLCVariable, dataTypes: readonly PLCDataType[], path: string[]): string => {
+/**
+ * Construct expression for a composite: a structure, or a function block
+ * instance built from the pins that crossed.
+ *
+ * The two look the same from here — a named type whose members were decoded into
+ * temporaries — so one builder covers both, and the only difference is where the
+ * member list comes from.
+ */
+const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string[]): string => {
+  const dataTypes = context.dataTypes ?? []
   const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
   const base = variable.type.definition === 'array' ? variable.type.data?.baseType : variable.type
 
   const buildFor = (typeName: string, fieldPath: string[]): string => {
     const dataType = byName.get(typeName.toUpperCase())
-    /* istanbul ignore next -- defensive: only structures reach here */
-    if (!dataType || dataType.derivation !== 'structure') return `_${fieldPath.join('_')}`
-    const args = dataType.variable.map((member) => {
-      const memberPath = [...fieldPath, member.name]
-      if (member.type.definition === 'user-data-type') {
-        const nested = byName.get(member.type.value.toUpperCase())
-        if (nested?.derivation === 'structure') return `${member.name}=${buildFor(member.type.value, memberPath)}`
-        if (nested?.derivation === 'enumerated') {
-          return `${member.name}=${member.type.value}(_${memberPath.join('_')})`
+
+    if (dataType?.derivation === 'structure') {
+      const args = dataType.variable.map((member) => {
+        const memberPath = [...fieldPath, member.name]
+        if (member.type.definition === 'user-data-type') {
+          const nested = byName.get(member.type.value.toUpperCase())
+          if (nested?.derivation === 'structure') return `${member.name}=${buildFor(member.type.value, memberPath)}`
+          if (nested?.derivation === 'enumerated') {
+            return `${member.name}=${member.type.value}(_${memberPath.join('_')})`
+          }
         }
-      }
-      return `${member.name}=_${memberPath.join('_')}`
+        return `${member.name}=_${memberPath.join('_')}`
+      })
+      return `${dataType.name}(${args.join(', ')})`
+    }
+
+    // Not a data type, so a function block instance. Its pins are the members,
+    // and only the ones that crossed appear — which for the inbound direction is
+    // inputs, in-outs and outputs.
+    const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
+    /* istanbul ignore next -- defensive: an unresolvable instance is refused upstream */
+    if (!pins) return `_${fieldPath.join('_')}`
+    // Must match the walk exactly, or the constructor names a temporary the
+    // decode never produced — hence one shared predicate.
+    const crossing = pins.filter((pin) => pinCrossesInDirection(pin.class, context.direction))
+    const args = crossing.map((pin) => {
+      // Upper-cased on both sides of the `=`: the keyword names the class slot,
+      // and the temporary names the field the walk produced. They are the same
+      // name by construction — see the pin naming note in `shm-leaves`.
+      const upper = pin.name.toUpperCase()
+      return `${upper}=_${[...fieldPath, upper].join('_')}`
     })
-    return `${dataType.name}(${args.join(', ')})`
+    return `${typeName}(${args.join(', ')})`
   }
 
-  /* istanbul ignore next -- defensive: callers only assemble structures */
-  return base?.definition === 'user-data-type' ? buildFor(base.value, path) : `_${path.join('_')}`
+  /* istanbul ignore next -- defensive: callers only assemble composites */
+  return base && (base.definition === 'user-data-type' || base.definition === 'derived')
+    ? buildFor(base.value, path)
+    : `_${path.join('_')}`
 }
 
 /** Decode one leaf out of `_vals` into `local`. */
@@ -194,7 +281,7 @@ const decodeLeaf = (leaf: ShmLeaf, local: string, indent: string): string => {
  */
 const generateUnpackCode = (
   variables: PLCVariable[],
-  dataTypes: readonly PLCDataType[],
+  context: ShmWalkContext,
   opts: { header: string; buffer: string; fmt: string; size: string; indent: string },
 ): string => {
   const { header, buffer, fmt, size, indent } = opts
@@ -203,14 +290,14 @@ const generateUnpackCode = (
   code += `${indent}_vals = struct.unpack(${fmt}, ${buffer}.buf[:${size}])\n`
   code += `${indent}_idx = 0\n`
   for (const variable of variables) {
-    code += generateVariableUnpack(variable, dataTypes, indent)
+    code += generateVariableUnpack(variable, context, indent)
   }
   return code
 }
 
-const generateInputUnpackCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateInputUnpackCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return '    # No input variables to read'
-  return generateUnpackCode(variables, dataTypes, {
+  return generateUnpackCode(variables, context, {
     header: '    # Read input variables',
     buffer: 'shm_in',
     fmt: 'fmt_in',
@@ -231,9 +318,9 @@ const generateInputUnpackCode = (variables: PLCVariable[], dataTypes: readonly P
  * them back. A block that never assigns an output now leaves it exactly as the
  * PLC had it.
  */
-const generateOutputSeedCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return '# No output variables to seed'
-  return generateUnpackCode(variables, dataTypes, {
+  return generateUnpackCode(variables, context, {
     header: '# Seed outputs from the values the PLC already holds',
     buffer: 'shm_out',
     fmt: 'fmt_out',
@@ -281,13 +368,13 @@ const encodeLeaf = (leaf: ShmLeaf): string => {
 /**
  * Generate Python code that packs output variables into the flat struct format.
  */
-const generateOutputPackCode = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string => {
+const generateOutputPackCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
   if (variables.length === 0) return '    # No output variables to write'
 
   let code = '    # Write output variables\n'
   code += '    _out = []\n'
   for (const variable of variables) {
-    const walked = describeShmLeaves(variable, dataTypes)
+    const walked = describeShmLeaves(variable, context)
     /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
     if ('refusal' in walked) continue
     for (const leaf of walked.leaves) code += encodeLeaf(leaf)
@@ -300,14 +387,16 @@ const generateOutputPackCode = (variables: PLCVariable[], dataTypes: readonly PL
 }
 
 const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
-  const { fmtIn, fmtOut, inputVariables, outputVariables, originalCode, pouName, dataTypes = [] } = params
+  const { fmtIn, fmtOut, inputVariables, outputVariables, originalCode, pouName, inbound, outbound } = params
 
-  const outputSeeding = generateOutputSeedCode(outputVariables, dataTypes)
-  const readInputSection = generateInputUnpackCode(inputVariables, dataTypes)
-  const writeOutputSection = generateOutputPackCode(outputVariables, dataTypes)
+  const outputSeeding = generateOutputSeedCode(outputVariables, outbound)
+  const readInputSection = generateInputUnpackCode(inputVariables, inbound)
+  const writeOutputSection = generateOutputPackCode(outputVariables, outbound)
   // Declared before the user's code, so a block_init() that constructs one of
-  // its own structures finds the class already defined.
-  const typeDeclarations = generateTypeDeclarations([...inputVariables, ...outputVariables], dataTypes)
+  // its own structures finds the class already defined. The inbound context is
+  // the fuller one — it carries a function block's outputs as well as its
+  // inputs — so the emitted class has every pin.
+  const typeDeclarations = generateTypeDeclarations([...inputVariables, ...outputVariables], inbound)
 
   const injectedCode = `
 from enum import IntEnum

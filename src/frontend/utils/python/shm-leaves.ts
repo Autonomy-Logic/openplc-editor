@@ -24,12 +24,15 @@
 
 import type {
   PLCDataType,
+  PLCPou,
   PLCStructureVariable,
   PLCVariable,
   PLCVariableType,
 } from '../../../middleware/shared/ports/types'
 import { getArrayTotalElements } from '../PLC/array-codegen-helpers'
 import { parseDimensionRange } from '../PLC/dimension-range'
+import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
+import { resolveFunctionBlockPins } from '../PLC/function-block-pins'
 import type { ShmFieldDescriptor } from './shm-type-map'
 import { describeShmField, SHM_SCALAR_TYPES } from './shm-type-map'
 
@@ -69,6 +72,25 @@ export interface ShmRefusal {
 export type ShmWalkResult = { leaves: ShmLeaf[] } | { refusal: ShmRefusal }
 
 /**
+ * What the walk needs beyond the variable, and which way the data travels.
+ *
+ * `direction` matters only for a function block instance, whose pins are not
+ * symmetric: the block's inputs are the caller's to drive, so Python may write
+ * them, while its outputs are produced by the instance and are Python's to read.
+ * A structure has no such asymmetry — every member travels both ways — so
+ * everything else ignores it.
+ */
+export interface ShmWalkContext {
+  dataTypes?: readonly PLCDataType[]
+  /** Project POUs, for resolving a function block instance's pins. */
+  pous?: readonly PLCPou[]
+  /** Installed libraries, for resolving a standard block such as TON. */
+  libraries?: readonly LibraryFunctionBlockSource[]
+  /** `in` — what the PLC sends the block. `out` — what the block sends back. */
+  direction: 'in' | 'out'
+}
+
+/**
  * The member's C++ name, mirroring STruC++'s `member-mangling.ts`.
  *
  * A member whose name matches its own user-defined type is emitted with a
@@ -91,12 +113,44 @@ const mangledMemberName = (memberName: string, memberTypeName: string, userTypeN
   return upper === memberTypeName.toUpperCase() && userTypeNames.has(upper) ? `${upper}_` : upper
 }
 
+/**
+ * Whether a function block pin crosses in a given direction.
+ *
+ * The one statement of this rule. It was briefly written twice — once in the
+ * walk and once where Python reassembles the instance — and the two disagreed:
+ * the reassembly ignored direction, so the output seed constructed the instance
+ * from a pin the seed had never decoded and the block died on
+ * `NameError: name '_ton0_Q' is not defined`. Anything that needs to know which
+ * pins are present has to ask here.
+ */
+export const pinCrossesInDirection = (
+  pinClass: 'input' | 'output' | 'inOut' | 'local',
+  direction: 'in' | 'out',
+): boolean => {
+  // FB-internal state never crosses: it is the instance's own business, and
+  // letting Python write it would corrupt the block from outside.
+  if (pinClass === 'local') return false
+  // Outbound is what Python may drive — the block's inputs. Inbound is
+  // everything, so Python can read what the instance produced.
+  if (direction === 'out') return pinClass === 'input' || pinClass === 'inOut'
+  return true
+}
+
 /** Index the project's data types by upper-cased name. */
 const indexDataTypes = (dataTypes: readonly PLCDataType[]): Map<string, PLCDataType> =>
   new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
 
 /** IEC base type an enumeration is stored as. STruC++ defaults to INT. */
 const ENUM_BASE_DESCRIPTOR = SHM_SCALAR_TYPES.int
+
+/** Everything the recursion carries that does not change between levels. */
+interface WalkEnv {
+  types: Map<string, PLCDataType>
+  userTypeNames: ReadonlySet<string>
+  pous: readonly PLCPou[]
+  libraries: readonly LibraryFunctionBlockSource[]
+  direction: 'in' | 'out'
+}
 
 const walk = (
   name: string,
@@ -106,10 +160,10 @@ const walk = (
   path: string[],
   field: string,
   access: string,
-  types: Map<string, PLCDataType>,
-  userTypeNames: ReadonlySet<string>,
+  env: WalkEnv,
   depth: number,
 ): ShmWalkResult => {
+  const { types, userTypeNames } = env
   // A structure that contains itself would otherwise recurse forever. The
   // compiler rejects that too, but this walk runs first and must not hang.
   if (depth > 16) {
@@ -136,8 +190,7 @@ const walk = (
         [...path, member.name],
         `${field}_${member.name}`,
         `${access}.${mangledMemberName(member.name, member.type.value, userTypeNames)}`,
-        types,
-        userTypeNames,
+        env,
         depth + 1,
       )
       if ('refusal' in result) return result
@@ -171,18 +224,61 @@ const walk = (
 
   // A function block instance. `derived` is what the variables parser marks one
   // as, having resolved the name against the project's POUs and libraries;
-  // `user-data-type` reaches here only when the name matched no declared data
-  // type either, which is the same situation from this side. Both are refused
-  // with the reason, because the reason is not "unsupported type" — Python runs
-  // in its own process and cannot call an instance, so holding one would give
-  // the user pins that never advance.
+  // `user-data-type` reaches here only when the name matched no data type
+  // either, which is the same situation from this side.
+  //
+  // Python cannot call the instance — it runs in its own process. What it can do
+  // is use the pins, because the generated ST wrapper calls the instance once
+  // per scan, in the PLC process where it lives (see `generateSTCode`). So the
+  // pins cross like a structure's members, and which ones cross depends on the
+  // direction: the block's inputs are the caller's to drive, so Python writes
+  // them, and its outputs are the instance's to produce, so Python reads them.
+  //
+  // FB-internal `local` state never crosses. It is the instance's own business,
+  // and letting Python write it would corrupt the block from the outside.
   if (typeDefinition === 'derived' || typeDefinition === 'user-data-type') {
-    return {
-      refusal: {
-        path,
-        reason: `"${typeValue}" is a function block instance. A Python block cannot hold one — it runs in its own process, so it cannot call the instance, and an uncalled instance never updates its outputs. Use EN/ENO on the block itself for execution control, or call the instance from an ST block and pass its outputs in as inputs`,
-      },
+    if (arrayInfo) {
+      return { refusal: { path, reason: 'an array of function block instances cannot cross into Python yet' } }
     }
+
+    const pins = resolveFunctionBlockPins(typeValue, env.pous, env.libraries)
+    if (!pins) {
+      return {
+        refusal: {
+          path,
+          reason: `"${typeValue}" is not a type this project declares, and no function block by that name was found in the project or the installed libraries`,
+        },
+      }
+    }
+
+    const crossing = pins.filter((pin) => pinCrossesInDirection(pin.class, env.direction))
+
+    const leaves: ShmLeaf[] = []
+    for (const pin of crossing) {
+      // Pin names are upper-cased throughout — the struct field, the Python
+      // attribute, the class slot and the constructor keyword. The compiler
+      // upper-cases members, so this is also what the C++ side writes
+      // (`ton0.IN`), and a user-declared lowercase pin would otherwise give
+      // Python an attribute named differently from the slot it was built with.
+      const pinName = pin.name.toUpperCase()
+      const element = elementTypeOf({ name: pin.name, type: pin.type })
+      const result = walk(
+        pinName,
+        element.value,
+        element.definition,
+        arrayInfoFor({ name: pin.name, type: pin.type }),
+        [...path, pinName],
+        `${field}_${pinName}`,
+        // A pin is a member of the instance's class, upper-cased, and mangled by
+        // the same rule as any other member.
+        `${access}.${mangledMemberName(pin.name, pin.type.value, userTypeNames)}`,
+        env,
+        depth + 1,
+      )
+      if ('refusal' in result) return result
+      leaves.push(...result.leaves)
+    }
+    return { leaves }
   }
 
   const descriptor = describeShmField({
@@ -257,9 +353,15 @@ const arrayInfoFor = (
  * failure lands on unrelated variables and reads as corrupted data. Refusing
  * stops the build with the name of the variable that caused it.
  */
-export const describeShmLeaves = (variable: PLCVariable, dataTypes: readonly PLCDataType[] = []): ShmWalkResult => {
-  const types = indexDataTypes(dataTypes)
-  const userTypeNames = new Set(dataTypes.map((dataType) => dataType.name.toUpperCase()))
+export const describeShmLeaves = (variable: PLCVariable, context: ShmWalkContext): ShmWalkResult => {
+  const dataTypes = context.dataTypes ?? []
+  const env: WalkEnv = {
+    types: indexDataTypes(dataTypes),
+    userTypeNames: new Set(dataTypes.map((dataType) => dataType.name.toUpperCase())),
+    pous: context.pous ?? [],
+    libraries: context.libraries ?? [],
+    direction: context.direction,
+  }
 
   const element = elementTypeOf(variable)
 
@@ -271,22 +373,41 @@ export const describeShmLeaves = (variable: PLCVariable, dataTypes: readonly PLC
     [variable.name],
     variable.name,
     variable.name.toUpperCase(),
-    types,
-    userTypeNames,
+    env,
     0,
   )
 }
 
 /** Every leaf of every variable, in order, or the first refusal encountered. */
-export const describeShmLayout = (
-  variables: readonly PLCVariable[],
-  dataTypes: readonly PLCDataType[] = [],
-): ShmWalkResult => {
+export const describeShmLayout = (variables: readonly PLCVariable[], context: ShmWalkContext): ShmWalkResult => {
   const leaves: ShmLeaf[] = []
   for (const variable of variables) {
-    const result = describeShmLeaves(variable, dataTypes)
+    const result = describeShmLeaves(variable, context)
     if ('refusal' in result) return result
     leaves.push(...result.leaves)
   }
   return { leaves }
+}
+
+/**
+ * The function block instances a Python block declares, in declaration order.
+ *
+ * The generated ST wrapper calls each of these once per scan, between applying
+ * Python's pin writes and publishing the pins back — see `generateSTCode`. Order
+ * is the declaration order, so the sequence is stable and a user can reason
+ * about which instance runs first.
+ */
+export const pythonFunctionBlockInstances = (
+  variables: readonly PLCVariable[],
+  dataTypes: readonly PLCDataType[] = [],
+): PLCVariable[] => {
+  const declared = new Set(dataTypes.map((dataType) => dataType.name.toUpperCase()))
+  return variables.filter(
+    (variable) =>
+      variable.type.definition === 'derived' ||
+      // A name the project does not declare as a data type is a function block:
+      // the variables parser marks it `derived` when it resolved the name, and
+      // leaves it `user-data-type` when it did not.
+      (variable.type.definition === 'user-data-type' && !declared.has(variable.type.value.toUpperCase())),
+  )
 }
