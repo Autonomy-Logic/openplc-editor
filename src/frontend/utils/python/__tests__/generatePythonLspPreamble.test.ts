@@ -42,17 +42,11 @@ describe('generatePythonLspPreamble', () => {
       expect(result.lineCount).toBe(0)
     })
 
-    it('returns empty text when no variables are input/output class', () => {
-      // The runtime injection only wires `input` and `output` through
-      // shared memory.  Local / temp / external would never become
-      // runtime globals — preamble must skip them so the LSP doesn't
-      // pretend they exist.
-      const vars = [
-        makeScalar('localOnly', 'local', 'INT'),
-        makeScalar('tempOnly', 'temp', 'BOOL'),
-        makeScalar('externOnly', 'external', 'REAL'),
-        makeScalar('ioOnly', 'inOut', 'INT'),
-      ]
+    it('returns empty text when no variable crosses the boundary', () => {
+      // The preamble declares exactly what the runtime injection makes a module
+      // global. A VAR_TEMP is refused outright for a Python block, so it never
+      // becomes one — declaring it would have the LSP pretend it exists.
+      const vars = [makeScalar('tempOnly', 'temp', 'BOOL')]
       const result = generatePythonLspPreamble(vars)
       expect(result.text).toBe('')
       expect(result.lineCount).toBe(0)
@@ -139,22 +133,78 @@ describe('generatePythonLspPreamble', () => {
   })
 
   describe('class filtering', () => {
-    it('includes only input + output, excludes local / temp / inOut / external', () => {
+    it('declares every class the runtime makes a module global, and no other', () => {
+      // The preamble has to match the injection exactly: anything it omits shows
+      // as an undefined name in the editor for a variable that does exist, and
+      // anything it adds is a name that will not be there at runtime.
       const vars = [
         makeScalar('inA', 'input', 'INT'),
         makeScalar('outB', 'output', 'REAL'),
         makeScalar('localC', 'local', 'BOOL'),
-        makeScalar('tempD', 'temp', 'INT'),
         makeScalar('ioE', 'inOut', 'INT'),
         makeScalar('extF', 'external', 'INT'),
+        makeScalar('tempD', 'temp', 'INT'),
       ]
       const result = generatePythonLspPreamble(vars)
       expect(result.text).toContain('inA: int = 0')
       expect(result.text).toContain('outB: float = 0.0')
-      expect(result.text).not.toContain('localC')
+      expect(result.text).toContain('localC: bool = False')
+      expect(result.text).toContain('ioE: int = 0')
+      expect(result.text).toContain('extF: int = 0')
+      // VAR_TEMP is refused for a Python block, so it is never a global.
       expect(result.text).not.toContain('tempD')
-      expect(result.text).not.toContain('ioE')
-      expect(result.text).not.toContain('extF')
+    })
+
+    it('declares a variable that travels both ways exactly once', () => {
+      const vars = [makeScalar('ioE', 'inOut', 'INT')]
+      const result = generatePythonLspPreamble(vars)
+
+      expect(result.text.match(/ioE: int = 0/g)).toHaveLength(1)
+    })
+  })
+
+  describe('types the annotation cannot map', () => {
+    it('declares a STRING as an empty str, not None', () => {
+      // Pyright needs a definite assignment compatible with the annotation, so
+      // the literal has to match the declared type rather than be a placeholder.
+      const result = generatePythonLspPreamble([makeScalar('label', 'input', 'STRING')])
+
+      expect(result.text).toContain("label: str = ''")
+    })
+
+    it('skips an array whose element type has no Python equivalent', () => {
+      // The runtime does not marshal one either, so declaring it would have the
+      // editor offer a name that will not exist at runtime.
+      const arrayOfStructs: PLCVariable = {
+        name: 'bank',
+        class: 'input',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..3] OF Motor',
+          data: {
+            baseType: { definition: 'user-data-type', value: 'Motor' },
+            dimensions: [{ dimension: '0..3' }],
+          },
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      }
+
+      expect(generatePythonLspPreamble([arrayOfStructs]).text).toBe('')
+    })
+
+    it('skips an array whose declaration carries no element type', () => {
+      const malformed: PLCVariable = {
+        name: 'bank',
+        class: 'input',
+        type: { definition: 'array', value: 'ARRAY [0..3] OF INT' },
+        location: '',
+        documentation: '',
+        debug: false,
+      }
+
+      expect(generatePythonLspPreamble([malformed]).text).toBe('')
     })
   })
 
@@ -224,7 +274,9 @@ describe('generatePythonLspPreamble', () => {
   describe('variableNameByPreambleLine', () => {
     it('is empty when no variables produce declaration lines', () => {
       expect(generatePythonLspPreamble([]).variableNameByPreambleLine.size).toBe(0)
-      expect(generatePythonLspPreamble([makeScalar('x', 'local', 'BOOL')]).variableNameByPreambleLine.size).toBe(0)
+      // `temp` is the class a Python block cannot express, so it is the one that
+      // produces no declaration. A `local` does become a module global now.
+      expect(generatePythonLspPreamble([makeScalar('x', 'temp', 'BOOL')]).variableNameByPreambleLine.size).toBe(0)
     })
 
     it('maps each declaration line to the corresponding variable name in order', () => {

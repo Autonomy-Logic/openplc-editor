@@ -4,6 +4,7 @@ import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
 import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
 import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
+import { pythonInterfaceVariables, pythonRefusedVariables } from '../../../../frontend/utils/python/block-interface'
 import { describeShmField, describeVariableType } from '../../../../frontend/utils/python/shm-type-map'
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSoftMotionArtifacts } from '../../ethercat/generate-softmotion'
@@ -109,11 +110,30 @@ function preprocessPous(
   // unsupported type. Structures, enumerations and function block instances
   // arrive in later phases.
   if (hasPythonCode) {
+    // A class this side of the boundary cannot express is refused first, and on
+    // its own terms: telling a user their VAR_TEMP is an unsupported *type*
+    // would send them to change the type, which is not the problem.
+    const refusedClasses: string[] = []
+    for (const pou of projectData.pous) {
+      if (pou.body.language !== 'python') continue
+      for (const { variable, reason } of pythonRefusedVariables(pou.interface?.variables ?? [])) {
+        refusedClasses.push(`"${pou.name}.${variable.name}": ${reason}`)
+      }
+    }
+    if (refusedClasses.length > 0) {
+      const message = refusedClasses.join(' ')
+      log('error', message)
+      return {
+        projectData: processedProjectData as ProjectDataWithCpp,
+        validationFailed: true,
+        validationError: message,
+      }
+    }
+
     const unsupported: string[] = []
     for (const pou of projectData.pous) {
       if (pou.body.language !== 'python') continue
-      for (const variable of pou.interface?.variables ?? []) {
-        if (variable.class !== 'input' && variable.class !== 'output') continue
+      for (const variable of pythonInterfaceVariables(pou.interface?.variables ?? [])) {
         if (describeShmField(variable) === null) {
           unsupported.push(`"${pou.name}.${variable.name}" (${describeVariableType(variable)})`)
         }

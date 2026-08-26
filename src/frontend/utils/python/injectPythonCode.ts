@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
 import { encodeCharactersFromVariable } from './encodeCharactersFromVariable'
 import { injectPythonRuntime } from './injectPythonRuntime'
 
@@ -12,8 +13,8 @@ type PythonPouData = {
 
 const injectPythonCode = (pythonPous: PythonPouData[]): string[] => {
   return pythonPous.map((pou) => {
-    const inputVariables = pou.variables.filter((v) => v.class === 'input')
-    const outputVariables = pou.variables.filter((v) => v.class === 'output')
+    const inputVariables = pythonInboundVariables(pou.variables)
+    const outputVariables = pythonOutboundVariables(pou.variables)
 
     const fmtIn = encodeCharactersFromVariable(inputVariables)
     const fmtOut = encodeCharactersFromVariable(outputVariables)

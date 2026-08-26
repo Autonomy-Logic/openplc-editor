@@ -1,5 +1,6 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayStartIndex, getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
 import { describeShmField, SHM_STRING_CHARS } from './shm-type-map'
 
 type STCodeGenerationParams = {
@@ -27,8 +28,7 @@ const fieldKind = (variable: PLCVariable): 'scalar' | 'string' | 'wstring' | nul
  * bridges between the wrapper (force-aware reads and writes on the IEC side)
  * and these raw fields at the boundary.
  */
-const shmFieldType = (variable: PLCVariable): string =>
-  describeShmField(variable)?.cType ?? 'uint8_t'
+const shmFieldType = (variable: PLCVariable): string => describeShmField(variable)?.cType ?? 'uint8_t'
 
 const generateStructField = (variable: PLCVariable): string => {
   const fieldType = shmFieldType(variable)
@@ -72,15 +72,49 @@ const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): 
   return structs
 }
 
+/**
+ * How one variable is named in a copy statement, and what must wrap that
+ * statement.
+ *
+ * Every class but `external` is a plain member of the block's class, so the
+ * upper-cased name refers to it directly. A `VAR_EXTERNAL` is a
+ * `GlobalVar<V>*`: the value together with that global's own mutex. Naming it
+ * directly would compile — the pointer converts — and would copy from the wrong
+ * place while holding no lock at all.
+ *
+ * So an external's copy is wrapped in `with_lock`, which runs a callable with a
+ * `V*` while the lock is held. Each external is wrapped on its own rather than
+ * nested: this stub only copies values in and out, it does not run user code, so
+ * one lock at a time is enough — and that matches what an ST body does, with no
+ * lock ordering to reason about.
+ *
+ * The lambda's parameter is deduced, so nothing here names `V` — the compiler's
+ * layout stays the only statement of it. The dereference is bound to a reference
+ * on its own line rather than written inline as `(*p)`: this C++ sits inside an
+ * `{external}` block that the ST front end still scans, where `(*` opens a block
+ * comment and would swallow the rest of the POU.
+ */
+const accessorFor = (variable: PLCVariable): { open: string; name: string; close: string } => {
+  const upperName = variable.name.toUpperCase()
+  if (variable.class !== 'external') return { open: '', name: upperName, close: '' }
+
+  return {
+    open: `        ${upperName}->with_lock([&](auto* __g) {\n        auto& __r = *__g;\n`,
+    name: '__r',
+    close: '        });\n',
+  }
+}
+
 const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
   if (inputVars.length === 0) return ''
 
   let code = '        shm_data_in_t data_in;\n'
 
   inputVars.forEach((variable) => {
-    const upperName = variable.name.toUpperCase()
+    const { open, name: upperName, close } = accessorFor(variable)
     const fieldName = variable.name
     const kind = fieldKind(variable)
+    code += open
 
     if (isArrayVariable(variable)) {
       // Iterate IEC indices and pull each element through `.get()` so
@@ -114,6 +148,7 @@ const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
       // so a forced input is observed correctly.
       code += `        data_in.${fieldName} = ${upperName};\n`
     }
+    code += close
   })
 
   code += '        memcpy(shm_in_ptr, &data_in, sizeof(data_in));\n\n'
@@ -143,9 +178,10 @@ const generateOutputSeedCode = (outputVars: PLCVariable[]): string => {
   code += '        std::memset(&seed_out, 0, sizeof(seed_out));\n'
 
   outputVars.forEach((variable) => {
-    const upperName = variable.name.toUpperCase()
+    const { open, name: upperName, close } = accessorFor(variable)
     const fieldName = variable.name
     const kind = fieldKind(variable)
+    code += open
 
     if (isArrayVariable(variable)) {
       const totalElements = getArrayTotalElements(variable)
@@ -164,6 +200,7 @@ const generateOutputSeedCode = (outputVars: PLCVariable[]): string => {
     } else {
       code += `        seed_out.${fieldName} = ${upperName};\n`
     }
+    code += close
   })
 
   code += '        memcpy(shm_out_ptr, &seed_out, sizeof(seed_out));\n'
@@ -177,9 +214,10 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
   code += '        memcpy(&data_out, shm_out_ptr, sizeof(data_out));\n'
 
   outputVars.forEach((variable) => {
-    const upperName = variable.name.toUpperCase()
+    const { open, name: upperName, close } = accessorFor(variable)
     const fieldName = variable.name
     const kind = fieldKind(variable)
+    code += open
 
     if (isArrayVariable(variable)) {
       const totalElements = getArrayTotalElements(variable)
@@ -199,6 +237,7 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
       // Scalar — IECVar::operator=(T) → set(), force-respect.
       code += `        ${upperName} = data_out.${fieldName};\n`
     }
+    code += close
   })
 
   return code
@@ -207,8 +246,8 @@ const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
 const generateSTCode = (params: STCodeGenerationParams): string => {
   const { pouName, allVariables, processedPythonCode } = params
 
-  const inputVariables = allVariables.filter((v) => v.class === 'input')
-  const outputVariables = allVariables.filter((v) => v.class === 'output')
+  const inputVariables = pythonInboundVariables(allVariables)
+  const outputVariables = pythonOutboundVariables(allVariables)
 
   const cStructs = generateCStructs(inputVariables, outputVariables)
   const inputCopyCode = generateInputCopyCode(inputVariables)
