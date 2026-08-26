@@ -108,10 +108,15 @@ describe('encodeCharactersFromVariable', () => {
     expect(encodeCharactersFromVariable(vars)).toBe('=hfB')
   })
 
-  it('skips unknown scalar types and warns', () => {
+  it('describes nothing at all when one type cannot cross', () => {
+    // Emitting a format for the fields it *can* describe is the corruption this
+    // whole design exists to prevent: a dropped field does not go missing, it
+    // shifts every later field's offset. The compile path refuses such a POU
+    // before reaching here; a direct caller gets an empty layout rather than a
+    // half-formed one.
     const vars = [makeScalarVar('x', 'UNKNOWN_TYPE'), makeScalarVar('y', 'INT')]
-    const result = encodeCharactersFromVariable(vars)
-    expect(result).toBe('=h')
+
+    expect(encodeCharactersFromVariable(vars)).toBe('=')
   })
 
   it('encodes array variables with repeated format chars', () => {

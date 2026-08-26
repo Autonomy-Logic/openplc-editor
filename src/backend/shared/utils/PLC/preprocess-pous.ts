@@ -2,10 +2,10 @@ import { addCppLocalVariables } from '../../../../frontend/utils/cpp/addCppLocal
 import { generateSTCode as generateCppSTCode } from '../../../../frontend/utils/cpp/generateSTCode'
 import { validateCppCode } from '../../../../frontend/utils/cpp/validateCppCode'
 import { addPythonLocalVariables } from '../../../../frontend/utils/python/addPythonLocalVariables'
+import { pythonInterfaceVariables, pythonRefusedVariables } from '../../../../frontend/utils/python/block-interface'
 import { generateSTCode } from '../../../../frontend/utils/python/generateSTCode'
 import { injectPythonCode } from '../../../../frontend/utils/python/injectPythonCode'
-import { pythonInterfaceVariables, pythonRefusedVariables } from '../../../../frontend/utils/python/block-interface'
-import { describeShmField, describeVariableType } from '../../../../frontend/utils/python/shm-type-map'
+import { describeShmLeaves } from '../../../../frontend/utils/python/shm-leaves'
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSoftMotionArtifacts } from '../../ethercat/generate-softmotion'
 
@@ -134,16 +134,19 @@ function preprocessPous(
     for (const pou of projectData.pous) {
       if (pou.body.language !== 'python') continue
       for (const variable of pythonInterfaceVariables(pou.interface?.variables ?? [])) {
-        if (describeShmField(variable) === null) {
-          unsupported.push(`"${pou.name}.${variable.name}" (${describeVariableType(variable)})`)
+        // The walk descends into structures, so the refusal names the member
+        // that cannot cross rather than the variable that contains it.
+        const walked = describeShmLeaves(variable, projectData.dataTypes ?? [])
+        if ('refusal' in walked) {
+          unsupported.push(`"${pou.name}.${walked.refusal.path.join('.')}": ${walked.refusal.reason}`)
         }
       }
     }
     if (unsupported.length > 0) {
       const message =
-        `Python function blocks cannot exchange these variable types yet: ${unsupported.join(', ')}. ` +
+        `Python function blocks cannot exchange these variables: ${unsupported.join('; ')}. ` +
         'Supported types are BOOL, the integer and bit-string types, REAL/LREAL, TIME/DATE/TOD/DT, ' +
-        'STRING, WSTRING, and arrays of those.'
+        'STRING, WSTRING, arrays of those, and structures and enumerations built from them.'
       log('error', message)
       return {
         projectData: processedProjectData as ProjectDataWithCpp,
@@ -181,7 +184,7 @@ function preprocessPous(
     } else {
       // Full pipeline for runtime targets
       const pythonData = extractPythonData(processedProjectData.pous)
-      const processedPythonCodes = injectPythonCode(pythonData)
+      const processedPythonCodes = injectPythonCode(pythonData, projectData.dataTypes ?? [])
 
       let pythonIndex = 0
       processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
@@ -194,6 +197,7 @@ function preprocessPous(
                 /* istanbul ignore next -- defensive: interface may be undefined */
                 pou.interface?.variables ?? [],
               processedPythonCode: processedPythonCodes[pythonIndex],
+              dataTypes: projectData.dataTypes ?? [],
             })
 
             pythonIndex++

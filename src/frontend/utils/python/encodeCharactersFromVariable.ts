@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Autonomy / OpenPLC Project
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
-import { describeShmField } from './shm-type-map'
+import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { ShmLeaf } from './shm-leaves'
+import { describeShmLayout } from './shm-leaves'
 
 /**
  * Convert a POU's interface variables into the format string Python's
  * `struct.pack` / `struct.unpack` use for the shared-memory exchange.
  *
- * The per-type formats come from `shm-type-map.ts`, which the C-side struct
- * emitter reads as well — the two sides cannot drift because there is only one
- * table. This function's own job is just repetition and ordering.
+ * The format is built from the same leaf walk the C-side struct emitter uses, so
+ * the two descriptions of one layout cannot drift: a structure is flattened into
+ * the same fields, in the same order, on both sides.
  *
  * Unsupported types are refused upstream (`preprocessPous`) rather than skipped
  * here. Skipping was the original defect: a dropped field does not merely go
@@ -19,37 +19,36 @@ import { describeShmField } from './shm-type-map'
  * @returns a `struct` format string such as `'=hfb126s'`, native byte order and
  *   no alignment, matching the `#pragma pack(push, 1)` struct on the C side.
  */
-const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
+const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
+  const encoded = leaves.map((leaf) => {
+    if (leaf.count > 1) {
+      // A repeat count applies only to the FIRST character of a struct format,
+      // so `10b126s` is not ten strings. Multi-character formats are repeated
+      // whole.
+      if (leaf.descriptor.pyFormat.length > 1) {
+        return leaf.descriptor.pyFormat.repeat(leaf.count)
+      }
+      return `${leaf.count}${leaf.descriptor.pyFormat}`
+    }
+    return leaf.descriptor.pyFormat
+  })
+
+  return '=' + encoded.join('')
+}
+
+const encodeCharactersFromVariable = (variables: PLCVariable[], dataTypes: readonly PLCDataType[] = []): string => {
   if (!variables || variables.length === 0) {
     return '='
   }
 
-  const encodedChars = variables
-    .map((variable) => {
-      const descriptor = describeShmField(variable)
-      if (!descriptor) {
-        // Unreachable through the compile path — `preprocessPous` rejects an
-        // unsupported type before any of this runs. Kept as a total function so
-        // a direct caller cannot produce a half-formed layout.
-        return ''
-      }
+  const walked = describeShmLayout(variables, dataTypes)
+  // Unreachable through the compile path — `preprocessPous` refuses anything
+  // that cannot cross before any of this runs. Kept as a total function so a
+  // direct caller cannot produce a half-formed layout.
+  /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
+  if ('refusal' in walked) return '='
 
-      if (isArrayVariable(variable)) {
-        const totalElements = getArrayTotalElements(variable)
-        // A repeat count applies only to the FIRST character of a struct
-        // format, so `10b126s` is not ten strings. Multi-character formats are
-        // repeated whole.
-        if (descriptor.pyFormat.length > 1) {
-          return descriptor.pyFormat.repeat(totalElements)
-        }
-        return `${totalElements}${descriptor.pyFormat}`
-      }
-
-      return descriptor.pyFormat
-    })
-    .filter((char) => char !== '')
-
-  return '=' + encodedChars.join('')
+  return encodeCharactersFromLeaves(walked.leaves)
 }
 
-export { encodeCharactersFromVariable }
+export { encodeCharactersFromLeaves, encodeCharactersFromVariable }

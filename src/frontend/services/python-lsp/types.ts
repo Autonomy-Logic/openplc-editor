@@ -6,7 +6,7 @@
 
 import type * as monaco from 'monaco-editor'
 
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
 
 export interface PythonLspStartOptions {
   /**
@@ -53,7 +53,13 @@ export interface PythonLspService {
    * target lands in this URI.  Without it, the redirect can't open
    * the right POU tab.
    */
-  attachPou(uri: string, pouName: string, variables: PLCVariable[], bodyText: string): void
+  attachPou(
+    uri: string,
+    pouName: string,
+    variables: PLCVariable[],
+    bodyText: string,
+    dataTypes?: readonly PLCDataType[],
+  ): void
 
   /**
    * Push a new body version for an already-attached POU.  Preamble
@@ -66,7 +72,12 @@ export interface PythonLspService {
    * shared offset registry, and push the new augmented document.
    * Bumps the LSP document version.
    */
-  notifyVariablesChange(uri: string, variables: PLCVariable[], bodyText: string): void
+  notifyVariablesChange(
+    uri: string,
+    variables: PLCVariable[],
+    bodyText: string,
+    dataTypes?: readonly PLCDataType[],
+  ): void
 
   /** Send `textDocument/didClose` and drop the preamble entry. */
   detachPou(uri: string): void
