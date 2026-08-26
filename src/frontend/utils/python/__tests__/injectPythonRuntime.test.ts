@@ -672,3 +672,80 @@ describe('injectPythonRuntime', () => {
     expect(result).toContain('# No output variables to write')
   })
 })
+
+describe('a function block pin that is itself composite', () => {
+  // The walk emits a temporary per LEAF, never one for the composite. A
+  // structure MEMBER already got that recursion; a pin did not, so the
+  // constructor named `_drv_CFG` — which the decode never assigns — and the
+  // module raised `NameError` before `block_init()`. Reproduced through
+  // openplc-cli before fixing.
+  const MOTOR: PLCDataType = {
+    name: 'Motor',
+    derivation: 'structure',
+    variable: [
+      { name: 'speed', type: { definition: 'base-type', value: 'int' } },
+      { name: 'label', type: { definition: 'base-type', value: 'string' } },
+    ],
+  }
+  const MODE: PLCDataType = {
+    name: 'Mode',
+    derivation: 'enumerated',
+    values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+  }
+  /** A library block whose input pin is a structure and whose output is an enum. */
+  const DRIVE_LIB = {
+    functionBlocks: [
+      {
+        name: 'DRIVE',
+        inputs: [{ name: 'CFG', type: 'Motor' }],
+        inouts: [],
+        outputs: [{ name: 'STATE', type: 'Mode' }],
+      },
+    ],
+  }
+  const drv: PLCVariable = {
+    name: 'drv',
+    class: 'local',
+    type: { definition: 'derived', value: 'DRIVE' },
+    location: '',
+    documentation: '',
+    debug: false,
+  }
+  const run = () =>
+    injectPythonRuntime({
+      fmtIn: '=',
+      fmtOut: '=',
+      inputVariables: [drv],
+      outputVariables: [drv],
+      originalCode: '',
+      pouName: 'test',
+      inbound: { dataTypes: [MOTOR, MODE], libraries: [DRIVE_LIB], direction: 'in' },
+      outbound: { dataTypes: [MOTOR, MODE], libraries: [DRIVE_LIB], direction: 'out' },
+    })
+
+  it('builds a structure pin from the member temporaries the decode produced', () => {
+    expect(run()).toContain('CFG=Motor(speed=_drv_CFG_speed, label=_drv_CFG_label)')
+  })
+
+  it('never names a temporary for the composite itself', () => {
+    // `_drv_CFG` alone is the bug: assigned nowhere, referenced by the ctor.
+    expect(run()).not.toMatch(/CFG=_drv_CFG[,)]/)
+  })
+
+  it('wraps an enumeration pin back into its class', () => {
+    expect(run()).toContain('STATE=Mode(_drv_STATE)')
+  })
+
+  it('declares the classes reached only through a pin', () => {
+    // `collectReferencedTypes` stopped at the instance, so a structure used
+    // only as a pin type was never declared and the ctor named a missing class.
+    const result = run()
+    expect(result).toContain('class Motor:')
+    expect(result).toContain('class Mode(IntEnum):')
+  })
+
+  it('declares a pin type before the block class that constructs it', () => {
+    const result = run()
+    expect(result.indexOf('class Motor:')).toBeLessThan(result.indexOf('class DRIVE:'))
+  })
+})

@@ -33,7 +33,7 @@ type PythonRuntimeInjectionParams = {
  */
 const generateTypeDeclarations = (variables: PLCVariable[], context: ShmWalkContext): string => {
   const dataTypes = context.dataTypes ?? []
-  const referenced = collectReferencedTypes(variables, dataTypes)
+  const referenced = collectReferencedTypes(variables, dataTypes, context)
   const instanceClasses = generateInstanceClasses(variables, context)
 
   if (referenced.length === 0 && instanceClasses === '') {
@@ -139,25 +139,51 @@ const generateInstanceClasses = (variables: PLCVariable[], context: ShmWalkConte
 /**
  * Every structure and enumeration a block's interface reaches, nested ones
  * included, in an order where a type is declared before anything using it.
+ *
+ * "Reaches" includes THROUGH A FUNCTION BLOCK INSTANCE. A pin can be a structure
+ * or an enumeration, and the constructor for that pin names its class — so a
+ * walk that stopped at the instance left the class undeclared and the generated
+ * module referenced a name that was never defined.
  */
-const collectReferencedTypes = (variables: PLCVariable[], dataTypes: readonly PLCDataType[]): PLCDataType[] => {
+const collectReferencedTypes = (
+  variables: PLCVariable[],
+  dataTypes: readonly PLCDataType[],
+  context: ShmWalkContext,
+): PLCDataType[] => {
   const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
   const ordered: PLCDataType[] = []
   const seen = new Set<string>()
+  const seenBlocks = new Set<string>()
 
   const visit = (typeName: string, depth: number): void => {
     /* istanbul ignore next -- defensive: describeShmLeaves refuses deeper nesting first */
     if (depth > 16) return
     const key = typeName.toUpperCase()
-    if (seen.has(key)) return
     const dataType = byName.get(key)
-    if (!dataType || dataType.derivation === 'array') return
+
+    // No data type by that name: a function block instance. Its pins are what
+    // the constructor names, so they are what has to be reachable from here.
+    if (!dataType) {
+      if (seenBlocks.has(key)) return
+      seenBlocks.add(key)
+      const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
+      for (const pin of pins ?? []) {
+        if (pin.type.definition === 'user-data-type' || pin.type.definition === 'derived') {
+          visit(pin.type.value, depth + 1)
+        }
+      }
+      return
+    }
+
+    if (seen.has(key) || dataType.derivation === 'array') return
     seen.add(key)
     if (dataType.derivation === 'structure') {
       // Members first, so a nested structure is defined before the class that
       // constructs it.
       for (const member of dataType.variable) {
-        if (member.type.definition === 'user-data-type') visit(member.type.value, depth + 1)
+        if (member.type.definition === 'user-data-type' || member.type.definition === 'derived') {
+          visit(member.type.value, depth + 1)
+        }
       }
     }
     ordered.push(dataType)
@@ -165,7 +191,7 @@ const collectReferencedTypes = (variables: PLCVariable[], dataTypes: readonly PL
 
   for (const variable of variables) {
     const base = variable.type.definition === 'array' ? variable.type.data?.baseType : variable.type
-    if (base?.definition === 'user-data-type') visit(base.value, 0)
+    if (base?.definition === 'user-data-type' || base?.definition === 'derived') visit(base.value, 0)
   }
   return ordered
 }
@@ -215,21 +241,39 @@ const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string
   const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
   const base = variable.type.definition === 'array' ? variable.type.data?.baseType : variable.type
 
+  /**
+   * The expression for whatever sits at `fieldPath`, given its declared type.
+   *
+   * ONE rule, used for a structure's members and for a function block's pins
+   * alike, because the walk treats them alike: it descends into a composite and
+   * emits a temporary per LEAF, never one for the composite itself. A structure
+   * member got that recursion; a pin did not, and emitted a flat
+   * `PIN=_instance_PIN` — a name the decode never assigns. An FB whose pin is a
+   * structure therefore raised `NameError` at module scope, before
+   * `block_init()`. Keeping one rule is what stops the two drifting again.
+   */
+  const valueFor = (typeValue: string, typeDefinition: string, fieldPath: string[]): string => {
+    if (typeDefinition === 'user-data-type' || typeDefinition === 'derived') {
+      const declared = byName.get(typeValue.toUpperCase())
+      // An enumeration crosses as its integer and is wrapped back into the
+      // class. `declared.name`, not the reference's spelling: the class is
+      // emitted under the type's own declared name, so echoing a mixed-case
+      // reference would name a class that does not exist.
+      if (declared?.derivation === 'enumerated') return `${declared.name}(_${fieldPath.join('_')})`
+      // A structure, or a function block instance (no data type by that name).
+      if (!declared || declared.derivation === 'structure') return buildFor(typeValue, fieldPath)
+    }
+    return `_${fieldPath.join('_')}`
+  }
+
   const buildFor = (typeName: string, fieldPath: string[]): string => {
     const dataType = byName.get(typeName.toUpperCase())
 
     if (dataType?.derivation === 'structure') {
-      const args = dataType.variable.map((member) => {
-        const memberPath = [...fieldPath, member.name]
-        if (member.type.definition === 'user-data-type') {
-          const nested = byName.get(member.type.value.toUpperCase())
-          if (nested?.derivation === 'structure') return `${member.name}=${buildFor(member.type.value, memberPath)}`
-          if (nested?.derivation === 'enumerated') {
-            return `${member.name}=${member.type.value}(_${memberPath.join('_')})`
-          }
-        }
-        return `${member.name}=_${memberPath.join('_')}`
-      })
+      const args = dataType.variable.map(
+        (member) =>
+          `${member.name}=${valueFor(member.type.value, member.type.definition, [...fieldPath, member.name])}`,
+      )
       return `${dataType.name}(${args.join(', ')})`
     }
 
@@ -247,7 +291,7 @@ const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string
       // and the temporary names the field the walk produced. They are the same
       // name by construction — see the pin naming note in `shm-leaves`.
       const upper = pin.name.toUpperCase()
-      return `${upper}=_${[...fieldPath, upper].join('_')}`
+      return `${upper}=${valueFor(pin.type.value, pin.type.definition, [...fieldPath, upper])}`
     })
     return `${pythonClassName(typeName)}(${args.join(', ')})`
   }
