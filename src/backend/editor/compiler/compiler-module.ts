@@ -196,9 +196,13 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
-    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
-    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
-    // so the lib must be installed for every Arduino build.
+    // Backs DEBUG_GET_BOARD_ID (FC 0x48) in modbus_debug.cpp, which includes
+    // <ArduinoUniqueID.h> unless defines.h carries OPENPLC_NO_UNIQUE_ID — i.e.
+    // only on a board whose package declares `isLicensable`, since a unique id
+    // exists solely to bind a paid VPP licence to hardware. Kept in the global
+    // list rather than moved behind that gate: installing a library nothing
+    // includes costs a one-time download and changes no build, whereas a
+    // conditional install is one more way for a licensable board to fail late.
     'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',

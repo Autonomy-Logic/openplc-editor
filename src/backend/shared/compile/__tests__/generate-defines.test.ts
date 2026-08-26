@@ -33,37 +33,78 @@ const EMPTY_INPUTS = {
 }
 
 describe('generateDefinesContent — board defines section', () => {
+  // `isLicensable: true` throughout this block: it is the only input that
+  // empties the board-defines list, and these cases are about the
+  // `boardEntry.define` half.  The licensing half has its own block below.
+  const LICENSABLE = { ...EMPTY_INPUTS, isLicensable: true }
+
   it('omits the Board defines header when no boardEntry is provided', () => {
-    const out = generateDefinesContent(EMPTY_INPUTS)
+    const out = generateDefinesContent(LICENSABLE)
     expect(out).not.toContain('// Board defines')
   })
 
   it('omits the Board defines header when boardEntry has no define field', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardEntry: {} })
+    const out = generateDefinesContent({ ...LICENSABLE, boardEntry: {} })
     expect(out).not.toContain('// Board defines')
   })
 
   it('emits a single define from a string boardEntry.define', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardEntry: { define: 'BOARD_X' } })
+    const out = generateDefinesContent({ ...LICENSABLE, boardEntry: { define: 'BOARD_X' } })
     expect(out).toContain('// Board defines\n#define BOARD_X\n')
   })
 
   it('emits multiple defines from an array boardEntry.define', () => {
     const out = generateDefinesContent({
-      ...EMPTY_INPUTS,
+      ...LICENSABLE,
       boardEntry: { define: ['BOARD_X', 'PIN_COUNT=8', 'HAS_ANALOG'] },
     })
     expect(out).toContain('// Board defines\n#define BOARD_X\n#define PIN_COUNT=8\n#define HAS_ANALOG\n')
   })
 
   it('omits the Board defines header when boardEntry.define is an empty array', () => {
-    // Empty array is falsy-ish for the loop but the header is gated on
-    // boardEntry.define being truthy; an empty array IS truthy, so a
-    // header with no entries would be a bug.  Editor's behavior:
-    // empty-array case emits the header but no defines.  Snapshot the
-    // editor's behavior here.
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardEntry: { define: [] } })
-    expect(out.startsWith('// Board defines\n\n\n')).toBe(true)
+    // An empty array used to emit a bare header with no defines under it
+    // (the emitter gated the header on `define` being truthy, and `[]` is).
+    // Collecting the defines into a list first means the header follows the
+    // list, so this corner now emits nothing — reachable only on a
+    // licensable board, of which there are none yet.
+    const out = generateDefinesContent({ ...LICENSABLE, boardEntry: { define: [] } })
+    expect(out).not.toContain('// Board defines')
+    expect(out.startsWith('\n\n')).toBe(true)
+  })
+})
+
+describe('generateDefinesContent — OPENPLC_NO_UNIQUE_ID', () => {
+  // The flag keeps `ArduinoUniqueID` out of the build on any board that
+  // cannot be licensed, which is what makes the library's `#error` on an
+  // uncovered core (mbed — Opta, Portenta Machine Control, Edge Control) a
+  // non-problem.  Its polarity is inverted on purpose, so the DEFAULT is
+  // tested as hard as the exception.
+  it('emits the flag when isLicensable is absent (a package that says nothing is free)', () => {
+    const out = generateDefinesContent(EMPTY_INPUTS)
+    expect(out).toContain('// Board defines\n#define OPENPLC_NO_UNIQUE_ID\n')
+  })
+
+  it('emits the flag when isLicensable is explicitly false', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, isLicensable: false })
+    expect(out).toContain('#define OPENPLC_NO_UNIQUE_ID')
+  })
+
+  it('omits the flag only when isLicensable is true', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, isLicensable: true })
+    expect(out).not.toContain('OPENPLC_NO_UNIQUE_ID')
+  })
+
+  it('emits the flag for the simulator, which is not licensable', () => {
+    // The avr8js simulator has real AVR silicon behind it, so
+    // ArduinoUniqueID would work there — but a simulated board cannot hold
+    // a licence, so FC 0x48 reports no id like any other free target.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'simulator' })
+    expect(out).toContain('#define OPENPLC_NO_UNIQUE_ID')
+  })
+
+  it('appends the flag after the board`s own defines rather than replacing them', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, boardEntry: { define: ['BOARD_X', 'PIN_COUNT=8'] } })
+    expect(out).toContain('// Board defines\n#define BOARD_X\n#define PIN_COUNT=8\n#define OPENPLC_NO_UNIQUE_ID\n')
   })
 })
 
@@ -452,6 +493,7 @@ describe('generateDefinesContent — full output snapshot', () => {
       [
         '// Board defines',
         '#define __AVR_ATmega2560__',
+        '#define OPENPLC_NO_UNIQUE_ID',
         '',
         '',
         '//Program MD5',
@@ -496,6 +538,7 @@ describe('generateDefinesContent — full output snapshot', () => {
       [
         '// Board defines',
         '#define PIN_LED=13',
+        '#define OPENPLC_NO_UNIQUE_ID',
         '',
         '',
         '//Program MD5',
