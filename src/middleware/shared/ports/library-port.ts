@@ -100,6 +100,20 @@ export interface StlibArchiveDTO {
     variables: unknown[]
     documentation?: string
   }>
+  /** Python function blocks the library ships, carried verbatim
+   *  through the archive.  Exactly the same contract as `cppBlocks`
+   *  — strucpp doesn't compile these either, and the consumer's
+   *  program build grafts them in and lowers them through the same
+   *  Python-POU pipeline a user-authored Python block uses.  Kept as
+   *  a separate field rather than a `language` tag on `cppBlocks` so
+   *  older editors, which only know `cppBlocks`, cannot mistake a
+   *  Python block for C++.  Absent on libraries that don't ship any. */
+  pythonBlocks?: Array<{
+    name: string
+    code: string
+    variables: unknown[]
+    documentation?: string
+  }>
 }
 
 export interface LibraryPort {

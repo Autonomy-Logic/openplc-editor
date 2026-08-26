@@ -272,14 +272,35 @@ export async function runLibraryBuildPipeline(
       pouDocs[name] = doc
     }
   }
-  const cppBlocks: LibraryCppBlock[] = (
-    (projectData as { originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }> })
-      .originalCppPous ?? []
-  ).map((b) => ({
-    name: b.name,
-    code: b.code,
-    variables: b.variables,
-  }))
+  // Native (non-strucpp) blocks ride the archive verbatim.  Both sidecars
+  // are captured by `preprocessPous` before lowering, so what ships is the
+  // author's original C++/Python, not the generated bridge stub — see
+  // `inject-library-blocks.ts` for why that distinction matters.
+  const nativeSidecars = projectData as {
+    originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
+    originalPythonPous?: Array<{ name: string; code: string; variables: unknown[] }>
+  }
+  const toBlocks = (pous: Array<{ name: string; code: string; variables: unknown[] }> = []): LibraryCppBlock[] =>
+    pous.map((b) => ({
+      name: b.name,
+      code: b.code,
+      variables: b.variables,
+    }))
+  const cppBlocks = toBlocks(nativeSidecars.originalCppPous)
+  const pythonBlocks = toBlocks(nativeSidecars.originalPythonPous)
+
+  // A native block with no source is unbuildable by any consumer — its
+  // source is the whole deliverable.  Fail here, naming the block, rather
+  // than shipping an archive that dies later with an undefined-symbol
+  // diagnostic pointing at generated code.
+  const sourceless = [...cppBlocks, ...pythonBlocks].filter((b) => b.code.trim() === '').map((b) => b.name)
+  if (sourceless.length > 0) {
+    return fail(
+      emit,
+      `Library build aborted: C/C++ and Python blocks must ship their source, and these have none (${sourceless.join(', ')}).`,
+      { libraryName: manifest.name },
+    )
+  }
 
   // -------------------------------------------------------------------------
   // Stage 7: strucpp compileStlib
@@ -290,6 +311,7 @@ export async function runLibraryBuildPipeline(
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
     cppBlocks,
+    pythonBlocks,
   })
   if (!stage7.success) {
     for (const err of stage7.errors) {

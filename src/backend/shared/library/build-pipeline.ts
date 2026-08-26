@@ -333,6 +333,14 @@ export interface LibraryBuildAux {
    *  `cppBlocks` field after compileStlib returns.  See
    *  `LibraryCppBlock` for the per-entry shape. */
   cppBlocks?: LibraryCppBlock[]
+  /** Python POUs from the library's project.  Same contract as
+   *  `cppBlocks`: filtered OUT of strucpp's input set, stamped onto
+   *  the archive's `pythonBlocks` field, and re-lowered by the
+   *  consumer at compile time.  Python POUs used to be left in the
+   *  strucpp input set, which shipped the generated `{external}`
+   *  bridge — freezing the `iec_python.h` ABI of the editor that
+   *  built the library into the archive. */
+  pythonBlocks?: LibraryCppBlock[]
 }
 
 /**
@@ -375,23 +383,30 @@ export function libraryBuildFromTranspiledSt(
   //     anyway — they ship POUs + types for consumer projects to
   //     instantiate.
   //   - Every per-POU file whose source POU was originally a
-  //     C/C++ function block.  Those POUs' ST bodies are
-  //     `generateCppSTCode`-emitted stubs that reference
-  //     `c_blocks.h` externs strucpp's library compiler can't
-  //     resolve (no `pouIncludes` on `compileStlib`).  We
-  //     re-attach the verbatim C++ source on the archive's
-  //     `cppBlocks` field after `compileStlib` returns; the
-  //     consumer's program compile reads it back and routes it
-  //     through the existing user-C++-block path.
+  //     C/C++ or Python function block.  Those POUs' ST bodies are
+  //     generated bridge stubs (`generateCppSTCode` /
+  //     `generateSTCode`) whose `{external}` blocks call into
+  //     `c_blocks.h` / `iec_python.h`.  Strucpp would happily emit
+  //     them — it is a transpiler, and an `{external}` body is
+  //     copied through verbatim — but shipping them would freeze
+  //     the building editor's ABI into the archive, so that any
+  //     later change to the bridge breaks every library published
+  //     before it until each one is rebuilt.  Instead the verbatim
+  //     author source rides on `cppBlocks` / `pythonBlocks` and the
+  //     consumer re-derives the stub at compile time, with whatever
+  //     transformation that consumer implements.  See
+  //     `inject-library-blocks.ts` for the consuming half.
   //
   // Keep `_types.st` and `_globals.st`: they may carry user-defined
   // types and library-internal globals the POUs reference.
-  const cppBlockFilenames = new Set((aux?.cppBlocks ?? []).map((b) => `${b.name}.st`))
+  const nativeBlockFilenames = new Set(
+    [...(aux?.cppBlocks ?? []), ...(aux?.pythonBlocks ?? [])].map((b) => `${b.name}.st`),
+  )
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue
     if (fileName === '_config.st') continue
-    if (cppBlockFilenames.has(fileName)) continue
+    if (nativeBlockFilenames.has(fileName)) continue
     sources.push({
       fileName,
       source,
@@ -411,8 +426,9 @@ export function libraryBuildFromTranspiledSt(
   // just `cppBlocks` riding through the archive for the consumer
   // to consume).
   const hasRealSources = sources.some((s) => s.fileName !== '_globals.st')
-  const hasCppBlocks = (aux?.cppBlocks?.length ?? 0) > 0
-  if (!hasRealSources && !hasCppBlocks) {
+  const nativeBlocks = [...(aux?.cppBlocks ?? []), ...(aux?.pythonBlocks ?? [])]
+  const hasNativeBlocks = nativeBlocks.length > 0
+  if (!hasRealSources && !hasNativeBlocks) {
     return {
       success: false,
       errors: [
@@ -422,6 +438,44 @@ export function libraryBuildFromTranspiledSt(
         },
       ],
     }
+  }
+
+  // A library whose POUs are ALL C/C++ or Python has nothing left for
+  // strucpp: every per-POU file was just filtered out, and there are no
+  // types or globals.  `compileStlib([])` hard-fails with "No source
+  // files provided", which is what a library like this used to die on —
+  // right after verification had reported success, so it read as an
+  // infrastructure fault rather than anything to do with the project.
+  //
+  // There is genuinely nothing to compile, so don't ask strucpp to.
+  // Synthesize the archive shell it would have produced for an empty
+  // symbol set and let `decorateArchive` attach the native blocks, which
+  // is where all of this library's content actually lives.  The shape
+  // must match strucpp's own output exactly — `loadStlibFromString`
+  // validates `formatVersion` and the manifest's array fields on the way
+  // back in, and a consumer that can't load the archive is no better off
+  // than one that never got it.
+  if (sources.length === 0) {
+    const archive = {
+      formatVersion: 1,
+      manifest: {
+        name: manifest.name,
+        version: manifest.version,
+        namespace: manifest.namespace,
+        functions: [],
+        functionBlocks: [],
+        types: [],
+        globals: [],
+        headers: [],
+        isBuiltin: false,
+        sourceFiles: [],
+      },
+      chunks: [],
+      dependencies: [],
+      sources: [],
+    }
+    decorateArchive(archive, manifest, aux)
+    return { success: true, archive, errors: [] }
   }
 
   const compileRes = compileStlib(sources, {
@@ -473,6 +527,7 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
     }
     dependencies?: Array<{ name: string; version: string }>
     cppBlocks?: LibraryCppBlock[]
+    pythonBlocks?: LibraryCppBlock[]
   }
   if (!arch.manifest) return
 
@@ -511,20 +566,33 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
     arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
   }
 
-  // C/C++ blocks ride through the archive verbatim — strucpp has
-  // no notion of them, the consumer-side editor reads them back
-  // at program-compile time and grafts them into the project's
-  // own C++-POU pipeline.  JSON.stringify preserves the field, so
-  // attaching it on the in-memory archive is enough to round-trip
-  // to disk.
-  if (aux?.cppBlocks && aux.cppBlocks.length > 0) {
-    arch.cppBlocks = aux.cppBlocks.map((b) => ({
-      name: b.name,
-      code: b.code,
-      variables: b.variables,
-      ...(b.documentation && b.documentation.length > 0 ? { documentation: b.documentation } : {}),
-    }))
-  }
+  // C/C++ and Python blocks ride through the archive verbatim —
+  // strucpp has no notion of them; the consumer-side editor reads
+  // them back at program-compile time and grafts them into the
+  // project's own native-POU pipeline.  JSON.stringify preserves the
+  // fields, so attaching them on the in-memory archive is enough to
+  // round-trip to disk.
+  //
+  // Deliberately unconditional with respect to any "publish without
+  // sources" option: strucpp's `noSource` may drop the ST `sources`
+  // array because those symbols are already compiled into `chunks`,
+  // but a native block has no chunk.  Its source IS the deliverable,
+  // and an archive that omitted it would be unbuildable by every
+  // consumer.  See `findLibrariesMissingNativeSources`.
+  const attachNative = (blocks: LibraryCppBlock[] | undefined): LibraryCppBlock[] | undefined =>
+    blocks && blocks.length > 0
+      ? blocks.map((b) => ({
+          name: b.name,
+          code: b.code,
+          variables: b.variables,
+          ...(b.documentation && b.documentation.length > 0 ? { documentation: b.documentation } : {}),
+        }))
+      : undefined
+
+  const cpp = attachNative(aux?.cppBlocks)
+  if (cpp) arch.cppBlocks = cpp
+  const python = attachNative(aux?.pythonBlocks)
+  if (python) arch.pythonBlocks = python
 }
 
 /**

@@ -177,26 +177,33 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
     variables: CppBlockVar[]
     documentation?: string
   }
-  const archiveWithCppBlocks = archive as typeof archive & { cppBlocks?: CppBlockEntry[] }
-  for (const block of archiveWithCppBlocks.cppBlocks ?? []) {
-    const variables: SystemLibraryVariable[] = []
-    for (const v of block.variables) {
-      if (v.class !== 'input' && v.class !== 'output' && v.class !== 'inOut') continue
-      variables.push({
-        name: v.name,
-        class: v.class,
-        type: typeRef(v.type?.value ?? 'BOOL'),
+  const archiveWithNativeBlocks = archive as typeof archive & {
+    cppBlocks?: CppBlockEntry[]
+    pythonBlocks?: CppBlockEntry[]
+  }
+  const pushNativeBlocks = (blocks: CppBlockEntry[] | undefined, language: 'cpp' | 'python'): void => {
+    for (const block of blocks ?? []) {
+      const variables: SystemLibraryVariable[] = []
+      for (const v of block.variables) {
+        if (v.class !== 'input' && v.class !== 'output' && v.class !== 'inOut') continue
+        variables.push({
+          name: v.name,
+          class: v.class,
+          type: typeRef(v.type?.value ?? 'BOOL'),
+        })
+      }
+      pous.push({
+        name: `${m.name}__${block.name}`,
+        type: 'function-block',
+        language,
+        variables,
+        body: block.code,
+        documentation: block.documentation ?? '',
       })
     }
-    pous.push({
-      name: `${m.name}__${block.name}`,
-      type: 'function-block',
-      language: 'cpp',
-      variables,
-      body: block.code,
-      documentation: block.documentation ?? '',
-    })
   }
+  pushNativeBlocks(archiveWithNativeBlocks.cppBlocks, 'cpp')
+  pushNativeBlocks(archiveWithNativeBlocks.pythonBlocks, 'python')
 
   const result: SystemLibrary = {
     name: m.name,
