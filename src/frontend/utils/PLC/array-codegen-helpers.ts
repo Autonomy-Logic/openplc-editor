@@ -183,12 +183,12 @@ const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet
 
 export {
   generateStructMember,
-  multiDimensionalContainerType,
-  mapUserTypeToIEC,
   getArrayBaseTypeValue,
   getArrayStartIndex,
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
   mapBaseTypeToIEC,
+  mapUserTypeToIEC,
+  multiDimensionalContainerType,
 }
