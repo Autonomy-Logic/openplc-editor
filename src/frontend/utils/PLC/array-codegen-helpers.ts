@@ -18,6 +18,20 @@ const BASE_TYPE_TO_IEC: Record<string, string> = {
   real: 'IEC_REAL',
   lreal: 'IEC_LREAL',
   string: 'IEC_STRING',
+  wstring: 'IEC_WSTRING',
+
+  // Duration and calendar types. Absent until DOPE-584's type sweep: a C++
+  // block declaring `TIME` emitted `strucpp::TIME`, which names nothing, and the
+  // build failed on generated code the user never wrote. The aliases these map
+  // to are the ones strucpp declares (`IEC_TIME = IECVar<TIME_t>`, and so on).
+  time: 'IEC_TIME',
+  date: 'IEC_DATE',
+  tod: 'IEC_TOD',
+  dt: 'IEC_DT',
+
+  // The long spellings IEC 61131-3 also allows for the same two types.
+  time_of_day: 'IEC_TOD',
+  date_and_time: 'IEC_DT',
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { SHM_SCALAR_TYPES } from '../../python/shm-type-map'
 import {
   generateStructMember,
   getArrayBaseTypeValue,
@@ -271,6 +272,38 @@ describe('getArrayStartIndex', () => {
 // ---------------------------------------------------------------------------
 // generateStructMember
 // ---------------------------------------------------------------------------
+describe('the two native languages accept the same elementary types', () => {
+  // A type either crosses into both a C++ block and a Python block, or neither.
+  // They drifted once already: TIME / DATE / TOD / DT / WSTRING were in the
+  // Python shared-memory table but absent from the C++ map, so a C++ block
+  // declaring `TIME` emitted `strucpp::TIME` — a name that does not exist — and
+  // the build failed on generated code the user never wrote. Nothing catches
+  // that except a build, and nobody builds every type by hand.
+  const scalarOf = (value: string): PLCVariable => ({
+    name: 'v',
+    class: 'input',
+    type: { definition: 'base-type', value },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  const pythonTypes = [...Object.keys(SHM_SCALAR_TYPES), 'string', 'wstring']
+
+  it.each(pythonTypes)('%s has a C++ spelling too', (type) => {
+    expect(mapBaseTypeToIEC(type)).toMatch(/^IEC_/)
+  })
+
+  it.each(pythonTypes)('%s resolves for a C++ struct member', (type) => {
+    expect(generateStructMember(scalarOf(type))).toMatch(/^ {2}strucpp::IEC_\w+ \*V;\n$/)
+  })
+
+  it('accepts the long spellings IEC 61131-3 allows for the calendar types', () => {
+    expect(mapBaseTypeToIEC('time_of_day')).toBe('IEC_TOD')
+    expect(mapBaseTypeToIEC('date_and_time')).toBe('IEC_DT')
+  })
+})
+
 describe('mapUserTypeToIEC', () => {
   // strucpp declares a structure or enumeration and then aliases it
   // (`using IEC_MOTOR = MOTOR`), but a function block class gets no alias. Only
