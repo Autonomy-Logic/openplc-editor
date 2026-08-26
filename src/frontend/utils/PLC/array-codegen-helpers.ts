@@ -55,8 +55,35 @@ const getArrayBaseTypeValue = (variable: PLCVariable): string => {
  * Map a base type string to its IEC C type name.
  * Falls back to uppercasing the type value if not found.
  */
-const mapBaseTypeToIEC = (baseType: string): string => {
-  return BASE_TYPE_TO_IEC[baseType.toLowerCase()] || baseType.toUpperCase()
+/**
+ * Spell a user-defined type the way strucpp declares it.
+ *
+ * The compiler emits two different shapes and there is no single rule that
+ * covers both, so the caller has to say which names are data types:
+ *
+ *   - A data type gets an `IEC_`-prefixed alias — `struct MOTOR { … };
+ *     using IEC_MOTOR = MOTOR;` for a structure, and
+ *     `enum class MODE { … }; using IEC_MODE = IEC_ENUM<MODE>;` for an
+ *     enumeration. The alias is the one to use: for an enumeration the bare
+ *     name is the raw C++ `enum class`, while `IEC_MODE` is the force-aware
+ *     wrapper, and a pin must be the wrapper like every other pin.
+ *   - A function block instance is a plain `class HELPER;` with no alias, so
+ *     the bare name is the only spelling that exists.
+ *
+ * Without `userTypeNames` the bare name is returned, which is the correct
+ * answer for a function block and the historical behaviour for everything else.
+ */
+const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
+  const upper = typeName.toUpperCase()
+  return userTypeNames?.has(upper) ? `IEC_${upper}` : upper
+}
+
+const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {
+  const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
+  if (elementary) return elementary
+  // Not elementary: an array of a user-defined type, or a type the map does not
+  // know. Both go through the same spelling rule as a scalar of that type.
+  return mapUserTypeToIEC(baseType, userTypeNames)
 }
 
 /**
@@ -64,14 +91,14 @@ const mapBaseTypeToIEC = (baseType: string): string => {
  * For arrays, returns the IEC type of the base element type.
  * For scalars, returns the IEC type of the variable's type.
  */
-const getVariableIECType = (variable: PLCVariable): string => {
+const getVariableIECType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   if (variable.type.definition === 'array' && variable.type.data) {
-    return mapBaseTypeToIEC(variable.type.data.baseType.value)
+    return mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
   }
   if (variable.type.definition === 'base-type') {
-    return mapBaseTypeToIEC(variable.type.value)
+    return mapBaseTypeToIEC(variable.type.value, userTypeNames)
   }
-  return variable.type.value.toUpperCase()
+  return mapUserTypeToIEC(variable.type.value, userTypeNames)
 }
 
 /**
@@ -84,6 +111,43 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
   if (dimensions.length === 0) return 0
   const range = parseDimensionRange(dimensions[0].dimension)
   return range ? range.lower : 0
+}
+
+/**
+ * strucpp container type for an array of rank two or three, or `null` for
+ * anything else.
+ *
+ * A one-dimensional array is passed as a pointer to its first element, offset by
+ * the lower bound, so the block writes `arr[i]` with the declared IEC indices
+ * and the element type is all the struct has to name. That trick does not extend
+ * past rank one: `IEC_ARRAY_2D` deliberately has no `operator[]` — a row
+ * subscript would have to return a view — and takes every index in one
+ * `operator()` call instead. So a multi-dimensional array is passed as a pointer
+ * to the container itself, and the block indexes it as `grid(i, j)`, which is
+ * the same accessor the compiler's own generated code uses.
+ *
+ * `Array2D` / `Array3D` are strucpp's documented public aliases, and the bounds
+ * handed to them come from the user's own declaration rather than from any
+ * assumption about how the container is laid out.
+ *
+ * Rank four and beyond returns `null`: strucpp declares no alias for it, so
+ * there is no type to name and no array to describe.
+ */
+const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string | null => {
+  if (variable.type.definition !== 'array' || !variable.type.data) return null
+
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length < 2 || dimensions.length > 3) return null
+
+  const bounds: number[] = []
+  for (const dimension of dimensions) {
+    const range = parseDimensionRange(dimension.dimension)
+    if (!range) return null
+    bounds.push(range.lower, range.upper)
+  }
+
+  const elementType = mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+  return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
 }
 
 /**
@@ -108,14 +172,19 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * numeric raw typedefs that still cover the user's local-variable
  * declarations inside `setup()` / `loop()`.
  */
-const generateStructMember = (variable: PLCVariable): string => {
-  const iecType = getVariableIECType(variable)
+const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   const name = variable.name.toUpperCase()
+  const multiDimensional = multiDimensionalContainerType(variable, userTypeNames)
+  if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
+
+  const iecType = getVariableIECType(variable, userTypeNames)
   return `  strucpp::${iecType} *${name};\n`
 }
 
 export {
   generateStructMember,
+  multiDimensionalContainerType,
+  mapUserTypeToIEC,
   getArrayBaseTypeValue,
   getArrayStartIndex,
   getArrayTotalElements,

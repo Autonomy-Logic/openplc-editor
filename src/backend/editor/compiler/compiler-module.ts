@@ -1255,7 +1255,11 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    const headerContent: string = generateCBlocksHeader(cppPous)
+    // The project's data-type names let the generator tell a structure or
+    // enumeration (which strucpp aliases as `IEC_<NAME>`) from a function block
+    // instance (a bare `class <NAME>`), which the variable alone cannot say.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const headerContent: string = generateCBlocksHeader(cppPous, userTypeNames)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
