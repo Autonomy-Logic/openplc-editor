@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksHeader } from '../generateCBlocksHeader'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: PLCVariable['class'], baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (name: string, cls: PLCVariable['class'], baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -59,13 +59,13 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
   })
 
-  it('includes only input and output variables in the struct', () => {
+  it('includes local variables in the C++ POU instance struct', () => {
     const variables: PLCVariable[] = [
       makeScalarVar('inVar', 'input', 'INT'),
       {
-        name: 'localVar',
+        name: 'PrevSeq',
         class: 'local',
-        type: { definition: 'base-type', value: 'BOOL' },
+        type: { definition: 'base-type', value: 'USINT' },
         location: '',
         documentation: '',
         debug: false,
@@ -76,8 +76,27 @@ describe('generateCBlocksHeader', () => {
     const result = generateCBlocksHeader([{ name: 'test', variables }])
 
     expect(result).toContain('strucpp::IEC_INT *INVAR;')
+    expect(result).toContain('strucpp::IEC_USINT *PREVSEQ;')
     expect(result).toContain('strucpp::IEC_BOOL *OUTVAR;')
-    expect(result).not.toContain('LOCALVAR')
+  })
+
+  it('does not include the generated setup guard in the C++ POU instance struct', () => {
+    const variables: PLCVariable[] = [
+      makeScalarVar('inVar', 'input', 'INT'),
+      {
+        name: 'hasBeenInitialized',
+        class: 'local',
+        type: { definition: 'base-type', value: 'BOOL' },
+        location: '',
+        documentation: '',
+        debug: false,
+      },
+    ]
+
+    const result = generateCBlocksHeader([{ name: 'test', variables }])
+
+    expect(result).toContain('strucpp::IEC_INT *INVAR;')
+    expect(result).not.toContain('HASBEENINITIALIZED')
   })
 
   it('generates declarations for multiple pous', () => {

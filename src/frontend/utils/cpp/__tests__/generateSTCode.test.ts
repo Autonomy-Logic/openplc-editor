@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSTCode } from '../generateSTCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: PLCVariable['class'], baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (name: string, cls: PLCVariable['class'], baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -153,11 +153,11 @@ describe('generateSTCode (cpp)', () => {
     expect(result).toContain('vars.D = &D[0] - 0;')
   })
 
-  it('filters out local variables', () => {
+  it('passes C++ POU local variables as per-instance state', () => {
     const localVar: PLCVariable = {
-      name: 'localVal',
+      name: 'PrevSeq',
       class: 'local',
-      type: { definition: 'base-type', value: 'INT' },
+      type: { definition: 'base-type', value: 'USINT' },
       location: '',
       documentation: '',
       debug: false,
@@ -168,6 +168,26 @@ describe('generateSTCode (cpp)', () => {
       allVariables: [makeScalarVar('x', 'input', 'INT'), localVar],
     })
 
-    expect(result).not.toContain('LOCALVAL')
+    expect(result).toContain('vars.PREVSEQ = &PREVSEQ;')
+  })
+
+  it('does not pass the runtime setup guard to the C++ POU struct', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        {
+          name: 'hasBeenInitialized',
+          class: 'local',
+          type: { definition: 'base-type', value: 'BOOL' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ],
+    })
+
+    expect(result).toContain('if hasBeenInitialized = False then')
+    expect(result).not.toContain('vars.HASBEENINITIALIZED')
   })
 })

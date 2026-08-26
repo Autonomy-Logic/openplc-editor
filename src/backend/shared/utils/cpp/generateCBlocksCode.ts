@@ -1,3 +1,4 @@
+import { getCppPouStateVariables } from '../../../../frontend/utils/cpp/cppPouVariables'
 import { generateStructMember, isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
@@ -112,17 +113,12 @@ const processUserCode = (pou: CppPouData): string => {
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
   const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-  const inputVariables = pou.variables.filter((v) => v.class === 'input')
-  const outputVariables = pou.variables.filter((v) => v.class === 'output')
+  const stateVariables = getCppPouStateVariables(pou.variables)
 
   let processedCode = `//definition of external blocks - ${pou.name.toUpperCase()}\n`
   processedCode += `typedef struct {\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateStructMember(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  stateVariables.forEach((variable) => {
     processedCode += generateStructMember(variable)
   })
 
@@ -131,11 +127,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += `extern "C" void ${setupFunctionName}(${structName} *vars);\n`
   processedCode += `extern "C" void ${loopFunctionName}(${structName} *vars);\n\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateDefine(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  stateVariables.forEach((variable) => {
     processedCode += generateDefine(variable)
   })
 
@@ -153,10 +145,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += modifiedUserCode
   processedCode += '\n'
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateUndef(variable)
-  })
-  outputVariables.forEach((variable) => {
+  stateVariables.forEach((variable) => {
     processedCode += generateUndef(variable)
   })
   processedCode += '\n'

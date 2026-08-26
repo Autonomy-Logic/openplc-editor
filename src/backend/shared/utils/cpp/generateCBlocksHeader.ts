@@ -1,3 +1,4 @@
+import { getCppPouStateVariables } from '../../../../frontend/utils/cpp/cppPouVariables'
 import { generateStructMember } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
@@ -25,17 +26,12 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
     const setupFunctionName = `${pou.name.toLowerCase()}_setup`
     const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-    const inputVariables = pou.variables.filter((v) => v.class === 'input')
-    const outputVariables = pou.variables.filter((v) => v.class === 'output')
+    const stateVariables = getCppPouStateVariables(pou.variables)
 
     headerContent += `//definition of external blocks - ${pou.name.toUpperCase()}\n`
     headerContent += `typedef struct {\n`
 
-    inputVariables.forEach((variable) => {
-      headerContent += generateStructMember(variable)
-    })
-
-    outputVariables.forEach((variable) => {
+    stateVariables.forEach((variable) => {
       headerContent += generateStructMember(variable)
     })
 

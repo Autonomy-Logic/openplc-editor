@@ -82,6 +82,23 @@ type ProjectDataWithCppPous = PLCProjectData & {
 }
 
 /**
+ * Keep generated C++ metadata aligned with the POU interfaces used to build
+ * the ST bridge. The sidecar carries the original C++ source, while the
+ * preprocessed POU is the authoritative source for its current variables.
+ */
+const getCppPousForGeneration = (projectData: ProjectDataWithCppPous): CppPouDataCode[] => {
+  return (projectData.originalCppPous ?? []).map((cppPou) => {
+    const processedPou = projectData.pous.find((pou) => pou.data.name === cppPou.name) as
+      | { data?: { variables?: PLCVariable[] } }
+      | undefined
+    return {
+      ...cppPou,
+      variables: processedPou?.data?.variables ?? cppPou.variables,
+    }
+  })
+}
+
+/**
  * Post-build PLC start retry loop bounds. Why these numbers:
  *   - 5000 ms total: longer than the slowest STOP transition observed
  *     end-to-end (worst case ~3 s on a Pi 4 with EtherCAT teardown).
@@ -119,7 +136,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import JSZip from 'jszip'
 
-import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import type { PlatformOption, PLCVariable } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
@@ -1247,7 +1264,7 @@ class CompilerModule {
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
-    const originalCppPous = projectData.originalCppPous || []
+    const originalCppPous = getCppPousForGeneration(projectData)
 
     if (originalCppPous.length === 0) {
       handleOutputData('No C/C++ blocks found, skipping c_blocks.h generation', 'info')
@@ -1280,7 +1297,7 @@ class CompilerModule {
     _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
-    const originalCppPous = projectData.originalCppPous || []
+    const originalCppPous = getCppPousForGeneration(projectData)
 
     if (originalCppPous.length === 0) {
       handleOutputData('No C/C++ blocks found, skipping c_blocks_code.cpp generation', 'info')
