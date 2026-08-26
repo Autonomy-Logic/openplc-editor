@@ -57,6 +57,11 @@ interface PortHarness {
   transpileCalls: TranspileToStArgs[]
   /** Programmable error for whichever method the test wants to fail. */
   throwOn: Partial<Record<keyof LibraryBuildPort, Error>>
+  /** Error raised by `readBuildFile` for one specific path only.
+   *  `throwOn.readBuildFile` fails every read, which means stage 0's
+   *  `library.json` aborts the build before any later read is attempted —
+   *  so a failure deeper in the pipeline needs to be scoped to its path. */
+  throwOnRead: Map<string, Error>
 }
 
 function makePort(): PortHarness {
@@ -68,6 +73,7 @@ function makePort(): PortHarness {
     missing: [],
     verifyResult: { success: true },
     verifyCalls: [],
+    throwOnRead: new Map<string, Error>(),
     transpileResult: { ok: true, programSt: FAKE_PROGRAM_ST },
     transpileCalls: [],
     throwOn: {},
@@ -88,6 +94,8 @@ function makePort(): PortHarness {
     },
     async readBuildFile(_projectPath: string, relPath: string) {
       if (harness.throwOn.readBuildFile) throw harness.throwOn.readBuildFile
+      const scoped = harness.throwOnRead.get(relPath)
+      if (scoped) throw scoped
       if (relPath === 'library.json') return harness.manifestContent
       return harness.files.get(relPath) ?? null
     },
@@ -508,6 +516,30 @@ describe('runLibraryBuildPipeline', () => {
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
     expect(aux.nativeSources).toEqual([{ fileName: 'CPP_ADD.cpp', source: FN }])
+  })
+
+  it('fails naming the path when reading a native source throws', async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+    // Scoped to this one path: a blanket read failure would abort at stage 0's
+    // `library.json` and never reach the native read.
+    harness.throwOnRead.set('pous/function-blocks/Boom.cpp', new Error('EIO'))
+
+    const projectData = {
+      ...projectDataEmpty(),
+      pous: [{ type: 'function-block', data: { name: 'Boom', body: { language: 'cpp' } } }],
+    } as unknown as PLCProjectData
+
+    const result = await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('pous/function-blocks/Boom.cpp')
+    expect(result.error).toContain('EIO')
+    expect(mockLibraryBuild).not.toHaveBeenCalled()
   })
 
   it('fails naming the block when its authored source is missing from disk', async () => {
