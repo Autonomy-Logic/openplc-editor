@@ -11,6 +11,21 @@ let adapter: AcceleratorPort
  */
 const capturedHandlers: Record<string, ((...args: unknown[]) => void) | null> = {}
 
+/** Invokes a captured bridge listener, failing loudly if none was registered.
+ *  CLAUDE.md forbids non-null assertions, and a bare `?.()` would let a missing
+ *  registration pass the test silently. */
+const fire = (key: string, ...args: unknown[]): void => {
+  const handler = capturedHandlers[key]
+  if (!handler) throw new Error(`no listener captured for "${key}"`)
+  handler(...args)
+}
+
+/** Emits on a channel whose listener may already be gone — used after an
+ *  unsubscribe to show the callback stays silent. */
+const fireIfRegistered = (key: string, ...args: unknown[]): void => {
+  capturedHandlers[key]?.(...args)
+}
+
 /** Mirrors the bridge contract: register the listener, return its disposer. */
 const register = (key: string) =>
   jest.fn().mockImplementation((cb: (...args: unknown[]) => void) => {
@@ -55,7 +70,7 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
 
       expect((window.bridge as unknown as Record<string, jest.Mock>)[bridgeMethodName]).toHaveBeenCalledTimes(1)
 
-      capturedHandlers[handlerKey]!()
+      fire(handlerKey)
       expect(cb).toHaveBeenCalledTimes(1)
     })
 
@@ -64,7 +79,7 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
       const unsub = (adapter[methodName] as (cb: () => void) => () => void)(cb)
 
       unsub()
-      capturedHandlers[handlerKey]?.()
+      fireIfRegistered(handlerKey)
 
       expect(cb).not.toHaveBeenCalled()
     })
@@ -106,7 +121,7 @@ describe('onOpenRecent', () => {
 
     const mockEvent = {}
     const mockResponse = { projectPath: '/some/path' }
-    capturedHandlers.openRecent!(mockEvent, mockResponse)
+    fire('openRecent', mockEvent, mockResponse)
 
     expect(cb).toHaveBeenCalledWith(mockResponse)
   })
@@ -116,7 +131,7 @@ describe('onOpenRecent', () => {
     const unsub = adapter.onOpenRecent(cb)
 
     unsub()
-    capturedHandlers.openRecent?.({}, { projectPath: '/x' })
+    fireIfRegistered('openRecent', {}, { projectPath: '/x' })
 
     expect(cb).not.toHaveBeenCalled()
   })
