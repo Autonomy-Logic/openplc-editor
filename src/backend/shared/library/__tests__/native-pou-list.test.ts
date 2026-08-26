@@ -1,5 +1,10 @@
-import type { PLCBody, PLCPou, PouType } from '../../../../middleware/shared/ports/open-plc-types'
-import type { PLCProjectData } from '../../../../middleware/shared/ports/types'
+// All four from `ports/types`, which is what `collectNativePous` takes. The
+// import used to reach into `open-plc-types` for `PLCPou` and `PouType`: the
+// latter does not exist there, and the former is the `{ type, data }`
+// discriminated union rather than the `{ name, pouType, … }` shape this fixture
+// builds — so this suite never compiled and ran zero tests. Nothing caught it
+// because both jest workflows are `workflow_dispatch`.
+import type { PLCBody, PLCPou, PLCProjectData, PouType } from '../../../../middleware/shared/ports/types'
 import { collectNativePous, parseNativePouRefs } from '../native-pou-list'
 
 /** A typed project fixture — only `pous` is read, the rest is a valid empty. */
@@ -43,7 +48,7 @@ describe('collectNativePous', () => {
   // has to follow the POU type so the build hands strucpp the file and lets it
   // explain that a native block must be a FUNCTION_BLOCK, rather than failing
   // on a path guessed wrong.
-  it.each([
+  it.each<[PouType, string]>([
     ['function', 'pous/functions/CPP_ADD.cpp'],
     ['program', 'pous/programs/CPP_ADD.cpp'],
     ['function-block', 'pous/function-blocks/CPP_ADD.cpp'],
@@ -93,8 +98,17 @@ describe('collectNativePous', () => {
 
   it('tolerates a POU with no body', () => {
     // Same provenance as above: only malformed on-disk data produces this.
+    // `body` is required on `PLCPou`, and the point of this case is a POU that
+    // arrived without one — so it is built as a partial and widened through the
+    // list type, rather than asserted into a shape it deliberately is not.
+    const broken: Omit<PLCPou, 'body'> = {
+      name: 'Broken',
+      pouType: 'function-block',
+      interface: { variables: [] },
+      documentation: '',
+    }
     const noBody: PLCProjectData = {
-      pous: [{ name: 'Broken', pouType: 'function-block', interface: { variables: [] }, documentation: '' } as PLCPou],
+      pous: [broken as PLCPou],
       dataTypes: [],
       configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
     }

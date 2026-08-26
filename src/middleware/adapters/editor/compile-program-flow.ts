@@ -23,6 +23,7 @@ import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pou
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
+import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type { IpcProjectData } from './compiler-adapter'
 import { decodeMessage, inferStage, toIpcProjectData } from './compiler-adapter'
 
@@ -90,6 +91,18 @@ export async function compileProgramFlow(
   const boardCore = boardInfo?.core ?? null
   const isSimulator = args.isSimulator ?? boardInfo?.compiler === 'simulator'
 
+  // `pythonFunctionBlocks` has always described the contract (v3 / v4 run them,
+  // the Simulator stubs them, arduino-cli targets reject them); until now
+  // nothing enforced the rejection half, so a Python block on an Arduino board
+  // reached the board's C++ toolchain and failed there instead.
+  //
+  // Only gate on a board we actually resolved: `resolveTargetCapabilities`
+  // returns an all-false block for `undefined`, so gating on an unresolved
+  // board would turn a catalog lookup miss into a Python build failure.
+  const pythonSupport = boardInfo
+    ? { supported: resolveTargetCapabilities(boardInfo).pythonFunctionBlocks, targetLabel: args.boardTarget }
+    : undefined
+
   // Graft library-supplied C/C++ and Python blocks into the project's
   // POU list before preprocessing.  They behave like user-defined
   // native POUs from this point on — same `preprocessPous` branch,
@@ -112,18 +125,27 @@ export async function compileProgramFlow(
   const dataWithLibCpp = injectLibraryBlocks(args.projectData, archives)
 
   // Preprocess POUs (comment wrapping, Python->ST stubs, C++ validation/ST generation)
-  const { projectData: processedData, validationFailed } = preprocessPous(
+  const {
+    projectData: processedData,
+    validationFailed,
+    validationError,
+  } = preprocessPous(
     dataWithLibCpp,
     isSimulator,
     (level, message) => {
       onProgress({ stage: 'st', message, level })
     },
+    pythonSupport,
+    // The archives are already loaded for the C++ graft above. A native block
+    // declaring `ton0 : TON` needs that block's pin list before the instance can
+    // cross into Python, and the manifest is where it lives.
+    archives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks })),
   )
 
   if (validationFailed) {
     return {
       success: false,
-      error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+      error: validationError ?? 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
     }
   }
 

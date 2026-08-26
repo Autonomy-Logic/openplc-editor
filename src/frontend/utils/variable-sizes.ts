@@ -3,14 +3,19 @@ import { parseDurationLiteral } from './iec-duration'
 import { type IECTypeMetadata, type IECWireFormat, lookupBaseType } from './iec-types-registry'
 
 /**
- * STRING / WSTRING wire size cap, in characters. Strucpp's
- * IECStringVar / IECWStringVar default to 254 chars in declarations
- * but the debug protocol pre-dates that change and still frames
- * length-prefixed payloads at 1 length byte + 126 code units. Pull
- * this into a constant so the parser/encoder/sizer all share the cap
- * — bump it in one place when the protocol catches up.
+ * STRING / WSTRING wire size cap, in characters, and the single place it is
+ * written down.
+ *
+ * Strucpp's `IECStringVar` / `IECWStringVar` default to 254 characters in
+ * declarations, but the debug protocol pre-dates that change and still frames
+ * length-prefixed payloads at 1 length byte + 126 code units. Every consumer
+ * reads it from here — the debugger decoder below, the Python SHM layout
+ * (`python/shm-type-map.ts` re-exports it as `SHM_STRING_CHARS`), and the
+ * declaration parser's user-facing message — so the transport, the layout built
+ * on it, and the limit quoted to the user cannot drift apart. Bump it once when
+ * the protocol catches up.
  */
-const DEBUG_STRING_CAP = 126
+export const DEBUG_STRING_CAP = 126
 
 function readInt8(data: Uint8Array, offset: number): number {
   const value = data[offset]

@@ -541,7 +541,8 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
-    const cBlocks = buildCBlocksFromPous(originalCppPous as never)
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
     const bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
@@ -816,7 +817,8 @@ async function runCompilePipelineInner(
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
-  const cBlocks = buildCBlocksFromPous(originalCppPous as never)
+  const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     cBlocks,

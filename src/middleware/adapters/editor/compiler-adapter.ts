@@ -34,6 +34,7 @@ import type {
   PLCProjectData,
   Result,
 } from '../../shared/ports/types'
+import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import { compileProgramFlow } from './compile-program-flow'
 
 /**
@@ -171,17 +172,38 @@ export function createEditorCompilerAdapter(): CompilerPort {
 
       const dataWithLibCpp = injectLibraryBlocks(args.projectData, archives)
 
-      // Preprocess for debug compilation too
-      const { projectData: processedData, validationFailed } = preprocessPous(
+      // Preprocess for debug compilation too. Same target gate as the build
+      // path — a Python block is no more loadable on an Arduino board when the
+      // build is for debugging.
+      const debugBoards = await window.bridge.getAvailableBoards()
+      const debugBoardInfo = debugBoards.get(args.boardTarget)
+      const {
+        projectData: processedData,
+        validationFailed,
+        validationError,
+      } = preprocessPous(
         dataWithLibCpp,
         false,
         (level, message) => {
           onProgress({ stage: 'st', message, level })
         },
+        debugBoardInfo
+          ? {
+              supported: resolveTargetCapabilities(debugBoardInfo).pythonFunctionBlocks,
+              targetLabel: args.boardTarget,
+            }
+          : undefined,
+        // The same FB pin source the build and library paths pass. Without it
+        // `libraries` defaults to `[]`, `describeShmLeaves` cannot resolve a
+        // library block, and a Python POU declaring e.g. `ton0 : TON` compiled
+        // for upload and then failed the debug compile with "cannot exchange
+        // these variables" — the one path where the archives were already
+        // loaded and simply not forwarded.
+        archives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks })),
       )
 
       if (validationFailed) {
-        return { success: false, error: 'POU validation failed.' }
+        return { success: false, error: validationError ?? 'POU validation failed.' }
       }
 
       const ipcData = toIpcProjectData(processedData)
@@ -262,19 +284,56 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // only ever sees the already-lowered data.
       const nativePous = collectNativePous(args.projectData)
 
-      const buildResult = preprocessPous(args.projectData, false, (level, message) => {
-        onProgress({ stage: 'st', message, level })
-      })
+      // A library's own Python POU may hold a function block instance too, so it
+      // needs the same pin source a project build gets.
+      const libraryArchives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
+      const fbSources = libraryArchives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks }))
+
+      const buildResult = preprocessPous(
+        args.projectData,
+        false,
+        (level, message) => {
+          onProgress({ stage: 'st', message, level })
+        },
+        undefined,
+        fbSources,
+      )
       if (buildResult.validationFailed) {
         return {
           success: false,
-          error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+          // `preprocessPous` returns `validationError` so the caller stops
+          // guessing at the cause. This path can now fail for a Python reason —
+          // the shm refusals are not gated on target support — and reporting
+          // every one of those as "check C/C++ code for setup()/loop()" sent
+          // the user to the wrong file.
+          error:
+            buildResult.validationError ??
+            'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
         }
       }
-      const verifyResult = preprocessPous(args.projectData, true, () => {
-        // Silent — same project gets logged once via the build
-        // pass; a second round of "Found …" lines is noise.
-      })
+      const verifyResult = preprocessPous(
+        args.projectData,
+        true,
+        () => {
+          // Silent — same project gets logged once via the build
+          // pass; a second round of "Found …" lines is noise.
+        },
+        undefined,
+        fbSources,
+      )
+      // Checked rather than ignored, matching the build pass above. Both passes
+      // get the same project and the same FB pin sources, so they agree today —
+      // but handing an un-lowered project to the verify compile would fail it on
+      // `python_block_loader` instead of reporting the refusal, and that is not
+      // a difference worth leaving to luck.
+      if (verifyResult.validationFailed) {
+        return {
+          success: false,
+          error:
+            verifyResult.validationError ??
+            'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+        }
+      }
       const ipcDataForBuild = toIpcProjectData(buildResult.projectData)
       const ipcDataForVerify = toIpcProjectData(verifyResult.projectData)
 
