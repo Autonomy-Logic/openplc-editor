@@ -105,6 +105,24 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('#undef result')
   })
 
+  it('undefines Arduino’s abs macro, which breaks <chrono> on the mbed cores', () => {
+    // `<chrono>` calls `abs` with a template argument list the one-parameter
+    // macro cannot swallow: `macro "abs" passed 2 arguments, but takes just 1`,
+    // and the standard header then fails to parse. AVR never showed it — its
+    // libstdc++ is the vendored freestanding port and never reaches <chrono>.
+    const result = generateCBlocksCode([{ name: 'B', code: 'void setup() { }\nvoid loop() { }', variables: [] }])
+
+    expect(result).toContain('#undef abs')
+  })
+
+  it('leaves the Arduino macros that shadow nothing standard', () => {
+    // `constrain` and `sq` collide with no standard name, so user code keeps them.
+    const result = generateCBlocksCode([{ name: 'B', code: 'void setup() { }\nvoid loop() { }', variables: [] }])
+
+    expect(result).not.toContain('#undef constrain')
+    expect(result).not.toContain('#undef sq')
+  })
+
   it('generates array defines with direct struct dereference (no pointer deref)', () => {
     const variables: PLCVariable[] = [makeArrayVar('data', 'input', 'INT', '0..9')]
     const code = 'void setup() { }\nvoid loop() { }'
@@ -127,9 +145,9 @@ describe('generateCBlocksCode', () => {
     // No #define / #undef for variables (the only `#define`s in the
     // baseline now are the Arduino min/max macro guards).
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
-    // Strip the baseline's `#undef min` / `#undef max` (Arduino.h macro
-    // scrubbing — see baseline) before asserting no per-variable undefs.
-    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max)\s*$/gm, '')
+    // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
+    // — see baseline) before asserting no per-variable undefs.
+    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs)\s*$/gm, '')
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 

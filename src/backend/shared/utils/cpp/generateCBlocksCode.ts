@@ -38,15 +38,23 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 
 #ifdef ARDUINO
 #include <Arduino.h>
-// Arduino.h defines \`min\` and \`max\` as preprocessor macros, which
-// collide with the \`std::min\` / \`std::max\` function templates and
-// the \`numeric_limits<T>::min()\` / \`max()\` static members that
-// \`<algorithm>\` / \`<limits>\` declare (both pulled in transitively
-// via \`iec_string.hpp\` below). Undef'ing them here keeps the user's
-// c_blocks code free to call \`std::min\` / \`std::max\` and lets the
-// strucpp runtime headers compile cleanly on AVR.
+// Arduino declares several of its helpers as function-like preprocessor macros,
+// and every one of them collides with a standard-library name that the headers
+// below pull in: \`min\` / \`max\` with the \`std::min\` / \`std::max\` templates and
+// \`numeric_limits<T>::min()\` / \`max()\`, and \`abs\` with \`std::abs\` — which is
+// worse, because \`<chrono>\` (reached transitively on the mbed cores) calls
+// \`abs\` with a template argument list the one-parameter macro cannot swallow:
+// \`macro "abs" passed 2 arguments, but takes just 1\`, and the standard header
+// then fails to parse.
+//
+// The AVR targets never showed it, because their libstdc++ is the vendored
+// freestanding port and never reaches \`<chrono>\`. An mbed board does.
+//
+// \`constrain\` and \`sq\` are left alone: neither shadows a standard name, so
+// user code keeps them.
 #undef min
 #undef max
+#undef abs
 #endif
 
 // The C block interface — the \`<POU>_VARS\` struct for every C++ POU in this

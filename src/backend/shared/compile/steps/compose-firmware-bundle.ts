@@ -119,7 +119,7 @@ export function buildCBlocksFromPous(
  *
  * Layout produced (paths relative to project root):
  *  - `examples/Baremetal/Baremetal.ino`              — from skeleton
- *  - `examples/Baremetal/c_blocks_code.cpp`          — overwritten when `cBlocks.code !== null`
+ *  - `src/c_blocks_code.cpp`                         — written when `cBlocks.code !== null`
  *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
  *  - `src/arduino.cpp`                               — from skeleton (HAL adapter, simulator-specific)
  *  - `src/c_blocks.h`                                — written verbatim from `cBlocks.header`
@@ -157,13 +157,25 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // resolves which one wins.
   files['src/c_blocks.h'] = cBlocks.header
 
-  // C blocks code overwrites ONLY when the project has C/C++ POUs.
-  // For empty projects, the firmware skeleton's static
-  // `examples/Baremetal/c_blocks_code.cpp` baseline stays (it's
-  // a benign empty unit per the editor's emission, providing
-  // helpers the runtime expects regardless of user code).
+  // C blocks code goes under `src/`, not next to the sketch, so the
+  // pre-compile step picks it up and builds it at -std=gnu++17 with the rest of
+  // the generated code.
+  //
+  // It used to land in `examples/Baremetal/`, where arduino-cli compiles it at
+  // whatever standard the core ships. That was survivable while the unit only
+  // pulled in `iec_var.hpp` and `iec_string.hpp`, and stopped being survivable
+  // when it started including `generated.hpp` for the project's own types:
+  // `iec_ptr.hpp` uses `std::is_arithmetic_v`, so on an mbed core (gnu++14) a
+  // project with a C++ block failed with `'is_arithmetic_v' is not a member of
+  // 'std'`. The AVR targets hid it because `hals.json` declares
+  // `-std=gnu++17` in their `cxx_flags`; a VPP board such as Arduino Opta
+  // declares no such flag and does not.
+  //
+  // The skeleton's static `examples/Baremetal/c_blocks_code.cpp` stays where it
+  // is either way. It defines no symbols and pulls in no strucpp header, so it
+  // compiles at the core's standard and cannot collide with this one.
   if (cBlocks.code !== null) {
-    files['examples/Baremetal/c_blocks_code.cpp'] = cBlocks.code
+    files['src/c_blocks_code.cpp'] = cBlocks.code
   }
 
   // defines.h is the authored output of the shared
