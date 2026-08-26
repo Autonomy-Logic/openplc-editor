@@ -1,3 +1,4 @@
+import { cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
 import { isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
@@ -158,19 +159,14 @@ const processUserCode = (pou: CppPouData): string => {
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
   const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-  const inputVariables = pou.variables.filter((v) => v.class === 'input')
-  const outputVariables = pou.variables.filter((v) => v.class === 'output')
+  const interfaceVariables = cBlockInterfaceVariables(pou.variables)
 
   // The struct and the two entry-point declarations come from c_blocks.h, which
   // the baseline includes. Only the name-binding macros and the user's own body
   // are emitted here.
   let processedCode = `// ${pou.name.toUpperCase()} — Variables Table names bound to the interface struct\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateDefine(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  interfaceVariables.forEach((variable) => {
     processedCode += generateDefine(variable)
   })
 
@@ -188,10 +184,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += modifiedUserCode
   processedCode += '\n'
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateUndef(variable)
-  })
-  outputVariables.forEach((variable) => {
+  interfaceVariables.forEach((variable) => {
     processedCode += generateUndef(variable)
   })
   processedCode += '\n'

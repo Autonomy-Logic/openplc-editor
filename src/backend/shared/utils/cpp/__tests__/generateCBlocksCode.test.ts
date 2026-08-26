@@ -166,17 +166,21 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('// comment about setup')
   })
 
-  it('filters variables by class (only input and output)', () => {
+  it('binds every class the user can declare, and nothing the toolchain injected', () => {
+    const byClass = (name: string, cls: PLCVariable['class'], type: string): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'base-type', value: type },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
     const variables: PLCVariable[] = [
       makeScalarVar('inVar', 'input', 'INT'),
-      {
-        name: 'localVar',
-        class: 'local',
-        type: { definition: 'base-type', value: 'INT' },
-        location: '',
-        documentation: '',
-        debug: false,
-      },
+      byClass('localVar', 'local', 'INT'),
+      byClass('tempVar', 'temp', 'INT'),
+      byClass('ioVar', 'inOut', 'INT'),
+      byClass('hasBeenInitialized', 'local', 'BOOL'),
       makeScalarVar('outVar', 'output', 'INT'),
     ]
     const code = 'void setup() { }\nvoid loop() { }'
@@ -185,9 +189,16 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('#define inVar')
     expect(result).toContain('#define outVar')
-    expect(result).not.toContain('#define localVar')
+    expect(result).toContain('#define localVar')
+    expect(result).toContain('#define tempVar')
+    expect(result).toContain('#define ioVar')
+    // The setup() latch stays out of the user's reach — see the header tests.
+    expect(result).not.toContain('#define hasBeenInitialized')
     expect(result).toContain('#undef inVar')
     expect(result).toContain('#undef outVar')
-    expect(result).not.toContain('#undef localVar')
+    expect(result).toContain('#undef localVar')
+    expect(result).toContain('#undef tempVar')
+    expect(result).toContain('#undef ioVar')
+    expect(result).not.toContain('#undef hasBeenInitialized')
   })
 })

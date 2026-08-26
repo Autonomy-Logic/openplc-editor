@@ -10,6 +10,16 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
+/** Same shape, for the classes beyond input/output that the struct now carries. */
+const byClass = (name: string, cls: PLCVariable['class'], baseType: string): PLCVariable => ({
+  name,
+  class: cls,
+  type: { definition: 'base-type', value: baseType },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
 const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
@@ -126,25 +136,51 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
   })
 
-  it('includes only input and output variables in the struct', () => {
+  it('carries every class the user can declare, grouped in a stable order', () => {
+    // A native block should see its own Variables Table the way an ST block
+    // does. `inOut`, `local` and `temp` are all plain members on the strucpp
+    // side, so a pointer to each is exactly as valid as one to an input.
     const variables: PLCVariable[] = [
-      makeScalarVar('inVar', 'input', 'INT'),
-      {
-        name: 'localVar',
-        class: 'local',
-        type: { definition: 'base-type', value: 'BOOL' },
-        location: '',
-        documentation: '',
-        debug: false,
-      },
       makeScalarVar('outVar', 'output', 'BOOL'),
+      byClass('tempVar', 'temp', 'INT'),
+      makeScalarVar('inVar', 'input', 'INT'),
+      byClass('localVar', 'local', 'DINT'),
+      byClass('ioVar', 'inOut', 'REAL'),
     ]
 
     const result = generateCBlocksHeader([{ name: 'test', variables }])
 
     expect(result).toContain('strucpp::IEC_INT *INVAR;')
     expect(result).toContain('strucpp::IEC_BOOL *OUTVAR;')
-    expect(result).not.toContain('LOCALVAR')
+    expect(result).toContain('strucpp::IEC_REAL *IOVAR;')
+    expect(result).toContain('strucpp::IEC_DINT *LOCALVAR;')
+    expect(result).toContain('strucpp::IEC_INT *TEMPVAR;')
+
+    // Grouped by class regardless of declaration order, so the header stays
+    // readable and its diffs stay meaningful.
+    const order = ['INVAR', 'OUTVAR', 'IOVAR', 'LOCALVAR', 'TEMPVAR'].map((n) => result.indexOf(`*${n};`))
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
+  it('leaves out the latch the toolchain injects into every C++ block', () => {
+    // `hasBeenInitialized` drives the one-shot setup() call. It is machinery,
+    // not a declaration, and a block able to write it could re-run or skip its
+    // own initialisation.
+    const variables: PLCVariable[] = [
+      makeScalarVar('inVar', 'input', 'INT'),
+      byClass('hasBeenInitialized', 'local', 'BOOL'),
+    ]
+
+    expect(generateCBlocksHeader([{ name: 'test', variables }])).not.toContain('HASBEENINITIALIZED')
+  })
+
+  it('leaves out a VAR_EXTERNAL, which is not a plain member', () => {
+    // A `VAR_EXTERNAL` is a `GlobalVar<V>*` carrying the global's mutex, not a
+    // value member. Emitting a plain pointer to it would compile and silently
+    // drop the lock, so it is handled separately rather than folded in here.
+    const variables: PLCVariable[] = [makeScalarVar('inVar', 'input', 'INT'), byClass('gCounter', 'external', 'DINT')]
+
+    expect(generateCBlocksHeader([{ name: 'test', variables }])).not.toContain('GCOUNTER')
   })
 
   it('generates declarations for multiple pous', () => {

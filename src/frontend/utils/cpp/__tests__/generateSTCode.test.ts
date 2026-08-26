@@ -153,21 +153,51 @@ describe('generateSTCode (cpp)', () => {
     expect(result).toContain('vars.D = &D[0] - 0;')
   })
 
-  it('filters out local variables', () => {
-    const localVar: PLCVariable = {
-      name: 'localVal',
-      class: 'local',
+  it('assigns a pointer for every class the struct carries', () => {
+    // The assignments and the struct must select the same variables: a field
+    // the assignments skip is a dangling pointer the user's first write
+    // follows. Both read `cBlockInterfaceVariables`, and this pins the result.
+    const byClass = (name: string, cls: PLCVariable['class']): PLCVariable => ({
+      name,
+      class: cls,
       type: { definition: 'base-type', value: 'INT' },
       location: '',
       documentation: '',
       debug: false,
-    }
+    })
 
     const result = generateSTCode({
       pouName: 'test',
-      allVariables: [makeScalarVar('x', 'input', 'INT'), localVar],
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        byClass('localVal', 'local'),
+        byClass('tempVal', 'temp'),
+        byClass('ioVal', 'inOut'),
+      ],
     })
 
-    expect(result).not.toContain('LOCALVAL')
+    expect(result).toContain('vars.X = &X;')
+    expect(result).toContain('vars.LOCALVAL = &LOCALVAL;')
+    expect(result).toContain('vars.TEMPVAL = &TEMPVAL;')
+    expect(result).toContain('vars.IOVAL = &IOVAL;')
+  })
+
+  it('does not assign the latch the toolchain injects', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        {
+          name: 'hasBeenInitialized',
+          class: 'local',
+          type: { definition: 'base-type', value: 'BOOL' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ],
+    })
+
+    expect(result).not.toContain('vars.HASBEENINITIALIZED')
   })
 })
