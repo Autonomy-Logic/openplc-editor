@@ -58,3 +58,32 @@ export function collectNativePous(projectData: PLCProjectData): NativePouRef[] {
   }
   return refs
 }
+
+/**
+ * Narrow an untrusted value into `NativePouRef[]`.
+ *
+ * The desktop build sends this list across IPC, so it arrives as `unknown` no
+ * matter what the renderer meant to send: an older renderer omits it entirely,
+ * and a malformed entry would otherwise reach the read loop and throw on
+ * `relPath.split` — out of a handler invoked with `void`, so the renderer would
+ * sit waiting for a result that never comes.
+ *
+ * Unparseable input yields an empty list, which degrades to "this project has
+ * no native POUs": the library still builds, and a project that genuinely had
+ * native blocks fails later with strucpp's own diagnostic rather than a crash
+ * with no result at all. Individual malformed entries are dropped rather than
+ * failing the whole list, for the same reason.
+ */
+export function parseNativePouRefs(value: unknown): NativePouRef[] {
+  if (!Array.isArray(value)) return []
+  const refs: NativePouRef[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const { name, language, relPath } = entry as Record<string, unknown>
+    if (typeof name !== 'string' || name === '') continue
+    if (typeof relPath !== 'string' || relPath === '') continue
+    if (language !== 'cpp' && language !== 'python') continue
+    refs.push({ name, language, relPath })
+  }
+  return refs
+}

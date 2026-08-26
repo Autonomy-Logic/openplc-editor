@@ -1,15 +1,21 @@
+import type { PLCBody, PLCPou, PouType } from '../../../../middleware/shared/ports/open-plc-types'
 import type { PLCProjectData } from '../../../../middleware/shared/ports/types'
-import { collectNativePous } from '../native-pou-list'
+import { collectNativePous, parseNativePouRefs } from '../native-pou-list'
 
-function project(pous: Array<{ name: string; pouType: string; language: string }>): PLCProjectData {
+/** A typed project fixture — only `pous` is read, the rest is a valid empty. */
+function project(pous: Array<{ name: string; pouType: PouType; language: PLCBody['language'] }>): PLCProjectData {
+  const built: PLCPou[] = pous.map((p) => ({
+    name: p.name,
+    pouType: p.pouType,
+    interface: { variables: [] },
+    body: { language: p.language, value: '' } as PLCBody,
+    documentation: '',
+  }))
   return {
-    pous: pous.map((p) => ({
-      name: p.name,
-      pouType: p.pouType,
-      interface: { variables: [] },
-      body: { language: p.language, value: '' },
-    })),
-  } as unknown as PLCProjectData
+    pous: built,
+    dataTypes: [],
+    configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+  }
 }
 
 describe('collectNativePous', () => {
@@ -46,9 +52,23 @@ describe('collectNativePous', () => {
   })
 
   it('falls back to the function-block directory for an unrecognised POU type', () => {
-    expect(collectNativePous(project([{ name: 'Odd', pouType: 'weird', language: 'cpp' }]))[0].relPath).toBe(
-      'pous/function-blocks/Odd.cpp',
-    )
+    // `pouType` is a union, so an unknown value can only arrive from data the
+    // types do not describe — a hand-edited project.json. The fallback keeps
+    // the build pointed somewhere sensible instead of at `undefined/Odd.cpp`.
+    const odd: PLCProjectData = {
+      pous: [
+        {
+          name: 'Odd',
+          pouType: 'weird' as PouType,
+          interface: { variables: [] },
+          body: { language: 'cpp', value: '' } as PLCBody,
+          documentation: '',
+        },
+      ],
+      dataTypes: [],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+    expect(collectNativePous(odd)[0].relPath).toBe('pous/function-blocks/Odd.cpp')
   })
 
   it('keeps declaration order and skips non-native POUs', () => {
@@ -72,7 +92,52 @@ describe('collectNativePous', () => {
   })
 
   it('tolerates a POU with no body', () => {
-    const data = { pous: [{ name: 'Broken', pouType: 'function-block' }] } as unknown as PLCProjectData
-    expect(collectNativePous(data)).toEqual([])
+    // Same provenance as above: only malformed on-disk data produces this.
+    const noBody: PLCProjectData = {
+      pous: [{ name: 'Broken', pouType: 'function-block', interface: { variables: [] }, documentation: '' } as PLCPou],
+      dataTypes: [],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+    expect(collectNativePous(noBody)).toEqual([])
+  })
+})
+
+describe('parseNativePouRefs', () => {
+  const valid = { name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' }
+
+  it('accepts a well-formed list', () => {
+    expect(parseNativePouRefs([valid])).toEqual([valid])
+  })
+
+  // Arrives over IPC, so it is `unknown` whatever the renderer meant to send.
+  // Unreadable input degrades to "no native POUs" rather than throwing inside
+  // the pipeline, out of a handler invoked with `void`.
+  it.each([
+    ['undefined (older renderer)', undefined],
+    ['null', null],
+    ['a string', 'nope'],
+    ['an object', { name: 'x' }],
+  ])('returns an empty list for %s', (_label, value) => {
+    expect(parseNativePouRefs(value)).toEqual([])
+  })
+
+  it.each([
+    ['a null entry', null],
+    ['a non-object entry', 'CPP_SCALE'],
+    ['a missing name', { language: 'cpp', relPath: 'a/b.cpp' }],
+    ['an empty name', { name: '', language: 'cpp', relPath: 'a/b.cpp' }],
+    ['a missing relPath', { name: 'X', language: 'cpp' }],
+    ['an empty relPath', { name: 'X', language: 'cpp', relPath: '' }],
+    ['a non-string relPath', { name: 'X', language: 'cpp', relPath: 42 }],
+    ['an unknown language', { name: 'X', language: 'rust', relPath: 'a/b.rs' }],
+  ])('drops %s', (_label, entry) => {
+    expect(parseNativePouRefs([entry])).toEqual([])
+  })
+
+  it('keeps the good entries and drops only the bad ones', () => {
+    expect(parseNativePouRefs([valid, { name: 'Bad' }, null, { ...valid, name: 'PY', language: 'python' }])).toEqual([
+      valid,
+      { name: 'PY', language: 'python', relPath: valid.relPath },
+    ])
   })
 })

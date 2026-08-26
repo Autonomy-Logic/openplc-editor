@@ -25,7 +25,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
-import type { NativePouRef } from '@root/backend/shared/library/native-pou-list'
+import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -3343,13 +3343,20 @@ class CompilerModule {
     // channel `preprocessPous` has already lowered every native body to
     // bridge ST and rewritten its language tag. An older renderer omits it,
     // which degrades to "this project has no native POUs".
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false, nativePous = []] = args as [
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false, rawNativePous] = args as [
       string,
       PLCProjectData,
       PLCProjectData,
       boolean | undefined,
-      NativePouRef[] | undefined,
+      unknown,
     ]
+
+    // Validated at the boundary rather than trusted: this crosses IPC, so it
+    // arrives as `unknown` whatever the renderer intended. A malformed entry
+    // would otherwise throw inside the pipeline's read loop, and this handler
+    // is invoked with `void` — the renderer would wait for a result that never
+    // arrives. `parseNativePouRefs` drops what it cannot read.
+    const nativePous = parseNativePouRefs(rawNativePous)
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific
