@@ -2415,6 +2415,46 @@ class CompilerModule {
       const combinedHash = hash.digest('hex')
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
+      // The package signature, forwarded so the runtime can verify what it is
+      // about to compile.
+      //
+      // `vpp_plugin/` is the only content in an upload that the runtime builds
+      // with a Makefile that came from the upload itself, so the runtime
+      // requires it to be signed by a trusted key. It cannot re-derive the
+      // signature: the plugin tree it receives is a SUBSET of the package
+      // (config_template.json and requirements.txt are dropped above, and
+      // trusted_keys.c / checksum.sha256 are generated here), so only the
+      // original package's detached signature can attest to it.
+      //
+      // `pluginDir` tells the runtime which signed subtree to compare the
+      // upload against — the same relative path this function copied from.
+      //
+      // Without this the runtime refuses every VPP upload with "vpp_signature
+      // .json is missing or unreadable". The contract was written on the
+      // runtime side (webserver/vpp_package_signature.py, whose comment names
+      // this very function as its author) and never implemented here, so no
+      // VPP could be uploaded to a runtime that enforces it.
+      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      try {
+        const signatureRaw = await readFile(packageSignaturePath, 'utf-8')
+        await writeFile(
+          join(sourceTargetFolderPath, 'vpp_signature.json'),
+          `${JSON.stringify({ package: JSON.parse(signatureRaw), pluginDir: pluginDirRelPath.split(path.sep).join('/') }, null, 2)}\n`,
+          'utf-8',
+        )
+      } catch (err) {
+        // Non-fatal HERE, and refused THERE. An unsigned package is a normal
+        // thing to have during vendor development (`build.ts --unsigned`), and
+        // failing the local build would make that workflow impossible. The
+        // runtime is the boundary that matters, and it rejects the upload with
+        // a message naming the fix — which is better than this build guessing
+        // whether the target enforces signatures.
+        handleOutputData(
+          `VPP package has no usable signature.json (${getErrorMessage(err)}); a runtime that requires signed plugins will refuse this upload`,
+          'warning',
+        )
+      }
+
       handleOutputData(
         `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
