@@ -11,59 +11,84 @@ type PythonRuntimeInjectionParams = {
   pouName: string
 }
 
-const generateOutputInitialization = (outputVariables: PLCVariable[]): string => {
-  if (outputVariables.length === 0) return '# No output variables to initialize'
-
-  return outputVariables
-    .map((variable) => {
-      if (isArrayVariable(variable)) {
-        const totalElements = getArrayTotalElements(variable)
-        return `${variable.name} = [0] * ${totalElements}`
-      }
-      const kind = describeShmField(variable)?.kind
-      const defaultValue = kind === 'string' || kind === 'wstring' ? '""' : variable.initialValue || 0
-      return `${variable.name} = ${defaultValue}`
-    })
-    .join('\n')
+const generateInputUnpackCode = (inputVariables: PLCVariable[]): string => {
+  if (inputVariables.length === 0) return '    # No input variables to read'
+  return generateUnpackCode(inputVariables, {
+    header: '    # Read input variables',
+    buffer: 'shm_in',
+    fmt: 'fmt_in',
+    size: 'data_size_in',
+    indent: '    ',
+  })
 }
 
 /**
- * Generate Python code that extracts variables from the flat unpacked tuple using index slicing.
- * Handles scalars, strings (len+body pairs), and arrays (N consecutive elements -> list).
+ * Seed the output globals from what the PLC currently holds, before
+ * `block_init()` runs.
+ *
+ * Previously the outputs were initialised from their declarations
+ * (`initialValue || 0`) and written back after the first `block_loop()`, before
+ * the user's code had assigned anything — so the IEC-side value was replaced by
+ * a default on every start. With RETAIN that is destructive rather than merely
+ * wrong. The C stub publishes the live values into shared memory when it maps
+ * the segment (see `generateOutputSeedCode`), and this reads them back.
+ *
+ * A block that never assigns an output now leaves it exactly as the PLC had it.
  */
-const generateInputUnpackCode = (inputVariables: PLCVariable[]): string => {
-  if (inputVariables.length === 0) return '    # No input variables to read'
+const generateOutputSeedCode = (outputVariables: PLCVariable[]): string => {
+  if (outputVariables.length === 0) return '# No output variables to seed'
+  return generateUnpackCode(outputVariables, {
+    header: '# Seed outputs from the values the PLC already holds',
+    buffer: 'shm_out',
+    fmt: 'fmt_out',
+    size: 'data_size_out',
+    indent: '',
+  })
+}
 
-  let code = '    # Read input variables\n'
-  code += '    _vals = struct.unpack(fmt_in, shm_in.buf[:data_size_in])\n'
-  code += '    _idx = 0\n'
+/**
+ * Emit the unpack sequence for a set of variables.
+ *
+ * Shared by the per-cycle input read and the one-time output seed: both decode
+ * the same packed layout, differing only in which buffer they read and at what
+ * indentation. Keeping one generator means the two cannot drift in how they
+ * interpret a field — the same reason the type table is shared.
+ */
+const generateUnpackCode = (
+  variables: PLCVariable[],
+  opts: { header: string; buffer: string; fmt: string; size: string; indent: string },
+): string => {
+  const { header, buffer, fmt, size, indent } = opts
 
-  inputVariables.forEach((variable) => {
+  let code = `${header}\n`
+  code += `${indent}_vals = struct.unpack(${fmt}, ${buffer}.buf[:${size}])\n`
+  code += `${indent}_idx = 0\n`
+
+  variables.forEach((variable) => {
+    const kind = describeShmField(variable)?.kind
+
     if (isArrayVariable(variable)) {
       const count = getArrayTotalElements(variable)
-      code += `    ${variable.name} = list(_vals[_idx:_idx+${count}])\n`
-      code += `    _idx += ${count}\n`
-    } else if (describeShmField(variable)?.kind === 'string') {
-      code += `    ${variable.name}_len = _vals[_idx]\n`
-      code += `    _idx += 1\n`
-      code += `    ${variable.name}_body = _vals[_idx]\n`
-      code += `    _idx += 1\n`
+      code += `${indent}${variable.name} = list(_vals[_idx:_idx+${count}])\n`
+      code += `${indent}_idx += ${count}\n`
+    } else if (kind === 'string' || kind === 'wstring') {
+      code += `${indent}${variable.name}_len = _vals[_idx]\n`
+      code += `${indent}_idx += 1\n`
+      code += `${indent}${variable.name}_body = _vals[_idx]\n`
+      code += `${indent}_idx += 1\n`
       // The C side clamps the length to the budget, but the prefix is a signed
       // int8 and the buffer starts zeroed, so clamp on read too: a negative
       // slice bound would silently truncate from the end instead of failing.
-      code += `    ${variable.name}_len = max(0, min(${variable.name}_len, ${SHM_STRING_CHARS}))\n`
-      code += `    ${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')\n`
-    } else if (describeShmField(variable)?.kind === 'wstring') {
-      // The length counts UTF-16 code units, so the byte slice is twice it.
-      code += `    ${variable.name}_len = _vals[_idx]\n`
-      code += `    _idx += 1\n`
-      code += `    ${variable.name}_body = _vals[_idx]\n`
-      code += `    _idx += 1\n`
-      code += `    ${variable.name}_len = max(0, min(${variable.name}_len, ${SHM_STRING_CHARS}))\n`
-      code += `    ${variable.name} = ${variable.name}_body[:${variable.name}_len * 2].decode('utf-16-le', errors='ignore')\n`
+      code += `${indent}${variable.name}_len = max(0, min(${variable.name}_len, ${SHM_STRING_CHARS}))\n`
+      if (kind === 'wstring') {
+        // The length counts UTF-16 code units, so the byte slice is twice it.
+        code += `${indent}${variable.name} = ${variable.name}_body[:${variable.name}_len * 2].decode('utf-16-le', errors='ignore')\n`
+      } else {
+        code += `${indent}${variable.name} = ${variable.name}_body[:${variable.name}_len].decode('utf-8', errors='ignore')\n`
+      }
     } else {
-      code += `    ${variable.name} = _vals[_idx]\n`
-      code += `    _idx += 1\n`
+      code += `${indent}${variable.name} = _vals[_idx]\n`
+      code += `${indent}_idx += 1\n`
     }
   })
 
@@ -113,7 +138,7 @@ const generateOutputPackCode = (outputVariables: PLCVariable[]): string => {
 const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
   const { fmtIn, fmtOut, inputVariables, outputVariables, originalCode, pouName } = params
 
-  const outputInitialization = generateOutputInitialization(outputVariables)
+  const outputSeeding = generateOutputSeedCode(outputVariables)
   const readInputSection = generateInputUnpackCode(inputVariables)
   const writeOutputSection = generateOutputPackCode(outputVariables)
 
@@ -130,13 +155,17 @@ except Exception as e:
     print(f'Error on shared memory: {e}')
     exit(1)
 
-# Initialize output variables here - if any
-${outputInitialization}
+data_size_in = struct.calcsize(fmt_in)
+data_size_out = struct.calcsize(fmt_out)
+
+# Outputs start from what the PLC already holds, not from their declarations.
+# The stub publishes the live values into shared memory when it maps the
+# segment, so a block that never assigns an output leaves it untouched — and a
+# RETAIN output survives the restart it exists to survive.
+${outputSeeding}
 
 # Initialize block
 block_init()
-data_size_in = struct.calcsize(fmt_in)
-data_size_out = struct.calcsize(fmt_out)
 while True:
     try:
         os.kill(plc_pid, 0)

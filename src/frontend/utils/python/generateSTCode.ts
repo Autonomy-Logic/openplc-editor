@@ -121,6 +121,55 @@ const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
   return code
 }
 
+/**
+ * Publish the IEC-side output values into shared memory once, at startup.
+ *
+ * Without this the Python block seeds its output globals from the declaration
+ * (`initialValue || 0`) and writes them back after its very first
+ * `block_loop()`, before the user's code has assigned anything — so whatever
+ * the IEC variable held is destroyed. Today that discards a declared initial
+ * value; once a Python block can carry RETAIN it destroys the retained value on
+ * every restart, which is the exact opposite of what retain is for.
+ *
+ * Shared memory is created zeroed, so there is nothing for Python to seed from
+ * unless the C side puts it there. This is the mirror of `generateOutputCopyCode`
+ * — same fields, opposite direction — and runs in the `first_run` branch right
+ * after the loader has mapped the segment.
+ */
+const generateOutputSeedCode = (outputVars: PLCVariable[]): string => {
+  if (outputVars.length === 0) return ''
+
+  let code = '        shm_data_out_t seed_out;\n'
+  code += '        std::memset(&seed_out, 0, sizeof(seed_out));\n'
+
+  outputVars.forEach((variable) => {
+    const upperName = variable.name.toUpperCase()
+    const fieldName = variable.name
+    const kind = fieldKind(variable)
+
+    if (isArrayVariable(variable)) {
+      const totalElements = getArrayTotalElements(variable)
+      const startIdx = getArrayStartIndex(variable)
+      code += `        for (int __i = 0; __i < ${totalElements}; __i++) seed_out.${fieldName}[__i] = ${upperName}[${startIdx} + __i].get();\n`
+    } else if (kind === 'string') {
+      code += `        { auto __s = ${upperName}.get();\n`
+      code += `          __strlen_t __n = (__strlen_t)(__s.length() < STR_MAX_LEN ? __s.length() : STR_MAX_LEN);\n`
+      code += `          seed_out.${fieldName}.len = __n;\n`
+      code += `          std::memcpy(seed_out.${fieldName}.body, __s.c_str(), (size_t)__n); }\n`
+    } else if (kind === 'wstring') {
+      code += `        { auto __s = ${upperName}.get();\n`
+      code += `          __strlen_t __n = (__strlen_t)(__s.length() < STR_MAX_LEN ? __s.length() : STR_MAX_LEN);\n`
+      code += `          seed_out.${fieldName}.len = __n;\n`
+      code += `          std::memcpy(seed_out.${fieldName}.body, __s.c_str(), (size_t)__n * sizeof(uint16_t)); }\n`
+    } else {
+      code += `        seed_out.${fieldName} = ${upperName};\n`
+    }
+  })
+
+  code += '        memcpy(shm_out_ptr, &seed_out, sizeof(seed_out));\n'
+  return code
+}
+
 const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
   if (outputVars.length === 0) return ''
 
@@ -164,6 +213,7 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
   const cStructs = generateCStructs(inputVariables, outputVariables)
   const inputCopyCode = generateInputCopyCode(inputVariables)
   const outputCopyCode = generateOutputCopyCode(outputVariables)
+  const outputSeedCode = generateOutputSeedCode(outputVariables)
 
   const escapedPythonCode = processedPythonCode
     .replace(/\\/g, '\\\\')
@@ -230,7 +280,12 @@ if first_run = false then
 
         SHM_IN_PTR = (uint64_t)shm_in_ptr;
         SHM_OUT_PTR = (uint64_t)shm_out_ptr;
-    }
+
+        // Publish the current IEC output values so the Python side can seed
+        // from them instead of from its declarations. Shared memory is created
+        // zeroed; without this the block's first write-back would overwrite the
+        // IEC value (a retained one included) with a default.
+${outputSeedCode}    }
     first_run := true;
 else
     {external

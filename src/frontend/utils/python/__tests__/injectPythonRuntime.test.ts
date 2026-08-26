@@ -150,7 +150,7 @@ describe('injectPythonRuntime', () => {
     expect(result).toContain('_out.append(_body)')
   })
 
-  it('generates output initialization for scalar output variables', () => {
+  it('seeds scalar outputs from shared memory, not from the declaration', () => {
     const result = injectPythonRuntime({
       fmtIn: '=',
       fmtOut: '=h',
@@ -160,10 +160,15 @@ describe('injectPythonRuntime', () => {
       pouName: 'test',
     })
 
-    expect(result).toContain('count = 0')
+    // The old behaviour set `count = 0` from the declaration and wrote that
+    // back on the first cycle, destroying whatever the PLC held.
+    expect(result).toContain('# Seed outputs from the values the PLC already holds')
+    expect(result).toContain('_vals = struct.unpack(fmt_out, shm_out.buf[:data_size_out])')
+    expect(result).toContain('count = _vals[_idx]')
+    expect(result).not.toContain('count = 0')
   })
 
-  it('generates output initialization for array output variables', () => {
+  it('seeds array outputs from shared memory', () => {
     const result = injectPythonRuntime({
       fmtIn: '=',
       fmtOut: '=3h',
@@ -173,10 +178,11 @@ describe('injectPythonRuntime', () => {
       pouName: 'test',
     })
 
-    expect(result).toContain('arr = [0] * 3')
+    expect(result).toContain('arr = list(_vals[_idx:_idx+3])')
+    expect(result).not.toContain('arr = [0] * 3')
   })
 
-  it('generates output initialization for string output variables', () => {
+  it('seeds string outputs by decoding the shared-memory body', () => {
     const outputVar: PLCVariable = {
       name: 'msg',
       class: 'output',
@@ -195,10 +201,11 @@ describe('injectPythonRuntime', () => {
       pouName: 'test',
     })
 
-    expect(result).toContain('msg = ""')
+    expect(result).toContain("msg = msg_body[:msg_len].decode('utf-8', errors='ignore')")
+    expect(result).not.toContain('msg = ""')
   })
 
-  it('uses initialValue when present for scalar output initialization', () => {
+  it('ignores a declared initialValue on an output — the PLC value wins', () => {
     const outputVar: PLCVariable = {
       name: 'count',
       class: 'output',
@@ -218,10 +225,29 @@ describe('injectPythonRuntime', () => {
       pouName: 'test',
     })
 
-    expect(result).toContain('count = 42')
+    // The declaration's initial value is applied by the runtime on the IEC
+    // side and reaches Python through shared memory. Re-applying it here is
+    // what overwrote a retained value on restart.
+    expect(result).not.toContain('count = 42')
+    expect(result).toContain('count = _vals[_idx]')
   })
 
-  it('outputs comment for no output variables in initialization', () => {
+  it('seeds before block_init so the user sees real values in it', () => {
+    const result = injectPythonRuntime({
+      fmtIn: '=',
+      fmtOut: '=h',
+      inputVariables: [],
+      outputVariables: [makeScalarVar('count', 'output', 'INT')],
+      originalCode: '',
+      pouName: 'test',
+    })
+
+    expect(result.indexOf('# Seed outputs')).toBeLessThan(result.indexOf('block_init()'))
+    // calcsize has to precede the seed — the seed reads that many bytes.
+    expect(result.indexOf('data_size_out = struct.calcsize')).toBeLessThan(result.indexOf('# Seed outputs'))
+  })
+
+  it('says so plainly when there are no outputs to seed', () => {
     const result = injectPythonRuntime({
       fmtIn: '=',
       fmtOut: '=',
@@ -231,7 +257,7 @@ describe('injectPythonRuntime', () => {
       pouName: 'test',
     })
 
-    expect(result).toContain('# No output variables to initialize')
+    expect(result).toContain('# No output variables to seed')
   })
 
   it('outputs comment for no input variables', () => {
