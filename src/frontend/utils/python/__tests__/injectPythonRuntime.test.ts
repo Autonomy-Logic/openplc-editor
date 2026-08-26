@@ -35,6 +35,71 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
   debug: false,
 })
 
+const makeWStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
+  name,
+  class: cls,
+  type: { definition: 'base-type', value: 'wstring' },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+describe('WSTRING crosses as UTF-16, counted in code units', () => {
+  // WSTRING shared STRING's handling until DOPE-584 P2, which was wrong in both
+  // directions: the body is char16_t, so the byte count is twice the length, and
+  // the length the C side writes counts code units rather than bytes. These pin
+  // the distinction on both sides of the boundary.
+  const run = (variables: PLCVariable[]) =>
+    injectPythonRuntime({
+      fmtIn: '=b252s',
+      fmtOut: '=b252s',
+      inputVariables: variables.filter((v) => v.class === 'input'),
+      outputVariables: variables.filter((v) => v.class === 'output'),
+      originalCode: '',
+      pouName: 'test',
+    })
+
+  it('decodes an inbound WSTRING as utf-16-le over twice the length', () => {
+    const result = run([makeWStringVar('label', 'input')])
+
+    expect(result).toContain("label = label_body[:label_len * 2].decode('utf-16-le', errors='ignore')")
+  })
+
+  it('decodes an inbound STRING as utf-8 over the length itself', () => {
+    const result = run([makeStringVar('label', 'input')])
+
+    expect(result).toContain("label = label_body[:label_len].decode('utf-8', errors='ignore')")
+  })
+
+  it('encodes an outbound WSTRING to the doubled byte budget', () => {
+    const result = run([makeWStringVar('label', 'output')])
+
+    expect(result).toContain("_body = label.encode('utf-16-le')[:252]")
+    expect(result).toContain("_body = _body.ljust(252, b'\\0')")
+  })
+
+  it('truncates an outbound WSTRING on a code-unit boundary, never mid-unit', () => {
+    // Clipping to an odd byte count would split a UTF-16 unit and hand the C
+    // side half a character.
+    const result = run([makeWStringVar('label', 'output')])
+
+    expect(result).toContain('_body = _body[: len(_body) - (len(_body) % 2)]')
+  })
+
+  it('reports an outbound WSTRING length in code units, not bytes', () => {
+    const result = run([makeWStringVar('label', 'output')])
+
+    expect(result).toContain('_len = len(_body) // 2')
+  })
+
+  it('reports an outbound STRING length in bytes, which for utf-8 is what it is', () => {
+    const result = run([makeStringVar('label', 'output')])
+
+    expect(result).toContain('_len = len(_body)')
+    expect(result).not.toContain('_len = len(_body) // 2')
+  })
+})
+
 describe('injectPythonRuntime', () => {
   it('injects runtime wrapper around original code with no variables', () => {
     const result = injectPythonRuntime({

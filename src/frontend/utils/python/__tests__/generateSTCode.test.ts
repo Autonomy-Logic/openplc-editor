@@ -223,7 +223,10 @@ describe('generateSTCode (python)', () => {
     // the field becomes 254 bytes where Python packs 253 — every later field
     // then decodes from the wrong offset. Only a real compile surfaced this.
     const preamble = result.slice(0, result.indexOf('shm_data_in_t'))
-    const packedRegion = preamble.slice(preamble.indexOf('#pragma pack(push, 1)'), preamble.indexOf('#pragma pack(pop)'))
+    const packedRegion = preamble.slice(
+      preamble.indexOf('#pragma pack(push, 1)'),
+      preamble.indexOf('#pragma pack(pop)'),
+    )
     expect(packedRegion).toContain('shm_iec_string_t')
     expect(packedRegion).toContain('shm_iec_wstring_t')
   })
@@ -318,24 +321,102 @@ describe('generateSTCode (python)', () => {
     expect(result).toContain('python_block_loader')
   })
 
-  it('skips locals — only input/output appear in SHM structs', () => {
-    const localVar: PLCVariable = {
-      name: 'localVal',
-      class: 'local',
-      type: { definition: 'base-type', value: 'INT' },
+  describe('variable classes', () => {
+    const byClass = (name: string, cls: PLCVariable['class'], type = 'INT'): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'base-type', value: type },
       location: '',
       documentation: '',
       debug: false,
-    }
-
-    const result = generateSTCode({
-      pouName: 'test',
-      allVariables: [makeScalarVar('x', 'input', 'INT'), localVar, makeScalarVar('y', 'output', 'INT')],
-      processedPythonCode: '',
     })
 
-    expect(result).toContain('int16_t x;')
-    expect(result).toContain('int16_t y;')
-    expect(result).not.toContain('localVal')
+    const structs = (result: string) => {
+      const inStart = result.indexOf('typedef struct {')
+      const inEnd = result.indexOf('} shm_data_in_t;')
+      const outStart = result.indexOf('typedef struct {', inEnd)
+      const outEnd = result.indexOf('} shm_data_out_t;')
+      return { inbound: result.slice(inStart, inEnd), outbound: result.slice(outStart, outEnd) }
+    }
+
+    it('sends an input in only and an output back only', () => {
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [makeScalarVar('x', 'input', 'INT'), makeScalarVar('y', 'output', 'INT')],
+        processedPythonCode: '',
+      })
+      const { inbound, outbound } = structs(result)
+
+      expect(inbound).toContain('int16_t x;')
+      expect(inbound).not.toContain('int16_t y;')
+      expect(outbound).toContain('int16_t y;')
+      expect(outbound).not.toContain('int16_t x;')
+    })
+
+    it.each([
+      ['inOut', 'ioVal'],
+      ['local', 'localVal'],
+      ['external', 'gVal'],
+    ])('sends a %s both ways, so the PLC keeps owning the value', (cls, name) => {
+      // A block that never assigns one sends back what it received. That is what
+      // makes a VAR the block's own state, keeps it visible to the debugger, and
+      // lets it be retained.
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [makeScalarVar('x', 'input', 'INT'), byClass(name, cls as PLCVariable['class'])],
+        processedPythonCode: '',
+      })
+      const { inbound, outbound } = structs(result)
+
+      expect(inbound).toContain(`int16_t ${name};`)
+      expect(outbound).toContain(`int16_t ${name};`)
+    })
+
+    it('leaves a temp out entirely — it is refused before reaching here', () => {
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [makeScalarVar('x', 'input', 'INT'), byClass('scratch', 'temp')],
+        processedPythonCode: '',
+      })
+
+      expect(result).not.toContain('scratch')
+    })
+
+    it('copies an external under the global’s own lock', () => {
+      // A VAR_EXTERNAL is a `GlobalVar<V>*`, not a member. Naming it directly
+      // would compile and copy from the wrong place holding no lock at all.
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [byClass('gVal', 'external')],
+        processedPythonCode: '',
+      })
+
+      expect(result).toContain('GVAL->with_lock([&](auto* __g) {')
+      expect(result).toContain('auto& __r = *__g;')
+      expect(result).toContain('data_in.gVal = __r;')
+    })
+
+    it('never writes `(*` inside the external block, which the ST lexer reads as a comment', () => {
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [byClass('gVal', 'external')],
+        processedPythonCode: '',
+      })
+
+      expect(result).not.toContain('(*__g)')
+    })
+
+    it('locks each external on its own rather than nesting them', () => {
+      // The stub only copies values; it runs no user code, so one lock at a time
+      // is enough and there is no lock ordering to reason about.
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [byClass('gA', 'external'), byClass('gB', 'external')],
+        processedPythonCode: '',
+      })
+      const closeBeforeSecondOpen = result.indexOf('});') < result.indexOf('GB->with_lock')
+
+      expect(closeBeforeSecondOpen).toBe(true)
+    })
   })
 })

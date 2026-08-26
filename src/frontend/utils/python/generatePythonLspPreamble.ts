@@ -25,6 +25,7 @@
  */
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { pythonInterfaceVariables } from './block-interface'
 
 export interface PythonLspPreamble {
   /** Ready-to-prepend text, terminated by a newline (or empty). */
@@ -94,9 +95,12 @@ function defaultPythonLiteralFor(pythonType: string): string {
   if (pythonType === 'int') return '0'
   if (pythonType === 'float') return '0.0'
   if (pythonType === 'str') return "''"
-  // list[...] or any other compound — empty list is the safest no-op
-  // initial value Pyright accepts as compatible with the annotation.
-  if (pythonType.startsWith('list[')) return '[]'
+  // Unreachable in practice: `annotationFor` yields exactly these four scalar
+  // annotations or `list[...]`, and `initialValueFor` handles the list case
+  // before delegating here. Kept as a safety net rather than a throw, because a
+  // preamble is a convenience for the editor — a wrong literal costs a Pyright
+  // diagnostic, an exception would cost the user their type checking entirely.
+  /* istanbul ignore next -- defensive: annotationFor cannot produce another value */
   return 'None'
 }
 
@@ -155,7 +159,7 @@ function initialValueFor(variable: PLCVariable, annotation: string): string {
  * the lines are a synthetic Pyright nudge, not user code.
  */
 export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPreamble {
-  const declarable = variables.filter((v) => v.class === 'input' || v.class === 'output')
+  const declarable = pythonInterfaceVariables(variables)
   if (declarable.length === 0) {
     return { text: '', lineCount: 0, variableNameByPreambleLine: new Map() }
   }
