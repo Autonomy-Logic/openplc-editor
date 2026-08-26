@@ -2179,7 +2179,7 @@ describe('createSharedSlice', () => {
     describe('clearStatesOnCloseProject', () => {
       it('resets all slice states', () => {
         store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
-        store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'test' })
+        store.getState().consoleActions.addLog({ level: 'info', message: 'test' })
 
         store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
 
