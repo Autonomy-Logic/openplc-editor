@@ -347,6 +347,35 @@ describe('createEditorProjectAdapter', () => {
       expect(result.success).toBe(false)
       expect(result.error).toEqual({ title: 'Not Found', description: 'Path does not exist' })
     })
+
+    // The read is deliberately not flag-gated: a flag-off build has to open a
+    // project a flag-on build migrated, or rolling the flag back would present
+    // it as having no data types.
+    it('hydrates .dt files even though the write flag ships off', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue({
+        ...mockRawProjectFiles,
+        data: {
+          ...mockRawProjectFiles.data,
+          dataTypeFiles: [{ relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : (Red);\nEND_TYPE\n' }],
+        },
+      })
+
+      const result = await adapter.openProjectByPath('/path/to/project')
+
+      expect(result.data?.projectData.dataTypes.map((dt) => dt.name)).toEqual(['Color'])
+    })
+
+    it('degrades to the legacy source when the IPC payload carries no .dt array', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue({
+        ...mockRawProjectFiles,
+        data: { ...mockRawProjectFiles.data, dataTypeFiles: undefined },
+      })
+
+      const result = await adapter.openProjectByPath('/path/to/project')
+
+      expect(result.success).toBe(true)
+      expect(result.data?.projectData.dataTypes).toEqual([])
+    })
   })
 
   describe('readProjectFiles', () => {

@@ -22,11 +22,13 @@ import type {
   DiscoverDevicesResult,
   DiscoveredRuntimeDevice,
   ListUsersResult,
+  RetainConfigResult,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
+  UpdateRetainConfigParams,
   UpdateUserParams,
   UsersInfoResult,
   WhoAmIResult,
@@ -111,6 +113,24 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       try {
         const ip = requireIp()
         return await window.bridge.runtimeDeleteUser(ip, userId)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getRetainConfig(): Promise<RetainConfigResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeGetRetainConfig(ip)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async updateRetainConfig(params: UpdateRetainConfigParams): Promise<RetainConfigResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeUpdateRetainConfig(ip, params)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
       }

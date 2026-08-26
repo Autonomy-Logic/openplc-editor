@@ -29,6 +29,7 @@ import { ResourcesEditor } from '../components/_features/[workspace]/editor/reso
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
+import { PersistentStorageEditor } from '../components/_features/[workspace]/editor/persistent-storage'
 import { UserManagementEditor } from '../components/_features/[workspace]/editor/user-management'
 import { VendorScreenEditor } from '../components/_features/[workspace]/editor/vendor-screen'
 import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
@@ -54,6 +55,7 @@ import {
   useIsDebuggerVisible,
 } from '../hooks/use-debug-value'
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
+import { useNativeScreenEnforcement } from '../hooks/use-native-screen-enforcement'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
@@ -158,6 +160,9 @@ const WorkspaceScreen = () => {
   // existing liveness tick (no timer of its own).
   useDevicePlcState()
   useDeviceConnectionMonitor()
+  // A target that replaces a native screen must also have the native feature
+  // switched off on the device — hiding a screen is not cosmetic.
+  useNativeScreenEnforcement()
 
   // Build debug variables from POUs with debug=true
   const allDebugVariables = useMemo(() => {
@@ -589,6 +594,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
+                        {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 

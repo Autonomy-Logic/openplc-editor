@@ -374,6 +374,7 @@ class HardwareModule {
               deviceId: device.id,
               packagePath: pkg.path,
               screens,
+              ...(device.hidesNativeScreens ? { hidesNativeScreens: device.hidesNativeScreens } : {}),
               moduleSystem: device.moduleSystem
                 ? {
                     enabled: device.moduleSystem.enabled,

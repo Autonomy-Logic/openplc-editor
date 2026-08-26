@@ -209,6 +209,15 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** Persistent Storage screen — where the connected runtime keeps its
+         *  RETAIN variables. Device-scoped like User Management: the settings
+         *  live on the runtime, not in the project. */
+        type: 'plc-persistent-storage'
+        meta: {
+          name: string
+        }
+      }
+    | {
         /** The Library Project's manifest tab — Monaco-wrapped
          *  `library.json` at the project root.  Only ever opened
          *  when `meta.type === 'plc-library'`.  Always present
