@@ -4,13 +4,37 @@ import { findLibrariesMissingNativeSources, injectLibraryBlocks, libraryBlockPou
 
 // -- helpers ------------------------------------------------------------------
 
-function project(overrides: {
-  libraries?: Array<{ name: string; version: string }>
-  pous?: Array<{ name: string }>
-}): PLCProjectData {
+/** A whole authored native POU file: ST header + native body. */
+const cppFile = (name: string, body = 'void setup() {}\nvoid loop() { SCALED = RAW * GAIN; }') => `(* Scales *)
+FUNCTION_BLOCK ${name}
+VAR_INPUT
+  RAW : INT;
+  GAIN : INT;
+END_VAR
+VAR_OUTPUT
+  SCALED : INT;
+END_VAR
+${body}
+END_FUNCTION_BLOCK
+`
+
+const pyFile = (name: string) => `FUNCTION_BLOCK ${name}
+VAR_INPUT
+  IN_VAL : INT;
+END_VAR
+VAR_OUTPUT
+  OUT_VAL : INT;
+END_VAR
+def block_loop():
+    global OUT_VAL
+    OUT_VAL = IN_VAL + 1
+END_FUNCTION_BLOCK
+`
+
+function project(overrides: { libraries?: Array<{ name: string; version: string }>; pous?: string[] }): PLCProjectData {
   return {
-    pous: (overrides.pous ?? []).map((p) => ({
-      name: p.name,
+    pous: (overrides.pous ?? []).map((name) => ({
+      name,
       pouType: 'program',
       interface: { variables: [] },
       body: { language: 'st', value: 'x := 1;' },
@@ -19,24 +43,37 @@ function project(overrides: {
   } as unknown as PLCProjectData
 }
 
-function archive(name: string, blocks: { cppBlocks?: unknown[]; pythonBlocks?: unknown[] } = {}): StlibArchiveDTO {
-  return {
-    manifest: { name, version: '1.0.0' },
-    ...blocks,
-  } as unknown as StlibArchiveDTO
+/** An archive shaped the way strucpp now emits one. */
+function archive(
+  name: string,
+  blocks: Array<{ name: string; language: 'cpp' | 'python'; file?: string; source?: string | null }> = [],
+  opts: { stBlocks?: string[] } = {},
+): StlibArchiveDTO {
+  const sources: Array<{ fileName: string; source: string }> = []
+  const functionBlocks: unknown[] = (opts.stBlocks ?? []).map((n) => ({
+    name: n,
+    inputs: [],
+    outputs: [],
+    inouts: [],
+  }))
+
+  for (const block of blocks) {
+    const fileName = block.file ?? `${block.name}.${block.language === 'cpp' ? 'cpp' : 'py'}`
+    const source =
+      block.source === undefined ? (block.language === 'cpp' ? cppFile(block.name) : pyFile(block.name)) : block.source
+    functionBlocks.push({
+      name: block.name,
+      inputs: [],
+      outputs: [],
+      inouts: [],
+      implementation: block.language,
+      sourceFile: fileName,
+    })
+    if (source !== null) sources.push({ fileName, source })
+  }
+
+  return { manifest: { name, version: '1.0.0', functionBlocks }, sources } as unknown as StlibArchiveDTO
 }
-
-const cppBlock = (name: string, code = 'void setup(){}\nvoid loop(){}') => ({
-  name,
-  code,
-  variables: [{ name: 'EN', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }],
-})
-
-const pyBlock = (name: string, code = 'out = inp + 1') => ({
-  name,
-  code,
-  variables: [{ name: 'inp', class: 'input', type: { definition: 'base-type', value: 'INT' } }],
-})
 
 // -- tests --------------------------------------------------------------------
 
@@ -48,50 +85,64 @@ describe('libraryBlockPouName', () => {
 
 describe('injectLibraryBlocks', () => {
   it('returns the same object when the project enables no libraries', () => {
-    const data = project({ pous: [{ name: 'Main' }] })
-    expect(injectLibraryBlocks(data, [archive('lib', { cppBlocks: [cppBlock('X')] })])).toBe(data)
+    const data = project({ pous: ['main'] })
+    expect(injectLibraryBlocks(data, [archive('lib', [{ name: 'X', language: 'cpp' }])])).toBe(data)
   })
 
-  it('returns the same object when the project has an empty library list', () => {
-    const data = project({ pous: [{ name: 'Main' }], libraries: [] })
-    expect(injectLibraryBlocks(data, [archive('lib', { cppBlocks: [cppBlock('X')] })])).toBe(data)
+  it('returns the same object when the library list is empty', () => {
+    const data = project({ pous: ['main'], libraries: [] })
+    expect(injectLibraryBlocks(data, [archive('lib', [{ name: 'X', language: 'cpp' }])])).toBe(data)
   })
 
-  it('returns the same object when no enabled library ships native blocks', () => {
-    const data = project({ pous: [{ name: 'Main' }], libraries: [{ name: 'lib', version: '1.0.0' }] })
-    expect(injectLibraryBlocks(data, [archive('lib')])).toBe(data)
+  it('returns the same object for a library of only ST blocks', () => {
+    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
+    expect(injectLibraryBlocks(data, [archive('lib', [], { stBlocks: ['ST_ADD'] })])).toBe(data)
   })
 
-  it('grafts C++ blocks as cpp POUs under the prefixed name', () => {
-    const data = project({ pous: [{ name: 'Main' }], libraries: [{ name: 'network_tools', version: '1.0.0' }] })
-    const result = injectLibraryBlocks(data, [
-      archive('network_tools', { cppBlocks: [cppBlock('TCP_CLIENT'), cppBlock('UDP_SEND')] }),
-    ])
+  it('grafts a C++ block, parsing its interface and body from the authored file', () => {
+    const data = project({ pous: ['main'], libraries: [{ name: 'network_tools', version: '1.0.0' }] })
+    const result = injectLibraryBlocks(data, [archive('network_tools', [{ name: 'TCP_CLIENT', language: 'cpp' }])])
 
     expect(result).not.toBe(data)
-    expect(result.pous.map((p) => p.name)).toEqual(['Main', 'network_tools__TCP_CLIENT', 'network_tools__UDP_SEND'])
+    expect(result.pous.map((p) => p.name)).toEqual(['main', 'network_tools__TCP_CLIENT'])
 
     const grafted = result.pous[1]
     expect(grafted.pouType).toBe('function-block')
     expect(grafted.body.language).toBe('cpp')
-    expect(grafted.body.value).toBe('void setup(){}\nvoid loop(){}')
-    expect(grafted.interface?.variables).toEqual(cppBlock('TCP_CLIENT').variables)
+    // Interface recovered from the ST header, not from serialized metadata.
+    expect(grafted.interface?.variables.map((v) => `${v.name}:${v.class}`)).toEqual([
+      'RAW:input',
+      'GAIN:input',
+      'SCALED:output',
+    ])
+    // Body is the native code only — the ST header is stripped, exactly as it
+    // is for a POU read off disk.
+    expect(grafted.body.value).toContain('void loop()')
+    expect(grafted.body.value).not.toContain('VAR_INPUT')
+    expect(grafted.documentation).toBe('Scales')
   })
 
-  it('grafts Python blocks as python POUs', () => {
+  it('grafts a Python block as a python POU', () => {
     const data = project({ libraries: [{ name: 'pylib', version: '1.0.0' }] })
-    const result = injectLibraryBlocks(data, [archive('pylib', { pythonBlocks: [pyBlock('SCALE')] })])
+    const result = injectLibraryBlocks(data, [archive('pylib', [{ name: 'SCALE', language: 'python' }])])
 
     expect(result.pous).toHaveLength(1)
     expect(result.pous[0].name).toBe('pylib__SCALE')
     expect(result.pous[0].body.language).toBe('python')
-    expect(result.pous[0].body.value).toBe('out = inp + 1')
+    expect(result.pous[0].body.value).toContain('def block_loop()')
   })
 
-  it('grafts C++ and Python blocks from the same archive', () => {
+  it('grafts C++ and Python blocks from one archive, leaving ST blocks alone', () => {
     const data = project({ libraries: [{ name: 'mixed', version: '1.0.0' }] })
     const result = injectLibraryBlocks(data, [
-      archive('mixed', { cppBlocks: [cppBlock('C')], pythonBlocks: [pyBlock('P')] }),
+      archive(
+        'mixed',
+        [
+          { name: 'C', language: 'cpp' },
+          { name: 'P', language: 'python' },
+        ],
+        { stBlocks: ['S'] },
+      ),
     ])
 
     expect(result.pous.map((p) => `${p.name}:${p.body.language}`)).toEqual(['mixed__C:cpp', 'mixed__P:python'])
@@ -100,8 +151,8 @@ describe('injectLibraryBlocks', () => {
   it('ignores archives the project has not enabled', () => {
     const data = project({ libraries: [{ name: 'enabled', version: '1.0.0' }] })
     const result = injectLibraryBlocks(data, [
-      archive('enabled', { cppBlocks: [cppBlock('Yes')] }),
-      archive('disabled', { cppBlocks: [cppBlock('No')] }),
+      archive('enabled', [{ name: 'Yes', language: 'cpp' }]),
+      archive('disabled', [{ name: 'No', language: 'cpp' }]),
     ])
 
     expect(result.pous.map((p) => p.name)).toEqual(['enabled__Yes'])
@@ -109,88 +160,117 @@ describe('injectLibraryBlocks', () => {
 
   it('ignores an archive with no manifest name', () => {
     const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    const broken = { cppBlocks: [cppBlock('X')] } as unknown as StlibArchiveDTO
+    const broken = { sources: [] } as unknown as StlibArchiveDTO
     expect(injectLibraryBlocks(data, [broken])).toBe(data)
   })
 
-  it('carries documentation through, defaulting to empty', () => {
+  it('resolves the source by sourceFile, not by guessing from the block name', () => {
     const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
     const result = injectLibraryBlocks(data, [
-      archive('lib', {
-        cppBlocks: [{ ...cppBlock('Documented'), documentation: 'Does a thing.' }, cppBlock('Bare')],
-      }),
+      archive('lib', [{ name: 'Block', language: 'cpp', file: 'differently_named.cpp' }]),
     ])
+    expect(result.pous.map((p) => p.name)).toEqual(['lib__Block'])
+  })
 
-    expect(result.pous[0].documentation).toBe('Does a thing.')
-    expect(result.pous[1].documentation).toBe('')
+  it('skips a native block whose manifest entry names no source file', () => {
+    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
+    const noSourceFile = {
+      manifest: {
+        name: 'lib',
+        version: '1.0.0',
+        functionBlocks: [{ name: 'X', inputs: [], outputs: [], inouts: [], implementation: 'cpp' }],
+      },
+    } as unknown as StlibArchiveDTO
+    expect(injectLibraryBlocks(data, [noSourceFile]).pous).toEqual([])
+  })
+
+  it('tolerates an archive with no manifest.functionBlocks array', () => {
+    const data = project({ pous: ['main'], libraries: [{ name: 'lib', version: '1.0.0' }] })
+    const bare = { manifest: { name: 'lib', version: '1.0.0' } } as unknown as StlibArchiveDTO
+    expect(injectLibraryBlocks(data, [bare])).toBe(data)
+  })
+
+  it('skips a block whose source is missing from the archive', () => {
+    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
+    const result = injectLibraryBlocks(data, [archive('lib', [{ name: 'Gone', language: 'cpp', source: null }])])
+    expect(result.pous).toEqual([])
+  })
+
+  it('skips a block whose header the parser rejects, without aborting the graft', () => {
+    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
+    const result = injectLibraryBlocks(data, [
+      archive('lib', [
+        { name: 'Bad', language: 'cpp', source: 'this is not a POU at all' },
+        { name: 'Good', language: 'cpp' },
+      ]),
+    ])
+    expect(result.pous.map((p) => p.name)).toEqual(['lib__Good'])
+  })
+
+  it('returns the project untouched when every native block fails to parse', () => {
+    const data = project({ pous: ['main'], libraries: [{ name: 'lib', version: '1.0.0' }] })
+    const result = injectLibraryBlocks(data, [archive('lib', [{ name: 'Bad', language: 'cpp', source: 'not a POU' }])])
+    expect(result).toBe(data)
   })
 
   it('does not mutate the input project', () => {
-    const data = project({ pous: [{ name: 'Main' }], libraries: [{ name: 'lib', version: '1.0.0' }] })
-    const before = data.pous.length
-    injectLibraryBlocks(data, [archive('lib', { cppBlocks: [cppBlock('X')] })])
-    expect(data.pous).toHaveLength(before)
+    const data = project({ pous: ['main'], libraries: [{ name: 'lib', version: '1.0.0' }] })
+    injectLibraryBlocks(data, [archive('lib', [{ name: 'X', language: 'cpp' }])])
+    expect(data.pous).toHaveLength(1)
   })
 })
 
 describe('findLibrariesMissingNativeSources', () => {
   it('returns nothing when the project enables no libraries', () => {
     expect(
-      findLibrariesMissingNativeSources(project({}), [archive('lib', { cppBlocks: [cppBlock('X', '')] })]),
+      findLibrariesMissingNativeSources(project({}), [archive('lib', [{ name: 'X', language: 'cpp', source: null }])]),
     ).toEqual([])
-  })
-
-  it('returns nothing when the library list is empty', () => {
-    const data = project({ libraries: [] })
-    expect(findLibrariesMissingNativeSources(data, [archive('lib', { cppBlocks: [cppBlock('X', '')] })])).toEqual([])
-  })
-
-  it('returns nothing for libraries with no native blocks', () => {
-    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    expect(findLibrariesMissingNativeSources(data, [archive('lib')])).toEqual([])
   })
 
   it('returns nothing when every native block carries source', () => {
     const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    const archives = [archive('lib', { cppBlocks: [cppBlock('X')], pythonBlocks: [pyBlock('Y')] })]
+    const archives = [
+      archive('lib', [
+        { name: 'X', language: 'cpp' },
+        { name: 'Y', language: 'python' },
+      ]),
+    ]
     expect(findLibrariesMissingNativeSources(data, archives)).toEqual([])
   })
 
+  it('returns nothing for a library of only ST blocks', () => {
+    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
+    expect(findLibrariesMissingNativeSources(data, [archive('lib', [], { stBlocks: ['S'] })])).toEqual([])
+  })
+
   it.each([
-    ['an empty string', ''],
-    ['whitespace only', '   \n  '],
-  ])('flags a library whose C++ block source is %s', (_label, code) => {
+    ['absent from sources', null],
+    ['present but empty', ''],
+    ['whitespace only', '   \n '],
+  ])('flags a library whose native source is %s', (_label, source) => {
     const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    expect(findLibrariesMissingNativeSources(data, [archive('lib', { cppBlocks: [cppBlock('X', code)] })])).toEqual([
-      'lib',
-    ])
+    expect(findLibrariesMissingNativeSources(data, [archive('lib', [{ name: 'X', language: 'cpp', source }])])).toEqual(
+      ['lib'],
+    )
   })
 
-  it('flags a library whose Python block has no source', () => {
-    const data = project({ libraries: [{ name: 'pylib', version: '1.0.0' }] })
-    expect(findLibrariesMissingNativeSources(data, [archive('pylib', { pythonBlocks: [pyBlock('Y', '')] })])).toEqual([
-      'pylib',
-    ])
-  })
-
-  it('flags a library whose block source is not a string at all', () => {
+  it('reports each library once even with several sourceless blocks', () => {
     const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    const bad = archive('lib', { cppBlocks: [{ name: 'X', variables: [] }] })
-    expect(findLibrariesMissingNativeSources(data, [bad])).toEqual(['lib'])
+    const archives = [
+      archive('lib', [
+        { name: 'A', language: 'cpp', source: null },
+        { name: 'B', language: 'python', source: null },
+      ]),
+    ]
+    expect(findLibrariesMissingNativeSources(data, archives)).toEqual(['lib'])
   })
 
   it('ignores sourceless blocks in libraries the project has not enabled', () => {
     const data = project({ libraries: [{ name: 'enabled', version: '1.0.0' }] })
     const archives = [
-      archive('enabled', { cppBlocks: [cppBlock('Good')] }),
-      archive('disabled', { cppBlocks: [cppBlock('Bad', '')] }),
+      archive('enabled', [{ name: 'Good', language: 'cpp' }]),
+      archive('disabled', [{ name: 'Bad', language: 'cpp', source: null }]),
     ]
     expect(findLibrariesMissingNativeSources(data, archives)).toEqual([])
-  })
-
-  it('ignores an archive with no manifest name', () => {
-    const data = project({ libraries: [{ name: 'lib', version: '1.0.0' }] })
-    const broken = { cppBlocks: [cppBlock('X', '')] } as unknown as StlibArchiveDTO
-    expect(findLibrariesMissingNativeSources(data, [broken])).toEqual([])
   })
 })

@@ -295,52 +295,38 @@ export interface LibraryBuildResult {
  *     transitive deps without re-reading every archive on disk.
  */
 /**
- * C/C++ function block carried verbatim through the `.stlib`.
- * Strucpp's library compiler is ST/IL-only, so the editor pulls
- * these out of the strucpp input set and re-attaches them on the
- * resulting archive as a separate field.  At consume time, the
- * editor reads them back, synthesizes user-POU-equivalent entries
- * into the consumer project (with a library-name prefix on the
- * POU name to avoid collisions), and feeds them through the
- * existing user-defined C/C++ block pipeline.  Strucpp never sees
- * them — same shape user-defined C++ POUs use today.
+ * One native (C/C++, Python) library source, exactly as the author wrote it.
+ *
+ * Handed straight to `compileStlib` alongside the ST sources. Strucpp routes
+ * by extension: it recovers the interface from the file's ST header, emits no
+ * chunk, and carries the file verbatim in the archive. The consumer re-derives
+ * the native bridge at its own build time, which is what keeps a published
+ * library working across bridge revisions — see
+ * `backend/shared/library/inject-library-blocks.ts`.
+ *
+ * The editor's own lowering of these POUs (the `generateCppSTCode` /
+ * Python-bridge ST that `preprocessPous` produces) is deliberately kept OUT of
+ * the archive: shipping it would freeze the building editor's bridge ABI into
+ * every library built with it.
  */
-export interface LibraryCppBlock {
-  /** FB name as the library author wrote it.  The consumer-side
-   *  injection renames this to `<library_name>__<name>` before
-   *  feeding to `preprocessPous`, so collisions with the
-   *  consumer's own POUs are impossible by construction. */
-  name: string
-  /** Raw user-authored C++ source.  Same shape `originalCppPous`
-   *  carries today (the body of `void setup()` / `void loop()`
-   *  plus any helpers). */
-  code: string
-  /** Variable declarations on the FB (inputs / outputs / etc.).
-   *  Same shape `PLCVariable` uses elsewhere; carried opaquely
-   *  here so this module stays free of the variable-schema
-   *  import. */
-  variables: unknown[]
-  /** Optional documentation surfaced in the library tree picker. */
-  documentation?: string
+export interface LibraryNativeSource {
+  /** File name as authored, e.g. `TCP_CLIENT.cpp`. The extension is how
+   *  strucpp decides the block's language, so it must be preserved. */
+  fileName: string
+  /** The whole authored file: ST header (`FUNCTION_BLOCK` + `VAR_*` blocks)
+   *  followed by the native body. */
+  source: string
 }
 
 export interface LibraryBuildAux {
   pouDocs?: Record<string, string>
   dependencyArchives?: unknown[]
   dependencyRefs?: Array<{ name: string; version: string }>
-  /** C/C++ POUs from the library's project.  Filtered OUT of
-   *  strucpp's input set and stamped onto the archive's
-   *  `cppBlocks` field after compileStlib returns.  See
-   *  `LibraryCppBlock` for the per-entry shape. */
-  cppBlocks?: LibraryCppBlock[]
-  /** Python POUs from the library's project.  Same contract as
-   *  `cppBlocks`: filtered OUT of strucpp's input set, stamped onto
-   *  the archive's `pythonBlocks` field, and re-lowered by the
-   *  consumer at compile time.  Python POUs used to be left in the
-   *  strucpp input set, which shipped the generated `{external}`
-   *  bridge — freezing the `iec_python.h` ABI of the editor that
-   *  built the library into the archive. */
-  pythonBlocks?: LibraryCppBlock[]
+  /** Verbatim C/C++ and Python sources from the library's project,
+   *  passed through to `compileStlib` next to the ST. Their lowered
+   *  bridge ST is filtered out of the strucpp input in exchange —
+   *  see `LibraryNativeSource`. */
+  nativeSources?: LibraryNativeSource[]
 }
 
 /**
@@ -382,31 +368,27 @@ export function libraryBuildFromTranspiledSt(
   //     diagnostics).  Libraries don't carry configurations
   //     anyway — they ship POUs + types for consumer projects to
   //     instantiate.
-  //   - Every per-POU file whose source POU was originally a
-  //     C/C++ or Python function block.  Those POUs' ST bodies are
-  //     generated bridge stubs (`generateCppSTCode` /
-  //     `generateSTCode`) whose `{external}` blocks call into
-  //     `c_blocks.h` / `iec_python.h`.  Strucpp would happily emit
-  //     them — it is a transpiler, and an `{external}` body is
-  //     copied through verbatim — but shipping them would freeze
-  //     the building editor's ABI into the archive, so that any
-  //     later change to the bridge breaks every library published
-  //     before it until each one is rebuilt.  Instead the verbatim
-  //     author source rides on `cppBlocks` / `pythonBlocks` and the
-  //     consumer re-derives the stub at compile time, with whatever
-  //     transformation that consumer implements.  See
-  //     `inject-library-blocks.ts` for the consuming half.
+  //   - Every per-POU file whose source POU was originally a C/C++ or
+  //     Python function block.  Those bodies are generated bridge stubs
+  //     against the current `c_blocks.h` / `iec_python.h` ABI; shipping
+  //     them would freeze this editor's bridge into the archive.  The
+  //     verbatim author source is handed to strucpp instead, which stores
+  //     it and lets the consumer re-derive the bridge at its own build
+  //     time.  See `inject-library-blocks.ts`.
   //
   // Keep `_types.st` and `_globals.st`: they may carry user-defined
   // types and library-internal globals the POUs reference.
-  const nativeBlockFilenames = new Set(
-    [...(aux?.cppBlocks ?? []), ...(aux?.pythonBlocks ?? [])].map((b) => `${b.name}.st`),
-  )
+  // Drop the per-POU file for every native block. `preprocessPous` replaced
+  // those POU bodies with generated bridge ST against the current
+  // `c_blocks.h` / `iec_python.h` ABI; shipping that would freeze this
+  // editor's bridge into the archive. The verbatim author source goes to
+  // strucpp instead, below.
+  const nativeStFilenames = new Set((aux?.nativeSources ?? []).map((n) => `${n.fileName.replace(/\.[^.]+$/, '')}.st`))
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue
     if (fileName === '_config.st') continue
-    if (nativeBlockFilenames.has(fileName)) continue
+    if (nativeStFilenames.has(fileName)) continue
     sources.push({
       fileName,
       source,
@@ -414,21 +396,16 @@ export function libraryBuildFromTranspiledSt(
     })
   }
 
-  // No real POU files left?  That means the library has no
-  // functions / function-blocks / types — a degenerate case but a
-  // valid one (a library project may be opened fresh before the
-  // user has added any symbols).  Refuse with a clear message
-  // rather than producing an empty .stlib that strucpp would
-  // accept silently.
+  // Nothing to ship at all?  A library project may legitimately be opened
+  // fresh, before the user has added any symbols.  Refuse with a clear
+  // message rather than producing an empty `.stlib`.
   //
-  // C/C++ blocks count as "real content" — a library that ships
-  // only C/C++ FBs is still useful (no strucpp-compiled chunks,
-  // just `cppBlocks` riding through the archive for the consumer
-  // to consume).
+  // Native blocks count as real content: a library of nothing but C/C++ or
+  // Python FBs is useful, and strucpp handles an ST-empty input set — it
+  // recovers each block's interface from its ST header and emits no chunk.
   const hasRealSources = sources.some((s) => s.fileName !== '_globals.st')
-  const nativeBlocks = [...(aux?.cppBlocks ?? []), ...(aux?.pythonBlocks ?? [])]
-  const hasNativeBlocks = nativeBlocks.length > 0
-  if (!hasRealSources && !hasNativeBlocks) {
+  const nativeSources = aux?.nativeSources ?? []
+  if (!hasRealSources && nativeSources.length === 0) {
     return {
       success: false,
       errors: [
@@ -440,45 +417,9 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
-  // A library whose POUs are ALL C/C++ or Python has nothing left for
-  // strucpp: every per-POU file was just filtered out, and there are no
-  // types or globals.  `compileStlib([])` hard-fails with "No source
-  // files provided", which is what a library like this used to die on —
-  // right after verification had reported success, so it read as an
-  // infrastructure fault rather than anything to do with the project.
-  //
-  // There is genuinely nothing to compile, so don't ask strucpp to.
-  // Synthesize the archive shell it would have produced for an empty
-  // symbol set and let `decorateArchive` attach the native blocks, which
-  // is where all of this library's content actually lives.  The shape
-  // must match strucpp's own output exactly — `loadStlibFromString`
-  // validates `formatVersion` and the manifest's array fields on the way
-  // back in, and a consumer that can't load the archive is no better off
-  // than one that never got it.
-  if (sources.length === 0) {
-    const archive = {
-      formatVersion: 1,
-      manifest: {
-        name: manifest.name,
-        version: manifest.version,
-        namespace: manifest.namespace,
-        functions: [],
-        functionBlocks: [],
-        types: [],
-        globals: [],
-        headers: [],
-        isBuiltin: false,
-        sourceFiles: [],
-      },
-      chunks: [],
-      dependencies: [],
-      sources: [],
-    }
-    decorateArchive(archive, manifest, aux)
-    return { success: true, archive, errors: [] }
-  }
-
-  const compileRes = compileStlib(sources, {
+  // Native sources ride in the same input array; strucpp routes on the file
+  // extension.  Appended after the ST so `sourceFiles` ordering stays stable.
+  const compileRes = compileStlib([...sources, ...nativeSources.map((n) => ({ ...n }))], {
     name: manifest.name,
     version: manifest.version,
     namespace: manifest.namespace,
@@ -526,8 +467,6 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       types?: Array<{ name: string; documentation?: string }>
     }
     dependencies?: Array<{ name: string; version: string }>
-    cppBlocks?: LibraryCppBlock[]
-    pythonBlocks?: LibraryCppBlock[]
   }
   if (!arch.manifest) return
 
@@ -565,34 +504,6 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
   if (aux?.dependencyRefs && aux.dependencyRefs.length > 0) {
     arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
   }
-
-  // C/C++ and Python blocks ride through the archive verbatim —
-  // strucpp has no notion of them; the consumer-side editor reads
-  // them back at program-compile time and grafts them into the
-  // project's own native-POU pipeline.  JSON.stringify preserves the
-  // fields, so attaching them on the in-memory archive is enough to
-  // round-trip to disk.
-  //
-  // Deliberately unconditional with respect to any "publish without
-  // sources" option: strucpp's `noSource` may drop the ST `sources`
-  // array because those symbols are already compiled into `chunks`,
-  // but a native block has no chunk.  Its source IS the deliverable,
-  // and an archive that omitted it would be unbuildable by every
-  // consumer.  See `findLibrariesMissingNativeSources`.
-  const attachNative = (blocks: LibraryCppBlock[] | undefined): LibraryCppBlock[] | undefined =>
-    blocks && blocks.length > 0
-      ? blocks.map((b) => ({
-          name: b.name,
-          code: b.code,
-          variables: b.variables,
-          ...(b.documentation && b.documentation.length > 0 ? { documentation: b.documentation } : {}),
-        }))
-      : undefined
-
-  const cpp = attachNative(aux?.cppBlocks)
-  if (cpp) arch.cppBlocks = cpp
-  const python = attachNative(aux?.pythonBlocks)
-  if (python) arch.pythonBlocks = python
 }
 
 /**

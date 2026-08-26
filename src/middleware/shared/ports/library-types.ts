@@ -1,12 +1,11 @@
 export type LibraryPouType = 'function' | 'function-block'
 /** Body language as the library presents it to consumers.  `cpp` and
- *  `python` surface user-authored native function blocks the library
- *  ships via `archive.cppBlocks` / `archive.pythonBlocks` — strucpp
- *  doesn't compile those; the consumer's program build grafts them
- *  into the project's own native-POU pipeline (see
- *  `backend/shared/library/inject-library-blocks.ts`).
- *  ST/IL/LD/SFC/FBD libraries are strucpp-compiled and the chunks
- *  ride the manifest entries. */
+ *  `python` surface native function blocks: strucpp doesn't compile
+ *  those, it carries the authored source and the consumer's program
+ *  build grafts them into the project's own native-POU pipeline (see
+ *  `backend/shared/library/inject-library-blocks.ts`).  ST/IL/LD/SFC/FBD
+ *  libraries are strucpp-compiled and the chunks ride the manifest
+ *  entries. */
 export type LibraryLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'cpp' | 'python'
 
 export interface SystemLibraryVariable {

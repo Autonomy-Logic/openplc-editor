@@ -427,7 +427,7 @@ describe('runLibraryBuildPipeline', () => {
     expect(events.some((e) => /\[main\.st:15\].*Undefined type 'TON'/.test(e.message))).toBe(true)
   })
 
-  it('threads pouDocs and cppBlocks through to libraryBuildFromTranspiledSt', async () => {
+  it('threads pouDocs through to libraryBuildFromTranspiledSt', async () => {
     const harness = makePort()
     const { emit } = captureEvents()
 
@@ -435,23 +435,74 @@ describe('runLibraryBuildPipeline', () => {
       ...projectDataEmpty(),
       pous: [{ type: 'function-block', data: { name: 'MyFb', documentation: 'A docstring' } }],
       dataTypes: [{ name: 'MyType', documentation: 'A type description' }],
-      originalCppPous: [{ name: 'MyCppFb', code: 'void setup() {}', variables: [] }],
     } as unknown as PLCProjectData
 
     await runLibraryBuildPipeline(
-      {
-        projectPath: '/project',
-        projectData,
-        verifyProjectData: projectDataEmpty(),
-        cleanBuild: false,
-      },
+      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
       harness.port,
       emit,
     )
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
     expect(aux.pouDocs).toEqual({ MyFb: 'A docstring', MyType: 'A type description' })
-    expect(aux.cppBlocks).toEqual([{ name: 'MyCppFb', code: 'void setup() {}', variables: [] }])
+  })
+
+  // The archive must carry what the AUTHOR wrote, so the native sources are
+  // read off disk rather than taken from the project data — by this point
+  // `preprocessPous` has already replaced those bodies with generated bridge
+  // ST, and shipping that would freeze this editor's bridge ABI.
+  it('reads authored C/C++ and Python POU files off disk and passes them verbatim', async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+
+    const CPP = '(* doc *)\nFUNCTION_BLOCK MyCppFb\nVAR_INPUT a : BOOL; END_VAR\nvoid setup() {}\nEND_FUNCTION_BLOCK\n'
+    const PY = 'FUNCTION_BLOCK MyPyFb\nVAR_INPUT b : INT; END_VAR\ndef block_loop():\n    pass\nEND_FUNCTION_BLOCK\n'
+    harness.files.set('pous/function-blocks/MyCppFb.cpp', CPP)
+    harness.files.set('pous/function-blocks/MyPyFb.py', PY)
+
+    const projectData = {
+      ...projectDataEmpty(),
+      pous: [
+        // Bodies here are already lowered — proof the values below came from
+        // disk and not from the project data.
+        { type: 'function-block', data: { name: 'MyCppFb', body: { language: 'cpp' } } },
+        { type: 'function-block', data: { name: 'MyPyFb', body: { language: 'python' } } },
+        { type: 'function-block', data: { name: 'PlainSt', body: { language: 'st' } } },
+      ],
+    } as unknown as PLCProjectData
+
+    await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.nativeSources).toEqual([
+      { fileName: 'MyCppFb.cpp', source: CPP },
+      { fileName: 'MyPyFb.py', source: PY },
+    ])
+  })
+
+  it('fails naming the block when its authored source is missing from disk', async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+
+    const projectData = {
+      ...projectDataEmpty(),
+      pous: [{ type: 'function-block', data: { name: 'Gone', body: { language: 'cpp' } } }],
+    } as unknown as PLCProjectData
+
+    const result = await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Gone')
+    expect(result.error).toContain('pous/function-blocks/Gone.cpp')
+    expect(mockLibraryBuild).not.toHaveBeenCalled()
   })
 
   it('returns the manifest validation error verbatim without proceeding', async () => {

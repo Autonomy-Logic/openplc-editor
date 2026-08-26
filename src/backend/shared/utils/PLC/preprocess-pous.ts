@@ -15,13 +15,6 @@ type CppPouData = {
 
 type ProjectDataWithCpp = PLCProjectData & {
   originalCppPous?: CppPouData[]
-  /** Verbatim Python POU sources, captured before lowering, in the same
-   *  shape `originalCppPous` uses.  The library build needs the author's
-   *  original Python to ship in the `.stlib` — the lowered ST embeds an
-   *  `{external}` bridge against the current `iec_python.h` ABI, which
-   *  must not be frozen into a published archive.  Program builds ignore
-   *  this field; only `library-build-orchestrator` reads it. */
-  originalPythonPous?: CppPouData[]
 }
 
 type LogFn = (level: 'info' | 'error', message: string) => void
@@ -61,18 +54,6 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
     })
 
     log('info', `Processing ${pythonPous.length} Python POU(s)...`)
-
-    // Captured BEFORE lowering — once `generateSTCode` has run, the body is
-    // an ST bridge stub and the author's Python is gone.
-    const originalPythonPousData: CppPouData[] = pythonPous.map((pou) => ({
-      name: pou.name,
-      code:
-        /* istanbul ignore next -- defensive: filter above guarantees language === 'python' */
-        pou.body.language === 'python' ? (pou.body as { language: string; value: string }).value : '',
-      variables:
-        /* istanbul ignore next -- defensive: interface may be undefined */
-        pou.interface?.variables ?? [],
-    }))
 
     processedProjectData = addPythonLocalVariables(projectData)
 
@@ -127,8 +108,6 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
     if (isSimulator) {
       log('info', `Compiled ${pythonPous.length} Python POU(s) as empty stubs for simulator`)
     }
-
-    ;(processedProjectData as ProjectDataWithCpp).originalPythonPous = originalPythonPousData
   }
 
   // --- C++ processing ---

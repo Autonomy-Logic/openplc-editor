@@ -546,211 +546,114 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect(archive.dependencies).toEqual([{ name: 'oscat', version: '3.3.0' }])
   })
 
-  it('filters C/C++ POUs from strucpp inputs and attaches them as `cppBlocks` on the archive', () => {
-    // The library has one ST FB (`Tank`) and one C/C++ FB (`SmartGate`).
-    // The user's `SmartGate` arrived here as an ST stub (preprocessPous
-    // converts C++ → ST stub + `originalCppPous` sidecar on the
-    // renderer side), so the splitter sees `SmartGate.st` in
-    // program.st.  The build pipeline must drop that source from the
-    // strucpp inputs (strucpp's library compiler has no
-    // `pouIncludes` to resolve the c_blocks.h externs the stub
-    // references) and stamp the original C++ onto the archive.
-    const archive: { manifest: { name: string }; dependencies: unknown[]; cppBlocks?: unknown[] } = {
-      manifest: { name: 'demo_lib' },
-      dependencies: [],
-    }
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+  // Native (C/C++, Python) blocks: the editor hands strucpp the AUTHORED file
+  // and keeps the generated bridge ST out of the input. Shipping that stub
+  // would freeze this editor's `c_blocks.h` / `iec_python.h` ABI into the
+  // archive, so what reaches `compileStlib` is the contract worth asserting.
+  const nativeProgramSt =
+    'FUNCTION_BLOCK PlainSt\n  VAR y : INT; END_VAR\n  y := 1;\nEND_FUNCTION_BLOCK\n' +
+    '\n' +
+    'FUNCTION_BLOCK CppBlk\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
+    '\n' +
+    'FUNCTION_BLOCK PyBlk\n  VAR z : INT; END_VAR\n  z := 2;\nEND_FUNCTION_BLOCK\n' +
+    '\n' +
+    'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+
+  const nativeKnownPous = [
+    { name: 'PlainSt', kind: 'FUNCTION_BLOCK' as const },
+    { name: 'CppBlk', kind: 'FUNCTION_BLOCK' as const },
+    { name: 'PyBlk', kind: 'FUNCTION_BLOCK' as const },
+    { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' as const },
+  ]
+
+  const CPP_FILE =
+    '(* doc *)\nFUNCTION_BLOCK CppBlk\nVAR_INPUT a : BOOL; END_VAR\nvoid setup() {}\nEND_FUNCTION_BLOCK\n'
+  const PY_FILE = 'FUNCTION_BLOCK PyBlk\nVAR_INPUT b : INT; END_VAR\ndef block_loop():\n    pass\nEND_FUNCTION_BLOCK\n'
+
+  const nativeAux = {
+    nativeSources: [
+      { fileName: 'CppBlk.cpp', source: CPP_FILE },
+      { fileName: 'PyBlk.py', source: PY_FILE },
+    ],
+  }
+
+  const runNativeBuild = (compileStlib: jest.Mock, libName = 'native_lib') => {
     __setStrucppRuntimeForTests(
       makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
     )
-
-    const programSt =
-      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
-      '\n' +
-      'FUNCTION_BLOCK SmartGate\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
-      '\n' +
-      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
-
-    libraryBuildFromTranspiledSt(
-      programSt,
-      [
-        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
-        { name: 'SmartGate', kind: 'FUNCTION_BLOCK' },
-        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
-      ],
-      manifest,
-      {
-        cppBlocks: [
-          {
-            name: 'SmartGate',
-            code: 'void setup() {}\nvoid loop() {}',
-            variables: [{ name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }],
-          },
-        ],
-      },
+    return libraryBuildFromTranspiledSt(
+      nativeProgramSt,
+      nativeKnownPous,
+      { ...manifest, name: libName, namespace: libName },
+      nativeAux,
     )
+  }
 
-    // SmartGate.st must be filtered out of strucpp's input list.
-    const sources = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
-    const filenames = sources.map((s) => s.fileName)
-    expect(filenames).toContain('Tank.st')
-    expect(filenames).not.toContain('SmartGate.st')
-    expect(filenames).not.toContain(STUB.STUB_SPLIT_FILENAME)
-
-    // SmartGate rides through on `archive.cppBlocks` verbatim.
-    expect(archive.cppBlocks).toEqual([
-      {
-        name: 'SmartGate',
-        code: 'void setup() {}\nvoid loop() {}',
-        variables: [{ name: 'x', class: 'input', type: { definition: 'base-type', value: 'BOOL' } }],
-      },
-    ])
-  })
-
-  // Regression: a library whose POUs are ALL C/C++ (or all Python) leaves
-  // strucpp with an empty source list, and `compileStlib([])` hard-fails
-  // with "No source files provided" — which is what shipped.  The previous
-  // version of this test mocked `compileStlib` to return success, so the
-  // empty-array path it was named after was unreachable from the test.
-  //
-  // These assert on the pipeline's own decision instead: strucpp must not
-  // be called at all, and the synthesized archive must be shaped the way
-  // strucpp's own loader accepts on the way back in.
-  describe.each([
-    ['C/C++', 'cppBlocks' as const, 'void setup() {}\nvoid loop() {}'],
-    ['Python', 'pythonBlocks' as const, 'def loop():\n    pass'],
-  ])('a library that ships only %s blocks', (_label, field, code) => {
-    const buildNativeOnly = (compileStlib: jest.Mock) => {
-      __setStrucppRuntimeForTests(
-        makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
-      )
-
-      const programSt =
-        'FUNCTION_BLOCK NativeOnly\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
-        '\n' +
-        'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
-
-      return libraryBuildFromTranspiledSt(
-        programSt,
-        [
-          { name: 'NativeOnly', kind: 'FUNCTION_BLOCK' },
-          { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
-        ],
-        { ...manifest, name: 'native_only_lib', namespace: 'native_only_lib' },
-        { [field]: [{ name: 'NativeOnly', code, variables: [] }] },
-      )
-    }
-
-    it('builds without handing strucpp an empty source list', () => {
-      const compileStlib = jest.fn()
-      const res = buildNativeOnly(compileStlib)
-
-      expect(res.success).toBe(true)
-      // The whole point: strucpp has nothing to compile, so it is not asked.
-      expect(compileStlib).not.toHaveBeenCalled()
+  it('hands strucpp the authored native files, not their generated bridge ST', () => {
+    const compileStlib = jest.fn().mockReturnValue({
+      success: true,
+      archive: { manifest: { name: 'native_lib' }, dependencies: [] },
     })
+    const res = runNativeBuild(compileStlib)
+    expect(res.success).toBe(true)
 
-    it("produces an archive strucpp's own loader will accept", () => {
-      const res = buildNativeOnly(jest.fn())
-      const archive = res.archive as {
-        formatVersion?: number
-        manifest?: Record<string, unknown>
-        chunks?: unknown[]
-        dependencies?: unknown[]
-        sources?: unknown[]
-      }
+    const passed = compileStlib.mock.calls[0][0] as Array<{ fileName: string; source: string }>
+    const names = passed.map((p) => p.fileName)
 
-      // `loadStlibFromString` validates `formatVersion` and the manifest's
-      // array fields; an archive it rejects is no better than none.
-      expect(archive.formatVersion).toBe(1)
-      expect(archive.chunks).toEqual([])
-      expect(archive.sources).toEqual([])
-      expect(archive.manifest).toMatchObject({
-        name: 'native_only_lib',
-        namespace: 'native_only_lib',
-        functions: [],
-        functionBlocks: [],
-        types: [],
-        globals: [],
-        headers: [],
-        isBuiltin: false,
-        sourceFiles: [],
-      })
-    })
-
-    it('carries the block source through verbatim', () => {
-      const res = buildNativeOnly(jest.fn())
-      const archive = res.archive as Record<string, Array<{ name: string; code: string }>>
-
-      expect(archive[field]).toEqual([{ name: 'NativeOnly', code, variables: [] }])
-    })
-  })
-
-  it('keeps native blocks out of the strucpp source list when the library also has ST POUs', () => {
-    const archive = { manifest: { name: 'mixed_lib' }, dependencies: [] }
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
-    __setStrucppRuntimeForTests(
-      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
-    )
-
-    const programSt =
-      'FUNCTION_BLOCK PlainSt\n  VAR y : INT; END_VAR\n  y := 1;\nEND_FUNCTION_BLOCK\n' +
-      '\n' +
-      'FUNCTION_BLOCK CppOnly\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
-      '\n' +
-      'FUNCTION_BLOCK PyOnly\n  VAR z : INT; END_VAR\n  z := 2;\nEND_FUNCTION_BLOCK\n' +
-      '\n' +
-      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
-
-    libraryBuildFromTranspiledSt(
-      programSt,
-      [
-        { name: 'PlainSt', kind: 'FUNCTION_BLOCK' },
-        { name: 'CppOnly', kind: 'FUNCTION_BLOCK' },
-        { name: 'PyOnly', kind: 'FUNCTION_BLOCK' },
-        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
-      ],
-      { ...manifest, name: 'mixed_lib', namespace: 'mixed_lib' },
-      {
-        cppBlocks: [{ name: 'CppOnly', code: 'void setup() {}', variables: [] }],
-        pythonBlocks: [{ name: 'PyOnly', code: 'pass', variables: [] }],
-      },
-    )
-
-    const sources = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
-    const names = sources.map((src) => src.fileName)
+    // The ST POU is compiled as usual.
     expect(names).toContain('PlainSt.st')
-    // Both native bodies are generated bridge stubs; shipping them would
-    // freeze this editor's C++/Python ABI into the archive.
-    expect(names).not.toContain('CppOnly.st')
-    expect(names).not.toContain('PyOnly.st')
+    // The bridge stubs are withheld…
+    expect(names).not.toContain('CppBlk.st')
+    expect(names).not.toContain('PyBlk.st')
+    // …and the authored files go instead, byte for byte.
+    expect(passed.find((p) => p.fileName === 'CppBlk.cpp')?.source).toBe(CPP_FILE)
+    expect(passed.find((p) => p.fileName === 'PyBlk.py')?.source).toBe(PY_FILE)
   })
 
-  it('attaches native sources regardless of any publish-without-sources option', () => {
-    const archive: Record<string, unknown> = { manifest: { name: 'mixed_lib' }, dependencies: [] }
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
+  it('builds a library whose POUs are ALL native, leaving strucpp only those files', () => {
+    const compileStlib = jest.fn().mockReturnValue({
+      success: true,
+      archive: { manifest: { name: 'native_only' }, dependencies: [] },
+    })
     __setStrucppRuntimeForTests(
       makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
     )
 
-    libraryBuildFromTranspiledSt(
-      'FUNCTION_BLOCK PlainSt\n  VAR y : INT; END_VAR\n  y := 1;\nEND_FUNCTION_BLOCK\n' +
+    const res = libraryBuildFromTranspiledSt(
+      'FUNCTION_BLOCK CppBlk\n  VAR x : BOOL; END_VAR\n  x := TRUE;\nEND_FUNCTION_BLOCK\n' +
         'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
       [
-        { name: 'PlainSt', kind: 'FUNCTION_BLOCK' },
+        { name: 'CppBlk', kind: 'FUNCTION_BLOCK' },
         { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
       ],
-      { ...manifest, name: 'mixed_lib', namespace: 'mixed_lib' },
-      {
-        cppBlocks: [{ name: 'C', code: 'void setup() {}', variables: [] }],
-        pythonBlocks: [{ name: 'P', code: 'pass', variables: [] }],
-      },
+      { ...manifest, name: 'native_only', namespace: 'native_only' },
+      { nativeSources: [{ fileName: 'CppBlk.cpp', source: CPP_FILE }] },
     )
 
-    // A native block has no compiled chunk — its source IS the deliverable,
-    // so it can never be stripped the way ST sources legitimately can be.
-    expect(archive.cppBlocks).toEqual([{ name: 'C', code: 'void setup() {}', variables: [] }])
-    expect(archive.pythonBlocks).toEqual([{ name: 'P', code: 'pass', variables: [] }])
+    expect(res.success).toBe(true)
+    // strucpp is still called — it tolerates an ST-empty input set and
+    // recovers each native block's interface from its ST header. The editor
+    // no longer hand-builds an archive to work around a refusal here.
+    const passed = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
+    expect(passed.map((p) => p.fileName)).toEqual(['CppBlk.cpp'])
+  })
+
+  it('still refuses a library with neither ST nor native content', () => {
+    const compileStlib = jest.fn()
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const res = libraryBuildFromTranspiledSt(
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
+      [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }],
+      { ...manifest, name: 'empty_lib', namespace: 'empty_lib' },
+      {},
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.errors[0]?.message).toMatch(/no functions, function blocks, or data types/)
+    expect(compileStlib).not.toHaveBeenCalled()
   })
 
   it('matches POU docs case-insensitively (the transpiler upper-cases identifiers)', () => {

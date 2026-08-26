@@ -75,6 +75,19 @@ export interface StlibArchiveDTO {
       inouts: Array<{ name: string; type: string }>
       documentation?: string
       category?: string
+      /** Body language, when strucpp did NOT compile this block.
+       *  Absent on ordinary ST/IL blocks (their C++ rides in the
+       *  archive's chunks).  Present on a C/C++ or Python block:
+       *  strucpp recovered the interface from the file's ST header,
+       *  emitted no chunk, and carried the authored file verbatim in
+       *  `sources`.  The consumer lowers that source itself at
+       *  compile time, which is what keeps a published library
+       *  working across native-bridge revisions. */
+      implementation?: 'cpp' | 'python'
+      /** Entry in `sources` holding this block's body.  Set with
+       *  `implementation`; the file name need not match the block
+       *  name, so it is carried explicitly rather than guessed. */
+      sourceFile?: string
     }>
     types: Array<{
       name: string
@@ -85,35 +98,14 @@ export interface StlibArchiveDTO {
     }>
   }
   globalConstants?: Record<string, number>
-  /** C/C++ function blocks the library ships, carried verbatim
-   *  through the archive.  Strucpp doesn't compile these — the
-   *  consumer's program build grafts them into the project's own
-   *  C++-POU pipeline (with a `<library_name>__<name>` rename for
-   *  collision avoidance) and routes them through the existing
-   *  `c_blocks.h` / `c_blocks_code.cpp` generation.  Absent on
-   *  libraries that don't ship any. */
-  cppBlocks?: Array<{
-    name: string
-    code: string
-    /** Opaque on this side — the editor maps to/from `PLCVariable`
-     *  on the renderer when grafting back into the project. */
-    variables: unknown[]
-    documentation?: string
-  }>
-  /** Python function blocks the library ships, carried verbatim
-   *  through the archive.  Exactly the same contract as `cppBlocks`
-   *  — strucpp doesn't compile these either, and the consumer's
-   *  program build grafts them in and lowers them through the same
-   *  Python-POU pipeline a user-authored Python block uses.  Kept as
-   *  a separate field rather than a `language` tag on `cppBlocks` so
-   *  older editors, which only know `cppBlocks`, cannot mistake a
-   *  Python block for C++.  Absent on libraries that don't ship any. */
-  pythonBlocks?: Array<{
-    name: string
-    code: string
-    variables: unknown[]
-    documentation?: string
-  }>
+  /** Authored source files the archive ships.
+   *
+   *  ST entries are present unless the library was published
+   *  closed-source (`--no-source`).  Native (C/C++, Python) entries
+   *  are ALWAYS present: they have no compiled chunk, so the source
+   *  is the deliverable and an archive without it is unbuildable.
+   *  Located via a function block's `sourceFile`. */
+  sources?: Array<{ fileName: string; source: string; category?: string }>
 }
 
 export interface LibraryPort {
