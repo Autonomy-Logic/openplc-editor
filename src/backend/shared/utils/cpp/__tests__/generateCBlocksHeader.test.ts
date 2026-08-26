@@ -34,15 +34,82 @@ describe('generateCBlocksHeader', () => {
     expect(result).toContain('#endif // C_BLOCKS_H')
   })
 
-  it('pulls in the strucpp wrapper headers so `strucpp::IEC_*` qualifications resolve', () => {
-    // Every struct field this header emits is fully qualified as
-    // `strucpp::IEC_*` (numeric, bit-string, STRING, WSTRING). Without
-    // these includes, a TU that does `#include "c_blocks.h"` without
-    // first pulling in the strucpp runtime would fail with
-    // `'IEC_STRING' does not name a type`.
+  it('pulls in the generated declarations so every field type resolves', () => {
+    // Struct fields name strucpp types across the whole range the Variables
+    // Table can declare: `strucpp::IEC_*` wrappers for elementary pins, and the
+    // project's own structures, enumerations and function block classes for the
+    // rest. `generated.hpp` carries all of them (and the runtime wrappers
+    // transitively), so a TU that includes c_blocks.h without any other setup
+    // still compiles instead of failing with `'IEC_STRING' does not name a
+    // type` or `'MOTOR' does not name a type`.
     const result = generateCBlocksHeader([])
-    expect(result).toContain('#include "iec_var.hpp"')
-    expect(result).toContain('#include "iec_string.hpp"')
+    expect(result).toContain('#include "generated.hpp"')
+  })
+
+  describe('user-defined types', () => {
+    // strucpp spells the two shapes differently, and the variable alone cannot
+    // say which it is:
+    //
+    //   struct MOTOR { … };  using IEC_MOTOR = MOTOR;
+    //   enum class MODE { … }; using IEC_MODE = IEC_ENUM<MODE>;
+    //   class HELPER { … };                    // no alias at all
+    //
+    // A structure and an enumeration are both declared in the project's data
+    // types, so both get the `IEC_` alias. A function block instance is not,
+    // and taking `&instance` yields the bare class — spelling that field
+    // `IEC_HELPER` would name a type that does not exist.
+    const userVar = (name: string, cls: PLCVariable['class'], typeName: string): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+
+    it('aliases a data type but leaves a function block instance bare', () => {
+      const variables: PLCVariable[] = [
+        userVar('m', 'input', 'Motor'),
+        userVar('md', 'input', 'Mode'),
+        userVar('h', 'input', 'Helper'),
+      ]
+
+      const result = generateCBlocksHeader([{ name: 'Blk', variables }], ['Motor', 'Mode'])
+
+      expect(result).toContain('  strucpp::IEC_MOTOR *M;')
+      expect(result).toContain('  strucpp::IEC_MODE *MD;')
+      expect(result).toContain('  strucpp::HELPER *H;')
+    })
+
+    it('spells an array of a data type through the same rule', () => {
+      const variables: PLCVariable[] = [
+        {
+          name: 'bank',
+          class: 'input',
+          type: {
+            definition: 'array',
+            value: 'ARRAY [0..3] OF Motor',
+            data: {
+              baseType: { definition: 'user-data-type', value: 'Motor' },
+              dimensions: [{ dimension: '0..3' }],
+            },
+          },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ]
+
+      const result = generateCBlocksHeader([{ name: 'Blk', variables }], ['Motor'])
+
+      expect(result).toContain('  strucpp::IEC_MOTOR *BANK;')
+    })
+
+    it('leaves every user type bare when the project declares no data types', () => {
+      const variables: PLCVariable[] = [userVar('h', 'input', 'Helper')]
+
+      expect(generateCBlocksHeader([{ name: 'Blk', variables }])).toContain('  strucpp::HELPER *H;')
+    })
   })
 
   it('generates struct and function declarations for a pou with scalar variables', () => {

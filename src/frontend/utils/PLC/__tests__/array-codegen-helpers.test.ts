@@ -7,6 +7,7 @@ import {
   getVariableIECType,
   isArrayVariable,
   mapBaseTypeToIEC,
+  mapUserTypeToIEC,
 } from '../array-codegen-helpers'
 
 // ---------------------------------------------------------------------------
@@ -269,6 +270,31 @@ describe('getArrayStartIndex', () => {
 // ---------------------------------------------------------------------------
 // generateStructMember
 // ---------------------------------------------------------------------------
+describe('mapUserTypeToIEC', () => {
+  // strucpp declares a structure or enumeration and then aliases it
+  // (`using IEC_MOTOR = MOTOR`), but a function block class gets no alias. Only
+  // the project's declared data types carry the prefix; anything else — an FB
+  // instance — keeps the bare class name, because `IEC_HELPER` would name a
+  // type that was never declared.
+  it('prefixes a name the project declares as a data type', () => {
+    expect(mapUserTypeToIEC('Motor', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+
+  it('leaves a name the project does not declare bare', () => {
+    expect(mapUserTypeToIEC('Helper', new Set(['MOTOR']))).toBe('HELPER')
+  })
+
+  it('leaves every name bare when no data-type set is supplied', () => {
+    // The set is optional so call sites that predate user types keep working;
+    // with nothing to match against, no name can be a data type.
+    expect(mapUserTypeToIEC('Motor')).toBe('MOTOR')
+  })
+
+  it('matches case-insensitively, since the set is uppercased by the caller', () => {
+    expect(mapUserTypeToIEC('mOtOr', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+})
+
 describe('generateStructMember', () => {
   // Numeric/time/bit base types resolve to strucpp's IECVar wrapper —
   // the c_blocks_code.cpp baseline keeps file-scope raw typedefs for
