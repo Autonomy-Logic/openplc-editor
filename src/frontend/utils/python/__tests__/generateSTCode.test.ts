@@ -169,6 +169,47 @@ describe('generateSTCode (python)', () => {
     expect(result).toContain('std::memcpy(data_in.msg.body, __s.c_str(), (size_t)__n);')
   })
 
+  it('publishes the live IEC output values into shared memory at startup', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeScalarVar('count', 'output', 'dint'), makeStringVar('msg', 'output')],
+      processedPythonCode: '',
+    })
+
+    // Shared memory is created zeroed, so without this the Python side has
+    // nothing to seed from and falls back to its declarations — overwriting
+    // the IEC value (a retained one included) on the first write-back.
+    expect(result).toContain('shm_data_out_t seed_out;')
+    expect(result).toContain('seed_out.count = COUNT;')
+    expect(result).toContain('seed_out.msg.len = __n;')
+    expect(result).toContain('memcpy(shm_out_ptr, &seed_out, sizeof(seed_out));')
+  })
+
+  it('publishes the seed inside the first_run branch, after the loader maps the segment', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeScalarVar('count', 'output', 'dint')],
+      processedPythonCode: '',
+    })
+
+    const loaderAt = result.indexOf('python_block_loader')
+    const seedAt = result.indexOf('memcpy(shm_out_ptr, &seed_out')
+    const firstRunSetAt = result.indexOf('first_run := true;')
+    expect(loaderAt).toBeGreaterThan(-1)
+    expect(seedAt).toBeGreaterThan(loaderAt)
+    expect(seedAt).toBeLessThan(firstRunSetAt)
+  })
+
+  it('emits no seed block when the POU has no outputs', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeScalarVar('v', 'input', 'int')],
+      processedPythonCode: '',
+    })
+
+    expect(result).not.toContain('seed_out')
+  })
+
   it('packs the string typedefs themselves, not just the structs using them', () => {
     const result = generateSTCode({
       pouName: 'test',
