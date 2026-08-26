@@ -15,12 +15,16 @@
  * declares, whether a POU needs preprocessing, what shape the pipeline expects).
  */
 
+import {
+  findLibrariesMissingNativeSources,
+  injectLibraryBlocks,
+} from '../../../backend/shared/library/inject-library-blocks'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
 import type { IpcProjectData } from './compiler-adapter'
-import { decodeMessage, inferStage, injectLibraryCppBlocks, toIpcProjectData } from './compiler-adapter'
+import { decodeMessage, inferStage, toIpcProjectData } from './compiler-adapter'
 
 /**
  * The compile pipeline's argument list, by position.
@@ -86,14 +90,26 @@ export async function compileProgramFlow(
   const boardCore = boardInfo?.core ?? null
   const isSimulator = args.isSimulator ?? boardInfo?.compiler === 'simulator'
 
-  // Graft library-supplied C++ blocks into the project's POU
-  // list before preprocessing.  They behave like user-defined
-  // C++ POUs from this point on — same `preprocessPous` branch,
-  // same `c_blocks.h` / `c_blocks_code.cpp` generation
-  // downstream.  See `injectLibraryCppBlocks` for the renaming
-  // contract.
+  // Graft library-supplied C/C++ and Python blocks into the project's
+  // POU list before preprocessing.  They behave like user-defined
+  // native POUs from this point on — same `preprocessPous` branch,
+  // same `c_blocks.h` / `c_blocks_code.cpp` and Python-bridge
+  // generation downstream.  See `injectLibraryBlocks` for the renaming
+  // contract and for why the archive ships source rather than the
+  // already-lowered ST.
   const archives = await transport.loadAllLibraries()
-  const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
+
+  // A native block with no source cannot be built by any consumer.
+  const missingSources = findLibrariesMissingNativeSources(args.projectData, archives)
+  if (missingSources.length > 0) {
+    const error =
+      `These libraries ship C/C++ or Python blocks without their source, so they cannot be built: ${missingSources.join(', ')}. ` +
+      'Reinstall them from a build that includes sources.'
+    onProgress({ stage: 'st', message: error, level: 'error' })
+    return { success: false, error }
+  }
+
+  const dataWithLibCpp = injectLibraryBlocks(args.projectData, archives)
 
   // Preprocess POUs (comment wrapping, Python->ST stubs, C++ validation/ST generation)
   const { projectData: processedData, validationFailed } = preprocessPous(
