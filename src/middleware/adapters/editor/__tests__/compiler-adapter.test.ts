@@ -1105,6 +1105,41 @@ describe('compileForDebug — library function block pins', () => {
     }
   })
 
+  it('refuses a Python POU on a board that cannot run it, without calling the bridge', async () => {
+    // The build path had this covered; the debug path did not. Same gate, same
+    // reason — a Python block is no more loadable on an Arduino board when the
+    // compile is for debugging — so the message must name the board and the
+    // bridge must never be reached.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['Arduino Mega', { name: 'Arduino Mega', compiler: 'arduino-cli' }]]),
+    )
+
+    const pythonOnly: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'PyBlock',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'python', value: 'def block_loop():\n    pass' },
+        },
+      ],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const result = await adapter.compileForDebug(
+      { projectData: pythonOnly, boardTarget: 'Arduino Mega', projectPath: '/p' },
+      () => {},
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Arduino Mega')
+    expect(result.error).toContain('"PyBlock"')
+    expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
+  })
+
   it('refuses the same POU when no archive declares the block', async () => {
     // The other half of the contract: with no library carrying TON, the refusal
     // is correct and must still name the variable.

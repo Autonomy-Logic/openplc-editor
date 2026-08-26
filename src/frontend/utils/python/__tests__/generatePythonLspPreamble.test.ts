@@ -239,7 +239,26 @@ describe('generatePythonLspPreamble', () => {
       expect(result.text).toContain('class Motor:')
       expect(result.text).toContain('    speed: int')
       expect(result.text).toContain('    label: str')
-      expect(result.text).toContain('m: Motor = None')
+      // Constructed, not `None`: the stub declares members and no `__init__`,
+      // so `Motor()` type-checks, where `= None` did not.
+      expect(result.text).toContain('m: Motor = Motor()')
+    })
+
+    it('annotates with the type’s own spelling, not the variable’s', () => {
+      // `m : MOTOR` against a type declared `Motor` used to annotate `MOTOR`,
+      // which names no class — Pyright reported `"MOTOR" is not defined`.
+      const shouty: PLCVariable = { ...structVar, type: { definition: 'user-data-type', value: 'MOTOR' } }
+      const result = generatePythonLspPreamble([shouty], [MOTOR])
+
+      expect(result.text).toContain('m: Motor = Motor()')
+      expect(result.text).not.toContain('m: MOTOR')
+    })
+
+    it('seeds an enumeration with its first member, which a class cannot be called for', () => {
+      const enumVar: PLCVariable = { ...structVar, name: 'md', type: { definition: 'user-data-type', value: 'Mode' } }
+      const result = generatePythonLspPreamble([enumVar], [MODE])
+
+      expect(result.text).toContain('md: Mode = Mode.STOPPED')
     })
 
     it('declares an enumeration as an IntEnum with its members', () => {
@@ -271,12 +290,14 @@ describe('generatePythonLspPreamble', () => {
       expect(result.text.match(/class Motor:/g)).toHaveLength(1)
     })
 
-    it('still declares the variable when the project declares no data types', () => {
+    it('annotates a type the project does not declare as Any', () => {
       // The compile path refuses such a POU, but the editor should not silently
-      // drop a name the user can see in the Variables Table.
+      // drop a name the user can see in the Variables Table — nor annotate it
+      // with a class that has no stub, which is what `m: Motor = None` did:
+      // Pyright reported `"Motor" is not defined` on a line the user cannot see.
       const result = generatePythonLspPreamble([structVar])
 
-      expect(result.text).toContain('m: Motor = None')
+      expect(result.text).toContain('m: Any = None')
       expect(result.text).not.toContain('class Motor:')
     })
 

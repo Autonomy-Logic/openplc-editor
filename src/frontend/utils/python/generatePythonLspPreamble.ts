@@ -95,23 +95,39 @@ function defaultPythonLiteralFor(pythonType: string): string {
   if (pythonType === 'int') return '0'
   if (pythonType === 'float') return '0.0'
   if (pythonType === 'str') return "''"
-  // Unreachable in practice: `annotationFor` yields exactly these four scalar
-  // annotations or `list[...]`, and `initialValueFor` handles the list case
-  // before delegating here. Kept as a safety net rather than a throw, because a
-  // preamble is a convenience for the editor — a wrong literal costs a Pyright
-  // diagnostic, an exception would cost the user their type checking entirely.
-  /* istanbul ignore next -- defensive: annotationFor cannot produce another value */
+  // `Any` reaches here, and `None` is assignable to it. Every other annotation
+  // — `list[...]`, a structure, an enumeration — is resolved by
+  // `initialValueFor` before it delegates, so those never arrive.
+  //
+  // This used to carry an `istanbul ignore` claiming it was unreachable. It was
+  // not: a structure or enumeration variable annotated `Motor` fell straight
+  // through the four scalars to `None`, and the preamble declared
+  // `m: Motor = None` — which Pyright correctly rejects, putting a spurious
+  // error on correct user code for the commonest composite case.
   return 'None'
 }
 
+/** The project's data types, indexed the way every other lookup indexes them. */
+const indexTypes = (dataTypes: readonly PLCDataType[]): Map<string, PLCDataType> =>
+  new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
+
 /**
  * Build a Python type annotation string for a single IEC variable.
- * Returns `null` when the variable's type can't be mapped (struct,
- * enum, unsupported scalar, malformed array) — caller skips
- * declaring it rather than risk a Pyright diagnostic on the
- * preamble itself.
+ * Returns `null` when the variable's type can't be mapped at all — caller skips
+ * declaring it rather than risk a Pyright diagnostic on the preamble itself.
+ *
+ * A user-defined type is resolved through `dataTypes` rather than echoed back:
+ *
+ *   - the annotation is the type's OWN declared spelling, because that is what
+ *     `typeStubsFor` names the class. Echoing the variable's spelling meant
+ *     `m : MOTOR` against a type declared `Motor` annotated a class that does
+ *     not exist, and Pyright reported `"MOTOR" is not defined` on generated
+ *     code the user cannot see or fix.
+ *   - a name the project does not declare becomes `Any`. It gets a declaration
+ *     either way, so the name resolves while the user is still typing, but it
+ *     cannot name a class with no stub behind it.
  */
-function annotationFor(variable: PLCVariable): string | null {
+function annotationFor(variable: PLCVariable, dataTypes: readonly PLCDataType[] = []): string | null {
   if (isArrayVariable(variable)) {
     const inner = variable.type.data?.baseType?.value
     if (!inner) return null
@@ -120,11 +136,9 @@ function annotationFor(variable: PLCVariable): string | null {
     return `list[${innerPython}]`
   }
   if (variable.type.definition === 'user-data-type') {
-    // A structure or an enumeration: the stub declared above carries its shape,
-    // so the annotation is simply the class name. A type the project does not
-    // declare — a function block instance — is refused at compile time and gets
-    // no declaration here either.
-    return variable.type.value
+    const declared = indexTypes(dataTypes).get(variable.type.value.toUpperCase())
+    if (!declared || declared.derivation === 'array') return 'Any'
+    return declared.name
   }
   /* istanbul ignore next -- defensive: only base-type remains */
   if (variable.type.definition !== 'base-type') return null
@@ -140,12 +154,25 @@ function annotationFor(variable: PLCVariable): string | null {
  * runtime; the preamble's literal is only there to satisfy
  * Pyright's "name has a value" requirement.
  */
-function initialValueFor(variable: PLCVariable, annotation: string): string {
+function initialValueFor(variable: PLCVariable, annotation: string, dataTypes: readonly PLCDataType[] = []): string {
   if (annotation.startsWith('list[')) {
     const innerType = annotation.slice('list['.length, -1)
     const count = getArrayTotalElements(variable)
     const defaultInner = defaultPythonLiteralFor(innerType)
     return count > 0 ? `[${defaultInner}] * ${count}` : '[]'
+  }
+  // A class annotation needs a value of that class, not `None`. Pyright is right
+  // to reject `m: Motor = None`, and the user sees the complaint on a line the
+  // preamble wrote.
+  //
+  // A structure stub declares members as annotations and no `__init__`, so
+  // `Motor()` constructs and type-checks. An enumeration cannot be called, so it
+  // takes its first member — which is also the value the PLC starts it at.
+  const declared = indexTypes(dataTypes).get(annotation.toUpperCase())
+  if (declared?.derivation === 'structure') return `${declared.name}()`
+  if (declared?.derivation === 'enumerated') {
+    const first = declared.values[0]?.description
+    return first ? `${declared.name}.${first}` : 'Any'
   }
   return defaultPythonLiteralFor(annotation)
 }
@@ -190,12 +217,15 @@ function typeStubsFor(variables: PLCVariable[], dataTypes: readonly PLCDataType[
     }
     lines.push(`class ${dataType.name}:`)
     for (const member of dataType.variable) {
-      const annotation = annotationFor({
-        name: member.name,
-        type: member.type,
-        location: '',
-        documentation: '',
-      })
+      const annotation = annotationFor(
+        {
+          name: member.name,
+          type: member.type,
+          location: '',
+          documentation: '',
+        },
+        dataTypes,
+      )
       lines.push(`    ${member.name}: ${annotation ?? 'Any'}`)
     }
   }
@@ -237,7 +267,7 @@ export function generatePythonLspPreamble(
     '# names as module-level globals at runtime (see injectPythonRuntime).',
     '# ===================================================================',
   ]
-  const declared = declarable.filter((variable) => annotationFor(variable) !== null)
+  const declared = declarable.filter((variable) => annotationFor(variable, dataTypes) !== null)
   const typeStubs = typeStubsFor(declared, dataTypes)
   const declLines: string[] = []
   const variableNameByPreambleLine = new Map<number, string>()
@@ -248,9 +278,9 @@ export function generatePythonLspPreamble(
   // get a declaration line, so they don't take a slot in the map.
   let preambleLine = header.length + typeStubs.length
   for (const v of declarable) {
-    const annotation = annotationFor(v)
+    const annotation = annotationFor(v, dataTypes)
     if (!annotation) continue
-    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation)}`)
+    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation, dataTypes)}`)
     variableNameByPreambleLine.set(preambleLine, v.name)
     preambleLine++
   }

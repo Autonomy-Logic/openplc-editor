@@ -225,7 +225,16 @@ export const parseIecStringToVariables = (
     // DEBUG_STRING_CAP-character budget, so a declared length would not be honoured even if
     // it parsed; when the compiler grows the declaration, this guard is the one
     // place that has to change.
-    const lengthQualifiedString = /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType)
+    // Both shapes it can take: on its own (`msg : STRING[20]`) and as an ARRAY's
+    // element type (`tags : ARRAY [0..3] OF STRING[20]`). The array form needs
+    // its own alternative because `parseArrayType` only accepts a bare
+    // identifier after `OF`, so a length-qualified element matches nothing and
+    // used to fall through every branch to the compiler — which then reported
+    // `Expected Semicolon, found [` at a column the user never wrote, plus two
+    // cascading errors on the FOLLOWING line, so even the line number misled.
+    const lengthQualifiedString =
+      /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType) ??
+      /^ARRAY\s*\[[^\]]*\]\s+OF\s+(W?STRING)\s*\[\s*[^\]]*\]\s*$/i.exec(parsedType)
     if (lengthQualifiedString) {
       const keyword = lengthQualifiedString[1].toUpperCase()
       throw new Error(

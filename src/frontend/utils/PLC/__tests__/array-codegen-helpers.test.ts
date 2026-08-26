@@ -330,14 +330,18 @@ describe('mapUserTypeToIEC', () => {
 })
 
 describe('multiDimensionalContainerType', () => {
-  const arrayOfRank = (dimensions: string[], baseType = 'INT'): PLCVariable => ({
+  const arrayOfRank = (
+    dimensions: string[],
+    baseType = 'INT',
+    baseDefinition: 'base-type' | 'user-data-type' = 'base-type',
+  ): PLCVariable => ({
     name: 'grid',
     class: 'input',
     type: {
       definition: 'array',
       value: `ARRAY [${dimensions.join(', ')}] OF ${baseType}`,
       data: {
-        baseType: { definition: 'base-type', value: baseType },
+        baseType: { definition: baseDefinition, value: baseType },
         dimensions: dimensions.map((dimension) => ({ dimension })),
       },
     },
@@ -397,8 +401,10 @@ describe('multiDimensionalContainerType', () => {
   })
 
   it('applies the user-defined type spelling to the element type', () => {
-    const v = arrayOfRank(['0..1', '0..1'], 'Motor')
-    v.type.data!.baseType = { definition: 'user-data-type', value: 'Motor' }
+    // Built with the user-defined element type rather than mutated into one
+    // afterwards, so the fixture needs no non-null assertion to reach into
+    // `type.data`.
+    const v = arrayOfRank(['0..1', '0..1'], 'Motor', 'user-data-type')
 
     expect(multiDimensionalContainerType(v, new Set(['MOTOR']))).toBe('Array2D<strucpp::IEC_MOTOR, 0, 1, 0, 1>')
   })

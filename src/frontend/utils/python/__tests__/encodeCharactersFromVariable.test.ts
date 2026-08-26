@@ -36,11 +36,11 @@ describe('encodeCharactersFromVariable', () => {
   })
 
   it('returns = for undefined input', () => {
-    expect(encodeCharactersFromVariable(undefined as unknown as PLCVariable[], ctx)).toBe('=')
+    expect(encodeCharactersFromVariable(undefined, ctx)).toBe('=')
   })
 
   it('returns = for null input', () => {
-    expect(encodeCharactersFromVariable(null as unknown as PLCVariable[], ctx)).toBe('=')
+    expect(encodeCharactersFromVariable(null, ctx)).toBe('=')
   })
 
   it('encodes BOOL as B', () => {

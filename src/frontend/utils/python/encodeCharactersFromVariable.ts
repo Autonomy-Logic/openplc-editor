@@ -34,7 +34,14 @@ const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
   return '=' + encoded.join('')
 }
 
-const encodeCharactersFromVariable = (variables: PLCVariable[], context: ShmWalkContext): string => {
+/**
+ * `variables` is nullable on purpose. The guard below has always accepted a
+ * missing list — a POU with no interface at all reaches here as `undefined` from
+ * the older project shapes — but the signature claimed otherwise, so the tests
+ * covering that guard had to lie to the compiler with `as unknown as`. Stating
+ * it in the type removes the assertion instead of hiding it.
+ */
+const encodeCharactersFromVariable = (variables: PLCVariable[] | null | undefined, context: ShmWalkContext): string => {
   if (!variables || variables.length === 0) {
     return '='
   }

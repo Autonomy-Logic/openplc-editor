@@ -84,6 +84,25 @@ const generateTypeDeclarations = (variables: PLCVariable[], context: ShmWalkCont
  * the instance's own business, and exposing it would invite writes that corrupt
  * the block from outside.
  */
+/**
+ * The Python class name for a function block type.
+ *
+ * Upper-cased, and this is the ONLY place that decides it. The class is emitted
+ * once per type and constructed once per instance, from two different functions,
+ * and each used to spell the name from its own variable's raw `type.value`
+ * while the de-duplication keyed on the upper-cased form. So `a : Accum` and
+ * `b : ACCUM` emitted a single `class Accum:` and then constructed both
+ * `Accum(...)` and `ACCUM(...)` — the second a `NameError` at module scope,
+ * before `block_init()` ever ran.
+ *
+ * Upper case is the right canonical form here: it is what the de-duplication
+ * already keyed on, what strucpp does to every identifier, and what the pin
+ * names and shared-memory slots on this side already use. The class name never
+ * appears in user code — a user writes `ton0.IN`, never the type — so nothing
+ * user-visible changes.
+ */
+const pythonClassName = (typeName: string): string => typeName.toUpperCase()
+
 const generateInstanceClasses = (variables: PLCVariable[], context: ShmWalkContext): string => {
   const instances = pythonFunctionBlockInstances(variables, context.dataTypes ?? [])
   if (instances.length === 0) return ''
@@ -92,8 +111,10 @@ const generateInstanceClasses = (variables: PLCVariable[], context: ShmWalkConte
   let code = '# Function block instances — called once per scan by the PLC\n'
   for (const instance of instances) {
     const typeName = instance.type.value
-    if (emitted.has(typeName.toUpperCase())) continue
-    emitted.add(typeName.toUpperCase())
+    // The de-duplication key IS the emitted class name, so the two cannot drift.
+    const className = pythonClassName(typeName)
+    if (emitted.has(className)) continue
+    emitted.add(className)
 
     const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
     /* istanbul ignore next -- defensive: an unresolvable instance is refused upstream */
@@ -106,7 +127,7 @@ const generateInstanceClasses = (variables: PLCVariable[], context: ShmWalkConte
     /* istanbul ignore next -- defensive: a block with no pins at all */
     if (names.length === 0) continue
 
-    code += `class ${typeName}:\n`
+    code += `class ${className}:\n`
     code += `    __slots__ = (${names.map((n) => `'${n}'`).join(', ')}${names.length === 1 ? ',' : ''})\n`
     code += `    def __init__(self${names.map((n) => `, ${n}=None`).join('')}):\n`
     for (const n of names) code += `        self.${n} = ${n}\n`
@@ -228,7 +249,7 @@ const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string
       const upper = pin.name.toUpperCase()
       return `${upper}=_${[...fieldPath, upper].join('_')}`
     })
-    return `${typeName}(${args.join(', ')})`
+    return `${pythonClassName(typeName)}(${args.join(', ')})`
   }
 
   /* istanbul ignore next -- defensive: callers only assemble composites */
